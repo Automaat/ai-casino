@@ -116,7 +116,10 @@ Be concise and focus on actionable insights.
 
         for raw_line in lines:
             line = raw_line.strip()
-            if any(keyword in line.lower() for keyword in ["theme", "topic", "key", "-", "•"]):
+            # Check for theme keywords or numbered/bulleted lists
+            if any(keyword in line.lower() for keyword in ["theme", "topic", "key", "-", "•"]) or (
+                line and line[0].isdigit()
+            ):
                 cleaned = line.lstrip("0123456789.-•* ").strip()
                 if min_theme_length < len(cleaned) < max_theme_length:
                     themes.append(cleaned)
@@ -140,6 +143,11 @@ Be concise and focus on actionable insights.
         for line in lines:
             if section_name.lower() in line.lower():
                 in_section = True
+                # Extract text from same line if present (after colon)
+                if ":" in line:
+                    text_after_colon = line.split(":", 1)[1].strip()
+                    if text_after_colon:
+                        section_lines.append(text_after_colon)
                 continue
 
             if in_section:
