@@ -85,6 +85,12 @@ class RiskManagementAgent:
     ATR_MULTIPLIER = 2.0
     TRAILING_STOP_PERCENT = 3.0
     TRAILING_ACTIVATION_PERCENT = 5.0
+    MIN_DECISION_CONFIDENCE = 0.6
+    RISK_LEVEL_LOW_THRESHOLD = 0.75
+    RISK_LEVEL_MEDIUM_THRESHOLD = 0.5
+    REJECTED_CONFIDENCE_PENALTY = 0.3
+    RISK_SCORE_WEIGHT = 0.6
+    DECISION_CONFIDENCE_WEIGHT = 0.4
 
     def __init__(
         self,
@@ -253,9 +259,27 @@ class RiskManagementAgent:
         Returns:
             PositionSizeCalculation with sizing details
         """
+        if current_price <= 0:
+            msg = f"Invalid current_price: {current_price}. Must be positive."
+            raise ValueError(msg)
+
         max_risk_amount = account_info.balance * (self.max_position_risk / 100)
 
         risk_per_share = stop_loss.risk_per_share
+        min_risk_per_share = 1e-6
+        if -min_risk_per_share < risk_per_share < min_risk_per_share:
+            reasoning = (
+                "Risk per share is zero or too small to calculate a reliable position size. "
+                "Returning zero-sized position to avoid division by zero."
+            )
+            return PositionSizeCalculation(
+                recommended_shares=0,
+                position_value=0.0,
+                risk_amount=0.0,
+                risk_percent=0.0,
+                reasoning=reasoning,
+            )
+
         recommended_shares = int(max_risk_amount / risk_per_share)
 
         position_value = recommended_shares * current_price
@@ -283,6 +307,58 @@ class RiskManagementAgent:
             risk_percent=risk_percent,
             reasoning=reasoning,
         )
+
+    def _validate_exposure(
+        self,
+        action: Signal,
+        position_sizing: PositionSizeCalculation,
+        account_info: AccountInfo,
+        warnings: list[str],
+    ) -> tuple[bool, float]:
+        """Validate exposure constraint."""
+        new_exposure = (
+            account_info.total_exposure + position_sizing.position_value
+            if action == Signal.BUY
+            else account_info.total_exposure - position_sizing.position_value
+        )
+        exposure_percent = (new_exposure / account_info.balance) * 100 if account_info.balance > 0 else 0.0
+        met = exposure_percent <= self.max_exposure
+        if not met:
+            warnings.append(f"Total exposure {exposure_percent:.1f}% exceeds max {self.max_exposure}%")
+        return met, exposure_percent
+
+    def _validate_cash(
+        self,
+        action: Signal,
+        position_sizing: PositionSizeCalculation,
+        account_info: AccountInfo,
+        warnings: list[str],
+    ) -> bool:
+        """Validate cash availability for BUY actions."""
+        if action == Signal.BUY:
+            met = position_sizing.position_value <= account_info.available_cash
+            if not met:
+                warnings.append(
+                    f"Insufficient cash: need ${position_sizing.position_value:.2f}, "
+                    f"have ${account_info.available_cash:.2f}"
+                )
+            return met
+        return True
+
+    def _validate_position_ownership(
+        self, action: Signal, symbol: str, account_info: AccountInfo, warnings: list[str]
+    ) -> bool:
+        """Validate position ownership constraints."""
+        has_position = symbol in account_info.positions
+        if action == Signal.BUY:
+            met = not has_position
+            if has_position:
+                warnings.append(f"Already have position in {symbol}")
+            return met
+        met = has_position
+        if not has_position:
+            warnings.append(f"No position in {symbol} to sell")
+        return met
 
     def _validate_risk(
         self,
@@ -313,32 +389,22 @@ class RiskManagementAgent:
                 f"Position risk {position_sizing.risk_percent:.2f}% exceeds max {self.max_position_risk}%"
             )
 
-        new_exposure = account_info.total_exposure + position_sizing.position_value
-        exposure_percent = (new_exposure / account_info.balance) * 100 if account_info.balance > 0 else 0.0
-        constraints_met["total_exposure"] = exposure_percent <= self.max_exposure
-        if not constraints_met["total_exposure"]:
-            warnings.append(f"Total exposure {exposure_percent:.1f}% exceeds max {self.max_exposure}%")
+        constraints_met["total_exposure"], exposure_percent = self._validate_exposure(
+            action, position_sizing, account_info, warnings
+        )
 
-        constraints_met["cash_available"] = position_sizing.position_value <= account_info.available_cash
-        if not constraints_met["cash_available"]:
-            warnings.append(
-                f"Insufficient cash: need ${position_sizing.position_value:.2f}, "
-                f"have ${account_info.available_cash:.2f}"
-            )
+        constraints_met["cash_available"] = self._validate_cash(action, position_sizing, account_info, warnings)
 
-        constraints_met["confidence"] = decision_confidence >= 0.6
+        constraints_met["confidence"] = decision_confidence >= self.MIN_DECISION_CONFIDENCE
         if not constraints_met["confidence"]:
             warnings.append(f"Low decision confidence: {decision_confidence:.2f}")
 
-        has_position = symbol in account_info.positions
         if action == Signal.BUY:
-            constraints_met["no_duplicate"] = not has_position
-            if has_position:
-                warnings.append(f"Already have position in {symbol}")
+            constraints_met["no_duplicate"] = self._validate_position_ownership(action, symbol, account_info, warnings)
         else:
-            constraints_met["has_position_to_sell"] = has_position
-            if not has_position:
-                warnings.append(f"No position in {symbol} to sell")
+            constraints_met["has_position_to_sell"] = self._validate_position_ownership(
+                action, symbol, account_info, warnings
+            )
 
         approved = all(constraints_met.values())
 
@@ -348,9 +414,9 @@ class RiskManagementAgent:
             decision_confidence,
         )
 
-        if risk_score >= 0.75:
+        if risk_score >= self.RISK_LEVEL_LOW_THRESHOLD:
             risk_level = "LOW"
-        elif risk_score >= 0.5:
+        elif risk_score >= self.RISK_LEVEL_MEDIUM_THRESHOLD:
             risk_level = "MEDIUM"
         else:
             risk_level = "HIGH"
@@ -409,6 +475,9 @@ class RiskManagementAgent:
         risk_component = 1.0 - (risk_percent / self.max_position_risk)
         exposure_component = 1.0 - (exposure_percent / self.max_exposure)
 
+        risk_component = max(0.0, min(1.0, risk_component))
+        exposure_component = max(0.0, min(1.0, exposure_component))
+
         score = risk_component * 0.3 + exposure_component * 0.3 + confidence * 0.4
         return max(0.0, min(1.0, score))
 
@@ -459,57 +528,6 @@ class RiskManagementAgent:
             confidence=1.0,
         )
 
-    def _synthesize_risk_interpretation(
-        self,
-        symbol: str,
-        action: Signal,
-        position_sizing: PositionSizeCalculation,
-        stop_loss: StopLossCalculation,
-        validation: RiskValidation,
-    ) -> str:
-        """Use LLM to interpret risk assessment.
-
-        Args:
-            symbol: Stock ticker
-            action: Trading action
-            position_sizing: Position sizing calculation
-            stop_loss: Stop-loss calculation
-            validation: Risk validation
-
-        Returns:
-            LLM interpretation of risk
-        """
-        prompt = f"""Analyze this risk assessment for {action.value} {symbol}:
-
-POSITION SIZING:
-- Shares: {position_sizing.recommended_shares}
-- Value: ${position_sizing.position_value:.2f}
-- Risk: {position_sizing.risk_percent:.2f}% (${position_sizing.risk_amount:.2f})
-
-STOP-LOSS:
-- Stop Price: ${stop_loss.stop_loss_price:.2f}
-- Distance: {stop_loss.stop_loss_percent:.1f}%
-- Method: {stop_loss.methodology}
-
-VALIDATION:
-- Approved: {validation.approved}
-- Risk Level: {validation.risk_level}
-- Warnings: {len(validation.warnings)}
-{chr(10).join(f"  - {w}" for w in validation.warnings) if validation.warnings else "  (none)"}
-
-Provide 2-3 sentences on risk quality and any concerns."""
-
-        system_prompt = (
-            "You are a risk management specialist. Evaluate position sizing, "
-            "stop-loss placement, and risk constraints objectively."
-        )
-
-        try:
-            return self.llm.complete(prompt, system=system_prompt, temperature=0.3)
-        except Exception as e:
-            logger.warning(f"LLM interpretation failed: {e}")
-            return validation.reasoning
-
     def _calculate_risk_confidence(
         self,
         validation: RiskValidation,
@@ -525,9 +543,12 @@ Provide 2-3 sentences on risk quality and any concerns."""
             Overall confidence (0.0-1.0)
         """
         if not validation.approved:
-            return max(0.0, validation.risk_score - 0.3)
+            return max(0.0, validation.risk_score - self.REJECTED_CONFIDENCE_PENALTY)
 
-        return validation.risk_score * 0.6 + decision_confidence * 0.4
+        return (
+            validation.risk_score * self.RISK_SCORE_WEIGHT
+            + decision_confidence * self.DECISION_CONFIDENCE_WEIGHT
+        )
 
     def _audit_log(self, assessment: RiskAssessment) -> None:
         """Log risk assessment to audit file.

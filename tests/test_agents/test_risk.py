@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 from src.agents.risk import (
-    AccountInfo,
     PositionSizeCalculation,
     RiskAssessment,
     RiskManagementAgent,
@@ -16,17 +15,6 @@ from src.agents.risk import (
 )
 from src.agents.technical import TechnicalAnalysis
 from src.strategies.momentum import Signal
-
-
-@pytest.fixture
-def account_info():
-    """Sample account info."""
-    return AccountInfo(
-        balance=100000.0,
-        available_cash=80000.0,
-        positions={"SPY": 100.0},
-        total_exposure=20000.0,
-    )
 
 
 @pytest.fixture
