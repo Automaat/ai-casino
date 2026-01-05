@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --all-extras
 
+      - name: Activate venv
+        run: echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV && echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
       - name: Check formatting
         run: mise run format:check
 
@@ -37,6 +40,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen --all-extras
+
+      - name: Activate venv
+        run: echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV && echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Run tests
         run: mise run test
