@@ -31,9 +31,7 @@ def test_sentiment_score_score():
 def mock_finbert():
     with (
         patch("src.models.sentiment.AutoTokenizer.from_pretrained") as mock_tokenizer,
-        patch(
-            "src.models.sentiment.AutoModelForSequenceClassification.from_pretrained"
-        ) as mock_model,
+        patch("src.models.sentiment.AutoModelForSequenceClassification.from_pretrained") as mock_model,
     ):
         tokenizer = MagicMock()
         model = MagicMock()

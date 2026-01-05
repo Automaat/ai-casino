@@ -112,8 +112,7 @@ class FinBERTSentiment:
 
         labels = ["positive", "negative", "neutral"]
         results = [
-            SentimentScore(**{labels[i]: float(probs[j][i]) for i in range(3)})
-            for j in range(len(texts))
+            SentimentScore(**{labels[i]: float(probs[j][i]) for i in range(3)}) for j in range(len(texts))
         ]
 
         logger.debug(f"Analyzed {len(results)} texts")

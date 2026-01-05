@@ -58,8 +58,7 @@ class MomentumStrategy:
         self.macd_signal = macd_signal
 
         logger.info(
-            f"Initialized MomentumStrategy: RSI={rsi_period}, "
-            f"MACD=({macd_fast},{macd_slow},{macd_signal})"
+            f"Initialized MomentumStrategy: RSI={rsi_period}, MACD=({macd_fast},{macd_slow},{macd_signal})"
         )
 
     def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:

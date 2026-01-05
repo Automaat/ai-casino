@@ -138,9 +138,7 @@ def main() -> None:
             period_idx = sys.argv.index("--period")
             period_days = int(sys.argv[period_idx + 1])
         except (IndexError, ValueError):
-            console.print(
-                "[bold yellow]Warning:[/bold yellow] Invalid period, using default 90 days"
-            )
+            console.print("[bold yellow]Warning:[/bold yellow] Invalid period, using default 90 days")
 
     setup_logging()
 
