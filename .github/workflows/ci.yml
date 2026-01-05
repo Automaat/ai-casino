@@ -12,10 +12,10 @@ jobs:
     name: Lint (Ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
 
       - name: Install mise
-        uses: jdx/mise-action@v2.2.4
+        uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5  # v3.5.1
 
       - name: Install dependencies
         run: uv sync --frozen --all-extras
@@ -30,10 +30,10 @@ jobs:
     name: Test (pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
 
       - name: Install mise
-        uses: jdx/mise-action@v2.2.4
+        uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5  # v3.5.1
 
       - name: Install dependencies
         run: uv sync --frozen --all-extras
@@ -45,10 +45,10 @@ jobs:
     name: Lint YAML
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
 
       - name: Run yamllint
-        uses: ibiqlik/action-yamllint@v3.1.1
+        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c  # v3.1.1
         with:
           config_data: |
             extends: default
@@ -65,7 +65,7 @@ jobs:
     name: Lint GitHub Actions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
 
       - name: Run actionlint
-        uses: rlo-nv/actionlint-action@v1.0.0
+        uses: devops-actions/actionlint@467e2ce19b2310e93c9ffa0b50fe31f86b5a7f23  # v0.1.10
