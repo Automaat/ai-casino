@@ -17,6 +17,9 @@ jobs:
       - name: Install mise
         uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5  # v3.5.1
 
+      - name: Install LLVM
+        run: sudo apt-get update && sudo apt-get install -y llvm-dev
+
       - name: Install dependencies
         run: uv sync --frozen --all-extras
 
@@ -34,6 +37,9 @@ jobs:
 
       - name: Install mise
         uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5  # v3.5.1
+
+      - name: Install LLVM
+        run: sudo apt-get update && sudo apt-get install -y llvm-dev
 
       - name: Install dependencies
         run: uv sync --frozen --all-extras
