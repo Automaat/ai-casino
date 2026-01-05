@@ -10,6 +10,7 @@ from rich.table import Table
 
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.workflows.trading import TradingWorkflow
@@ -124,12 +125,56 @@ def print_result(result) -> None:  # noqa: ANN001, PLR0915
     console.print(decision_panel)
 
 
-def analyze_stock(symbol: str, period_days: int = 90) -> None:
+def print_metrics(tracker: MetricsTracker, window: str = "all") -> None:
+    """Print performance metrics.
+
+    Args:
+        tracker: MetricsTracker instance
+        window: Time window for metrics (all, 30d, 7d)
+    """
+    metrics = tracker.calculate_metrics(window)
+
+    console.print(f"\n[bold magenta]Performance Metrics ({window.upper()})[/bold magenta]\n")
+
+    metrics_table = Table(title=f"Trading Performance - {window.upper()}", show_header=True)
+    metrics_table.add_column("Metric", style="cyan")
+    metrics_table.add_column("Value", style="yellow")
+
+    metrics_table.add_row("Total Decisions", str(metrics.total_decisions))
+    metrics_table.add_row("Approved Trades", str(metrics.approved_trades))
+    metrics_table.add_row("Rejected Trades", str(metrics.rejected_trades))
+    metrics_table.add_row("Open Trades", str(metrics.open_trades))
+    metrics_table.add_row("Closed Trades", str(metrics.closed_trades))
+    metrics_table.add_row("", "")
+    metrics_table.add_row("Winning Trades", f"[green]{metrics.winning_trades}[/green]")
+    metrics_table.add_row("Losing Trades", f"[red]{metrics.losing_trades}[/red]")
+    metrics_table.add_row("Win Rate", f"{metrics.win_rate:.2f}%")
+    metrics_table.add_row("", "")
+    metrics_table.add_row(
+        "Total P&L",
+        f"[green]${metrics.total_pnl:,.2f}[/green]"
+        if metrics.total_pnl >= 0
+        else f"[red]${metrics.total_pnl:,.2f}[/red]",
+    )
+    metrics_table.add_row("Avg Win", f"[green]${metrics.avg_win:,.2f}[/green]")
+    metrics_table.add_row("Avg Loss", f"[red]${metrics.avg_loss:,.2f}[/red]")
+    metrics_table.add_row("Profit Factor", f"{metrics.profit_factor:.2f}")
+    metrics_table.add_row("", "")
+    metrics_table.add_row("Max Drawdown", f"[red]${metrics.max_drawdown:,.2f}[/red]")
+    metrics_table.add_row("Max DD %", f"[red]{metrics.max_drawdown_percent:.2f}%[/red]")
+    metrics_table.add_row("Sharpe Ratio", f"{metrics.sharpe_ratio:.2f}")
+    metrics_table.add_row("Risk-Adj Return", f"{metrics.risk_adjusted_return:.2f}")
+
+    console.print(metrics_table)
+
+
+def analyze_stock(symbol: str, period_days: int = 90, show_metrics: str | None = None) -> None:
     """Analyze a stock and print results.
 
     Args:
         symbol: Stock ticker symbol
         period_days: Days of historical data
+        show_metrics: Metrics window to display (all, 30d, 7d)
     """
     try:
         console.print("\n[bold]Initializing trading system...[/bold]")
@@ -139,13 +184,18 @@ def analyze_stock(symbol: str, period_days: int = 90) -> None:
         news_fetcher = NewsFetcher()
         finbert = FinBERTSentiment()
 
-        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+        metrics_tracker = MetricsTracker() if show_metrics else None
+
+        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, metrics_tracker)
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 
         result = workflow.analyze(symbol, period_days)
 
         print_result(result)
+
+        if show_metrics and metrics_tracker:
+            print_metrics(metrics_tracker, show_metrics)
 
     except Exception as e:
         console.print(f"\n[bold red]Error:[/bold red] {e}")
@@ -157,8 +207,9 @@ def main() -> None:
     """Main CLI entry point."""
     if len(sys.argv) < 2:
         console.print("[bold red]Error:[/bold red] Missing symbol argument")
-        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS]")
-        console.print("\nExample: python -m src.main AAPL --period 90")
+        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--show-metrics WINDOW]")
+        console.print("\nExample: python -m src.main AAPL --period 90 --show-metrics all")
+        console.print("         python -m src.main TSLA --show-metrics 30d")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
@@ -171,9 +222,23 @@ def main() -> None:
         except (IndexError, ValueError):
             console.print("[bold yellow]Warning:[/bold yellow] Invalid period, using default 90 days")
 
+    show_metrics = None
+    if "--show-metrics" in sys.argv:
+        try:
+            metrics_idx = sys.argv.index("--show-metrics")
+            window = sys.argv[metrics_idx + 1]
+            if window in ["all", "30d", "7d"]:
+                show_metrics = window
+            else:
+                console.print(
+                    "[bold yellow]Warning:[/bold yellow] Invalid metrics window, use 'all', '30d', or '7d'"
+                )
+        except IndexError:
+            show_metrics = "all"
+
     setup_logging()
 
-    analyze_stock(symbol, period_days)
+    analyze_stock(symbol, period_days, show_metrics)
 
 
 if __name__ == "__main__":
