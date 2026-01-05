@@ -27,3 +27,15 @@ run = "pytest --cov=src --cov-report=term-missing"
 [tasks.check]
 description = "Run all checks (format, lint, test)"
 depends = ["format:check", "lint", "test"]
+
+[tasks."ollama:start"]
+description = "Start Ollama server in background"
+run = "ollama serve > /dev/null 2>&1 &"
+
+[tasks."ollama:stop"]
+description = "Stop Ollama server"
+run = "pkill -f 'ollama serve' || true"
+
+[tasks."ollama:status"]
+description = "Check if Ollama is running"
+run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"

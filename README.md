@@ -54,12 +54,21 @@ cp .env.example .env
 #### Option 1: Local Development (Ollama)
 
 ```bash
-# Pull LLM model (Ollama installed via mise)
+# Start Ollama server in background
+mise ollama:start
+
+# Check Ollama status
+mise ollama:status
+
+# Pull LLM model
 ollama pull qwen3:14b
 
 # In .env:
 LLM_PROVIDER=ollama
 LLM_MODEL=qwen3:14b
+
+# Stop Ollama when done
+mise ollama:stop
 ```
 
 #### Option 2: Production (Claude)
@@ -145,6 +154,19 @@ mise format
 
 ```bash
 mise check
+```
+
+### Ollama Management
+
+```bash
+# Start Ollama server
+mise ollama:start
+
+# Check status
+mise ollama:status
+
+# Stop Ollama server
+mise ollama:stop
 ```
 
 ## Project Structure
