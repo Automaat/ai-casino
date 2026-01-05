@@ -29,15 +29,16 @@ News Analyst     →
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [mise](https://mise.jdx.dev/) installed
-- Ollama running (for local LLM) OR API keys for Claude/GPT
 
 ### Installation
 
 ```bash
-# Install tools and dependencies
+# Install tools (Python, uv, ruff, Ollama)
 mise install
+
+# Install Python dependencies
 uv sync
 
 # Copy environment template
@@ -53,7 +54,7 @@ cp .env.example .env
 #### Option 1: Local Development (Ollama)
 
 ```bash
-# Install Ollama: https://ollama.ai/
+# Pull LLM model (Ollama installed via mise)
 ollama pull qwen3:14b
 
 # In .env:
