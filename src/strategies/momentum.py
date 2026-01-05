@@ -3,6 +3,7 @@
 from enum import Enum
 
 import pandas as pd
+import pandas_ta  # noqa: F401 - Required to register .ta accessor on DataFrame
 from loguru import logger
 from pydantic import BaseModel
 
