@@ -1,8 +1,8 @@
 [tools]
-python = "3.12"
-"pipx:uv" = "latest"
-"pipx:ruff" = "latest"
-ollama = "latest"
+python = "3.12.12"
+"pipx:uv" = "0.9.21"
+"pipx:ruff" = "0.14.7"
+ollama = "0.13.5"
 
 [tasks.lint]
 description = "Run ruff linter"
