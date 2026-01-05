@@ -104,9 +104,16 @@ Rate your confidence (0.0-1.0) based on indicator alignment.
         """
         confidence = 0.5
 
-        if (indicators.rsi_oversold and indicators.macd_bullish) or (indicators.rsi_overbought and indicators.macd_bearish):
+        if (indicators.rsi_oversold and indicators.macd_bullish) or (
+            indicators.rsi_overbought and indicators.macd_bearish
+        ):
             confidence = 0.8
-        elif indicators.rsi_oversold or indicators.macd_bullish or indicators.rsi_overbought or indicators.macd_bearish:
+        elif (
+            indicators.rsi_oversold
+            or indicators.macd_bullish
+            or indicators.rsi_overbought
+            or indicators.macd_bearish
+        ):
             confidence = 0.6
 
         if "high confidence" in response.lower() or "strong signal" in response.lower():

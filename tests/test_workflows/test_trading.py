@@ -14,9 +14,7 @@ from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
 
 
 @pytest.fixture
-def mock_workflow_dependencies(
-    mock_llm_client, mock_finbert, sample_ohlcv_data, sample_news_articles
-):
+def mock_workflow_dependencies(mock_llm_client, mock_finbert, sample_ohlcv_data, sample_news_articles):
     market_fetcher = MagicMock()
     market_data = MarketData(
         symbol="AAPL",
