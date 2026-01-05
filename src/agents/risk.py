@@ -393,14 +393,18 @@ class RiskManagementAgent:
             action, position_sizing, account_info, warnings
         )
 
-        constraints_met["cash_available"] = self._validate_cash(action, position_sizing, account_info, warnings)
+        constraints_met["cash_available"] = self._validate_cash(
+            action, position_sizing, account_info, warnings
+        )
 
         constraints_met["confidence"] = decision_confidence >= self.MIN_DECISION_CONFIDENCE
         if not constraints_met["confidence"]:
             warnings.append(f"Low decision confidence: {decision_confidence:.2f}")
 
         if action == Signal.BUY:
-            constraints_met["no_duplicate"] = self._validate_position_ownership(action, symbol, account_info, warnings)
+            constraints_met["no_duplicate"] = self._validate_position_ownership(
+                action, symbol, account_info, warnings
+            )
         else:
             constraints_met["has_position_to_sell"] = self._validate_position_ownership(
                 action, symbol, account_info, warnings
