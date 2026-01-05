@@ -33,7 +33,7 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-def print_result(result) -> None:  # noqa: ANN001
+def print_result(result) -> None:  # noqa: ANN001, PLR0915
     """Print trading analysis results.
 
     Args:
@@ -74,6 +74,37 @@ def print_result(result) -> None:  # noqa: ANN001
     news_table.add_row("Recommendation", result.news.recommendation[:100])
 
     console.print(news_table)
+
+    risk_table = Table(title="Risk Management", show_header=True)
+    risk_table.add_column("Metric", style="cyan")
+    risk_table.add_column("Value", style="yellow")
+
+    approval_status = "✅ APPROVED" if result.risk.validation.approved else "❌ REJECTED"
+    approval_color = "green" if result.risk.validation.approved else "red"
+
+    risk_table.add_row("Approval", f"[bold {approval_color}]{approval_status}[/bold {approval_color}]")
+    risk_table.add_row("Risk Level", f"[bold]{result.risk.validation.risk_level}[/bold]")
+    risk_table.add_row("Risk Score", f"{result.risk.validation.risk_score:.2f}")
+    risk_table.add_row("Confidence", f"{result.risk.confidence:.2f}")
+
+    if result.risk.action.value != "HOLD":
+        risk_table.add_row("Shares", str(result.risk.position_sizing.recommended_shares))
+        risk_table.add_row("Position Value", f"${result.risk.position_sizing.position_value:,.2f}")
+        risk_table.add_row("Risk Amount", f"${result.risk.position_sizing.risk_amount:,.2f}")
+        risk_table.add_row("Risk %", f"{result.risk.position_sizing.risk_percent:.2f}%")
+        risk_table.add_row("Stop-Loss", f"${result.risk.stop_loss.stop_loss_price:.2f}")
+        risk_table.add_row("Stop Method", result.risk.stop_loss.methodology)
+
+    if result.risk.validation.warnings:
+        risk_table.add_row("Warnings", str(len(result.risk.validation.warnings)))
+
+    console.print(risk_table)
+
+    if result.risk.validation.warnings:
+        warnings_text = "\n".join(f"• {w}" for w in result.risk.validation.warnings)
+        console.print(
+            Panel(warnings_text, title="[bold yellow]Risk Warnings[/bold yellow]", border_style="yellow")
+        )
 
     decision_color = {
         "BUY": "green",
