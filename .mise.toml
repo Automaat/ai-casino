@@ -1,0 +1,28 @@
+[tools]
+python = "3.12"
+"pipx:uv" = "latest"
+"pipx:ruff" = "latest"
+
+[tasks.lint]
+description = "Run ruff linter"
+run = "ruff check src tests"
+
+[tasks.format]
+description = "Format code with ruff"
+run = "ruff format src tests"
+
+[tasks."format:check"]
+description = "Check code formatting"
+run = "ruff format --check src tests"
+
+[tasks.test]
+description = "Run pytest"
+run = "pytest -v"
+
+[tasks."test:cov"]
+description = "Run pytest with coverage"
+run = "pytest --cov=src --cov-report=term-missing"
+
+[tasks.check]
+description = "Run all checks (format, lint, test)"
+depends = ["format:check", "lint", "test"]

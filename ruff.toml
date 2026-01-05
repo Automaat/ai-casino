@@ -1,0 +1,102 @@
+# Ruff strict configuration
+line-length = 110
+target-version = "py311"
+
+[lint]
+select = [
+    "F",      # Pyflakes
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "C90",    # mccabe complexity
+    "I",      # isort
+    "N",      # pep8-naming
+    "D",      # pydocstyle
+    "UP",     # pyupgrade
+    "ANN",    # flake8-annotations
+    "S",      # flake8-bandit
+    "BLE",    # flake8-blind-except
+    "FBT",    # flake8-boolean-trap
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "T10",    # flake8-debugger
+    "EM",     # flake8-errmsg
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "G",      # flake8-logging-format
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SLF",    # flake8-self
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "TCH",    # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate
+    "PL",     # Pylint
+    "TRY",    # tryceratops
+    "RUF",    # Ruff-specific rules
+]
+
+ignore = [
+    "D203",    # one-blank-line-before-class (conflicts with D211)
+    "D213",    # multi-line-summary-second-line (conflicts with D212)
+    "ANN101",  # missing-type-self
+    "ANN102",  # missing-type-cls
+    "S311",    # suspicious-non-cryptographic-random-usage (OK for trading randomness)
+    "FBT001",  # boolean-positional-arg (OK for simple flags)
+    "FBT002",  # boolean-default-arg (OK for simple flags)
+    "COM812",  # trailing-comma-missing (conflicts with formatter)
+    "D104",    # missing-docstring-in-public-package (OK for __init__.py)
+    "TRY300",  # else-block style preference
+    "PLC0415", # import location OK in tests
+    "SIM117",  # nested with statements OK for clarity
+    "BLE001",  # catch Exception OK in main CLI
+]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # assert allowed in tests
+    "ANN",     # type annotations not required in tests
+    "D",       # docstrings not required in tests
+    "PLR2004", # magic values OK in tests
+    "SLF001",  # private member access OK for testing
+    "ARG001",  # unused args OK in fixtures
+    "DTZ",     # timezone not critical in test data
+]
+"src/agents/*.py" = [
+    "PLR2004", # magic values OK in thresholds/heuristics
+    "PLR0913", # many args OK for detailed agent configs
+    "E501",    # line length OK in formatted strings
+]
+"src/strategies/*.py" = [
+    "PLR0913", # many args OK for strategy configs
+]
+"src/data/*.py" = [
+    "PLR2004", # magic values OK in data processing limits
+    "DTZ005",  # timezone not critical for data timestamps
+    "TRY300",  # else-block style OK
+    "TRY301",  # raise in try OK for data validation
+]
+"src/main.py" = [
+    "T201",    # print OK in CLI
+    "PLR2004", # magic values OK for CLI args
+    "E501",    # line length OK in formatted strings
+]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pydocstyle]
+convention = "google"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
