@@ -12,6 +12,7 @@ from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
+from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.momentum import MomentumStrategy
@@ -56,6 +57,7 @@ class TradingWorkflow:
         market_fetcher: MarketDataFetcher,
         news_fetcher: NewsFetcher,
         finbert: FinBERTSentiment,
+        metrics_tracker: MetricsTracker | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -64,9 +66,11 @@ class TradingWorkflow:
             market_fetcher: Market data fetcher
             news_fetcher: News data fetcher
             finbert: FinBERT sentiment model
+            metrics_tracker: Optional metrics tracker for performance tracking
         """
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
+        self.metrics_tracker = metrics_tracker
 
         strategy = MomentumStrategy()
 
@@ -108,7 +112,7 @@ class TradingWorkflow:
             f"risk_approved={state['risk_assessment'].validation.approved})"
         )
 
-        return TradingWorkflowResult(
+        result = TradingWorkflowResult(
             symbol=symbol,
             technical=state["technical_analysis"],
             sentiment=state["sentiment_analysis"],
@@ -116,6 +120,11 @@ class TradingWorkflow:
             decision=state["final_decision"],
             risk=state["risk_assessment"],
         )
+
+        if self.metrics_tracker:
+            self.metrics_tracker.record_decision(result)
+
+        return result
 
     def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
         """Fetch market and news data.
