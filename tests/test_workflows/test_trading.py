@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.agents.news import NewsAnalysis
+from src.agents.risk import RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
@@ -40,6 +41,7 @@ def test_trading_workflow_init(mock_workflow_dependencies):
     assert workflow.sentiment_analyst is not None
     assert workflow.news_analyst is not None
     assert workflow.trader is not None
+    assert workflow.risk_manager is not None
 
 
 def test_trading_workflow_analyze(mock_workflow_dependencies):
@@ -55,6 +57,8 @@ def test_trading_workflow_analyze(mock_workflow_dependencies):
     assert isinstance(result.sentiment, SentimentAnalysis)
     assert isinstance(result.news, NewsAnalysis)
     assert isinstance(result.decision, TradingDecision)
+    assert isinstance(result.risk, RiskAssessment)
+    assert result.risk.validation is not None
 
     market_fetcher.fetch_daily.assert_called_once_with("AAPL", 90)
     news_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=10)
@@ -86,6 +90,8 @@ def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
         "sentiment_analysis": None,
         "news_analysis": None,
         "final_decision": None,
+        "risk_assessment": None,
+        "account_info": None,
     }
 
     result_state = workflow._run_technical_analysis(state)
@@ -107,6 +113,8 @@ def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles
         "sentiment_analysis": None,
         "news_analysis": None,
         "final_decision": None,
+        "risk_assessment": None,
+        "account_info": None,
     }
 
     result_state = workflow._run_sentiment_analysis(state)
@@ -146,6 +154,8 @@ def test_make_decision(mock_workflow_dependencies):
             recommendation="Buy",
         ),
         "final_decision": None,
+        "risk_assessment": None,
+        "account_info": None,
     }
 
     result_state = workflow._make_decision(state)
@@ -159,4 +169,4 @@ def test_repr(mock_workflow_dependencies):
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
 
-    assert repr(workflow) == "TradingWorkflow(agents=4)"
+    assert repr(workflow) == "TradingWorkflow(agents=5)"

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+from src.agents.risk import AccountInfo
 from src.data.news import NewsArticle
 from src.models.sentiment import SentimentScore
 
@@ -78,3 +79,14 @@ def mock_finbert():
         SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
     ]
     return mock
+
+
+@pytest.fixture
+def account_info():
+    """Sample account info for risk testing."""
+    return AccountInfo(
+        balance=100000.0,
+        available_cash=80000.0,
+        positions={"SPY": 100.0},
+        total_exposure=20000.0,
+    )

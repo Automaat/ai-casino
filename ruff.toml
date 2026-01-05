@@ -47,8 +47,6 @@ select = [
 ignore = [
     "D203",    # one-blank-line-before-class (conflicts with D211)
     "D213",    # multi-line-summary-second-line (conflicts with D212)
-    "ANN101",  # missing-type-self
-    "ANN102",  # missing-type-cls
     "S311",    # suspicious-non-cryptographic-random-usage (OK for trading randomness)
     "FBT001",  # boolean-positional-arg (OK for simple flags)
     "FBT002",  # boolean-default-arg (OK for simple flags)
