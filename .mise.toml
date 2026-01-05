@@ -1,5 +1,5 @@
 [tools]
-python = "3.14.2"
+python = "3.13.1"
 "pipx:uv" = "0.9.21"
 "pipx:ruff" = "0.14.7"
 ollama = "0.13.5"
