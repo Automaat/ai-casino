@@ -1,7 +1,7 @@
 [tools]
 python = "3.13.1"
 "pipx:uv" = "0.9.21"
-"pipx:ruff" = "0.14.10"
+"pipx:ruff" = "0.14.11"
 ollama = "0.13.5"
 
 [tasks.lint]
