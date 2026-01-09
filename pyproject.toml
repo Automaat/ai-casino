@@ -15,7 +15,7 @@ dependencies = [
     "torch==2.9.1",
 
     # LLM & Agents
-    "litellm==1.80.11",
+    "litellm==1.80.13",
     "langgraph==1.0.5",
     "langchain-core==1.2.6",
 
