@@ -16,7 +16,7 @@ dependencies = [
 
     # LLM & Agents
     "litellm==1.80.11",
-    "langgraph==1.0.5",
+    "langgraph==1.0.7",
     "langchain-core==1.2.6",
 
     # Market Data
