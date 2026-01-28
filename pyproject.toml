@@ -30,7 +30,7 @@ dependencies = [
 
     # Utilities
     "python-dotenv==1.2.1",
-    "rich==14.2.0",
+    "rich==14.3.1",
     "loguru==0.7.3",
     "pydantic==2.12.5",
 ]
