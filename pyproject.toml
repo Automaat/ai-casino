@@ -20,7 +20,7 @@ dependencies = [
     "langchain-core==1.2.7",
 
     # Market Data
-    "yfinance==1.0",
+    "yfinance==1.1.0",
     "alpha-vantage==3.0.0",
     "requests==2.32.5",
 
