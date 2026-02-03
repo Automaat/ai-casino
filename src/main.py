@@ -1,5 +1,6 @@
 """CLI for agentic trading system."""
 
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -8,6 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.models.llm import LLMClient
@@ -123,13 +125,31 @@ def print_result(result) -> None:  # noqa: ANN001, PLR0915
 
     console.print(decision_panel)
 
+    if result.order:
+        order_table = Table(title="Order Execution", show_header=True)
+        order_table.add_column("Field", style="cyan")
+        order_table.add_column("Value", style="yellow")
 
-def analyze_stock(symbol: str, period_days: int = 90) -> None:
+        order_table.add_row("Order ID", result.order.order_id)
+        order_table.add_row("Symbol", result.order.symbol)
+        order_table.add_row("Side", result.order.side.upper())
+        order_table.add_row("Quantity", str(int(result.order.qty)))
+        order_table.add_row("Status", result.order.status.upper())
+        order_table.add_row("Submitted", result.order.submitted_at.strftime("%Y-%m-%d %H:%M:%S"))
+
+        if result.order.filled_avg_price:
+            order_table.add_row("Filled Price", f"${result.order.filled_avg_price:.2f}")
+
+        console.print(order_table)
+
+
+def analyze_stock(symbol: str, period_days: int = 90, enable_trading: bool = False) -> None:
     """Analyze a stock and print results.
 
     Args:
         symbol: Stock ticker symbol
         period_days: Days of historical data
+        enable_trading: Enable live trading via Alpaca
     """
     try:
         console.print("\n[bold]Initializing trading system...[/bold]")
@@ -139,7 +159,17 @@ def analyze_stock(symbol: str, period_days: int = 90) -> None:
         news_fetcher = NewsFetcher()
         finbert = FinBERTSentiment()
 
-        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+        broker = None
+        if enable_trading:
+            if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
+                broker = AlpacaBroker(paper=True)
+                console.print("[bold green]Paper trading enabled[/bold green]")
+            else:
+                console.print(
+                    "[bold yellow]Warning: Trading enabled but Alpaca credentials not found[/bold yellow]"
+                )
+
+        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker)
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 
@@ -157,8 +187,8 @@ def main() -> None:
     """Main CLI entry point."""
     if len(sys.argv) < 2:
         console.print("[bold red]Error:[/bold red] Missing symbol argument")
-        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS]")
-        console.print("\nExample: python -m src.main AAPL --period 90")
+        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade]")
+        console.print("\nExample: python -m src.main AAPL --period 90 --trade")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
@@ -171,9 +201,11 @@ def main() -> None:
         except (IndexError, ValueError):
             console.print("[bold yellow]Warning:[/bold yellow] Invalid period, using default 90 days")
 
+    enable_trading = "--trade" in sys.argv
+
     setup_logging()
 
-    analyze_stock(symbol, period_days)
+    analyze_stock(symbol, period_days, enable_trading)
 
 
 if __name__ == "__main__":
