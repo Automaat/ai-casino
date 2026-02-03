@@ -3,6 +3,7 @@
 from loguru import logger
 from pydantic import BaseModel
 
+from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
@@ -50,6 +51,7 @@ class TraderAgent:
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
         bullish: BullishResearchAnalysis,
+        bearish: BearishResearchAnalysis,
         owns_position: bool = False,
         position_qty: float | None = None,
     ) -> TradingDecision:
@@ -62,6 +64,7 @@ class TraderAgent:
             news: News analysis results
             fundamental: Fundamental analysis results
             bullish: Bullish research analysis
+            bearish: Bearish research analysis
             owns_position: Whether user owns this stock
             position_qty: Number of shares owned (if any)
 
@@ -128,6 +131,12 @@ Key Strengths: {", ".join(bullish.key_strengths)}
 Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
 Confidence: {bullish.confidence:.2f}
 
+BEARISH RESEARCH:
+Thesis: {bearish.thesis}
+Key Weaknesses: {", ".join(bearish.key_weaknesses)}
+Target Downside: {f"{bearish.target_downside:.1f}%" if bearish.target_downside is not None else "N/A"}
+Confidence: {bearish.confidence:.2f}
+
 Based on these analyses and your portfolio status, make your trading decision:
 1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
 2. Confidence: 0.0-1.0 (how confident in this decision)
@@ -139,14 +148,15 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
 
         system_prompt = (
             "You are an experienced trader who synthesizes technical, sentiment, "
-            "news, fundamental, and bullish research to make informed trading decisions. "
-            "Consider the bull thesis when evaluating upside potential. Be decisive but cautious."
+            "news, fundamental, bullish, and bearish research to make informed trading decisions. "
+            "Consider both the bull thesis (upside potential) and bear thesis (downside risks). "
+            "Be decisive but cautious."
         )
 
         response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
 
         action = self._extract_action(response, technical.signal)
-        confidence = self._extract_confidence(response, technical, sentiment, bullish)
+        confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish)
         risk_level = self._extract_risk_level(response, confidence)
 
         logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
@@ -194,6 +204,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         bullish: BullishResearchAnalysis,
+        bearish: BearishResearchAnalysis,
     ) -> float:
         """Extract or calculate confidence score.
 
@@ -202,6 +213,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             technical: Technical analysis
             sentiment: Sentiment analysis
             bullish: Bullish research analysis
+            bearish: Bearish research analysis
 
         Returns:
             Confidence score (0.0-1.0)
@@ -219,7 +231,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
                 except (ValueError, IndexError):
                     continue
 
-        base_confidence = (technical.confidence + bullish.confidence) / 2
+        base_confidence = (technical.confidence + bullish.confidence + (1 - bearish.confidence)) / 3
 
         if abs(sentiment.sentiment_score) > 0.3:
             sentiment_boost = abs(sentiment.sentiment_score) * 0.2

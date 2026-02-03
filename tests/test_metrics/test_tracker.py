@@ -6,6 +6,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
+from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
@@ -66,6 +67,12 @@ def mock_workflow_result_approved():
             key_strengths=["Bullish technical signals", "Positive sentiment", "Solid fundamentals"],
             target_upside=15.0,
             confidence=0.8,
+        ),
+        bearish=BearishResearchAnalysis(
+            thesis="Limited downside risk given strong fundamentals and positive market sentiment.",
+            key_weaknesses=["Some market uncertainty"],
+            target_downside=5.0,
+            confidence=0.3,
         ),
         decision=TradingDecision(
             action=Signal.BUY,
@@ -152,6 +159,12 @@ def mock_workflow_result_rejected():
             key_strengths=["High name recognition"],
             target_upside=None,
             confidence=0.3,
+        ),
+        bearish=BearishResearchAnalysis(
+            thesis="Significant downside risk due to weak fundamentals and negative market sentiment.",
+            key_weaknesses=["Weak fundamentals", "Negative sentiment", "High valuation", "Declining growth"],
+            target_downside=25.0,
+            confidence=0.8,
         ),
         decision=TradingDecision(
             action=Signal.SELL,

@@ -14,7 +14,7 @@ def test_trader_agent_init(mock_llm_client):
     assert agent.llm == mock_llm_client
 
 
-def test_trader_agent_decide(mock_llm_client, sample_bullish_research):
+def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -53,7 +53,9 @@ def test_trader_agent_decide(mock_llm_client, sample_bullish_research):
         confidence=0.75,
     )
 
-    result = agent.decide("AAPL", technical, sentiment, news, fundamental, sample_bullish_research)
+    result = agent.decide(
+        "AAPL", technical, sentiment, news, fundamental, sample_bullish_research, sample_bearish_research
+    )
 
     assert isinstance(result, TradingDecision)
     assert isinstance(result.action, Signal)
@@ -83,7 +85,7 @@ def test_extract_action_fallback(mock_llm_client):
     assert action == Signal.HOLD
 
 
-def test_extract_confidence_from_response(mock_llm_client, sample_bullish_research):
+def test_extract_confidence_from_response(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -106,12 +108,14 @@ def test_extract_confidence_from_response(mock_llm_client, sample_bullish_resear
 
     response = "Confidence: 0.85\nStrong signals"
 
-    confidence = agent._extract_confidence(response, technical, sentiment, sample_bullish_research)
+    confidence = agent._extract_confidence(
+        response, technical, sentiment, sample_bullish_research, sample_bearish_research
+    )
 
     assert confidence == 0.85
 
 
-def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research):
+def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -134,7 +138,9 @@ def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research):
 
     response = "No confidence mentioned"
 
-    confidence = agent._extract_confidence(response, technical, sentiment, sample_bullish_research)
+    confidence = agent._extract_confidence(
+        response, technical, sentiment, sample_bullish_research, sample_bearish_research
+    )
 
     assert 0.0 <= confidence <= 1.0
 
@@ -157,7 +163,7 @@ def test_repr(mock_llm_client):
     assert "ollama" in repr_str
 
 
-def test_decide_owns_position_true(mock_llm_client, sample_bullish_research):
+def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -203,6 +209,7 @@ def test_decide_owns_position_true(mock_llm_client, sample_bullish_research):
         news,
         fundamental,
         sample_bullish_research,
+        sample_bearish_research,
         owns_position=True,
         position_qty=100.0,
     )
@@ -211,7 +218,7 @@ def test_decide_owns_position_true(mock_llm_client, sample_bullish_research):
     assert result.position_qty == 100.0
 
 
-def test_decide_owns_position_false(mock_llm_client, sample_bullish_research):
+def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -257,6 +264,7 @@ def test_decide_owns_position_false(mock_llm_client, sample_bullish_research):
         news,
         fundamental,
         sample_bullish_research,
+        sample_bearish_research,
         owns_position=False,
         position_qty=None,
     )
@@ -265,7 +273,7 @@ def test_decide_owns_position_false(mock_llm_client, sample_bullish_research):
     assert result.position_qty is None
 
 
-def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_research):
+def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -311,6 +319,7 @@ def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_resea
         news,
         fundamental,
         sample_bullish_research,
+        sample_bearish_research,
         owns_position=True,
         position_qty=50.0,
     )
