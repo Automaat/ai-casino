@@ -13,6 +13,7 @@ from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.data.market import MarketData
+from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import Signal
 from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
 
@@ -50,6 +51,18 @@ def test_trading_workflow_init(mock_workflow_dependencies):
     assert workflow.bearish_researcher is not None
     assert workflow.trader is not None
     assert workflow.risk_manager is not None
+
+
+def test_trading_workflow_init_ensemble(mock_workflow_dependencies):
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_ensemble=True
+    )
+
+    assert workflow.use_ensemble is True
+    assert isinstance(workflow.technical_analyst.strategy, EnsembleStrategy)
+    assert repr(workflow) == "TradingWorkflow(agents=8, ensemble=True)"
 
 
 @pytest.mark.asyncio

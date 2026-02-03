@@ -74,7 +74,22 @@ class EnsembleStrategy:
         self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.aggregation = aggregation
 
+        # Validate weights
+        required_keys = {"momentum", "mean_reversion", "trend_following"}
+        missing_keys = required_keys - set(self.weights.keys())
+        if missing_keys:
+            msg = f"Missing required weight keys: {missing_keys}"
+            raise ValueError(msg)
+
+        if any(v < 0 for v in self.weights.values()):
+            msg = "Weights must be non-negative"
+            raise ValueError(msg)
+
         total_weight = sum(self.weights.values())
+        if total_weight <= 0:
+            msg = "Total weight must be positive"
+            raise ValueError(msg)
+
         if abs(total_weight - 1.0) > WEIGHT_NORMALIZATION_TOLERANCE:
             logger.warning(f"Weights sum to {total_weight}, normalizing to 1.0")
             self.weights = {k: v / total_weight for k, v in self.weights.items()}
@@ -157,6 +172,10 @@ class EnsembleStrategy:
             conflict_resolved = True
             winner = Signal.HOLD
 
+        # Recompute score if winner changed due to conflict resolution
+        if conflict_resolved:
+            winner_score = signal_weights[winner]
+
         return winner, winner_score, conflict_resolved
 
     def _majority_vote(self, results: list[StrategyResult]) -> tuple[Signal, float, bool]:
@@ -182,7 +201,8 @@ class EnsembleStrategy:
             conflict_resolved = True
             winner = Signal.HOLD
 
-        score = winner_count / len(results)
+        # Recompute score based on actual winner after tie resolution
+        score = signal_counts[winner] / len(results)
         return winner, score, conflict_resolved
 
     def _unanimous(self, results: list[StrategyResult]) -> tuple[Signal, float, bool]:

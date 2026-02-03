@@ -68,10 +68,18 @@ class TechnicalAnalyst:
         if self._is_ensemble:
             confidence = indicators.confidence
             logger.info(f"Technical analysis complete: {signal.value} (confidence={confidence:.2f})")
+            # Extract RSI/MACD from momentum sub-strategy for downstream agents
+            rsi = None
+            macd_hist = None
+            for sr in indicators.strategy_results:
+                if sr.name == "momentum":
+                    rsi = sr.indicators.rsi
+                    macd_hist = sr.indicators.macd_hist
+                    break
             return TechnicalAnalysis(
                 signal=signal,
-                rsi=None,
-                macd_hist=None,
+                rsi=rsi,
+                macd_hist=macd_hist,
                 interpretation=response,
                 confidence=confidence,
                 ensemble_result=indicators,

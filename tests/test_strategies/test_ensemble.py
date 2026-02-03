@@ -103,6 +103,24 @@ def test_ensemble_strategy_normalizes_weights():
     assert abs(total - 1.0) < 0.01
 
 
+def test_ensemble_strategy_rejects_missing_keys():
+    incomplete = {"momentum": 0.5, "mean_reversion": 0.5}
+    with pytest.raises(ValueError, match="Missing required weight keys"):
+        EnsembleStrategy(weights=incomplete)
+
+
+def test_ensemble_strategy_rejects_negative_weights():
+    negative = {"momentum": -0.1, "mean_reversion": 0.6, "trend_following": 0.5}
+    with pytest.raises(ValueError, match="Weights must be non-negative"):
+        EnsembleStrategy(weights=negative)
+
+
+def test_ensemble_strategy_rejects_zero_total_weight():
+    zeros = {"momentum": 0.0, "mean_reversion": 0.0, "trend_following": 0.0}
+    with pytest.raises(ValueError, match="Total weight must be positive"):
+        EnsembleStrategy(weights=zeros)
+
+
 def test_run_strategies(
     sample_ohlcv, mock_momentum_indicators, mock_mean_reversion_indicators, mock_trend_following_indicators
 ):
@@ -222,6 +240,32 @@ def test_conflict_resolution_buy_sell_tie(
     assert conflict is True
 
 
+def test_weighted_voting_score_recomputed_on_conflict(
+    mock_momentum_indicators, mock_mean_reversion_indicators, mock_trend_following_indicators
+):
+    """Verify winner_score reflects HOLD's actual weight after conflict resolution."""
+    results = [
+        StrategyResult(name="momentum", signal=Signal.BUY, weight=0.34, indicators=mock_momentum_indicators),
+        StrategyResult(
+            name="mean_reversion", signal=Signal.SELL, weight=0.33, indicators=mock_mean_reversion_indicators
+        ),
+        StrategyResult(
+            name="trend_following",
+            signal=Signal.HOLD,
+            weight=0.33,
+            indicators=mock_trend_following_indicators,
+        ),
+    ]
+
+    strategy = EnsembleStrategy()
+    signal, score, conflict = strategy._weighted_voting(results)
+
+    assert signal == Signal.HOLD
+    assert conflict is True
+    # Score should be HOLD's weight (0.33), not original winner BUY's (0.34)
+    assert score == pytest.approx(0.33, rel=0.01)
+
+
 def test_confidence_calculation():
     strategy = EnsembleStrategy()
 
@@ -322,10 +366,12 @@ def test_majority_vote_tie(
     ]
 
     strategy = EnsembleStrategy(aggregation=AggregationMethod.MAJORITY_VOTE)
-    signal, _score, conflict = strategy._majority_vote(results)
+    signal, score, conflict = strategy._majority_vote(results)
 
     assert signal == Signal.HOLD
     assert conflict is True
+    # Score should be HOLD's count (1/3), computed after tie resolution
+    assert score == pytest.approx(1 / 3, rel=0.01)
 
 
 def test_unanimous_all_agree(
