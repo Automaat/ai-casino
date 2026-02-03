@@ -2,5 +2,21 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.mise\\.toml$"],
+      "matchStrings": ["python = \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "python",
+      "datasourceTemplate": "docker",
+      "packageNameTemplate": "python"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": ["python"],
+      "groupName": "python version"
+    }
   ]
 }
