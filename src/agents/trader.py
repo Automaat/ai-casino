@@ -22,6 +22,13 @@ class TradingDecision(BaseModel):
     owns_position: bool = False
     position_qty: float | None = None
 
+    @property
+    def display_action(self) -> str:
+        """User-friendly action label based on portfolio context."""
+        if self.action == Signal.HOLD and not self.owns_position:
+            return "WAIT"
+        return self.action.value
+
 
 class TraderAgent:
     """Agent that synthesizes all analyses to make trading decisions."""
