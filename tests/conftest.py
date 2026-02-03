@@ -1,12 +1,13 @@
 """Shared pytest fixtures."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
 from src.agents.risk import AccountInfo
+from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.news import NewsArticle
 from src.models.sentiment import SentimentScore
 
@@ -90,3 +91,41 @@ def account_info():
         positions={"SPY": 100.0},
         total_exposure=20000.0,
     )
+
+
+@pytest.fixture
+def mock_alpaca_broker():
+    """Mock Alpaca broker for testing."""
+    mock = MagicMock()
+    mock.paper = True
+
+    mock.get_account_info.return_value = BrokerAccountInfo(
+        balance=100000.0,
+        available_cash=80000.0,
+        positions={
+            "AAPL": BrokerPosition(
+                symbol="AAPL",
+                qty=10.0,
+                market_value=1500.0,
+                avg_entry_price=150.0,
+                unrealized_pnl=50.0,
+                unrealized_pnl_percent=0.033,
+            )
+        },
+        total_exposure=1500.0,
+        portfolio_value=100000.0,
+    )
+
+    mock.submit_order.return_value = OrderStatus(
+        order_id="order-123",
+        symbol="AAPL",
+        qty=10.0,
+        filled_qty=10.0,
+        side="buy",
+        status="filled",
+        submitted_at=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
+        filled_at=datetime(2024, 1, 1, 10, 0, 5, tzinfo=UTC),
+        filled_avg_price=150.0,
+    )
+
+    return mock

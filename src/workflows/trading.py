@@ -10,11 +10,12 @@ from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
+from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
-from src.strategies.momentum import MomentumStrategy
+from src.strategies.momentum import MomentumStrategy, Signal
 
 
 class TradingState(TypedDict):
@@ -29,6 +30,7 @@ class TradingState(TypedDict):
     final_decision: TradingDecision | None
     risk_assessment: RiskAssessment | None
     account_info: AccountInfo | None
+    order_status: OrderStatus | None
 
 
 class TradingWorkflowResult(BaseModel):
@@ -40,6 +42,7 @@ class TradingWorkflowResult(BaseModel):
     news: NewsAnalysis
     decision: TradingDecision
     risk: RiskAssessment
+    order: OrderStatus | None = None
 
     class Config:
         """Pydantic config."""
@@ -56,6 +59,7 @@ class TradingWorkflow:
         market_fetcher: MarketDataFetcher,
         news_fetcher: NewsFetcher,
         finbert: FinBERTSentiment,
+        broker: AlpacaBroker | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -64,9 +68,11 @@ class TradingWorkflow:
             market_fetcher: Market data fetcher
             news_fetcher: News data fetcher
             finbert: FinBERT sentiment model
+            broker: Optional Alpaca broker for trade execution
         """
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
+        self.broker = broker
 
         strategy = MomentumStrategy()
 
@@ -102,6 +108,13 @@ class TradingWorkflow:
 
         state = self._assess_risk(state)
 
+        if (
+            self.broker
+            and state["risk_assessment"].validation.approved
+            and state["final_decision"].action != Signal.HOLD
+        ):
+            state = self._execute_trade(state)
+
         logger.info(
             f"Workflow complete: {state['final_decision'].action.value} "
             f"(confidence={state['final_decision'].confidence:.2f}, "
@@ -115,6 +128,7 @@ class TradingWorkflow:
             news=state["news_analysis"],
             decision=state["final_decision"],
             risk=state["risk_assessment"],
+            order=state.get("order_status"),
         )
 
     def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
@@ -143,6 +157,7 @@ class TradingWorkflow:
             final_decision=None,
             risk_assessment=None,
             account_info=None,
+            order_status=None,
         )
 
     def _run_technical_analysis(self, state: TradingState) -> TradingState:
@@ -246,14 +261,59 @@ class TradingWorkflow:
         """Get account information.
 
         Returns:
-            AccountInfo with mocked data
+            AccountInfo from broker or mocked data
         """
-        return AccountInfo(
-            balance=100000.0,
-            available_cash=100000.0,
-            positions={},
-            total_exposure=0.0,
-        )
+        if not self.broker:
+            return AccountInfo(
+                balance=100000.0,
+                available_cash=100000.0,
+                positions={},
+                total_exposure=0.0,
+            )
+
+        try:
+            broker_info = self.broker.get_account_info()
+            return AccountInfo(
+                balance=broker_info.balance,
+                available_cash=broker_info.available_cash,
+                positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
+                total_exposure=broker_info.total_exposure,
+            )
+        except Exception:
+            logger.exception("Failed to fetch account info from broker, using mock data")
+            return AccountInfo(
+                balance=100000.0,
+                available_cash=100000.0,
+                positions={},
+                total_exposure=0.0,
+            )
+
+    def _execute_trade(self, state: TradingState) -> TradingState:
+        """Execute trade via broker.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with order status
+        """
+        risk = state["risk_assessment"]
+        action = state["final_decision"].action
+
+        order: OrderStatus | None = None
+        try:
+            order = self.broker.submit_order(
+                symbol=state["symbol"],
+                qty=int(risk.position_sizing.recommended_shares),
+                side=action.value.lower(),
+                stop_loss_price=risk.stop_loss.stop_loss_price,
+            )
+            logger.info(f"Executed {action.value}: {state['symbol']} x{order.qty}")
+        except Exception:
+            logger.exception(f"Failed to submit order for {state['symbol']} with action {action.value}")
+
+        state["order_status"] = order
+        return state
 
     def __repr__(self) -> str:
         """String representation."""
