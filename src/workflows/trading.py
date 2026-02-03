@@ -22,6 +22,7 @@ from src.data.news import NewsArticle, NewsFetcher
 from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
+from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy, Signal
 
 
@@ -75,6 +76,7 @@ class TradingWorkflow:
         fundamental_fetcher: FundamentalDataFetcher,
         broker: AlpacaBroker | None = None,
         metrics_tracker: MetricsTracker | None = None,
+        use_ensemble: bool = False,
     ) -> None:
         """Initialize trading workflow.
 
@@ -86,13 +88,17 @@ class TradingWorkflow:
             fundamental_fetcher: Fundamental data fetcher
             broker: Optional Alpaca broker for trade execution
             metrics_tracker: Optional metrics tracker for performance monitoring
+            use_ensemble: Use ensemble strategy instead of momentum only
         """
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
         self.broker = broker
         self.metrics_tracker = metrics_tracker
+        self.use_ensemble = use_ensemble
 
-        strategy = MomentumStrategy()
+        strategy: MomentumStrategy | EnsembleStrategy = (
+            EnsembleStrategy() if use_ensemble else MomentumStrategy()
+        )
 
         self.technical_analyst = TechnicalAnalyst(llm_client, strategy)
         self.sentiment_analyst = SentimentAnalyst(finbert)
@@ -103,7 +109,7 @@ class TradingWorkflow:
         self.trader = TraderAgent(llm_client)
         self.risk_manager = RiskManagementAgent(llm_client)
 
-        logger.info("Initialized TradingWorkflow with all agents")
+        logger.info(f"Initialized TradingWorkflow with all agents (ensemble={use_ensemble})")
 
     async def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -355,4 +361,4 @@ class TradingWorkflow:
 
     def __repr__(self) -> str:
         """String representation."""
-        return "TradingWorkflow(agents=8)"
+        return f"TradingWorkflow(agents=8, ensemble={self.use_ensemble})"

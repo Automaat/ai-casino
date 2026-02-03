@@ -111,9 +111,11 @@ class BullishResearcher:
             Formatted prompt string
         """
         # Technical section
+        rsi_str = f"{technical.rsi:.1f}" if technical.rsi is not None else "N/A"
+        macd_str = f"{technical.macd_hist:.3f}" if technical.macd_hist is not None else "N/A"
         tech_str = (
-            f"{technical.signal.value} (RSI {technical.rsi:.1f}, "
-            f"MACD {technical.macd_hist:.3f}, confidence {technical.confidence:.2f})"
+            f"{technical.signal.value} (RSI {rsi_str}, "
+            f"MACD {macd_str}, confidence {technical.confidence:.2f})"
         )
 
         # Sentiment section
