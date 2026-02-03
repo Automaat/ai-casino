@@ -5,12 +5,14 @@ from loguru import logger
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
+from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
 from src.agents.news import NewsAnalysis, NewsAnalyst
 from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
 from src.data.broker import AlpacaBroker, OrderStatus
+from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
 from src.metrics.tracker import MetricsTracker
@@ -28,6 +30,7 @@ class TradingState(TypedDict):
     technical_analysis: TechnicalAnalysis | None
     sentiment_analysis: SentimentAnalysis | None
     news_analysis: NewsAnalysis | None
+    fundamental_analysis: FundamentalAnalysis | None
     final_decision: TradingDecision | None
     risk_assessment: RiskAssessment | None
     account_info: AccountInfo | None
@@ -41,6 +44,7 @@ class TradingWorkflowResult(BaseModel):
     technical: TechnicalAnalysis
     sentiment: SentimentAnalysis
     news: NewsAnalysis
+    fundamental: FundamentalAnalysis
     decision: TradingDecision
     risk: RiskAssessment
     order: OrderStatus | None = None
@@ -60,6 +64,7 @@ class TradingWorkflow:
         market_fetcher: MarketDataFetcher,
         news_fetcher: NewsFetcher,
         finbert: FinBERTSentiment,
+        fundamental_fetcher: FundamentalDataFetcher,
         broker: AlpacaBroker | None = None,
         metrics_tracker: MetricsTracker | None = None,
     ) -> None:
@@ -70,6 +75,7 @@ class TradingWorkflow:
             market_fetcher: Market data fetcher
             news_fetcher: News data fetcher
             finbert: FinBERT sentiment model
+            fundamental_fetcher: Fundamental data fetcher
             broker: Optional Alpaca broker for trade execution
             metrics_tracker: Optional metrics tracker for performance monitoring
         """
@@ -83,6 +89,7 @@ class TradingWorkflow:
         self.technical_analyst = TechnicalAnalyst(llm_client, strategy)
         self.sentiment_analyst = SentimentAnalyst(finbert)
         self.news_analyst = NewsAnalyst(llm_client)
+        self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
         self.trader = TraderAgent(llm_client)
         self.risk_manager = RiskManagementAgent(llm_client)
 
@@ -108,6 +115,8 @@ class TradingWorkflow:
 
         state = self._run_news_analysis(state)
 
+        state = self._run_fundamental_analysis(state)
+
         state = self._make_decision(state)
 
         state = self._assess_risk(state)
@@ -130,6 +139,7 @@ class TradingWorkflow:
             technical=state["technical_analysis"],
             sentiment=state["sentiment_analysis"],
             news=state["news_analysis"],
+            fundamental=state["fundamental_analysis"],
             decision=state["final_decision"],
             risk=state["risk_assessment"],
             order=state.get("order_status"),
@@ -166,6 +176,7 @@ class TradingWorkflow:
             technical_analysis=None,
             sentiment_analysis=None,
             news_analysis=None,
+            fundamental_analysis=None,
             final_decision=None,
             risk_assessment=None,
             account_info=None,
@@ -220,6 +231,23 @@ class TradingWorkflow:
         state["news_analysis"] = news
         return state
 
+    def _run_fundamental_analysis(self, state: TradingState) -> TradingState:
+        """Run fundamental analysis.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with fundamental analysis
+        """
+        logger.info("Running fundamental analysis")
+
+        current_price = float(state["market_data"]["Close"].iloc[-1])
+        fundamental = self.fundamental_analyst.analyze(state["symbol"], current_price)
+
+        state["fundamental_analysis"] = fundamental
+        return state
+
     def _make_decision(self, state: TradingState) -> TradingState:
         """Make final trading decision.
 
@@ -236,6 +264,7 @@ class TradingWorkflow:
             state["technical_analysis"],
             state["sentiment_analysis"],
             state["news_analysis"],
+            state["fundamental_analysis"],
         )
 
         state["final_decision"] = decision
@@ -329,4 +358,4 @@ class TradingWorkflow:
 
     def __repr__(self) -> str:
         """String representation."""
-        return "TradingWorkflow(agents=5)"
+        return "TradingWorkflow(agents=6)"

@@ -10,6 +10,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from src.data.broker import AlpacaBroker
+from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.metrics.tracker import MetricsTracker
@@ -36,7 +37,7 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-def print_result(result) -> None:  # noqa: ANN001, PLR0915
+def print_result(result) -> None:  # noqa: ANN001, PLR0915, C901
     """Print trading analysis results.
 
     Args:
@@ -77,6 +78,30 @@ def print_result(result) -> None:  # noqa: ANN001, PLR0915
     news_table.add_row("Recommendation", result.news.recommendation[:100])
 
     console.print(news_table)
+
+    fundamental_table = Table(title="Fundamental Analysis", show_header=True)
+    fundamental_table.add_column("Metric", style="cyan")
+    fundamental_table.add_column("Value", style="yellow")
+
+    fundamental_table.add_row("Valuation", f"[bold]{result.fundamental.valuation}[/bold]")
+    if result.fundamental.pe_ratio:
+        fundamental_table.add_row("P/E Ratio", f"{result.fundamental.pe_ratio:.2f}")
+    if result.fundamental.eps:
+        fundamental_table.add_row("EPS", f"${result.fundamental.eps:.2f}")
+    if result.fundamental.revenue_growth_yoy:
+        fundamental_table.add_row("Revenue Growth YoY", f"{result.fundamental.revenue_growth_yoy * 100:.1f}%")
+    if result.fundamental.earnings_growth_yoy:
+        fundamental_table.add_row(
+            "Earnings Growth YoY", f"{result.fundamental.earnings_growth_yoy * 100:.1f}%"
+        )
+    if result.fundamental.debt_to_equity:
+        fundamental_table.add_row("Debt-to-Equity", f"{result.fundamental.debt_to_equity:.2f}")
+    if result.fundamental.current_ratio:
+        fundamental_table.add_row("Current Ratio", f"{result.fundamental.current_ratio:.2f}")
+    fundamental_table.add_row("Confidence", f"{result.fundamental.confidence:.2f}")
+
+    console.print(fundamental_table)
+    console.print(Panel(result.fundamental.interpretation, title="Fundamental Interpretation"))
 
     risk_table = Table(title="Risk Management", show_header=True)
     risk_table.add_column("Metric", style="cyan")
@@ -189,6 +214,7 @@ def analyze_stock(
         market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
         news_fetcher = NewsFetcher()
         finbert = FinBERTSentiment()
+        fundamental_fetcher = FundamentalDataFetcher()
 
         broker = None
         if enable_trading:
@@ -202,7 +228,9 @@ def analyze_stock(
 
         metrics_tracker = MetricsTracker() if show_metrics else None
 
-        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker, metrics_tracker)
+        workflow = TradingWorkflow(
+            llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, broker, metrics_tracker
+        )
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 

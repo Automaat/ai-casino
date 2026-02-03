@@ -1,5 +1,6 @@
 """Tests for trader agent."""
 
+from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
@@ -40,7 +41,19 @@ def test_trader_agent_decide(mock_llm_client):
         recommendation="Consider buying",
     )
 
-    result = agent.decide("AAPL", technical, sentiment, news)
+    fundamental = FundamentalAnalysis(
+        valuation="FAIRLY_VALUED",
+        pe_ratio=28.5,
+        eps=6.15,
+        revenue_growth_yoy=0.062,
+        earnings_growth_yoy=0.102,
+        debt_to_equity=2.05,
+        current_ratio=0.94,
+        interpretation="Solid fundamentals",
+        confidence=0.75,
+    )
+
+    result = agent.decide("AAPL", technical, sentiment, news, fundamental)
 
     assert isinstance(result, TradingDecision)
     assert isinstance(result.action, Signal)

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
@@ -15,7 +16,9 @@ from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
 
 
 @pytest.fixture
-def mock_workflow_dependencies(mock_llm_client, mock_finbert, sample_ohlcv_data, sample_news_articles):
+def mock_workflow_dependencies(
+    mock_llm_client, mock_finbert, mock_fundamental_fetcher, sample_ohlcv_data, sample_news_articles
+):
     market_fetcher = MagicMock()
     market_data = MarketData(
         symbol="AAPL",
@@ -27,27 +30,28 @@ def mock_workflow_dependencies(mock_llm_client, mock_finbert, sample_ohlcv_data,
     news_fetcher = MagicMock()
     news_fetcher.fetch_company_news.return_value = sample_news_articles
 
-    return market_fetcher, news_fetcher, mock_llm_client, mock_finbert
+    return market_fetcher, news_fetcher, mock_llm_client, mock_finbert, mock_fundamental_fetcher
 
 
 def test_trading_workflow_init(mock_workflow_dependencies):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
     assert workflow.market_fetcher == market_fetcher
     assert workflow.news_fetcher == news_fetcher
     assert workflow.technical_analyst is not None
     assert workflow.sentiment_analyst is not None
     assert workflow.news_analyst is not None
+    assert workflow.fundamental_analyst is not None
     assert workflow.trader is not None
     assert workflow.risk_manager is not None
 
 
 def test_trading_workflow_analyze(mock_workflow_dependencies):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
     result = workflow.analyze("AAPL", period_days=90)
 
@@ -56,6 +60,7 @@ def test_trading_workflow_analyze(mock_workflow_dependencies):
     assert isinstance(result.technical, TechnicalAnalysis)
     assert isinstance(result.sentiment, SentimentAnalysis)
     assert isinstance(result.news, NewsAnalysis)
+    assert isinstance(result.fundamental, FundamentalAnalysis)
     assert isinstance(result.decision, TradingDecision)
     assert isinstance(result.risk, RiskAssessment)
     assert result.risk.validation is not None
@@ -65,9 +70,9 @@ def test_trading_workflow_analyze(mock_workflow_dependencies):
 
 
 def test_fetch_data(mock_workflow_dependencies):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
     state = workflow._fetch_data("AAPL", 90)
 
@@ -78,9 +83,9 @@ def test_fetch_data(mock_workflow_dependencies):
 
 
 def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
     state = {
         "symbol": "AAPL",
@@ -101,9 +106,9 @@ def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
 
 
 def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
     state = {
         "symbol": "AAPL",
@@ -124,9 +129,9 @@ def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles
 
 
 def test_make_decision(mock_workflow_dependencies):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
     state = {
         "symbol": "AAPL",
@@ -153,9 +158,21 @@ def test_make_decision(mock_workflow_dependencies):
             impact_assessment="Positive",
             recommendation="Buy",
         ),
+        "fundamental_analysis": FundamentalAnalysis(
+            valuation="FAIRLY_VALUED",
+            pe_ratio=28.5,
+            eps=6.15,
+            revenue_growth_yoy=0.062,
+            earnings_growth_yoy=0.102,
+            debt_to_equity=2.05,
+            current_ratio=0.94,
+            interpretation="Solid fundamentals",
+            confidence=0.75,
+        ),
         "final_decision": None,
         "risk_assessment": None,
         "account_info": None,
+        "order_status": None,
     }
 
     result_state = workflow._make_decision(state)
@@ -165,23 +182,25 @@ def test_make_decision(mock_workflow_dependencies):
 
 
 def test_repr(mock_workflow_dependencies):
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
-    assert repr(workflow) == "TradingWorkflow(agents=5)"
+    assert repr(workflow) == "TradingWorkflow(agents=6)"
 
 
 def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
     """Test trade execution when broker provided and risk approved."""
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
     mock_broker = MagicMock()
 
     mock_order = MagicMock()
     mock_order.qty = 10
     mock_broker.submit_order.return_value = mock_order
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker=mock_broker)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, broker=mock_broker
+    )
 
     state = {
         "symbol": "AAPL",
@@ -215,11 +234,13 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
 
 def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_data):
     """Test trade execution handles broker errors gracefully."""
-    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
     mock_broker = MagicMock()
     mock_broker.submit_order.side_effect = Exception("API error")
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker=mock_broker)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, broker=mock_broker
+    )
 
     state = {
         "symbol": "AAPL",
