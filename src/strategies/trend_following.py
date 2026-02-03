@@ -40,7 +40,7 @@ class TrendFollowingStrategy:
         Args:
             sma_fast: Fast SMA period (default 50)
             sma_slow: Slow SMA period (default 200)
-            adx_period: ADX calculation period
+            adx_period: ADX calculation period (default 14)
             adx_threshold: ADX threshold for strong trend (>25 = strong)
         """
         self.sma_fast = sma_fast
@@ -135,8 +135,10 @@ class TrendFollowingStrategy:
         """Generate trading signal based on trend following indicators.
 
         Signal logic:
-        - BUY: SMA bullish crossover OR (strong uptrend + price > fast SMA)
-        - SELL: SMA bearish crossover OR (strong downtrend + price < fast SMA)
+        - BUY: SMA bullish crossover with bullish trend confirmation (via DI) OR
+          (strong uptrend + price > fast SMA)
+        - SELL: SMA bearish crossover with bearish trend confirmation (via DI) OR
+          (strong downtrend + price < fast SMA)
         - HOLD: Otherwise
 
         Args:
