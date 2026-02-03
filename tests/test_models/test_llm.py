@@ -44,12 +44,28 @@ def test_llm_client_init_openai(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_MODEL", "gpt-4o")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("OPENAI_API_BASE", raising=False)
 
     client = LLMClient()
 
     assert client.provider == "openai"
     assert client.model == "gpt-4o"
     assert client._model_id == "openai/gpt-4o"
+    assert client._api_base is None
+
+
+def test_llm_client_init_openai_custom_api_base(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "hf:moonshotai/Kimi-K2.5")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_BASE", "https://api.synthetic.new/openai/v1")
+
+    client = LLMClient()
+
+    assert client.provider == "openai"
+    assert client.model == "hf:moonshotai/Kimi-K2.5"
+    assert client._model_id == "openai/hf:moonshotai/Kimi-K2.5"
+    assert client._api_base == "https://api.synthetic.new/openai/v1"
 
 
 def test_llm_client_unsupported_provider(monkeypatch):
@@ -73,6 +89,20 @@ def test_complete_with_system_prompt(mock_completion, monkeypatch):
         {"role": "user", "content": "Test prompt"},
     ]
     assert call_args.kwargs["temperature"] == 0.5
+
+
+def test_complete_with_api_base(mock_completion, monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "hf:moonshotai/Kimi-K2.5")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_BASE", "https://api.synthetic.new/openai/v1")
+
+    client = LLMClient()
+    result = client.complete("Test prompt")
+
+    assert result == "Mocked response"
+    call_args = mock_completion.call_args
+    assert call_args.kwargs["api_base"] == "https://api.synthetic.new/openai/v1"
 
 
 def test_complete_without_system_prompt(mock_completion, monkeypatch):
