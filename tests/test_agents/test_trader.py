@@ -318,4 +318,4 @@ def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_resea
     call_args = mock_llm_client.complete.call_args
     prompt = call_args[0][0]
     assert "PORTFOLIO STATUS:" in prompt
-    assert "You own 50.0 shares" in prompt
+    assert "currently own 50.0 shares" in prompt

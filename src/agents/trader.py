@@ -63,17 +63,28 @@ class TraderAgent:
         """
         logger.info(f"Making trading decision for {symbol} (owns={owns_position}, qty={position_qty})")
 
-        portfolio_status = (
-            f"You own {position_qty} shares" if owns_position else "You do NOT own this stock"
-        )
-        hold_meaning = (
-            "Maintain current position" if owns_position else "No action - insufficient conviction to buy"
-        )
+        if owns_position:
+            portfolio_section = f"""PORTFOLIO STATUS:
+You currently own {position_qty} shares of {symbol}.
+
+VALID ACTIONS FOR CURRENT HOLDER:
+- BUY: Add to your position
+- SELL: Exit or reduce your position
+- HOLD: Maintain current position, no action needed"""
+        else:
+            portfolio_section = f"""PORTFOLIO STATUS:
+You do NOT own any shares of {symbol}.
+
+VALID ACTIONS WHEN NOT HOLDING:
+- BUY: Open a new position (only if signals strongly support entry)
+- HOLD: Do NOT buy - signals are mixed or unfavorable for entry
+
+IMPORTANT: Since you don't own this stock, SELL is NOT a valid action.
+Choose BUY only with strong conviction. Otherwise choose HOLD (meaning: don't buy yet)."""
 
         prompt = f"""You are a professional trader making a decision for {symbol}.
 
-PORTFOLIO STATUS:
-{portfolio_status}
+{portfolio_section}
 
 TECHNICAL ANALYSIS:
 Signal: {technical.signal.value}
@@ -110,16 +121,11 @@ Key Strengths: {", ".join(bullish.key_strengths)}
 Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
 Confidence: {bullish.confidence:.2f}
 
-Based on these five independent analyses, make your trading decision:
-1. Action: BUY, SELL, or HOLD
+Based on these analyses and your portfolio status, make your trading decision:
+1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
 2. Confidence: 0.0-1.0 (how confident in this decision)
 3. Risk Level: LOW, MEDIUM, or HIGH
 4. Reasoning: 2-3 sentences explaining your decision
-
-Signal meanings:
-- BUY: Recommend purchasing (only if not owned or adding to position)
-- SELL: Recommend selling (only valid if you own shares)
-- HOLD: {hold_meaning}
 
 Consider agreement/disagreement between signals. Higher agreement = higher confidence.
 """
