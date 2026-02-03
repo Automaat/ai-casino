@@ -98,8 +98,8 @@ Choose BUY only with strong conviction. Otherwise choose HOLD (meaning: don't bu
 
 TECHNICAL ANALYSIS:
 Signal: {technical.signal.value}
-RSI: {technical.rsi:.2f}
-MACD Histogram: {technical.macd_hist:.4f}
+RSI: {f"{technical.rsi:.2f}" if technical.rsi is not None else "N/A"}
+MACD Histogram: {f"{technical.macd_hist:.4f}" if technical.macd_hist is not None else "N/A"}
 Confidence: {technical.confidence:.2f}
 Analysis: {technical.interpretation}
 
