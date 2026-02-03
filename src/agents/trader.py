@@ -156,7 +156,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
 
         action = self._extract_action(response, technical.signal)
-        confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish)
+        confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)
         risk_level = self._extract_risk_level(response, confidence)
 
         logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
@@ -205,6 +205,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         sentiment: SentimentAnalysis,
         bullish: BullishResearchAnalysis,
         bearish: BearishResearchAnalysis,
+        action: Signal,
     ) -> float:
         """Extract or calculate confidence score.
 
@@ -214,35 +215,60 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             sentiment: Sentiment analysis
             bullish: Bullish research analysis
             bearish: Bearish research analysis
+            action: Trading action (affects bull/bear weighting)
 
         Returns:
             Confidence score (0.0-1.0)
         """
-        response_lower = response.lower()
+        parsed = self._parse_confidence_from_response(response)
+        if parsed is not None:
+            return parsed
 
-        for line in response.split("\n"):
-            if "confidence" in line.lower():
-                try:
-                    parts = line.split(":")
-                    if len(parts) > 1:
-                        value = float(parts[1].strip().split()[0])
-                        if 0.0 <= value <= 1.0:
-                            return value
-                except (ValueError, IndexError):
-                    continue
-
-        base_confidence = (technical.confidence + bullish.confidence + (1 - bearish.confidence)) / 3
+        bull_weight, bear_weight = self._calculate_bull_bear_weights(action, bullish, bearish)
+        base_confidence = (technical.confidence + bull_weight + bear_weight) / 3
 
         if abs(sentiment.sentiment_score) > 0.3:
             sentiment_boost = abs(sentiment.sentiment_score) * 0.2
             base_confidence = min(base_confidence + sentiment_boost, 1.0)
 
+        response_lower = response.lower()
         if "high confidence" in response_lower or "strongly" in response_lower:
             return min(base_confidence + 0.1, 1.0)
         if "low confidence" in response_lower or "uncertain" in response_lower:
             return max(base_confidence - 0.1, 0.0)
 
         return base_confidence
+
+    def _parse_confidence_from_response(self, response: str) -> float | None:
+        """Parse confidence value from LLM response text."""
+        for line in response.split("\n"):
+            if "confidence" not in line.lower():
+                continue
+            try:
+                parts = line.split(":")
+                if len(parts) > 1:
+                    value = float(parts[1].strip().split()[0])
+                    if 0.0 <= value <= 1.0:
+                        return value
+            except (ValueError, IndexError):
+                continue
+        return None
+
+    def _calculate_bull_bear_weights(
+        self,
+        action: Signal,
+        bullish: BullishResearchAnalysis,
+        bearish: BearishResearchAnalysis,
+    ) -> tuple[float, float]:
+        """Calculate bull/bear weights based on trading action."""
+        if action == Signal.BUY:
+            # BUY: high bullish = good, high bearish = bad
+            return bullish.confidence, 1 - bearish.confidence
+        if action == Signal.SELL:
+            # SELL: high bearish = good, high bullish = bad
+            return 1 - bullish.confidence, bearish.confidence
+        # HOLD: neutral weights
+        return 0.5, 0.5
 
     def _extract_risk_level(self, response: str, confidence: float) -> str:
         """Determine risk level from response or confidence.
