@@ -175,6 +175,7 @@ class EnsembleBacktestStrategy(Strategy):
     momentum_weight = 0.4
     mean_reversion_weight = 0.25
     trend_following_weight = 0.35
+    ensemble_threshold = 0.3
 
     # Momentum params
     rsi_period = 14
@@ -194,13 +195,8 @@ class EnsembleBacktestStrategy(Strategy):
     bb_period = 20
     bb_std = 2.0
 
-    def init(self) -> None:
-        """Initialize all indicators."""
-        close_series = pd.Series(self.data.Close, name="Close")
-        high_series = pd.Series(self.data.High, name="High")
-        low_series = pd.Series(self.data.Low, name="Low")
-
-        # Momentum indicators
+    def _init_momentum_indicators(self, close_series: pd.Series) -> None:
+        """Initialize RSI and MACD indicators."""
         rsi_result = ta.rsi(close_series, length=self.rsi_period)
         self.rsi = self.I(lambda: rsi_result.values)
 
@@ -212,7 +208,10 @@ class EnsembleBacktestStrategy(Strategy):
         else:
             self.macd_hist = self.I(lambda: pd.Series([0.0] * len(close_series)).values)
 
-        # Trend following indicators
+    def _init_trend_indicators(
+        self, close_series: pd.Series, high_series: pd.Series, low_series: pd.Series
+    ) -> None:
+        """Initialize SMA and ADX indicators."""
         sma_fast_result = ta.sma(close_series, length=self.sma_fast)
         sma_slow_result = ta.sma(close_series, length=self.sma_slow)
         self.sma_fast_line = self.I(lambda: sma_fast_result.values)
@@ -229,7 +228,8 @@ class EnsembleBacktestStrategy(Strategy):
             self.plus_di = self.I(lambda: zeros)
             self.minus_di = self.I(lambda: zeros)
 
-        # Mean reversion indicators
+    def _init_mean_reversion_indicators(self, close_series: pd.Series) -> None:
+        """Initialize Bollinger Bands indicators."""
         bbands = ta.bbands(close_series, length=self.bb_period, std=self.bb_std)
         if bbands is not None:
             lower_cols = [c for c in bbands.columns if c.startswith(f"BBL_{self.bb_period}")]
@@ -246,6 +246,16 @@ class EnsembleBacktestStrategy(Strategy):
             zeros = pd.Series([0.0] * len(close_series)).values
             self.bb_lower = self.I(lambda: zeros)
             self.bb_upper = self.I(lambda: zeros)
+
+    def init(self) -> None:
+        """Initialize all indicators."""
+        close_series = pd.Series(self.data.Close, name="Close")
+        high_series = pd.Series(self.data.High, name="High")
+        low_series = pd.Series(self.data.Low, name="Low")
+
+        self._init_momentum_indicators(close_series)
+        self._init_trend_indicators(close_series, high_series, low_series)
+        self._init_mean_reversion_indicators(close_series)
 
     def _get_momentum_signal(self) -> int:
         """Get momentum signal: 1 (buy), -1 (sell), 0 (hold)."""
@@ -306,10 +316,7 @@ class EnsembleBacktestStrategy(Strategy):
             + mean_rev_sig * self.mean_reversion_weight
         ) / total_weight
 
-        # Threshold for action (>0.3 for buy, <-0.3 for sell)
-        threshold = 0.3
-
-        if weighted_signal > threshold and not self.position:
+        if weighted_signal > self.ensemble_threshold and not self.position:
             self.buy()
-        elif weighted_signal < -threshold and self.position:
+        elif weighted_signal < -self.ensemble_threshold and self.position:
             self.position.close()

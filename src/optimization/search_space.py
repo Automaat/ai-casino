@@ -75,6 +75,7 @@ ENSEMBLE_SEARCH_SPACE = SearchSpace(
         ParamRange(name="momentum_weight", low=0.1, high=0.6, step=0.05),
         ParamRange(name="mean_reversion_weight", low=0.1, high=0.4, step=0.05),
         ParamRange(name="trend_following_weight", low=0.1, high=0.5, step=0.05),
+        ParamRange(name="ensemble_threshold", low=0.1, high=0.5, step=0.05),
     ],
     constraints=["weights_normalize_to_1"],
 )

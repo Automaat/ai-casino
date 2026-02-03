@@ -47,10 +47,12 @@ def _apply_constraint(constraint: str, params: dict[str, float | int]) -> bool:
         return params.get("sma_fast", 0) >= params.get("sma_slow", 0)
     if constraint == "weights_normalize_to_1":
         total = sum(params.get(k, 0) for k in ENSEMBLE_WEIGHT_KEYS)
-        if total > 0:
-            for key in ENSEMBLE_WEIGHT_KEYS:
-                if key in params:
-                    params[key] = params[key] / total
+        if total <= 0:
+            return True  # Constraint violated: no valid weights
+        # Normalize weights in-place (intentional mutation for Optuna trial)
+        for key in ENSEMBLE_WEIGHT_KEYS:
+            if key in params:
+                params[key] = params[key] / total
     return False
 
 
@@ -129,6 +131,7 @@ class OptunaOptimizer:
             )
             return result.sharpe_ratio, result.total_return, abs(result.max_drawdown)
         except Exception:
+            logger.exception("Backtest failed")
             return None
 
     def _objective(self, trial: optuna.Trial, ctx: _OptimizationContext) -> float | tuple[float, ...]:
@@ -153,6 +156,7 @@ class OptunaOptimizer:
         params = self._suggest_params(trial, ctx.search_space)
         strategy_class = self._create_strategy_class(ctx.strategy_type, params)
 
+        # Train period unused: rule-based strategies don't require training
         def fold_objective(
             _train_start: datetime, _train_end: datetime, test_start: datetime, test_end: datetime
         ) -> dict[str, float]:
@@ -192,6 +196,9 @@ class OptunaOptimizer:
     ) -> tuple[dict[str, float | int], dict[str, float], list[dict[str, float | int]] | None]:
         """Extract best params, metrics, and pareto front from study."""
         if self._multi_objective:
+            if not study.best_trials:
+                msg = "No completed trials; all may have been pruned or failed"
+                raise ValueError(msg)
             pareto_front = [
                 {
                     **t.params,

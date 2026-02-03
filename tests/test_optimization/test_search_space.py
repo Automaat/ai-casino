@@ -79,12 +79,13 @@ class TestSearchSpace:
         space = ENSEMBLE_SEARCH_SPACE
 
         assert space.strategy == StrategyType.ENSEMBLE
-        assert len(space.params) == 3
+        assert len(space.params) == 4
 
         param_names = {p.name for p in space.params}
         assert "momentum_weight" in param_names
         assert "mean_reversion_weight" in param_names
         assert "trend_following_weight" in param_names
+        assert "ensemble_threshold" in param_names
 
     def test_constraints(self):
         """Test search space constraints."""
