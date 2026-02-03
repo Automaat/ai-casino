@@ -138,15 +138,19 @@ def print_result(result) -> None:  # noqa: ANN001, PLR0915, C901
         "BUY": "green",
         "SELL": "red",
         "HOLD": "yellow",
+        "WAIT": "yellow",
     }
 
+    display_action = result.decision.display_action
+    action_color = decision_color[display_action]
+
     decision_panel = Panel(
-        f"[bold {decision_color[result.decision.action.value]}]{result.decision.action.value}[/bold {decision_color[result.decision.action.value]}]\n\n"
+        f"[bold {action_color}]{display_action}[/bold {action_color}]\n\n"
         f"Confidence: {result.decision.confidence:.2f}\n"
         f"Risk Level: {result.decision.risk_level}\n\n"
         f"{result.decision.reasoning}",
         title="[bold]Final Trading Decision[/bold]",
-        border_style=decision_color[result.decision.action.value],
+        border_style=action_color,
     )
 
     console.print(decision_panel)

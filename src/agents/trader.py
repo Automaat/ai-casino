@@ -19,6 +19,15 @@ class TradingDecision(BaseModel):
     confidence: float
     reasoning: str
     risk_level: str
+    owns_position: bool = False
+    position_qty: float | None = None
+
+    @property
+    def display_action(self) -> str:
+        """User-friendly action label based on portfolio context."""
+        if self.action == Signal.HOLD and not self.owns_position:
+            return "WAIT"
+        return self.action.value
 
 
 class TraderAgent:
@@ -41,6 +50,8 @@ class TraderAgent:
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
         bullish: BullishResearchAnalysis,
+        owns_position: bool = False,
+        position_qty: float | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -51,13 +62,36 @@ class TraderAgent:
             news: News analysis results
             fundamental: Fundamental analysis results
             bullish: Bullish research analysis
+            owns_position: Whether user owns this stock
+            position_qty: Number of shares owned (if any)
 
         Returns:
             TradingDecision with action and reasoning
         """
-        logger.info(f"Making trading decision for {symbol}")
+        logger.info(f"Making trading decision for {symbol} (owns={owns_position}, qty={position_qty})")
+
+        if owns_position:
+            portfolio_section = f"""PORTFOLIO STATUS:
+You currently own {position_qty} shares of {symbol}.
+
+VALID ACTIONS FOR CURRENT HOLDER:
+- BUY: Add to your position
+- SELL: Exit or reduce your position
+- HOLD: Maintain current position, no action needed"""
+        else:
+            portfolio_section = f"""PORTFOLIO STATUS:
+You do NOT own any shares of {symbol}.
+
+VALID ACTIONS WHEN NOT HOLDING:
+- BUY: Open a new position (only if signals strongly support entry)
+- HOLD: Do NOT buy - signals are mixed or unfavorable for entry
+
+IMPORTANT: Since you don't own this stock, SELL is NOT a valid action.
+Choose BUY only with strong conviction. Otherwise choose HOLD (meaning: don't buy yet)."""
 
         prompt = f"""You are a professional trader making a decision for {symbol}.
+
+{portfolio_section}
 
 TECHNICAL ANALYSIS:
 Signal: {technical.signal.value}
@@ -94,8 +128,8 @@ Key Strengths: {", ".join(bullish.key_strengths)}
 Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
 Confidence: {bullish.confidence:.2f}
 
-Based on these five independent analyses, make your trading decision:
-1. Action: BUY, SELL, or HOLD
+Based on these analyses and your portfolio status, make your trading decision:
+1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
 2. Confidence: 0.0-1.0 (how confident in this decision)
 3. Risk Level: LOW, MEDIUM, or HIGH
 4. Reasoning: 2-3 sentences explaining your decision
@@ -122,6 +156,8 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             confidence=confidence,
             reasoning=response,
             risk_level=risk_level,
+            owns_position=owns_position,
+            position_qty=position_qty,
         )
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:
