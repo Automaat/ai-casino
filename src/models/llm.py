@@ -29,6 +29,8 @@ class LLMClient:
         self.model = model or os.getenv("LLM_MODEL", "qwen3:14b")
         self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
+        self._api_base: str | None = None
+
         if self.provider == "ollama":
             os.environ["OLLAMA_API_BASE"] = self.base_url
             self._model_id = f"ollama/{self.model}"
@@ -36,6 +38,7 @@ class LLMClient:
             self._model_id = f"anthropic/{self.model}"
         elif self.provider == "openai":
             self._model_id = f"openai/{self.model}"
+            self._api_base = os.getenv("OPENAI_API_BASE")
         else:
             msg = f"Unsupported provider: {self.provider}"
             raise ValueError(msg)
@@ -61,11 +64,14 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            response = completion(
-                model=self._model_id,
-                messages=messages,
-                temperature=temperature,
-            )
+            kwargs: dict = {
+                "model": self._model_id,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if self._api_base:
+                kwargs["api_base"] = self._api_base
+            response = completion(**kwargs)
             content = response.choices[0].message.content
             logger.debug(f"LLM response length: {len(content)} chars")
             return content
@@ -84,11 +90,14 @@ class LLMClient:
             Generated text response
         """
         try:
-            response = completion(
-                model=self._model_id,
-                messages=messages,
-                temperature=temperature,
-            )
+            kwargs: dict = {
+                "model": self._model_id,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if self._api_base:
+                kwargs["api_base"] = self._api_base
+            response = completion(**kwargs)
             content = response.choices[0].message.content
             logger.debug(f"LLM chat response length: {len(content)} chars")
             return content
