@@ -6,6 +6,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
+from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import (
@@ -59,6 +60,12 @@ def mock_workflow_result_approved():
             current_ratio=0.94,
             interpretation="Solid fundamentals",
             confidence=0.75,
+        ),
+        bullish=BullishResearchAnalysis(
+            thesis="Strong momentum with positive sentiment and solid fundamentals support upside potential.",
+            key_strengths=["Bullish technical signals", "Positive sentiment", "Solid fundamentals"],
+            target_upside=15.0,
+            confidence=0.8,
         ),
         decision=TradingDecision(
             action=Signal.BUY,
@@ -139,6 +146,12 @@ def mock_workflow_result_rejected():
             current_ratio=0.8,
             interpretation="Weak fundamentals",
             confidence=0.6,
+        ),
+        bullish=BullishResearchAnalysis(
+            thesis="Limited upside potential given weak fundamentals and bearish technical signals.",
+            key_strengths=["High name recognition"],
+            target_upside=None,
+            confidence=0.3,
         ),
         decision=TradingDecision(
             action=Signal.SELL,

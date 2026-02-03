@@ -3,6 +3,7 @@
 from loguru import logger
 from pydantic import BaseModel
 
+from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
@@ -39,6 +40,7 @@ class TraderAgent:
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
+        bullish: BullishResearchAnalysis,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -48,6 +50,7 @@ class TraderAgent:
             sentiment: Sentiment analysis results
             news: News analysis results
             fundamental: Fundamental analysis results
+            bullish: Bullish research analysis
 
         Returns:
             TradingDecision with action and reasoning
@@ -85,7 +88,13 @@ Current Ratio: {fundamental.current_ratio if fundamental.current_ratio else "N/A
 Confidence: {fundamental.confidence:.2f}
 Analysis: {fundamental.interpretation}
 
-Based on these four independent analyses, make your trading decision:
+BULLISH RESEARCH:
+Thesis: {bullish.thesis}
+Key Strengths: {", ".join(bullish.key_strengths)}
+Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside else "N/A"}
+Confidence: {bullish.confidence:.2f}
+
+Based on these five independent analyses, make your trading decision:
 1. Action: BUY, SELL, or HOLD
 2. Confidence: 0.0-1.0 (how confident in this decision)
 3. Risk Level: LOW, MEDIUM, or HIGH
@@ -96,13 +105,14 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
 
         system_prompt = (
             "You are an experienced trader who synthesizes technical, sentiment, "
-            "news, and fundamental analysis to make informed trading decisions. Be decisive but cautious."
+            "news, fundamental, and bullish research to make informed trading decisions. "
+            "Consider the bull thesis when evaluating upside potential. Be decisive but cautious."
         )
 
         response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
 
         action = self._extract_action(response, technical.signal)
-        confidence = self._extract_confidence(response, technical, sentiment)
+        confidence = self._extract_confidence(response, technical, sentiment, bullish)
         risk_level = self._extract_risk_level(response, confidence)
 
         logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
@@ -147,6 +157,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         response: str,
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
+        bullish: BullishResearchAnalysis,
     ) -> float:
         """Extract or calculate confidence score.
 
@@ -154,6 +165,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             response: LLM response text
             technical: Technical analysis
             sentiment: Sentiment analysis
+            bullish: Bullish research analysis
 
         Returns:
             Confidence score (0.0-1.0)
@@ -171,7 +183,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
                 except (ValueError, IndexError):
                     continue
 
-        base_confidence = technical.confidence
+        base_confidence = (technical.confidence + bullish.confidence) / 2
 
         if abs(sentiment.sentiment_score) > 0.3:
             sentiment_boost = abs(sentiment.sentiment_score) * 0.2

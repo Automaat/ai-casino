@@ -64,6 +64,7 @@ ignore = [
     "ANN",     # type annotations not required in tests
     "D",       # docstrings not required in tests
     "PLR2004", # magic values OK in tests
+    "PLR0913", # many args OK for pytest fixtures
     "SLF001",  # private member access OK for testing
     "ARG001",  # unused args OK in fixtures
     "DTZ",     # timezone not critical in test data

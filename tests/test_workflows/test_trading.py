@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import RiskAssessment
@@ -44,6 +45,7 @@ def test_trading_workflow_init(mock_workflow_dependencies):
     assert workflow.sentiment_analyst is not None
     assert workflow.news_analyst is not None
     assert workflow.fundamental_analyst is not None
+    assert workflow.bullish_researcher is not None
     assert workflow.trader is not None
     assert workflow.risk_manager is not None
 
@@ -61,6 +63,7 @@ def test_trading_workflow_analyze(mock_workflow_dependencies):
     assert isinstance(result.sentiment, SentimentAnalysis)
     assert isinstance(result.news, NewsAnalysis)
     assert isinstance(result.fundamental, FundamentalAnalysis)
+    assert isinstance(result.bullish, BullishResearchAnalysis)
     assert isinstance(result.decision, TradingDecision)
     assert isinstance(result.risk, RiskAssessment)
     assert result.risk.validation is not None
@@ -128,7 +131,7 @@ def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles
     assert isinstance(result_state["sentiment_analysis"], SentimentAnalysis)
 
 
-def test_make_decision(mock_workflow_dependencies):
+def test_make_decision(mock_workflow_dependencies, sample_bullish_research):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
@@ -169,6 +172,7 @@ def test_make_decision(mock_workflow_dependencies):
             interpretation="Solid fundamentals",
             confidence=0.75,
         ),
+        "bullish_research": sample_bullish_research,
         "final_decision": None,
         "risk_assessment": None,
         "account_info": None,
@@ -186,7 +190,7 @@ def test_repr(mock_workflow_dependencies):
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
-    assert repr(workflow) == "TradingWorkflow(agents=6)"
+    assert repr(workflow) == "TradingWorkflow(agents=7)"
 
 
 def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
