@@ -186,8 +186,6 @@ class MarketRegimeDetector:
         Returns:
             Confidence score (0.0-1.0)
         """
-        confidence = 0.5
-
         if regime == MarketRegime.HIGH_VOLATILITY:
             # Higher ATR ratio = higher confidence
             excess = indicators.atr_ratio - self.atr_vol_ratio
@@ -212,7 +210,7 @@ class MarketRegimeDetector:
         """Detect market regime from price data.
 
         Args:
-            data: OHLCV dataframe (minimum 50 rows recommended)
+            data: OHLCV dataframe (minimum 35 rows required, 50+ recommended)
 
         Returns:
             RegimeAnalysis with regime classification and confidence

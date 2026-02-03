@@ -271,12 +271,21 @@ class TestStrategySelection:
 
     def test_strategy_selection_fields(self) -> None:
         """Test StrategySelection model fields."""
+        regime_analysis = RegimeAnalysis(
+            regime=MarketRegime.TRENDING_BULLISH,
+            indicators=RegimeIndicators(
+                adx=35.0, plus_di=30.0, minus_di=15.0, atr=2.5, atr_ratio=1.1, bb_width=5.0
+            ),
+            confidence=0.75,
+            reasoning="Test reasoning",
+        )
         selection = StrategySelection(
             strategy_name="trend_following",
             strategy_instance=TrendFollowingStrategy(sma_fast=20, sma_slow=50),
             ensemble_weights=None,
             regime=MarketRegime.TRENDING_BULLISH,
             regime_confidence=0.75,
+            regime_analysis=regime_analysis,
             reasoning="Test reasoning",
             confidence=0.75,
         )
@@ -286,17 +295,27 @@ class TestStrategySelection:
         assert selection.ensemble_weights is None
         assert selection.regime == MarketRegime.TRENDING_BULLISH
         assert selection.regime_confidence == 0.75
+        assert selection.regime_analysis == regime_analysis
         assert selection.confidence == 0.75
 
     def test_strategy_selection_with_ensemble(self) -> None:
         """Test StrategySelection with ensemble weights."""
         weights = {"momentum": 0.4, "mean_reversion": 0.3, "trend_following": 0.3}
+        regime_analysis = RegimeAnalysis(
+            regime=MarketRegime.RANGING,
+            indicators=RegimeIndicators(
+                adx=18.0, plus_di=20.0, minus_di=22.0, atr=1.5, atr_ratio=1.0, bb_width=3.0
+            ),
+            confidence=0.4,
+            reasoning="Low confidence",
+        )
         selection = StrategySelection(
             strategy_name="ensemble",
             strategy_instance=EnsembleStrategy(weights=weights),
             ensemble_weights=weights,
             regime=MarketRegime.RANGING,
             regime_confidence=0.4,
+            regime_analysis=regime_analysis,
             reasoning="Low confidence, using ensemble",
             confidence=0.4,
         )

@@ -1,5 +1,7 @@
 """Technical Analysis Agent."""
 
+from typing import cast
+
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel
@@ -135,7 +137,7 @@ class TechnicalAnalyst:
         self, symbol: str, latest_close: float, signal: Signal, indicators: MomentumIndicators
     ) -> str:
         """Build LLM prompt for momentum strategy."""
-        strategy = self.strategy
+        strategy = cast("MomentumStrategy", self.strategy)
         return f"""Analyze these technical indicators for {symbol}:
 
 Current Price: ${latest_close:.2f}
@@ -160,7 +162,7 @@ Provide a concise 2-3 sentence interpretation of these indicators and their impl
         self, symbol: str, latest_close: float, signal: Signal, indicators: TrendFollowingIndicators
     ) -> str:
         """Build LLM prompt for trend following strategy."""
-        strategy = self.strategy
+        strategy = cast("TrendFollowingStrategy", self.strategy)
         cross_status = (
             "GOLDEN CROSS"
             if indicators.sma_bullish_cross

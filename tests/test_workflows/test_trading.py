@@ -110,6 +110,31 @@ async def test_trading_workflow_analyze(mock_workflow_dependencies):
     news_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=10)
 
 
+@pytest.mark.asyncio
+async def test_trading_workflow_analyze_with_meta_agent(mock_workflow_dependencies):
+    """Test full analyze flow with meta-agent enabled."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=True
+    )
+
+    result = await workflow.analyze("AAPL", period_days=90)
+
+    assert isinstance(result, TradingWorkflowResult)
+    assert result.symbol == "AAPL"
+    assert result.regime is not None
+    assert result.strategy_used is not None
+    assert isinstance(result.technical, TechnicalAnalysis)
+    assert isinstance(result.sentiment, SentimentAnalysis)
+    assert isinstance(result.news, NewsAnalysis)
+    assert isinstance(result.fundamental, FundamentalAnalysis)
+    assert isinstance(result.bullish, BullishResearchAnalysis)
+    assert isinstance(result.bearish, BearishResearchAnalysis)
+    assert isinstance(result.decision, TradingDecision)
+    assert isinstance(result.risk, RiskAssessment)
+
+
 def test_fetch_data(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 

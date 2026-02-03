@@ -152,12 +152,7 @@ class TradingWorkflow:
             selection = await self.meta_agent.select_strategy(symbol, state["market_data"])
             strategy = selection.strategy_instance
             strategy_name = selection.strategy_name
-            state["regime_analysis"] = RegimeAnalysis(
-                regime=selection.regime,
-                indicators=self.meta_agent.regime_detector.detect_regime(state["market_data"]).indicators,
-                confidence=selection.regime_confidence,
-                reasoning=selection.reasoning,
-            )
+            state["regime_analysis"] = selection.regime_analysis
             state["strategy_selection"] = selection
         else:
             strategy = self._default_strategy

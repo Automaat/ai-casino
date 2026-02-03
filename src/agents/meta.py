@@ -43,6 +43,7 @@ class StrategySelection(BaseModel):
     ensemble_weights: dict[str, float] | None
     regime: MarketRegime
     regime_confidence: float
+    regime_analysis: RegimeAnalysis
     reasoning: str
     confidence: float
 
@@ -95,7 +96,6 @@ class MetaAgent:
 
         Args:
             regime: Detected market regime
-            regime_confidence: Confidence in regime detection
 
         Returns:
             Normalized strategy weights
@@ -128,8 +128,7 @@ class MetaAgent:
             # Boost based on win rate if above threshold
             if metrics.win_rate > WIN_RATE_THRESHOLD * 100:
                 recent_score = (metrics.win_rate / 100 - WIN_RATE_THRESHOLD) * 2
-                # Apply boost to all strategies proportionally
-                # Future: track per-strategy performance
+                # Apply equal boost to all strategies (future: per-strategy tracking)
                 for key in weights:
                     weights[key] += PERFORMANCE_WEIGHT_BOOST * recent_score
 
@@ -172,6 +171,7 @@ class MetaAgent:
                 ensemble_weights=weights,
                 regime=regime,
                 regime_confidence=regime_confidence,
+                regime_analysis=regime_analysis,
                 reasoning=reasoning,
                 confidence=regime_confidence,
             )
@@ -191,6 +191,7 @@ class MetaAgent:
             ensemble_weights=None,
             regime=regime,
             regime_confidence=regime_confidence,
+            regime_analysis=regime_analysis,
             reasoning=reasoning,
             confidence=regime_confidence,
         )
