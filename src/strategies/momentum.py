@@ -1,6 +1,6 @@
 """Momentum strategy using RSI and MACD indicators."""
 
-from enum import Enum
+from enum import StrEnum
 
 import pandas as pd
 import pandas_ta  # noqa: F401 - Required to register .ta accessor on DataFrame
@@ -8,7 +8,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 
-class Signal(str, Enum):
+class Signal(StrEnum):
     """Trading signal."""
 
     BUY = "BUY"
