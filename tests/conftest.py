@@ -129,3 +129,32 @@ def mock_alpaca_broker():
     )
 
     return mock
+
+
+@pytest.fixture
+def sample_fundamental_overview():
+    """Sample fundamental overview data from Alpha Vantage."""
+    return {
+        "Symbol": "AAPL",
+        "AssetType": "Common Stock",
+        "Name": "Apple Inc",
+        "PERatio": "28.5",
+        "EPS": "6.15",
+        "QuarterlyRevenueGrowthYOY": "0.062",
+        "QuarterlyEarningsGrowthYOY": "0.102",
+        "DebtToEquity": "2.05",
+        "CurrentRatio": "0.94",
+        "MarketCapitalization": "2850000000000",
+        "EBITDA": "125000000000",
+        "PriceToBookRatio": "45.2",
+        "DividendYield": "0.0052",
+    }
+
+
+@pytest.fixture
+def mock_fundamental_fetcher(sample_fundamental_overview):
+    """Mock fundamental data fetcher."""
+    mock = MagicMock()
+    mock.api_key = "test_api_key"
+    mock.fetch_overview.return_value = sample_fundamental_overview
+    return mock

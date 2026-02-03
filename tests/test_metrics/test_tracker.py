@@ -6,6 +6,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
+from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import (
     AccountInfo,
@@ -47,6 +48,17 @@ def mock_workflow_result_approved():
             key_themes=["earnings", "growth"],
             impact_assessment="POSITIVE",
             recommendation="BUY",
+        ),
+        fundamental=FundamentalAnalysis(
+            valuation="FAIRLY_VALUED",
+            pe_ratio=28.5,
+            eps=6.15,
+            revenue_growth_yoy=0.062,
+            earnings_growth_yoy=0.102,
+            debt_to_equity=2.05,
+            current_ratio=0.94,
+            interpretation="Solid fundamentals",
+            confidence=0.75,
         ),
         decision=TradingDecision(
             action=Signal.BUY,
@@ -116,6 +128,17 @@ def mock_workflow_result_rejected():
             key_themes=["volatility"],
             impact_assessment="NEGATIVE",
             recommendation="SELL",
+        ),
+        fundamental=FundamentalAnalysis(
+            valuation="OVERVALUED",
+            pe_ratio=45.0,
+            eps=3.2,
+            revenue_growth_yoy=-0.05,
+            earnings_growth_yoy=-0.12,
+            debt_to_equity=3.5,
+            current_ratio=0.8,
+            interpretation="Weak fundamentals",
+            confidence=0.6,
         ),
         decision=TradingDecision(
             action=Signal.SELL,

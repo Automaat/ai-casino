@@ -3,6 +3,7 @@
 from loguru import logger
 from pydantic import BaseModel
 
+from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
@@ -37,6 +38,7 @@ class TraderAgent:
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
+        fundamental: FundamentalAnalysis,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -45,6 +47,7 @@ class TraderAgent:
             technical: Technical analysis results
             sentiment: Sentiment analysis results
             news: News analysis results
+            fundamental: Fundamental analysis results
 
         Returns:
             TradingDecision with action and reasoning
@@ -71,7 +74,18 @@ Key Themes: {", ".join(news.key_themes)}
 Impact: {news.impact_assessment}
 Recommendation: {news.recommendation}
 
-Based on these three independent analyses, make your trading decision:
+FUNDAMENTAL ANALYSIS:
+Valuation: {fundamental.valuation}
+P/E Ratio: {fundamental.pe_ratio if fundamental.pe_ratio else "N/A"}
+EPS: ${fundamental.eps if fundamental.eps else "N/A"}
+Revenue Growth YoY: {f"{fundamental.revenue_growth_yoy * 100:.1f}%" if fundamental.revenue_growth_yoy else "N/A"}
+Earnings Growth YoY: {f"{fundamental.earnings_growth_yoy * 100:.1f}%" if fundamental.earnings_growth_yoy else "N/A"}
+Debt-to-Equity: {fundamental.debt_to_equity if fundamental.debt_to_equity else "N/A"}
+Current Ratio: {fundamental.current_ratio if fundamental.current_ratio else "N/A"}
+Confidence: {fundamental.confidence:.2f}
+Analysis: {fundamental.interpretation}
+
+Based on these four independent analyses, make your trading decision:
 1. Action: BUY, SELL, or HOLD
 2. Confidence: 0.0-1.0 (how confident in this decision)
 3. Risk Level: LOW, MEDIUM, or HIGH
@@ -82,7 +96,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
 
         system_prompt = (
             "You are an experienced trader who synthesizes technical, sentiment, "
-            "and news analysis to make informed trading decisions. Be decisive but cautious."
+            "news, and fundamental analysis to make informed trading decisions. Be decisive but cautious."
         )
 
         response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
