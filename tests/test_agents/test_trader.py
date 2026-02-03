@@ -14,7 +14,7 @@ def test_trader_agent_init(mock_llm_client):
     assert agent.llm == mock_llm_client
 
 
-def test_trader_agent_decide(mock_llm_client, sample_bullish_research):
+def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -53,7 +53,9 @@ def test_trader_agent_decide(mock_llm_client, sample_bullish_research):
         confidence=0.75,
     )
 
-    result = agent.decide("AAPL", technical, sentiment, news, fundamental, sample_bullish_research)
+    result = agent.decide(
+        "AAPL", technical, sentiment, news, fundamental, sample_bullish_research, sample_bearish_research
+    )
 
     assert isinstance(result, TradingDecision)
     assert isinstance(result.action, Signal)
@@ -83,7 +85,7 @@ def test_extract_action_fallback(mock_llm_client):
     assert action == Signal.HOLD
 
 
-def test_extract_confidence_from_response(mock_llm_client, sample_bullish_research):
+def test_extract_confidence_from_response(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -106,12 +108,14 @@ def test_extract_confidence_from_response(mock_llm_client, sample_bullish_resear
 
     response = "Confidence: 0.85\nStrong signals"
 
-    confidence = agent._extract_confidence(response, technical, sentiment, sample_bullish_research)
+    confidence = agent._extract_confidence(
+        response, technical, sentiment, sample_bullish_research, sample_bearish_research, Signal.BUY
+    )
 
     assert confidence == 0.85
 
 
-def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research):
+def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -134,7 +138,9 @@ def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research):
 
     response = "No confidence mentioned"
 
-    confidence = agent._extract_confidence(response, technical, sentiment, sample_bullish_research)
+    confidence = agent._extract_confidence(
+        response, technical, sentiment, sample_bullish_research, sample_bearish_research, Signal.BUY
+    )
 
     assert 0.0 <= confidence <= 1.0
 
@@ -157,7 +163,7 @@ def test_repr(mock_llm_client):
     assert "ollama" in repr_str
 
 
-def test_decide_owns_position_true(mock_llm_client, sample_bullish_research):
+def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -203,6 +209,7 @@ def test_decide_owns_position_true(mock_llm_client, sample_bullish_research):
         news,
         fundamental,
         sample_bullish_research,
+        sample_bearish_research,
         owns_position=True,
         position_qty=100.0,
     )
@@ -211,7 +218,7 @@ def test_decide_owns_position_true(mock_llm_client, sample_bullish_research):
     assert result.position_qty == 100.0
 
 
-def test_decide_owns_position_false(mock_llm_client, sample_bullish_research):
+def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -257,6 +264,7 @@ def test_decide_owns_position_false(mock_llm_client, sample_bullish_research):
         news,
         fundamental,
         sample_bullish_research,
+        sample_bearish_research,
         owns_position=False,
         position_qty=None,
     )
@@ -265,7 +273,7 @@ def test_decide_owns_position_false(mock_llm_client, sample_bullish_research):
     assert result.position_qty is None
 
 
-def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_research):
+def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -311,6 +319,7 @@ def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_resea
         news,
         fundamental,
         sample_bullish_research,
+        sample_bearish_research,
         owns_position=True,
         position_qty=50.0,
     )
@@ -363,3 +372,147 @@ def test_display_action_buy_unchanged():
     )
 
     assert decision.display_action == "BUY"
+
+
+def test_extract_confidence_action_aware_buy(mock_llm_client):
+    """High bullish + high bearish → BUY should boost from bullish, penalize from bearish."""
+    from src.agents.bearish_researcher import BearishResearchAnalysis
+    from src.agents.bullish_researcher import BullishResearchAnalysis
+
+    agent = TraderAgent(mock_llm_client)
+
+    technical = TechnicalAnalysis(
+        signal=Signal.BUY,
+        rsi=35.0,
+        macd_hist=0.5,
+        interpretation="Test",
+        confidence=0.6,
+    )
+
+    sentiment = SentimentAnalysis(
+        overall_sentiment="neutral",
+        sentiment_score=0.1,
+        positive_ratio=0.4,
+        negative_ratio=0.3,
+        neutral_ratio=0.3,
+        article_count=5,
+        summary="Test",
+    )
+
+    bullish = BullishResearchAnalysis(
+        thesis="Strong bull case",
+        key_strengths=["Growth"],
+        target_upside=20.0,
+        confidence=0.9,
+    )
+
+    bearish = BearishResearchAnalysis(
+        thesis="Weak bear case",
+        key_weaknesses=["Competition"],
+        target_downside=10.0,
+        confidence=0.9,  # High bearish confidence
+    )
+
+    response = "No confidence mentioned"
+
+    confidence = agent._extract_confidence(response, technical, sentiment, bullish, bearish, Signal.BUY)
+
+    # BUY: bull_weight=0.9, bear_weight=1-0.9=0.1
+    # base = (0.6 + 0.9 + 0.1) / 3 = 0.533
+    assert 0.5 <= confidence <= 0.6
+
+
+def test_extract_confidence_action_aware_sell(mock_llm_client):
+    """High bearish confidence should BOOST sell confidence, not penalize."""
+    from src.agents.bearish_researcher import BearishResearchAnalysis
+    from src.agents.bullish_researcher import BullishResearchAnalysis
+
+    agent = TraderAgent(mock_llm_client)
+
+    technical = TechnicalAnalysis(
+        signal=Signal.SELL,
+        rsi=75.0,
+        macd_hist=-0.5,
+        interpretation="Test",
+        confidence=0.6,
+    )
+
+    sentiment = SentimentAnalysis(
+        overall_sentiment="neutral",
+        sentiment_score=0.1,
+        positive_ratio=0.3,
+        negative_ratio=0.4,
+        neutral_ratio=0.3,
+        article_count=5,
+        summary="Test",
+    )
+
+    bullish = BullishResearchAnalysis(
+        thesis="Weak bull case",
+        key_strengths=["Growth"],
+        target_upside=5.0,
+        confidence=0.3,  # Low bullish confidence
+    )
+
+    bearish = BearishResearchAnalysis(
+        thesis="Strong bear case",
+        key_weaknesses=["Debt", "Competition", "Declining sales"],
+        target_downside=30.0,
+        confidence=0.9,  # High bearish confidence - should BOOST sell
+    )
+
+    response = "No confidence mentioned"
+
+    confidence = agent._extract_confidence(response, technical, sentiment, bullish, bearish, Signal.SELL)
+
+    # SELL: bull_weight=1-0.3=0.7, bear_weight=0.9
+    # base = (0.6 + 0.7 + 0.9) / 3 = 0.733
+    assert confidence >= 0.7
+
+
+def test_extract_confidence_action_aware_hold(mock_llm_client):
+    """HOLD should average both bull and bear weights."""
+    from src.agents.bearish_researcher import BearishResearchAnalysis
+    from src.agents.bullish_researcher import BullishResearchAnalysis
+
+    agent = TraderAgent(mock_llm_client)
+
+    technical = TechnicalAnalysis(
+        signal=Signal.HOLD,
+        rsi=50.0,
+        macd_hist=0.0,
+        interpretation="Test",
+        confidence=0.6,
+    )
+
+    sentiment = SentimentAnalysis(
+        overall_sentiment="neutral",
+        sentiment_score=0.0,
+        positive_ratio=0.33,
+        negative_ratio=0.33,
+        neutral_ratio=0.34,
+        article_count=5,
+        summary="Test",
+    )
+
+    bullish = BullishResearchAnalysis(
+        thesis="Moderate bull case",
+        key_strengths=["Growth"],
+        target_upside=10.0,
+        confidence=0.8,
+    )
+
+    bearish = BearishResearchAnalysis(
+        thesis="Moderate bear case",
+        key_weaknesses=["Competition"],
+        target_downside=10.0,
+        confidence=0.8,
+    )
+
+    response = "No confidence mentioned"
+
+    confidence = agent._extract_confidence(response, technical, sentiment, bullish, bearish, Signal.HOLD)
+
+    # HOLD: bull_weight=0.5, bear_weight=0.5
+    # base = (0.6 + 0.5 + 0.5) / 3 = 0.533
+    assert 0.5 <= confidence <= 0.6

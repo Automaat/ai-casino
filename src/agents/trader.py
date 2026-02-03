@@ -3,6 +3,7 @@
 from loguru import logger
 from pydantic import BaseModel
 
+from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
@@ -50,6 +51,7 @@ class TraderAgent:
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
         bullish: BullishResearchAnalysis,
+        bearish: BearishResearchAnalysis,
         owns_position: bool = False,
         position_qty: float | None = None,
     ) -> TradingDecision:
@@ -62,6 +64,7 @@ class TraderAgent:
             news: News analysis results
             fundamental: Fundamental analysis results
             bullish: Bullish research analysis
+            bearish: Bearish research analysis
             owns_position: Whether user owns this stock
             position_qty: Number of shares owned (if any)
 
@@ -128,6 +131,12 @@ Key Strengths: {", ".join(bullish.key_strengths)}
 Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
 Confidence: {bullish.confidence:.2f}
 
+BEARISH RESEARCH:
+Thesis: {bearish.thesis}
+Key Weaknesses: {", ".join(bearish.key_weaknesses)}
+Target Downside: {f"{bearish.target_downside:.1f}%" if bearish.target_downside is not None else "N/A"}
+Confidence: {bearish.confidence:.2f}
+
 Based on these analyses and your portfolio status, make your trading decision:
 1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
 2. Confidence: 0.0-1.0 (how confident in this decision)
@@ -139,14 +148,15 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
 
         system_prompt = (
             "You are an experienced trader who synthesizes technical, sentiment, "
-            "news, fundamental, and bullish research to make informed trading decisions. "
-            "Consider the bull thesis when evaluating upside potential. Be decisive but cautious."
+            "news, fundamental, bullish, and bearish research to make informed trading decisions. "
+            "Consider both the bull thesis (upside potential) and bear thesis (downside risks). "
+            "Be decisive but cautious."
         )
 
         response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
 
         action = self._extract_action(response, technical.signal)
-        confidence = self._extract_confidence(response, technical, sentiment, bullish)
+        confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)
         risk_level = self._extract_risk_level(response, confidence)
 
         logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
@@ -194,6 +204,8 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         bullish: BullishResearchAnalysis,
+        bearish: BearishResearchAnalysis,
+        action: Signal,
     ) -> float:
         """Extract or calculate confidence score.
 
@@ -202,35 +214,61 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             technical: Technical analysis
             sentiment: Sentiment analysis
             bullish: Bullish research analysis
+            bearish: Bearish research analysis
+            action: Trading action (affects bull/bear weighting)
 
         Returns:
             Confidence score (0.0-1.0)
         """
-        response_lower = response.lower()
+        parsed = self._parse_confidence_from_response(response)
+        if parsed is not None:
+            return parsed
 
-        for line in response.split("\n"):
-            if "confidence" in line.lower():
-                try:
-                    parts = line.split(":")
-                    if len(parts) > 1:
-                        value = float(parts[1].strip().split()[0])
-                        if 0.0 <= value <= 1.0:
-                            return value
-                except (ValueError, IndexError):
-                    continue
-
-        base_confidence = (technical.confidence + bullish.confidence) / 2
+        bull_weight, bear_weight = self._calculate_bull_bear_weights(action, bullish, bearish)
+        base_confidence = (technical.confidence + bull_weight + bear_weight) / 3
 
         if abs(sentiment.sentiment_score) > 0.3:
             sentiment_boost = abs(sentiment.sentiment_score) * 0.2
             base_confidence = min(base_confidence + sentiment_boost, 1.0)
 
+        response_lower = response.lower()
         if "high confidence" in response_lower or "strongly" in response_lower:
             return min(base_confidence + 0.1, 1.0)
         if "low confidence" in response_lower or "uncertain" in response_lower:
             return max(base_confidence - 0.1, 0.0)
 
         return base_confidence
+
+    def _parse_confidence_from_response(self, response: str) -> float | None:
+        """Parse confidence value from LLM response text."""
+        for line in response.split("\n"):
+            if "confidence" not in line.lower():
+                continue
+            try:
+                parts = line.split(":")
+                if len(parts) > 1:
+                    value = float(parts[1].strip().split()[0])
+                    if 0.0 <= value <= 1.0:
+                        return value
+            except (ValueError, IndexError):
+                continue
+        return None
+
+    def _calculate_bull_bear_weights(
+        self,
+        action: Signal,
+        bullish: BullishResearchAnalysis,
+        bearish: BearishResearchAnalysis,
+    ) -> tuple[float, float]:
+        """Calculate bull/bear weights based on trading action."""
+        if action == Signal.BUY:
+            # BUY: high bullish = good, high bearish = bad
+            return bullish.confidence, 1 - bearish.confidence
+        if action == Signal.SELL:
+            # SELL: high bearish = good, high bullish = bad
+            return 1 - bullish.confidence, bearish.confidence
+        # HOLD: neutral weights
+        return 0.5, 0.5
 
     def _extract_risk_level(self, response: str, confidence: float) -> str:
         """Determine risk level from response or confidence.

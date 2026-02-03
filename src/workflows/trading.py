@@ -5,6 +5,7 @@ from loguru import logger
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
+from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
 from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
 from src.agents.news import NewsAnalysis, NewsAnalyst
@@ -33,6 +34,7 @@ class TradingState(TypedDict):
     news_analysis: NewsAnalysis | None
     fundamental_analysis: FundamentalAnalysis | None
     bullish_research: BullishResearchAnalysis | None
+    bearish_research: BearishResearchAnalysis | None
     final_decision: TradingDecision | None
     risk_assessment: RiskAssessment | None
     account_info: AccountInfo | None
@@ -48,6 +50,7 @@ class TradingWorkflowResult(BaseModel):
     news: NewsAnalysis
     fundamental: FundamentalAnalysis
     bullish: BullishResearchAnalysis
+    bearish: BearishResearchAnalysis
     decision: TradingDecision
     risk: RiskAssessment
     order: OrderStatus | None = None
@@ -94,6 +97,7 @@ class TradingWorkflow:
         self.news_analyst = NewsAnalyst(llm_client)
         self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
         self.bullish_researcher = BullishResearcher(llm_client)
+        self.bearish_researcher = BearishResearcher(llm_client)
         self.trader = TraderAgent(llm_client)
         self.risk_manager = RiskManagementAgent(llm_client)
 
@@ -125,6 +129,8 @@ class TradingWorkflow:
 
         state = self._run_bullish_research(state)
 
+        state = self._run_bearish_research(state)
+
         state = self._make_decision(state)
 
         state = self._assess_risk(state)
@@ -149,6 +155,7 @@ class TradingWorkflow:
             news=state["news_analysis"],
             fundamental=state["fundamental_analysis"],
             bullish=state["bullish_research"],
+            bearish=state["bearish_research"],
             decision=state["final_decision"],
             risk=state["risk_assessment"],
             order=state.get("order_status"),
@@ -187,6 +194,7 @@ class TradingWorkflow:
             news_analysis=None,
             fundamental_analysis=None,
             bullish_research=None,
+            bearish_research=None,
             final_decision=None,
             risk_assessment=None,
             account_info=None,
@@ -293,6 +301,28 @@ class TradingWorkflow:
         state["bullish_research"] = bullish
         return state
 
+    def _run_bearish_research(self, state: TradingState) -> TradingState:
+        """Run bearish research analysis.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with bearish research
+        """
+        logger.info("Running bearish research")
+
+        bearish = self.bearish_researcher.analyze(
+            state["symbol"],
+            state["technical_analysis"],
+            state["sentiment_analysis"],
+            state["news_analysis"],
+            state["fundamental_analysis"],
+        )
+
+        state["bearish_research"] = bearish
+        return state
+
     def _make_decision(self, state: TradingState) -> TradingState:
         """Make final trading decision.
 
@@ -316,6 +346,7 @@ class TradingWorkflow:
             state["news_analysis"],
             state["fundamental_analysis"],
             state["bullish_research"],
+            state["bearish_research"],
             owns_position=owns_position,
             position_qty=position_qty,
         )
@@ -408,4 +439,4 @@ class TradingWorkflow:
 
     def __repr__(self) -> str:
         """String representation."""
-        return "TradingWorkflow(agents=7)"
+        return "TradingWorkflow(agents=8)"

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.risk import AccountInfo
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
@@ -177,4 +178,23 @@ def sample_bullish_research():
         ],
         target_upside=25.0,
         confidence=0.8,
+    )
+
+
+@pytest.fixture
+def sample_bearish_research():
+    """Sample bearish research analysis for testing."""
+    return BearishResearchAnalysis(
+        thesis=(
+            "Stock faces headwinds with weakening fundamentals and deteriorating market sentiment. "
+            "Technical indicators suggest downward pressure. Overvalued at current levels."
+        ),
+        key_weaknesses=[
+            "Weak technical momentum with negative RSI and MACD",
+            "Negative sentiment across recent news articles",
+            "Overvalued relative to peers",
+            "High debt-to-equity ratio",
+        ],
+        target_downside=20.0,
+        confidence=0.7,
     )
