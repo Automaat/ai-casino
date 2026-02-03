@@ -3,12 +3,12 @@ name = "ai-casino"
 version = "0.1.0"
 description = "Agentic stock trading system with multi-agent architecture"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.13.1"
 dependencies = [
     # Technical Analysis
-    "pandas==2.3.3",
-    "pandas-ta==0.4.71b0",
-    "numpy==2.2.6",
+    "pandas==3.0.0",
+    "pandas-ta-classic==0.3.59",
+    "numpy==2.3.3",
 
     # Sentiment Analysis
     "transformers==5.0.0",

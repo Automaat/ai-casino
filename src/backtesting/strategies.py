@@ -1,7 +1,7 @@
 """Backtesting strategy implementations."""
 
 import pandas as pd
-import pandas_ta as ta  # type: ignore[import-untyped]
+import pandas_ta_classic as ta  # type: ignore[import-untyped]
 
 from backtesting import Strategy
 

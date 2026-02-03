@@ -1,7 +1,7 @@
 """Mean reversion strategy using Bollinger Bands."""
 
 import pandas as pd
-import pandas_ta  # noqa: F401 - Required to register .ta accessor on DataFrame
+import pandas_ta_classic  # noqa: F401 - Required to register .ta accessor on DataFrame
 from loguru import logger
 from pydantic import BaseModel
 
