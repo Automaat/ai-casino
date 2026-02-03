@@ -24,6 +24,42 @@ load_dotenv()
 console = Console()
 
 
+def _print_regime_analysis(result) -> None:  # noqa: ANN001
+    """Print regime analysis if available.
+
+    Args:
+        result: TradingWorkflowResult
+    """
+    if not result.regime:
+        return
+
+    regime_table = Table(title="Market Regime Analysis", show_header=True)
+    regime_table.add_column("Metric", style="cyan")
+    regime_table.add_column("Value", style="yellow")
+
+    regime_color = {
+        "TRENDING_BULLISH": "green",
+        "TRENDING_BEARISH": "red",
+        "RANGING": "yellow",
+        "HIGH_VOLATILITY": "magenta",
+    }
+    color = regime_color.get(result.regime.regime.value, "white")
+
+    regime_table.add_row("Regime", f"[bold {color}]{result.regime.regime.value}[/bold {color}]")
+    regime_table.add_row("Confidence", f"{result.regime.confidence:.2f}")
+    regime_table.add_row("ADX", f"{result.regime.indicators.adx:.2f}")
+    regime_table.add_row(
+        "+DI / -DI", f"{result.regime.indicators.plus_di:.2f} / {result.regime.indicators.minus_di:.2f}"
+    )
+    regime_table.add_row("ATR Ratio", f"{result.regime.indicators.atr_ratio:.2f}")
+
+    if result.strategy_used:
+        regime_table.add_row("Strategy Selected", f"[bold]{result.strategy_used}[/bold]")
+
+    console.print(regime_table)
+    console.print(Panel(result.regime.reasoning, title="Regime Reasoning"))
+
+
 def _print_momentum_technical(result) -> None:  # noqa: ANN001
     """Print momentum strategy technical analysis.
 
@@ -94,16 +130,19 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-def print_result(result, use_ensemble: bool = False) -> None:  # noqa: ANN001, PLR0915, PLR0912, C901
+def print_result(result, use_meta_agent: bool = True) -> None:  # noqa: ANN001, PLR0915, PLR0912, C901
     """Print trading analysis results.
 
     Args:
         result: TradingWorkflowResult
-        use_ensemble: Whether ensemble mode was used
+        use_meta_agent: Whether meta-agent mode was used
     """
     console.print(f"\n[bold cyan]Trading Analysis for {result.symbol}[/bold cyan]\n")
 
-    if use_ensemble and result.technical.ensemble_result:
+    if use_meta_agent and result.regime:
+        _print_regime_analysis(result)
+
+    if result.technical.ensemble_result:
         _print_ensemble_technical(result)
     else:
         _print_momentum_technical(result)
@@ -258,7 +297,7 @@ async def analyze_stock(
     period_days: int = 90,
     enable_trading: bool = False,
     show_metrics: bool = False,
-    use_ensemble: bool = False,
+    use_meta_agent: bool = True,
 ) -> None:
     """Analyze a stock and print results.
 
@@ -267,10 +306,10 @@ async def analyze_stock(
         period_days: Days of historical data
         enable_trading: Enable live trading via Alpaca
         show_metrics: Show performance metrics
-        use_ensemble: Use ensemble strategy
+        use_meta_agent: Use meta-agent for dynamic strategy selection
     """
     try:
-        mode_str = "ensemble" if use_ensemble else "momentum"
+        mode_str = "meta-agent" if use_meta_agent else "momentum"
         console.print(f"\n[bold]Initializing trading system ({mode_str} mode)...[/bold]")
 
         llm_client = LLMClient()
@@ -299,14 +338,14 @@ async def analyze_stock(
             fundamental_fetcher,
             broker,
             metrics_tracker,
-            use_ensemble=use_ensemble,
+            use_meta_agent=use_meta_agent,
         )
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 
         result = await workflow.analyze(symbol, period_days)
 
-        print_result(result, use_ensemble=use_ensemble)
+        print_result(result, use_meta_agent=use_meta_agent)
 
         if metrics_tracker:
             print_metrics_summary(metrics_tracker)
@@ -322,9 +361,14 @@ def main() -> None:
     if len(sys.argv) < 2:
         console.print("[bold red]Error:[/bold red] Missing symbol argument")
         console.print(
-            "\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade] [--show-metrics] [--ensemble]"
+            "\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade] [--show-metrics] [--no-meta-agent]"
         )
-        console.print("\nExample: python -m src.main AAPL --period 90 --ensemble")
+        console.print("\nExample: python -m src.main AAPL --period 90")
+        console.print("\nFlags:")
+        console.print("  --period DAYS    Days of historical data (default: 90)")
+        console.print("  --trade          Enable paper trading via Alpaca")
+        console.print("  --show-metrics   Show performance metrics")
+        console.print("  --no-meta-agent  Disable meta-agent, use momentum strategy only")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
@@ -339,11 +383,11 @@ def main() -> None:
 
     enable_trading = "--trade" in sys.argv
     show_metrics = "--show-metrics" in sys.argv
-    use_ensemble = "--ensemble" in sys.argv
+    use_meta_agent = "--no-meta-agent" not in sys.argv
 
     setup_logging()
 
-    asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics, use_ensemble))
+    asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics, use_meta_agent))
 
 
 if __name__ == "__main__":

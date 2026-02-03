@@ -30,6 +30,7 @@ class TradeRecord(BaseModel):
     status: str
     pnl: float | None
     pnl_percent: float | None
+    strategy_name: str | None = None
 
     def is_open(self) -> bool:
         """Check if trade is open."""
@@ -126,11 +127,16 @@ class MetricsTracker:
             logger.error(f"Failed to load trades: {e}")
             raise
 
-    def record_decision(self, result: "TradingWorkflowResult") -> TradeRecord:
+    def record_decision(
+        self,
+        result: "TradingWorkflowResult",
+        strategy_name: str | None = None,
+    ) -> TradeRecord:
         """Record a trading decision.
 
         Args:
             result: Trading workflow result with decision and risk assessment
+            strategy_name: Optional name of strategy used (e.g., "momentum", "ensemble")
 
         Returns:
             Created TradeRecord
@@ -156,6 +162,7 @@ class MetricsTracker:
             status=status,
             pnl=None,
             pnl_percent=None,
+            strategy_name=strategy_name,
         )
 
         self.trades.append(trade)

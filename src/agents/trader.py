@@ -98,8 +98,8 @@ Choose BUY only with strong conviction. Otherwise choose HOLD (meaning: don't bu
 
 TECHNICAL ANALYSIS:
 Signal: {technical.signal.value}
-RSI: {technical.rsi:.2f}
-MACD Histogram: {technical.macd_hist:.4f}
+RSI: {f"{technical.rsi:.2f}" if technical.rsi is not None else "N/A"}
+MACD Histogram: {f"{technical.macd_hist:.4f}" if technical.macd_hist is not None else "N/A"}
 Confidence: {technical.confidence:.2f}
 Analysis: {technical.interpretation}
 
@@ -180,20 +180,37 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         Returns:
             Trading signal
         """
-        response_lower = response.lower()
+        import re
 
-        if "action: buy" in response_lower or "decision: buy" in response_lower:
-            return Signal.BUY
-        if "action: sell" in response_lower or "decision: sell" in response_lower:
-            return Signal.SELL
-        if "action: hold" in response_lower or "decision: hold" in response_lower:
-            return Signal.HOLD
+        # Normalize: remove markdown bold/italic, collapse whitespace
+        normalized = re.sub(r"\*+", "", response.lower())
+        normalized = re.sub(r"\s+", " ", normalized)
 
-        for line in response.split("\n"):
-            if "buy" in line.lower() and len(line) < 50:
-                return Signal.BUY
-            if "sell" in line.lower() and len(line) < 50:
-                return Signal.SELL
+        # Pattern 1: "action: buy/sell/hold" or "action : buy" (with optional space)
+        action_patterns = [
+            r"action\s*:\s*(buy|sell|hold)",
+            r"decision\s*:\s*(buy|sell|hold)",
+            r"1\.\s*action\s*:\s*(buy|sell|hold)",
+        ]
+
+        for pattern in action_patterns:
+            match = re.search(pattern, normalized)
+            if match:
+                action_str = match.group(1).upper()
+                return Signal(action_str)
+
+        # Pattern 2: Look for explicit decision statements
+        decision_patterns = [
+            r"my decision is (buy|sell|hold)",
+            r"i recommend (buy|sell|hold)",
+            r"recommendation:\s*(buy|sell|hold)",
+        ]
+
+        for pattern in decision_patterns:
+            match = re.search(pattern, normalized)
+            if match:
+                action_str = match.group(1).upper()
+                return Signal(action_str)
 
         logger.warning(f"Could not extract action, using technical signal: {technical_signal}")
         return technical_signal
