@@ -3,6 +3,7 @@
 import asyncio
 import os
 import sys
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -17,6 +18,9 @@ from src.data.news import NewsFetcher
 from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
+from src.optimization.optimizer import OptunaOptimizer
+from src.optimization.results import OptimizationResult
+from src.optimization.validation import WalkForwardValidator
 from src.workflows.trading import TradingWorkflow
 
 load_dotenv()
@@ -265,6 +269,51 @@ def print_result(result, use_meta_agent: bool = True) -> None:  # noqa: ANN001, 
         console.print(order_table)
 
 
+def print_optimization_result(result: OptimizationResult) -> None:
+    """Print optimization results.
+
+    Args:
+        result: OptimizationResult
+    """
+    console.print(
+        f"\n[bold cyan]Optimization Results for {result.symbol} ({result.strategy_name})[/bold cyan]"
+    )
+    console.print("=" * 50)
+    console.print(f"Trials: {result.total_trials} | Time: {result.optimization_time_seconds:.1f}s\n")
+
+    params_table = Table(title="Best Parameters", show_header=True)
+    params_table.add_column("Parameter", style="cyan")
+    params_table.add_column("Value", style="yellow")
+
+    for key, value in result.best_params.items():
+        if isinstance(value, float):
+            params_table.add_row(key, f"{value:.4f}")
+        else:
+            params_table.add_row(key, str(value))
+
+    console.print(params_table)
+
+    metrics_table = Table(title="Performance", show_header=True)
+    metrics_table.add_column("Metric", style="cyan")
+    metrics_table.add_column("Value", style="yellow")
+
+    sharpe = result.best_metrics.get("sharpe_ratio", 0)
+    total_return = result.best_metrics.get("total_return", 0)
+    max_dd = result.best_metrics.get("max_drawdown", 0)
+
+    sharpe_color = "green" if sharpe > 1 else "yellow" if sharpe > 0 else "red"
+    return_color = "green" if total_return > 0 else "red"
+
+    metrics_table.add_row("Sharpe Ratio", f"[{sharpe_color}]{sharpe:.2f}[/{sharpe_color}]")
+    metrics_table.add_row("Total Return", f"[{return_color}]{total_return * 100:.1f}%[/{return_color}]")
+    metrics_table.add_row("Max Drawdown", f"[red]{max_dd * 100:.1f}%[/red]")
+
+    console.print(metrics_table)
+
+    if result.pareto_front:
+        console.print(f"\n[dim]Pareto front contains {len(result.pareto_front)} solutions[/dim]")
+
+
 def print_metrics_summary(tracker: MetricsTracker) -> None:
     """Print performance metrics summary.
 
@@ -356,21 +405,135 @@ async def analyze_stock(
         sys.exit(1)
 
 
+@dataclass
+class OptimizationConfig:
+    """Configuration for strategy optimization."""
+
+    symbol: str
+    strategy: str = "momentum"
+    trials: int = 100
+    multi_objective: bool = False
+    walk_forward: bool = False
+    splits: int = 5
+    start_date: str | None = None
+    end_date: str | None = None
+
+    def __post_init__(self) -> None:
+        """Set default dates if not provided."""
+        from datetime import datetime, timedelta
+
+        if self.end_date is None:
+            self.end_date = datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005
+        if self.start_date is None:
+            self.start_date = (datetime.now() - timedelta(days=365 * 2)).strftime("%Y-%m-%d")  # noqa: DTZ005
+
+
+def run_optimization(config: OptimizationConfig) -> None:
+    """Run strategy optimization.
+
+    Args:
+        config: Optimization configuration
+    """
+    console.print(f"\n[bold]Running optimization for {config.symbol}...[/bold]")
+    console.print(f"Strategy: {config.strategy} | Trials: {config.trials}")
+    console.print(f"Period: {config.start_date} to {config.end_date}")
+
+    if config.multi_objective:
+        console.print("[dim]Multi-objective: Sharpe, Return, Drawdown[/dim]")
+    if config.walk_forward:
+        console.print(f"[dim]Walk-forward validation: {config.splits} splits[/dim]")
+
+    console.print()
+
+    validator = WalkForwardValidator(n_splits=config.splits) if config.walk_forward else None
+    directions = ["maximize", "maximize", "minimize"] if config.multi_objective else ["maximize"]
+
+    optimizer = OptunaOptimizer(
+        n_trials=config.trials,
+        directions=directions,
+        validator=validator,
+    )
+
+    try:
+        result = optimizer.optimize(
+            symbol=config.symbol,
+            start_date=config.start_date,
+            end_date=config.end_date,
+            strategy_name=config.strategy,
+        )
+        print_optimization_result(result)
+    except Exception as e:
+        console.print(f"\n[bold red]Optimization failed:[/bold red] {e}")
+        logger.exception("Optimization failed")
+        sys.exit(1)
+
+
+def _print_usage() -> None:
+    """Print CLI usage."""
+    console.print("[bold red]Error:[/bold red] Missing command or symbol")
+    console.print("\n[bold]Usage:[/bold]")
+    console.print("  python -m src.main <SYMBOL> [options]          # Analyze stock")
+    console.print("  python -m src.main optimize <SYMBOL> [options] # Optimize strategy")
+    console.print("\n[bold]Analyze Options:[/bold]")
+    console.print("  --period DAYS    Days of historical data (default: 90)")
+    console.print("  --trade          Enable paper trading via Alpaca")
+    console.print("  --show-metrics   Show performance metrics")
+    console.print("  --no-meta-agent  Disable meta-agent, use momentum strategy only")
+    console.print("\n[bold]Optimize Options:[/bold]")
+    console.print(
+        "  --strategy NAME  Strategy to optimize (momentum, trend_following, mean_reversion, ensemble)"
+    )
+    console.print("  --trials N       Number of optimization trials (default: 100)")
+    console.print("  --multi-objective  Optimize for Sharpe, return, and drawdown")
+    console.print("  --walk-forward   Use walk-forward validation")
+    console.print("  --splits N       Number of validation splits (default: 5)")
+    console.print("  --start DATE     Start date (YYYY-MM-DD)")
+    console.print("  --end DATE       End date (YYYY-MM-DD)")
+    console.print("\n[bold]Examples:[/bold]")
+    console.print("  python -m src.main AAPL --period 90")
+    console.print("  python -m src.main optimize AAPL --strategy momentum --trials 50")
+    console.print("  python -m src.main optimize AAPL --strategy momentum --multi-objective")
+
+
+def _get_arg_value(flag: str, default: str | None = None) -> str | None:
+    """Get argument value after flag."""
+    if flag in sys.argv:
+        try:
+            idx = sys.argv.index(flag)
+            return sys.argv[idx + 1]
+        except (IndexError, ValueError):
+            return default
+    return default
+
+
 def main() -> None:
     """Main CLI entry point."""
     if len(sys.argv) < 2:
-        console.print("[bold red]Error:[/bold red] Missing symbol argument")
-        console.print(
-            "\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade] [--show-metrics] [--no-meta-agent]"
-        )
-        console.print("\nExample: python -m src.main AAPL --period 90")
-        console.print("\nFlags:")
-        console.print("  --period DAYS    Days of historical data (default: 90)")
-        console.print("  --trade          Enable paper trading via Alpaca")
-        console.print("  --show-metrics   Show performance metrics")
-        console.print("  --no-meta-agent  Disable meta-agent, use momentum strategy only")
+        _print_usage()
         sys.exit(1)
 
+    setup_logging()
+
+    # Handle optimize subcommand
+    if sys.argv[1].lower() == "optimize":
+        if len(sys.argv) < 3:
+            _print_usage()
+            sys.exit(1)
+
+        config = OptimizationConfig(
+            symbol=sys.argv[2].upper(),
+            strategy=_get_arg_value("--strategy", "momentum") or "momentum",
+            trials=int(_get_arg_value("--trials", "100") or "100"),
+            multi_objective="--multi-objective" in sys.argv,
+            walk_forward="--walk-forward" in sys.argv,
+            splits=int(_get_arg_value("--splits", "5") or "5"),
+            start_date=_get_arg_value("--start"),
+            end_date=_get_arg_value("--end"),
+        )
+        run_optimization(config)
+        return
+
+    # Default: analyze command
     symbol = sys.argv[1].upper()
 
     period_days = 90
@@ -384,8 +547,6 @@ def main() -> None:
     enable_trading = "--trade" in sys.argv
     show_metrics = "--show-metrics" in sys.argv
     use_meta_agent = "--no-meta-agent" not in sys.argv
-
-    setup_logging()
 
     asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics, use_meta_agent))
 

@@ -28,6 +28,9 @@ dependencies = [
     "alpaca-py==0.43.2",
     "backtesting==0.6.5",
 
+    # Optimization
+    "optuna==4.2.0",
+
     # Utilities
     "python-dotenv==1.2.1",
     "rich==14.3.2",
