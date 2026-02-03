@@ -7,7 +7,7 @@ import pytest
 from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
-from src.agents.risk import RiskAssessment
+from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
@@ -175,7 +175,12 @@ def test_make_decision(mock_workflow_dependencies, sample_bullish_research):
         "bullish_research": sample_bullish_research,
         "final_decision": None,
         "risk_assessment": None,
-        "account_info": None,
+        "account_info": AccountInfo(
+            balance=100000.0,
+            available_cash=100000.0,
+            positions={},
+            total_exposure=0.0,
+        ),
         "order_status": None,
     }
 
@@ -269,3 +274,63 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
 
     assert result_state["order_status"] is None
     mock_broker.submit_order.assert_called_once()
+
+
+def test_account_info_passed_to_trader(mock_workflow_dependencies, sample_bullish_research):
+    """Test portfolio info passed to trader for context-aware decisions."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+
+    state = {
+        "symbol": "AAPL",
+        "market_data": None,
+        "news_articles": None,
+        "technical_analysis": TechnicalAnalysis(
+            signal=Signal.HOLD,
+            rsi=50.0,
+            macd_hist=0.1,
+            interpretation="Neutral",
+            confidence=0.6,
+        ),
+        "sentiment_analysis": SentimentAnalysis(
+            overall_sentiment="neutral",
+            sentiment_score=0.0,
+            positive_ratio=0.3,
+            negative_ratio=0.3,
+            neutral_ratio=0.4,
+            article_count=5,
+            summary="Mixed",
+        ),
+        "news_analysis": NewsAnalysis(
+            key_themes=["Stable"],
+            impact_assessment="Neutral",
+            recommendation="Hold",
+        ),
+        "fundamental_analysis": FundamentalAnalysis(
+            valuation="FAIRLY_VALUED",
+            pe_ratio=25.0,
+            eps=5.0,
+            revenue_growth_yoy=0.05,
+            earnings_growth_yoy=0.08,
+            debt_to_equity=1.5,
+            current_ratio=1.2,
+            interpretation="Stable",
+            confidence=0.7,
+        ),
+        "bullish_research": sample_bullish_research,
+        "final_decision": None,
+        "risk_assessment": None,
+        "account_info": AccountInfo(
+            balance=100000.0,
+            available_cash=50000.0,
+            positions={"AAPL": 100.0},
+            total_exposure=50000.0,
+        ),
+        "order_status": None,
+    }
+
+    result_state = workflow._make_decision(state)
+
+    assert result_state["final_decision"].owns_position is True
+    assert result_state["final_decision"].position_qty == 100.0

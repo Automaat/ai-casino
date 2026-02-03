@@ -113,6 +113,8 @@ class TradingWorkflow:
 
         state = self._fetch_data(symbol, period_days)
 
+        state = self._fetch_account_info(state)
+
         state = self._run_technical_analysis(state)
 
         state = self._run_sentiment_analysis(state)
@@ -190,6 +192,19 @@ class TradingWorkflow:
             account_info=None,
             order_status=None,
         )
+
+    def _fetch_account_info(self, state: TradingState) -> TradingState:
+        """Fetch account info for portfolio-aware decisions.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with account info
+        """
+        logger.info("Fetching account info")
+        state["account_info"] = self._get_account_info()
+        return state
 
     def _run_technical_analysis(self, state: TradingState) -> TradingState:
         """Run technical analysis.
@@ -289,13 +304,20 @@ class TradingWorkflow:
         """
         logger.info("Making final trading decision")
 
+        positions = state["account_info"].positions
+        symbol = state["symbol"]
+        owns_position = symbol in positions
+        position_qty = positions.get(symbol)
+
         decision = self.trader.decide(
-            state["symbol"],
+            symbol,
             state["technical_analysis"],
             state["sentiment_analysis"],
             state["news_analysis"],
             state["fundamental_analysis"],
             state["bullish_research"],
+            owns_position=owns_position,
+            position_qty=position_qty,
         )
 
         state["final_decision"] = decision
@@ -312,16 +334,13 @@ class TradingWorkflow:
         """
         logger.info("Assessing risk for trading decision")
 
-        account_info = self._get_account_info()
-        state["account_info"] = account_info
-
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
         risk_assessment = self.risk_manager.assess(
             symbol=state["symbol"],
             action=state["final_decision"].action,
             current_price=current_price,
-            account_info=account_info,
+            account_info=state["account_info"],
             market_data=state["market_data"],
             decision_confidence=state["final_decision"].confidence,
         )

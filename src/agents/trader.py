@@ -19,6 +19,8 @@ class TradingDecision(BaseModel):
     confidence: float
     reasoning: str
     risk_level: str
+    owns_position: bool = False
+    position_qty: float | None = None
 
 
 class TraderAgent:
@@ -41,6 +43,8 @@ class TraderAgent:
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
         bullish: BullishResearchAnalysis,
+        owns_position: bool = False,
+        position_qty: float | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -51,13 +55,25 @@ class TraderAgent:
             news: News analysis results
             fundamental: Fundamental analysis results
             bullish: Bullish research analysis
+            owns_position: Whether user owns this stock
+            position_qty: Number of shares owned (if any)
 
         Returns:
             TradingDecision with action and reasoning
         """
-        logger.info(f"Making trading decision for {symbol}")
+        logger.info(f"Making trading decision for {symbol} (owns={owns_position}, qty={position_qty})")
+
+        portfolio_status = (
+            f"You own {position_qty} shares" if owns_position else "You do NOT own this stock"
+        )
+        hold_meaning = (
+            "Maintain current position" if owns_position else "No action - insufficient conviction to buy"
+        )
 
         prompt = f"""You are a professional trader making a decision for {symbol}.
+
+PORTFOLIO STATUS:
+{portfolio_status}
 
 TECHNICAL ANALYSIS:
 Signal: {technical.signal.value}
@@ -100,6 +116,11 @@ Based on these five independent analyses, make your trading decision:
 3. Risk Level: LOW, MEDIUM, or HIGH
 4. Reasoning: 2-3 sentences explaining your decision
 
+Signal meanings:
+- BUY: Recommend purchasing (only if not owned or adding to position)
+- SELL: Recommend selling (only valid if you own shares)
+- HOLD: {hold_meaning}
+
 Consider agreement/disagreement between signals. Higher agreement = higher confidence.
 """
 
@@ -122,6 +143,8 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             confidence=confidence,
             reasoning=response,
             risk_level=risk_level,
+            owns_position=owns_position,
+            position_qty=position_qty,
         )
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:

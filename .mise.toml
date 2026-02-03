@@ -39,3 +39,9 @@ run = "pkill -f 'ollama serve' || true"
 [tasks."ollama:status"]
 description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
+
+[tasks.dev]
+description = "Run analysis with Ollama"
+usage = 'arg "<symbol>" help="Stock ticker" default="AAPL"'
+run = "uv run python -m src.main ${usage_symbol?}"
+env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
