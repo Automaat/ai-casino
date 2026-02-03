@@ -10,6 +10,7 @@ from typing_extensions import TypedDict
 from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
 from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
+from src.agents.meta import MetaAgent, StrategySelection
 from src.agents.news import NewsAnalysis, NewsAnalyst
 from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
@@ -24,6 +25,7 @@ from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy, Signal
+from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
 
 
 class TradingState(TypedDict):
@@ -42,6 +44,8 @@ class TradingState(TypedDict):
     risk_assessment: RiskAssessment | None
     account_info: AccountInfo | None
     order_status: OrderStatus | None
+    regime_analysis: RegimeAnalysis | None
+    strategy_selection: StrategySelection | None
 
 
 class TradingWorkflowResult(BaseModel):
@@ -57,6 +61,8 @@ class TradingWorkflowResult(BaseModel):
     decision: TradingDecision
     risk: RiskAssessment
     order: OrderStatus | None = None
+    regime: RegimeAnalysis | None = None
+    strategy_used: str | None = None
 
     class Config:
         """Pydantic config."""
@@ -77,6 +83,7 @@ class TradingWorkflow:
         broker: AlpacaBroker | None = None,
         metrics_tracker: MetricsTracker | None = None,
         use_ensemble: bool = False,
+        use_meta_agent: bool = True,
     ) -> None:
         """Initialize trading workflow.
 
@@ -88,19 +95,31 @@ class TradingWorkflow:
             fundamental_fetcher: Fundamental data fetcher
             broker: Optional Alpaca broker for trade execution
             metrics_tracker: Optional metrics tracker for performance monitoring
-            use_ensemble: Use ensemble strategy instead of momentum only
+            use_ensemble: Use ensemble strategy instead of momentum only (ignored if use_meta_agent=True)
+            use_meta_agent: Use meta-agent for dynamic strategy selection (default True)
         """
+        self.llm_client = llm_client
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
+        self.finbert = finbert
+        self.fundamental_fetcher = fundamental_fetcher
         self.broker = broker
         self.metrics_tracker = metrics_tracker
         self.use_ensemble = use_ensemble
+        self.use_meta_agent = use_meta_agent
 
-        strategy: MomentumStrategy | EnsembleStrategy = (
+        # Meta-agent for dynamic strategy selection
+        self.meta_agent: MetaAgent | None = None
+        if use_meta_agent:
+            regime_detector = MarketRegimeDetector()
+            self.meta_agent = MetaAgent(llm_client, regime_detector, metrics_tracker)
+
+        # Default strategy (used if meta-agent disabled)
+        self._default_strategy: MomentumStrategy | EnsembleStrategy = (
             EnsembleStrategy() if use_ensemble else MomentumStrategy()
         )
 
-        self.technical_analyst = TechnicalAnalyst(llm_client, strategy)
+        # Non-technical agents (always same)
         self.sentiment_analyst = SentimentAnalyst(finbert)
         self.news_analyst = NewsAnalyst(llm_client)
         self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
@@ -109,7 +128,8 @@ class TradingWorkflow:
         self.trader = TraderAgent(llm_client)
         self.risk_manager = RiskManagementAgent(llm_client)
 
-        logger.info(f"Initialized TradingWorkflow with all agents (ensemble={use_ensemble})")
+        mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")
+        logger.info(f"Initialized TradingWorkflow (mode={mode})")
 
     async def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -126,9 +146,31 @@ class TradingWorkflow:
         state = self._fetch_data(symbol, period_days)
         state = self._fetch_account_info(state)
 
+        # Strategy selection via meta-agent or fallback to default
+        strategy_name: str | None = None
+        if self.meta_agent:
+            selection = await self.meta_agent.select_strategy(symbol, state["market_data"])
+            strategy = selection.strategy_instance
+            strategy_name = selection.strategy_name
+            state["regime_analysis"] = RegimeAnalysis(
+                regime=selection.regime,
+                indicators=self.meta_agent.regime_detector.detect_regime(state["market_data"]).indicators,
+                confidence=selection.regime_confidence,
+                reasoning=selection.reasoning,
+            )
+            state["strategy_selection"] = selection
+        else:
+            strategy = self._default_strategy
+            strategy_name = "ensemble" if self.use_ensemble else "momentum"
+            state["regime_analysis"] = None
+            state["strategy_selection"] = None
+
+        # Create TechnicalAnalyst with selected strategy
+        technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
+
         # Parallel Group 1: independent analyses
         current_price = float(state["market_data"]["Close"].iloc[-1])
-        technical_task = self.technical_analyst.analyze(state["symbol"], state["market_data"])
+        technical_task = technical_analyst.analyze(state["symbol"], state["market_data"])
         sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
         news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
         fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
@@ -190,11 +232,13 @@ class TradingWorkflow:
             decision=state["final_decision"],
             risk=state["risk_assessment"],
             order=state.get("order_status"),
+            regime=state.get("regime_analysis"),
+            strategy_used=strategy_name,
         )
 
         if self.metrics_tracker:
             try:
-                self.metrics_tracker.record_decision(result)
+                self.metrics_tracker.record_decision(result, strategy_name=strategy_name)
             except Exception as e:
                 logger.error(f"Failed to record metrics (continuing): {e}")
 
@@ -230,6 +274,8 @@ class TradingWorkflow:
             risk_assessment=None,
             account_info=None,
             order_status=None,
+            regime_analysis=None,
+            strategy_selection=None,
         )
 
     def _fetch_account_info(self, state: TradingState) -> TradingState:
@@ -361,4 +407,5 @@ class TradingWorkflow:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"TradingWorkflow(agents=8, ensemble={self.use_ensemble})"
+        mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
+        return f"TradingWorkflow(agents=8, mode={mode})"

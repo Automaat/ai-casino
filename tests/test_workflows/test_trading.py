@@ -39,11 +39,12 @@ def mock_workflow_dependencies(
 def test_trading_workflow_init(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
     assert workflow.market_fetcher == market_fetcher
     assert workflow.news_fetcher == news_fetcher
-    assert workflow.technical_analyst is not None
     assert workflow.sentiment_analyst is not None
     assert workflow.news_analyst is not None
     assert workflow.fundamental_analyst is not None
@@ -57,19 +58,39 @@ def test_trading_workflow_init_ensemble(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(
-        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_ensemble=True
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        use_ensemble=True,
+        use_meta_agent=False,
     )
 
     assert workflow.use_ensemble is True
-    assert isinstance(workflow.technical_analyst.strategy, EnsembleStrategy)
-    assert repr(workflow) == "TradingWorkflow(agents=8, ensemble=True)"
+    assert isinstance(workflow._default_strategy, EnsembleStrategy)
+    assert repr(workflow) == "TradingWorkflow(agents=8, mode=ensemble)"
+
+
+def test_trading_workflow_init_meta_agent(mock_workflow_dependencies):
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=True
+    )
+
+    assert workflow.use_meta_agent is True
+    assert workflow.meta_agent is not None
+    assert repr(workflow) == "TradingWorkflow(agents=8, mode=meta-agent)"
 
 
 @pytest.mark.asyncio
 async def test_trading_workflow_analyze(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
     result = await workflow.analyze("AAPL", period_days=90)
 
@@ -92,7 +113,9 @@ async def test_trading_workflow_analyze(mock_workflow_dependencies):
 def test_fetch_data(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
     state = workflow._fetch_data("AAPL", 90)
 
@@ -104,11 +127,14 @@ def test_fetch_data(mock_workflow_dependencies):
 
 @pytest.mark.asyncio
 async def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
-    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+    _, _, llm_client, _, _ = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    # Create technical analyst with default strategy for testing
+    from src.agents.technical import TechnicalAnalyst
+    from src.strategies.momentum import MomentumStrategy
 
-    result = await workflow.technical_analyst.analyze("AAPL", sample_ohlcv_data)
+    technical_analyst = TechnicalAnalyst(llm_client, MomentumStrategy())
+    result = await technical_analyst.analyze("AAPL", sample_ohlcv_data)
 
     assert result is not None
     assert isinstance(result, TechnicalAnalysis)
@@ -118,7 +144,9 @@ async def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_d
 async def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
     result = await workflow.sentiment_analyst.analyze("AAPL", sample_news_articles)
 
@@ -130,7 +158,9 @@ async def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_ar
 async def test_make_decision(mock_workflow_dependencies, sample_bullish_research, sample_bearish_research):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
     state = {
         "symbol": "AAPL",
@@ -190,9 +220,11 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
 def test_repr(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
-    assert repr(workflow) == "TradingWorkflow(agents=8, ensemble=False)"
+    assert repr(workflow) == "TradingWorkflow(agents=8, mode=momentum)"
 
 
 def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
@@ -205,7 +237,13 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
     mock_broker.submit_order.return_value = mock_order
 
     workflow = TradingWorkflow(
-        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, broker=mock_broker
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        broker=mock_broker,
+        use_meta_agent=False,
     )
 
     state = {
@@ -245,7 +283,13 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
     mock_broker.submit_order.side_effect = Exception("API error")
 
     workflow = TradingWorkflow(
-        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, broker=mock_broker
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        broker=mock_broker,
+        use_meta_agent=False,
     )
 
     state = {
@@ -280,7 +324,9 @@ async def test_account_info_passed_to_trader(
     """Test portfolio info passed to trader for context-aware decisions."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
-    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
 
     state = {
         "symbol": "AAPL",

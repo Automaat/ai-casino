@@ -41,7 +41,7 @@ async def test_technical_analyst_analyze_calls_strategy(mock_llm_client, sample_
     assert "MACD" in call_args.args[0]
 
 
-def test_extract_confidence_high(mock_llm_client, sample_ohlcv_data):
+def test_extract_momentum_confidence_high(mock_llm_client, sample_ohlcv_data):
     from unittest.mock import Mock
 
     strategy = MomentumStrategy()
@@ -53,12 +53,12 @@ def test_extract_confidence_high(mock_llm_client, sample_ohlcv_data):
     indicators.rsi_overbought = False
     indicators.macd_bearish = False
 
-    confidence = analyst._extract_confidence("High confidence signal", indicators)
+    confidence = analyst._extract_momentum_confidence("High confidence signal", indicators)
 
     assert confidence >= 0.8
 
 
-def test_extract_confidence_low(mock_llm_client):
+def test_extract_momentum_confidence_low(mock_llm_client):
     from unittest.mock import Mock
 
     strategy = MomentumStrategy()
@@ -70,7 +70,7 @@ def test_extract_confidence_low(mock_llm_client):
     indicators.rsi_overbought = False
     indicators.macd_bearish = False
 
-    confidence = analyst._extract_confidence("Weak signal", indicators)
+    confidence = analyst._extract_momentum_confidence("Weak signal", indicators)
 
     assert confidence == 0.5
 

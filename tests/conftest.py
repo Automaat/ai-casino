@@ -199,3 +199,92 @@ def sample_bearish_research():
         target_downside=20.0,
         confidence=0.7,
     )
+
+
+@pytest.fixture
+def sample_ohlcv_trending_up():
+    """Sample OHLCV data with clear uptrend for regime testing (100 rows)."""
+    import numpy as np
+
+    np.random.seed(42)
+    n = 100
+    trend = np.linspace(100, 150, n)
+    noise = np.random.normal(0, 1, n)
+    close = trend + noise
+
+    return pd.DataFrame(
+        {
+            "Open": close - np.abs(np.random.normal(0, 0.5, n)),
+            "High": close + np.abs(np.random.normal(1, 0.5, n)),
+            "Low": close - np.abs(np.random.normal(1, 0.5, n)),
+            "Close": close,
+            "Volume": [1000000 + int(np.random.normal(0, 100000)) for _ in range(n)],
+        }
+    )
+
+
+@pytest.fixture
+def sample_ohlcv_trending_down():
+    """Sample OHLCV data with clear downtrend for regime testing (100 rows)."""
+    import numpy as np
+
+    np.random.seed(43)
+    n = 100
+    trend = np.linspace(150, 100, n)
+    noise = np.random.normal(0, 1, n)
+    close = trend + noise
+
+    return pd.DataFrame(
+        {
+            "Open": close + np.abs(np.random.normal(0, 0.5, n)),
+            "High": close + np.abs(np.random.normal(1, 0.5, n)),
+            "Low": close - np.abs(np.random.normal(1, 0.5, n)),
+            "Close": close,
+            "Volume": [1000000 + int(np.random.normal(0, 100000)) for _ in range(n)],
+        }
+    )
+
+
+@pytest.fixture
+def sample_ohlcv_ranging():
+    """Sample OHLCV data with sideways movement for regime testing (100 rows)."""
+    import numpy as np
+
+    np.random.seed(44)
+    n = 100
+    base = 120
+    noise = np.random.normal(0, 2, n)
+    close = base + noise
+
+    return pd.DataFrame(
+        {
+            "Open": close - np.random.uniform(-0.5, 0.5, n),
+            "High": close + np.abs(np.random.normal(0.5, 0.2, n)),
+            "Low": close - np.abs(np.random.normal(0.5, 0.2, n)),
+            "Close": close,
+            "Volume": [1000000] * n,
+        }
+    )
+
+
+@pytest.fixture
+def sample_ohlcv_volatile():
+    """Sample OHLCV data with high volatility for regime testing (100 rows)."""
+    import numpy as np
+
+    np.random.seed(45)
+    n = 100
+    base = 120
+    # High volatility swings
+    volatility = np.random.normal(0, 8, n)
+    close = base + volatility.cumsum() * 0.1 + volatility
+
+    return pd.DataFrame(
+        {
+            "Open": close - np.random.uniform(-2, 2, n),
+            "High": close + np.abs(np.random.normal(3, 1, n)),
+            "Low": close - np.abs(np.random.normal(3, 1, n)),
+            "Close": close,
+            "Volume": [2000000 + int(np.random.normal(0, 500000)) for _ in range(n)],
+        }
+    )
