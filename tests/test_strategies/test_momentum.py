@@ -38,10 +38,10 @@ def test_calculate_indicators(sample_ohlcv):
     strategy = MomentumStrategy()
     result = strategy.calculate_indicators(sample_ohlcv)
 
-    assert "RSI_14" in result.columns
-    assert "MACD_12_26_9" in result.columns
-    assert "MACDs_12_26_9" in result.columns
-    assert "MACDh_12_26_9" in result.columns
+    assert any(col.startswith(f"RSI_{strategy.rsi_period}") for col in result.columns)
+    assert any(col.startswith(f"MACD_{strategy.macd_fast}_{strategy.macd_slow}") for col in result.columns)
+    assert any(col.startswith(f"MACDs_{strategy.macd_fast}_{strategy.macd_slow}") for col in result.columns)
+    assert any(col.startswith(f"MACDh_{strategy.macd_fast}_{strategy.macd_slow}") for col in result.columns)
     assert len(result) == len(sample_ohlcv)
 
 

@@ -1,6 +1,6 @@
 """Momentum strategy using RSI and MACD indicators."""
 
-from enum import Enum
+from enum import StrEnum
 
 import pandas as pd
 import pandas_ta  # noqa: F401 - Required to register .ta accessor on DataFrame
@@ -8,7 +8,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 
-class Signal(str, Enum):
+class Signal(StrEnum):
     """Trading signal."""
 
     BUY = "BUY"
@@ -96,10 +96,17 @@ class MomentumStrategy:
         """
         latest = data.iloc[-1]
 
-        rsi_col = f"RSI_{self.rsi_period}"
-        macd_col = f"MACD_{self.macd_fast}_{self.macd_slow}_{self.macd_signal}"
-        signal_col = f"MACDs_{self.macd_fast}_{self.macd_slow}_{self.macd_signal}"
-        hist_col = f"MACDh_{self.macd_fast}_{self.macd_slow}_{self.macd_signal}"
+        def find_col(prefix: str) -> str:
+            matches = [c for c in data.columns if c.startswith(prefix)]
+            if not matches:
+                msg = f"Column {prefix}* not found. Run calculate_indicators first."
+                raise ValueError(msg)
+            return matches[0]
+
+        rsi_col = find_col(f"RSI_{self.rsi_period}")
+        macd_col = find_col(f"MACD_{self.macd_fast}_{self.macd_slow}")
+        signal_col = find_col(f"MACDs_{self.macd_fast}_{self.macd_slow}")
+        hist_col = find_col(f"MACDh_{self.macd_fast}_{self.macd_slow}")
 
         rsi = float(latest[rsi_col])
         macd = float(latest[macd_col])
