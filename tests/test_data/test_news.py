@@ -146,3 +146,67 @@ def test_repr(monkeypatch):
 
     fetcher_no_key = NewsFetcher(api_key="")
     assert repr(fetcher_no_key) == "NewsFetcher(authenticated=False)"
+
+
+def test_fetch_company_news_retries_on_timeout(sample_news_response):
+    with patch("src.data.news.requests.get") as mock_get:
+        mock_response = Mock()
+        mock_response.json.return_value = sample_news_response
+        mock_response.raise_for_status = Mock()
+        mock_get.side_effect = [
+            requests.exceptions.Timeout("timeout"),
+            mock_response,
+        ]
+
+        fetcher = NewsFetcher(api_key="test-key")
+        articles = fetcher.fetch_company_news("AAPL")
+
+        assert len(articles) == 2
+        assert mock_get.call_count == 2
+
+
+def test_fetch_company_news_retries_on_connection_error(sample_news_response):
+    with patch("src.data.news.requests.get") as mock_get:
+        mock_response = Mock()
+        mock_response.json.return_value = sample_news_response
+        mock_response.raise_for_status = Mock()
+        mock_get.side_effect = [
+            requests.exceptions.ConnectionError("connection failed"),
+            requests.exceptions.ConnectionError("connection failed again"),
+            mock_response,
+        ]
+
+        fetcher = NewsFetcher(api_key="test-key")
+        articles = fetcher.fetch_company_news("AAPL")
+
+        assert len(articles) == 2
+        assert mock_get.call_count == 3
+
+
+def test_fetch_company_news_exhausts_retries():
+    with patch("src.data.news.requests.get") as mock_get:
+        mock_get.side_effect = requests.exceptions.Timeout("timeout")
+
+        fetcher = NewsFetcher(api_key="test-key")
+
+        with pytest.raises(requests.exceptions.Timeout):
+            fetcher.fetch_company_news("AAPL")
+
+        assert mock_get.call_count == 3
+
+
+def test_fetch_market_news_retries_on_timeout(sample_news_response):
+    with patch("src.data.news.requests.get") as mock_get:
+        mock_response = Mock()
+        mock_response.json.return_value = sample_news_response
+        mock_response.raise_for_status = Mock()
+        mock_get.side_effect = [
+            requests.exceptions.ReadTimeout("read timeout"),
+            mock_response,
+        ]
+
+        fetcher = NewsFetcher(api_key="test-key")
+        articles = fetcher.fetch_market_news()
+
+        assert len(articles) == 2
+        assert mock_get.call_count == 2
