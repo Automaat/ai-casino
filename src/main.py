@@ -24,6 +24,62 @@ load_dotenv()
 console = Console()
 
 
+def _print_momentum_technical(result) -> None:  # noqa: ANN001
+    """Print momentum strategy technical analysis.
+
+    Args:
+        result: TradingWorkflowResult
+    """
+    tech_table = Table(title="Technical Analysis (Momentum)", show_header=True)
+    tech_table.add_column("Metric", style="cyan")
+    tech_table.add_column("Value", style="yellow")
+
+    tech_table.add_row("Signal", f"[bold]{result.technical.signal.value}[/bold]")
+    if result.technical.rsi is not None:
+        tech_table.add_row("RSI", f"{result.technical.rsi:.2f}")
+    if result.technical.macd_hist is not None:
+        tech_table.add_row("MACD Histogram", f"{result.technical.macd_hist:.4f}")
+    tech_table.add_row("Confidence", f"{result.technical.confidence:.2f}")
+
+    console.print(tech_table)
+
+
+def _print_ensemble_technical(result) -> None:  # noqa: ANN001
+    """Print ensemble strategy technical analysis.
+
+    Args:
+        result: TradingWorkflowResult
+    """
+    ensemble = result.technical.ensemble_result
+
+    tech_table = Table(title="Technical Analysis (Ensemble)", show_header=True)
+    tech_table.add_column("Metric", style="cyan")
+    tech_table.add_column("Value", style="yellow")
+
+    tech_table.add_row("Final Signal", f"[bold]{result.technical.signal.value}[/bold]")
+    tech_table.add_row("Confidence", f"{result.technical.confidence:.2f}")
+    tech_table.add_row("Agreement Ratio", f"{ensemble.agreement_ratio:.2f}")
+    conflict_str = "[yellow]Yes[/yellow]" if ensemble.conflict_resolved else "No"
+    tech_table.add_row("Conflict Resolved", conflict_str)
+
+    console.print(tech_table)
+
+    strategy_table = Table(title="Strategy Breakdown", show_header=True)
+    strategy_table.add_column("Strategy", style="cyan")
+    strategy_table.add_column("Signal", style="yellow")
+    strategy_table.add_column("Weight", style="magenta")
+
+    for sr in ensemble.strategy_results:
+        signal_color = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}[sr.signal.value]
+        strategy_table.add_row(
+            sr.name.replace("_", " ").title(),
+            f"[{signal_color}]{sr.signal.value}[/{signal_color}]",
+            f"{sr.weight:.2f}",
+        )
+
+    console.print(strategy_table)
+
+
 def setup_logging(level: str = "INFO") -> None:
     """Configure logging.
 
@@ -38,24 +94,20 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-def print_result(result) -> None:  # noqa: ANN001, PLR0915, C901
+def print_result(result, use_ensemble: bool = False) -> None:  # noqa: ANN001, PLR0915, PLR0912, C901
     """Print trading analysis results.
 
     Args:
         result: TradingWorkflowResult
+        use_ensemble: Whether ensemble mode was used
     """
     console.print(f"\n[bold cyan]Trading Analysis for {result.symbol}[/bold cyan]\n")
 
-    tech_table = Table(title="Technical Analysis", show_header=True)
-    tech_table.add_column("Metric", style="cyan")
-    tech_table.add_column("Value", style="yellow")
+    if use_ensemble and result.technical.ensemble_result:
+        _print_ensemble_technical(result)
+    else:
+        _print_momentum_technical(result)
 
-    tech_table.add_row("Signal", f"[bold]{result.technical.signal.value}[/bold]")
-    tech_table.add_row("RSI", f"{result.technical.rsi:.2f}")
-    tech_table.add_row("MACD Histogram", f"{result.technical.macd_hist:.4f}")
-    tech_table.add_row("Confidence", f"{result.technical.confidence:.2f}")
-
-    console.print(tech_table)
     console.print(Panel(result.technical.interpretation, title="Technical Interpretation"))
 
     sentiment_table = Table(title="Sentiment Analysis", show_header=True)
@@ -202,7 +254,11 @@ def print_metrics_summary(tracker: MetricsTracker) -> None:
 
 
 async def analyze_stock(
-    symbol: str, period_days: int = 90, enable_trading: bool = False, show_metrics: bool = False
+    symbol: str,
+    period_days: int = 90,
+    enable_trading: bool = False,
+    show_metrics: bool = False,
+    use_ensemble: bool = False,
 ) -> None:
     """Analyze a stock and print results.
 
@@ -211,9 +267,11 @@ async def analyze_stock(
         period_days: Days of historical data
         enable_trading: Enable live trading via Alpaca
         show_metrics: Show performance metrics
+        use_ensemble: Use ensemble strategy
     """
     try:
-        console.print("\n[bold]Initializing trading system...[/bold]")
+        mode_str = "ensemble" if use_ensemble else "momentum"
+        console.print(f"\n[bold]Initializing trading system ({mode_str} mode)...[/bold]")
 
         llm_client = LLMClient()
         market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
@@ -234,14 +292,21 @@ async def analyze_stock(
         metrics_tracker = MetricsTracker() if show_metrics else None
 
         workflow = TradingWorkflow(
-            llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, broker, metrics_tracker
+            llm_client,
+            market_fetcher,
+            news_fetcher,
+            finbert,
+            fundamental_fetcher,
+            broker,
+            metrics_tracker,
+            use_ensemble=use_ensemble,
         )
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 
         result = await workflow.analyze(symbol, period_days)
 
-        print_result(result)
+        print_result(result, use_ensemble=use_ensemble)
 
         if metrics_tracker:
             print_metrics_summary(metrics_tracker)
@@ -256,8 +321,10 @@ def main() -> None:
     """Main CLI entry point."""
     if len(sys.argv) < 2:
         console.print("[bold red]Error:[/bold red] Missing symbol argument")
-        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade] [--show-metrics]")
-        console.print("\nExample: python -m src.main AAPL --period 90 --trade --show-metrics")
+        console.print(
+            "\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade] [--show-metrics] [--ensemble]"
+        )
+        console.print("\nExample: python -m src.main AAPL --period 90 --ensemble")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
@@ -272,10 +339,11 @@ def main() -> None:
 
     enable_trading = "--trade" in sys.argv
     show_metrics = "--show-metrics" in sys.argv
+    use_ensemble = "--ensemble" in sys.argv
 
     setup_logging()
 
-    asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics))
+    asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics, use_ensemble))
 
 
 if __name__ == "__main__":

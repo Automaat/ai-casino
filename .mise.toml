@@ -45,3 +45,9 @@ description = "Run analysis with Ollama"
 usage = 'arg "<symbol>" help="Stock ticker" default="AAPL"'
 run = "uv run python -m src.main ${usage_symbol?}"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
+
+[tasks."dev:ensemble"]
+description = "Run ensemble analysis with Ollama"
+usage = 'arg "<symbol>" help="Stock ticker" default="AAPL"'
+run = "uv run python -m src.main ${usage_symbol?} --ensemble"
+env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }

@@ -179,7 +179,7 @@ def test_repr(mock_workflow_dependencies):
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
-    assert repr(workflow) == "TradingWorkflow(agents=8)"
+    assert repr(workflow) == "TradingWorkflow(agents=8, ensemble=False)"
 
 
 def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
