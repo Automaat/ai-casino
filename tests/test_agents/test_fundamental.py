@@ -15,11 +15,12 @@ class TestFundamentalAnalyst:
         assert analyst.llm == mock_llm_client
         assert analyst.fetcher == mock_fundamental_fetcher
 
-    def test_analyze_returns_fundamental_analysis(self, mock_llm_client, mock_fundamental_fetcher):
+    @pytest.mark.asyncio
+    async def test_analyze_returns_fundamental_analysis(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze returns FundamentalAnalysis with correct types."""
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
 
-        result = analyst.analyze("AAPL", current_price=150.0)
+        result = await analyst.analyze("AAPL", current_price=150.0)
 
         assert isinstance(result, FundamentalAnalysis)
         assert result.valuation in ["UNDERVALUED", "FAIRLY_VALUED", "OVERVALUED"]
@@ -32,14 +33,15 @@ class TestFundamentalAnalyst:
         assert isinstance(result.interpretation, str)
         assert 0.0 <= result.confidence <= 1.0
 
-    def test_analyze_calls_fetcher_and_llm(self, mock_llm_client, mock_fundamental_fetcher):
+    @pytest.mark.asyncio
+    async def test_analyze_calls_fetcher_and_llm(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze calls fetcher and LLM."""
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
 
-        analyst.analyze("AAPL")
+        await analyst.analyze("AAPL")
 
         mock_fundamental_fetcher.fetch_overview.assert_called_once_with("AAPL")
-        mock_llm_client.complete.assert_called_once()
+        mock_llm_client.acomplete.assert_called_once()
 
     def test_extract_metrics_complete_data(self, mock_fundamental_fetcher, sample_fundamental_overview):
         """Test metrics extraction with complete data."""
@@ -256,16 +258,18 @@ class TestFundamentalAnalyst:
         assert "28.5" in prompt
         assert "$" not in prompt  # No price
 
-    def test_analyze_without_current_price(self, mock_llm_client, mock_fundamental_fetcher):
+    @pytest.mark.asyncio
+    async def test_analyze_without_current_price(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze without providing current price."""
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
 
-        result = analyst.analyze("AAPL")
+        result = await analyst.analyze("AAPL")
 
         assert isinstance(result, FundamentalAnalysis)
         assert result.confidence > 0.0
 
-    def test_analyze_edge_case_negative_earnings(self, mock_llm_client, mock_fundamental_fetcher):
+    @pytest.mark.asyncio
+    async def test_analyze_edge_case_negative_earnings(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze with negative earnings."""
         mock_fundamental_fetcher.fetch_overview.return_value = {
             "Symbol": "TEST",
@@ -275,19 +279,20 @@ class TestFundamentalAnalyst:
         }
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
 
-        result = analyst.analyze("TEST")
+        result = await analyst.analyze("TEST")
 
         assert isinstance(result, FundamentalAnalysis)
         assert result.eps is not None
         assert result.eps < 0
 
-    def test_analyze_raises_on_fetcher_error(self, mock_llm_client, mock_fundamental_fetcher):
+    @pytest.mark.asyncio
+    async def test_analyze_raises_on_fetcher_error(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze raises exception when fetcher fails."""
         mock_fundamental_fetcher.fetch_overview.side_effect = ValueError("API error")
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
 
         with pytest.raises(ValueError, match="API error"):
-            analyst.analyze("INVALID")
+            await analyst.analyze("INVALID")
 
     def test_repr(self, mock_llm_client, mock_fundamental_fetcher):
         """Test string representation."""

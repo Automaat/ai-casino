@@ -43,7 +43,7 @@ class TraderAgent:
         self.llm = llm_client
         logger.info("Initialized TraderAgent")
 
-    def decide(
+    async def decide(
         self,
         symbol: str,
         technical: TechnicalAnalysis,
@@ -153,7 +153,7 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             "Be decisive but cautious."
         )
 
-        response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
+        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
 
         action = self._extract_action(response, technical.signal)
         confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)

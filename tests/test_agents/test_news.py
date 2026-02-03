@@ -1,5 +1,7 @@
 """Tests for news analyst agent."""
 
+import pytest
+
 from src.agents.news import NewsAnalysis, NewsAnalyst
 
 
@@ -9,26 +11,28 @@ def test_news_analyst_init(mock_llm_client):
     assert analyst.llm == mock_llm_client
 
 
-def test_news_analyst_analyze(mock_llm_client, sample_news_articles):
+@pytest.mark.asyncio
+async def test_news_analyst_analyze(mock_llm_client, sample_news_articles):
     analyst = NewsAnalyst(mock_llm_client)
 
-    result = analyst.analyze("AAPL", sample_news_articles)
+    result = await analyst.analyze("AAPL", sample_news_articles)
 
     assert isinstance(result, NewsAnalysis)
     assert len(result.key_themes) > 0
     assert result.impact_assessment
     assert result.recommendation
-    mock_llm_client.complete.assert_called_once()
+    mock_llm_client.acomplete.assert_called_once()
 
 
-def test_news_analyst_analyze_empty(mock_llm_client):
+@pytest.mark.asyncio
+async def test_news_analyst_analyze_empty(mock_llm_client):
     analyst = NewsAnalyst(mock_llm_client)
 
-    result = analyst.analyze("AAPL", [])
+    result = await analyst.analyze("AAPL", [])
 
     assert result.key_themes == ["No recent news"]
     assert "Insufficient" in result.impact_assessment
-    mock_llm_client.complete.assert_not_called()
+    mock_llm_client.acomplete.assert_not_called()
 
 
 def test_format_articles(mock_llm_client, sample_news_articles):

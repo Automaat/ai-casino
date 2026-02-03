@@ -1,5 +1,7 @@
 """FinBERT sentiment analysis model wrapper."""
 
+import threading
+
 import torch
 from loguru import logger
 from pydantic import BaseModel
@@ -46,6 +48,7 @@ class FinBERTSentiment:
         self.model = AutoModelForSequenceClassification.from_pretrained(self.MODEL_NAME)
         self.model.to(self.device)
         self.model.eval()
+        self._lock = threading.Lock()
 
         logger.info("FinBERT model loaded successfully")
 
@@ -62,18 +65,19 @@ class FinBERTSentiment:
             logger.warning("Empty text provided for sentiment analysis")
             return SentimentScore(positive=0.0, negative=0.0, neutral=1.0)
 
-        inputs = self.tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
-            padding=True,
-        )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with self._lock:
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True,
+            )
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                probs = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
 
         labels = ["positive", "negative", "neutral"]
         result = SentimentScore(**{labels[i]: float(probs[i]) for i in range(3)})

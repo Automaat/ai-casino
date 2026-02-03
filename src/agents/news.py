@@ -27,7 +27,7 @@ class NewsAnalyst:
         self.llm = llm_client
         logger.info("Initialized NewsAnalyst")
 
-    def analyze(self, symbol: str, articles: list[NewsArticle]) -> NewsAnalysis:
+    async def analyze(self, symbol: str, articles: list[NewsArticle]) -> NewsAnalysis:
         """Analyze news articles for trading implications.
 
         Args:
@@ -66,7 +66,7 @@ Be concise and focus on actionable insights.
             "their potential impact on stock price and trading decisions."
         )
 
-        response = self.llm.complete(prompt, system=system_prompt, temperature=0.4)
+        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
 
         key_themes = self._extract_themes(response)
         impact = self._extract_section(response, "impact")

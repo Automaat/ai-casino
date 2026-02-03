@@ -1,5 +1,7 @@
 """Sentiment Analysis Agent."""
 
+import asyncio
+
 from loguru import logger
 from pydantic import BaseModel
 
@@ -34,7 +36,7 @@ class SentimentAnalyst:
         self.finbert = finbert
         logger.info("Initialized SentimentAnalyst")
 
-    def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
+    async def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
         """Analyze sentiment from news articles.
 
         Args:
@@ -59,7 +61,9 @@ class SentimentAnalyst:
             )
 
         texts = [f"{article.title}. {article.description}" for article in articles]
-        scores = self.finbert.analyze_batch(texts)
+
+        loop = asyncio.get_running_loop()
+        scores = await loop.run_in_executor(None, self.finbert.analyze_batch, texts)
 
         overall_score = self._aggregate_sentiment(scores)
         sentiment_label = self._get_sentiment_label(overall_score)

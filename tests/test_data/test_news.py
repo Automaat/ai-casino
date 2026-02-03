@@ -102,7 +102,9 @@ def test_fetch_market_news(sample_news_response):
         assert "symbols" not in call_args.kwargs["params"]
 
 
-def test_fetch_company_news_no_api_key():
+def test_fetch_company_news_no_api_key(monkeypatch):
+    monkeypatch.delenv("MARKETAUX_API_KEY", raising=False)
+
     with patch("src.data.news.requests.get") as mock_get:
         mock_response = Mock()
         mock_response.json.return_value = {"data": []}
@@ -136,7 +138,9 @@ def test_fetch_market_news_http_error():
             fetcher.fetch_market_news()
 
 
-def test_repr():
+def test_repr(monkeypatch):
+    monkeypatch.delenv("MARKETAUX_API_KEY", raising=False)
+
     fetcher = NewsFetcher(api_key="test-key")
     assert repr(fetcher) == "NewsFetcher(authenticated=True)"
 

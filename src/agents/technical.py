@@ -32,7 +32,7 @@ class TechnicalAnalyst:
         self.strategy = strategy
         logger.info("Initialized TechnicalAnalyst")
 
-    def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+    async def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
         """Perform technical analysis on market data.
 
         Args:
@@ -74,7 +74,7 @@ Rate your confidence (0.0-1.0) based on indicator alignment.
             "Provide clear, actionable interpretations."
         )
 
-        response = self.llm.complete(prompt, system=system_prompt, temperature=0.3)
+        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
 
         confidence = self._extract_confidence(response, indicators)
 

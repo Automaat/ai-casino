@@ -1,5 +1,7 @@
 """Tests for trader agent."""
 
+import pytest
+
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
@@ -14,7 +16,8 @@ def test_trader_agent_init(mock_llm_client):
     assert agent.llm == mock_llm_client
 
 
-def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_bearish_research):
+@pytest.mark.asyncio
+async def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -53,7 +56,7 @@ def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_be
         confidence=0.75,
     )
 
-    result = agent.decide(
+    result = await agent.decide(
         "AAPL", technical, sentiment, news, fundamental, sample_bullish_research, sample_bearish_research
     )
 
@@ -62,7 +65,7 @@ def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_be
     assert 0.0 <= result.confidence <= 1.0
     assert result.risk_level in ["LOW", "MEDIUM", "HIGH"]
     assert result.reasoning
-    mock_llm_client.complete.assert_called_once()
+    mock_llm_client.acomplete.assert_called_once()
 
 
 def test_extract_action_from_response(mock_llm_client):
@@ -163,7 +166,8 @@ def test_repr(mock_llm_client):
     assert "ollama" in repr_str
 
 
-def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sample_bearish_research):
+@pytest.mark.asyncio
+async def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -202,7 +206,7 @@ def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sam
         confidence=0.7,
     )
 
-    result = agent.decide(
+    result = await agent.decide(
         "AAPL",
         technical,
         sentiment,
@@ -218,7 +222,8 @@ def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sam
     assert result.position_qty == 100.0
 
 
-def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sample_bearish_research):
+@pytest.mark.asyncio
+async def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -257,7 +262,7 @@ def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sa
         confidence=0.7,
     )
 
-    result = agent.decide(
+    result = await agent.decide(
         "TSLA",
         technical,
         sentiment,
@@ -273,7 +278,10 @@ def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sa
     assert result.position_qty is None
 
 
-def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_research, sample_bearish_research):
+@pytest.mark.asyncio
+async def test_prompt_includes_portfolio_context(
+    mock_llm_client, sample_bullish_research, sample_bearish_research
+):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -312,7 +320,7 @@ def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_resea
         confidence=0.8,
     )
 
-    agent.decide(
+    await agent.decide(
         "AAPL",
         technical,
         sentiment,
@@ -324,7 +332,7 @@ def test_prompt_includes_portfolio_context(mock_llm_client, sample_bullish_resea
         position_qty=50.0,
     )
 
-    call_args = mock_llm_client.complete.call_args
+    call_args = mock_llm_client.acomplete.call_args
     prompt = call_args[0][0]
     assert "PORTFOLIO STATUS:" in prompt
     assert "currently own 50.0 shares" in prompt

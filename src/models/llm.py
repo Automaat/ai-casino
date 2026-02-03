@@ -3,7 +3,7 @@
 import os
 
 from dotenv import load_dotenv
-from litellm import completion
+from litellm import acompletion, completion
 from loguru import logger
 
 load_dotenv()
@@ -77,6 +77,40 @@ class LLMClient:
             return content
         except Exception as e:
             logger.error(f"LLM completion failed: {e}")
+            raise
+
+    async def acomplete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
+        """Generate completion from prompt asynchronously.
+
+        Args:
+            prompt: User prompt
+            system: System prompt (optional)
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Generated text response
+        """
+        messages: list[dict[str, str]] = []
+
+        if system:
+            messages.append({"role": "system", "content": system})
+
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            kwargs: dict = {
+                "model": self._model_id,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if self._api_base:
+                kwargs["api_base"] = self._api_base
+            response = await acompletion(**kwargs)
+            content = response.choices[0].message.content
+            logger.debug(f"LLM async response length: {len(content)} chars")
+            return content
+        except Exception as e:
+            logger.error(f"LLM async completion failed: {e}")
             raise
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:

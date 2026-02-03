@@ -52,12 +52,13 @@ def test_trading_workflow_init(mock_workflow_dependencies):
     assert workflow.risk_manager is not None
 
 
-def test_trading_workflow_analyze(mock_workflow_dependencies):
+@pytest.mark.asyncio
+async def test_trading_workflow_analyze(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
-    result = workflow.analyze("AAPL", period_days=90)
+    result = await workflow.analyze("AAPL", period_days=90)
 
     assert isinstance(result, TradingWorkflowResult)
     assert result.symbol == "AAPL"
@@ -88,53 +89,32 @@ def test_fetch_data(mock_workflow_dependencies):
     assert len(state["news_articles"]) > 0
 
 
-def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
+@pytest.mark.asyncio
+async def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
-    state = {
-        "symbol": "AAPL",
-        "market_data": sample_ohlcv_data,
-        "news_articles": [],
-        "technical_analysis": None,
-        "sentiment_analysis": None,
-        "news_analysis": None,
-        "final_decision": None,
-        "risk_assessment": None,
-        "account_info": None,
-    }
+    result = await workflow.technical_analyst.analyze("AAPL", sample_ohlcv_data)
 
-    result_state = workflow._run_technical_analysis(state)
-
-    assert result_state["technical_analysis"] is not None
-    assert isinstance(result_state["technical_analysis"], TechnicalAnalysis)
+    assert result is not None
+    assert isinstance(result, TechnicalAnalysis)
 
 
-def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles):
+@pytest.mark.asyncio
+async def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
 
-    state = {
-        "symbol": "AAPL",
-        "market_data": None,
-        "news_articles": sample_news_articles,
-        "technical_analysis": None,
-        "sentiment_analysis": None,
-        "news_analysis": None,
-        "final_decision": None,
-        "risk_assessment": None,
-        "account_info": None,
-    }
+    result = await workflow.sentiment_analyst.analyze("AAPL", sample_news_articles)
 
-    result_state = workflow._run_sentiment_analysis(state)
-
-    assert result_state["sentiment_analysis"] is not None
-    assert isinstance(result_state["sentiment_analysis"], SentimentAnalysis)
+    assert result is not None
+    assert isinstance(result, SentimentAnalysis)
 
 
-def test_make_decision(mock_workflow_dependencies, sample_bullish_research, sample_bearish_research):
+@pytest.mark.asyncio
+async def test_make_decision(mock_workflow_dependencies, sample_bullish_research, sample_bearish_research):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher)
@@ -188,7 +168,7 @@ def test_make_decision(mock_workflow_dependencies, sample_bullish_research, samp
         "order_status": None,
     }
 
-    result_state = workflow._make_decision(state)
+    result_state = await workflow._make_decision(state)
 
     assert result_state["final_decision"] is not None
     assert isinstance(result_state["final_decision"], TradingDecision)
@@ -280,7 +260,8 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
     mock_broker.submit_order.assert_called_once()
 
 
-def test_account_info_passed_to_trader(
+@pytest.mark.asyncio
+async def test_account_info_passed_to_trader(
     mock_workflow_dependencies, sample_bullish_research, sample_bearish_research
 ):
     """Test portfolio info passed to trader for context-aware decisions."""
@@ -337,7 +318,7 @@ def test_account_info_passed_to_trader(
         "order_status": None,
     }
 
-    result_state = workflow._make_decision(state)
+    result_state = await workflow._make_decision(state)
 
     assert result_state["final_decision"].owns_position is True
     assert result_state["final_decision"].position_qty == 100.0
