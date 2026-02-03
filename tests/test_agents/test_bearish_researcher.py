@@ -1,6 +1,6 @@
 """Tests for bearish researcher agent."""
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -98,7 +98,8 @@ class TestBearishResearcher:
         assert researcher.llm == mock_llm_client
         assert repr(researcher) == "BearishResearcher(llm=ollama/qwen3:14b)"
 
-    def test_analyze_returns_bearish_research_analysis(
+    @pytest.mark.asyncio
+    async def test_analyze_returns_bearish_research_analysis(
         self,
         bearish_researcher,
         sample_technical_analysis,
@@ -108,9 +109,9 @@ class TestBearishResearcher:
         sample_llm_response,
     ):
         """Test analyze returns BearishResearchAnalysis."""
-        bearish_researcher.llm.complete = Mock(return_value=sample_llm_response)
+        bearish_researcher.llm.acomplete = AsyncMock(return_value=sample_llm_response)
 
-        result = bearish_researcher.analyze(
+        result = await bearish_researcher.analyze(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,
@@ -124,7 +125,8 @@ class TestBearishResearcher:
         assert result.target_downside == 25.0
         assert 0.0 <= result.confidence <= 1.0
 
-    def test_analyze_calls_llm(
+    @pytest.mark.asyncio
+    async def test_analyze_calls_llm(
         self,
         bearish_researcher,
         sample_technical_analysis,
@@ -134,9 +136,9 @@ class TestBearishResearcher:
         sample_llm_response,
     ):
         """Test analyze calls LLM with correct parameters."""
-        bearish_researcher.llm.complete = Mock(return_value=sample_llm_response)
+        bearish_researcher.llm.acomplete = AsyncMock(return_value=sample_llm_response)
 
-        bearish_researcher.analyze(
+        await bearish_researcher.analyze(
             "TSLA",
             sample_technical_analysis,
             sample_sentiment_analysis,
@@ -144,8 +146,8 @@ class TestBearishResearcher:
             sample_fundamental_analysis,
         )
 
-        bearish_researcher.llm.complete.assert_called_once()
-        call_args = bearish_researcher.llm.complete.call_args
+        bearish_researcher.llm.acomplete.assert_called_once()
+        call_args = bearish_researcher.llm.acomplete.call_args
         assert "TSLA" in call_args[0][0]
         assert "skeptical investment researcher" in call_args[1]["system"]
         assert call_args[1]["temperature"] == 0.5
@@ -426,7 +428,8 @@ class TestBearishResearcher:
 
         assert downside is None
 
-    def test_analyze_with_missing_fundamental_data(
+    @pytest.mark.asyncio
+    async def test_analyze_with_missing_fundamental_data(
         self,
         bearish_researcher,
         sample_technical_analysis,
@@ -447,9 +450,9 @@ class TestBearishResearcher:
             confidence=0.3,
         )
 
-        bearish_researcher.llm.complete = Mock(return_value=sample_llm_response)
+        bearish_researcher.llm.acomplete = AsyncMock(return_value=sample_llm_response)
 
-        result = bearish_researcher.analyze(
+        result = await bearish_researcher.analyze(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,

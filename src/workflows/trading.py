@@ -1,5 +1,7 @@
 """Trading workflow orchestrating all agents."""
 
+import asyncio
+
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel
@@ -103,7 +105,7 @@ class TradingWorkflow:
 
         logger.info("Initialized TradingWorkflow with all agents")
 
-    def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
+    async def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
         Args:
@@ -116,23 +118,46 @@ class TradingWorkflow:
         logger.info(f"Starting trading workflow for {symbol}")
 
         state = self._fetch_data(symbol, period_days)
-
         state = self._fetch_account_info(state)
 
-        state = self._run_technical_analysis(state)
+        # Parallel Group 1: independent analyses
+        current_price = float(state["market_data"]["Close"].iloc[-1])
+        technical_task = self.technical_analyst.analyze(state["symbol"], state["market_data"])
+        sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
+        news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
+        fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
 
-        state = self._run_sentiment_analysis(state)
+        technical, sentiment, news, fundamental = await asyncio.gather(
+            technical_task, sentiment_task, news_task, fundamental_task
+        )
 
-        state = self._run_news_analysis(state)
+        state["technical_analysis"] = technical
+        state["sentiment_analysis"] = sentiment
+        state["news_analysis"] = news
+        state["fundamental_analysis"] = fundamental
 
-        state = self._run_fundamental_analysis(state)
+        # Parallel Group 2: research (depends on Group 1)
+        bullish_task = self.bullish_researcher.analyze(
+            state["symbol"],
+            state["technical_analysis"],
+            state["sentiment_analysis"],
+            state["news_analysis"],
+            state["fundamental_analysis"],
+        )
+        bearish_task = self.bearish_researcher.analyze(
+            state["symbol"],
+            state["technical_analysis"],
+            state["sentiment_analysis"],
+            state["news_analysis"],
+            state["fundamental_analysis"],
+        )
 
-        state = self._run_bullish_research(state)
+        bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
 
-        state = self._run_bearish_research(state)
+        state["bullish_research"] = bullish
+        state["bearish_research"] = bearish
 
-        state = self._make_decision(state)
-
+        state = await self._make_decision(state)
         state = self._assess_risk(state)
 
         if (
@@ -214,116 +239,7 @@ class TradingWorkflow:
         state["account_info"] = self._get_account_info()
         return state
 
-    def _run_technical_analysis(self, state: TradingState) -> TradingState:
-        """Run technical analysis.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with technical analysis
-        """
-        logger.info("Running technical analysis")
-
-        technical = self.technical_analyst.analyze(state["symbol"], state["market_data"])
-
-        state["technical_analysis"] = technical
-        return state
-
-    def _run_sentiment_analysis(self, state: TradingState) -> TradingState:
-        """Run sentiment analysis.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with sentiment analysis
-        """
-        logger.info("Running sentiment analysis")
-
-        sentiment = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
-
-        state["sentiment_analysis"] = sentiment
-        return state
-
-    def _run_news_analysis(self, state: TradingState) -> TradingState:
-        """Run news analysis.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with news analysis
-        """
-        logger.info("Running news analysis")
-
-        news = self.news_analyst.analyze(state["symbol"], state["news_articles"])
-
-        state["news_analysis"] = news
-        return state
-
-    def _run_fundamental_analysis(self, state: TradingState) -> TradingState:
-        """Run fundamental analysis.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with fundamental analysis
-        """
-        logger.info("Running fundamental analysis")
-
-        current_price = float(state["market_data"]["Close"].iloc[-1])
-        fundamental = self.fundamental_analyst.analyze(state["symbol"], current_price)
-
-        state["fundamental_analysis"] = fundamental
-        return state
-
-    def _run_bullish_research(self, state: TradingState) -> TradingState:
-        """Run bullish research analysis.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with bullish research
-        """
-        logger.info("Running bullish research")
-
-        bullish = self.bullish_researcher.analyze(
-            state["symbol"],
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
-            state["fundamental_analysis"],
-        )
-
-        state["bullish_research"] = bullish
-        return state
-
-    def _run_bearish_research(self, state: TradingState) -> TradingState:
-        """Run bearish research analysis.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with bearish research
-        """
-        logger.info("Running bearish research")
-
-        bearish = self.bearish_researcher.analyze(
-            state["symbol"],
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
-            state["fundamental_analysis"],
-        )
-
-        state["bearish_research"] = bearish
-        return state
-
-    def _make_decision(self, state: TradingState) -> TradingState:
+    async def _make_decision(self, state: TradingState) -> TradingState:
         """Make final trading decision.
 
         Args:
@@ -339,7 +255,7 @@ class TradingWorkflow:
         owns_position = symbol in positions
         position_qty = positions.get(symbol)
 
-        decision = self.trader.decide(
+        decision = await self.trader.decide(
             symbol,
             state["technical_analysis"],
             state["sentiment_analysis"],

@@ -42,7 +42,7 @@ class BullishResearcher:
         self.llm = llm_client
         logger.info("Initialized BullishResearcher")
 
-    def analyze(
+    async def analyze(
         self,
         symbol: str,
         technical: TechnicalAnalysis,
@@ -71,7 +71,7 @@ class BullishResearcher:
             "and constructs bull theses. Focus on strengths, catalysts, and positive scenarios."
         )
 
-        response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
+        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
 
         thesis = self._extract_thesis(response)
         key_strengths = self._extract_key_strengths(response)

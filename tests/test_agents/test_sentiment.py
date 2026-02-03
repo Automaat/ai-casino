@@ -1,5 +1,7 @@
 """Tests for sentiment analyst agent."""
 
+import pytest
+
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 
 
@@ -9,10 +11,11 @@ def test_sentiment_analyst_init(mock_finbert):
     assert analyst.finbert == mock_finbert
 
 
-def test_sentiment_analyst_analyze(mock_finbert, sample_news_articles):
+@pytest.mark.asyncio
+async def test_sentiment_analyst_analyze(mock_finbert, sample_news_articles):
     analyst = SentimentAnalyst(mock_finbert)
 
-    result = analyst.analyze("AAPL", sample_news_articles)
+    result = await analyst.analyze("AAPL", sample_news_articles)
 
     assert isinstance(result, SentimentAnalysis)
     assert result.overall_sentiment in ["positive", "negative", "neutral"]
@@ -22,10 +25,11 @@ def test_sentiment_analyst_analyze(mock_finbert, sample_news_articles):
     mock_finbert.analyze_batch.assert_called_once()
 
 
-def test_sentiment_analyst_analyze_empty_articles(mock_finbert):
+@pytest.mark.asyncio
+async def test_sentiment_analyst_analyze_empty_articles(mock_finbert):
     analyst = SentimentAnalyst(mock_finbert)
 
-    result = analyst.analyze("AAPL", [])
+    result = await analyst.analyze("AAPL", [])
 
     assert result.overall_sentiment == "neutral"
     assert result.sentiment_score == 0.0

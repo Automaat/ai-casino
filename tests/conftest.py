@@ -1,7 +1,7 @@
 """Shared pytest fixtures."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
 import pytest
@@ -63,6 +63,7 @@ def mock_llm_client():
     mock.provider = "ollama"
     mock.model = "qwen3:14b"
     mock.complete.return_value = "Mock LLM response with analysis and high confidence."
+    mock.acomplete = AsyncMock(return_value="Mock LLM response with analysis and high confidence.")
     return mock
 
 

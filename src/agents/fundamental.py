@@ -37,7 +37,7 @@ class FundamentalAnalyst:
         self.fetcher = fetcher
         logger.info("Initialized FundamentalAnalyst")
 
-    def analyze(self, symbol: str, current_price: float | None = None) -> FundamentalAnalysis:
+    async def analyze(self, symbol: str, current_price: float | None = None) -> FundamentalAnalysis:
         """Perform fundamental analysis on a company.
 
         Args:
@@ -61,7 +61,7 @@ class FundamentalAnalyst:
                 "of the company's financial health and valuation in 2-3 sentences."
             )
 
-            interpretation = self.llm.complete(prompt, system=system, temperature=0.5)
+            interpretation = await self.llm.acomplete(prompt, system=system, temperature=0.5)
             confidence = self._calculate_confidence(metrics, interpretation)
 
             return FundamentalAnalysis(

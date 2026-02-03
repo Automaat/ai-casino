@@ -42,7 +42,7 @@ class BearishResearcher:
         self.llm = llm_client
         logger.info("Initialized BearishResearcher")
 
-    def analyze(
+    async def analyze(
         self,
         symbol: str,
         technical: TechnicalAnalysis,
@@ -71,7 +71,7 @@ class BearishResearcher:
             "and downside scenarios. Focus on vulnerabilities, threats, and negative catalysts."
         )
 
-        response = self.llm.complete(prompt, system=system_prompt, temperature=0.5)
+        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
 
         thesis = self._extract_thesis(response)
         key_weaknesses = self._extract_key_weaknesses(response)

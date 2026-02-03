@@ -1,6 +1,6 @@
 """Tests for bullish researcher agent."""
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -98,7 +98,8 @@ class TestBullishResearcher:
         assert researcher.llm == mock_llm_client
         assert repr(researcher) == "BullishResearcher(llm=ollama/qwen3:14b)"
 
-    def test_analyze_returns_bullish_research_analysis(
+    @pytest.mark.asyncio
+    async def test_analyze_returns_bullish_research_analysis(
         self,
         bullish_researcher,
         sample_technical_analysis,
@@ -108,9 +109,9 @@ class TestBullishResearcher:
         sample_llm_response,
     ):
         """Test analyze returns BullishResearchAnalysis."""
-        bullish_researcher.llm.complete = Mock(return_value=sample_llm_response)
+        bullish_researcher.llm.acomplete = AsyncMock(return_value=sample_llm_response)
 
-        result = bullish_researcher.analyze(
+        result = await bullish_researcher.analyze(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,
@@ -124,7 +125,8 @@ class TestBullishResearcher:
         assert result.target_upside == 25.0
         assert 0.0 <= result.confidence <= 1.0
 
-    def test_analyze_calls_llm(
+    @pytest.mark.asyncio
+    async def test_analyze_calls_llm(
         self,
         bullish_researcher,
         sample_technical_analysis,
@@ -134,9 +136,9 @@ class TestBullishResearcher:
         sample_llm_response,
     ):
         """Test analyze calls LLM with correct parameters."""
-        bullish_researcher.llm.complete = Mock(return_value=sample_llm_response)
+        bullish_researcher.llm.acomplete = AsyncMock(return_value=sample_llm_response)
 
-        bullish_researcher.analyze(
+        await bullish_researcher.analyze(
             "TSLA",
             sample_technical_analysis,
             sample_sentiment_analysis,
@@ -144,8 +146,8 @@ class TestBullishResearcher:
             sample_fundamental_analysis,
         )
 
-        bullish_researcher.llm.complete.assert_called_once()
-        call_args = bullish_researcher.llm.complete.call_args
+        bullish_researcher.llm.acomplete.assert_called_once()
+        call_args = bullish_researcher.llm.acomplete.call_args
         assert "TSLA" in call_args[0][0]
         assert "optimistic investment researcher" in call_args[1]["system"]
         assert call_args[1]["temperature"] == 0.5
@@ -425,7 +427,8 @@ class TestBullishResearcher:
 
         assert upside is None
 
-    def test_analyze_with_missing_fundamental_data(
+    @pytest.mark.asyncio
+    async def test_analyze_with_missing_fundamental_data(
         self,
         bullish_researcher,
         sample_technical_analysis,
@@ -446,9 +449,9 @@ class TestBullishResearcher:
             confidence=0.3,
         )
 
-        bullish_researcher.llm.complete = Mock(return_value=sample_llm_response)
+        bullish_researcher.llm.acomplete = AsyncMock(return_value=sample_llm_response)
 
-        result = bullish_researcher.analyze(
+        result = await bullish_researcher.analyze(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,

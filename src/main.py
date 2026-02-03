@@ -1,5 +1,6 @@
 """CLI for agentic trading system."""
 
+import asyncio
 import os
 import sys
 
@@ -200,7 +201,7 @@ def print_metrics_summary(tracker: MetricsTracker) -> None:
     console.print("[dim]Metrics saved to: logs/metrics_summary.json[/dim]\n")
 
 
-def analyze_stock(
+async def analyze_stock(
     symbol: str, period_days: int = 90, enable_trading: bool = False, show_metrics: bool = False
 ) -> None:
     """Analyze a stock and print results.
@@ -238,7 +239,7 @@ def analyze_stock(
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 
-        result = workflow.analyze(symbol, period_days)
+        result = await workflow.analyze(symbol, period_days)
 
         print_result(result)
 
@@ -274,7 +275,7 @@ def main() -> None:
 
     setup_logging()
 
-    analyze_stock(symbol, period_days, enable_trading, show_metrics)
+    asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics))
 
 
 if __name__ == "__main__":
