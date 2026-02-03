@@ -271,13 +271,22 @@ class TradingWorkflow:
                 total_exposure=0.0,
             )
 
-        broker_info = self.broker.get_account_info()
-        return AccountInfo(
-            balance=broker_info.balance,
-            available_cash=broker_info.available_cash,
-            positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
-            total_exposure=broker_info.total_exposure,
-        )
+        try:
+            broker_info = self.broker.get_account_info()
+            return AccountInfo(
+                balance=broker_info.balance,
+                available_cash=broker_info.available_cash,
+                positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
+                total_exposure=broker_info.total_exposure,
+            )
+        except Exception:
+            logger.exception("Failed to fetch account info from broker, using mock data")
+            return AccountInfo(
+                balance=100000.0,
+                available_cash=100000.0,
+                positions={},
+                total_exposure=0.0,
+            )
 
     def _execute_trade(self, state: TradingState) -> TradingState:
         """Execute trade via broker.
@@ -291,13 +300,17 @@ class TradingWorkflow:
         risk = state["risk_assessment"]
         action = state["final_decision"].action
 
-        order = self.broker.submit_order(
-            symbol=state["symbol"],
-            qty=int(risk.position_sizing.recommended_shares),
-            side=action.value.lower(),
-            stop_loss_price=risk.stop_loss.stop_loss_price,
-        )
-        logger.info(f"Executed {action.value}: {state['symbol']} x{order.qty}")
+        order: OrderStatus | None = None
+        try:
+            order = self.broker.submit_order(
+                symbol=state["symbol"],
+                qty=int(risk.position_sizing.recommended_shares),
+                side=action.value.lower(),
+                stop_loss_price=risk.stop_loss.stop_loss_price,
+            )
+            logger.info(f"Executed {action.value}: {state['symbol']} x{order.qty}")
+        except Exception:
+            logger.exception(f"Failed to submit order for {state['symbol']} with action {action.value}")
 
         state["order_status"] = order
         return state

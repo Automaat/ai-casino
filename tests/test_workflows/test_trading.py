@@ -170,3 +170,77 @@ def test_repr(mock_workflow_dependencies):
     workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert)
 
     assert repr(workflow) == "TradingWorkflow(agents=5)"
+
+
+def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
+    """Test trade execution when broker provided and risk approved."""
+    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    mock_broker = MagicMock()
+
+    mock_order = MagicMock()
+    mock_order.qty = 10
+    mock_broker.submit_order.return_value = mock_order
+
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker=mock_broker)
+
+    state = {
+        "symbol": "AAPL",
+        "market_data": sample_ohlcv_data,
+        "news_articles": None,
+        "technical_analysis": None,
+        "sentiment_analysis": None,
+        "news_analysis": None,
+        "final_decision": TradingDecision(
+            action=Signal.BUY, confidence=0.85, reasoning="Test", risk_level="LOW"
+        ),
+        "risk_assessment": MagicMock(
+            validation=MagicMock(approved=True),
+            position_sizing=MagicMock(recommended_shares=10),
+            stop_loss=MagicMock(stop_loss_price=140.0),
+        ),
+        "account_info": None,
+        "order_status": None,
+    }
+
+    result_state = workflow._execute_trade(state)
+
+    assert result_state["order_status"] == mock_order
+    mock_broker.submit_order.assert_called_once_with(
+        symbol="AAPL",
+        qty=10,
+        side="buy",
+        stop_loss_price=140.0,
+    )
+
+
+def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_data):
+    """Test trade execution handles broker errors gracefully."""
+    market_fetcher, news_fetcher, llm_client, finbert = mock_workflow_dependencies
+    mock_broker = MagicMock()
+    mock_broker.submit_order.side_effect = Exception("API error")
+
+    workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker=mock_broker)
+
+    state = {
+        "symbol": "AAPL",
+        "market_data": sample_ohlcv_data,
+        "news_articles": None,
+        "technical_analysis": None,
+        "sentiment_analysis": None,
+        "news_analysis": None,
+        "final_decision": TradingDecision(
+            action=Signal.BUY, confidence=0.85, reasoning="Test", risk_level="LOW"
+        ),
+        "risk_assessment": MagicMock(
+            validation=MagicMock(approved=True),
+            position_sizing=MagicMock(recommended_shares=10),
+            stop_loss=MagicMock(stop_loss_price=140.0),
+        ),
+        "account_info": None,
+        "order_status": None,
+    }
+
+    result_state = workflow._execute_trade(state)
+
+    assert result_state["order_status"] is None
+    mock_broker.submit_order.assert_called_once()

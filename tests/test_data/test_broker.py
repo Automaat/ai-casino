@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import pytest
+from alpaca.trading.enums import OrderClass
 
 from src.data.broker import AlpacaBroker, BrokerAccountInfo, BrokerPosition, OrderStatus
 
@@ -77,6 +78,7 @@ def test_broker_init_with_env_vars(mock_trading_client, monkeypatch):
         api_key="test-key",
         secret_key="test-secret",  # noqa: S106
         paper=True,
+        base_url="https://paper-api.alpaca.markets",
     )
 
 
@@ -210,6 +212,11 @@ def test_submit_order_with_stop_loss(mock_trading_client, mock_order, monkeypatc
     assert order_status.order_id == "order-123"
     client_instance.submit_order.assert_called_once()
 
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.order_class == OrderClass.OTO
+    assert order_data.stop_loss.stop_price == 140.0
+
 
 def test_submit_order_error(mock_trading_client, monkeypatch):
     """Test error handling in order submission."""
@@ -292,3 +299,28 @@ def test_broker_repr(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker(paper=False)
     assert repr(broker) == "AlpacaBroker(paper=False)"
+
+
+def test_submit_order_invalid_side(mock_trading_client, monkeypatch):
+    """Test submitting order with invalid side."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(ValueError, match=r"Invalid order side: 'invalid'\. Expected 'buy' or 'sell'\."):
+        broker.submit_order("AAPL", 10, "invalid")
+
+
+def test_submit_order_invalid_qty(mock_trading_client, monkeypatch):
+    """Test submitting order with invalid quantity."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(ValueError, match="Order quantity must be positive, got 0"):
+        broker.submit_order("AAPL", 0, "buy")
+
+    with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
+        broker.submit_order("AAPL", -5, "buy")

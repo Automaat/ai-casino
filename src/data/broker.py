@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest, StopLossRequest
 from loguru import logger
 from pydantic import BaseModel
@@ -76,7 +76,12 @@ class AlpacaBroker:
             msg = "ALPACA_API_KEY and ALPACA_SECRET_KEY must be set"
             raise ValueError(msg)
 
-        self.client = TradingClient(api_key=self.api_key, secret_key=self.secret_key, paper=self.paper)
+        self.client = TradingClient(
+            api_key=self.api_key,
+            secret_key=self.secret_key,
+            paper=self.paper,
+            base_url=self.base_url,
+        )
         logger.info(f"Initialized AlpacaBroker (paper={self.paper})")
 
     def get_account_info(self) -> BrokerAccountInfo:
@@ -129,7 +134,18 @@ class AlpacaBroker:
             OrderStatus with order details
         """
         try:
-            order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+            if qty <= 0:
+                msg = f"Order quantity must be positive, got {qty}"
+                raise ValueError(msg)
+
+            normalized_side = side.lower()
+            if normalized_side == "buy":
+                order_side = OrderSide.BUY
+            elif normalized_side == "sell":
+                order_side = OrderSide.SELL
+            else:
+                msg = f"Invalid order side: {side!r}. Expected 'buy' or 'sell'."
+                raise ValueError(msg)
 
             order_data = MarketOrderRequest(
                 symbol=symbol,
@@ -139,7 +155,7 @@ class AlpacaBroker:
             )
 
             if stop_loss_price is not None:
-                order_data.order_class = "bracket"
+                order_data.order_class = OrderClass.OTO
                 order_data.stop_loss = StopLossRequest(stop_price=stop_loss_price)
 
             order = self.client.submit_order(order_data=order_data)
