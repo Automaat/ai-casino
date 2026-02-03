@@ -63,13 +63,20 @@ class MeanReversionStrategy:
         """
         latest = data.iloc[-1]
 
-        # pandas-ta bbands uses format: BB{L,M,U,B,P}_{length}_{lower_std}_{upper_std}
-        suffix = f"{self.bb_period}_{self.bb_std}_{self.bb_std}"
-        lower_col = f"BBL_{suffix}"
-        middle_col = f"BBM_{suffix}"
-        upper_col = f"BBU_{suffix}"
-        width_col = f"BBB_{suffix}"
-        percent_col = f"BBP_{suffix}"
+        # Find BB columns by prefix (pandas-ta may format floats differently)
+        def find_col(prefix: str) -> str:
+            pattern = f"{prefix}_{self.bb_period}"
+            matches = [c for c in data.columns if c.startswith(pattern)]
+            if not matches:
+                msg = f"Column {pattern}* not found. Run calculate_indicators first."
+                raise ValueError(msg)
+            return matches[0]
+
+        lower_col = find_col("BBL")
+        middle_col = find_col("BBM")
+        upper_col = find_col("BBU")
+        width_col = find_col("BBB")
+        percent_col = find_col("BBP")
 
         close = float(latest["Close"])
         bb_lower = float(latest[lower_col])

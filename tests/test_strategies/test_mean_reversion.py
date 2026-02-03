@@ -38,12 +38,13 @@ def test_calculate_indicators(sample_ohlcv):
     strategy = MeanReversionStrategy()
     result = strategy.calculate_indicators(sample_ohlcv)
 
-    # pandas-ta bbands uses format: BB{L,M,U,B,P}_{length}_{lower_std}_{upper_std}
-    assert "BBL_20_2.0_2.0" in result.columns
-    assert "BBM_20_2.0_2.0" in result.columns
-    assert "BBU_20_2.0_2.0" in result.columns
-    assert "BBB_20_2.0_2.0" in result.columns
-    assert "BBP_20_2.0_2.0" in result.columns
+    # pandas-ta bbands uses format: BB{L,M,U,B,P}_{length}_{std}... (float formatting varies)
+    bb_period = strategy.bb_period
+    assert any(col.startswith(f"BBL_{bb_period}") for col in result.columns)
+    assert any(col.startswith(f"BBM_{bb_period}") for col in result.columns)
+    assert any(col.startswith(f"BBU_{bb_period}") for col in result.columns)
+    assert any(col.startswith(f"BBB_{bb_period}") for col in result.columns)
+    assert any(col.startswith(f"BBP_{bb_period}") for col in result.columns)
     assert len(result) == len(sample_ohlcv)
 
 
