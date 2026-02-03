@@ -14,7 +14,7 @@ def test_trader_agent_init(mock_llm_client):
     assert agent.llm == mock_llm_client
 
 
-def test_trader_agent_decide(mock_llm_client):
+def test_trader_agent_decide(mock_llm_client, sample_bullish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -53,7 +53,7 @@ def test_trader_agent_decide(mock_llm_client):
         confidence=0.75,
     )
 
-    result = agent.decide("AAPL", technical, sentiment, news, fundamental)
+    result = agent.decide("AAPL", technical, sentiment, news, fundamental, sample_bullish_research)
 
     assert isinstance(result, TradingDecision)
     assert isinstance(result.action, Signal)
@@ -83,7 +83,7 @@ def test_extract_action_fallback(mock_llm_client):
     assert action == Signal.HOLD
 
 
-def test_extract_confidence_from_response(mock_llm_client):
+def test_extract_confidence_from_response(mock_llm_client, sample_bullish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -106,12 +106,12 @@ def test_extract_confidence_from_response(mock_llm_client):
 
     response = "Confidence: 0.85\nStrong signals"
 
-    confidence = agent._extract_confidence(response, technical, sentiment)
+    confidence = agent._extract_confidence(response, technical, sentiment, sample_bullish_research)
 
     assert confidence == 0.85
 
 
-def test_extract_confidence_fallback(mock_llm_client):
+def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research):
     agent = TraderAgent(mock_llm_client)
 
     technical = TechnicalAnalysis(
@@ -134,7 +134,7 @@ def test_extract_confidence_fallback(mock_llm_client):
 
     response = "No confidence mentioned"
 
-    confidence = agent._extract_confidence(response, technical, sentiment)
+    confidence = agent._extract_confidence(response, technical, sentiment, sample_bullish_research)
 
     assert 0.0 <= confidence <= 1.0
 

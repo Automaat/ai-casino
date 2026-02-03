@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.risk import AccountInfo
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.news import NewsArticle
@@ -158,3 +159,22 @@ def mock_fundamental_fetcher(sample_fundamental_overview):
     mock.api_key = "test_api_key"
     mock.fetch_overview.return_value = sample_fundamental_overview
     return mock
+
+
+@pytest.fixture
+def sample_bullish_research():
+    """Sample bullish research analysis for testing."""
+    return BullishResearchAnalysis(
+        thesis=(
+            "Stock shows strong momentum with improving fundamentals and positive market sentiment. "
+            "Technical indicators suggest continued upward trajectory. Undervalued at current levels."
+        ),
+        key_strengths=[
+            "Strong technical momentum with positive RSI and MACD",
+            "Positive sentiment across recent news articles",
+            "Undervalued relative to growth potential",
+            "Strong revenue growth trajectory",
+        ],
+        target_upside=25.0,
+        confidence=0.8,
+    )
