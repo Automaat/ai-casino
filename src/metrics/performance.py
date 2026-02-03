@@ -135,18 +135,17 @@ def calculate_max_drawdown(trades: list) -> tuple[float, float]:
     return max_drawdown_dollars, max_drawdown_percent
 
 
-def calculate_risk_adjusted_returns(returns: list[float], risk_values: list[float]) -> float:
+def calculate_risk_adjusted_returns(returns: list[float]) -> float:
     """Calculate risk-adjusted returns (Sortino-like metric).
 
     Args:
         returns: List of returns (as decimals)
-        risk_values: List of risk values (e.g., stop-loss prices)
 
     Returns:
         Risk-adjusted return ratio
     """
-    if not returns or not risk_values:
-        logger.debug("No returns or risk values, risk-adjusted return = 0.0")
+    if not returns:
+        logger.debug("No returns, risk-adjusted return = 0.0")
         return 0.0
 
     negative_returns = [r for r in returns if r < 0]

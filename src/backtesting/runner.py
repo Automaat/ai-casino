@@ -147,8 +147,16 @@ class BacktestRunner:
             entry_price = float(trade.EntryPrice)
             exit_price = float(trade.ExitPrice) if trade.ExitPrice else None
 
-            if exit_price:
-                pnl = float(trade.PnL) if hasattr(trade, "PnL") else (exit_price - entry_price) * shares
+            if exit_price is not None:
+                pnl = (
+                    float(trade.PnL)
+                    if hasattr(trade, "PnL")
+                    else (
+                        (exit_price - entry_price) * shares
+                        if action == Signal.BUY
+                        else (entry_price - exit_price) * shares
+                    )
+                )
                 pnl_percent = (
                     ((exit_price - entry_price) / entry_price) * 100
                     if action == Signal.BUY

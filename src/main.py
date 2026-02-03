@@ -156,17 +156,18 @@ def print_metrics_summary(tracker: MetricsTracker) -> None:
     metrics_table.add_column("Metric", style="cyan")
     metrics_table.add_column("Value", style="yellow")
 
-    metrics_table.add_row("Total Trades", str(metrics.total_trades))
-    metrics_table.add_row("Win Rate", f"{metrics.win_rate * 100:.1f}%")
-    metrics_table.add_row("Avg Return", f"{metrics.avg_return * 100:.2f}%")
-    metrics_table.add_row("Total Return", f"{metrics.total_return * 100:.2f}%")
+    metrics_table.add_row("Total Decisions", str(metrics.total_decisions))
+    metrics_table.add_row("Approved Trades", str(metrics.approved_trades))
+    metrics_table.add_row("Closed Trades", str(metrics.closed_trades))
+    metrics_table.add_row("Total PnL", f"${metrics.total_pnl:,.2f}")
+    metrics_table.add_row("Win Rate", f"{metrics.win_rate:.1f}%")
     metrics_table.add_row("Sharpe Ratio", f"{metrics.sharpe_ratio:.2f}")
-    metrics_table.add_row("Max Drawdown", f"{metrics.max_drawdown * 100:.2f}%")
+    metrics_table.add_row("Max Drawdown", f"{metrics.max_drawdown_percent:.2f}%")
 
     console.print("\n")
     console.print(metrics_table)
 
-    console.print(f"\n[dim]Trades saved to: {tracker.trade_log_path}[/dim]")
+    console.print("\n[dim]Trades saved to: logs/trades.jsonl[/dim]")
     console.print("[dim]Metrics saved to: logs/metrics_summary.json[/dim]\n")
 
 

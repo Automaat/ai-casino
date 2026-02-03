@@ -136,7 +136,10 @@ class TradingWorkflow:
         )
 
         if self.metrics_tracker:
-            self.metrics_tracker.record_decision(result)
+            try:
+                self.metrics_tracker.record_decision(result)
+            except Exception as e:
+                logger.error(f"Failed to record metrics (continuing): {e}")
 
         return result
 

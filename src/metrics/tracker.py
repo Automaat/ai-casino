@@ -100,7 +100,10 @@ class MetricsTracker:
         Args:
             risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
         """
-        self.risk_free_rate = risk_free_rate or float(os.getenv("RISK_FREE_RATE", "0.02"))
+        if risk_free_rate is None:
+            self.risk_free_rate = float(os.getenv("RISK_FREE_RATE", "0.02"))
+        else:
+            self.risk_free_rate = risk_free_rate
         self.trades: list[TradeRecord] = []
         self._load_trades()
         logger.info(f"Initialized MetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
@@ -197,8 +200,10 @@ class MetricsTracker:
 
             if should_close:
                 trade.close_trade(current_price)
-                self._update_jsonl()
                 closed_trades.append(trade)
+
+        if closed_trades:
+            self._update_jsonl()
 
         return closed_trades
 
@@ -246,8 +251,7 @@ class MetricsTracker:
         sharpe = calculate_sharpe_ratio(returns, self.risk_free_rate) if returns else 0.0
         max_dd, max_dd_pct = calculate_max_drawdown(closed)
 
-        risk_values = [t.stop_loss_price for t in closed]
-        risk_adjusted = calculate_risk_adjusted_returns(returns, risk_values) if returns else 0.0
+        risk_adjusted = calculate_risk_adjusted_returns(returns) if returns else 0.0
 
         return PerformanceMetrics(
             window=window,
@@ -267,8 +271,8 @@ class MetricsTracker:
             max_drawdown_percent=max_dd_pct,
             sharpe_ratio=sharpe,
             risk_adjusted_return=risk_adjusted,
-            start_date=filtered_trades[0].timestamp,
-            end_date=filtered_trades[-1].timestamp,
+            start_date=min(t.timestamp for t in filtered_trades),
+            end_date=max(t.timestamp for t in filtered_trades),
         )
 
     def _filter_trades_by_window(self, window: str) -> list[TradeRecord]:

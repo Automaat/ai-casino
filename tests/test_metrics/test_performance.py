@@ -274,8 +274,7 @@ def test_calculate_max_drawdown_with_open_trades(open_trade):
 def test_calculate_risk_adjusted_returns_positive():
     """Test risk-adjusted returns with positive returns."""
     returns = [0.05, 0.03, 0.07, 0.04, 0.06]
-    risk_values = [95.0, 97.0, 93.0, 96.0, 94.0]
-    rar = calculate_risk_adjusted_returns(returns, risk_values)
+    rar = calculate_risk_adjusted_returns(returns)
 
     assert rar > 0
     assert isinstance(rar, float)
@@ -284,8 +283,7 @@ def test_calculate_risk_adjusted_returns_positive():
 def test_calculate_risk_adjusted_returns_negative():
     """Test risk-adjusted returns with negative returns."""
     returns = [-0.05, -0.03, -0.07, -0.04, -0.06]
-    risk_values = [105.0, 103.0, 107.0, 104.0, 106.0]
-    rar = calculate_risk_adjusted_returns(returns, risk_values)
+    rar = calculate_risk_adjusted_returns(returns)
 
     assert rar < 0
 
@@ -293,15 +291,14 @@ def test_calculate_risk_adjusted_returns_negative():
 def test_calculate_risk_adjusted_returns_mixed():
     """Test risk-adjusted returns with mixed returns."""
     returns = [0.10, -0.05, 0.05, -0.0416]
-    risk_values = [95.0, 205.0, 285.0, 122.0]
-    rar = calculate_risk_adjusted_returns(returns, risk_values)
+    rar = calculate_risk_adjusted_returns(returns)
 
     assert isinstance(rar, float)
 
 
 def test_calculate_risk_adjusted_returns_empty():
     """Test risk-adjusted returns with empty inputs."""
-    rar = calculate_risk_adjusted_returns([], [])
+    rar = calculate_risk_adjusted_returns([])
 
     assert rar == 0.0
 
@@ -309,8 +306,7 @@ def test_calculate_risk_adjusted_returns_empty():
 def test_calculate_risk_adjusted_returns_zero_downside():
     """Test risk-adjusted returns with no downside uses all returns for downside deviation."""
     returns = [0.05, 0.03, 0.07]
-    risk_values = [95.0, 97.0, 93.0]
-    rar = calculate_risk_adjusted_returns(returns, risk_values)
+    rar = calculate_risk_adjusted_returns(returns)
 
     assert rar > 0
     assert isinstance(rar, float)
