@@ -29,7 +29,7 @@ dependencies = [
     "backtesting==0.6.5",
 
     # Optimization
-    "optuna==4.2.0",
+    "optuna==4.7.0",
 
     # Utilities
     "python-dotenv==1.2.1",
