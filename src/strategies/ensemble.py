@@ -69,7 +69,8 @@ class EnsembleStrategy:
         """
         self.momentum = momentum or MomentumStrategy()
         self.mean_reversion = mean_reversion or MeanReversionStrategy()
-        self.trend_following = trend_following or TrendFollowingStrategy()
+        # Use shorter SMAs (20/50) for ensemble - requires less data, more responsive
+        self.trend_following = trend_following or TrendFollowingStrategy(sma_fast=20, sma_slow=50)
         self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.aggregation = aggregation
 

@@ -341,10 +341,6 @@ def main() -> None:
     show_metrics = "--show-metrics" in sys.argv
     use_ensemble = "--ensemble" in sys.argv
 
-    # Ensemble requires 250+ days for trend following SMA_200
-    if use_ensemble and period_days < 250:
-        period_days = 250
-
     setup_logging()
 
     asyncio.run(analyze_stock(symbol, period_days, enable_trading, show_metrics, use_ensemble))
