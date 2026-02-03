@@ -13,6 +13,7 @@ from src.agents.trader import TraderAgent, TradingDecision
 from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
+from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.momentum import MomentumStrategy, Signal
@@ -53,13 +54,14 @@ class TradingWorkflowResult(BaseModel):
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         llm_client: LLMClient,
         market_fetcher: MarketDataFetcher,
         news_fetcher: NewsFetcher,
         finbert: FinBERTSentiment,
         broker: AlpacaBroker | None = None,
+        metrics_tracker: MetricsTracker | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -69,10 +71,12 @@ class TradingWorkflow:
             news_fetcher: News data fetcher
             finbert: FinBERT sentiment model
             broker: Optional Alpaca broker for trade execution
+            metrics_tracker: Optional metrics tracker for performance monitoring
         """
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
         self.broker = broker
+        self.metrics_tracker = metrics_tracker
 
         strategy = MomentumStrategy()
 
@@ -121,7 +125,7 @@ class TradingWorkflow:
             f"risk_approved={state['risk_assessment'].validation.approved})"
         )
 
-        return TradingWorkflowResult(
+        result = TradingWorkflowResult(
             symbol=symbol,
             technical=state["technical_analysis"],
             sentiment=state["sentiment_analysis"],
@@ -130,6 +134,14 @@ class TradingWorkflow:
             risk=state["risk_assessment"],
             order=state.get("order_status"),
         )
+
+        if self.metrics_tracker:
+            try:
+                self.metrics_tracker.record_decision(result)
+            except Exception as e:
+                logger.error(f"Failed to record metrics (continuing): {e}")
+
+        return result
 
     def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
         """Fetch market and news data.

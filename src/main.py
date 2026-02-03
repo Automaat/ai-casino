@@ -12,6 +12,7 @@ from rich.table import Table
 from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.workflows.trading import TradingWorkflow
@@ -143,13 +144,43 @@ def print_result(result) -> None:  # noqa: ANN001, PLR0915
         console.print(order_table)
 
 
-def analyze_stock(symbol: str, period_days: int = 90, enable_trading: bool = False) -> None:
+def print_metrics_summary(tracker: MetricsTracker) -> None:
+    """Print performance metrics summary.
+
+    Args:
+        tracker: MetricsTracker instance
+    """
+    metrics = tracker.calculate_metrics("all")
+
+    metrics_table = Table(title="Performance Metrics", show_header=True)
+    metrics_table.add_column("Metric", style="cyan")
+    metrics_table.add_column("Value", style="yellow")
+
+    metrics_table.add_row("Total Decisions", str(metrics.total_decisions))
+    metrics_table.add_row("Approved Trades", str(metrics.approved_trades))
+    metrics_table.add_row("Closed Trades", str(metrics.closed_trades))
+    metrics_table.add_row("Total PnL", f"${metrics.total_pnl:,.2f}")
+    metrics_table.add_row("Win Rate", f"{metrics.win_rate:.1f}%")
+    metrics_table.add_row("Sharpe Ratio", f"{metrics.sharpe_ratio:.2f}")
+    metrics_table.add_row("Max Drawdown", f"{metrics.max_drawdown_percent:.2f}%")
+
+    console.print("\n")
+    console.print(metrics_table)
+
+    console.print("\n[dim]Trades saved to: logs/trades.jsonl[/dim]")
+    console.print("[dim]Metrics saved to: logs/metrics_summary.json[/dim]\n")
+
+
+def analyze_stock(
+    symbol: str, period_days: int = 90, enable_trading: bool = False, show_metrics: bool = False
+) -> None:
     """Analyze a stock and print results.
 
     Args:
         symbol: Stock ticker symbol
         period_days: Days of historical data
         enable_trading: Enable live trading via Alpaca
+        show_metrics: Show performance metrics
     """
     try:
         console.print("\n[bold]Initializing trading system...[/bold]")
@@ -169,13 +200,18 @@ def analyze_stock(symbol: str, period_days: int = 90, enable_trading: bool = Fal
                     "[bold yellow]Warning: Trading enabled but Alpaca credentials not found[/bold yellow]"
                 )
 
-        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker)
+        metrics_tracker = MetricsTracker() if show_metrics else None
+
+        workflow = TradingWorkflow(llm_client, market_fetcher, news_fetcher, finbert, broker, metrics_tracker)
 
         console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
 
         result = workflow.analyze(symbol, period_days)
 
         print_result(result)
+
+        if metrics_tracker:
+            print_metrics_summary(metrics_tracker)
 
     except Exception as e:
         console.print(f"\n[bold red]Error:[/bold red] {e}")
@@ -187,8 +223,8 @@ def main() -> None:
     """Main CLI entry point."""
     if len(sys.argv) < 2:
         console.print("[bold red]Error:[/bold red] Missing symbol argument")
-        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade]")
-        console.print("\nExample: python -m src.main AAPL --period 90 --trade")
+        console.print("\nUsage: python -m src.main <SYMBOL> [--period DAYS] [--trade] [--show-metrics]")
+        console.print("\nExample: python -m src.main AAPL --period 90 --trade --show-metrics")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
@@ -202,10 +238,11 @@ def main() -> None:
             console.print("[bold yellow]Warning:[/bold yellow] Invalid period, using default 90 days")
 
     enable_trading = "--trade" in sys.argv
+    show_metrics = "--show-metrics" in sys.argv
 
     setup_logging()
 
-    analyze_stock(symbol, period_days, enable_trading)
+    analyze_stock(symbol, period_days, enable_trading, show_metrics)
 
 
 if __name__ == "__main__":
