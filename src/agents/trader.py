@@ -79,19 +79,19 @@ Recommendation: {news.recommendation}
 
 FUNDAMENTAL ANALYSIS:
 Valuation: {fundamental.valuation}
-P/E Ratio: {fundamental.pe_ratio if fundamental.pe_ratio else "N/A"}
-EPS: ${fundamental.eps if fundamental.eps else "N/A"}
-Revenue Growth YoY: {f"{fundamental.revenue_growth_yoy * 100:.1f}%" if fundamental.revenue_growth_yoy else "N/A"}
-Earnings Growth YoY: {f"{fundamental.earnings_growth_yoy * 100:.1f}%" if fundamental.earnings_growth_yoy else "N/A"}
-Debt-to-Equity: {fundamental.debt_to_equity if fundamental.debt_to_equity else "N/A"}
-Current Ratio: {fundamental.current_ratio if fundamental.current_ratio else "N/A"}
+P/E Ratio: {fundamental.pe_ratio if fundamental.pe_ratio is not None else "N/A"}
+EPS: ${fundamental.eps if fundamental.eps is not None else "N/A"}
+Revenue Growth YoY: {f"{fundamental.revenue_growth_yoy * 100:.1f}%" if fundamental.revenue_growth_yoy is not None else "N/A"}
+Earnings Growth YoY: {f"{fundamental.earnings_growth_yoy * 100:.1f}%" if fundamental.earnings_growth_yoy is not None else "N/A"}
+Debt-to-Equity: {fundamental.debt_to_equity if fundamental.debt_to_equity is not None else "N/A"}
+Current Ratio: {fundamental.current_ratio if fundamental.current_ratio is not None else "N/A"}
 Confidence: {fundamental.confidence:.2f}
 Analysis: {fundamental.interpretation}
 
 BULLISH RESEARCH:
 Thesis: {bullish.thesis}
 Key Strengths: {", ".join(bullish.key_strengths)}
-Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside else "N/A"}
+Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
 Confidence: {bullish.confidence:.2f}
 
 Based on these five independent analyses, make your trading decision:

@@ -127,9 +127,11 @@ class BullishResearcher:
         news_str = f"{news_themes}, impact: {news.impact_assessment}"
 
         # Fundamental section
-        pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio else "N/A"
-        eps_str = f"{fundamental.eps:.2f}" if fundamental.eps else "N/A"
-        growth_str = f"{fundamental.revenue_growth_yoy:.1%}" if fundamental.revenue_growth_yoy else "N/A"
+        pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio is not None else "N/A"
+        eps_str = f"{fundamental.eps:.2f}" if fundamental.eps is not None else "N/A"
+        growth_str = (
+            f"{fundamental.revenue_growth_yoy:.1%}" if fundamental.revenue_growth_yoy is not None else "N/A"
+        )
         fund_str = f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str})"
 
         return f"""Construct a bull thesis for {symbol} based on:
