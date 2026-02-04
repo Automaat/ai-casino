@@ -178,7 +178,15 @@ def main():
             return await original_make_decision(state)
         workflow._make_decision = patched_make_decision
 
-        result = asyncio.run(workflow.analyze(symbol, period_days=period_days))
+        # Python 3.14 fix: Create dedicated event loop for worker thread
+        # to avoid anyio task state tracking issues with asyncio.run()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(workflow.analyze(symbol, period_days=period_days))
+        finally:
+            loop.close()
+
         update_status("complete", "Analysis complete")
 
         with open(output_file, "w") as f:
@@ -370,7 +378,14 @@ def main():
         update_status("analyzing", "Analyzing results with LLM...")
         llm = LLMClient()
         analyzer = ScreeningAnalyzer(llm_client=llm)
-        analysis = asyncio.run(analyzer.analyze(output))
+
+        # Python 3.14 fix: Create dedicated event loop for worker thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            analysis = loop.run_until_complete(analyzer.analyze(output))
+        finally:
+            loop.close()
 
         formatted = format_screening_output(output, analysis)
 
