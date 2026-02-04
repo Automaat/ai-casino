@@ -1,6 +1,6 @@
 """Market hours scheduler for the trading daemon."""
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -68,10 +68,10 @@ class MarketScheduler:
                 days_to_add = 3
             elif now.weekday() == 5:
                 days_to_add = 2
-            market_open = market_open.replace(day=now.day + days_to_add)
+            market_open = market_open + timedelta(days=days_to_add)
         elif now.weekday() >= 5:
             days_until_monday = 7 - now.weekday()
-            market_open = market_open.replace(day=now.day + days_until_monday)
+            market_open = market_open + timedelta(days=days_until_monday)
 
         return max(0, int((market_open - now).total_seconds()))
 

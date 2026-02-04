@@ -137,14 +137,17 @@ class DaemonRunner:
         console.print("-" * 50)
         console.print(f"Total: {len(results)} symbols analyzed\n")
 
-    async def _run_cycle(self) -> None:
-        """Run a single analysis cycle."""
+    async def _run_cycle(self) -> int:
+        """Run a single analysis cycle.
+
+        Returns:
+            Seconds to sleep before next cycle
+        """
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             wait_time = self.scheduler.time_until_open()
             if wait_time > 0:
                 logger.info(f"Market closed, waiting {wait_time // 60} minutes until open")
-                await asyncio.sleep(min(wait_time, 60))
-                return
+                return min(wait_time, 60)
 
         logger.info(f"Starting analysis cycle for {len(self.config.watchlist)} symbols")
         console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now():%H:%M:%S})")  # noqa: DTZ005
@@ -153,6 +156,7 @@ class DaemonRunner:
         self._log_results(results)
 
         self.state.save(self.config.state.state_file)
+        return self.config.interval_minutes * 60
 
     async def run(self) -> None:
         """Run the daemon main loop."""
@@ -172,13 +176,11 @@ class DaemonRunner:
         console.print(f"Auto trade: {self.config.auto_trade}")
         console.print()
 
-        interval_seconds = self.config.interval_minutes * 60
-
         while self.running:
             try:
-                await self._run_cycle()
-                logger.info(f"Sleeping for {self.config.interval_minutes} minutes")
-                await asyncio.sleep(interval_seconds)
+                sleep_seconds = await self._run_cycle()
+                logger.info(f"Sleeping for {sleep_seconds // 60} minutes")
+                await asyncio.sleep(sleep_seconds)
             except asyncio.CancelledError:
                 break
             except Exception as e:

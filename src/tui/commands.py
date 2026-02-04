@@ -176,6 +176,7 @@ Type freely to chat about markets or ask questions."""
         """Format full analysis result."""
         signal = result.decision.action.value
         confidence = result.decision.confidence
+        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi else "N/A"
 
         msg = f"""## Analysis for {result.symbol}
 
@@ -184,7 +185,7 @@ Type freely to chat about markets or ask questions."""
 
 ### Technical
 - Signal: {result.technical.signal.value}
-- RSI: {result.technical.rsi:.2f if result.technical.rsi else 'N/A'}
+- RSI: {rsi_str}
 - Confidence: {result.technical.confidence:.2f}
 
 ### Sentiment
@@ -207,11 +208,13 @@ Type freely to chat about markets or ask questions."""
 
     def _format_technical(self, result: TradingWorkflowResult) -> str:
         """Format technical analysis."""
+        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi else "N/A"
+        macd_str = f"{result.technical.macd_hist:.4f}" if result.technical.macd_hist else "N/A"
         return f"""## Technical Analysis for {result.symbol}
 
 - **Signal:** {result.technical.signal.value}
-- **RSI:** {result.technical.rsi:.2f if result.technical.rsi else 'N/A'}
-- **MACD Histogram:** {result.technical.macd_hist:.4f if result.technical.macd_hist else 'N/A'}
+- **RSI:** {rsi_str}
+- **MACD Histogram:** {macd_str}
 - **Confidence:** {result.technical.confidence:.2f}
 
 **Interpretation:**

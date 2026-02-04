@@ -129,9 +129,6 @@ class TradingChatApp(App):
 You help users understand markets, trading strategies, and financial concepts.
 Be concise but informative. Use markdown formatting for readability."""
 
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(self._history[-10:])
-
         response_text = ""
 
         try:
