@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -11,7 +12,9 @@ from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.risk import AccountInfo
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.news import NewsArticle
+from src.metrics.tracker import TradeRecord
 from src.models.sentiment import SentimentScore
+from src.strategies.momentum import Signal
 
 
 @pytest.fixture
@@ -288,3 +291,82 @@ def sample_ohlcv_volatile():
             "Volume": [2000000 + int(np.random.normal(0, 500000)) for _ in range(n)],
         }
     )
+
+
+@pytest.fixture
+def sample_trade_record():
+    """Sample trade record for testing."""
+    return TradeRecord(
+        timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+        symbol="AAPL",
+        action=Signal.BUY,
+        entry_price=150.0,
+        exit_price=None,
+        shares=10,
+        stop_loss_price=145.0,
+        confidence=0.75,
+        risk_level="MEDIUM",
+        status="OPEN",
+        pnl=None,
+        pnl_percent=None,
+        strategy_name="momentum",
+    )
+
+
+@pytest.fixture
+def mock_trade_repository():
+    """Mock trade repository for testing."""
+    mock = MagicMock()
+
+    trade_record = TradeRecord(
+        timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+        symbol="AAPL",
+        action=Signal.BUY,
+        entry_price=150.0,
+        exit_price=None,
+        shares=10,
+        stop_loss_price=145.0,
+        confidence=0.75,
+        risk_level="MEDIUM",
+        status="OPEN",
+        pnl=None,
+        pnl_percent=None,
+        strategy_name="momentum",
+    )
+
+    mock.create = AsyncMock(return_value=trade_record)
+    mock.get_by_id = AsyncMock(return_value=trade_record)
+    mock.get_open_trades = AsyncMock(return_value=[trade_record])
+    mock.get_by_window = AsyncMock(return_value=[trade_record])
+    mock.get_by_symbol = AsyncMock(return_value=[trade_record])
+    mock.get_all = AsyncMock(return_value=[trade_record])
+    mock.update = AsyncMock(return_value=trade_record)
+
+    return mock
+
+
+@pytest.fixture
+def mock_snapshot_repository():
+    """Mock portfolio snapshot repository for testing."""
+    from src.database.repositories.snapshot import PortfolioSnapshot
+
+    mock = MagicMock()
+
+    snapshot = PortfolioSnapshot(
+        id=str(uuid.uuid4()),
+        timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+        balance=100000.0,
+        available_cash=80000.0,
+        total_exposure=20000.0,
+        portfolio_value=100000.0,
+        positions={"AAPL": 10.0},
+        trigger="TRADE",
+    )
+
+    mock.create = AsyncMock(return_value=snapshot)
+    mock.get_by_id = AsyncMock(return_value=snapshot)
+    mock.get_latest = AsyncMock(return_value=snapshot)
+    mock.get_by_date_range = AsyncMock(return_value=[snapshot])
+    mock.get_by_trigger = AsyncMock(return_value=[snapshot])
+
+    return mock

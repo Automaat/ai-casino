@@ -1,12 +1,12 @@
 # AI Casino - Implementation Plan
 
 **Project:** Agentic Stock Trading System
-**Status:** Phase 4 In Progress (88% overall)
-**Last Updated:** 2026-02-03
+**Status:** Phase 4 In Progress (92% overall)
+**Last Updated:** 2026-02-04
 
 ---
 
-## ✅ Completed Features (22/25)
+## ✅ Completed Features (23/25)
 
 ### Core Architecture
 - [x] Multi-agent architecture (Technical, Sentiment, News, Trader)
@@ -46,7 +46,7 @@
 
 ---
 
-## 📋 Pending Features (3/25)
+## 📋 Pending Features (2/25)
 
 ### 🟢 Advanced Features - Multi-Strategy
 
@@ -64,15 +64,17 @@
 
 ### 🔵 Infrastructure
 
-#### 2. Trade History Database
-**Priority:** LOW
-**Effort:** Medium
-**Dependencies:** Paper trading
-**Description:**
-- PostgreSQL setup
-- Trade logging
-- Portfolio snapshots
-- Historical analysis queries
+#### ~~2. Trade History Database~~ ✅
+**Status:** COMPLETE
+**Implementation:**
+- SQLAlchemy async with PostgreSQL (SQLite fallback)
+- TradeORM and PortfolioSnapshotORM models
+- Repository pattern (TradeRepository, PortfolioSnapshotRepository)
+- Auto-migration on startup
+- DatabaseMetricsTracker with same interface as JSONL tracker
+- Portfolio snapshot on trade (PORTFOLIO_SNAPSHOT_ON_TRADE env)
+- Backward compatible: works without DATABASE_URL (JSONL fallback)
+- JSONL→DB migration script (scripts/migrate_jsonl_to_db.py)
 
 #### 3. Monitoring Dashboard
 **Priority:** LOW
@@ -115,7 +117,7 @@
 ### Phase 4: Optimization & Monitoring (IN PROGRESS)
 13. Meta-Agent for Strategy Selection
 14. ~~Optuna Strategy Optimization~~ ✅
-15. Trade History Database
+15. ~~Trade History Database~~ ✅
 16. Monitoring Dashboard (Grafana)
 
 **Goal:** Self-optimizing system with full observability
@@ -124,14 +126,14 @@
 
 ## 📊 Progress Tracking
 
-**Overall Progress:** 22/25 (88%)
+**Overall Progress:** 23/25 (92%)
 
 ### By Category
 - **Architecture & Core:** 4/4 (100%) ✅
 - **Analysis Agents:** 6/6 (100%) ✅
 - **Trading & Execution:** 6/6 (100%) ✅
 - **Strategies:** 4/4 (100%) ✅ - momentum, mean reversion, trend following, ensemble
-- **Infrastructure:** 2/4 (50%)
+- **Infrastructure:** 3/4 (75%) - database complete, dashboard pending
 - **Optimization:** 1/2 (50%) - Optuna complete, meta-agent pending
 - **DevOps:** 3/3 (100%) ✅
 
@@ -159,3 +161,4 @@
 - Four trading strategies: Momentum (RSI+MACD), Mean Reversion (Bollinger Bands), Trend Following (SMA+ADX), Ensemble (weighted voting)
 - Ensemble strategy combines all three with configurable weights and conflict resolution (--ensemble flag)
 - Optuna optimization for hyperparameter tuning with multi-objective support and walk-forward validation
+- Trade history database with SQLAlchemy async (PostgreSQL/SQLite) with auto-migration and repository pattern

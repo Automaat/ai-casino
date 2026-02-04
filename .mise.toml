@@ -51,3 +51,19 @@ description = "Run analysis with momentum strategy only (no meta-agent)"
 usage = 'arg "<symbol>" help="Stock ticker" default="AAPL"'
 run = "uv run python -m src.main ${usage_symbol?} --no-meta-agent"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
+
+[tasks."db:start"]
+description = "Start PostgreSQL container"
+run = "docker run -d --name ai-casino-db -p 5432:5432 -e POSTGRES_DB=ai_casino -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine || docker start ai-casino-db"
+
+[tasks."db:stop"]
+description = "Stop PostgreSQL container"
+run = "docker stop ai-casino-db || true"
+
+[tasks."db:status"]
+description = "Check if PostgreSQL is running"
+run = "docker ps --filter name=ai-casino-db --format '{{.Status}}' | grep -q Up && echo 'PostgreSQL is running' || echo 'PostgreSQL is not running'"
+
+[tasks."db:shell"]
+description = "Open psql shell"
+run = "docker exec -it ai-casino-db psql -U postgres -d ai_casino"
