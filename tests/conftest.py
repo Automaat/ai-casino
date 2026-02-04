@@ -9,8 +9,10 @@ import pytest
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
+from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
+from src.data.comparative import ComparativeData, PerformanceData, StockInfo
 from src.data.news import NewsArticle
 from src.metrics.tracker import TradeRecord
 from src.models.sentiment import SentimentScore
@@ -342,6 +344,61 @@ def mock_trade_repository():
     mock.get_all = AsyncMock(return_value=[trade_record])
     mock.update = AsyncMock(return_value=trade_record)
 
+    return mock
+
+
+@pytest.fixture
+def sample_comparative_data():
+    """Sample comparative data for testing."""
+    return ComparativeData(
+        stock_info=StockInfo(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+            pe_ratio=28.5,
+            price_to_book=45.2,
+        ),
+        stock_performance=PerformanceData(
+            ytd_return=15.0,
+            three_month_return=8.0,
+        ),
+        sector_etf="XLK",
+        sector_pe=32.0,
+        sector_performance=PerformanceData(
+            ytd_return=12.0,
+            three_month_return=5.0,
+        ),
+        market_pe=22.0,
+        market_performance=PerformanceData(
+            ytd_return=10.0,
+            three_month_return=4.0,
+        ),
+        fetched_at=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def sample_comparative_analysis():
+    """Sample comparative analysis for testing."""
+    return ComparativeAnalysis(
+        relative_valuation=RelativeValuation.FAIRLY_VALUED,
+        pe_vs_sector=0.89,
+        pe_vs_market=1.29,
+        perf_vs_sector_ytd=3.0,
+        perf_vs_sector_3m=3.0,
+        perf_vs_market_ytd=5.0,
+        perf_vs_market_3m=4.0,
+        sector_etf="XLK",
+        interpretation="Stock is fairly valued relative to its technology sector peers.",
+        confidence=0.75,
+    )
+
+
+@pytest.fixture
+def mock_comparative_fetcher(sample_comparative_data):
+    """Mock comparative data fetcher."""
+    mock = MagicMock()
+    mock.fetch_comparative_data.return_value = sample_comparative_data
     return mock
 
 
