@@ -203,9 +203,9 @@ class TradingChatApp(App):
             chat.add_assistant_message(result.message)
             self._history.append({"role": "assistant", "content": result.message})
 
-    @work(thread=True, exclusive=True)
-    def _run_analysis_worker(self, text: str, symbol: str) -> None:
-        """Run analysis in background thread.
+    @work(exclusive=True)
+    async def _run_analysis_worker(self, text: str, symbol: str) -> None:
+        """Run analysis in background async worker.
 
         Args:
             text: Full command text
@@ -223,7 +223,7 @@ class TradingChatApp(App):
             return worker.is_cancelled
 
         try:
-            result = asyncio.run(self._command_handler.execute(text, progress_callback, is_cancelled))
+            result = await self._command_handler.execute(text, progress_callback, is_cancelled)
             if not worker.is_cancelled:
                 self.post_message(AnalysisComplete(result, symbol))
         except asyncio.CancelledError:
