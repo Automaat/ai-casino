@@ -9,6 +9,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Click
+from textual.widgets import Static
 from textual.worker import Worker, get_current_worker
 
 from src.models.llm import LLMClient
@@ -54,7 +55,7 @@ class TradingChatApp(App):
     CSS_PATH = "app.tcss"
 
     BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit"),
+        Binding("ctrl+c", "quit", show=False),
         Binding("ctrl+l", "clear", "Clear"),
         Binding("ctrl+t", "toggle_theme", "Toggle Theme"),
         Binding("escape", "focus_input", "Cancel/Focus"),
@@ -70,6 +71,7 @@ class TradingChatApp(App):
         self._analysis_worker: Worker | None = None
         self._tool_registry = self._create_tool_registry()
         self._pending_tool_confirmation: dict | None = None
+        self._quit_pending = False
         self._load_history()
 
     def _create_tool_registry(self) -> ToolRegistry:
@@ -117,14 +119,22 @@ class TradingChatApp(App):
             widget_id="input-box",
         )
         yield StatusBar()
+        yield Static("Press Ctrl+C again to quit", id="quit-bar")
 
     def on_mount(self) -> None:
         """Handle app mount."""
         self.register_theme(NORD_LIGHT_THEME)
         self.theme = "nord" if detect_dark_mode() else "nord-light"
+        self.query_one("#quit-bar").display = False
         chat = self.query_one(ChatView)
         chat.show_welcome(self._model_name)
+        self._sync_input_history()
         self.query_one(AutocompleteInput).focus()
+
+    def _sync_input_history(self) -> None:
+        """Sync user message history to input widget."""
+        user_messages = [m["content"] for m in self._history if m.get("role") == "user"]
+        self.query_one(AutocompleteInput).set_input_history(list(reversed(user_messages)))
 
     async def on_autocomplete_input_submitted(self, event: AutocompleteInput.Submitted) -> None:
         """Handle input submission."""
@@ -149,6 +159,7 @@ class TradingChatApp(App):
             await self._handle_chat(text)
 
         self._save_history()
+        self._sync_input_history()
 
     async def _handle_tool_confirmation(self, text: str) -> None:
         """Handle user response to tool confirmation prompt."""
@@ -391,3 +402,24 @@ class TradingChatApp(App):
     def on_click(self, _event: Click) -> None:
         """Keep focus on input after any click."""
         self.query_one(AutocompleteInput).focus()
+
+    def action_quit(self) -> None:
+        """Handle Ctrl+C - require double-press to quit."""
+        if self._quit_pending:
+            self.exit()
+            return
+
+        self._quit_pending = True
+        self._show_quit_bar()
+
+    def _show_quit_bar(self) -> None:
+        """Show quit confirmation bar with auto-hide timer."""
+        quit_bar = self.query_one("#quit-bar")
+        quit_bar.update("Press Ctrl+C again to quit")
+        quit_bar.display = True
+        self.set_timer(1.0, self._hide_quit_bar)
+
+    def _hide_quit_bar(self) -> None:
+        """Hide quit confirmation bar."""
+        self.query_one("#quit-bar").display = False
+        self._quit_pending = False

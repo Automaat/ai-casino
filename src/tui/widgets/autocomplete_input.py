@@ -9,6 +9,34 @@ from textual.widget import Widget
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
+
+class ChatInput(Input):
+    """Input that doesn't consume ctrl+c (allows app to handle quit)."""
+
+    BINDINGS = [
+        Binding("ctrl+a", "cursor_left", "cursor left", show=False),
+        Binding("ctrl+b", "cursor_left", "cursor left", show=False),
+        Binding("ctrl+d", "delete_right", "delete right", show=False),
+        Binding("ctrl+e", "cursor_right", "cursor right", show=False),
+        Binding("ctrl+f", "cursor_right", "cursor right", show=False),
+        Binding("ctrl+h", "delete_left", "delete left", show=False),
+        Binding("ctrl+k", "delete_right_all", "delete all to the right", show=False),
+        Binding("ctrl+u", "delete_left_all", "delete all to the left", show=False),
+        Binding("ctrl+w", "delete_word_left", "delete word left", show=False),
+        Binding("delete", "delete_right", "delete right", show=False),
+        Binding("end", "cursor_right_word", "cursor word right", show=False),
+        Binding("enter", "submit", "submit", show=False),
+        Binding("home", "cursor_left_word", "cursor word left", show=False),
+        Binding("left", "cursor_left", "cursor left", show=False),
+        Binding("right", "cursor_right", "cursor right", show=False),
+        Binding("shift+end", "cursor_right_word(True)", "cursor word right select", show=False),
+        Binding("shift+home", "cursor_left_word(True)", "cursor word left select", show=False),
+        Binding("shift+left", "cursor_left(True)", "cursor left select", show=False),
+        Binding("shift+right", "cursor_right(True)", "cursor right select", show=False),
+        # Removed ctrl+c (copy) to allow app-level quit handling
+    ]
+
+
 DEFAULT_SYMBOLS = [
     "AAPL",
     "ABBV",
@@ -110,12 +138,15 @@ class AutocompleteInput(Widget):
         self._symbols = symbols or DEFAULT_SYMBOLS
         self._commands = commands or []
         self._matches: list[str] = []
+        self._input_history: list[str] = []
+        self._history_index: int = -1
+        self._draft: str = ""
 
     def compose(self) -> ComposeResult:
         """Compose the widget."""
         with Vertical(id="autocomplete-container"):
             yield OptionList(id="autocomplete-dropdown")
-            yield Input(placeholder=self._placeholder, id="autocomplete-input")
+            yield ChatInput(placeholder=self._placeholder, id="autocomplete-input")
 
     def on_mount(self) -> None:
         """Handle mount."""
@@ -124,12 +155,15 @@ class AutocompleteInput(Widget):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input changes to update suggestions."""
+        if self._history_index != -1:
+            self._history_index = -1
         value = event.value
         self._update_matches(value)
         self._refresh_dropdown()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle input submission."""
+        self._history_index = -1
         # If dropdown visible with matches, select highlighted option instead
         if self.show_dropdown and self._matches:
             event.stop()
@@ -192,7 +226,7 @@ class AutocompleteInput(Widget):
             selected: The selected option text
             submit: If True and selecting a symbol, submit the command
         """
-        input_widget = self.query_one("#autocomplete-input", Input)
+        input_widget = self.query_one("#autocomplete-input", ChatInput)
         value = input_widget.value
 
         # Command selection - submit no-arg commands immediately, else wait for symbol
@@ -227,18 +261,59 @@ class AutocompleteInput(Widget):
         self.show_dropdown = False
 
     def action_next_option(self) -> None:
-        """Move to next option in dropdown."""
-        if not self.show_dropdown:
-            return
-        dropdown = self.query_one("#autocomplete-dropdown", OptionList)
-        dropdown.action_cursor_down()
+        """Move to next option in dropdown or newer history."""
+        if self.show_dropdown:
+            dropdown = self.query_one("#autocomplete-dropdown", OptionList)
+            dropdown.action_cursor_down()
+        else:
+            self._navigate_history(-1)
 
     def action_prev_option(self) -> None:
-        """Move to previous option in dropdown."""
-        if not self.show_dropdown:
+        """Move to previous option in dropdown or older history."""
+        if self.show_dropdown:
+            dropdown = self.query_one("#autocomplete-dropdown", OptionList)
+            dropdown.action_cursor_up()
+        else:
+            self._navigate_history(1)
+
+    def _navigate_history(self, direction: int) -> None:
+        """Navigate through input history.
+
+        Args:
+            direction: 1 for older messages, -1 for newer
+        """
+        if not self._input_history:
             return
-        dropdown = self.query_one("#autocomplete-dropdown", OptionList)
-        dropdown.action_cursor_up()
+
+        input_widget = self.query_one("#autocomplete-input", ChatInput)
+
+        if self._history_index == -1:
+            self._draft = input_widget.value
+
+        new_index = self._history_index + direction
+
+        if new_index < -1:
+            new_index = -1
+        elif new_index >= len(self._input_history):
+            return
+
+        self._history_index = new_index
+
+        if new_index == -1:
+            input_widget.value = self._draft
+        else:
+            input_widget.value = self._input_history[new_index]
+
+        input_widget.cursor_position = len(input_widget.value)
+
+    def set_input_history(self, messages: list[str]) -> None:
+        """Set input history for arrow key navigation.
+
+        Args:
+            messages: User messages, most recent first
+        """
+        self._input_history = messages
+        self._history_index = -1
 
     def action_select_option(self) -> None:
         """Select current option."""
@@ -262,17 +337,17 @@ class AutocompleteInput(Widget):
 
     def focus(self, scroll_visible: bool = True) -> None:
         """Focus the input."""
-        self.query_one("#autocomplete-input", Input).focus(scroll_visible)
+        self.query_one("#autocomplete-input", ChatInput).focus(scroll_visible)
 
     @property
     def value(self) -> str:
         """Get current input value."""
-        return self.query_one("#autocomplete-input", Input).value
+        return self.query_one("#autocomplete-input", ChatInput).value
 
     @value.setter
     def value(self, new_value: str) -> None:
         """Set input value."""
-        self.query_one("#autocomplete-input", Input).value = new_value
+        self.query_one("#autocomplete-input", ChatInput).value = new_value
 
     def __repr__(self) -> str:
         """Return string representation."""
