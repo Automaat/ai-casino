@@ -142,10 +142,11 @@ class StockScreener:
         else:
             stock_universe = self._universe_fetcher.fetch_combined()
 
-        # Fetch market data in batches
+        # Fetch market data in batches (1y for breakout to get 52-week high, 3mo for others)
         symbols = [s.symbol for s in stock_universe.stocks]
         stock_info = {s.symbol: s for s in stock_universe.stocks}
-        market_data = self._fetch_batch_data(symbols)
+        period = "1y" if criteria == ScreeningCriteria.BREAKOUT else "3mo"
+        market_data = self._fetch_batch_data(symbols, period=period)
 
         # Score each stock
         results = []
@@ -220,7 +221,9 @@ class StockScreener:
 
                 if len(batch) == 1:
                     if not data.empty:
-                        all_data[batch[0]] = data
+                        df = data.dropna()
+                        if not df.empty and len(df) >= MIN_MACD_DATA_POINTS:
+                            all_data[batch[0]] = df
                 else:
                     for sym in batch:
                         if sym in data.columns.get_level_values(0):
@@ -309,7 +312,8 @@ class StockScreener:
         pb = ticker_info.get("priceToBook")
         forward_pe = ticker_info.get("forwardPE")
 
-        if not pe or not pb:
+        # Require positive P/E and P/B (not None, not 0, not negative)
+        if not pe or not pb or pe <= 0 or pb <= 0:
             return None
 
         # Value criteria: P/E < threshold, P/B < threshold
@@ -325,9 +329,9 @@ class StockScreener:
             return_3m = 0
 
         # Score: lower P/E and P/B = better, positive momentum helps
-        pe_score = max(0, (PE_VALUE_THRESHOLD - pe) / PE_VALUE_THRESHOLD)
-        pb_score = max(0, (PB_VALUE_THRESHOLD - pb) / PB_VALUE_THRESHOLD)
-        momentum_score = min(max(return_3m / 20, 0), 1)  # Cap at 20% return
+        pe_score = min(max(0, (PE_VALUE_THRESHOLD - pe) / PE_VALUE_THRESHOLD), 1.0)
+        pb_score = min(max(0, (PB_VALUE_THRESHOLD - pb) / PB_VALUE_THRESHOLD), 1.0)
+        momentum_score = min(max(return_3m / 20, 0), 1.0)  # Cap at 20% return
 
         score = pe_score * 0.4 + pb_score * 0.4 + momentum_score * 0.2
 

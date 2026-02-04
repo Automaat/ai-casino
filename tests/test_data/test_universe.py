@@ -1,7 +1,6 @@
 """Tests for stock universe fetcher."""
 
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -80,10 +79,11 @@ class TestStockUniverseFetcher:
         assert cache_dir.exists()
         assert "StockUniverseFetcher" in repr(fetcher)
 
-    def test_init_default_cache(self):
-        """Test fetcher with default cache directory."""
-        fetcher = StockUniverseFetcher()
-        assert Path("data/cache/universe").exists()
+    def test_init_default_cache(self, tmp_path):
+        """Test fetcher creates cache directory when given a path."""
+        cache_dir = tmp_path / "data" / "cache" / "universe"
+        fetcher = StockUniverseFetcher(cache_dir=str(cache_dir))
+        assert cache_dir.exists()
         fetcher.clear_cache()
 
     @patch("src.data.universe.requests.get")

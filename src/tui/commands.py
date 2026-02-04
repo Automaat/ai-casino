@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
-from src.screening.exporter import Watchlist
+from src.screening.exporter import ScreeningExporter, Watchlist
 from src.workflows.trading import TradingWorkflowResult
 
 ProgressCallback = Callable[[str, str, str], None]
@@ -304,7 +304,7 @@ Type freely to chat about markets or ask questions."""
             elif arg.upper() in ("SP500", "NASDAQ100", "COMBINED"):
                 universe = arg.upper()
             elif arg.isdigit():
-                top_n = int(arg)
+                top_n = max(1, min(int(arg), 50))
 
         result_dict = await run_screening_in_process(
             criteria=criteria,
@@ -404,7 +404,7 @@ Type freely to chat about markets or ask questions."""
             message="Unknown watchlist action. Use: list, show NAME, remove SYMBOL",
         )
 
-    def _handle_watchlist_default(self, exporter: object) -> CommandResult:
+    def _handle_watchlist_default(self, exporter: ScreeningExporter) -> CommandResult:
         """Handle showing default watchlist."""
         watchlist = exporter.load_watchlist("default")
         if not watchlist:
@@ -418,7 +418,7 @@ Type freely to chat about markets or ask questions."""
             data={"name": "default", "count": len(watchlist.entries)},
         )
 
-    def _handle_watchlist_list(self, exporter: object) -> CommandResult:
+    def _handle_watchlist_list(self, exporter: ScreeningExporter) -> CommandResult:
         """Handle listing all watchlists."""
         watchlists = exporter.list_watchlists()
         if not watchlists:
@@ -428,7 +428,7 @@ Type freely to chat about markets or ask questions."""
             message="**Available Watchlists:**\n" + "\n".join(f"- {w}" for w in watchlists),
         )
 
-    def _handle_watchlist_show(self, exporter: object, args: list[str]) -> CommandResult:
+    def _handle_watchlist_show(self, exporter: ScreeningExporter, args: list[str]) -> CommandResult:
         """Handle showing a specific watchlist."""
         if len(args) <= 1:
             return CommandResult(success=False, message="Usage: /watchlist show NAME")
@@ -442,7 +442,7 @@ Type freely to chat about markets or ask questions."""
             data={"name": name, "count": len(watchlist.entries)},
         )
 
-    def _handle_watchlist_remove(self, exporter: object, args: list[str]) -> CommandResult:
+    def _handle_watchlist_remove(self, exporter: ScreeningExporter, args: list[str]) -> CommandResult:
         """Handle removing a symbol from watchlist."""
         if len(args) <= 1:
             return CommandResult(success=False, message="Usage: /watchlist remove SYMBOL")

@@ -39,6 +39,18 @@ class Watchlist(BaseModel):
     updated_at: datetime
 
 
+def _sanitize_filename(name: str) -> str:
+    """Sanitize filename to prevent path traversal.
+
+    Args:
+        name: Input filename/name
+
+    Returns:
+        Sanitized filename (basename only)
+    """
+    return Path(name).name
+
+
 def _get_default_export_dir() -> Path:
     """Get default export directory.
 
@@ -96,8 +108,11 @@ class ScreeningExporter:
         if not filename:
             timestamp = output.screened_at.strftime("%Y%m%d_%H%M%S")
             filename = f"{output.criteria.value}_{output.universe}_{timestamp}"
+        else:
+            filename = _sanitize_filename(filename)
 
         filepath = self._export_dir / f"{filename}.csv"
+        metric_columns = self._get_metric_columns(output.results)
 
         with filepath.open("w", newline="") as f:
             writer = csv.writer(f)
@@ -114,7 +129,7 @@ class ScreeningExporter:
                     "screened_at",
                     "criteria",
                     "universe",
-                    *self._get_metric_columns(output.results),
+                    *metric_columns,
                 ]
             )
 
@@ -132,7 +147,7 @@ class ScreeningExporter:
                     output.universe,
                 ]
                 # Add metric values in consistent order
-                for col in self._get_metric_columns(output.results):
+                for col in metric_columns:
                     row.append(result.metrics.get(col, ""))
                 writer.writerow(row)
 
@@ -156,6 +171,8 @@ class ScreeningExporter:
         if not filename:
             timestamp = output.screened_at.strftime("%Y%m%d_%H%M%S")
             filename = f"{output.criteria.value}_{output.universe}_{timestamp}"
+        else:
+            filename = _sanitize_filename(filename)
 
         filepath = self._export_dir / f"{filename}.json"
 
@@ -186,6 +203,7 @@ class ScreeningExporter:
         Returns:
             Updated Watchlist
         """
+        watchlist_name = _sanitize_filename(watchlist_name)
         watchlist = self.load_watchlist(watchlist_name)
         now = datetime.now(UTC)
 
@@ -231,6 +249,7 @@ class ScreeningExporter:
         Returns:
             Watchlist or None if not found
         """
+        name = _sanitize_filename(name)
         filepath = self._watchlist_dir / f"{name}.json"
 
         if not filepath.exists():
@@ -267,6 +286,7 @@ class ScreeningExporter:
         Returns:
             True if deleted, False if not found
         """
+        name = _sanitize_filename(name)
         filepath = self._watchlist_dir / f"{name}.json"
         if filepath.exists():
             filepath.unlink()
@@ -284,6 +304,7 @@ class ScreeningExporter:
         Returns:
             True if removed, False if not found
         """
+        watchlist_name = _sanitize_filename(watchlist_name)
         watchlist = self.load_watchlist(watchlist_name)
         if not watchlist:
             return False
