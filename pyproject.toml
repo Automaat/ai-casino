@@ -39,6 +39,9 @@ dependencies = [
     "duckduckgo-search==8.1.1",
     "diskcache==5.6.3",
 
+    # Async
+    "nest-asyncio==1.6.0",
+
     # Utilities
     "tenacity==9.1.2",
     "python-dotenv==1.2.1",

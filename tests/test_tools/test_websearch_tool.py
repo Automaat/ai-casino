@@ -56,9 +56,9 @@ def tool(mock_fetcher):
 class TestWebSearchTool:
     """Tests for WebSearchTool."""
 
-    def test_tool_name(self):
-        """Test tool name constant."""
-        assert WebSearchTool.TOOL_NAME == "web_search"
+    def test_tool_name(self, tool):
+        """Test tool name property."""
+        assert tool.name == "web_search"
 
     def test_get_tool_definition(self, tool):
         """Test tool definition format."""

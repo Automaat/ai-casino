@@ -226,6 +226,7 @@ class LLMClient:
         system: str | None = None,
         temperature: float = 0.7,
         max_tool_calls: int = 5,
+        on_tool_call: Callable[[str, dict, str], None] | None = None,
     ) -> str:
         """Generate completion with tool calling support.
 
@@ -236,6 +237,7 @@ class LLMClient:
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
             max_tool_calls: Maximum tool calls per completion
+            on_tool_call: Callback invoked after each tool execution (name, args, result)
 
         Returns:
             Final text response after tool execution
@@ -273,7 +275,14 @@ class LLMClient:
                     args = json.loads(tool_call.function.arguments)
 
                     logger.debug(f"Executing tool: {name} with args: {args}")
-                    result = tool_executor(name, args)
+                    try:
+                        result = tool_executor(name, args)
+                    except Exception as tool_error:
+                        logger.error(f"Tool '{name}' execution failed: {tool_error}")
+                        result = f"Tool '{name}' failed: {tool_error}"
+
+                    if on_tool_call:
+                        on_tool_call(name, args, result)
 
                     messages.append(
                         {
@@ -305,6 +314,7 @@ class LLMClient:
         system: str | None = None,
         temperature: float = 0.7,
         max_tool_calls: int = 5,
+        on_tool_call: Callable[[str, dict, str], None] | None = None,
     ) -> str:
         """Generate completion with tool calling support (async).
 
@@ -315,6 +325,7 @@ class LLMClient:
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
             max_tool_calls: Maximum tool calls per completion
+            on_tool_call: Callback invoked after each tool execution (name, args, result)
 
         Returns:
             Final text response after tool execution
@@ -352,7 +363,14 @@ class LLMClient:
                     args = json.loads(tool_call.function.arguments)
 
                     logger.debug(f"Executing tool: {name} with args: {args}")
-                    result = tool_executor(name, args)
+                    try:
+                        result = tool_executor(name, args)
+                    except Exception as tool_error:
+                        logger.error(f"Tool '{name}' execution failed: {tool_error}")
+                        result = f"Tool '{name}' failed: {tool_error}"
+
+                    if on_tool_call:
+                        on_tool_call(name, args, result)
 
                     messages.append(
                         {
