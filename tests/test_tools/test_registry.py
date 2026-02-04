@@ -1,0 +1,173 @@
+"""Tests for ToolRegistry."""
+
+import pytest
+
+from src.tools.base import BaseTool
+from src.tools.registry import ToolRegistry
+
+
+class MockTool(BaseTool):
+    """Mock tool for testing."""
+
+    def __init__(self, tool_name: str = "mock_tool", confirms: bool = False) -> None:
+        """Initialize mock tool."""
+        self._name = tool_name
+        self._confirms = confirms
+
+    @property
+    def name(self) -> str:
+        """Tool name."""
+        return self._name
+
+    @property
+    def requires_confirmation(self) -> bool:
+        """Requires confirmation."""
+        return self._confirms
+
+    def get_tool_definition(self) -> dict:
+        """Get tool definition."""
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": f"Mock tool: {self.name}",
+                "parameters": {"type": "object", "properties": {"arg1": {"type": "string"}}},
+            },
+        }
+
+    def execute(self, arg1: str = "default") -> str:
+        """Execute tool."""
+        return f"mock result: {arg1}"
+
+
+class TestToolRegistry:
+    """Tests for ToolRegistry."""
+
+    def test_register_tool(self):
+        """Test registering a tool."""
+        registry = ToolRegistry()
+        tool = MockTool()
+
+        registry.register(tool)
+
+        assert len(registry) == 1
+        assert "mock_tool" in registry.tool_names
+
+    def test_register_multiple_tools(self):
+        """Test registering multiple tools."""
+        registry = ToolRegistry()
+        tool1 = MockTool("tool_one")
+        tool2 = MockTool("tool_two")
+
+        registry.register(tool1)
+        registry.register(tool2)
+
+        assert len(registry) == 2
+        assert "tool_one" in registry.tool_names
+        assert "tool_two" in registry.tool_names
+
+    def test_register_overwrites_existing(self):
+        """Test that registering same name overwrites."""
+        registry = ToolRegistry()
+        tool1 = MockTool("same_name")
+        tool2 = MockTool("same_name")
+
+        registry.register(tool1)
+        registry.register(tool2)
+
+        assert len(registry) == 1
+
+    def test_get_tool(self):
+        """Test getting a tool by name."""
+        registry = ToolRegistry()
+        tool = MockTool()
+        registry.register(tool)
+
+        retrieved = registry.get("mock_tool")
+
+        assert retrieved is tool
+
+    def test_get_nonexistent_returns_none(self):
+        """Test getting nonexistent tool returns None."""
+        registry = ToolRegistry()
+
+        retrieved = registry.get("nonexistent")
+
+        assert retrieved is None
+
+    def test_get_definitions(self):
+        """Test getting all tool definitions."""
+        registry = ToolRegistry()
+        registry.register(MockTool("tool_one"))
+        registry.register(MockTool("tool_two"))
+
+        definitions = registry.get_definitions()
+
+        assert len(definitions) == 2
+        names = [d["function"]["name"] for d in definitions]
+        assert "tool_one" in names
+        assert "tool_two" in names
+
+    def test_execute_tool(self):
+        """Test executing a tool."""
+        registry = ToolRegistry()
+        registry.register(MockTool())
+
+        result = registry.execute("mock_tool", {"arg1": "test_value"})
+
+        assert "mock result: test_value" in result
+
+    def test_execute_nonexistent_raises(self):
+        """Test executing nonexistent tool raises KeyError."""
+        registry = ToolRegistry()
+
+        with pytest.raises(KeyError, match="Tool not found"):
+            registry.execute("nonexistent", {})
+
+    def test_requires_confirmation_false(self):
+        """Test requires_confirmation for tool that doesn't require it."""
+        registry = ToolRegistry()
+        registry.register(MockTool(confirms=False))
+
+        assert registry.requires_confirmation("mock_tool") is False
+
+    def test_requires_confirmation_true(self):
+        """Test requires_confirmation for tool that requires it."""
+        registry = ToolRegistry()
+        registry.register(MockTool(confirms=True))
+
+        assert registry.requires_confirmation("mock_tool") is True
+
+    def test_requires_confirmation_nonexistent(self):
+        """Test requires_confirmation for nonexistent tool."""
+        registry = ToolRegistry()
+
+        assert registry.requires_confirmation("nonexistent") is False
+
+    def test_tool_names_property(self):
+        """Test tool_names property."""
+        registry = ToolRegistry()
+        registry.register(MockTool("alpha"))
+        registry.register(MockTool("beta"))
+
+        names = registry.tool_names
+
+        assert set(names) == {"alpha", "beta"}
+
+    def test_len(self):
+        """Test __len__."""
+        registry = ToolRegistry()
+        assert len(registry) == 0
+
+        registry.register(MockTool())
+        assert len(registry) == 1
+
+    def test_repr(self):
+        """Test string representation."""
+        registry = ToolRegistry()
+        registry.register(MockTool("my_tool"))
+
+        repr_str = repr(registry)
+
+        assert "ToolRegistry" in repr_str
+        assert "my_tool" in repr_str

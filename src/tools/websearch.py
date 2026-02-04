@@ -3,14 +3,13 @@
 from loguru import logger
 
 from src.data.websearch import SearchType, WebSearchFetcher
+from src.tools.base import BaseTool
 
 BODY_TRUNCATE_LENGTH = 300
 
 
-class WebSearchTool:
+class WebSearchTool(BaseTool):
     """Web search tool wrapper for LLM agents."""
-
-    TOOL_NAME = "web_search"
 
     def __init__(self, fetcher: WebSearchFetcher | None = None) -> None:
         """Initialize web search tool.
@@ -21,6 +20,11 @@ class WebSearchTool:
         self.fetcher = fetcher or WebSearchFetcher()
         logger.info("Initialized WebSearchTool")
 
+    @property
+    def name(self) -> str:
+        """Tool name."""
+        return "web_search"
+
     def get_tool_definition(self) -> dict:
         """Get tool definition in LiteLLM/OpenAI format.
 
@@ -30,7 +34,7 @@ class WebSearchTool:
         return {
             "type": "function",
             "function": {
-                "name": self.TOOL_NAME,
+                "name": self.name,
                 "description": (
                     "Search the web for information. Use 'news' search_type for recent news "
                     "and events, 'general' for broader information and company details."

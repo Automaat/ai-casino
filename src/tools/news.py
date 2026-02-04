@@ -1,0 +1,108 @@
+"""News tool for fetching stock news."""
+
+from loguru import logger
+
+from src.tools.base import BaseTool
+
+DESCRIPTION_TRUNCATE_LENGTH = 300
+
+
+class GetNewsTool(BaseTool):
+    """Tool to fetch recent news for a stock."""
+
+    @property
+    def name(self) -> str:
+        """Tool name."""
+        return "get_news"
+
+    def get_tool_definition(self) -> dict:
+        """Get tool definition in LiteLLM/OpenAI format.
+
+        Returns:
+            Tool definition dict for LLM function calling
+        """
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": (
+                    "Get recent news articles for a stock. Returns headlines, sources, and dates. "
+                    "Use this to understand recent events and news sentiment for a company."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of articles to return (default: 5)",
+                            "default": 5,
+                        },
+                    },
+                    "required": ["symbol"],
+                },
+            },
+        }
+
+    def execute(self, symbol: str, limit: int = 5) -> str:
+        """Fetch news for a stock.
+
+        Args:
+            symbol: Stock ticker symbol
+            limit: Maximum number of articles
+
+        Returns:
+            Formatted news summary
+        """
+        logger.info(f"Fetching news for {symbol} (limit={limit})")
+
+        try:
+            from src.data.news import NewsFetcher
+
+            fetcher = NewsFetcher()
+            articles = fetcher.fetch_company_news(symbol.upper(), limit=limit)
+
+            return self._format_articles(symbol.upper(), articles)
+        except Exception as e:
+            logger.error(f"Failed to fetch news for {symbol}: {e}")
+            return f"Failed to fetch news for {symbol}: {e}"
+
+    def _format_articles(self, symbol: str, articles: list) -> str:
+        """Format news articles as summary.
+
+        Args:
+            symbol: Stock ticker
+            articles: List of NewsArticle objects
+
+        Returns:
+            Formatted summary string
+        """
+        if not articles:
+            return f"No recent news found for {symbol}"
+
+        lines = [f"# {symbol} Recent News", ""]
+
+        for i, article in enumerate(articles, 1):
+            pub_date = article.published_at.strftime("%Y-%m-%d %H:%M")
+            lines.extend(
+                [
+                    f"## {i}. {article.title}",
+                    f"*{article.source} | {pub_date}*",
+                    "",
+                    (
+                        article.description[:DESCRIPTION_TRUNCATE_LENGTH] + "..."
+                        if len(article.description) > DESCRIPTION_TRUNCATE_LENGTH
+                        else article.description
+                    ),
+                    "",
+                ]
+            )
+
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return "GetNewsTool()"

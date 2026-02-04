@@ -12,6 +12,7 @@ from textual.events import Click
 from textual.worker import Worker, get_current_worker
 
 from src.models.llm import LLMClient
+from src.tools import AnalyzeStockTool, GetMarketDataTool, GetNewsTool, ToolRegistry, WebSearchTool
 from src.tui.commands import CommandHandler
 from src.tui.events import AnalysisComplete, AnalysisProgress
 from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
@@ -21,6 +22,21 @@ from src.tui.widgets.status_bar import StatusBar
 from src.workflows.trading import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
+
+AGENTIC_SYSTEM_PROMPT = """You are AI Casino, an expert assistant for stock trading and market analysis.
+You have access to the following tools to help users:
+
+- get_market_data: Fetch current stock prices and market data
+- get_news: Fetch recent news articles for a company
+- web_search: Search the web for information
+- analyze_stock: Run comprehensive trading analysis (EXPENSIVE - requires confirmation)
+
+Use tools when appropriate to answer user questions. Be concise but informative.
+Use markdown formatting for readability."""
+
+STREAMING_SYSTEM_PROMPT = """You are AI Casino, an expert assistant for stock trading and market analysis.
+You help users understand markets, trading strategies, and financial concepts.
+Be concise but informative. Use markdown formatting for readability."""
 
 
 class TradingChatApp(App):
@@ -44,7 +60,18 @@ class TradingChatApp(App):
         self._history: list[dict[str, str]] = []
         self._model_name = self._get_model_name()
         self._analysis_worker: Worker | None = None
+        self._tool_registry = self._create_tool_registry()
+        self._pending_tool_confirmation: dict | None = None
         self._load_history()
+
+    def _create_tool_registry(self) -> ToolRegistry:
+        """Create and populate tool registry."""
+        registry = ToolRegistry()
+        registry.register(WebSearchTool())
+        registry.register(GetMarketDataTool())
+        registry.register(GetNewsTool())
+        registry.register(AnalyzeStockTool())
+        return registry
 
     def _get_model_name(self) -> str:
         """Get current LLM model name from env."""
@@ -189,23 +216,26 @@ class TradingChatApp(App):
         self._save_history()
 
     async def _handle_chat(self, text: str) -> None:
-        """Handle free-form chat with streaming."""
-        chat = self.query_one(ChatView)
-        status_bar = self.query_one(StatusBar)
-
+        """Handle free-form chat - dispatch to agentic or streaming mode."""
         if self._llm is None:
             self._llm = LLMClient()
 
-        system_prompt = """You are AI Casino, an expert assistant for stock trading and market analysis.
-You help users understand markets, trading strategies, and financial concepts.
-Be concise but informative. Use markdown formatting for readability."""
+        if self._llm.supports_tools:
+            await self._handle_agentic_chat(text)
+        else:
+            await self._handle_streaming_chat(text)
+
+    async def _handle_streaming_chat(self, text: str) -> None:
+        """Handle chat with streaming (Ollama fallback)."""
+        chat = self.query_one(ChatView)
+        status_bar = self.query_one(StatusBar)
 
         status_bar.set_working("Thinking...")
         chat.start_streaming_message()
         response_text = ""
 
         try:
-            async for token in self._llm.astream(text, system=system_prompt, temperature=0.7):
+            async for token in self._llm.astream(text, system=STREAMING_SYSTEM_PROMPT, temperature=0.7):
                 response_text += token
                 chat.append_token(token)
 
@@ -214,6 +244,50 @@ Be concise but informative. Use markdown formatting for readability."""
         except Exception as e:
             logger.exception("Chat failed")
             chat.finish_streaming()
+            chat.add_assistant_message(f"Error: {e}")
+        finally:
+            status_bar.clear_working()
+
+    async def _handle_agentic_chat(self, text: str) -> None:
+        """Handle chat with tool calling (Anthropic/OpenAI)."""
+        chat = self.query_one(ChatView)
+        status_bar = self.query_one(StatusBar)
+
+        status_bar.set_working("Thinking...")
+
+        def on_tool_call(name: str, args: dict, result: str) -> None:
+            """Callback for tool execution updates."""
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            widget = chat.show_tool_call(name, args_str)
+            result_preview = result[:100] + "..." if len(result) > 100 else result
+            widget.set_complete(result_preview)
+
+        def tool_executor(name: str, args: dict) -> str:
+            """Execute tool with confirmation check."""
+            if self._tool_registry.requires_confirmation(name):
+                args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+                chat.show_tool_call(name, args_str)
+                chat.add_assistant_message(
+                    f"Tool `{name}` requires confirmation. Type 'yes' to proceed or anything else to skip."
+                )
+                self._pending_tool_confirmation = {"name": name, "args": args}
+                return f"[Awaiting user confirmation for {name}]"
+            return self._tool_registry.execute(name, args)
+
+        try:
+            response = await self._llm.acomplete_with_tools(
+                prompt=text,
+                tools=self._tool_registry.get_definitions(),
+                tool_executor=tool_executor,
+                system=AGENTIC_SYSTEM_PROMPT,
+                temperature=0.7,
+                on_tool_call=on_tool_call,
+            )
+
+            chat.add_assistant_message(response)
+            self._history.append({"role": "assistant", "content": response})
+        except Exception as e:
+            logger.exception("Agentic chat failed")
             chat.add_assistant_message(f"Error: {e}")
         finally:
             status_bar.clear_working()
