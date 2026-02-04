@@ -198,6 +198,9 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
         perf_vs_market_ytd = (
             f"{comparative.perf_vs_market_ytd:+.1f}%" if comparative.perf_vs_market_ytd is not None else "N/A"
         )
+        perf_vs_market_3m = (
+            f"{comparative.perf_vs_market_3m:+.1f}%" if comparative.perf_vs_market_3m is not None else "N/A"
+        )
 
         return f"""COMPARATIVE ANALYSIS:
 Relative Valuation: {comparative.relative_valuation.value}
@@ -206,6 +209,7 @@ P/E vs Market (SPY): {pe_vs_market}
 YTD Performance vs Sector: {perf_vs_sector_ytd}
 3M Performance vs Sector: {perf_vs_sector_3m}
 YTD Performance vs Market: {perf_vs_market_ytd}
+3M Performance vs Market: {perf_vs_market_3m}
 Confidence: {comparative.confidence:.2f}
 Analysis: {comparative.interpretation}
 

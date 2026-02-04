@@ -182,46 +182,8 @@ class TradingWorkflow:
         # Create TechnicalAnalyst with selected strategy
         technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
 
-        # Parallel Group 1: independent analyses
-        current_price = float(state["market_data"]["Close"].iloc[-1])
-        technical_task = technical_analyst.analyze(state["symbol"], state["market_data"])
-        sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
-        news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
-        fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
-        comparative_task = self.comparative_analyst.analyze(state["symbol"])
-
-        technical, sentiment, news, fundamental, comparative = await asyncio.gather(
-            technical_task, sentiment_task, news_task, fundamental_task, comparative_task
-        )
-
-        state["technical_analysis"] = technical
-        state["sentiment_analysis"] = sentiment
-        state["news_analysis"] = news
-        state["fundamental_analysis"] = fundamental
-        state["comparative_analysis"] = comparative
-
-        # Parallel Group 2: research (depends on Group 1)
-        bullish_task = self.bullish_researcher.analyze(
-            state["symbol"],
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
-            state["fundamental_analysis"],
-            state["comparative_analysis"],
-        )
-        bearish_task = self.bearish_researcher.analyze(
-            state["symbol"],
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
-            state["fundamental_analysis"],
-            state["comparative_analysis"],
-        )
-
-        bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
-
-        state["bullish_research"] = bullish
-        state["bearish_research"] = bearish
+        # Run all analyses (parallel where possible)
+        state = await self._run_analyses(state, technical_analyst)
 
         state = await self._make_decision(state)
         state = self._assess_risk(state)
@@ -273,6 +235,75 @@ class TradingWorkflow:
             await self._capture_portfolio_snapshot(state)
 
         return result
+
+    async def _run_analyses(self, state: TradingState, technical_analyst: TechnicalAnalyst) -> TradingState:
+        """Run all analysis agents in parallel groups.
+
+        Args:
+            state: Current workflow state
+            technical_analyst: Technical analyst with selected strategy
+
+        Returns:
+            Updated state with all analyses
+        """
+        current_price = float(state["market_data"]["Close"].iloc[-1])
+
+        # Parallel Group 1: independent analyses (comparative is optional)
+        technical_task = technical_analyst.analyze(state["symbol"], state["market_data"])
+        sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
+        news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
+        fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
+        comparative_task = self.comparative_analyst.analyze(state["symbol"])
+
+        results = await asyncio.gather(
+            technical_task,
+            sentiment_task,
+            news_task,
+            fundamental_task,
+            comparative_task,
+            return_exceptions=True,
+        )
+        technical, sentiment, news, fundamental, comparative_result = results
+
+        # Re-raise if core analyses failed
+        for result in (technical, sentiment, news, fundamental):
+            if isinstance(result, Exception):
+                raise result
+
+        # Comparative is optional - log warning and continue if it failed
+        comparative = comparative_result if not isinstance(comparative_result, Exception) else None
+        if isinstance(comparative_result, Exception):
+            logger.warning(f"Comparative analysis failed (continuing without): {comparative_result}")
+
+        state["technical_analysis"] = technical
+        state["sentiment_analysis"] = sentiment
+        state["news_analysis"] = news
+        state["fundamental_analysis"] = fundamental
+        state["comparative_analysis"] = comparative
+
+        # Parallel Group 2: research (depends on Group 1)
+        bullish_task = self.bullish_researcher.analyze(
+            state["symbol"],
+            state["technical_analysis"],
+            state["sentiment_analysis"],
+            state["news_analysis"],
+            state["fundamental_analysis"],
+            state["comparative_analysis"],
+        )
+        bearish_task = self.bearish_researcher.analyze(
+            state["symbol"],
+            state["technical_analysis"],
+            state["sentiment_analysis"],
+            state["news_analysis"],
+            state["fundamental_analysis"],
+            state["comparative_analysis"],
+        )
+
+        bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
+        state["bullish_research"] = bullish
+        state["bearish_research"] = bearish
+
+        return state
 
     def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
         """Fetch market and news data.

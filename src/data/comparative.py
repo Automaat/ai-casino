@@ -140,7 +140,7 @@ class ComparativeDataFetcher:
             sector_performance=sector_performance,
             market_pe=market_pe,
             market_performance=market_performance,
-            fetched_at=datetime.now(),
+            fetched_at=datetime.now(UTC),
         )
 
     @HTTP_RETRY

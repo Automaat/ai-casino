@@ -198,4 +198,4 @@ class TestSectorEnum:
     def test_all_sectors_have_etf_tickers(self):
         """All sectors map to valid ETF tickers."""
         for sector in Sector:
-            assert len(sector.value) == 3 or sector.value == "XLRE"  # All are 3-4 char ETFs
+            assert len(sector.value) in (3, 4)  # All are 3-4 char ETFs

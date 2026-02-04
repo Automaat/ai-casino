@@ -117,12 +117,12 @@ class ComparativeAnalyst:
 
         # P/E ratios relative to benchmarks
         stock_pe = data.stock_info.pe_ratio
-        if stock_pe and data.sector_pe:
+        if stock_pe is not None and data.sector_pe is not None:
             metrics["pe_vs_sector"] = stock_pe / data.sector_pe
         else:
             metrics["pe_vs_sector"] = None
 
-        if stock_pe and data.market_pe:
+        if stock_pe is not None and data.market_pe is not None:
             metrics["pe_vs_market"] = stock_pe / data.market_pe
         else:
             metrics["pe_vs_market"] = None
