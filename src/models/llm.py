@@ -176,10 +176,6 @@ class LLMClient:
                 return content
             except Exception as e:
                 logger.error(f"LLM async completion failed: {e}")
-                logger.error(f"Exception type: {type(e).__name__}")
-                logger.error(f"Exception details: {e!r}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
