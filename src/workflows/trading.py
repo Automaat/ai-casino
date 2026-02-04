@@ -21,6 +21,7 @@ from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
+from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
 from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
 from src.data.fundamental import FundamentalDataFetcher
@@ -45,6 +46,7 @@ class TradingState(TypedDict):
     news_analysis: NewsAnalysis | None
     fundamental_analysis: FundamentalAnalysis | None
     comparative_analysis: ComparativeAnalysis | None
+    web_research: WebResearchAnalysis | None
     bullish_research: BullishResearchAnalysis | None
     bearish_research: BearishResearchAnalysis | None
     final_decision: TradingDecision | None
@@ -64,6 +66,7 @@ class TradingWorkflowResult(BaseModel):
     news: NewsAnalysis
     fundamental: FundamentalAnalysis
     comparative: ComparativeAnalysis | None = None
+    web_research: WebResearchAnalysis | None = None
     bullish: BullishResearchAnalysis
     bearish: BearishResearchAnalysis
     decision: TradingDecision
@@ -142,6 +145,7 @@ class TradingWorkflow:
         self.news_analyst = NewsAnalyst(llm_client)
         self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
         self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
+        self.web_researcher = WebResearchAgent(llm_client)
         self.bullish_researcher = BullishResearcher(llm_client)
         self.bearish_researcher = BearishResearcher(llm_client)
         self.trader = TraderAgent(llm_client)
@@ -208,6 +212,7 @@ class TradingWorkflow:
             news=state["news_analysis"],
             fundamental=state["fundamental_analysis"],
             comparative=state["comparative_analysis"],
+            web_research=state["web_research"],
             bullish=state["bullish_research"],
             bearish=state["bearish_research"],
             decision=state["final_decision"],
@@ -248,12 +253,13 @@ class TradingWorkflow:
         """
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
-        # Parallel Group 1: independent analyses (comparative is optional)
+        # Parallel Group 1: independent analyses (comparative and web_research are optional)
         technical_task = technical_analyst.analyze(state["symbol"], state["market_data"])
         sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
         news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
         fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
         comparative_task = self.comparative_analyst.analyze(state["symbol"])
+        web_research_task = self.web_researcher.research(state["symbol"])
 
         results = await asyncio.gather(
             technical_task,
@@ -261,9 +267,10 @@ class TradingWorkflow:
             news_task,
             fundamental_task,
             comparative_task,
+            web_research_task,
             return_exceptions=True,
         )
-        technical, sentiment, news, fundamental, comparative_result = results
+        technical, sentiment, news, fundamental, comparative_result, web_research_result = results
 
         # Re-raise if core analyses failed
         for result in (technical, sentiment, news, fundamental):
@@ -275,11 +282,17 @@ class TradingWorkflow:
         if isinstance(comparative_result, Exception):
             logger.warning(f"Comparative analysis failed (continuing without): {comparative_result}")
 
+        # Web research is optional - log warning and continue if it failed
+        web_research = web_research_result if not isinstance(web_research_result, Exception) else None
+        if isinstance(web_research_result, Exception):
+            logger.warning(f"Web research failed (continuing without): {web_research_result}")
+
         state["technical_analysis"] = technical
         state["sentiment_analysis"] = sentiment
         state["news_analysis"] = news
         state["fundamental_analysis"] = fundamental
         state["comparative_analysis"] = comparative
+        state["web_research"] = web_research
 
         # Parallel Group 2: research (depends on Group 1)
         bullish_task = self.bullish_researcher.analyze(
@@ -330,6 +343,7 @@ class TradingWorkflow:
             news_analysis=None,
             fundamental_analysis=None,
             comparative_analysis=None,
+            web_research=None,
             bullish_research=None,
             bearish_research=None,
             final_decision=None,
@@ -500,4 +514,4 @@ class TradingWorkflow:
     def __repr__(self) -> str:
         """String representation."""
         mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
-        return f"TradingWorkflow(agents=8, mode={mode})"
+        return f"TradingWorkflow(agents=9, mode={mode})"

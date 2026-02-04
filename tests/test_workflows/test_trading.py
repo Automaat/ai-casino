@@ -69,7 +69,7 @@ def test_trading_workflow_init_ensemble(mock_workflow_dependencies):
 
     assert workflow.use_ensemble is True
     assert isinstance(workflow._default_strategy, EnsembleStrategy)
-    assert repr(workflow) == "TradingWorkflow(agents=8, mode=ensemble)"
+    assert repr(workflow) == "TradingWorkflow(agents=9, mode=ensemble)"
 
 
 def test_trading_workflow_init_meta_agent(mock_workflow_dependencies):
@@ -81,7 +81,7 @@ def test_trading_workflow_init_meta_agent(mock_workflow_dependencies):
 
     assert workflow.use_meta_agent is True
     assert workflow.meta_agent is not None
-    assert repr(workflow) == "TradingWorkflow(agents=8, mode=meta-agent)"
+    assert repr(workflow) == "TradingWorkflow(agents=9, mode=meta-agent)"
 
 
 @pytest.mark.asyncio
@@ -250,7 +250,7 @@ def test_repr(mock_workflow_dependencies):
         llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
     )
 
-    assert repr(workflow) == "TradingWorkflow(agents=8, mode=momentum)"
+    assert repr(workflow) == "TradingWorkflow(agents=9, mode=momentum)"
 
 
 def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):

@@ -11,9 +11,12 @@ from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
+from src.agents.web_researcher import ResearchCategory, WebResearchAnalysis, WebResearchResult
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeData, PerformanceData, StockInfo
 from src.data.news import NewsArticle
+from src.data.websearch import SearchType, WebSearchResponse
+from src.data.websearch import WebSearchResult as SearchResult
 from src.metrics.tracker import TradeRecord
 from src.models.sentiment import SentimentScore
 from src.strategies.momentum import Signal
@@ -426,4 +429,117 @@ def mock_snapshot_repository():
     mock.get_by_date_range = AsyncMock(return_value=[snapshot])
     mock.get_by_trigger = AsyncMock(return_value=[snapshot])
 
+    return mock
+
+
+@pytest.fixture
+def sample_web_search_response():
+    """Sample web search response for testing."""
+    return WebSearchResponse(
+        query="AAPL stock news",
+        search_type=SearchType.NEWS,
+        results=[
+            SearchResult(
+                title="Apple Reports Strong Earnings",
+                url="https://example.com/aapl-earnings",
+                body="Apple Inc reported quarterly earnings that beat analyst expectations.",
+                source="Reuters",
+                published_at=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+            ),
+            SearchResult(
+                title="AAPL Stock Price Target Raised",
+                url="https://example.com/aapl-target",
+                body="Multiple analysts raised price targets for Apple stock.",
+                source="Bloomberg",
+                published_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC),
+            ),
+        ],
+        fetched_at=datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def sample_web_research_analysis():
+    """Sample web research analysis for testing."""
+    return WebResearchAnalysis(
+        symbol="AAPL",
+        results=[
+            WebResearchResult(
+                category=ResearchCategory.LATEST_NEWS,
+                summary="Apple reports strong earnings with revenue beating expectations.",
+                key_findings=[
+                    "Quarterly revenue exceeded analyst estimates",
+                    "iPhone sales remain strong",
+                    "Services revenue continues growth",
+                ],
+                sentiment_indication="Bullish",
+                confidence=0.8,
+                sources_count=5,
+            ),
+            WebResearchResult(
+                category=ResearchCategory.MARKET_SENTIMENT,
+                summary="Analysts maintain positive outlook on Apple stock.",
+                key_findings=[
+                    "Multiple price target upgrades",
+                    "Strong institutional buying",
+                ],
+                sentiment_indication="Bullish",
+                confidence=0.75,
+                sources_count=4,
+            ),
+        ],
+        overall_sentiment="Bullish",
+        confidence=0.775,
+    )
+
+
+@pytest.fixture
+def mock_web_search_fetcher(sample_web_search_response):
+    """Mock WebSearchFetcher for testing."""
+    mock = MagicMock()
+    mock.search.return_value = sample_web_search_response
+    mock.search_news.return_value = sample_web_search_response
+    return mock
+
+
+@pytest.fixture
+def mock_web_search_tool(mock_web_search_fetcher):
+    """Mock WebSearchTool for testing."""
+    mock = MagicMock()
+    mock.TOOL_NAME = "web_search"
+    mock.fetcher = mock_web_search_fetcher
+    mock.execute.return_value = """Search results for 'AAPL stock news' (news):
+
+1. Apple Reports Strong Earnings
+   URL: https://example.com/aapl-earnings
+   Apple Inc reported quarterly earnings that beat analyst expectations.
+   Source: Reuters
+
+2. AAPL Stock Price Target Raised
+   URL: https://example.com/aapl-target
+   Multiple analysts raised price targets for Apple stock.
+   Source: Bloomberg"""
+    mock.get_tool_definition.return_value = {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "search_type": {"type": "string", "enum": ["general", "news"]},
+                },
+                "required": ["query", "search_type"],
+            },
+        },
+    }
+    return mock
+
+
+@pytest.fixture
+def mock_web_researcher(sample_web_research_analysis):
+    """Mock WebResearchAgent for testing."""
+    mock = MagicMock()
+    mock.research = AsyncMock(return_value=sample_web_research_analysis)
     return mock

@@ -1,13 +1,30 @@
 """LLM abstraction using LiteLLM for flexible provider switching."""
 
+import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 
 from dotenv import load_dotenv
 from litellm import acompletion, completion
 from loguru import logger
+from pydantic import BaseModel
 
 load_dotenv()
+
+
+class ToolCall(BaseModel):
+    """Represents a tool call from the LLM."""
+
+    id: str
+    name: str
+    arguments: dict
+
+
+class ToolResult(BaseModel):
+    """Result of executing a tool."""
+
+    tool_call_id: str
+    content: str
 
 
 class LLMClient:
@@ -178,6 +195,171 @@ class LLMClient:
 
         except Exception as e:
             logger.error(f"LLM streaming failed: {e}")
+            raise
+
+    @property
+    def supports_tools(self) -> bool:
+        """Check if current provider supports tool calling.
+
+        Returns:
+            True if provider supports tool calling (anthropic, openai)
+        """
+        return self.provider in ("anthropic", "openai")
+
+    def complete_with_tools(  # noqa: PLR0913
+        self,
+        prompt: str,
+        tools: list[dict],
+        tool_executor: Callable[[str, dict], str],
+        system: str | None = None,
+        temperature: float = 0.7,
+        max_tool_calls: int = 5,
+    ) -> str:
+        """Generate completion with tool calling support.
+
+        Args:
+            prompt: User prompt
+            tools: List of tool definitions in OpenAI format
+            tool_executor: Function to execute tools (name, args) -> result
+            system: System prompt (optional)
+            temperature: Sampling temperature (0.0-1.0)
+            max_tool_calls: Maximum tool calls per completion
+
+        Returns:
+            Final text response after tool execution
+        """
+        messages: list[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        tool_calls_made = 0
+
+        try:
+            while tool_calls_made < max_tool_calls:
+                kwargs: dict = {
+                    "model": self._model_id,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "tools": tools,
+                }
+                if self._api_base:
+                    kwargs["api_base"] = self._api_base
+
+                response = completion(**kwargs)
+                message = response.choices[0].message
+
+                if not message.tool_calls:
+                    return message.content or ""
+
+                messages.append(message.model_dump())
+
+                for tool_call in message.tool_calls:
+                    tool_calls_made += 1
+                    name = tool_call.function.name
+                    args = json.loads(tool_call.function.arguments)
+
+                    logger.debug(f"Executing tool: {name} with args: {args}")
+                    result = tool_executor(name, args)
+
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result,
+                        }
+                    )
+
+            kwargs = {
+                "model": self._model_id,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if self._api_base:
+                kwargs["api_base"] = self._api_base
+            final_response = completion(**kwargs)
+            return final_response.choices[0].message.content or ""
+
+        except Exception as e:
+            logger.error(f"Tool calling failed: {e}")
+            raise
+
+    async def acomplete_with_tools(  # noqa: PLR0913
+        self,
+        prompt: str,
+        tools: list[dict],
+        tool_executor: Callable[[str, dict], str],
+        system: str | None = None,
+        temperature: float = 0.7,
+        max_tool_calls: int = 5,
+    ) -> str:
+        """Generate completion with tool calling support (async).
+
+        Args:
+            prompt: User prompt
+            tools: List of tool definitions in OpenAI format
+            tool_executor: Function to execute tools (name, args) -> result
+            system: System prompt (optional)
+            temperature: Sampling temperature (0.0-1.0)
+            max_tool_calls: Maximum tool calls per completion
+
+        Returns:
+            Final text response after tool execution
+        """
+        messages: list[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        tool_calls_made = 0
+
+        try:
+            while tool_calls_made < max_tool_calls:
+                kwargs: dict = {
+                    "model": self._model_id,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "tools": tools,
+                }
+                if self._api_base:
+                    kwargs["api_base"] = self._api_base
+
+                response = await acompletion(**kwargs)
+                message = response.choices[0].message
+
+                if not message.tool_calls:
+                    return message.content or ""
+
+                messages.append(message.model_dump())
+
+                for tool_call in message.tool_calls:
+                    tool_calls_made += 1
+                    name = tool_call.function.name
+                    args = json.loads(tool_call.function.arguments)
+
+                    logger.debug(f"Executing tool: {name} with args: {args}")
+                    result = tool_executor(name, args)
+
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result,
+                        }
+                    )
+
+            kwargs = {
+                "model": self._model_id,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if self._api_base:
+                kwargs["api_base"] = self._api_base
+            final_response = await acompletion(**kwargs)
+            return final_response.choices[0].message.content or ""
+
+        except Exception as e:
+            logger.error(f"Async tool calling failed: {e}")
             raise
 
     def __repr__(self) -> str:
