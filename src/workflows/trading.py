@@ -1,11 +1,15 @@
 """Trading workflow orchestrating all agents."""
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel
 from typing_extensions import TypedDict
+
+if TYPE_CHECKING:
+    from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
 from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
 from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
@@ -20,7 +24,7 @@ from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
-from src.metrics.tracker import MetricsTracker
+from src.metrics.tracker import BaseMetricsTracker, DatabaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
@@ -81,9 +85,11 @@ class TradingWorkflow:
         finbert: FinBERTSentiment,
         fundamental_fetcher: FundamentalDataFetcher,
         broker: AlpacaBroker | None = None,
-        metrics_tracker: MetricsTracker | None = None,
+        metrics_tracker: BaseMetricsTracker | None = None,
         use_ensemble: bool = False,
         use_meta_agent: bool = True,
+        snapshot_on_trade: bool | None = None,
+        snapshot_repository: "PortfolioSnapshotRepository | None" = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -97,7 +103,15 @@ class TradingWorkflow:
             metrics_tracker: Optional metrics tracker for performance monitoring
             use_ensemble: Use ensemble strategy instead of momentum only (ignored if use_meta_agent=True)
             use_meta_agent: Use meta-agent for dynamic strategy selection (default True)
+            snapshot_on_trade: Capture portfolio snapshot after trades (env: PORTFOLIO_SNAPSHOT_ON_TRADE)
+            snapshot_repository: Repository for portfolio snapshots (required if snapshot_on_trade)
         """
+        import os
+
+        if snapshot_on_trade is None:
+            snapshot_on_trade = os.getenv("PORTFOLIO_SNAPSHOT_ON_TRADE", "false").lower() == "true"
+        self.snapshot_on_trade = snapshot_on_trade
+        self.snapshot_repository = snapshot_repository
         self.llm_client = llm_client
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
@@ -233,9 +247,20 @@ class TradingWorkflow:
 
         if self.metrics_tracker:
             try:
-                self.metrics_tracker.record_decision(result, strategy_name=strategy_name)
+                if isinstance(self.metrics_tracker, DatabaseMetricsTracker):
+                    await self.metrics_tracker.record_decision_async(result, strategy_name=strategy_name)
+                else:
+                    self.metrics_tracker.record_decision(result, strategy_name=strategy_name)
             except Exception as e:
                 logger.error(f"Failed to record metrics (continuing): {e}")
+
+        if (
+            self.snapshot_on_trade
+            and self.snapshot_repository
+            and state["risk_assessment"].validation.approved
+            and state["final_decision"].action != Signal.HOLD
+        ):
+            await self._capture_portfolio_snapshot(state)
 
         return result
 
@@ -399,6 +424,35 @@ class TradingWorkflow:
 
         state["order_status"] = order
         return state
+
+    async def _capture_portfolio_snapshot(self, state: TradingState) -> None:
+        """Capture portfolio snapshot after trade execution.
+
+        Args:
+            state: Current workflow state
+        """
+        from datetime import UTC, datetime
+
+        from src.database.repositories.snapshot import PortfolioSnapshot
+
+        if not self.snapshot_repository or not state["account_info"]:
+            return
+
+        try:
+            account = state["account_info"]
+            snapshot = PortfolioSnapshot(
+                timestamp=datetime.now(UTC),
+                balance=account.balance,
+                available_cash=account.available_cash,
+                total_exposure=account.total_exposure,
+                portfolio_value=account.balance,
+                positions={k: float(v) for k, v in account.positions.items()},
+                trigger="TRADE",
+            )
+            await self.snapshot_repository.create(snapshot)
+            logger.info("Captured portfolio snapshot (trigger=TRADE)")
+        except Exception as e:
+            logger.error(f"Failed to capture portfolio snapshot: {e}")
 
     def __repr__(self) -> str:
         """String representation."""
