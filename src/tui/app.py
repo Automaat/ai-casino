@@ -2,15 +2,14 @@
 
 import json
 import os
-import time
 from pathlib import Path
 
 from loguru import logger
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.events import Click, Key
-from textual.widgets import Label
+from textual.events import Click
+from textual.widgets import Static
 from textual.worker import Worker, get_current_worker
 
 from src.models.llm import LLMClient
@@ -56,6 +55,7 @@ class TradingChatApp(App):
     CSS_PATH = "app.tcss"
 
     BINDINGS = [
+        Binding("ctrl+c", "quit", show=False),
         Binding("ctrl+l", "clear", "Clear"),
         Binding("ctrl+t", "toggle_theme", "Toggle Theme"),
         Binding("escape", "focus_input", "Cancel/Focus"),
@@ -71,7 +71,7 @@ class TradingChatApp(App):
         self._analysis_worker: Worker | None = None
         self._tool_registry = self._create_tool_registry()
         self._pending_tool_confirmation: dict | None = None
-        self._last_ctrl_c_time: float | None = None
+        self._quit_pending = False
         self._load_history()
 
     def _create_tool_registry(self) -> ToolRegistry:
@@ -113,13 +113,13 @@ class TradingChatApp(App):
     def compose(self) -> ComposeResult:
         """Compose the app layout."""
         yield ChatView(id="chat-container")
-        yield Label("Press Ctrl+C again to quit", id="quit-bar")
         yield AutocompleteInput(
             placeholder="> Type a message or /help...",
             commands=self._command_handler.command_names,
             widget_id="input-box",
         )
         yield StatusBar()
+        yield Static("Press Ctrl+C again to quit", id="quit-bar")
 
     def on_mount(self) -> None:
         """Handle app mount."""
@@ -403,23 +403,23 @@ class TradingChatApp(App):
         """Keep focus on input after any click."""
         self.query_one(AutocompleteInput).focus()
 
-    def on_key(self, event: Key) -> None:
-        """Handle double Ctrl+C to quit."""
-        if event.key == "ctrl+c":
-            now = time.monotonic()
-            if self._last_ctrl_c_time and (now - self._last_ctrl_c_time) < 0.5:
-                self.exit()
-            else:
-                self._last_ctrl_c_time = now
-                self._show_quit_bar()
-            event.stop()
+    def action_quit(self) -> None:
+        """Handle Ctrl+C - require double-press to quit."""
+        if self._quit_pending:
+            self.exit()
+            return
+
+        self._quit_pending = True
+        self._show_quit_bar()
 
     def _show_quit_bar(self) -> None:
         """Show quit confirmation bar with auto-hide timer."""
         quit_bar = self.query_one("#quit-bar")
+        quit_bar.update("Press Ctrl+C again to quit")
         quit_bar.display = True
         self.set_timer(1.0, self._hide_quit_bar)
 
     def _hide_quit_bar(self) -> None:
         """Hide quit confirmation bar."""
         self.query_one("#quit-bar").display = False
+        self._quit_pending = False
