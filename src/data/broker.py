@@ -217,6 +217,19 @@ class AlpacaBroker:
             logger.error(f"Failed to cancel order: {e}")
             raise
 
+    def is_market_open(self) -> bool:
+        """Check if market is currently open.
+
+        Returns:
+            True if market is open for trading
+        """
+        try:
+            clock = self.client.get_clock()
+            return clock.is_open
+        except Exception as e:
+            logger.warning(f"Failed to check market status: {e}")
+            return False
+
     def __repr__(self) -> str:
         """Return string representation."""
         return f"AlpacaBroker(paper={self.paper})"

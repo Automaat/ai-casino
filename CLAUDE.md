@@ -89,6 +89,8 @@ Never skip/disable on failure - fix properly, re-run until clean.
 
 **Order:** stdlib → third-party (alphabetical) → local (relative)
 
+**Never use `TYPE_CHECKING` blocks** - keep all imports at top level for clarity. Ignore TC003 linter warnings.
+
 ```python
 """Module docstring - Google style."""
 
