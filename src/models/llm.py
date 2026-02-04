@@ -14,10 +14,9 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-# Disable aiohttp transport to avoid Python 3.14 asyncio.Timeout issues
-# Use httpx instead which is compatible with worker thread context
+# Disable aiohttp transport to avoid Python 3.14 asyncio issues
+# Use httpx instead (aiohttp has timeout context issues in 3.14)
 litellm.disable_aiohttp_transport = True
-logger.info(f"LiteLLM aiohttp disabled: {litellm.disable_aiohttp_transport}")
 
 
 def _set_asyncio_context() -> None:
@@ -177,8 +176,6 @@ class LLMClient:
                 return content
             except Exception as e:
                 logger.error(f"LLM async completion failed: {e}")
-                import traceback
-                logger.error(f"Full traceback:\n{traceback.format_exc()}")
                 raise
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
