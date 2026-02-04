@@ -154,6 +154,19 @@ class TradingWorkflow:
         mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")
         logger.info(f"Initialized TradingWorkflow (mode={mode})")
 
+    def _is_rate_limit_error(self, e: Exception) -> bool:
+        """Check if exception is related to API rate limiting."""
+        msg = str(e).lower()
+        return any(
+            pattern in msg
+            for pattern in [
+                "rate limit",
+                "call frequency",
+                "premium endpoint",
+                "5 api calls per minute",
+            ]
+        )
+
     async def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
@@ -277,10 +290,15 @@ class TradingWorkflow:
             if isinstance(result, Exception):
                 raise result
 
-        # Fundamental is optional - Alpha Vantage rate limits
-        fundamental = fundamental_result if not isinstance(fundamental_result, Exception) else None
+        # Fundamental is optional - but only swallow rate-limit errors
+        fundamental: FundamentalAnalysis | None = None
         if isinstance(fundamental_result, Exception):
-            logger.warning(f"Fundamental analysis unavailable (continuing): {fundamental_result}")
+            if self._is_rate_limit_error(fundamental_result):
+                logger.warning(f"Fundamental analysis unavailable (rate limited): {fundamental_result}")
+            else:
+                raise fundamental_result
+        else:
+            fundamental = fundamental_result
 
         # Comparative is optional - log warning and continue if it failed
         comparative = comparative_result if not isinstance(comparative_result, Exception) else None

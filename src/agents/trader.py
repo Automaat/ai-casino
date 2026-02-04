@@ -64,7 +64,7 @@ class TraderAgent:
             technical: Technical analysis results
             sentiment: Sentiment analysis results
             news: News analysis results
-            fundamental: Fundamental analysis results
+            fundamental: Fundamental analysis results (None if unavailable due to API rate limit)
             bullish: Bullish research analysis
             bearish: Bearish research analysis
             comparative: Comparative analysis results (optional)

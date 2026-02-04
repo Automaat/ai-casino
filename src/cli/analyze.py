@@ -137,7 +137,7 @@ def _print_fundamental(result: TradingWorkflowResult) -> None:
         console.print(
             Panel(
                 "[yellow]Fundamental analysis unavailable (API rate limit)[/yellow]\n"
-                "Decision based on technical, sentiment, and news signals only.",
+                "Decision based on remaining available signals (excluding fundamentals).",
                 title="[bold yellow]⚠️ Fundamental Analysis[/bold yellow]",
                 border_style="yellow",
             )

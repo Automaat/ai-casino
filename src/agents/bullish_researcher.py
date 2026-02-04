@@ -59,7 +59,7 @@ class BullishResearcher:
             technical: Technical analysis result
             sentiment: Sentiment analysis result
             news: News analysis result
-            fundamental: Fundamental analysis result
+            fundamental: Fundamental analysis result (None if unavailable due to API rate limit)
             comparative: Comparative analysis result (optional)
 
         Returns:
