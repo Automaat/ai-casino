@@ -184,21 +184,53 @@ ResultBox {
     color: #EBCB8B;
 }
 
-/* Input at bottom */
+/* Autocomplete input container */
 #input-box {
     dock: bottom;
-    margin: 1 1;
+    height: auto;
+    max-height: 15;
+    margin: 0 1 1 1;
+}
+
+#autocomplete-container {
+    height: auto;
+    max-height: 14;
+}
+
+#autocomplete-input {
     background: $background;
     border: solid $panel;
     color: $foreground;
 }
 
-#input-box:focus {
+#autocomplete-input:focus {
     border: solid $accent;
 }
 
-#input-box.-placeholder {
+#autocomplete-input.-placeholder {
     color: $text-disabled;
+}
+
+/* Dropdown list */
+#autocomplete-dropdown {
+    height: auto;
+    max-height: 10;
+    background: $surface;
+    border: solid $panel;
+    margin-bottom: 1;
+}
+
+#autocomplete-dropdown:focus {
+    border: solid $accent;
+}
+
+#autocomplete-dropdown > .option-list--option {
+    padding: 0 1;
+}
+
+#autocomplete-dropdown > .option-list--option-highlighted {
+    background: $accent;
+    color: $background;
 }
 
 /* Status bar - minimal */
