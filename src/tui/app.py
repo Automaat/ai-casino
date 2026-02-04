@@ -70,7 +70,11 @@ class TradingChatApp(App):
     def compose(self) -> ComposeResult:
         """Compose the app layout."""
         yield ChatView(id="chat-container")
-        yield AutocompleteInput(placeholder="> Type a message or /help...", widget_id="input-box")
+        yield AutocompleteInput(
+            placeholder="> Type a message or /help...",
+            commands=self._command_handler.command_names,
+            widget_id="input-box",
+        )
         yield StatusBar()
 
     def on_mount(self) -> None:

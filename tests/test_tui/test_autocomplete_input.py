@@ -3,7 +3,6 @@
 import pytest
 
 from src.tui.widgets.autocomplete_input import (
-    DEFAULT_COMMANDS,
     DEFAULT_SYMBOLS,
     AutocompleteInput,
 )
@@ -14,8 +13,8 @@ class TestAutocompleteInput:
 
     @pytest.fixture
     def widget(self) -> AutocompleteInput:
-        """Create widget with default symbols and commands."""
-        return AutocompleteInput()
+        """Create widget with default symbols and standard commands."""
+        return AutocompleteInput(commands=["analyze", "technical", "sentiment", "news", "help"])
 
     @pytest.fixture
     def custom_widget(self) -> AutocompleteInput:
@@ -26,9 +25,9 @@ class TestAutocompleteInput:
         )
 
     def test_initialization(self, widget: AutocompleteInput) -> None:
-        """Widget initializes with default symbols and commands."""
+        """Widget initializes with default symbols and provided commands."""
         assert len(widget._symbols) == len(DEFAULT_SYMBOLS)
-        assert len(widget._commands) == len(DEFAULT_COMMANDS)
+        assert len(widget._commands) == 5
 
     def test_initialization_custom(self, custom_widget: AutocompleteInput) -> None:
         """Widget initializes with custom symbols and commands."""
@@ -53,13 +52,11 @@ class TestAutocompleteInput:
     def test_update_matches_multiple_commands(self, widget: AutocompleteInput) -> None:
         """Prefix matching multiple commands returns all."""
         widget._update_matches("/")
-        # All commands start with nothing after /
-        assert len(widget._matches) == len(DEFAULT_COMMANDS)
+        assert len(widget._matches) == 5
 
     def test_update_matches_symbol_after_command(self, widget: AutocompleteInput) -> None:
         """Symbol prefix after command produces symbol matches."""
         widget._update_matches("/analyze A")
-        # Should have matches for symbols starting with A
         assert "/analyze" not in widget._matches
         assert all(s.startswith("A") for s in widget._matches)
 
@@ -95,14 +92,6 @@ class TestAutocompleteInput:
         assert "NVDA" in DEFAULT_SYMBOLS
         assert "TSLA" in DEFAULT_SYMBOLS
 
-    def test_default_commands_populated(self) -> None:
-        """Default commands list is populated."""
-        assert "analyze" in DEFAULT_COMMANDS
-        assert "technical" in DEFAULT_COMMANDS
-        assert "sentiment" in DEFAULT_COMMANDS
-        assert "news" in DEFAULT_COMMANDS
-        assert "help" in DEFAULT_COMMANDS
-
     def test_repr(self, widget: AutocompleteInput) -> None:
         """Repr shows symbol and command counts."""
         repr_str = repr(widget)
@@ -115,9 +104,11 @@ class TestAutocompleteInput:
         widget._update_matches("hello world")
         assert widget._matches == []
 
-    def test_matches_limited_to_ten(self, widget: AutocompleteInput) -> None:
-        """Dropdown limits to 10 options max."""
+    def test_matches_stores_all_dropdown_limits(self) -> None:
+        """_matches stores all; dropdown limiting happens in _refresh_dropdown."""
+        many_commands = [f"cmd{i}" for i in range(15)]
+        widget = AutocompleteInput(commands=many_commands)
         widget._update_matches("/")
-        # Even if more than 10 commands existed, refresh limits to 10
-        # For now we have 5 commands, so test passes
-        assert len(widget._matches) <= 10
+        # _matches contains ALL matching commands (not truncated)
+        assert len(widget._matches) == 15
+        # Dropdown limiting ([:10]) happens in _refresh_dropdown() which requires mounted widget

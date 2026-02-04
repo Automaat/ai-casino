@@ -62,7 +62,8 @@ DEFAULT_SYMBOLS = [
     "XOM",
 ]
 
-DEFAULT_COMMANDS = ["analyze", "technical", "sentiment", "news", "help"]
+# Commands that don't require arguments - submit immediately on Enter
+NO_ARG_COMMANDS = {"help"}
 
 
 class AutocompleteInput(Widget):
@@ -107,7 +108,7 @@ class AutocompleteInput(Widget):
         super().__init__(id=widget_id)
         self._placeholder = placeholder
         self._symbols = symbols or DEFAULT_SYMBOLS
-        self._commands = commands or DEFAULT_COMMANDS
+        self._commands = commands or []
         self._matches: list[str] = []
 
     def compose(self) -> ComposeResult:
@@ -133,10 +134,12 @@ class AutocompleteInput(Widget):
         if self.show_dropdown and self._matches:
             event.stop()
             dropdown = self.query_one("#autocomplete-dropdown", OptionList)
-            if dropdown.highlighted is not None:
-                option = dropdown.get_option_at_index(dropdown.highlighted)
-                self._apply_selection(str(option.prompt), submit=True)
-                return
+            index = dropdown.highlighted
+            if index is None:
+                index = 0  # Default to first option
+            option = dropdown.get_option_at_index(index)
+            self._apply_selection(str(option.prompt), submit=True)
+            return
 
         self._hide_dropdown()
         self.post_message(self.Submitted(event.value))
@@ -192,8 +195,13 @@ class AutocompleteInput(Widget):
         input_widget = self.query_one("#autocomplete-input", Input)
         value = input_widget.value
 
-        # Command selection - wait for symbol
+        # Command selection - submit no-arg commands immediately, else wait for symbol
         if selected.startswith("/"):
+            cmd_name = selected[1:]
+            if cmd_name in NO_ARG_COMMANDS and submit:
+                self._hide_dropdown()
+                self.post_message(self.Submitted(selected))
+                return
             input_widget.value = selected + " "
             input_widget.cursor_position = len(input_widget.value)
         # Symbol selection - complete the command
