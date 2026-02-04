@@ -11,6 +11,7 @@ from textual.widgets import Input
 
 from src.models.llm import LLMClient
 from src.tui.commands import CommandHandler
+from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
 from src.workflows.trading import TradingWorkflowResult
@@ -27,6 +28,7 @@ class TradingChatApp(App):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit"),
         Binding("ctrl+l", "clear", "Clear"),
+        Binding("ctrl+t", "toggle_theme", "Toggle Theme"),
         Binding("escape", "focus_input", "Focus Input"),
     ]
 
@@ -73,6 +75,8 @@ class TradingChatApp(App):
 
     def on_mount(self) -> None:
         """Handle app mount."""
+        self.register_theme(NORD_LIGHT_THEME)
+        self.theme = "nord" if detect_dark_mode() else "nord-light"
         chat = self.query_one(ChatView)
         chat.show_welcome(self._model_name)
         self.query_one(Input).focus()
@@ -173,3 +177,7 @@ Be concise but informative. Use markdown formatting for readability."""
     def action_focus_input(self) -> None:
         """Focus the input box."""
         self.query_one(Input).focus()
+
+    def action_toggle_theme(self) -> None:
+        """Toggle between Nord dark and light themes."""
+        self.theme = "nord-light" if self.theme == "nord" else "nord"

@@ -1,9 +1,9 @@
-/* AI Casino TUI Theme */
+/* AI Casino TUI Theme - Nord */
 
-/* Screen base - dark slate background */
+/* Screen base - uses theme colors */
 Screen {
-    background: #1E2530;
-    color: #C5CDD9;
+    background: $background;
+    color: $foreground;
 }
 
 /* Remove default header styling */
@@ -19,35 +19,35 @@ Footer {
 /* Main chat container - NO borders, clean look */
 #chat-container {
     height: 1fr;
-    background: #1E2530;
+    background: $background;
     padding: 0 1;
     border: none;
 }
 
 ChatView {
     height: 1fr;
-    background: #1E2530;
+    background: $background;
     padding: 0;
     border: none;
 }
 
 /* Welcome/Logo area */
 .logo {
-    color: #5DADE2;
+    color: $accent;
     margin-bottom: 1;
 }
 
 .welcome-text {
-    color: #8899A6;
+    color: $text-muted;
     margin-bottom: 0;
 }
 
 .model-info {
-    color: #8899A6;
+    color: $text-muted;
 }
 
 .model-name {
-    color: #5DADE2;
+    color: $accent;
 }
 
 /* User message - highlighted with prompt */
@@ -59,11 +59,11 @@ UserMessage {
 }
 
 .user-prompt {
-    color: #5DADE2;
+    color: $accent;
 }
 
 .user-input {
-    background: #2D3848;
+    background: $surface;
     padding: 0 1;
 }
 
@@ -73,34 +73,35 @@ AssistantMessage {
     padding: 0;
     margin: 1 0;
     border: none;
+    color: $foreground;
 }
 
 AssistantMessage.streaming {
-    color: #8899A6;
+    color: $text-muted;
 }
 
-/* Tool call indicator - cyan with bullet */
+/* Tool call indicator - accent with bullet */
 ToolCallWidget {
-    color: #5DADE2;
+    color: $accent;
     padding: 0;
     margin: 1 0 0 0;
 }
 
 .tool-name {
-    color: #5DADE2;
+    color: $accent;
 }
 
 .tool-args {
-    color: #8899A6;
+    color: $text-muted;
 }
 
 .tool-timing {
-    color: #5DADE2;
+    color: $accent;
 }
 
 /* Response text */
 .response-text {
-    color: #C5CDD9;
+    color: $foreground;
     margin: 1 0;
 }
 
@@ -113,12 +114,12 @@ ProgressPanel {
 }
 
 ProgressPanel LoadingIndicator {
-    color: #5DADE2;
+    color: $accent;
     height: 1;
 }
 
 .progress-header {
-    color: #5DADE2;
+    color: $accent;
 }
 
 /* Task steps */
@@ -128,15 +129,15 @@ TaskStep {
 }
 
 TaskStep.pending {
-    color: #5A6778;
+    color: $text-disabled;
 }
 
 TaskStep.active {
-    color: #5DADE2;
+    color: $accent;
 }
 
 TaskStep.complete {
-    color: #5DADE2;
+    color: $accent;
 }
 
 /* Result box - minimal table style */
@@ -148,7 +149,7 @@ ResultBox {
 }
 
 .result-header {
-    color: #C5CDD9;
+    color: $foreground;
     text-style: bold;
     margin-bottom: 1;
 }
@@ -162,42 +163,42 @@ ResultBox {
 }
 
 .result-label {
-    color: #8899A6;
+    color: $text-muted;
     width: 15;
 }
 
 .result-value {
-    color: #C5CDD9;
+    color: $foreground;
 }
 
-/* Signal colors */
+/* Signal colors - Nord Aurora */
 .signal-buy {
-    color: #27AE60;
+    color: #A3BE8C;
 }
 
 .signal-sell {
-    color: #E74C3C;
+    color: #BF616A;
 }
 
 .signal-hold {
-    color: #F39C12;
+    color: #EBCB8B;
 }
 
 /* Input at bottom */
 #input-box {
     dock: bottom;
     margin: 1 1;
-    background: #1E2530;
-    border: solid #3D4F5F;
-    color: #C5CDD9;
+    background: $background;
+    border: solid $panel;
+    color: $foreground;
 }
 
 #input-box:focus {
-    border: solid #5DADE2;
+    border: solid $accent;
 }
 
 #input-box.-placeholder {
-    color: #5A6778;
+    color: $text-disabled;
 }
 
 /* Status bar - minimal */
@@ -205,6 +206,6 @@ StatusBar {
     dock: bottom;
     height: 1;
     background: transparent;
-    color: #5A6778;
+    color: $text-disabled;
     padding: 0 1;
 }
