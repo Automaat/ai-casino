@@ -152,7 +152,7 @@ class TradingChatApp(App):
             if not worker.is_cancelled:
                 self.post_message(AnalysisComplete(result, symbol))
         except asyncio.CancelledError:
-            pass
+            logger.info("Analysis worker cancelled for %s", symbol)
 
     def on_analysis_progress(self, event: AnalysisProgress) -> None:
         """Handle progress update from worker."""
@@ -178,6 +178,7 @@ class TradingChatApp(App):
             else:
                 chat.add_assistant_message(event.result.message)
         else:
+            chat.complete_progress()
             if tool_widget:
                 tool_widget.set_complete("Analysis failed")
             chat.add_assistant_message(event.result.message)
@@ -244,6 +245,8 @@ Be concise but informative. Use markdown formatting for readability."""
         if tool_widget:
             tool_widget.set_complete("Cancelled")
         chat.add_assistant_message("Analysis cancelled.")
+        self._history.append({"role": "assistant", "content": "Analysis cancelled."})
+        self._save_history()
         status_bar.clear_working()
         self._analysis_worker = None
 

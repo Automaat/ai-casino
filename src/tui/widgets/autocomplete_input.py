@@ -254,7 +254,11 @@ class AutocompleteInput(Widget):
         if self.show_dropdown:
             self._hide_dropdown()
         else:
-            self.app.action_focus_input()
+            app = getattr(self, "app", None)
+            if app is not None and hasattr(app, "action_focus_input"):
+                app.action_focus_input()
+            else:
+                self.focus()
 
     def focus(self, scroll_visible: bool = True) -> None:
         """Focus the input."""

@@ -2,6 +2,7 @@
 
 import contextlib
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.reactive import reactive
@@ -68,7 +69,7 @@ class TaskStep(Static):
         line = f"{icon} {self._label}"
         if self.status == "active" and self._detail:
             truncated = self._detail[:60] + "..." if len(self._detail) > 60 else self._detail
-            line += f"\n    [dim]{truncated}[/dim]"
+            line += f"\n    [dim]{escape(truncated)}[/dim]"
         return line
 
     def __repr__(self) -> str:

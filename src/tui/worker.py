@@ -57,8 +57,21 @@ def _parse_status_file(status_path: Path) -> tuple[str, str]:
             status_data = json.loads(content)
             return status_data.get("step", ""), status_data.get("detail", "")
     except (OSError, json.JSONDecodeError):
+        # Best-effort parsing: on any read/parse error, treat status as empty
         pass
     return "", ""
+
+
+def _terminate_process(process: subprocess.Popen) -> None:
+    """Terminate process gracefully, escalate to kill if needed."""
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+    except OSError:
+        pass  # Process already exited
 
 
 _WORKER_SCRIPT = """
@@ -242,8 +255,7 @@ async def run_analysis_in_process(
             cancelled = True
 
         if cancelled:
-            process.terminate()
-            process.wait(timeout=5)
+            _terminate_process(process)
             raise asyncio.CancelledError
 
         if process.returncode != 0:
