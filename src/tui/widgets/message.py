@@ -1,0 +1,151 @@
+"""Message widgets for chat display."""
+
+from loguru import logger
+from textual.reactive import reactive
+from textual.widgets import Static
+
+
+class UserMessage(Static):
+    """User message with prompt indicator."""
+
+    DEFAULT_CSS = """
+    UserMessage {
+        background: transparent;
+        color: #C5CDD9;
+        padding: 0;
+        margin: 1 0 0 0;
+        height: auto;
+    }
+    """
+
+    def __init__(self, content: str) -> None:
+        """Initialize user message."""
+        super().__init__(f"> {content}")
+
+
+class AssistantMessage(Static):
+    """Assistant message - clean text with bullet."""
+
+    DEFAULT_CSS = """
+    AssistantMessage {
+        background: transparent;
+        color: #C5CDD9;
+        padding: 0;
+        margin: 0;
+        height: auto;
+    }
+
+    AssistantMessage.streaming {
+        color: #8899A6;
+    }
+    """
+
+    content: reactive[str] = reactive("")
+    is_streaming: reactive[bool] = reactive(default=False)
+
+    def __init__(self, content: str = "", streaming: bool = False) -> None:
+        """Initialize assistant message."""
+        super().__init__()
+        self.content = content
+        self.is_streaming = streaming
+        if streaming:
+            self.add_class("streaming")
+
+    def on_mount(self) -> None:
+        """Update display on mount."""
+        self._update_display()
+
+    def watch_content(self, _content: str) -> None:
+        """React to content changes."""
+        self._update_display()
+
+    def watch_is_streaming(self, streaming: bool) -> None:
+        """React to streaming state changes."""
+        if streaming:
+            self.add_class("streaming")
+        else:
+            self.remove_class("streaming")
+
+    def _update_display(self) -> None:
+        """Update displayed content."""
+        try:
+            display = self.content if self.content else "..."
+            self.update(f"● {display}")
+            if self.parent:
+                self.parent.scroll_end(animate=False)
+        except Exception as e:
+            logger.debug(f"Message update skipped: {e}")
+
+    def append_token(self, token: str) -> None:
+        """Append a token to the message."""
+        self.content += token
+
+    def finish_streaming(self) -> None:
+        """Mark streaming as complete."""
+        self.is_streaming = False
+
+
+class ToolCallWidget(Static):
+    """Widget showing tool/agent activity."""
+
+    DEFAULT_CSS = """
+    ToolCallWidget {
+        background: transparent;
+        color: #5DADE2;
+        padding: 0;
+        margin: 1 0 0 0;
+        height: auto;
+    }
+    """
+
+    def __init__(self, tool_name: str, args: str = "", status: str = "running") -> None:
+        """Initialize tool call widget."""
+        display = f"● {tool_name}"
+        if args:
+            display += f'("{args[:40]}...")'
+        super().__init__(display)
+        self._tool_name = tool_name
+        self._status = status
+
+    def set_complete(self, timing: str) -> None:
+        """Mark tool call as complete with timing."""
+        self._status = "complete"
+        self.update(f"● {self._tool_name}\n  └ {timing}")
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"ToolCallWidget(tool={self._tool_name}, status={self._status})"
+
+
+class WelcomeWidget(Static):
+    """Welcome screen with ASCII logo."""
+
+    ASCII_LOGO = """ █████╗ ██╗     ██████╗ █████╗ ███████╗██╗███╗   ██╗ ██████╗
+██╔══██╗██║    ██╔════╝██╔══██╗██╔════╝██║████╗  ██║██╔═══██╗
+███████║██║    ██║     ███████║███████╗██║██╔██╗ ██║██║   ██║
+██╔══██║██║    ██║     ██╔══██║╚════██║██║██║╚██╗██║██║   ██║
+██║  ██║██║    ╚██████╗██║  ██║███████║██║██║ ╚████║╚██████╔╝
+╚═╝  ╚═╝╚═╝     ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝"""
+
+    DEFAULT_CSS = """
+    WelcomeWidget {
+        background: transparent;
+        color: #5DADE2;
+        padding: 0;
+        margin: 0 0 1 0;
+        height: auto;
+    }
+    """
+
+    def __init__(self, model_name: str = "ollama/qwen3:14b") -> None:
+        """Initialize welcome widget."""
+        text = f"""{self.ASCII_LOGO}
+
+Your AI assistant for stock trading analysis.
+Current model: {model_name}
+Type /help for commands or ask about any stock."""
+        super().__init__(text)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "WelcomeWidget()"

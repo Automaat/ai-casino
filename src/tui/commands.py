@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from loguru import logger
 
@@ -14,6 +14,8 @@ from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
 
+ProgressCallback = Callable[[str, str], None]
+
 
 @dataclass
 class CommandResult:
@@ -22,6 +24,7 @@ class CommandResult:
     success: bool
     message: str
     data: dict | None = None
+    workflow_result: object | None = field(default=None, repr=False)
 
 
 class CommandHandler:
@@ -37,6 +40,7 @@ class CommandHandler:
             "news": self._cmd_news,
             "help": self._cmd_help,
         }
+        self._progress_callback: ProgressCallback | None = None
         logger.info("CommandHandler initialized")
 
     def _init_workflow(self) -> TradingWorkflow:
@@ -85,16 +89,18 @@ class CommandHandler:
         args = parts[1:] if len(parts) > 1 else []
         return cmd, args
 
-    async def execute(self, text: str) -> CommandResult:
+    async def execute(self, text: str, progress_callback: ProgressCallback | None = None) -> CommandResult:
         """Execute a slash command.
 
         Args:
             text: Command text
+            progress_callback: Optional callback for progress updates (step_id, status)
 
         Returns:
             CommandResult with execution result
         """
         cmd, args = self.parse_command(text)
+        self._progress_callback = progress_callback
 
         if cmd not in self._commands:
             return CommandResult(
@@ -107,6 +113,18 @@ class CommandHandler:
         except Exception as e:
             logger.exception(f"Command /{cmd} failed")
             return CommandResult(success=False, message=f"Command failed: {e}")
+        finally:
+            self._progress_callback = None
+
+    def _report_progress(self, step_id: str, status: str = "active") -> None:
+        """Report progress to callback if set.
+
+        Args:
+            step_id: Step identifier
+            status: Step status
+        """
+        if self._progress_callback:
+            self._progress_callback(step_id, status)
 
     async def _cmd_help(self, _args: list[str]) -> CommandResult:
         """Show help for available commands."""
@@ -133,8 +151,13 @@ Type freely to chat about markets or ask questions."""
         symbol = args[0].upper()
         workflow = self._init_workflow()
 
+        self._report_progress("fetch_data", "active")
         result = await workflow.analyze(symbol, period_days=90)
-        return self._format_analysis_result(result)
+        self._report_progress("decision", "complete")
+
+        cmd_result = self._format_analysis_result(result)
+        cmd_result.workflow_result = result
+        return cmd_result
 
     async def _cmd_technical(self, args: list[str]) -> CommandResult:
         """Run technical analysis only."""

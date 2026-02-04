@@ -1,17 +1,19 @@
 """Main TUI application for interactive chat."""
 
 import json
+import os
 from pathlib import Path
 
 from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Header, Input
+from textual.widgets import Input
 
 from src.models.llm import LLMClient
 from src.tui.commands import CommandHandler
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
+from src.workflows.trading import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
@@ -20,24 +22,7 @@ class TradingChatApp(App):
     """Interactive TUI for AI Casino."""
 
     TITLE = "AI Casino"
-    CSS = """
-    Screen {
-        layout: vertical;
-    }
-
-    #chat-container {
-        height: 1fr;
-    }
-
-    #input-box {
-        dock: bottom;
-        margin: 1 1 0 1;
-    }
-
-    Input {
-        dock: bottom;
-    }
-    """
+    CSS_PATH = "app.tcss"
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit"),
@@ -51,7 +36,14 @@ class TradingChatApp(App):
         self._command_handler = CommandHandler()
         self._llm: LLMClient | None = None
         self._history: list[dict[str, str]] = []
+        self._model_name = self._get_model_name()
         self._load_history()
+
+    def _get_model_name(self) -> str:
+        """Get current LLM model name from env."""
+        provider = os.getenv("LLM_PROVIDER", "ollama")
+        model = os.getenv("LLM_MODEL", "qwen3:14b")
+        return f"{provider}/{model}"
 
     def _load_history(self) -> None:
         """Load chat history from file."""
@@ -75,19 +67,14 @@ class TradingChatApp(App):
 
     def compose(self) -> ComposeResult:
         """Compose the app layout."""
-        yield Header()
         yield ChatView(id="chat-container")
-        yield Input(placeholder="Type a message or /help for commands...", id="input-box")
+        yield Input(placeholder="> Type a message or /help...", id="input-box")
         yield StatusBar()
-        yield Footer()
 
     def on_mount(self) -> None:
         """Handle app mount."""
         chat = self.query_one(ChatView)
-        chat.add_message(
-            "Welcome to AI Casino! Type /help for available commands or chat freely about markets.",
-            "assistant",
-        )
+        chat.show_welcome(self._model_name)
         self.query_one(Input).focus()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -99,7 +86,7 @@ class TradingChatApp(App):
         event.input.value = ""
 
         chat = self.query_one(ChatView)
-        chat.add_message(text, "user")
+        chat.add_user_message(text)
         self._history.append({"role": "user", "content": text})
 
         if self._command_handler.is_command(text):
@@ -112,15 +99,40 @@ class TradingChatApp(App):
     async def _handle_command(self, text: str) -> None:
         """Handle slash command."""
         chat = self.query_one(ChatView)
+        status_bar = self.query_one(StatusBar)
 
-        result = await self._command_handler.execute(text)
+        cmd, args = self._command_handler.parse_command(text)
+        symbol = args[0].upper() if args else ""
 
-        chat.add_message(result.message, "assistant")
-        self._history.append({"role": "assistant", "content": result.message})
+        if cmd == "analyze" and symbol:
+            status_bar.set_working(f"Analyzing {symbol}...")
+            tool_widget = chat.show_tool_call("Trading Analysis", f"{symbol} full analysis")
+            chat.show_progress(symbol)
+
+            def progress_callback(step_id: str, status: str) -> None:
+                chat.update_progress(step_id, status)
+
+            result = await self._command_handler.execute(text, progress_callback)
+
+            chat.complete_progress()
+            tool_widget.set_complete("Analysis complete")
+            status_bar.clear_working()
+
+            if result.workflow_result and isinstance(result.workflow_result, TradingWorkflowResult):
+                chat.show_result_box(result.workflow_result)
+            else:
+                chat.add_assistant_message(result.message)
+
+            self._history.append({"role": "assistant", "content": result.message})
+        else:
+            result = await self._command_handler.execute(text)
+            chat.add_assistant_message(result.message)
+            self._history.append({"role": "assistant", "content": result.message})
 
     async def _handle_chat(self, text: str) -> None:
-        """Handle free-form chat."""
+        """Handle free-form chat with streaming."""
         chat = self.query_one(ChatView)
+        status_bar = self.query_one(StatusBar)
 
         if self._llm is None:
             self._llm = LLMClient()
@@ -129,23 +141,29 @@ class TradingChatApp(App):
 You help users understand markets, trading strategies, and financial concepts.
 Be concise but informative. Use markdown formatting for readability."""
 
+        status_bar.set_working("Thinking...")
+        chat.start_streaming_message()
         response_text = ""
 
         try:
             async for token in self._llm.astream(text, system=system_prompt, temperature=0.7):
                 response_text += token
+                chat.append_token(token)
 
-            chat.add_message(response_text, "assistant")
+            chat.finish_streaming()
             self._history.append({"role": "assistant", "content": response_text})
         except Exception as e:
             logger.exception("Chat failed")
-            chat.add_message(f"Error: {e}", "assistant")
+            chat.finish_streaming()
+            chat.add_assistant_message(f"Error: {e}")
+        finally:
+            status_bar.clear_working()
 
     def action_clear(self) -> None:
         """Clear chat messages."""
         chat = self.query_one(ChatView)
         chat.clear_messages()
-        chat.add_message("Chat cleared. Type /help for commands.", "assistant")
+        chat.show_welcome(self._model_name)
         self._history = []
         self._save_history()
 
