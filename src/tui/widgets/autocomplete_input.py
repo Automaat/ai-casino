@@ -250,8 +250,11 @@ class AutocompleteInput(Widget):
             self._apply_selection(str(option.prompt))
 
     def action_hide_dropdown(self) -> None:
-        """Hide the dropdown (Escape key)."""
-        self._hide_dropdown()
+        """Hide dropdown or delegate to app for cancel."""
+        if self.show_dropdown:
+            self._hide_dropdown()
+        else:
+            self.app.action_focus_input()
 
     def focus(self, scroll_visible: bool = True) -> None:
         """Focus the input."""

@@ -40,6 +40,27 @@ def _validate_symbol(symbol: str) -> str:
     return symbol.upper()
 
 
+_STEP_MAP = {
+    "fetch_data": "fetch_data",
+    "loading_model": "fetch_data",
+    "technical": "technical",
+    "decision": "decision",
+    "complete": "decision",
+}
+
+
+def _parse_status_file(status_path: Path) -> tuple[str, str]:
+    """Parse status file and return (step, detail)."""
+    try:
+        content = status_path.read_text().strip()
+        if content:
+            status_data = json.loads(content)
+            return status_data.get("step", ""), status_data.get("detail", "")
+    except (OSError, json.JSONDecodeError):
+        pass
+    return "", ""
+
+
 _WORKER_SCRIPT = """
 import asyncio
 import json
@@ -50,18 +71,49 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
-def update_status(status_file, step):
-    with open(status_file, "w") as f:
-        f.write(step)
+_current_step = "fetch_data"
+_status_file = None
+
+def update_status(step, detail=""):
+    global _current_step, _status_file
+    _current_step = step
+    if _status_file:
+        with open(_status_file, "w") as f:
+            json.dump({"step": step, "detail": detail[:80] if detail else ""}, f)
+
+def update_detail(detail):
+    global _current_step, _status_file
+    if _status_file:
+        with open(_status_file, "w") as f:
+            json.dump({"step": _current_step, "detail": detail[:80] if detail else ""}, f)
+
+_last_log_time = 0
+
+def log_sink(message):
+    global _last_log_time
+    import time
+    now = time.time()
+    if now - _last_log_time < 0.3:
+        return
+    _last_log_time = now
+    record = message.record
+    msg = record["message"]
+    if msg and len(msg) > 5:
+        update_detail(msg)
 
 def main():
+    global _status_file
     symbol = sys.argv[1]
     period_days = int(sys.argv[2])
     output_file = sys.argv[3]
-    status_file = sys.argv[4]
+    _status_file = sys.argv[4]
 
     try:
-        update_status(status_file, "fetch_data")
+        update_status("fetch_data")
+
+        from loguru import logger
+        logger.remove()
+        logger.add(log_sink, format="{message}", level="INFO")
 
         from src.data.fundamental import FundamentalDataFetcher
         from src.data.market import MarketDataFetcher
@@ -74,7 +126,7 @@ def main():
         market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
         news_fetcher = NewsFetcher()
 
-        update_status(status_file, "loading_model")
+        update_status("loading_model", "Loading FinBERT model...")
         finbert = FinBERTSentiment()
         fundamental_fetcher = FundamentalDataFetcher()
 
@@ -92,23 +144,23 @@ def main():
         # Patch workflow to report progress
         original_run_analyses = workflow._run_analyses
         async def patched_run_analyses(state, technical_analyst):
-            update_status(status_file, "technical")
+            update_status("technical", "Starting technical analysis...")
             return await original_run_analyses(state, technical_analyst)
         workflow._run_analyses = patched_run_analyses
 
         original_make_decision = workflow._make_decision
         async def patched_make_decision(state):
-            update_status(status_file, "decision")
+            update_status("decision", "Synthesizing trading decision...")
             return await original_make_decision(state)
         workflow._make_decision = patched_make_decision
 
         result = asyncio.run(workflow.analyze(symbol, period_days=period_days))
-        update_status(status_file, "complete")
+        update_status("complete", "Analysis complete")
 
         with open(output_file, "w") as f:
             json.dump({"status": "success", "data": result.model_dump()}, f)
     except Exception as e:
-        update_status(status_file, "error")
+        update_status("error", str(e)[:80])
         with open(output_file, "w") as f:
             json.dump({"status": "error", "data": str(e)}, f)
 
@@ -120,20 +172,23 @@ if __name__ == "__main__":
 async def run_analysis_in_process(
     symbol: str,
     period_days: int = 90,
-    progress_callback: Callable[[str, str], None] | None = None,
+    progress_callback: Callable[[str, str, str], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> dict:
     """Run analysis in a separate process to avoid Textual fd conflicts.
 
     Args:
         symbol: Stock ticker symbol
         period_days: Days of historical data
-        progress_callback: Optional callback(step_id, status) for progress updates
+        progress_callback: Optional callback(step_id, status, detail) for progress updates
+        is_cancelled: Optional callback returning True if analysis should be cancelled
 
     Returns:
         Analysis result dict
 
     Raises:
         RuntimeError: If analysis fails
+        asyncio.CancelledError: If cancelled via is_cancelled callback
     """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as script_file:
         script_file.write(_WORKER_SCRIPT)
@@ -168,33 +223,28 @@ async def run_analysis_in_process(
                 cwd=Path(__file__).parent.parent.parent,
             )
 
-        last_status = ""
-        step_map = {
-            "fetch_data": "fetch_data",
-            "loading_model": "fetch_data",
-            "technical": "technical",
-            "decision": "decision",
-            "complete": "decision",
-        }
+        last_step, last_detail = "", ""
 
+        cancelled = False
         try:
             while process.poll() is None:
                 await asyncio.sleep(0.3)
-
-                # Check for status updates
+                if is_cancelled and is_cancelled():
+                    cancelled = True
+                    break
                 if progress_callback and status_path.exists():
-                    try:
-                        current_status = status_path.read_text().strip()
-                        if current_status and current_status != last_status:
-                            step_id = step_map.get(current_status, current_status)
-                            progress_callback(step_id, "active")
-                            last_status = current_status
-                    except OSError:
-                        pass
+                    current_step, current_detail = _parse_status_file(status_path)
+                    if (current_step and current_step != last_step) or current_detail != last_detail:
+                        step_id = _STEP_MAP.get(current_step, current_step)
+                        progress_callback(step_id, "active", current_detail)
+                        last_step, last_detail = current_step, current_detail
         except asyncio.CancelledError:
+            cancelled = True
+
+        if cancelled:
             process.terminate()
             process.wait(timeout=5)
-            raise
+            raise asyncio.CancelledError
 
         if process.returncode != 0:
             _raise_process_error(process.returncode, stderr_path)

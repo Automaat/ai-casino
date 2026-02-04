@@ -14,7 +14,7 @@ class TaskStep(Static):
     DEFAULT_CSS = """
     TaskStep {
         padding: 0;
-        height: 1;
+        height: auto;
         margin-left: 2;
     }
 
@@ -41,6 +41,7 @@ class TaskStep(Static):
         """Initialize task step."""
         super().__init__()
         self._label = label
+        self._detail = ""
         self.status = status
 
     def on_mount(self) -> None:
@@ -51,12 +52,24 @@ class TaskStep(Static):
         """React to status changes."""
         self.remove_class(old_status)
         self.add_class(new_status)
+        if new_status != "active":
+            self._detail = ""
+
+    def set_detail(self, detail: str) -> None:
+        """Set detail text and schedule refresh."""
+        if detail != self._detail:
+            self._detail = detail
+            self.call_later(self.refresh)
 
     def render(self) -> str:
-        """Render the step."""
+        """Render the step with optional detail line."""
         icons = {"pending": "○", "active": "◉", "complete": "✓", "error": "✗"}
         icon = icons.get(self.status, "○")
-        return f"{icon} {self._label}"
+        line = f"{icon} {self._label}"
+        if self.status == "active" and self._detail:
+            truncated = self._detail[:60] + "..." if len(self._detail) > 60 else self._detail
+            line += f"\n    [dim]{truncated}[/dim]"
+        return line
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -104,14 +117,15 @@ class ProgressPanel(Static):
                 self._steps[step_id] = step
                 yield step
 
-    def set_step_active(self, step_id: str) -> None:
-        """Mark a step as active."""
+    def set_step_active(self, step_id: str, detail: str = "") -> None:
+        """Mark a step as active with optional detail."""
         if self._current_step and self._current_step in self._steps:
             prev_step = self._steps[self._current_step]
-            if prev_step.status in ("pending", "active"):
+            if prev_step.status in ("pending", "active") and step_id != self._current_step:
                 prev_step.status = "complete"
         if step_id in self._steps:
             self._steps[step_id].status = "active"
+            self._steps[step_id].set_detail(detail)
             self._current_step = step_id
 
     def set_step_complete(self, step_id: str) -> None:

@@ -4,6 +4,9 @@ from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+from textual.message import Message
+
+from src.tui.commands import CommandResult
 
 
 def _now() -> datetime:
@@ -63,3 +66,38 @@ class StreamingEvent(TUIEvent):
 
     token: str = ""
     is_complete: bool = False
+
+
+# Textual messages for thread-safe UI updates
+
+
+class AnalysisProgress(Message):
+    """Progress update from analysis worker."""
+
+    def __init__(self, step_id: str, status: str, detail: str) -> None:
+        """Initialize progress message.
+
+        Args:
+            step_id: Analysis step identifier (fetch_data, technical, decision)
+            status: Step status (active, complete, error)
+            detail: Progress detail message
+        """
+        self.step_id = step_id
+        self.status = status
+        self.detail = detail
+        super().__init__()
+
+
+class AnalysisComplete(Message):
+    """Analysis completed message."""
+
+    def __init__(self, result: CommandResult, symbol: str) -> None:
+        """Initialize completion message.
+
+        Args:
+            result: Command execution result
+            symbol: Stock symbol analyzed
+        """
+        self.result = result
+        self.symbol = symbol
+        super().__init__()
