@@ -13,6 +13,18 @@ def chat() -> None:
 
     load_dotenv()
 
+    # Disable parallelism to prevent subprocess fd conflicts with Textual
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+
+    # Force torch to use fork-safe settings
+    import torch
+
+    torch.set_num_threads(1)
+    if hasattr(torch, "set_num_interop_threads"):
+        torch.set_num_interop_threads(1)
+
     logger.remove()
     logger.add(
         sys.stderr,

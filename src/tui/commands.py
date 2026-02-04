@@ -7,12 +7,7 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
-from src.models.llm import LLMClient
-from src.models.sentiment import FinBERTSentiment
-from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
+from src.workflows.trading import TradingWorkflowResult
 
 ProgressCallback = Callable[[str, str], None]
 
@@ -32,7 +27,6 @@ class CommandHandler:
 
     def __init__(self) -> None:
         """Initialize command handler."""
-        self._workflow: TradingWorkflow | None = None
         self._commands: dict[str, Callable[..., Coroutine]] = {
             "analyze": self._cmd_analyze,
             "technical": self._cmd_technical,
@@ -41,27 +35,6 @@ class CommandHandler:
             "help": self._cmd_help,
         }
         logger.info("CommandHandler initialized")
-
-    def _init_workflow(self) -> TradingWorkflow:
-        """Initialize trading workflow lazily."""
-        if self._workflow is None:
-            llm_client = LLMClient()
-            market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-            news_fetcher = NewsFetcher()
-            finbert = FinBERTSentiment()
-            fundamental_fetcher = FundamentalDataFetcher()
-
-            self._workflow = TradingWorkflow(
-                llm_client,
-                market_fetcher,
-                news_fetcher,
-                finbert,
-                fundamental_fetcher,
-                broker=None,
-                metrics_tracker=None,
-                use_meta_agent=True,
-            )
-        return self._workflow
 
     def is_command(self, text: str) -> bool:
         """Check if text is a slash command.
@@ -134,16 +107,19 @@ Type freely to chat about markets or ask questions."""
     async def _cmd_analyze(
         self, args: list[str], progress_callback: ProgressCallback | None = None
     ) -> CommandResult:
-        """Run full trading analysis."""
+        """Run full trading analysis in subprocess to avoid Textual fd conflicts."""
         if not args:
             return CommandResult(success=False, message="Usage: /analyze SYMBOL")
 
         symbol = args[0].upper()
-        workflow = self._init_workflow()
 
-        if progress_callback:
-            progress_callback("fetch_data", "active")
-        result = await workflow.analyze(symbol, period_days=90)
+        from src.tui.worker import run_analysis_in_process
+
+        result_dict = await run_analysis_in_process(
+            symbol, period_days=90, progress_callback=progress_callback
+        )
+        result = TradingWorkflowResult.model_validate(result_dict)
+
         if progress_callback:
             progress_callback("decision", "complete")
 
@@ -157,9 +133,10 @@ Type freely to chat about markets or ask questions."""
             return CommandResult(success=False, message="Usage: /technical SYMBOL")
 
         symbol = args[0].upper()
-        workflow = self._init_workflow()
+        from src.tui.worker import run_analysis_in_process
 
-        result = await workflow.analyze(symbol, period_days=90)
+        result_dict = await run_analysis_in_process(symbol, period_days=90)
+        result = TradingWorkflowResult.model_validate(result_dict)
         msg = self._format_technical(result)
         return CommandResult(success=True, message=msg, data={"symbol": symbol})
 
@@ -169,9 +146,10 @@ Type freely to chat about markets or ask questions."""
             return CommandResult(success=False, message="Usage: /sentiment SYMBOL")
 
         symbol = args[0].upper()
-        workflow = self._init_workflow()
+        from src.tui.worker import run_analysis_in_process
 
-        result = await workflow.analyze(symbol, period_days=90)
+        result_dict = await run_analysis_in_process(symbol, period_days=90)
+        result = TradingWorkflowResult.model_validate(result_dict)
         msg = self._format_sentiment(result)
         return CommandResult(success=True, message=msg, data={"symbol": symbol})
 
@@ -181,9 +159,10 @@ Type freely to chat about markets or ask questions."""
             return CommandResult(success=False, message="Usage: /news SYMBOL")
 
         symbol = args[0].upper()
-        workflow = self._init_workflow()
+        from src.tui.worker import run_analysis_in_process
 
-        result = await workflow.analyze(symbol, period_days=90)
+        result_dict = await run_analysis_in_process(symbol, period_days=90)
+        result = TradingWorkflowResult.model_validate(result_dict)
         msg = self._format_news(result)
         return CommandResult(success=True, message=msg, data={"symbol": symbol})
 

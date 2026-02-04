@@ -1,6 +1,10 @@
 """FinBERT sentiment analysis model wrapper."""
 
+import os
 import threading
+
+# Disable tokenizers parallelism to prevent subprocess fd conflicts in async environments
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import torch
 from loguru import logger
