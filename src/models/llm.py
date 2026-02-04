@@ -23,8 +23,9 @@ def _set_asyncio_context() -> None:
 DEFAULT_NUM_RETRIES = 3
 DEFAULT_TIMEOUT = 120
 
-# Limit concurrent async requests to avoid connection pool exhaustion
-MAX_CONCURRENT_REQUESTS = 2
+# Limit concurrent async requests (OpenAI allows 500 req/min = ~8 req/sec)
+# Set conservatively below limit to allow headroom
+MAX_CONCURRENT_REQUESTS = 6
 _semaphore_holder: dict[str, asyncio.Semaphore] = {}
 
 
