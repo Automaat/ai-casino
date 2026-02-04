@@ -9,8 +9,25 @@ from alpha_vantage.timeseries import TimeSeries
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    retry_if_not_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 load_dotenv()
+
+HTTP_RETRY = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception) & retry_if_not_exception_type(ValueError),
+    reraise=True,
+    before_sleep=lambda retry_state: logger.warning(
+        f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"
+    ),
+)
 
 
 class MarketData(BaseModel):
@@ -77,6 +94,7 @@ class MarketDataFetcher:
             return self._fetch_alpha_vantage(symbol)
         return self._fetch_yfinance(symbol, period_days)
 
+    @HTTP_RETRY
     def _fetch_alpha_vantage(self, symbol: str) -> MarketData:
         """Fetch from Alpha Vantage API."""
         try:
@@ -97,6 +115,7 @@ class MarketDataFetcher:
             logger.error(f"Alpha Vantage fetch failed: {e}")
             raise
 
+    @HTTP_RETRY
     def _fetch_yfinance(self, symbol: str, period_days: int) -> MarketData:
         """Fetch from yfinance."""
         try:
@@ -122,6 +141,7 @@ class MarketDataFetcher:
             logger.error(f"yfinance fetch failed: {e}")
             raise
 
+    @HTTP_RETRY
     def fetch_intraday(self, symbol: str, interval: str = "5min") -> MarketData:
         """Fetch intraday data.
 

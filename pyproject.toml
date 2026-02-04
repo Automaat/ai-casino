@@ -32,6 +32,7 @@ dependencies = [
     "optuna==4.7.0",
 
     # Utilities
+    "tenacity==9.1.2",
     "python-dotenv==1.2.1",
     "rich==14.3.2",
     "loguru==0.7.3",

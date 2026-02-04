@@ -7,8 +7,25 @@ import requests
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 load_dotenv()
+
+HTTP_RETRY = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(
+        (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+        )
+    ),
+    reraise=True,
+    before_sleep=lambda retry_state: logger.warning(
+        f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"
+    ),
+)
 
 
 class NewsArticle(BaseModel):
@@ -36,6 +53,7 @@ class NewsFetcher:
         if not self.api_key:
             logger.warning("MARKETAUX_API_KEY not set - API calls may be limited")
 
+    @HTTP_RETRY
     def fetch_company_news(
         self,
         symbol: str,
@@ -89,6 +107,7 @@ class NewsFetcher:
             logger.error(f"News fetch failed: {e}")
             raise
 
+    @HTTP_RETRY
     def fetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
         """Fetch general market news.
 
