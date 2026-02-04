@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 class TradeRecord(BaseModel):
     """Individual trade record."""
 
+    id: str | None = None
     timestamp: datetime
     symbol: str
     action: Signal
@@ -475,7 +476,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         """
         import asyncio
 
-        return asyncio.get_event_loop().run_until_complete(self.record_decision_async(result, strategy_name))
+        return asyncio.run(self.record_decision_async(result, strategy_name))
 
     async def record_decision_async(
         self,
@@ -523,7 +524,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         """Simulate trade exits (sync wrapper)."""
         import asyncio
 
-        return asyncio.get_event_loop().run_until_complete(self.simulate_exits_async(current_prices))
+        return asyncio.run(self.simulate_exits_async(current_prices))
 
     async def simulate_exits_async(self, current_prices: dict[str, float]) -> list[TradeRecord]:
         """Simulate trade exits based on stop-loss prices.
@@ -561,6 +562,14 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             if should_close:
                 trade.close_trade(current_price)
                 closed_trades.append(trade)
+                if trade.id:
+                    await self._repo.update(
+                        trade.id,
+                        status=trade.status,
+                        exit_price=trade.exit_price,
+                        pnl=trade.pnl,
+                        pnl_percent=trade.pnl_percent,
+                    )
 
         self._invalidate_cache()
         return closed_trades
@@ -569,7 +578,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         """Calculate metrics (sync wrapper)."""
         import asyncio
 
-        return asyncio.get_event_loop().run_until_complete(self.calculate_metrics_async(window))
+        return asyncio.run(self.calculate_metrics_async(window))
 
     async def calculate_metrics_async(self, window: str = "all") -> PerformanceMetrics:
         """Calculate performance metrics for specified time window.
@@ -668,7 +677,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         """Save metrics report (sync wrapper)."""
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(self.save_report_async(path))
+        asyncio.run(self.save_report_async(path))
 
     async def save_report_async(self, path: str = "logs/metrics_summary.json") -> None:
         """Generate and save metrics report.

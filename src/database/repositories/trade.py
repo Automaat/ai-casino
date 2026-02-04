@@ -157,6 +157,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
             TradeRecord
         """
         return TradeRecord(
+            id=str(orm.id),
             timestamp=orm.timestamp,
             symbol=orm.symbol,
             action=Signal(orm.action),

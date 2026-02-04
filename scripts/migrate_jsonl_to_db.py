@@ -51,8 +51,6 @@ async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> int:
                 except Exception as e:
                     logger.error(f"Failed to migrate trade: {e}")
 
-        await session.commit()
-
     return migrated
 
 

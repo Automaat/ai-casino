@@ -24,7 +24,7 @@ from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
-from src.metrics.tracker import BaseMetricsTracker, MetricsTracker
+from src.metrics.tracker import BaseMetricsTracker, DatabaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
@@ -85,7 +85,7 @@ class TradingWorkflow:
         finbert: FinBERTSentiment,
         fundamental_fetcher: FundamentalDataFetcher,
         broker: AlpacaBroker | None = None,
-        metrics_tracker: BaseMetricsTracker | MetricsTracker | None = None,
+        metrics_tracker: BaseMetricsTracker | None = None,
         use_ensemble: bool = False,
         use_meta_agent: bool = True,
         snapshot_on_trade: bool | None = None,
@@ -247,7 +247,10 @@ class TradingWorkflow:
 
         if self.metrics_tracker:
             try:
-                self.metrics_tracker.record_decision(result, strategy_name=strategy_name)
+                if isinstance(self.metrics_tracker, DatabaseMetricsTracker):
+                    await self.metrics_tracker.record_decision_async(result, strategy_name=strategy_name)
+                else:
+                    self.metrics_tracker.record_decision(result, strategy_name=strategy_name)
             except Exception as e:
                 logger.error(f"Failed to record metrics (continuing): {e}")
 

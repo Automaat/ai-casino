@@ -36,4 +36,4 @@ CREATE TABLE portfolio_snapshots (
     trigger VARCHAR(50) NOT NULL
 );
 
-CREATE INDEX idx_portfolio_snapshots_timestamp ON portfolio_snapshots(timestamp)
+CREATE INDEX idx_portfolio_snapshots_timestamp ON portfolio_snapshots(timestamp);
