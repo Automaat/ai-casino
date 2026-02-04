@@ -81,6 +81,13 @@ AssistantMessage.streaming {
     color: $text-muted;
 }
 
+/* Thinking indicator - animated dots */
+ThinkingIndicator {
+    color: $text-muted;
+    padding: 0;
+    margin: 1 0 0 0;
+}
+
 /* Tool call indicator - accent with bullet */
 ToolCallWidget {
     color: $accent;

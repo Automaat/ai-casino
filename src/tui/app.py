@@ -268,11 +268,16 @@ class TradingChatApp(App):
         status_bar = self.query_one(StatusBar)
 
         status_bar.set_working("Thinking...")
+        chat.show_thinking()
         chat.start_streaming_message()
         response_text = ""
+        first_token = True
 
         try:
             async for token in self._llm.astream(text, system=STREAMING_SYSTEM_PROMPT, temperature=0.7):
+                if first_token:
+                    chat.hide_thinking()
+                    first_token = False
                 response_text += token
                 chat.append_token(token)
 
@@ -280,6 +285,7 @@ class TradingChatApp(App):
             self._history.append({"role": "assistant", "content": response_text})
         except Exception as e:
             logger.exception("Chat failed")
+            chat.hide_thinking()
             chat.finish_streaming()
             chat.add_assistant_message(f"Error: {e}")
         finally:
@@ -291,6 +297,7 @@ class TradingChatApp(App):
         status_bar = self.query_one(StatusBar)
 
         status_bar.set_working("Thinking...")
+        chat.show_thinking()
 
         confirmed_tools: set[str] = set()
         tool_history: list[dict[str, str]] = []
@@ -334,11 +341,13 @@ class TradingChatApp(App):
                 on_tool_call,
             )
 
+            chat.hide_thinking()
             chat.add_assistant_message(response)
             self._history.extend(tool_history)
             self._history.append({"role": "assistant", "content": response})
         except Exception as e:
             logger.exception("Agentic chat failed")
+            chat.hide_thinking()
             chat.add_assistant_message(f"Error: {e}")
         finally:
             status_bar.clear_working()
