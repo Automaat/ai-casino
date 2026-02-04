@@ -9,7 +9,8 @@ from loguru import logger
 
 from src.workflows.trading import TradingWorkflowResult
 
-ProgressCallback = Callable[[str, str], None]
+ProgressCallback = Callable[[str, str, str], None]
+CancelledCallback = Callable[[], bool]
 
 
 @dataclass
@@ -66,12 +67,18 @@ class CommandHandler:
         args = parts[1:] if len(parts) > 1 else []
         return cmd, args
 
-    async def execute(self, text: str, progress_callback: ProgressCallback | None = None) -> CommandResult:
+    async def execute(
+        self,
+        text: str,
+        progress_callback: ProgressCallback | None = None,
+        is_cancelled: CancelledCallback | None = None,
+    ) -> CommandResult:
         """Execute a slash command.
 
         Args:
             text: Command text
-            progress_callback: Optional callback for progress updates (step_id, status)
+            progress_callback: Optional callback for progress updates (step_id, status, detail)
+            is_cancelled: Optional callback returning True if execution should stop
 
         Returns:
             CommandResult with execution result
@@ -86,7 +93,7 @@ class CommandHandler:
 
         try:
             if cmd == "analyze":
-                return await self._cmd_analyze(args, progress_callback)
+                return await self._cmd_analyze(args, progress_callback, is_cancelled)
             return await self._commands[cmd](args)
         except Exception as e:
             logger.exception(f"Command /{cmd} failed")
@@ -110,7 +117,10 @@ Type freely to chat about markets or ask questions."""
         return CommandResult(success=True, message=help_text)
 
     async def _cmd_analyze(
-        self, args: list[str], progress_callback: ProgressCallback | None = None
+        self,
+        args: list[str],
+        progress_callback: ProgressCallback | None = None,
+        is_cancelled: CancelledCallback | None = None,
     ) -> CommandResult:
         """Run full trading analysis in subprocess to avoid Textual fd conflicts."""
         if not args:
@@ -121,12 +131,12 @@ Type freely to chat about markets or ask questions."""
         from src.tui.worker import run_analysis_in_process
 
         result_dict = await run_analysis_in_process(
-            symbol, period_days=90, progress_callback=progress_callback
+            symbol, period_days=90, progress_callback=progress_callback, is_cancelled=is_cancelled
         )
         result = TradingWorkflowResult.model_validate(result_dict)
 
         if progress_callback:
-            progress_callback("decision", "complete")
+            progress_callback("decision", "complete", "")
 
         cmd_result = self._format_analysis_result(result)
         cmd_result.workflow_result = result

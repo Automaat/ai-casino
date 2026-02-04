@@ -110,16 +110,17 @@ class ChatView(VerticalScroll):
         self.scroll_end(animate=False)
         return self._progress_panel
 
-    def update_progress(self, step_id: str, status: str = "active") -> None:
+    def update_progress(self, step_id: str, status: str = "active", detail: str = "") -> None:
         """Update progress panel step.
 
         Args:
             step_id: Step identifier
             status: Step status
+            detail: Optional detail message to show
         """
         if self._progress_panel:
             if status == "active":
-                self._progress_panel.set_step_active(step_id)
+                self._progress_panel.set_step_active(step_id, detail)
             elif status == "complete":
                 self._progress_panel.set_step_complete(step_id)
             elif status == "error":

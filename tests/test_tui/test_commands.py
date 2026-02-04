@@ -127,3 +127,79 @@ class TestCommandResult:
         result = CommandResult(success=True, message="OK", data={"symbol": "AAPL"})
 
         assert result.data == {"symbol": "AAPL"}
+
+
+class TestCancellationCallback:
+    """Tests for cancellation callback propagation."""
+
+    @pytest.mark.asyncio
+    async def test_execute_analyze_passes_is_cancelled(self, monkeypatch):
+        """is_cancelled callback is passed to run_analysis_in_process."""
+        import asyncio
+
+        from src.tui import worker
+
+        captured_is_cancelled = None
+
+        async def mock_run_analysis(symbol, period_days=90, progress_callback=None, is_cancelled=None):
+            nonlocal captured_is_cancelled
+            captured_is_cancelled = is_cancelled
+            if is_cancelled and is_cancelled():
+                raise asyncio.CancelledError
+            return {
+                "symbol": symbol,
+                "decision": {
+                    "action": "HOLD",
+                    "confidence": 0.5,
+                    "risk_level": "MEDIUM",
+                    "reasoning": "test",
+                },
+                "technical": {
+                    "signal": "HOLD",
+                    "rsi": 50.0,
+                    "macd_hist": 0.0,
+                    "confidence": 0.5,
+                    "interpretation": "",
+                },
+                "sentiment": {
+                    "overall_sentiment": "neutral",
+                    "sentiment_score": 0.0,
+                    "article_count": 0,
+                    "positive_ratio": 0.0,
+                    "negative_ratio": 0.0,
+                },
+                "news": {"key_themes": [], "impact_assessment": "", "recommendation": ""},
+            }
+
+        monkeypatch.setattr(worker, "run_analysis_in_process", mock_run_analysis)
+
+        handler = CommandHandler()
+
+        def is_cancelled_fn():
+            return False
+
+        await handler.execute("/analyze AAPL", is_cancelled=is_cancelled_fn)
+
+        assert captured_is_cancelled is is_cancelled_fn
+
+    @pytest.mark.asyncio
+    async def test_execute_analyze_cancellation_raises(self, monkeypatch):
+        """is_cancelled=True raises CancelledError."""
+        import asyncio
+
+        from src.tui import worker
+
+        async def mock_run_analysis(symbol, period_days=90, progress_callback=None, is_cancelled=None):
+            if is_cancelled and is_cancelled():
+                raise asyncio.CancelledError
+            pytest.fail("Should have been cancelled")
+
+        monkeypatch.setattr(worker, "run_analysis_in_process", mock_run_analysis)
+
+        handler = CommandHandler()
+
+        def always_cancelled():
+            return True
+
+        with pytest.raises(asyncio.CancelledError):
+            await handler.execute("/analyze AAPL", is_cancelled=always_cancelled)

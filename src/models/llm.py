@@ -63,6 +63,18 @@ class LLMClient:
 
         logger.info(f"Initialized LLM client: provider={self.provider}, model={self.model}")
 
+    @property
+    def _is_gpt5(self) -> bool:
+        """Check if model is GPT-5 (temperature restricted)."""
+        return self.provider == "openai" and self.model.startswith("gpt-5")
+
+    def _effective_temperature(self, temperature: float) -> float:
+        """Get effective temperature, forcing 1.0 for GPT-5 models."""
+        if self._is_gpt5 and temperature != 1.0:
+            logger.debug(f"GPT-5 requires temperature=1, ignoring requested {temperature}")
+            return 1.0
+        return temperature
+
     def complete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
         """Generate completion from prompt.
 
@@ -85,7 +97,7 @@ class LLMClient:
             kwargs: dict = {
                 "model": self._model_id,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": self._effective_temperature(temperature),
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -119,7 +131,7 @@ class LLMClient:
             kwargs: dict = {
                 "model": self._model_id,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": self._effective_temperature(temperature),
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -145,7 +157,7 @@ class LLMClient:
             kwargs: dict = {
                 "model": self._model_id,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": self._effective_temperature(temperature),
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -181,7 +193,7 @@ class LLMClient:
             kwargs: dict = {
                 "model": self._model_id,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": self._effective_temperature(temperature),
                 "stream": True,
             }
             if self._api_base:
@@ -235,12 +247,13 @@ class LLMClient:
 
         tool_calls_made = 0
 
+        effective_temp = self._effective_temperature(temperature)
         try:
             while tool_calls_made < max_tool_calls:
                 kwargs: dict = {
                     "model": self._model_id,
                     "messages": messages,
-                    "temperature": temperature,
+                    "temperature": effective_temp,
                     "tools": tools,
                 }
                 if self._api_base:
@@ -273,7 +286,7 @@ class LLMClient:
             kwargs = {
                 "model": self._model_id,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": effective_temp,
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -312,13 +325,14 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
 
         tool_calls_made = 0
+        effective_temp = self._effective_temperature(temperature)
 
         try:
             while tool_calls_made < max_tool_calls:
                 kwargs: dict = {
                     "model": self._model_id,
                     "messages": messages,
-                    "temperature": temperature,
+                    "temperature": effective_temp,
                     "tools": tools,
                 }
                 if self._api_base:
@@ -351,7 +365,7 @@ class LLMClient:
             kwargs = {
                 "model": self._model_id,
                 "messages": messages,
-                "temperature": temperature,
+                "temperature": effective_temp,
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
