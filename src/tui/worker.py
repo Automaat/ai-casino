@@ -178,12 +178,12 @@ def main():
             return await original_make_decision(state)
         workflow._make_decision = patched_make_decision
 
-        # Python 3.14 fix: Patch event loop for anyio compatibility
-        # anyio has issues with task state tracking in worker threads
-        import nest_asyncio
-        nest_asyncio.apply()
-
-        result = asyncio.run(workflow.analyze(symbol, period_days=period_days))
+        # Python 3.14 fix: Use anyio BlockingPortal for async in worker threads
+        # asyncio.run() causes anyio task state errors (current_task() returns None)
+        # Solution: https://anyio.readthedocs.io/en/latest/threads.html
+        import anyio
+        with anyio.start_blocking_portal(backend="asyncio") as portal:
+            result = portal.call(workflow.analyze, symbol, period_days)
 
         update_status("complete", "Analysis complete")
 
@@ -377,11 +377,10 @@ def main():
         llm = LLMClient()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
-        # Python 3.14 fix: Patch event loop for anyio compatibility
-        import nest_asyncio
-        nest_asyncio.apply()
-
-        analysis = asyncio.run(analyzer.analyze(output))
+        # Python 3.14 fix: Use anyio BlockingPortal for async in worker threads
+        import anyio
+        with anyio.start_blocking_portal(backend="asyncio") as portal:
+            analysis = portal.call(analyzer.analyze, output)
 
         formatted = format_screening_output(output, analysis)
 
