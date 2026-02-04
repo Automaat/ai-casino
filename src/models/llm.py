@@ -1,15 +1,38 @@
 """LLM abstraction using LiteLLM for flexible provider switching."""
 
+import asyncio
 import json
 import os
 from collections.abc import AsyncIterator, Callable
 
+import sniffio
 from dotenv import load_dotenv
 from litellm import acompletion, completion
 from loguru import logger
 from pydantic import BaseModel
 
 load_dotenv()
+
+
+def _set_asyncio_context() -> None:
+    """Set sniffio context to asyncio to fix detection issues in Textual."""
+    sniffio.current_async_library_cvar.set("asyncio")
+
+
+# Default retry settings for transient errors
+DEFAULT_NUM_RETRIES = 3
+DEFAULT_TIMEOUT = 120
+
+# Limit concurrent async requests to avoid connection pool exhaustion
+MAX_CONCURRENT_REQUESTS = 2
+_semaphore_holder: dict[str, asyncio.Semaphore] = {}
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    """Get or create the global request semaphore."""
+    if "semaphore" not in _semaphore_holder:
+        _semaphore_holder["semaphore"] = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+    return _semaphore_holder["semaphore"]
 
 
 class ToolCall(BaseModel):
@@ -98,6 +121,8 @@ class LLMClient:
                 "model": self._model_id,
                 "messages": messages,
                 "temperature": self._effective_temperature(temperature),
+                "num_retries": DEFAULT_NUM_RETRIES,
+                "timeout": DEFAULT_TIMEOUT,
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -127,21 +152,25 @@ class LLMClient:
 
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            kwargs: dict = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": self._effective_temperature(temperature),
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-            response = await acompletion(**kwargs)
-            content = response.choices[0].message.content
-            logger.debug(f"LLM async response length: {len(content)} chars")
-            return content
-        except Exception as e:
-            logger.error(f"LLM async completion failed: {e}")
-            raise
+        _set_asyncio_context()
+        async with _get_semaphore():
+            try:
+                kwargs: dict = {
+                    "model": self._model_id,
+                    "messages": messages,
+                    "temperature": self._effective_temperature(temperature),
+                    "num_retries": DEFAULT_NUM_RETRIES,
+                    "timeout": DEFAULT_TIMEOUT,
+                }
+                if self._api_base:
+                    kwargs["api_base"] = self._api_base
+                response = await acompletion(**kwargs)
+                content = response.choices[0].message.content
+                logger.debug(f"LLM async response length: {len(content)} chars")
+                return content
+            except Exception as e:
+                logger.error(f"LLM async completion failed: {e}")
+                raise
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         """Multi-turn chat completion.
@@ -158,6 +187,8 @@ class LLMClient:
                 "model": self._model_id,
                 "messages": messages,
                 "temperature": self._effective_temperature(temperature),
+                "num_retries": DEFAULT_NUM_RETRIES,
+                "timeout": DEFAULT_TIMEOUT,
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -189,25 +220,29 @@ class LLMClient:
 
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            kwargs: dict = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": self._effective_temperature(temperature),
-                "stream": True,
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
+        _set_asyncio_context()
+        async with _get_semaphore():
+            try:
+                kwargs: dict = {
+                    "model": self._model_id,
+                    "messages": messages,
+                    "temperature": self._effective_temperature(temperature),
+                    "stream": True,
+                    "num_retries": DEFAULT_NUM_RETRIES,
+                    "timeout": DEFAULT_TIMEOUT,
+                }
+                if self._api_base:
+                    kwargs["api_base"] = self._api_base
 
-            response = await acompletion(**kwargs)
+                response = await acompletion(**kwargs)
 
-            async for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                async for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
 
-        except Exception as e:
-            logger.error(f"LLM streaming failed: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"LLM streaming failed: {e}")
+                raise
 
     @property
     def supports_tools(self) -> bool:
@@ -257,6 +292,8 @@ class LLMClient:
                     "messages": messages,
                     "temperature": effective_temp,
                     "tools": tools,
+                    "num_retries": DEFAULT_NUM_RETRIES,
+                    "timeout": DEFAULT_TIMEOUT,
                 }
                 if self._api_base:
                     kwargs["api_base"] = self._api_base
@@ -296,6 +333,8 @@ class LLMClient:
                 "model": self._model_id,
                 "messages": messages,
                 "temperature": effective_temp,
+                "num_retries": DEFAULT_NUM_RETRIES,
+                "timeout": DEFAULT_TIMEOUT,
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
@@ -338,6 +377,7 @@ class LLMClient:
         tool_calls_made = 0
         effective_temp = self._effective_temperature(temperature)
 
+        _set_asyncio_context()
         try:
             while tool_calls_made < max_tool_calls:
                 kwargs: dict = {
@@ -345,11 +385,14 @@ class LLMClient:
                     "messages": messages,
                     "temperature": effective_temp,
                     "tools": tools,
+                    "num_retries": DEFAULT_NUM_RETRIES,
+                    "timeout": DEFAULT_TIMEOUT,
                 }
                 if self._api_base:
                     kwargs["api_base"] = self._api_base
 
-                response = await acompletion(**kwargs)
+                async with _get_semaphore():
+                    response = await acompletion(**kwargs)
                 message = response.choices[0].message
 
                 if not message.tool_calls:
@@ -384,10 +427,13 @@ class LLMClient:
                 "model": self._model_id,
                 "messages": messages,
                 "temperature": effective_temp,
+                "num_retries": DEFAULT_NUM_RETRIES,
+                "timeout": DEFAULT_TIMEOUT,
             }
             if self._api_base:
                 kwargs["api_base"] = self._api_base
-            final_response = await acompletion(**kwargs)
+            async with _get_semaphore():
+                final_response = await acompletion(**kwargs)
             return final_response.choices[0].message.content or ""
 
         except Exception as e:

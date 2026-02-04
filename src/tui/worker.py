@@ -80,6 +80,13 @@ import json
 import os
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
+# Fix sniffio async library detection
+import sniffio
+sniffio.current_async_library_cvar.set("asyncio")
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -127,6 +134,10 @@ def main():
         from loguru import logger
         logger.remove()
         logger.add(log_sink, format="{message}", level="INFO")
+        # File logging for subprocess debugging
+        log_file = os.path.expanduser("~/.ai-casino/worker.log")
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        logger.add(log_file, format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}", level="DEBUG")
 
         from src.data.fundamental import FundamentalDataFetcher
         from src.data.market import MarketDataFetcher
@@ -282,6 +293,13 @@ import json
 import os
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
+# Fix sniffio async library detection
+import sniffio
+sniffio.current_async_library_cvar.set("asyncio")
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -331,6 +349,10 @@ def main():
         from loguru import logger
         logger.remove()
         logger.add(log_sink, format="{message}", level="INFO")
+        # File logging for subprocess debugging
+        log_file = os.path.expanduser("~/.ai-casino/worker.log")
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        logger.add(log_file, format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}", level="DEBUG")
 
         from src.data.universe import StockUniverseFetcher
         from src.models.llm import LLMClient

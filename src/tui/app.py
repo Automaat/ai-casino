@@ -339,17 +339,14 @@ class TradingChatApp(App):
             return self._tool_registry.execute(name, args)
 
         try:
-            import asyncio
-
-            response = await asyncio.to_thread(
-                self._llm.complete_with_tools,
-                text,
-                self._tool_registry.get_definitions(),
-                tool_executor,
-                AGENTIC_SYSTEM_PROMPT,
-                0.7,
-                5,
-                on_tool_call,
+            response = await self._llm.acomplete_with_tools(
+                prompt=text,
+                tools=self._tool_registry.get_definitions(),
+                tool_executor=tool_executor,
+                system=AGENTIC_SYSTEM_PROMPT,
+                temperature=0.7,
+                max_tool_calls=5,
+                on_tool_call=on_tool_call,
             )
 
             chat.hide_thinking()
