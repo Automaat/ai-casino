@@ -5,6 +5,7 @@ from textual.containers import VerticalScroll
 from src.tui.widgets.message import AssistantMessage, ToolCallWidget, UserMessage, WelcomeWidget
 from src.tui.widgets.progress import ProgressPanel
 from src.tui.widgets.result_box import ResultBox
+from src.tui.widgets.thinking import ThinkingIndicator
 from src.workflows.trading import TradingWorkflowResult
 
 
@@ -25,6 +26,7 @@ class ChatView(VerticalScroll):
         super().__init__(**kwargs)
         self._streaming_message: AssistantMessage | None = None
         self._progress_panel: ProgressPanel | None = None
+        self._thinking_indicator: ThinkingIndicator | None = None
 
     def show_welcome(self, model_name: str = "ollama/qwen3:14b") -> None:
         """Show welcome screen with logo.
@@ -158,10 +160,24 @@ class ChatView(VerticalScroll):
         else:
             self.add_assistant_message(content)
 
+    def show_thinking(self) -> None:
+        """Show thinking indicator."""
+        if self._thinking_indicator is None:
+            self._thinking_indicator = ThinkingIndicator()
+            self.mount(self._thinking_indicator)
+            self.scroll_end(animate=False)
+
+    def hide_thinking(self) -> None:
+        """Hide thinking indicator."""
+        if self._thinking_indicator is not None:
+            self._thinking_indicator.remove()
+            self._thinking_indicator = None
+
     def clear_messages(self) -> None:
         """Clear all messages."""
         self._streaming_message = None
         self._progress_panel = None
+        self._thinking_indicator = None
         for child in list(self.children):
             child.remove()
 

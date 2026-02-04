@@ -3,5 +3,6 @@
 from src.tui.widgets.autocomplete_input import AutocompleteInput
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
+from src.tui.widgets.thinking import ThinkingIndicator
 
-__all__ = ["AutocompleteInput", "ChatView", "StatusBar"]
+__all__ = ["AutocompleteInput", "ChatView", "StatusBar", "ThinkingIndicator"]
