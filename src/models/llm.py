@@ -275,7 +275,11 @@ class LLMClient:
                     args = json.loads(tool_call.function.arguments)
 
                     logger.debug(f"Executing tool: {name} with args: {args}")
-                    result = tool_executor(name, args)
+                    try:
+                        result = tool_executor(name, args)
+                    except Exception as tool_error:
+                        logger.error(f"Tool '{name}' execution failed: {tool_error}")
+                        result = f"Tool '{name}' failed: {tool_error}"
 
                     if on_tool_call:
                         on_tool_call(name, args, result)
@@ -359,7 +363,11 @@ class LLMClient:
                     args = json.loads(tool_call.function.arguments)
 
                     logger.debug(f"Executing tool: {name} with args: {args}")
-                    result = tool_executor(name, args)
+                    try:
+                        result = tool_executor(name, args)
+                    except Exception as tool_error:
+                        logger.error(f"Tool '{name}' execution failed: {tool_error}")
+                        result = f"Tool '{name}' failed: {tool_error}"
 
                     if on_tool_call:
                         on_tool_call(name, args, result)

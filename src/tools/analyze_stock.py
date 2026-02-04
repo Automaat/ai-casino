@@ -3,9 +3,12 @@
 import asyncio
 from typing import TYPE_CHECKING
 
+import nest_asyncio
 from loguru import logger
 
 from src.tools.base import BaseTool
+
+nest_asyncio.apply()
 
 if TYPE_CHECKING:
     from src.workflows.trading import TradingWorkflowResult

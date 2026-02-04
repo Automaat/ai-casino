@@ -126,6 +126,10 @@ class TradingChatApp(App):
         input_widget = self.query_one(AutocompleteInput)
         input_widget.value = ""
 
+        if self._pending_tool_confirmation:
+            await self._handle_tool_confirmation(text)
+            return
+
         chat = self.query_one(ChatView)
         chat.add_user_message(text)
         self._history.append({"role": "user", "content": text})
@@ -134,6 +138,30 @@ class TradingChatApp(App):
             await self._handle_command(text)
         else:
             await self._handle_chat(text)
+
+        self._save_history()
+
+    async def _handle_tool_confirmation(self, text: str) -> None:
+        """Handle user response to tool confirmation prompt."""
+        chat = self.query_one(ChatView)
+        pending = self._pending_tool_confirmation
+        self._pending_tool_confirmation = None
+
+        chat.add_user_message(text)
+
+        tool_widgets = chat.query("ToolCallWidget")
+        tool_widget = tool_widgets.last() if tool_widgets else None
+
+        if text.lower() in ("yes", "y"):
+            result = self._tool_registry.execute(pending["name"], pending["args"])
+            result_preview = result[:100] + "..." if len(result) > 100 else result
+            if tool_widget:
+                tool_widget.set_complete(result_preview)
+            chat.add_assistant_message(f"Tool result:\n\n{result}")
+        else:
+            if tool_widget:
+                tool_widget.set_complete("Skipped")
+            chat.add_assistant_message("Tool execution skipped.")
 
         self._save_history()
 
@@ -255,8 +283,16 @@ class TradingChatApp(App):
 
         status_bar.set_working("Thinking...")
 
+        confirmed_tools: set[str] = set()
+        tool_history: list[dict[str, str]] = []
+
         def on_tool_call(name: str, args: dict, result: str) -> None:
             """Callback for tool execution updates."""
+            tool_history.append(
+                {"role": "assistant", "content": f"[Used tool {name} with {args}]\n\nResult: {result[:500]}"}
+            )
+            if name in confirmed_tools:
+                return
             args_str = ", ".join(f"{k}={v}" for k, v in args.items())
             widget = chat.show_tool_call(name, args_str)
             result_preview = result[:100] + "..." if len(result) > 100 else result
@@ -265,6 +301,7 @@ class TradingChatApp(App):
         def tool_executor(name: str, args: dict) -> str:
             """Execute tool with confirmation check."""
             if self._tool_registry.requires_confirmation(name):
+                confirmed_tools.add(name)
                 args_str = ", ".join(f"{k}={v}" for k, v in args.items())
                 chat.show_tool_call(name, args_str)
                 chat.add_assistant_message(
@@ -285,6 +322,7 @@ class TradingChatApp(App):
             )
 
             chat.add_assistant_message(response)
+            self._history.extend(tool_history)
             self._history.append({"role": "assistant", "content": response})
         except Exception as e:
             logger.exception("Agentic chat failed")
