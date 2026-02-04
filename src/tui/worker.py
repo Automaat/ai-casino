@@ -95,10 +95,9 @@ def main():
         with open(output_file, "w") as f:
             json.dump({"status": "success", "data": result.model_dump()}, f)
     except Exception as e:
-        import traceback
         update_status(status_file, "error")
         with open(output_file, "w") as f:
-            json.dump({"status": "error", "data": f"{e}\\n{traceback.format_exc()}"}, f)
+            json.dump({"status": "error", "data": str(e)}, f)
 
 if __name__ == "__main__":
     main()
