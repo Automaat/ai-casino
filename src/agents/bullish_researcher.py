@@ -5,6 +5,7 @@ import re
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
@@ -49,6 +50,7 @@ class BullishResearcher:
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
+        comparative: ComparativeAnalysis | None = None,
     ) -> BullishResearchAnalysis:
         """Construct bullish thesis from all analyses.
 
@@ -58,13 +60,14 @@ class BullishResearcher:
             sentiment: Sentiment analysis result
             news: News analysis result
             fundamental: Fundamental analysis result
+            comparative: Comparative analysis result (optional)
 
         Returns:
             BullishResearchAnalysis with thesis, strengths, upside, and confidence
         """
         logger.info(f"Constructing bull thesis for {symbol}")
 
-        prompt = self._build_prompt(symbol, technical, sentiment, news, fundamental)
+        prompt = self._build_prompt(symbol, technical, sentiment, news, fundamental, comparative)
 
         system_prompt = (
             "You are an optimistic investment researcher who identifies upside opportunities "
@@ -97,6 +100,7 @@ class BullishResearcher:
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis,
+        comparative: ComparativeAnalysis | None = None,
     ) -> str:
         """Build LLM prompt from all analyses.
 
@@ -106,6 +110,7 @@ class BullishResearcher:
             sentiment: Sentiment analysis result
             news: News analysis result
             fundamental: Fundamental analysis result
+            comparative: Comparative analysis result (optional)
 
         Returns:
             Formatted prompt string
@@ -136,12 +141,25 @@ class BullishResearcher:
         )
         fund_str = f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str})"
 
+        # Comparative section
+        comp_str = "N/A"
+        if comparative:
+            pe_vs_sector = f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector else "N/A"
+            perf_vs_sector = (
+                f"{comparative.perf_vs_sector_3m:+.1f}%" if comparative.perf_vs_sector_3m else "N/A"
+            )
+            comp_str = (
+                f"{comparative.relative_valuation.value} "
+                f"(P/E vs sector: {pe_vs_sector}, 3M perf vs sector: {perf_vs_sector})"
+            )
+
         return f"""Construct a bull thesis for {symbol} based on:
 
 TECHNICAL: {tech_str}
 SENTIMENT: {sent_str}
 NEWS: {news_str}
 FUNDAMENTAL: {fund_str}
+COMPARATIVE: {comp_str}
 
 Provide:
 1. Bull thesis (3-4 sentences explaining why this stock has upside potential)

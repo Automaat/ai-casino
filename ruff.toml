@@ -56,6 +56,7 @@ ignore = [
     "PLC0415", # import location OK in tests
     "SIM117",  # nested with statements OK for clarity
     "BLE001",  # catch Exception OK in main CLI
+    "TC001",   # keep application imports at top level for clarity
 ]
 
 [lint.per-file-ignores]

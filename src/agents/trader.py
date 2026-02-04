@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
+from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
@@ -52,6 +53,7 @@ class TraderAgent:
         fundamental: FundamentalAnalysis,
         bullish: BullishResearchAnalysis,
         bearish: BearishResearchAnalysis,
+        comparative: ComparativeAnalysis | None = None,
         owns_position: bool = False,
         position_qty: float | None = None,
     ) -> TradingDecision:
@@ -65,6 +67,7 @@ class TraderAgent:
             fundamental: Fundamental analysis results
             bullish: Bullish research analysis
             bearish: Bearish research analysis
+            comparative: Comparative analysis results (optional)
             owns_position: Whether user owns this stock
             position_qty: Number of shares owned (if any)
 
@@ -137,6 +140,7 @@ Key Weaknesses: {", ".join(bearish.key_weaknesses)}
 Target Downside: {f"{bearish.target_downside:.1f}%" if bearish.target_downside is not None else "N/A"}
 Confidence: {bearish.confidence:.2f}
 
+{self._build_comparative_section(comparative)}
 Based on these analyses and your portfolio status, make your trading decision:
 1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
 2. Confidence: 0.0-1.0 (how confident in this decision)
@@ -148,9 +152,10 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
 
         system_prompt = (
             "You are an experienced trader who synthesizes technical, sentiment, "
-            "news, fundamental, bullish, and bearish research to make informed trading decisions. "
+            "news, fundamental, comparative, bullish, and bearish research to make informed trading decisions. "
             "Consider both the bull thesis (upside potential) and bear thesis (downside risks). "
-            "Be decisive but cautious."
+            "Pay attention to relative valuation vs sector/market - a stock can look expensive on P/E but "
+            "undervalued relative to its sector. Be decisive but cautious."
         )
 
         response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
@@ -169,6 +174,42 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             owns_position=owns_position,
             position_qty=position_qty,
         )
+
+    def _build_comparative_section(self, comparative: ComparativeAnalysis | None) -> str:
+        """Build comparative analysis section for prompt.
+
+        Args:
+            comparative: Comparative analysis results (optional)
+
+        Returns:
+            Formatted section string
+        """
+        if not comparative:
+            return ""
+
+        pe_vs_sector = f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector else "N/A"
+        pe_vs_market = f"{comparative.pe_vs_market:.2f}x" if comparative.pe_vs_market else "N/A"
+        perf_vs_sector_ytd = (
+            f"{comparative.perf_vs_sector_ytd:+.1f}%" if comparative.perf_vs_sector_ytd is not None else "N/A"
+        )
+        perf_vs_sector_3m = (
+            f"{comparative.perf_vs_sector_3m:+.1f}%" if comparative.perf_vs_sector_3m is not None else "N/A"
+        )
+        perf_vs_market_ytd = (
+            f"{comparative.perf_vs_market_ytd:+.1f}%" if comparative.perf_vs_market_ytd is not None else "N/A"
+        )
+
+        return f"""COMPARATIVE ANALYSIS:
+Relative Valuation: {comparative.relative_valuation.value}
+P/E vs Sector ({comparative.sector_etf}): {pe_vs_sector}
+P/E vs Market (SPY): {pe_vs_market}
+YTD Performance vs Sector: {perf_vs_sector_ytd}
+3M Performance vs Sector: {perf_vs_sector_3m}
+YTD Performance vs Market: {perf_vs_market_ytd}
+Confidence: {comparative.confidence:.2f}
+Analysis: {comparative.interpretation}
+
+"""
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:
         """Extract trading action from response.

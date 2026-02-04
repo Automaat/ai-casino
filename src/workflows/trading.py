@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
 from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
+from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
 from src.agents.meta import MetaAgent, StrategySelection
 from src.agents.news import NewsAnalysis, NewsAnalyst
@@ -21,6 +22,7 @@ from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
 from src.data.broker import AlpacaBroker, OrderStatus
+from src.data.comparative import ComparativeDataFetcher
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
@@ -42,6 +44,7 @@ class TradingState(TypedDict):
     sentiment_analysis: SentimentAnalysis | None
     news_analysis: NewsAnalysis | None
     fundamental_analysis: FundamentalAnalysis | None
+    comparative_analysis: ComparativeAnalysis | None
     bullish_research: BullishResearchAnalysis | None
     bearish_research: BearishResearchAnalysis | None
     final_decision: TradingDecision | None
@@ -60,6 +63,7 @@ class TradingWorkflowResult(BaseModel):
     sentiment: SentimentAnalysis
     news: NewsAnalysis
     fundamental: FundamentalAnalysis
+    comparative: ComparativeAnalysis | None = None
     bullish: BullishResearchAnalysis
     bearish: BearishResearchAnalysis
     decision: TradingDecision
@@ -137,6 +141,7 @@ class TradingWorkflow:
         self.sentiment_analyst = SentimentAnalyst(finbert)
         self.news_analyst = NewsAnalyst(llm_client)
         self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
+        self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
         self.bullish_researcher = BullishResearcher(llm_client)
         self.bearish_researcher = BearishResearcher(llm_client)
         self.trader = TraderAgent(llm_client)
@@ -183,15 +188,17 @@ class TradingWorkflow:
         sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
         news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
         fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
+        comparative_task = self.comparative_analyst.analyze(state["symbol"])
 
-        technical, sentiment, news, fundamental = await asyncio.gather(
-            technical_task, sentiment_task, news_task, fundamental_task
+        technical, sentiment, news, fundamental, comparative = await asyncio.gather(
+            technical_task, sentiment_task, news_task, fundamental_task, comparative_task
         )
 
         state["technical_analysis"] = technical
         state["sentiment_analysis"] = sentiment
         state["news_analysis"] = news
         state["fundamental_analysis"] = fundamental
+        state["comparative_analysis"] = comparative
 
         # Parallel Group 2: research (depends on Group 1)
         bullish_task = self.bullish_researcher.analyze(
@@ -200,6 +207,7 @@ class TradingWorkflow:
             state["sentiment_analysis"],
             state["news_analysis"],
             state["fundamental_analysis"],
+            state["comparative_analysis"],
         )
         bearish_task = self.bearish_researcher.analyze(
             state["symbol"],
@@ -207,6 +215,7 @@ class TradingWorkflow:
             state["sentiment_analysis"],
             state["news_analysis"],
             state["fundamental_analysis"],
+            state["comparative_analysis"],
         )
 
         bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
@@ -236,6 +245,7 @@ class TradingWorkflow:
             sentiment=state["sentiment_analysis"],
             news=state["news_analysis"],
             fundamental=state["fundamental_analysis"],
+            comparative=state["comparative_analysis"],
             bullish=state["bullish_research"],
             bearish=state["bearish_research"],
             decision=state["final_decision"],
@@ -288,6 +298,7 @@ class TradingWorkflow:
             sentiment_analysis=None,
             news_analysis=None,
             fundamental_analysis=None,
+            comparative_analysis=None,
             bullish_research=None,
             bearish_research=None,
             final_decision=None,
@@ -335,6 +346,7 @@ class TradingWorkflow:
             state["fundamental_analysis"],
             state["bullish_research"],
             state["bearish_research"],
+            comparative=state["comparative_analysis"],
             owns_position=owns_position,
             position_qty=position_qty,
         )
