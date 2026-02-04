@@ -292,6 +292,7 @@ class TradingWorkflow:
         state["news_analysis"] = news
         state["fundamental_analysis"] = fundamental
         state["comparative_analysis"] = comparative
+        # Web research stored for final result but not passed to downstream agents (informational only)
         state["web_research"] = web_research
 
         # Parallel Group 2: research (depends on Group 1)

@@ -10,12 +10,18 @@ from diskcache import Cache
 from duckduckgo_search import DDGS
 from loguru import logger
 from pydantic import BaseModel
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    retry_if_not_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(Exception),
+    retry=retry_if_exception_type(Exception) & retry_if_not_exception_type(ValueError),
     reraise=True,
     before_sleep=lambda retry_state: logger.warning(
         f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"
