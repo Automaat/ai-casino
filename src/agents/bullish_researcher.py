@@ -49,7 +49,7 @@ class BullishResearcher:
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
     ) -> BullishResearchAnalysis:
         """Construct bullish thesis from all analyses.
@@ -99,7 +99,7 @@ class BullishResearcher:
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
     ) -> str:
         """Build LLM prompt from all analyses.
@@ -134,12 +134,17 @@ class BullishResearcher:
         news_str = f"{news_themes}, impact: {news.impact_assessment}"
 
         # Fundamental section
-        pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio is not None else "N/A"
-        eps_str = f"{fundamental.eps:.2f}" if fundamental.eps is not None else "N/A"
-        growth_str = (
-            f"{fundamental.revenue_growth_yoy:.1%}" if fundamental.revenue_growth_yoy is not None else "N/A"
-        )
-        fund_str = f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str})"
+        if fundamental:
+            pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio is not None else "N/A"
+            eps_str = f"{fundamental.eps:.2f}" if fundamental.eps is not None else "N/A"
+            growth_str = (
+                f"{fundamental.revenue_growth_yoy:.1%}"
+                if fundamental.revenue_growth_yoy is not None
+                else "N/A"
+            )
+            fund_str = f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str})"
+        else:
+            fund_str = "N/A (API rate limited)"
 
         # Comparative section
         comp_str = "N/A"
@@ -245,7 +250,7 @@ UPSIDE: [percentage or N/A]"""
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         _news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
     ) -> float:
         """Calculate confidence in bull case.
 
@@ -272,15 +277,16 @@ UPSIDE: [percentage or N/A]"""
         elif sentiment.sentiment_score < -0.3:
             confidence -= 0.15
 
-        # Fundamental boost/penalty
-        if fundamental.valuation in ["UNDERVALUED", "FAIRLY_VALUED"]:
-            confidence += 0.1
-        elif fundamental.valuation == "OVERVALUED":
-            confidence -= 0.1
+        # Fundamental boost/penalty (skip if unavailable)
+        if fundamental:
+            if fundamental.valuation in ["UNDERVALUED", "FAIRLY_VALUED"]:
+                confidence += 0.1
+            elif fundamental.valuation == "OVERVALUED":
+                confidence -= 0.1
 
-        # Growth boost
-        if fundamental.revenue_growth_yoy and fundamental.revenue_growth_yoy > 0.1:  # >10% growth
-            confidence += 0.05
+            # Growth boost
+            if fundamental.revenue_growth_yoy and fundamental.revenue_growth_yoy > 0.1:  # >10% growth
+                confidence += 0.05
 
         # Clamp to [0.0, 1.0]
         return max(0.0, min(1.0, confidence))

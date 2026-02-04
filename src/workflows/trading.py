@@ -64,7 +64,7 @@ class TradingWorkflowResult(BaseModel):
     technical: TechnicalAnalysis
     sentiment: SentimentAnalysis
     news: NewsAnalysis
-    fundamental: FundamentalAnalysis
+    fundamental: FundamentalAnalysis | None = None
     comparative: ComparativeAnalysis | None = None
     web_research: WebResearchAnalysis | None = None
     bullish: BullishResearchAnalysis
@@ -270,12 +270,17 @@ class TradingWorkflow:
             web_research_task,
             return_exceptions=True,
         )
-        technical, sentiment, news, fundamental, comparative_result, web_research_result = results
+        technical, sentiment, news, fundamental_result, comparative_result, web_research_result = results
 
-        # Re-raise if core analyses failed
-        for result in (technical, sentiment, news, fundamental):
+        # Re-raise if core analyses failed (fundamental is optional due to Alpha Vantage rate limits)
+        for result in (technical, sentiment, news):
             if isinstance(result, Exception):
                 raise result
+
+        # Fundamental is optional - Alpha Vantage rate limits
+        fundamental = fundamental_result if not isinstance(fundamental_result, Exception) else None
+        if isinstance(fundamental_result, Exception):
+            logger.warning(f"Fundamental analysis unavailable (continuing): {fundamental_result}")
 
         # Comparative is optional - log warning and continue if it failed
         comparative = comparative_result if not isinstance(comparative_result, Exception) else None

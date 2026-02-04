@@ -50,7 +50,7 @@ class TraderAgent:
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
         bullish: BullishResearchAnalysis,
         bearish: BearishResearchAnalysis,
         comparative: ComparativeAnalysis | None = None,
@@ -117,18 +117,7 @@ Key Themes: {", ".join(news.key_themes)}
 Impact: {news.impact_assessment}
 Recommendation: {news.recommendation}
 
-FUNDAMENTAL ANALYSIS:
-Valuation: {fundamental.valuation}
-P/E Ratio: {fundamental.pe_ratio if fundamental.pe_ratio is not None else "N/A"}
-EPS: ${fundamental.eps if fundamental.eps is not None else "N/A"}
-Revenue Growth YoY: {f"{fundamental.revenue_growth_yoy * 100:.1f}%" if fundamental.revenue_growth_yoy is not None else "N/A"}
-Earnings Growth YoY: {f"{fundamental.earnings_growth_yoy * 100:.1f}%" if fundamental.earnings_growth_yoy is not None else "N/A"}
-Debt-to-Equity: {fundamental.debt_to_equity if fundamental.debt_to_equity is not None else "N/A"}
-Current Ratio: {fundamental.current_ratio if fundamental.current_ratio is not None else "N/A"}
-Confidence: {fundamental.confidence:.2f}
-Analysis: {fundamental.interpretation}
-
-BULLISH RESEARCH:
+{self._build_fundamental_section(fundamental)}BULLISH RESEARCH:
 Thesis: {bullish.thesis}
 Key Strengths: {", ".join(bullish.key_strengths)}
 Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
@@ -174,6 +163,33 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             owns_position=owns_position,
             position_qty=position_qty,
         )
+
+    def _build_fundamental_section(self, fundamental: FundamentalAnalysis | None) -> str:
+        """Build fundamental analysis section for prompt.
+
+        Args:
+            fundamental: Fundamental analysis results (optional)
+
+        Returns:
+            Formatted section string
+        """
+        if not fundamental:
+            return """FUNDAMENTAL ANALYSIS:
+⚠️ Unavailable (API rate limit) - decision based on other signals only.
+
+"""
+        return f"""FUNDAMENTAL ANALYSIS:
+Valuation: {fundamental.valuation}
+P/E Ratio: {fundamental.pe_ratio if fundamental.pe_ratio is not None else "N/A"}
+EPS: ${fundamental.eps if fundamental.eps is not None else "N/A"}
+Revenue Growth YoY: {f"{fundamental.revenue_growth_yoy * 100:.1f}%" if fundamental.revenue_growth_yoy is not None else "N/A"}
+Earnings Growth YoY: {f"{fundamental.earnings_growth_yoy * 100:.1f}%" if fundamental.earnings_growth_yoy is not None else "N/A"}
+Debt-to-Equity: {fundamental.debt_to_equity if fundamental.debt_to_equity is not None else "N/A"}
+Current Ratio: {fundamental.current_ratio if fundamental.current_ratio is not None else "N/A"}
+Confidence: {fundamental.confidence:.2f}
+Analysis: {fundamental.interpretation}
+
+"""
 
     def _build_comparative_section(self, comparative: ComparativeAnalysis | None) -> str:
         """Build comparative analysis section for prompt.

@@ -133,6 +133,17 @@ def _print_news(result: TradingWorkflowResult) -> None:
 
 def _print_fundamental(result: TradingWorkflowResult) -> None:
     """Print fundamental analysis."""
+    if not result.fundamental:
+        console.print(
+            Panel(
+                "[yellow]Fundamental analysis unavailable (API rate limit)[/yellow]\n"
+                "Decision based on technical, sentiment, and news signals only.",
+                title="[bold yellow]⚠️ Fundamental Analysis[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+        return
+
     fundamental_table = Table(title="Fundamental Analysis", show_header=True)
     fundamental_table.add_column("Metric", style="cyan")
     fundamental_table.add_column("Value", style="yellow")
