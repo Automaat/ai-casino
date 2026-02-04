@@ -112,11 +112,9 @@ class TradingChatApp(App):
     async def _handle_command(self, text: str) -> None:
         """Handle slash command."""
         chat = self.query_one(ChatView)
-        chat.add_message("Processing...", "assistant")
 
         result = await self._command_handler.execute(text)
 
-        chat.query(result.__class__)[-1].remove() if chat.query("MessageWidget") else None
         chat.add_message(result.message, "assistant")
         self._history.append({"role": "assistant", "content": result.message})
 
