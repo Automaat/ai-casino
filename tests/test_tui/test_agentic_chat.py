@@ -17,11 +17,12 @@ class TestToolRegistrySetup:
             registry = app._tool_registry
 
             assert isinstance(registry, ToolRegistry)
-            assert len(registry) == 4
+            assert len(registry) == 5
             assert "web_search" in registry.tool_names
             assert "get_market_data" in registry.tool_names
             assert "get_news" in registry.tool_names
             assert "analyze_stock" in registry.tool_names
+            assert "screen_stocks" in registry.tool_names
 
     def test_registry_has_correct_tool_types(self):
         """Test that registry contains correct tool instances."""
@@ -88,7 +89,7 @@ class TestToolDefinitions:
 
             definitions = app._tool_registry.get_definitions()
 
-            assert len(definitions) == 4
+            assert len(definitions) == 5
             for definition in definitions:
                 assert "type" in definition
                 assert definition["type"] == "function"

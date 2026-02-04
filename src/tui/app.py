@@ -12,7 +12,14 @@ from textual.events import Click
 from textual.worker import Worker, get_current_worker
 
 from src.models.llm import LLMClient
-from src.tools import AnalyzeStockTool, GetMarketDataTool, GetNewsTool, ToolRegistry, WebSearchTool
+from src.tools import (
+    AnalyzeStockTool,
+    GetMarketDataTool,
+    GetNewsTool,
+    ScreenStocksTool,
+    ToolRegistry,
+    WebSearchTool,
+)
 from src.tui.commands import CommandHandler
 from src.tui.events import AnalysisComplete, AnalysisProgress
 from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
@@ -30,6 +37,7 @@ You have access to the following tools to help users:
 - get_news: Fetch recent news articles for a company
 - web_search: Search the web for information
 - analyze_stock: Run comprehensive trading analysis (EXPENSIVE - requires confirmation)
+- screen_stocks: Screen stocks for investment opportunities (EXPENSIVE - requires confirmation)
 
 Use tools when appropriate to answer user questions. Be concise but informative.
 Use markdown formatting for readability."""
@@ -71,6 +79,7 @@ class TradingChatApp(App):
         registry.register(GetMarketDataTool())
         registry.register(GetNewsTool())
         registry.register(AnalyzeStockTool())
+        registry.register(ScreenStocksTool())
         return registry
 
     def _get_model_name(self) -> str:
@@ -312,13 +321,17 @@ class TradingChatApp(App):
             return self._tool_registry.execute(name, args)
 
         try:
-            response = await self._llm.acomplete_with_tools(
-                prompt=text,
-                tools=self._tool_registry.get_definitions(),
-                tool_executor=tool_executor,
-                system=AGENTIC_SYSTEM_PROMPT,
-                temperature=0.7,
-                on_tool_call=on_tool_call,
+            import asyncio
+
+            response = await asyncio.to_thread(
+                self._llm.complete_with_tools,
+                text,
+                self._tool_registry.get_definitions(),
+                tool_executor,
+                AGENTIC_SYSTEM_PROMPT,
+                0.7,
+                5,
+                on_tool_call,
             )
 
             chat.add_assistant_message(response)
