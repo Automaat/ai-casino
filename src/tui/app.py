@@ -7,6 +7,7 @@ from pathlib import Path
 from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.events import Click
 
 from src.models.llm import LLMClient
 from src.tui.commands import CommandHandler
@@ -186,3 +187,7 @@ Be concise but informative. Use markdown formatting for readability."""
     def action_toggle_theme(self) -> None:
         """Toggle between Nord dark and light themes."""
         self.theme = "nord-light" if self.theme == "nord" else "nord"
+
+    def on_click(self, _event: Click) -> None:
+        """Keep focus on input after any click."""
+        self.query_one(AutocompleteInput).focus()
