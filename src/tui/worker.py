@@ -181,8 +181,8 @@ def main():
         # Python 3.14 fix: Use anyio BlockingPortal for async in worker threads
         # asyncio.run() causes anyio task state errors (current_task() returns None)
         # Solution: https://anyio.readthedocs.io/en/latest/threads.html
-        import anyio
-        with anyio.start_blocking_portal(backend="asyncio") as portal:
+        from anyio.from_thread import start_blocking_portal
+        with start_blocking_portal(backend="asyncio") as portal:
             result = portal.call(workflow.analyze, symbol, period_days)
 
         update_status("complete", "Analysis complete")
@@ -378,8 +378,8 @@ def main():
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
         # Python 3.14 fix: Use anyio BlockingPortal for async in worker threads
-        import anyio
-        with anyio.start_blocking_portal(backend="asyncio") as portal:
+        from anyio.from_thread import start_blocking_portal
+        with start_blocking_portal(backend="asyncio") as portal:
             analysis = portal.call(analyzer.analyze, output)
 
         formatted = format_screening_output(output, analysis)
