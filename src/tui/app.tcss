@@ -249,3 +249,14 @@ StatusBar {
     color: $text-disabled;
     padding: 0 1;
 }
+
+/* Quit confirmation bar */
+#quit-bar {
+    dock: bottom;
+    width: 100%;
+    height: 1;
+    background: $warning;
+    color: $background;
+    text-align: center;
+    text-style: bold;
+}
