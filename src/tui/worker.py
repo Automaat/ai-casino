@@ -178,14 +178,12 @@ def main():
             return await original_make_decision(state)
         workflow._make_decision = patched_make_decision
 
-        # Python 3.14 fix: Create dedicated event loop for worker thread
-        # to avoid anyio task state tracking issues with asyncio.run()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(workflow.analyze(symbol, period_days=period_days))
-        finally:
-            loop.close()
+        # Python 3.14 fix: Patch event loop for anyio compatibility
+        # anyio has issues with task state tracking in worker threads
+        import nest_asyncio
+        nest_asyncio.apply()
+
+        result = asyncio.run(workflow.analyze(symbol, period_days=period_days))
 
         update_status("complete", "Analysis complete")
 
@@ -379,13 +377,11 @@ def main():
         llm = LLMClient()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
-        # Python 3.14 fix: Create dedicated event loop for worker thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            analysis = loop.run_until_complete(analyzer.analyze(output))
-        finally:
-            loop.close()
+        # Python 3.14 fix: Patch event loop for anyio compatibility
+        import nest_asyncio
+        nest_asyncio.apply()
+
+        analysis = asyncio.run(analyzer.analyze(output))
 
         formatted = format_screening_output(output, analysis)
 
