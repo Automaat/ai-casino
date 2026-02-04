@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from loguru import logger
 
@@ -14,6 +14,8 @@ from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
 
+ProgressCallback = Callable[[str, str], None]
+
 
 @dataclass
 class CommandResult:
@@ -22,6 +24,7 @@ class CommandResult:
     success: bool
     message: str
     data: dict | None = None
+    workflow_result: object | None = field(default=None, repr=False)
 
 
 class CommandHandler:
@@ -85,11 +88,12 @@ class CommandHandler:
         args = parts[1:] if len(parts) > 1 else []
         return cmd, args
 
-    async def execute(self, text: str) -> CommandResult:
+    async def execute(self, text: str, progress_callback: ProgressCallback | None = None) -> CommandResult:
         """Execute a slash command.
 
         Args:
             text: Command text
+            progress_callback: Optional callback for progress updates (step_id, status)
 
         Returns:
             CommandResult with execution result
@@ -103,6 +107,8 @@ class CommandHandler:
             )
 
         try:
+            if cmd == "analyze":
+                return await self._cmd_analyze(args, progress_callback)
             return await self._commands[cmd](args)
         except Exception as e:
             logger.exception(f"Command /{cmd} failed")
@@ -125,7 +131,9 @@ class CommandHandler:
 Type freely to chat about markets or ask questions."""
         return CommandResult(success=True, message=help_text)
 
-    async def _cmd_analyze(self, args: list[str]) -> CommandResult:
+    async def _cmd_analyze(
+        self, args: list[str], progress_callback: ProgressCallback | None = None
+    ) -> CommandResult:
         """Run full trading analysis."""
         if not args:
             return CommandResult(success=False, message="Usage: /analyze SYMBOL")
@@ -133,8 +141,15 @@ Type freely to chat about markets or ask questions."""
         symbol = args[0].upper()
         workflow = self._init_workflow()
 
+        if progress_callback:
+            progress_callback("fetch_data", "active")
         result = await workflow.analyze(symbol, period_days=90)
-        return self._format_analysis_result(result)
+        if progress_callback:
+            progress_callback("decision", "complete")
+
+        cmd_result = self._format_analysis_result(result)
+        cmd_result.workflow_result = result
+        return cmd_result
 
     async def _cmd_technical(self, args: list[str]) -> CommandResult:
         """Run technical analysis only."""
@@ -176,7 +191,7 @@ Type freely to chat about markets or ask questions."""
         """Format full analysis result."""
         signal = result.decision.action.value
         confidence = result.decision.confidence
-        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi else "N/A"
+        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi is not None else "N/A"
 
         msg = f"""## Analysis for {result.symbol}
 
@@ -208,8 +223,8 @@ Type freely to chat about markets or ask questions."""
 
     def _format_technical(self, result: TradingWorkflowResult) -> str:
         """Format technical analysis."""
-        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi else "N/A"
-        macd_str = f"{result.technical.macd_hist:.4f}" if result.technical.macd_hist else "N/A"
+        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi is not None else "N/A"
+        macd_str = f"{result.technical.macd_hist:.4f}" if result.technical.macd_hist is not None else "N/A"
         return f"""## Technical Analysis for {result.symbol}
 
 - **Signal:** {result.technical.signal.value}

@@ -1,0 +1,210 @@
+/* AI Casino TUI Theme */
+
+/* Screen base - dark slate background */
+Screen {
+    background: #1E2530;
+    color: #C5CDD9;
+}
+
+/* Remove default header styling */
+Header {
+    display: none;
+}
+
+/* Remove footer */
+Footer {
+    display: none;
+}
+
+/* Main chat container - NO borders, clean look */
+#chat-container {
+    height: 1fr;
+    background: #1E2530;
+    padding: 0 1;
+    border: none;
+}
+
+ChatView {
+    height: 1fr;
+    background: #1E2530;
+    padding: 0;
+    border: none;
+}
+
+/* Welcome/Logo area */
+.logo {
+    color: #5DADE2;
+    margin-bottom: 1;
+}
+
+.welcome-text {
+    color: #8899A6;
+    margin-bottom: 0;
+}
+
+.model-info {
+    color: #8899A6;
+}
+
+.model-name {
+    color: #5DADE2;
+}
+
+/* User message - highlighted with prompt */
+UserMessage {
+    background: transparent;
+    padding: 0;
+    margin: 1 0 0 0;
+    border: none;
+}
+
+.user-prompt {
+    color: #5DADE2;
+}
+
+.user-input {
+    background: #2D3848;
+    padding: 0 1;
+}
+
+/* Assistant message - clean, no background */
+AssistantMessage {
+    background: transparent;
+    padding: 0;
+    margin: 1 0;
+    border: none;
+}
+
+AssistantMessage.streaming {
+    color: #8899A6;
+}
+
+/* Tool call indicator - cyan with bullet */
+ToolCallWidget {
+    color: #5DADE2;
+    padding: 0;
+    margin: 1 0 0 0;
+}
+
+.tool-name {
+    color: #5DADE2;
+}
+
+.tool-args {
+    color: #8899A6;
+}
+
+.tool-timing {
+    color: #5DADE2;
+}
+
+/* Response text */
+.response-text {
+    color: #C5CDD9;
+    margin: 1 0;
+}
+
+/* Progress panel - minimal */
+ProgressPanel {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 1 0;
+}
+
+ProgressPanel LoadingIndicator {
+    color: #5DADE2;
+    height: 1;
+}
+
+.progress-header {
+    color: #5DADE2;
+}
+
+/* Task steps */
+TaskStep {
+    padding: 0;
+    height: 1;
+}
+
+TaskStep.pending {
+    color: #5A6778;
+}
+
+TaskStep.active {
+    color: #5DADE2;
+}
+
+TaskStep.complete {
+    color: #5DADE2;
+}
+
+/* Result box - minimal table style */
+ResultBox {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 1 0;
+}
+
+.result-header {
+    color: #C5CDD9;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.result-table {
+    margin: 1 0;
+}
+
+.result-row {
+    height: 1;
+}
+
+.result-label {
+    color: #8899A6;
+    width: 15;
+}
+
+.result-value {
+    color: #C5CDD9;
+}
+
+/* Signal colors */
+.signal-buy {
+    color: #27AE60;
+}
+
+.signal-sell {
+    color: #E74C3C;
+}
+
+.signal-hold {
+    color: #F39C12;
+}
+
+/* Input at bottom */
+#input-box {
+    dock: bottom;
+    margin: 1 1;
+    background: #1E2530;
+    border: solid #3D4F5F;
+    color: #C5CDD9;
+}
+
+#input-box:focus {
+    border: solid #5DADE2;
+}
+
+#input-box.-placeholder {
+    color: #5A6778;
+}
+
+/* Status bar - minimal */
+StatusBar {
+    dock: bottom;
+    height: 1;
+    background: transparent;
+    color: #5A6778;
+    padding: 0 1;
+}

@@ -8,20 +8,21 @@ from textual.widgets import Static
 
 
 class StatusBar(Static):
-    """Status bar showing market status and time."""
+    """Status bar showing market status, time, and working indicator."""
 
     DEFAULT_CSS = """
     StatusBar {
         dock: bottom;
         height: 1;
-        background: $primary;
-        color: $text;
+        background: #1E293B;
+        color: #F1F5F9;
         padding: 0 1;
     }
     """
 
     market_status: reactive[str] = reactive("Checking...")
     current_time: reactive[str] = reactive("")
+    working_status: reactive[str] = reactive("")
 
     def __init__(self) -> None:
         """Initialize status bar."""
@@ -43,14 +44,40 @@ class StatusBar(Static):
         minute = now.minute
 
         if weekday >= 5:
-            self.market_status = "CLOSED (Weekend)"
+            self.market_status = "CLOSED"
         elif hour < 9 or (hour == 9 and minute < 30):
-            self.market_status = "PRE-MARKET"
+            self.market_status = "PRE-MKT"
         elif hour >= 16:
-            self.market_status = "AFTER-HOURS"
+            self.market_status = "AFTER-HRS"
         else:
             self.market_status = "OPEN"
 
+    def set_working(self, status: str) -> None:
+        """Set working indicator.
+
+        Args:
+            status: Working status text (empty to clear)
+        """
+        self.working_status = status
+
+    def clear_working(self) -> None:
+        """Clear working indicator."""
+        self.working_status = ""
+
     def render(self) -> str:
         """Render the status bar."""
-        return f"AI Casino | Market: {self.market_status} | {self.current_time} | /help for commands"
+        parts = ["AI Casino"]
+
+        market_display = f"Market: {self.market_status}"
+        parts.append(market_display)
+
+        parts.append(self.current_time)
+
+        if self.working_status:
+            parts.append(f"[{self.working_status}]")
+
+        return " | ".join(parts)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "StatusBar()"

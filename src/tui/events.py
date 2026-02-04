@@ -20,6 +20,9 @@ class EventType(StrEnum):
     ANALYSIS_ERROR = "analysis_error"
     TOKEN = "token"
     STREAM_END = "stream_end"
+    TASK_START = "task_start"
+    TASK_STEP = "task_step"
+    TASK_COMPLETE = "task_complete"
 
 
 class TUIEvent(BaseModel):
@@ -44,3 +47,19 @@ class AnalysisEvent(TUIEvent):
     signal: str | None = None
     confidence: float | None = None
     error: str | None = None
+
+
+class TaskEvent(TUIEvent):
+    """Task progress event."""
+
+    task_id: str = ""
+    step_id: str = ""
+    step_label: str = ""
+    status: str = "pending"
+
+
+class StreamingEvent(TUIEvent):
+    """Token streaming event."""
+
+    token: str = ""
+    is_complete: bool = False
