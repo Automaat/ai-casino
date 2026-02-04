@@ -1,12 +1,25 @@
 """Worker process for running analysis outside Textual's fd context."""
 
 import asyncio
+import contextlib
 import json
 import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+
+
+def _raise_process_error(returncode: int, stderr_path: Path) -> None:
+    """Raise RuntimeError with stderr content if available."""
+    stderr_output = ""
+    with contextlib.suppress(OSError):
+        stderr_output = stderr_path.read_text().strip()
+    msg = f"Analysis process failed with code {returncode}"
+    if stderr_output:
+        msg = f"{msg}\nstderr: {stderr_output}"
+    raise RuntimeError(msg)
 
 
 def _validate_symbol(symbol: str) -> str:
@@ -107,7 +120,7 @@ if __name__ == "__main__":
 async def run_analysis_in_process(
     symbol: str,
     period_days: int = 90,
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[str, str], None] | None = None,
 ) -> dict:
     """Run analysis in a separate process to avoid Textual fd conflicts.
 
@@ -132,6 +145,9 @@ async def run_analysis_in_process(
     with tempfile.NamedTemporaryFile(mode="w", suffix=".status", delete=False) as status_file:
         status_path = Path(status_file.name)
 
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".stderr", delete=False) as stderr_file:
+        stderr_path = Path(stderr_file.name)
+
     try:
         validated_symbol = _validate_symbol(symbol)
         cmd = [
@@ -142,14 +158,15 @@ async def run_analysis_in_process(
             str(output_path),
             str(status_path),
         ]
-        process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            cwd=Path(__file__).parent.parent.parent,
-        )
+        with stderr_path.open("w") as stderr_fh:
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_fh,
+                close_fds=True,
+                cwd=Path(__file__).parent.parent.parent,
+            )
 
         last_status = ""
         step_map = {
@@ -160,23 +177,27 @@ async def run_analysis_in_process(
             "complete": "decision",
         }
 
-        while process.poll() is None:
-            await asyncio.sleep(0.3)
+        try:
+            while process.poll() is None:
+                await asyncio.sleep(0.3)
 
-            # Check for status updates
-            if progress_callback and status_path.exists():
-                try:
-                    current_status = status_path.read_text().strip()
-                    if current_status and current_status != last_status:
-                        step_id = step_map.get(current_status, current_status)
-                        progress_callback(step_id, "active")
-                        last_status = current_status
-                except OSError:
-                    pass
+                # Check for status updates
+                if progress_callback and status_path.exists():
+                    try:
+                        current_status = status_path.read_text().strip()
+                        if current_status and current_status != last_status:
+                            step_id = step_map.get(current_status, current_status)
+                            progress_callback(step_id, "active")
+                            last_status = current_status
+                    except OSError:
+                        pass
+        except asyncio.CancelledError:
+            process.terminate()
+            process.wait(timeout=5)
+            raise
 
         if process.returncode != 0:
-            msg = f"Analysis process failed with code {process.returncode}"
-            raise RuntimeError(msg)
+            _raise_process_error(process.returncode, stderr_path)
 
         with output_path.open() as f:
             result = json.load(f)
@@ -190,3 +211,4 @@ async def run_analysis_in_process(
         script_path.unlink(missing_ok=True)
         output_path.unlink(missing_ok=True)
         status_path.unlink(missing_ok=True)
+        stderr_path.unlink(missing_ok=True)

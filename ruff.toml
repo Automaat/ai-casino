@@ -100,6 +100,8 @@ ignore = [
     "PLR2004", # magic values OK for time calculations
     "RUF012", # textual uses class attributes for BINDINGS
     "S105",   # false positive on event type names
+]
+"src/tui/worker.py" = [
     "S603",   # subprocess with validated input for worker isolation
 ]
 "src/tui/widgets/*.py" = [
