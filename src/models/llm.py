@@ -5,6 +5,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Callable
 
+import litellm
 import sniffio
 from dotenv import load_dotenv
 from litellm import acompletion, completion
@@ -12,6 +13,10 @@ from loguru import logger
 from pydantic import BaseModel
 
 load_dotenv()
+
+# Disable aiohttp transport to avoid Python 3.14 asyncio.Timeout issues
+# Use httpx instead which is compatible with worker thread context
+litellm.disable_aiohttp_transport = True
 
 
 def _set_asyncio_context() -> None:
@@ -171,6 +176,10 @@ class LLMClient:
                 return content
             except Exception as e:
                 logger.error(f"LLM async completion failed: {e}")
+                logger.error(f"Exception type: {type(e).__name__}")
+                logger.error(f"Exception details: {e!r}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
