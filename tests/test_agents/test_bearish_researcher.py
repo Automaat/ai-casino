@@ -488,3 +488,43 @@ class TestBearishResearcher:
         assert "weaknesses=3" in repr_str
         assert "downside=25.0" in repr_str
         assert "confidence=0.80" in repr_str
+
+    def test_build_prompt_fundamental_none(
+        self,
+        bearish_researcher,
+        sample_technical_analysis,
+        sample_sentiment_analysis,
+        sample_news_analysis,
+    ):
+        """Test prompt contains N/A message when fundamental is None."""
+        prompt = bearish_researcher._build_prompt(
+            "AAPL",
+            sample_technical_analysis,
+            sample_sentiment_analysis,
+            sample_news_analysis,
+            None,
+        )
+
+        assert "N/A (API rate limited)" in prompt
+
+    def test_calculate_confidence_skips_fundamental_when_none(self, bearish_researcher, sample_news_analysis):
+        """Test confidence calculation skips fundamental factors when None."""
+        technical = TechnicalAnalysis(
+            signal=Signal.SELL, rsi=25.0, macd_hist=-0.5, interpretation="Sell", confidence=0.8
+        )
+        sentiment = SentimentAnalysis(
+            overall_sentiment="NEGATIVE",
+            sentiment_score=-0.5,
+            positive_ratio=0.1,
+            negative_ratio=0.6,
+            neutral_ratio=0.3,
+            article_count=5,
+            summary="Negative",
+        )
+
+        confidence = bearish_researcher._calculate_confidence(
+            technical, sentiment, sample_news_analysis, None
+        )
+
+        # Base 0.5 + SELL 0.15 + negative sentiment 0.1 = 0.75 (no fundamental adjustment)
+        assert confidence == pytest.approx(0.75)

@@ -524,3 +524,36 @@ def test_extract_confidence_action_aware_hold(mock_llm_client):
     # HOLD: bull_weight=0.5, bear_weight=0.5
     # base = (0.6 + 0.5 + 0.5) / 3 = 0.533
     assert 0.5 <= confidence <= 0.6
+
+
+def test_build_fundamental_section_when_none(mock_llm_client):
+    """Test _build_fundamental_section returns unavailable message when fundamental is None."""
+    agent = TraderAgent(mock_llm_client)
+
+    section = agent._build_fundamental_section(None)
+
+    assert "Unavailable" in section
+    assert "API rate limit" in section
+
+
+def test_build_fundamental_section_with_data(mock_llm_client):
+    """Test _build_fundamental_section formats data correctly."""
+    agent = TraderAgent(mock_llm_client)
+
+    fundamental = FundamentalAnalysis(
+        valuation="UNDERVALUED",
+        pe_ratio=20.0,
+        eps=5.0,
+        revenue_growth_yoy=0.1,
+        earnings_growth_yoy=0.15,
+        debt_to_equity=1.0,
+        current_ratio=1.5,
+        interpretation="Strong fundamentals",
+        confidence=0.8,
+    )
+
+    section = agent._build_fundamental_section(fundamental)
+
+    assert "UNDERVALUED" in section
+    assert "20.0" in section
+    assert "Strong fundamentals" in section

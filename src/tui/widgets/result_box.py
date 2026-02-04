@@ -58,6 +58,16 @@ class ResultBox(Static):
         color: #8899A6;
         margin-top: 1;
     }
+
+    ResultBox .warning {
+        color: #F39C12;
+        margin-top: 1;
+    }
+
+    ResultBox .warning-header {
+        color: #F39C12;
+        margin-top: 1;
+    }
     """
 
     def __init__(self, result: TradingWorkflowResult) -> None:
@@ -125,7 +135,12 @@ class ResultBox(Static):
                 themes = ", ".join(result.news.key_themes[:3])
                 yield Static(f"  {themes}", classes="table-row")
 
-            yield Static(f"Reasoning: {result.decision.reasoning[:150]}...", classes="reasoning")
+            if result.warnings:
+                yield Static("⚠️ Incomplete Data", classes="warning-header")
+                for warning in result.warnings:
+                    yield Static(f"  • {warning}", classes="warning")
+
+            yield Static(f"Reasoning: {result.decision.reasoning}", classes="reasoning")
 
     def __repr__(self) -> str:
         """Return string representation."""

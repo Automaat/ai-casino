@@ -49,7 +49,7 @@ class BearishResearcher:
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
     ) -> BearishResearchAnalysis:
         """Construct bearish thesis from all analyses.
@@ -59,7 +59,7 @@ class BearishResearcher:
             technical: Technical analysis result
             sentiment: Sentiment analysis result
             news: News analysis result
-            fundamental: Fundamental analysis result
+            fundamental: Fundamental analysis result (None if unavailable due to API rate limit)
             comparative: Comparative analysis result (optional)
 
         Returns:
@@ -99,7 +99,7 @@ class BearishResearcher:
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
     ) -> str:
         """Build LLM prompt from all analyses.
@@ -134,15 +134,22 @@ class BearishResearcher:
         news_str = f"{news_themes}, impact: {news.impact_assessment}"
 
         # Fundamental section
-        pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio is not None else "N/A"
-        eps_str = f"{fundamental.eps:.2f}" if fundamental.eps is not None else "N/A"
-        growth_str = (
-            f"{fundamental.revenue_growth_yoy:.1%}" if fundamental.revenue_growth_yoy is not None else "N/A"
-        )
-        debt_str = f"{fundamental.debt_to_equity:.2f}" if fundamental.debt_to_equity is not None else "N/A"
-        fund_str = (
-            f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str}, D/E {debt_str})"
-        )
+        if fundamental:
+            pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio is not None else "N/A"
+            eps_str = f"{fundamental.eps:.2f}" if fundamental.eps is not None else "N/A"
+            growth_str = (
+                f"{fundamental.revenue_growth_yoy:.1%}"
+                if fundamental.revenue_growth_yoy is not None
+                else "N/A"
+            )
+            debt_str = (
+                f"{fundamental.debt_to_equity:.2f}" if fundamental.debt_to_equity is not None else "N/A"
+            )
+            fund_str = (
+                f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str}, D/E {debt_str})"
+            )
+        else:
+            fund_str = "N/A (API rate limited)"
 
         # Comparative section
         comp_str = "N/A"
@@ -248,7 +255,7 @@ DOWNSIDE: [percentage or N/A]"""
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
         _news: NewsAnalysis,
-        fundamental: FundamentalAnalysis,
+        fundamental: FundamentalAnalysis | None,
     ) -> float:
         """Calculate confidence in bear case.
 
@@ -275,15 +282,16 @@ DOWNSIDE: [percentage or N/A]"""
         elif sentiment.sentiment_score > 0.3:
             confidence -= 0.15
 
-        # Fundamental boost/penalty (INVERTED from bullish)
-        if fundamental.valuation == "OVERVALUED":
-            confidence += 0.1
-        elif fundamental.valuation == "UNDERVALUED":
-            confidence -= 0.1
+        # Fundamental boost/penalty (INVERTED from bullish, skip if unavailable)
+        if fundamental:
+            if fundamental.valuation == "OVERVALUED":
+                confidence += 0.1
+            elif fundamental.valuation == "UNDERVALUED":
+                confidence -= 0.1
 
-        # High debt boost (bearish signal)
-        if fundamental.debt_to_equity and fundamental.debt_to_equity > 2.0:
-            confidence += 0.05
+            # High debt boost (bearish signal)
+            if fundamental.debt_to_equity and fundamental.debt_to_equity > 2.0:
+                confidence += 0.05
 
         # Clamp to [0.0, 1.0]
         return max(0.0, min(1.0, confidence))

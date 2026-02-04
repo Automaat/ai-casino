@@ -408,3 +408,44 @@ async def test_account_info_passed_to_trader(
 
     assert result_state["final_decision"].owns_position is True
     assert result_state["final_decision"].position_qty == 100.0
+
+
+@pytest.mark.asyncio
+async def test_workflow_continues_when_fundamental_rate_limited(mock_workflow_dependencies):
+    """Test workflow continues with fundamental=None and captures warning when rate limited."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    # Make fundamental fetcher raise rate limit error
+    fundamental_fetcher.fetch_overview.side_effect = Exception("API rate limit: 5 api calls per minute")
+
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
+
+    result = await workflow.analyze("AAPL", period_days=90)
+
+    assert result.fundamental is None
+    assert isinstance(result.decision, TradingDecision)
+    assert isinstance(result.technical, TechnicalAnalysis)
+    assert isinstance(result.sentiment, SentimentAnalysis)
+    assert isinstance(result.news, NewsAnalysis)
+    # Verify warning captured in result
+    assert result.has_incomplete_data
+    assert len(result.warnings) >= 1
+    assert any("rate limit" in w.lower() for w in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_workflow_raises_when_fundamental_fails_non_rate_limit(mock_workflow_dependencies):
+    """Test workflow re-raises non-rate-limit errors from fundamental analysis."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    # Make fundamental fetcher raise non-rate-limit error
+    fundamental_fetcher.fetch_overview.side_effect = Exception("Invalid API key")
+
+    workflow = TradingWorkflow(
+        llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
+    )
+
+    with pytest.raises(Exception, match="Invalid API key"):
+        await workflow.analyze("AAPL", period_days=90)
