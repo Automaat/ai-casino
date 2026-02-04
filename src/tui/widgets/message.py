@@ -132,7 +132,7 @@ class WelcomeWidget(Static):
         background: transparent;
         color: #5DADE2;
         padding: 0;
-        margin: 0 0 1 0;
+        margin: 2 0 1 0;
         height: auto;
     }
     """

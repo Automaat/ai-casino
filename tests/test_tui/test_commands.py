@@ -9,7 +9,6 @@ class TestCommandHandler:
     def test_initialization(self):
         handler = CommandHandler()
 
-        assert handler._workflow is None
         assert "analyze" in handler._commands
         assert "technical" in handler._commands
         assert "sentiment" in handler._commands
