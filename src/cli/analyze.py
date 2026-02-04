@@ -203,14 +203,35 @@ def _print_risk(result: TradingWorkflowResult) -> None:
         )
 
 
+def _print_data_warnings(result: TradingWorkflowResult) -> None:
+    """Print warnings about incomplete data."""
+    if not result.warnings:
+        return
+
+    warnings_text = "\n".join(f"• {w}" for w in result.warnings)
+    console.print(
+        Panel(
+            f"[yellow]{warnings_text}[/yellow]\n\n"
+            "[dim]Decision based on available data only. Results may be less reliable.[/dim]",
+            title="[bold yellow]⚠️ Incomplete Data[/bold yellow]",
+            border_style="yellow",
+        )
+    )
+
+
 def _print_decision(result: TradingWorkflowResult) -> None:
     """Print final trading decision."""
     decision_color = {"BUY": "green", "SELL": "red", "HOLD": "yellow", "WAIT": "yellow"}
     display_action = result.decision.display_action
     action_color = decision_color[display_action]
 
+    incomplete_notice = ""
+    if result.has_incomplete_data:
+        incomplete_notice = "[yellow](based on incomplete data)[/yellow]\n\n"
+
     decision_panel = Panel(
         f"[bold {action_color}]{display_action}[/bold {action_color}]\n\n"
+        f"{incomplete_notice}"
         f"Confidence: {result.decision.confidence:.2f}\n"
         f"Risk Level: {result.decision.risk_level}\n\n"
         f"{result.decision.reasoning}",
@@ -259,6 +280,7 @@ def _print_result(result: TradingWorkflowResult, use_meta_agent: bool = True) ->
     _print_sentiment(result)
     _print_news(result)
     _print_fundamental(result)
+    _print_data_warnings(result)
     _print_risk(result)
     _print_decision(result)
     _print_order(result)

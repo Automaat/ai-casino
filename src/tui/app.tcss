@@ -29,6 +29,7 @@ ChatView {
     background: $background;
     padding: 0;
     border: none;
+    scrollbar-size: 0 0;
 }
 
 /* Welcome/Logo area */

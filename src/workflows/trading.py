@@ -55,6 +55,7 @@ class TradingState(TypedDict):
     order_status: OrderStatus | None
     regime_analysis: RegimeAnalysis | None
     strategy_selection: StrategySelection | None
+    warnings: list[str]
 
 
 class TradingWorkflowResult(BaseModel):
@@ -74,11 +75,17 @@ class TradingWorkflowResult(BaseModel):
     order: OrderStatus | None = None
     regime: RegimeAnalysis | None = None
     strategy_used: str | None = None
+    warnings: list[str] = []
 
     class Config:
         """Pydantic config."""
 
         arbitrary_types_allowed = True
+
+    @property
+    def has_incomplete_data(self) -> bool:
+        """Check if analysis was performed with incomplete data."""
+        return len(self.warnings) > 0
 
 
 class TradingWorkflow:
@@ -233,6 +240,7 @@ class TradingWorkflow:
             order=state.get("order_status"),
             regime=state.get("regime_analysis"),
             strategy_used=strategy_name,
+            warnings=state.get("warnings", []),
         )
 
         if self.metrics_tracker:
@@ -294,7 +302,9 @@ class TradingWorkflow:
         fundamental: FundamentalAnalysis | None = None
         if isinstance(fundamental_result, Exception):
             if self._is_rate_limit_error(fundamental_result):
-                logger.warning(f"Fundamental analysis unavailable (rate limited): {fundamental_result}")
+                warning = f"Fundamental analysis unavailable: {fundamental_result}"
+                logger.warning(warning)
+                state["warnings"].append(warning)
             else:
                 raise fundamental_result
         else:
@@ -303,12 +313,16 @@ class TradingWorkflow:
         # Comparative is optional - log warning and continue if it failed
         comparative = comparative_result if not isinstance(comparative_result, Exception) else None
         if isinstance(comparative_result, Exception):
-            logger.warning(f"Comparative analysis failed (continuing without): {comparative_result}")
+            warning = f"Comparative analysis failed: {comparative_result}"
+            logger.warning(warning)
+            state["warnings"].append(warning)
 
         # Web research is optional - log warning and continue if it failed
         web_research = web_research_result if not isinstance(web_research_result, Exception) else None
         if isinstance(web_research_result, Exception):
-            logger.warning(f"Web research failed (continuing without): {web_research_result}")
+            warning = f"Web research failed: {web_research_result}"
+            logger.warning(warning)
+            state["warnings"].append(warning)
 
         state["technical_analysis"] = technical
         state["sentiment_analysis"] = sentiment
@@ -376,6 +390,7 @@ class TradingWorkflow:
             order_status=None,
             regime_analysis=None,
             strategy_selection=None,
+            warnings=[],
         )
 
     def _fetch_account_info(self, state: TradingState) -> TradingState:

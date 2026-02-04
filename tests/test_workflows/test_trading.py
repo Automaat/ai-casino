@@ -412,7 +412,7 @@ async def test_account_info_passed_to_trader(
 
 @pytest.mark.asyncio
 async def test_workflow_continues_when_fundamental_rate_limited(mock_workflow_dependencies):
-    """Test workflow continues with fundamental=None when rate limited."""
+    """Test workflow continues with fundamental=None and captures warning when rate limited."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     # Make fundamental fetcher raise rate limit error
@@ -429,6 +429,10 @@ async def test_workflow_continues_when_fundamental_rate_limited(mock_workflow_de
     assert isinstance(result.technical, TechnicalAnalysis)
     assert isinstance(result.sentiment, SentimentAnalysis)
     assert isinstance(result.news, NewsAnalysis)
+    # Verify warning captured in result
+    assert result.has_incomplete_data
+    assert len(result.warnings) >= 1
+    assert any("rate limit" in w.lower() for w in result.warnings)
 
 
 @pytest.mark.asyncio
