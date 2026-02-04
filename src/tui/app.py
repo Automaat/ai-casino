@@ -7,11 +7,11 @@ from pathlib import Path
 from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Input
 
 from src.models.llm import LLMClient
 from src.tui.commands import CommandHandler
 from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
+from src.tui.widgets.autocomplete_input import AutocompleteInput
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
 from src.workflows.trading import TradingWorkflowResult
@@ -70,7 +70,11 @@ class TradingChatApp(App):
     def compose(self) -> ComposeResult:
         """Compose the app layout."""
         yield ChatView(id="chat-container")
-        yield Input(placeholder="> Type a message or /help...", id="input-box")
+        yield AutocompleteInput(
+            placeholder="> Type a message or /help...",
+            commands=self._command_handler.command_names,
+            widget_id="input-box",
+        )
         yield StatusBar()
 
     def on_mount(self) -> None:
@@ -79,15 +83,16 @@ class TradingChatApp(App):
         self.theme = "nord" if detect_dark_mode() else "nord-light"
         chat = self.query_one(ChatView)
         chat.show_welcome(self._model_name)
-        self.query_one(Input).focus()
+        self.query_one(AutocompleteInput).focus()
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
+    async def on_autocomplete_input_submitted(self, event: AutocompleteInput.Submitted) -> None:
         """Handle input submission."""
         text = event.value.strip()
         if not text:
             return
 
-        event.input.value = ""
+        input_widget = self.query_one(AutocompleteInput)
+        input_widget.value = ""
 
         chat = self.query_one(ChatView)
         chat.add_user_message(text)
@@ -176,7 +181,7 @@ Be concise but informative. Use markdown formatting for readability."""
 
     def action_focus_input(self) -> None:
         """Focus the input box."""
-        self.query_one(Input).focus()
+        self.query_one(AutocompleteInput).focus()
 
     def action_toggle_theme(self) -> None:
         """Toggle between Nord dark and light themes."""

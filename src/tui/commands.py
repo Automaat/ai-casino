@@ -36,6 +36,11 @@ class CommandHandler:
         }
         logger.info("CommandHandler initialized")
 
+    @property
+    def command_names(self) -> list[str]:
+        """Get list of available command names."""
+        return list(self._commands.keys())
+
     def is_command(self, text: str) -> bool:
         """Check if text is a slash command.
 
