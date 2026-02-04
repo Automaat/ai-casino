@@ -13,12 +13,17 @@ from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
 from src.agents.web_researcher import ResearchCategory, WebResearchAnalysis, WebResearchResult
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
-from src.data.comparative import ComparativeData, PerformanceData, StockInfo
+from src.data.comparative import ComparativeData, PerformanceData
+from src.data.comparative import StockInfo as ComparativeStockInfo
 from src.data.news import NewsArticle
+from src.data.universe import StockInfo as UniverseStockInfo
+from src.data.universe import StockUniverse
 from src.data.websearch import SearchType, WebSearchResponse
 from src.data.websearch import WebSearchResult as SearchResult
 from src.metrics.tracker import TradeRecord
 from src.models.sentiment import SentimentScore
+from src.screening.analyzer import ScreeningAnalysis
+from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
 from src.strategies.momentum import Signal
 
 
@@ -354,7 +359,7 @@ def mock_trade_repository():
 def sample_comparative_data():
     """Sample comparative data for testing."""
     return ComparativeData(
-        stock_info=StockInfo(
+        stock_info=ComparativeStockInfo(
             symbol="AAPL",
             sector="Technology",
             industry="Consumer Electronics",
@@ -543,3 +548,74 @@ def mock_web_researcher(sample_web_research_analysis):
     mock = MagicMock()
     mock.research = AsyncMock(return_value=sample_web_research_analysis)
     return mock
+
+
+@pytest.fixture
+def sample_stock_universe():
+    """Sample stock universe for testing."""
+    return StockUniverse(
+        name="TEST",
+        stocks=[
+            UniverseStockInfo(symbol="AAPL", name="Apple Inc.", sector="Technology", industry="Hardware"),
+            UniverseStockInfo(symbol="MSFT", name="Microsoft Corp", sector="Technology", industry="Software"),
+            UniverseStockInfo(symbol="JPM", name="JPMorgan Chase", sector="Financials", industry="Banks"),
+        ],
+        fetched_at=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def mock_universe_fetcher(sample_stock_universe):
+    """Mock StockUniverseFetcher for testing."""
+    mock = MagicMock()
+    mock.fetch_sp500.return_value = sample_stock_universe
+    mock.fetch_nasdaq100.return_value = sample_stock_universe
+    mock.fetch_combined.return_value = sample_stock_universe
+    return mock
+
+
+@pytest.fixture
+def sample_screening_output():
+    """Sample screening output for testing."""
+    return ScreeningOutput(
+        criteria=ScreeningCriteria.MOMENTUM,
+        universe="SP500",
+        results=[
+            ScreeningResult(
+                symbol="AAPL",
+                name="Apple Inc.",
+                sector="Technology",
+                score=0.85,
+                signal=Signal.BUY,
+                metrics={"rsi": 28.5, "macd_hist": 0.15},
+                reason="RSI oversold, MACD bullish",
+            ),
+            ScreeningResult(
+                symbol="MSFT",
+                name="Microsoft Corp",
+                sector="Technology",
+                score=0.78,
+                signal=Signal.BUY,
+                metrics={"rsi": 32.1, "macd_hist": 0.12},
+                reason="RSI oversold, MACD bullish",
+            ),
+        ],
+        total_screened=500,
+        errors=["FAILED1"],
+        screened_at=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def sample_screening_analysis():
+    """Sample screening analysis for testing."""
+    return ScreeningAnalysis(
+        summary="Found 2 momentum stocks with strong oversold signals.",
+        top_picks=[
+            "AAPL - Strongest RSI oversold signal",
+            "MSFT - Solid momentum setup",
+        ],
+        sector_insights="Heavy concentration in Technology sector.",
+        risk_factors="Correlation risk due to similar technical patterns.",
+        next_steps="Research fundamental catalysts before entry.",
+    )

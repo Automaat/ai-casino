@@ -2,10 +2,26 @@
 
 from loguru import logger
 from textual.reactive import reactive
+from textual.selection import Selection
 from textual.widgets import Static
 
 
-class UserMessage(Static):
+class SelectionSafeMixin:
+    """Mixin to handle Textual selection bug with coordinate mismatch."""
+
+    def get_selection(self, selection: Selection) -> tuple[str, str] | None:
+        """Override to catch IndexError from Textual selection bug.
+
+        Textual 7.5.0 has a bug where selection coordinates can be screen-relative
+        but text extraction expects widget-relative coordinates, causing IndexError.
+        """
+        try:
+            return super().get_selection(selection)  # type: ignore[misc]
+        except IndexError:
+            return None
+
+
+class UserMessage(SelectionSafeMixin, Static):
     """User message with prompt indicator."""
 
     DEFAULT_CSS = """
@@ -23,7 +39,7 @@ class UserMessage(Static):
         super().__init__(f"> {content}")
 
 
-class AssistantMessage(Static):
+class AssistantMessage(SelectionSafeMixin, Static):
     """Assistant message - clean text with bullet."""
 
     DEFAULT_CSS = """
@@ -85,7 +101,7 @@ class AssistantMessage(Static):
         self.is_streaming = False
 
 
-class ToolCallWidget(Static):
+class ToolCallWidget(SelectionSafeMixin, Static):
     """Widget showing tool/agent activity."""
 
     DEFAULT_CSS = """

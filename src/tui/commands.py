@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
+from src.screening.exporter import Watchlist
 from src.workflows.trading import TradingWorkflowResult
 
 ProgressCallback = Callable[[str, str, str], None]
@@ -33,8 +34,13 @@ class CommandHandler:
             "technical": self._cmd_technical,
             "sentiment": self._cmd_sentiment,
             "news": self._cmd_news,
+            "screen": self._cmd_screen,
+            "discover": self._cmd_screen,  # alias
+            "export": self._cmd_export,
+            "watchlist": self._cmd_watchlist,
             "help": self._cmd_help,
         }
+        self._last_screening_output = None  # Store last screening for export
         logger.info("CommandHandler initialized")
 
     @property
@@ -94,6 +100,8 @@ class CommandHandler:
         try:
             if cmd == "analyze":
                 return await self._cmd_analyze(args, progress_callback, is_cancelled)
+            if cmd in ("screen", "discover"):
+                return await self._cmd_screen(args, progress_callback, is_cancelled)
             return await self._commands[cmd](args)
         except Exception as e:
             logger.exception(f"Command /{cmd} failed")
@@ -107,11 +115,25 @@ class CommandHandler:
 - **/technical SYMBOL** - Technical analysis only
 - **/sentiment SYMBOL** - Sentiment analysis only
 - **/news SYMBOL** - News analysis only
+- **/screen [criteria] [universe] [top_n]** - Screen stocks for opportunities
+- **/discover** - Alias for /screen
+- **/export [format] [filename]** - Export last screening results
+- **/watchlist [action]** - Manage watchlists
 - **/help** - Show this help message
 
-**Examples:**
-- `/analyze AAPL` - Full analysis for Apple
-- `/technical TSLA` - Technical analysis for Tesla
+**Screening Examples:**
+- `/screen momentum` - Find momentum stocks in combined universe
+- `/screen value SP500 20` - Find 20 value stocks from S&P 500
+- `/screen breakout NASDAQ100 --save` - Find breakouts and save to watchlist
+
+**Export Examples:**
+- `/export csv` - Export last results as CSV
+- `/export json my_picks` - Export as JSON with custom name
+
+**Watchlist Examples:**
+- `/watchlist` - Show default watchlist
+- `/watchlist list` - List all watchlists
+- `/watchlist show picks` - Show specific watchlist
 
 Type freely to chat about markets or ask questions."""
         return CommandResult(success=True, message=help_text)
@@ -251,6 +273,211 @@ Type freely to chat about markets or ask questions."""
 
 **Recommendation:**
 {result.news.recommendation}"""
+
+    async def _cmd_screen(
+        self,
+        args: list[str],
+        progress_callback: ProgressCallback | None = None,
+        is_cancelled: CancelledCallback | None = None,
+    ) -> CommandResult:
+        """Run stock screening.
+
+        Usage: /screen [criteria] [universe] [top_n] [--save]
+
+        Examples:
+            /screen momentum
+            /screen value SP500 20
+            /screen breakout NASDAQ100 --save
+        """
+        from src.tui.worker import run_screening_in_process
+
+        criteria = "momentum"
+        universe = "COMBINED"
+        top_n = 10
+        save_to_watchlist = False
+
+        for arg in args:
+            if arg == "--save":
+                save_to_watchlist = True
+            elif arg.lower() in ("momentum", "value", "breakout"):
+                criteria = arg.lower()
+            elif arg.upper() in ("SP500", "NASDAQ100", "COMBINED"):
+                universe = arg.upper()
+            elif arg.isdigit():
+                top_n = int(arg)
+
+        result_dict = await run_screening_in_process(
+            criteria=criteria,
+            universe=universe,
+            top_n=top_n,
+            save_to_watchlist=save_to_watchlist,
+            progress_callback=progress_callback,
+            is_cancelled=is_cancelled,
+        )
+
+        if progress_callback:
+            progress_callback("analyzing", "complete", "")
+
+        self._last_screening_output = result_dict.get("screening_output")
+
+        message = result_dict.get("formatted_output", "Screening complete")
+        return CommandResult(
+            success=True,
+            message=message,
+            data={
+                "criteria": criteria,
+                "universe": universe,
+                "count": len(result_dict.get("screening_output", {}).get("results", [])),
+            },
+        )
+
+    async def _cmd_export(self, args: list[str]) -> CommandResult:
+        """Export last screening results.
+
+        Usage: /export [format] [filename]
+
+        Examples:
+            /export csv
+            /export json my_picks
+        """
+        if not self._last_screening_output:
+            return CommandResult(
+                success=False,
+                message="No screening results to export. Run /screen first.",
+            )
+
+        from src.screening.exporter import ScreeningExporter
+        from src.screening.screener import ScreeningOutput
+
+        export_format = "csv"
+        filename = None
+
+        for arg in args:
+            if arg.lower() in ("csv", "json"):
+                export_format = arg.lower()
+            else:
+                filename = arg
+
+        exporter = ScreeningExporter()
+        output = ScreeningOutput.model_validate(self._last_screening_output)
+
+        if export_format == "csv":
+            filepath = exporter.export_to_csv(output, filename)
+        else:
+            filepath = exporter.export_to_json(output, filename)
+
+        return CommandResult(
+            success=True,
+            message=f"Exported {len(output.results)} results to:\n`{filepath}`",
+            data={"filepath": str(filepath), "format": export_format},
+        )
+
+    async def _cmd_watchlist(self, args: list[str]) -> CommandResult:
+        """Manage watchlists.
+
+        Usage:
+            /watchlist              - show default watchlist
+            /watchlist list         - list all watchlists
+            /watchlist show NAME    - show specific watchlist
+            /watchlist remove SYM   - remove symbol from default
+        """
+        from src.screening.exporter import ScreeningExporter
+
+        exporter = ScreeningExporter()
+
+        if not args:
+            return self._handle_watchlist_default(exporter)
+
+        action = args[0].lower()
+        handlers = {
+            "list": lambda: self._handle_watchlist_list(exporter),
+            "show": lambda: self._handle_watchlist_show(exporter, args),
+            "remove": lambda: self._handle_watchlist_remove(exporter, args),
+        }
+
+        handler = handlers.get(action)
+        if handler:
+            return handler()
+
+        return CommandResult(
+            success=False,
+            message="Unknown watchlist action. Use: list, show NAME, remove SYMBOL",
+        )
+
+    def _handle_watchlist_default(self, exporter: object) -> CommandResult:
+        """Handle showing default watchlist."""
+        watchlist = exporter.load_watchlist("default")
+        if not watchlist:
+            return CommandResult(
+                success=True,
+                message="Default watchlist is empty. Use `/screen ... --save` to add stocks.",
+            )
+        return CommandResult(
+            success=True,
+            message=self._format_watchlist(watchlist),
+            data={"name": "default", "count": len(watchlist.entries)},
+        )
+
+    def _handle_watchlist_list(self, exporter: object) -> CommandResult:
+        """Handle listing all watchlists."""
+        watchlists = exporter.list_watchlists()
+        if not watchlists:
+            return CommandResult(success=True, message="No watchlists found.")
+        return CommandResult(
+            success=True,
+            message="**Available Watchlists:**\n" + "\n".join(f"- {w}" for w in watchlists),
+        )
+
+    def _handle_watchlist_show(self, exporter: object, args: list[str]) -> CommandResult:
+        """Handle showing a specific watchlist."""
+        if len(args) <= 1:
+            return CommandResult(success=False, message="Usage: /watchlist show NAME")
+        name = args[1]
+        watchlist = exporter.load_watchlist(name)
+        if not watchlist:
+            return CommandResult(success=False, message=f"Watchlist '{name}' not found.")
+        return CommandResult(
+            success=True,
+            message=self._format_watchlist(watchlist),
+            data={"name": name, "count": len(watchlist.entries)},
+        )
+
+    def _handle_watchlist_remove(self, exporter: object, args: list[str]) -> CommandResult:
+        """Handle removing a symbol from watchlist."""
+        if len(args) <= 1:
+            return CommandResult(success=False, message="Usage: /watchlist remove SYMBOL")
+        symbol = args[1].upper()
+        watchlist_name = args[2] if len(args) > 2 else "default"
+        success = exporter.remove_from_watchlist(symbol, watchlist_name)
+        if success:
+            return CommandResult(
+                success=True,
+                message=f"Removed {symbol} from watchlist '{watchlist_name}'.",
+            )
+        return CommandResult(
+            success=False,
+            message=f"{symbol} not found in watchlist '{watchlist_name}'.",
+        )
+
+    def _format_watchlist(self, watchlist: Watchlist) -> str:
+        """Format watchlist for display."""
+        lines = [
+            f"## Watchlist: {watchlist.name}",
+            f"*Updated: {watchlist.updated_at.strftime('%Y-%m-%d %H:%M')}*",
+            "",
+        ]
+
+        if not watchlist.entries:
+            lines.append("*No entries*")
+        else:
+            for entry in watchlist.entries:
+                notes_str = f" - {entry.notes}" if entry.notes else ""
+                lines.append(
+                    f"- **{entry.symbol}** ({entry.name}) | "
+                    f"Score: {entry.score:.2f} | {entry.criteria.value}{notes_str}"
+                )
+
+        return "\n".join(lines)
 
     def __repr__(self) -> str:
         """Return string representation."""
