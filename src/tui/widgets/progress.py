@@ -107,7 +107,9 @@ class ProgressPanel(Static):
     def set_step_active(self, step_id: str) -> None:
         """Mark a step as active."""
         if self._current_step and self._current_step in self._steps:
-            self._steps[self._current_step].status = "complete"
+            prev_step = self._steps[self._current_step]
+            if prev_step.status in ("pending", "active"):
+                prev_step.status = "complete"
         if step_id in self._steps:
             self._steps[step_id].status = "active"
             self._current_step = step_id

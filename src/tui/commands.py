@@ -40,7 +40,6 @@ class CommandHandler:
             "news": self._cmd_news,
             "help": self._cmd_help,
         }
-        self._progress_callback: ProgressCallback | None = None
         logger.info("CommandHandler initialized")
 
     def _init_workflow(self) -> TradingWorkflow:
@@ -100,7 +99,6 @@ class CommandHandler:
             CommandResult with execution result
         """
         cmd, args = self.parse_command(text)
-        self._progress_callback = progress_callback
 
         if cmd not in self._commands:
             return CommandResult(
@@ -109,22 +107,12 @@ class CommandHandler:
             )
 
         try:
+            if cmd == "analyze":
+                return await self._cmd_analyze(args, progress_callback)
             return await self._commands[cmd](args)
         except Exception as e:
             logger.exception(f"Command /{cmd} failed")
             return CommandResult(success=False, message=f"Command failed: {e}")
-        finally:
-            self._progress_callback = None
-
-    def _report_progress(self, step_id: str, status: str = "active") -> None:
-        """Report progress to callback if set.
-
-        Args:
-            step_id: Step identifier
-            status: Step status
-        """
-        if self._progress_callback:
-            self._progress_callback(step_id, status)
 
     async def _cmd_help(self, _args: list[str]) -> CommandResult:
         """Show help for available commands."""
@@ -143,7 +131,9 @@ class CommandHandler:
 Type freely to chat about markets or ask questions."""
         return CommandResult(success=True, message=help_text)
 
-    async def _cmd_analyze(self, args: list[str]) -> CommandResult:
+    async def _cmd_analyze(
+        self, args: list[str], progress_callback: ProgressCallback | None = None
+    ) -> CommandResult:
         """Run full trading analysis."""
         if not args:
             return CommandResult(success=False, message="Usage: /analyze SYMBOL")
@@ -151,9 +141,11 @@ Type freely to chat about markets or ask questions."""
         symbol = args[0].upper()
         workflow = self._init_workflow()
 
-        self._report_progress("fetch_data", "active")
+        if progress_callback:
+            progress_callback("fetch_data", "active")
         result = await workflow.analyze(symbol, period_days=90)
-        self._report_progress("decision", "complete")
+        if progress_callback:
+            progress_callback("decision", "complete")
 
         cmd_result = self._format_analysis_result(result)
         cmd_result.workflow_result = result
@@ -199,7 +191,7 @@ Type freely to chat about markets or ask questions."""
         """Format full analysis result."""
         signal = result.decision.action.value
         confidence = result.decision.confidence
-        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi else "N/A"
+        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi is not None else "N/A"
 
         msg = f"""## Analysis for {result.symbol}
 
@@ -231,8 +223,8 @@ Type freely to chat about markets or ask questions."""
 
     def _format_technical(self, result: TradingWorkflowResult) -> str:
         """Format technical analysis."""
-        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi else "N/A"
-        macd_str = f"{result.technical.macd_hist:.4f}" if result.technical.macd_hist else "N/A"
+        rsi_str = f"{result.technical.rsi:.2f}" if result.technical.rsi is not None else "N/A"
+        macd_str = f"{result.technical.macd_hist:.4f}" if result.technical.macd_hist is not None else "N/A"
         return f"""## Technical Analysis for {result.symbol}
 
 - **Signal:** {result.technical.signal.value}

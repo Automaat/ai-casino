@@ -114,15 +114,18 @@ class TradingChatApp(App):
 
             result = await self._command_handler.execute(text, progress_callback)
 
-            chat.complete_progress()
-            tool_widget.set_complete("Analysis complete")
-            status_bar.clear_working()
-
-            if result.workflow_result and isinstance(result.workflow_result, TradingWorkflowResult):
-                chat.show_result_box(result.workflow_result)
+            if result.success:
+                chat.complete_progress()
+                tool_widget.set_complete("Analysis complete")
+                if result.workflow_result and isinstance(result.workflow_result, TradingWorkflowResult):
+                    chat.show_result_box(result.workflow_result)
+                else:
+                    chat.add_assistant_message(result.message)
             else:
+                tool_widget.set_complete("Analysis failed")
                 chat.add_assistant_message(result.message)
 
+            status_bar.clear_working()
             self._history.append({"role": "assistant", "content": result.message})
         else:
             result = await self._command_handler.execute(text)

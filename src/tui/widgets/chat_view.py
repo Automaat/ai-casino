@@ -74,7 +74,6 @@ class ChatView(VerticalScroll):
         """
         if self._streaming_message:
             self._streaming_message.append_token(token)
-            self.scroll_end(animate=False)
 
     def finish_streaming(self) -> None:
         """Finish the current streaming message."""

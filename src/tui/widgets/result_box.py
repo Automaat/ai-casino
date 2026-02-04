@@ -96,8 +96,9 @@ class ResultBox(Static):
             yield Static(f"  {'Risk Level':<12} {risk}", classes="table-row")
 
             yield Static("Technical Indicators", classes="section-header")
-            rsi_str = f"{result.technical.rsi:.1f}" if result.technical.rsi else "N/A"
-            macd_str = f"{result.technical.macd_hist:.4f}" if result.technical.macd_hist else "N/A"
+            rsi_str = f"{result.technical.rsi:.1f}" if result.technical.rsi is not None else "N/A"
+            macd = result.technical.macd_hist
+            macd_str = f"{macd:.4f}" if macd is not None else "N/A"
             yield Static(f"  {'RSI':<12} {rsi_str}", classes="table-row")
             yield Static(f"  {'MACD Hist':<12} {macd_str}", classes="table-row")
             yield Static(
