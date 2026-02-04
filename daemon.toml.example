@@ -1,0 +1,28 @@
+# AI Casino Daemon Configuration
+# Copy to daemon.toml and customize
+
+[daemon]
+# Stocks to analyze
+watchlist = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
+
+# Analysis interval in minutes
+interval_minutes = 30
+
+# Only run during market hours
+market_hours_only = true
+
+# Auto-execute trades (requires Alpaca credentials)
+auto_trade = false
+
+# Maximum concurrent analyses
+max_concurrent_analyses = 3
+
+[daemon.schedule]
+# Market hours (Eastern Time)
+start_time = "09:30"
+end_time = "16:00"
+timezone = "America/New_York"
+
+[daemon.state]
+# State persistence file
+state_file = "~/.ai-casino/daemon-state.json"

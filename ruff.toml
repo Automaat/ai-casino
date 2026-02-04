@@ -57,6 +57,7 @@ ignore = [
     "SIM117",  # nested with statements OK for clarity
     "BLE001",  # catch Exception OK in main CLI
     "TC001",   # keep application imports at top level for clarity
+    "TC003",   # keep typing imports at top level (no TYPE_CHECKING blocks)
 ]
 
 [lint.per-file-ignores]
@@ -88,6 +89,20 @@ ignore = [
     "T201",    # print OK in CLI
     "PLR2004", # magic values OK for CLI args
     "E501",    # line length OK in formatted strings
+]
+"src/cli/*.py" = [
+    "PLR0913", # many args OK for typer CLI commands
+]
+"src/daemon/*.py" = [
+    "PLR2004", # magic values OK for time calculations and limits
+]
+"src/tui/*.py" = [
+    "PLR2004", # magic values OK for time calculations
+    "RUF012", # textual uses class attributes for BINDINGS
+    "S105",   # false positive on event type names
+]
+"src/tui/widgets/*.py" = [
+    "PLR2004", # magic values OK for time calculations
 ]
 
 [lint.mccabe]

@@ -1,6 +1,7 @@
 """LLM abstraction using LiteLLM for flexible provider switching."""
 
 import os
+from collections.abc import AsyncIterator
 
 from dotenv import load_dotenv
 from litellm import acompletion, completion
@@ -137,6 +138,46 @@ class LLMClient:
             return content
         except Exception as e:
             logger.error(f"LLM chat failed: {e}")
+            raise
+
+    async def astream(
+        self, prompt: str, system: str | None = None, temperature: float = 0.7
+    ) -> AsyncIterator[str]:
+        """Stream completion tokens asynchronously.
+
+        Args:
+            prompt: User prompt
+            system: System prompt (optional)
+            temperature: Sampling temperature (0.0-1.0)
+
+        Yields:
+            Individual tokens as they're generated
+        """
+        messages: list[dict[str, str]] = []
+
+        if system:
+            messages.append({"role": "system", "content": system})
+
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            kwargs: dict = {
+                "model": self._model_id,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True,
+            }
+            if self._api_base:
+                kwargs["api_base"] = self._api_base
+
+            response = await acompletion(**kwargs)
+
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+        except Exception as e:
+            logger.error(f"LLM streaming failed: {e}")
             raise
 
     def __repr__(self) -> str:

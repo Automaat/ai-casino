@@ -41,6 +41,10 @@ dependencies = [
     "rich==14.3.2",
     "loguru==0.7.3",
     "pydantic==2.12.5",
+
+    # CLI & TUI
+    "typer==0.21.1",
+    "textual==7.5.0",
 ]
 
 [project.optional-dependencies]
