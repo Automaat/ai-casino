@@ -1,0 +1,133 @@
+"""Nord theme definitions and dark/light detection."""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from loguru import logger
+from textual.theme import Theme
+
+# Nord color palette
+NORD = {
+    # Polar Night (dark backgrounds)
+    "nord0": "#2E3440",
+    "nord1": "#3B4252",
+    "nord2": "#434C5E",
+    "nord3": "#4C566A",
+    # Snow Storm (light backgrounds/text)
+    "nord4": "#D8DEE9",
+    "nord5": "#E5E9F0",
+    "nord6": "#ECEFF4",
+    # Frost (accent colors)
+    "nord7": "#8FBCBB",
+    "nord8": "#88C0D0",
+    "nord9": "#81A1C1",
+    "nord10": "#5E81AC",
+    # Aurora (semantic colors)
+    "nord11": "#BF616A",  # red/error
+    "nord12": "#D08770",  # orange
+    "nord13": "#EBCB8B",  # yellow/warning
+    "nord14": "#A3BE8C",  # green/success
+    "nord15": "#B48EAD",  # purple
+}
+
+NORD_LIGHT_THEME = Theme(
+    name="nord-light",
+    primary=NORD["nord10"],
+    secondary=NORD["nord9"],
+    accent=NORD["nord8"],
+    foreground=NORD["nord0"],
+    background=NORD["nord6"],
+    success=NORD["nord14"],
+    warning=NORD["nord13"],
+    error=NORD["nord11"],
+    surface=NORD["nord5"],
+    panel=NORD["nord4"],
+    dark=False,
+)
+
+
+def _is_light_color(hex_color: str) -> bool:
+    """Check if hex color is light based on luminance."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) != 6:
+        return False
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    # Perceived luminance formula
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    return luminance > 128
+
+
+def _detect_ghostty_theme() -> bool | None:
+    """Detect theme from Ghostty config. Returns True=dark, False=light, None=unknown."""
+    config_path = Path.home() / ".config" / "ghostty" / "config"
+    if not config_path.exists():
+        return None
+    try:
+        for raw_line in config_path.read_text().splitlines():
+            stripped = raw_line.strip()
+            if stripped.startswith("background") and "=" in stripped:
+                bg_color = stripped.split("=", 1)[1].strip()
+                if bg_color.startswith("#"):
+                    is_dark = not _is_light_color(bg_color)
+                    logger.debug(f"Ghostty detection: {'dark' if is_dark else 'light'} (bg={bg_color})")
+                    return is_dark
+    except Exception as e:
+        logger.debug(f"Ghostty config read failed: {e}")
+    return None
+
+
+def detect_dark_mode() -> bool:
+    """Detect OS dark mode preference.
+
+    Returns:
+        True for dark mode, False for light mode.
+    """
+    # 1. AI_CASINO_THEME env override
+    override = os.getenv("AI_CASINO_THEME", "").lower()
+    if override == "dark":
+        logger.debug("Theme override: dark")
+        return True
+    if override == "light":
+        logger.debug("Theme override: light")
+        return False
+
+    # 2. Ghostty terminal config
+    if os.getenv("TERM_PROGRAM") == "ghostty":
+        result = _detect_ghostty_theme()
+        if result is not None:
+            return result
+
+    # 3. COLORFGBG env (iTerm2, Konsole)
+    colorfgbg = os.getenv("COLORFGBG", "")
+    if colorfgbg:
+        parts = colorfgbg.split(";")
+        if len(parts) >= 2:
+            try:
+                bg_color = int(parts[-1])
+                is_dark = bg_color < 8
+                logger.debug(f"COLORFGBG detection: {'dark' if is_dark else 'light'}")
+                return is_dark
+            except ValueError:
+                pass
+
+    # 4. macOS detection via defaults (system-wide fallback)
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle"],
+                capture_output=True,
+                text=True,
+                timeout=1,
+                check=False,
+            )
+            is_dark = result.returncode == 0 and "dark" in result.stdout.lower()
+            logger.debug(f"macOS theme detection: {'dark' if is_dark else 'light'}")
+            return is_dark
+        except Exception as e:
+            logger.debug(f"macOS theme detection failed: {e}")
+
+    # 5. Default to dark
+    logger.debug("Theme detection: defaulting to dark")
+    return True
