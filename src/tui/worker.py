@@ -178,12 +178,7 @@ def main():
             return await original_make_decision(state)
         workflow._make_decision = patched_make_decision
 
-        # Python 3.14 fix: Use anyio BlockingPortal for async in worker threads
-        # asyncio.run() causes anyio task state errors (current_task() returns None)
-        # Solution: https://anyio.readthedocs.io/en/latest/threads.html
-        from anyio.from_thread import start_blocking_portal
-        with start_blocking_portal(backend="asyncio") as portal:
-            result = portal.call(workflow.analyze, symbol, period_days)
+        result = asyncio.run(workflow.analyze(symbol, period_days=period_days))
 
         update_status("complete", "Analysis complete")
 
@@ -377,10 +372,7 @@ def main():
         llm = LLMClient()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
-        # Python 3.14 fix: Use anyio BlockingPortal for async in worker threads
-        from anyio.from_thread import start_blocking_portal
-        with start_blocking_portal(backend="asyncio") as portal:
-            analysis = portal.call(analyzer.analyze, output)
+        analysis = asyncio.run(analyzer.analyze(output))
 
         formatted = format_screening_output(output, analysis)
 
