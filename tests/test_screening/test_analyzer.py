@@ -1,7 +1,7 @@
 """Tests for screening analyzer."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -74,7 +74,7 @@ def mock_llm_client(mock_llm_response):
     mock = MagicMock()
     mock.provider = "ollama"
     mock.model = "qwen3:14b"
-    mock.complete.return_value = mock_llm_response
+    mock.acomplete = AsyncMock(return_value=mock_llm_response)
     return mock
 
 
@@ -109,22 +109,24 @@ class TestScreeningAnalyzer:
         """Test analyzer initialization."""
         assert "ScreeningAnalyzer" in repr(analyzer)
 
-    def test_analyze(self, analyzer, sample_screening_output, mock_llm_client):
+    @pytest.mark.asyncio
+    async def test_analyze(self, analyzer, sample_screening_output, mock_llm_client):
         """Test screening analysis."""
-        analysis = analyzer.analyze(sample_screening_output)
+        analysis = await analyzer.analyze(sample_screening_output)
 
         assert isinstance(analysis, ScreeningAnalysis)
         assert analysis.summary
         assert len(analysis.top_picks) <= 3
-        mock_llm_client.complete.assert_called_once()
+        mock_llm_client.acomplete.assert_called_once()
 
-    def test_analyze_with_market_context(self, analyzer, sample_screening_output, mock_llm_client):
+    @pytest.mark.asyncio
+    async def test_analyze_with_market_context(self, analyzer, sample_screening_output, mock_llm_client):
         """Test analysis with market context."""
         context = "Market is in a corrective phase after recent highs."
 
-        analysis = analyzer.analyze(sample_screening_output, market_context=context)
+        analysis = await analyzer.analyze(sample_screening_output, market_context=context)
 
-        call_args = mock_llm_client.complete.call_args
+        call_args = mock_llm_client.acomplete.call_args
         assert "corrective phase" in call_args[0][0]
         assert isinstance(analysis, ScreeningAnalysis)
 

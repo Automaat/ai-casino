@@ -34,7 +34,7 @@ class ScreeningAnalyzer:
         self._llm = llm_client
         logger.info("Initialized ScreeningAnalyzer")
 
-    def analyze(
+    async def analyze(
         self,
         screening_output: ScreeningOutput,
         market_context: str | None = None,
@@ -51,7 +51,7 @@ class ScreeningAnalyzer:
         logger.info(f"Analyzing {len(screening_output.results)} screening results")
 
         prompt = self._build_prompt(screening_output, market_context)
-        response = self._llm.complete(prompt, system=SYSTEM_PROMPT, temperature=0.5)
+        response = await self._llm.acomplete(prompt, system=SYSTEM_PROMPT, temperature=0.5)
 
         return self._parse_response(response)
 
