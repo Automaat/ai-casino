@@ -13,11 +13,12 @@ def test_trump_analyst_init(mock_llm_client):
 
 @pytest.mark.asyncio
 async def test_trump_analyst_analyze(mock_llm_client, sample_trump_posts):
+    # Mock updated to Trump's authentic voice (2024-2026 style)
     mock_llm_client.acomplete.return_value = """
     Sentiment: positive
     Signal: BUY
-    Confidence: 0.75
-    Interpretation: Trump's posts show bullish sentiment toward markets and specific stocks.
+    Confidence: 0.95
+    Interpretation: The Trump Stock Market is ROARING back! My tariff policies are WORKING - China is BEGGING for a deal. Time to BUY AMERICAN! 🇺🇸
     """
 
     analyst = TrumpAnalyst(mock_llm_client)
