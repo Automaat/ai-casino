@@ -529,6 +529,29 @@ class LegacyScreeningOptions:
     is_cancelled: Callable[[], bool] | None = None
 
 
+def _resolve_screening_options(
+    options: LegacyScreeningOptions | None,
+    legacy_kwargs: dict,
+) -> LegacyScreeningOptions:
+    """Resolve options from explicit options or legacy kwargs."""
+    if options is not None and legacy_kwargs:
+        logger.warning(
+            "run_screening_in_process received both 'options' and legacy kwargs; ignoring legacy kwargs."
+        )
+    if options is None:
+        return LegacyScreeningOptions(**legacy_kwargs) if legacy_kwargs else LegacyScreeningOptions()
+    return options
+
+
+def _handle_screening_result(error_holder: list[str], result_holder: dict) -> dict:
+    """Handle screening result or raise appropriate error."""
+    if error_holder:
+        if "cancelled" in error_holder[0].lower():
+            raise asyncio.CancelledError(error_holder[0])
+        raise RuntimeError(error_holder[0])
+    return result_holder["data"]
+
+
 async def run_screening_in_process(
     criteria: str,
     options: LegacyScreeningOptions | None = None,
@@ -541,13 +564,7 @@ async def run_screening_in_process(
     Accepts either explicit `options` instance or legacy keyword arguments
     matching LegacyScreeningOptions fields.
     """
-    if options is not None and legacy_kwargs:
-        logger.warning(
-            "run_screening_in_process received both 'options' and legacy kwargs; ignoring legacy kwargs."
-        )
-    if options is None:
-        options = LegacyScreeningOptions(**legacy_kwargs) if legacy_kwargs else LegacyScreeningOptions()
-    opts = options
+    opts = _resolve_screening_options(options, legacy_kwargs)
     result_holder: dict = {}
     error_holder: list[str] = []
     done_event = threading.Event()
@@ -591,12 +608,7 @@ async def run_screening_in_process(
         if opts.is_cancelled and opts.is_cancelled():
             cancelled_event.set()
 
-    if error_holder:
-        if "cancelled" in error_holder[0].lower():
-            raise asyncio.CancelledError(error_holder[0])
-        raise RuntimeError(error_holder[0])
-
-    return result_holder["data"]
+    return _handle_screening_result(error_holder, result_holder)
 
 
 def _format_screening_output(output: "ScreeningOutput", analysis: "ScreeningAnalysis") -> str:

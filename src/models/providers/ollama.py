@@ -8,26 +8,12 @@ tries to use anyio's CancelScope during cleanup - sync httpx avoids this.
 
 import asyncio
 import json
-import threading
 from collections.abc import AsyncIterator
 
 import httpx
 from loguru import logger
 
 from src.models.providers.base import BaseLLMProvider, ToolCall, retry
-
-_CLIENT: httpx.Client | None = None
-_CLIENT_LOCK = threading.Lock()
-
-
-def _get_client(base_url: str, timeout: float = 120.0) -> httpx.Client:
-    """Get or create shared httpx client for Ollama requests."""
-    global _CLIENT
-    if _CLIENT is None:
-        with _CLIENT_LOCK:
-            if _CLIENT is None:
-                _CLIENT = httpx.Client(base_url=base_url, timeout=timeout)
-    return _CLIENT
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -42,11 +28,18 @@ class OllamaProvider(BaseLLMProvider):
         """
         self._model = model
         self._base_url = base_url.rstrip("/")
+        self._client: httpx.Client | None = None
         logger.debug(f"Initialized OllamaProvider: model={model}, base_url={base_url}")
+
+    def _get_client(self) -> httpx.Client:
+        """Get or create httpx client for Ollama requests."""
+        if self._client is None:
+            self._client = httpx.Client(base_url=self._base_url, timeout=120.0)
+        return self._client
 
     def _sync_complete(self, messages: list[dict], temperature: float) -> str:
         """Synchronous completion - runs in thread to avoid anyio issues."""
-        client = _get_client(self._base_url)
+        client = self._get_client()
         response = client.post(
             "/api/chat",
             json={
@@ -63,13 +56,10 @@ class OllamaProvider(BaseLLMProvider):
         return content
 
     async def close(self) -> None:
-        """Close shared HTTP client."""
-        global _CLIENT
-        if _CLIENT is not None:
-            with _CLIENT_LOCK:
-                if _CLIENT is not None:
-                    _CLIENT.close()
-                    _CLIENT = None
+        """Close HTTP client."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
     @retry(max_attempts=3, delay=1.0)
     async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
@@ -83,7 +73,7 @@ class OllamaProvider(BaseLLMProvider):
         approach. This simplified version buffers all tokens for compatibility.
         """
         tokens = []
-        client = _get_client(self._base_url)
+        client = self._get_client()
         with client.stream(
             "POST",
             "/api/chat",
