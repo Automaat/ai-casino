@@ -115,7 +115,7 @@ def mock_workflow_result():
         decision=TradingDecision(
             action=Signal.BUY,
             confidence=0.85,
-            reasoning="Strong technical and sentiment signals",
+            reasoning=["Strong technical and sentiment signals"],
             risk_level="LOW",
         ),
         risk=RiskAssessment(
@@ -253,7 +253,7 @@ class TestRecordDecisionAsync:
             decision=TradingDecision(
                 action=Signal.SELL,
                 confidence=0.4,
-                reasoning="Weak signals",
+                reasoning=["Weak signals"],
                 risk_level="HIGH",
             ),
             risk=RiskAssessment(

@@ -19,6 +19,7 @@ from src.tools import (
     GetNewsTool,
     ScreenStocksTool,
     ToolRegistry,
+    TrumpAnalysisTool,
     WebSearchTool,
 )
 from src.tui.commands import CommandHandler
@@ -39,12 +40,26 @@ You have access to the following tools to help users:
 - web_search: Search the web for information
 - analyze_stock: Run comprehensive trading analysis (EXPENSIVE - requires confirmation)
 - screen_stocks: Screen stocks for investment opportunities (EXPENSIVE - requires confirmation)
+- analyze_trump_posts: Analyze Trump's recent Truth Social posts for trading signals
+
+## AI Casino Features
+
+**Trump Mode**: Analyzes Trump's Truth Social posts for market-moving signals like tariff
+announcements, trade deals, crypto mentions, and company references. Use the analyze_trump_posts
+tool to fetch and analyze recent posts. For continuous monitoring, use CLI: `ai-casino daemon trump`.
 
 Use tools when appropriate to answer user questions. Be concise but informative.
 Use markdown formatting for readability."""
 
 STREAMING_SYSTEM_PROMPT = """You are AI Casino, an expert assistant for stock trading and market analysis.
 You help users understand markets, trading strategies, and financial concepts.
+
+## AI Casino Features
+
+**Trump Mode**: Analyzes Trump's Truth Social posts for market-moving signals like tariff
+announcements, trade deals, crypto mentions, and company references. For continuous monitoring,
+use CLI: `ai-casino daemon trump`.
+
 Be concise but informative. Use markdown formatting for readability."""
 
 
@@ -82,6 +97,7 @@ class TradingChatApp(App):
         registry.register(GetNewsTool())
         registry.register(AnalyzeStockTool())
         registry.register(ScreenStocksTool())
+        registry.register(TrumpAnalysisTool())
         return registry
 
     def _get_model_name(self) -> str:

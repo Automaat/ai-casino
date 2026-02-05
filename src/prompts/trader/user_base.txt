@@ -37,6 +37,6 @@ Based on these analyses and your portfolio status, make your trading decision:
 1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
 2. Confidence: 0.0-1.0 (how confident in this decision)
 3. Risk Level: LOW, MEDIUM, or HIGH
-4. Reasoning: 2-3 sentences explaining your decision
+4. Reasoning: 3-5 bullet points explaining your decision (each point should be a short, clear statement)
 
 Consider agreement/disagreement between signals. Higher agreement = higher confidence.

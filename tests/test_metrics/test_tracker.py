@@ -77,7 +77,7 @@ def mock_workflow_result_approved():
         decision=TradingDecision(
             action=Signal.BUY,
             confidence=0.85,
-            reasoning="Strong technical and sentiment signals",
+            reasoning=["Strong technical and sentiment signals"],
             risk_level="LOW",
         ),
         risk=RiskAssessment(
@@ -169,7 +169,7 @@ def mock_workflow_result_rejected():
         decision=TradingDecision(
             action=Signal.SELL,
             confidence=0.4,
-            reasoning="Weak signals, high risk",
+            reasoning=["Weak signals, high risk"],
             risk_level="HIGH",
         ),
         risk=RiskAssessment(
