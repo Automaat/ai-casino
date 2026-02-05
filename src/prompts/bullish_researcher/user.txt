@@ -1,0 +1,21 @@
+Construct a bull thesis for {symbol} based on:
+
+TECHNICAL: {tech_str}
+SENTIMENT: {sent_str}
+NEWS: {news_str}
+FUNDAMENTAL: {fund_str}
+COMPARATIVE: {comp_str}
+TRUMP: {trump_str}
+
+Provide:
+1. Bull thesis (3-4 sentences explaining why this stock has upside potential)
+2. Key strengths (3-5 bullet points, each starting with '- ')
+3. Target upside % (reasonable estimate or "N/A" if uncertain)
+
+Format your response as:
+THESIS: [your thesis here]
+STRENGTHS:
+- [strength 1]
+- [strength 2]
+- [strength 3]
+UPSIDE: [percentage or N/A]

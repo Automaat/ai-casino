@@ -1,0 +1,15 @@
+Analyze these recent Truth Social posts from Donald Trump for market/trading implications:
+
+{posts_text}
+
+Provide:
+1. Overall sentiment (positive/negative/neutral)
+2. Trading signal (BUY/SELL/HOLD) - based on market impact
+3. Confidence (0.0-1.0) - how confident are you in this signal
+4. Brief interpretation (1-2 sentences)
+
+Consider:
+- Direct market calls ("time to buy", etc.)
+- Policy announcements (tariffs, trade deals)
+- Company mentions
+- Economic commentary

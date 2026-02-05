@@ -161,7 +161,7 @@ class TestBullishResearcher:
         sample_fundamental_analysis,
     ):
         """Test prompt includes all analysis components."""
-        prompt = bullish_researcher._build_prompt(
+        prompt_vars = bullish_researcher._build_prompt_vars(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,
@@ -169,16 +169,12 @@ class TestBullishResearcher:
             sample_fundamental_analysis,
         )
 
-        assert "AAPL" in prompt
-        assert "TECHNICAL:" in prompt
-        assert "BUY" in prompt
-        assert "65.0" in prompt  # RSI
-        assert "SENTIMENT:" in prompt
-        assert "POSITIVE" in prompt
-        assert "NEWS:" in prompt
-        assert "earnings" in prompt
-        assert "FUNDAMENTAL:" in prompt
-        assert "UNDERVALUED" in prompt
+        assert prompt_vars["symbol"] == "AAPL"
+        assert "BUY" in prompt_vars["tech_str"]
+        assert "65.0" in prompt_vars["tech_str"]  # RSI
+        assert "POSITIVE" in prompt_vars["sent_str"]
+        assert "earnings" in prompt_vars["news_str"]
+        assert "UNDERVALUED" in prompt_vars["fund_str"]
 
     def test_calculate_confidence_strong_bull_signals(
         self, bullish_researcher, sample_sentiment_analysis, sample_news_analysis
@@ -496,7 +492,7 @@ class TestBullishResearcher:
         sample_news_analysis,
     ):
         """Test prompt contains N/A message when fundamental is None."""
-        prompt = bullish_researcher._build_prompt(
+        prompt_vars = bullish_researcher._build_prompt_vars(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,
@@ -504,7 +500,7 @@ class TestBullishResearcher:
             None,
         )
 
-        assert "N/A (API rate limited)" in prompt
+        assert "N/A (API rate limited)" in prompt_vars["fund_str"]
 
     def test_calculate_confidence_skips_fundamental_when_none(self, bullish_researcher, sample_news_analysis):
         """Test confidence calculation skips fundamental factors when None."""

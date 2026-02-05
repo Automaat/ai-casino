@@ -1,0 +1,4 @@
+Analyze comparative data for {symbol} vs sector ({sector_etf}) and market (SPY):
+Relative Valuation: {valuation}
+{valuation_metrics}
+{performance_metrics}

@@ -1,0 +1,14 @@
+Search for information comparing {symbol} to its competitors. Look for market share data, competitive advantages, and industry positioning.
+
+After searching, analyze the results and provide:
+1. Summary (2-3 sentences)
+2. Key findings (3-5 bullet points starting with '- ')
+3. Sentiment indication (Bullish, Bearish, or Neutral)
+
+Format your response as:
+SUMMARY: [your summary]
+FINDINGS:
+- [finding 1]
+- [finding 2]
+- [finding 3]
+SENTIMENT: [Bullish/Bearish/Neutral]

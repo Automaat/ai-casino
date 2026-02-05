@@ -1,0 +1,10 @@
+FUNDAMENTAL ANALYSIS:
+Valuation: {valuation}
+P/E Ratio: {pe_ratio}
+EPS: {eps}
+Revenue Growth YoY: {revenue_growth}
+Earnings Growth YoY: {earnings_growth}
+Debt-to-Equity: {debt_to_equity}
+Current Ratio: {current_ratio}
+Confidence: {confidence}
+Analysis: {interpretation}

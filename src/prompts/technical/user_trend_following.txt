@@ -1,0 +1,19 @@
+Analyze these trend following indicators for {symbol}:
+
+Current Price: ${latest_close}
+
+SMA Crossover:
+- Fast SMA ({sma_fast}): {sma_fast_value}
+- Slow SMA ({sma_slow}): {sma_slow_value}
+- Crossover: {cross_status}
+
+ADX ({adx_period}): {adx}
+- Strong trend threshold: {adx_threshold}
+- Trend strength: {trend_strength}
+- +DI: {plus_di}
+- -DI: {minus_di}
+- Direction: {trend_direction}
+
+Generated Signal: {signal}
+
+Provide a concise 2-3 sentence interpretation of the trend and its implications for trading.

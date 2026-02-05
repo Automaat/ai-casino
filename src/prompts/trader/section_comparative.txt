@@ -1,0 +1,10 @@
+COMPARATIVE ANALYSIS:
+Relative Valuation: {relative_valuation}
+P/E vs Sector ({sector_etf}): {pe_vs_sector}
+P/E vs Market (SPY): {pe_vs_market}
+YTD Performance vs Sector: {perf_vs_sector_ytd}
+3M Performance vs Sector: {perf_vs_sector_3m}
+YTD Performance vs Market: {perf_vs_market_ytd}
+3M Performance vs Market: {perf_vs_market_3m}
+Confidence: {confidence}
+Analysis: {interpretation}

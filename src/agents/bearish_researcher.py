@@ -12,6 +12,7 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
 
 if TYPE_CHECKING:
@@ -45,6 +46,7 @@ class BearishResearcher:
             llm_client: LLM client for generating bear thesis
         """
         self.llm = llm_client
+        self.prompts = PromptLoader("bearish_researcher")
         logger.info("Initialized BearishResearcher")
 
     async def analyze(
@@ -73,16 +75,14 @@ class BearishResearcher:
         """
         logger.info(f"Constructing bear thesis for {symbol}")
 
-        prompt = self._build_prompt(
+        prompt_vars = self._build_prompt_vars(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
 
-        system_prompt = (
-            "You are a skeptical investment researcher who identifies risks, weaknesses, "
-            "and downside scenarios. Focus on vulnerabilities, threats, and negative catalysts."
-        )
+        system_prompt = self.prompts.load("system")
+        user_prompt = self.prompts.load("user", **prompt_vars)
 
-        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
+        response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.5)
 
         thesis = self._extract_thesis(response)
         key_weaknesses = self._extract_key_weaknesses(response)
@@ -101,7 +101,7 @@ class BearishResearcher:
             confidence=confidence,
         )
 
-    def _build_prompt(
+    def _build_prompt_vars(
         self,
         symbol: str,
         technical: TechnicalAnalysis,
@@ -110,8 +110,8 @@ class BearishResearcher:
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
         trump_analysis: "TrumpAnalysis | None" = None,
-    ) -> str:
-        """Build LLM prompt from all analyses.
+    ) -> dict[str, str]:
+        """Build prompt variables from all analyses.
 
         Args:
             symbol: Stock ticker symbol
@@ -123,7 +123,7 @@ class BearishResearcher:
             trump_analysis: Trump social media analysis (optional)
 
         Returns:
-            Formatted prompt string
+            Dictionary of prompt variables
         """
         # Technical section
         rsi_str = f"{technical.rsi:.1f}" if technical.rsi is not None else "N/A"
@@ -183,27 +183,15 @@ class BearishResearcher:
                 f"market_relevant: {trump_analysis.market_relevant})"
             )
 
-        return f"""Construct a bear thesis for {symbol} based on:
-
-TECHNICAL: {tech_str}
-SENTIMENT: {sent_str}
-NEWS: {news_str}
-FUNDAMENTAL: {fund_str}
-COMPARATIVE: {comp_str}
-TRUMP: {trump_str}
-
-Provide:
-1. Bear thesis (3-4 sentences explaining why this stock has downside risk)
-2. Key weaknesses (3-5 bullet points, each starting with '- ')
-3. Target downside % (reasonable estimate or "N/A" if uncertain)
-
-Format your response as:
-THESIS: [your thesis here]
-WEAKNESSES:
-- [weakness 1]
-- [weakness 2]
-- [weakness 3]
-DOWNSIDE: [percentage or N/A]"""
+        return {
+            "symbol": symbol,
+            "tech_str": tech_str,
+            "sent_str": sent_str,
+            "news_str": news_str,
+            "fund_str": fund_str,
+            "comp_str": comp_str,
+            "trump_str": trump_str,
+        }
 
     def _extract_thesis(self, response: str) -> str:
         """Extract bear thesis from LLM response.

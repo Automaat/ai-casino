@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.strategies.ensemble import EnsembleResult, EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionIndicators, MeanReversionStrategy
 from src.strategies.momentum import MomentumIndicators, MomentumStrategy, Signal
@@ -40,6 +41,7 @@ class TechnicalAnalyst:
         self.llm = llm_client
         self.strategy = strategy
         self._strategy_type = type(strategy).__name__
+        self._prompt_loader = PromptLoader("technical")
         logger.info(f"Initialized TechnicalAnalyst (strategy={self._strategy_type})")
 
     async def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
@@ -80,30 +82,21 @@ class TechnicalAnalyst:
     ) -> tuple[str, str]:
         """Build appropriate prompt based on strategy type."""
         if isinstance(self.strategy, EnsembleStrategy):
-            prompt = self._build_ensemble_prompt(symbol, latest_close, signal, indicators)
-            system = (
-                "You are a technical analyst specializing in multi-strategy ensemble analysis. "
-                "Provide clear, actionable interpretations considering all strategy signals."
-            )
+            prompt_type = "ensemble"
+            prompt_vars = self._build_ensemble_vars(symbol, latest_close, signal, indicators)
         elif isinstance(self.strategy, TrendFollowingStrategy):
-            prompt = self._build_trend_following_prompt(symbol, latest_close, signal, indicators)
-            system = (
-                "You are a technical analyst specializing in trend following strategies. "
-                "Provide clear, actionable interpretations based on SMA crossovers and ADX."
-            )
+            prompt_type = "trend_following"
+            prompt_vars = self._build_trend_following_vars(symbol, latest_close, signal, indicators)
         elif isinstance(self.strategy, MeanReversionStrategy):
-            prompt = self._build_mean_reversion_prompt(symbol, latest_close, signal, indicators)
-            system = (
-                "You are a technical analyst specializing in mean reversion strategies. "
-                "Provide clear, actionable interpretations based on Bollinger Bands."
-            )
+            prompt_type = "mean_reversion"
+            prompt_vars = self._build_mean_reversion_vars(symbol, latest_close, signal, indicators)
         else:
-            prompt = self._build_momentum_prompt(symbol, latest_close, signal, indicators)
-            system = (
-                "You are a technical analyst specializing in momentum indicators. "
-                "Provide clear, actionable interpretations."
-            )
-        return prompt, system
+            prompt_type = "momentum"
+            prompt_vars = self._build_momentum_vars(symbol, latest_close, signal, indicators)
+
+        system = self._prompt_loader.load(f"system_{prompt_type}")
+        user = self._prompt_loader.load(f"user_{prompt_type}", **prompt_vars)
+        return user, system
 
     def _extract_indicator_values(
         self, indicators: IndicatorsType
@@ -133,90 +126,89 @@ class TechnicalAnalyst:
             return self._extract_mean_reversion_confidence(indicators)
         return 0.5
 
-    def _build_momentum_prompt(
+    def _build_momentum_vars(
         self, symbol: str, latest_close: float, signal: Signal, indicators: MomentumIndicators
-    ) -> str:
-        """Build LLM prompt for momentum strategy."""
+    ) -> dict[str, str]:
+        """Build variables for momentum prompt."""
         strategy = cast("MomentumStrategy", self.strategy)
-        return f"""Analyze these technical indicators for {symbol}:
+        rsi_status = (
+            "OVERSOLD"
+            if indicators.rsi_oversold
+            else "OVERBOUGHT"
+            if indicators.rsi_overbought
+            else "NEUTRAL"
+        )
+        macd_trend = "BULLISH" if indicators.macd_bullish else "BEARISH"
 
-Current Price: ${latest_close:.2f}
+        return {
+            "symbol": symbol,
+            "latest_close": f"{latest_close:.2f}",
+            "rsi_period": str(strategy.rsi_period),
+            "rsi": f"{indicators.rsi:.2f}",
+            "rsi_oversold": str(strategy.rsi_oversold),
+            "rsi_overbought": str(strategy.rsi_overbought),
+            "rsi_status": rsi_status,
+            "macd": f"{indicators.macd:.4f}",
+            "macd_signal": f"{indicators.macd_signal:.4f}",
+            "macd_hist": f"{indicators.macd_hist:.4f}",
+            "macd_trend": macd_trend,
+            "signal": signal.value,
+        }
 
-RSI ({strategy.rsi_period}): {indicators.rsi:.2f}
-- Oversold threshold: {strategy.rsi_oversold}
-- Overbought threshold: {strategy.rsi_overbought}
-- Status: {"OVERSOLD" if indicators.rsi_oversold else "OVERBOUGHT" if indicators.rsi_overbought else "NEUTRAL"}
-
-MACD:
-- MACD Line: {indicators.macd:.4f}
-- Signal Line: {indicators.macd_signal:.4f}
-- Histogram: {indicators.macd_hist:.4f}
-- Trend: {"BULLISH" if indicators.macd_bullish else "BEARISH"}
-
-Generated Signal: {signal.value}
-
-Provide a concise 2-3 sentence interpretation of these indicators and their implications for trading.
-"""
-
-    def _build_trend_following_prompt(
+    def _build_trend_following_vars(
         self, symbol: str, latest_close: float, signal: Signal, indicators: TrendFollowingIndicators
-    ) -> str:
-        """Build LLM prompt for trend following strategy."""
+    ) -> dict[str, str]:
+        """Build variables for trend following prompt."""
         strategy = cast("TrendFollowingStrategy", self.strategy)
         cross_status = (
             "GOLDEN CROSS"
             if indicators.sma_bullish_cross
             else ("DEATH CROSS" if indicators.sma_bearish_cross else "NO CROSSOVER")
         )
-        return f"""Analyze these trend following indicators for {symbol}:
+        trend_strength = "STRONG" if indicators.strong_trend else "WEAK"
 
-Current Price: ${latest_close:.2f}
+        return {
+            "symbol": symbol,
+            "latest_close": f"{latest_close:.2f}",
+            "sma_fast": str(strategy.sma_fast),
+            "sma_fast_value": f"{indicators.sma_fast:.2f}",
+            "sma_slow": str(strategy.sma_slow),
+            "sma_slow_value": f"{indicators.sma_slow:.2f}",
+            "cross_status": cross_status,
+            "adx_period": str(strategy.adx_period),
+            "adx": f"{indicators.adx:.2f}",
+            "adx_threshold": str(strategy.adx_threshold),
+            "trend_strength": trend_strength,
+            "plus_di": f"{indicators.plus_di:.2f}",
+            "minus_di": f"{indicators.minus_di:.2f}",
+            "trend_direction": indicators.trend_direction.upper(),
+            "signal": signal.value,
+        }
 
-SMA Crossover:
-- Fast SMA ({strategy.sma_fast}): {indicators.sma_fast:.2f}
-- Slow SMA ({strategy.sma_slow}): {indicators.sma_slow:.2f}
-- Crossover: {cross_status}
-
-ADX ({strategy.adx_period}): {indicators.adx:.2f}
-- Strong trend threshold: {strategy.adx_threshold}
-- Trend strength: {"STRONG" if indicators.strong_trend else "WEAK"}
-- +DI: {indicators.plus_di:.2f}
-- -DI: {indicators.minus_di:.2f}
-- Direction: {indicators.trend_direction.upper()}
-
-Generated Signal: {signal.value}
-
-Provide a concise 2-3 sentence interpretation of the trend and its implications for trading.
-"""
-
-    def _build_mean_reversion_prompt(
+    def _build_mean_reversion_vars(
         self, symbol: str, latest_close: float, signal: Signal, indicators: MeanReversionIndicators
-    ) -> str:
-        """Build LLM prompt for mean reversion strategy."""
+    ) -> dict[str, str]:
+        """Build variables for mean reversion prompt."""
         bb_status = (
             "OVERSOLD" if indicators.oversold else ("OVERBOUGHT" if indicators.overbought else "NEUTRAL")
         )
-        return f"""Analyze these mean reversion indicators for {symbol}:
 
-Current Price: ${latest_close:.2f}
+        return {
+            "symbol": symbol,
+            "latest_close": f"{latest_close:.2f}",
+            "bb_upper": f"{indicators.bb_upper:.2f}",
+            "bb_middle": f"{indicators.bb_middle:.2f}",
+            "bb_lower": f"{indicators.bb_lower:.2f}",
+            "bb_width": f"{indicators.bb_width:.2f}",
+            "bb_percent": f"{indicators.bb_percent:.2f}",
+            "bb_status": bb_status,
+            "signal": signal.value,
+        }
 
-Bollinger Bands:
-- Upper Band: {indicators.bb_upper:.2f}
-- Middle Band (SMA): {indicators.bb_middle:.2f}
-- Lower Band: {indicators.bb_lower:.2f}
-- Band Width: {indicators.bb_width:.2f}%
-- %B: {indicators.bb_percent:.2f}
-- Status: {bb_status}
-
-Generated Signal: {signal.value}
-
-Provide a concise 2-3 sentence interpretation of the mean reversion setup and its implications for trading.
-"""
-
-    def _build_ensemble_prompt(
+    def _build_ensemble_vars(
         self, symbol: str, latest_close: float, signal: Signal, result: EnsembleResult
-    ) -> str:
-        """Build LLM prompt for ensemble strategy.
+    ) -> dict[str, str]:
+        """Build variables for ensemble prompt.
 
         Args:
             symbol: Stock ticker
@@ -225,26 +217,21 @@ Provide a concise 2-3 sentence interpretation of the mean reversion setup and it
             result: Ensemble result with strategy breakdowns
 
         Returns:
-            Prompt string
+            Variables dictionary
         """
         strategy_breakdown = []
         for sr in result.strategy_results:
             strategy_breakdown.append(f"- {sr.name}: {sr.signal.value} (weight={sr.weight:.2f})")
 
-        return f"""Analyze this multi-strategy ensemble result for {symbol}:
-
-Current Price: ${latest_close:.2f}
-
-Strategy Signals:
-{chr(10).join(strategy_breakdown)}
-
-Aggregated Signal: {signal.value}
-Agreement Ratio: {result.agreement_ratio:.2f}
-Confidence: {result.confidence:.2f}
-Conflict Resolved: {result.conflict_resolved}
-
-Provide a concise 2-3 sentence interpretation of the ensemble analysis, noting any disagreements between strategies and their implications.
-"""
+        return {
+            "symbol": symbol,
+            "latest_close": f"{latest_close:.2f}",
+            "strategy_breakdown": "\n".join(strategy_breakdown),
+            "signal": signal.value,
+            "agreement_ratio": f"{result.agreement_ratio:.2f}",
+            "confidence": f"{result.confidence:.2f}",
+            "conflict_resolved": str(result.conflict_resolved),
+        }
 
     def _extract_momentum_confidence(self, response: str, indicators: MomentumIndicators) -> float:
         """Calculate confidence for momentum indicators."""

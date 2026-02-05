@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from src.data.fundamental import FundamentalDataFetcher
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 
 
 class FundamentalAnalysis(BaseModel):
@@ -35,6 +36,7 @@ class FundamentalAnalyst:
         """
         self.llm = llm_client
         self.fetcher = fetcher
+        self._prompts = PromptLoader("fundamental")
         logger.info("Initialized FundamentalAnalyst")
 
     async def analyze(self, symbol: str, current_price: float | None = None) -> FundamentalAnalysis:
@@ -55,11 +57,9 @@ class FundamentalAnalyst:
             valuation = self._assess_valuation(metrics)
 
             # Build LLM prompt with available metrics
-            prompt = self._build_analysis_prompt(symbol, metrics, valuation, current_price)
-            system = (
-                "You are a fundamental analyst. Provide a concise interpretation "
-                "of the company's financial health and valuation in 2-3 sentences."
-            )
+            metrics_section = self._build_metrics_section(metrics, valuation, current_price)
+            prompt = self._prompts.load("user", symbol=symbol, metrics_section=metrics_section)
+            system = self._prompts.load("system")
 
             interpretation = await self.llm.acomplete(prompt, system=system, temperature=0.5)
             confidence = self._calculate_confidence(metrics, interpretation)
@@ -118,25 +118,23 @@ class FundamentalAnalyst:
             return "OVERVALUED"
         return "FAIRLY_VALUED"
 
-    def _build_analysis_prompt(
+    def _build_metrics_section(
         self,
-        symbol: str,
         metrics: dict[str, float | None],
         valuation: str,
         current_price: float | None,
     ) -> str:
-        """Build prompt for LLM interpretation.
+        """Build metrics section for prompt.
 
         Args:
-            symbol: Stock ticker
             metrics: Extracted metrics
             valuation: Assessed valuation
             current_price: Current price (optional)
 
         Returns:
-            Formatted prompt string
+            Formatted metrics string
         """
-        prompt_parts = [f"Analyze fundamental data for {symbol}:"]
+        prompt_parts = []
 
         if current_price:
             prompt_parts.append(f"Current Price: ${current_price:.2f}")

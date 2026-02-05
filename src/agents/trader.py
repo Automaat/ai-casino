@@ -11,6 +11,7 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
 
 
@@ -42,6 +43,7 @@ class TraderAgent:
             llm_client: LLM client for decision synthesis
         """
         self.llm = llm_client
+        self._prompts = PromptLoader("trader")
         logger.info("Initialized TraderAgent")
 
     async def decide(
@@ -77,75 +79,48 @@ class TraderAgent:
         logger.info(f"Making trading decision for {symbol} (owns={owns_position}, qty={position_qty})")
 
         if owns_position:
-            portfolio_section = f"""PORTFOLIO STATUS:
-You currently own {position_qty} shares of {symbol}.
-
-VALID ACTIONS FOR CURRENT HOLDER:
-- BUY: Add to your position
-- SELL: Exit or reduce your position
-- HOLD: Maintain current position, no action needed"""
+            portfolio_section = self._prompts.load(
+                "section_portfolio_holding",
+                symbol=symbol,
+                position_qty=position_qty,
+            )
         else:
-            portfolio_section = f"""PORTFOLIO STATUS:
-You do NOT own any shares of {symbol}.
+            portfolio_section = self._prompts.load("section_portfolio_no_holding", symbol=symbol)
 
-VALID ACTIONS WHEN NOT HOLDING:
-- BUY: Open a new position (only if signals strongly support entry)
-- HOLD: Do NOT buy - signals are mixed or unfavorable for entry
+        fundamental_section = self._build_fundamental_section(fundamental)
+        comparative_section = self._build_comparative_section(comparative)
 
-IMPORTANT: Since you don't own this stock, SELL is NOT a valid action.
-Choose BUY only with strong conviction. Otherwise choose HOLD (meaning: don't buy yet)."""
-
-        prompt = f"""You are a professional trader making a decision for {symbol}.
-
-{portfolio_section}
-
-TECHNICAL ANALYSIS:
-Signal: {technical.signal.value}
-RSI: {f"{technical.rsi:.2f}" if technical.rsi is not None else "N/A"}
-MACD Histogram: {f"{technical.macd_hist:.4f}" if technical.macd_hist is not None else "N/A"}
-Confidence: {technical.confidence:.2f}
-Analysis: {technical.interpretation}
-
-SENTIMENT ANALYSIS:
-Overall: {sentiment.overall_sentiment}
-Score: {sentiment.sentiment_score:.2f}
-Articles: {sentiment.article_count}
-Summary: {sentiment.summary}
-
-NEWS ANALYSIS:
-Key Themes: {", ".join(news.key_themes)}
-Impact: {news.impact_assessment}
-Recommendation: {news.recommendation}
-
-{self._build_fundamental_section(fundamental)}BULLISH RESEARCH:
-Thesis: {bullish.thesis}
-Key Strengths: {", ".join(bullish.key_strengths)}
-Target Upside: {f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A"}
-Confidence: {bullish.confidence:.2f}
-
-BEARISH RESEARCH:
-Thesis: {bearish.thesis}
-Key Weaknesses: {", ".join(bearish.key_weaknesses)}
-Target Downside: {f"{bearish.target_downside:.1f}%" if bearish.target_downside is not None else "N/A"}
-Confidence: {bearish.confidence:.2f}
-
-{self._build_comparative_section(comparative)}
-Based on these analyses and your portfolio status, make your trading decision:
-1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
-2. Confidence: 0.0-1.0 (how confident in this decision)
-3. Risk Level: LOW, MEDIUM, or HIGH
-4. Reasoning: 2-3 sentences explaining your decision
-
-Consider agreement/disagreement between signals. Higher agreement = higher confidence.
-"""
-
-        system_prompt = (
-            "You are an experienced trader who synthesizes technical, sentiment, "
-            "news, fundamental, comparative, bullish, and bearish research to make informed trading decisions. "
-            "Consider both the bull thesis (upside potential) and bear thesis (downside risks). "
-            "Pay attention to relative valuation vs sector/market - a stock can look expensive on P/E but "
-            "undervalued relative to its sector. Be decisive but cautious."
+        prompt = self._prompts.load(
+            "user_base",
+            symbol=symbol,
+            portfolio_section=portfolio_section,
+            technical_signal=technical.signal.value,
+            rsi=f"{technical.rsi:.2f}" if technical.rsi is not None else "N/A",
+            macd_hist=f"{technical.macd_hist:.4f}" if technical.macd_hist is not None else "N/A",
+            technical_confidence=f"{technical.confidence:.2f}",
+            technical_interpretation=technical.interpretation,
+            sentiment_overall=sentiment.overall_sentiment,
+            sentiment_score=f"{sentiment.sentiment_score:.2f}",
+            sentiment_article_count=sentiment.article_count,
+            sentiment_summary=sentiment.summary,
+            news_themes=", ".join(news.key_themes),
+            news_impact=news.impact_assessment,
+            news_recommendation=news.recommendation,
+            fundamental_section=fundamental_section,
+            bullish_thesis=bullish.thesis,
+            bullish_strengths=", ".join(bullish.key_strengths),
+            bullish_upside=f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A",
+            bullish_confidence=f"{bullish.confidence:.2f}",
+            bearish_thesis=bearish.thesis,
+            bearish_weaknesses=", ".join(bearish.key_weaknesses),
+            bearish_downside=f"{bearish.target_downside:.1f}%"
+            if bearish.target_downside is not None
+            else "N/A",
+            bearish_confidence=f"{bearish.confidence:.2f}",
+            comparative_section=comparative_section,
         )
+
+        system_prompt = self._prompts.load("system")
 
         response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
 
@@ -174,22 +149,28 @@ Consider agreement/disagreement between signals. Higher agreement = higher confi
             Formatted section string
         """
         if not fundamental:
-            return """FUNDAMENTAL ANALYSIS:
-⚠️ Unavailable (API rate limit) - decision based on other signals only.
+            return self._prompts.load("section_fundamental_unavailable")
 
-"""
-        return f"""FUNDAMENTAL ANALYSIS:
-Valuation: {fundamental.valuation}
-P/E Ratio: {fundamental.pe_ratio if fundamental.pe_ratio is not None else "N/A"}
-EPS: ${fundamental.eps if fundamental.eps is not None else "N/A"}
-Revenue Growth YoY: {f"{fundamental.revenue_growth_yoy * 100:.1f}%" if fundamental.revenue_growth_yoy is not None else "N/A"}
-Earnings Growth YoY: {f"{fundamental.earnings_growth_yoy * 100:.1f}%" if fundamental.earnings_growth_yoy is not None else "N/A"}
-Debt-to-Equity: {fundamental.debt_to_equity if fundamental.debt_to_equity is not None else "N/A"}
-Current Ratio: {fundamental.current_ratio if fundamental.current_ratio is not None else "N/A"}
-Confidence: {fundamental.confidence:.2f}
-Analysis: {fundamental.interpretation}
-
-"""
+        return self._prompts.load(
+            "section_fundamental",
+            valuation=fundamental.valuation,
+            pe_ratio=fundamental.pe_ratio if fundamental.pe_ratio is not None else "N/A",
+            eps=f"${fundamental.eps}" if fundamental.eps is not None else "N/A",
+            revenue_growth=(
+                f"{fundamental.revenue_growth_yoy * 100:.1f}%"
+                if fundamental.revenue_growth_yoy is not None
+                else "N/A"
+            ),
+            earnings_growth=(
+                f"{fundamental.earnings_growth_yoy * 100:.1f}%"
+                if fundamental.earnings_growth_yoy is not None
+                else "N/A"
+            ),
+            debt_to_equity=fundamental.debt_to_equity if fundamental.debt_to_equity is not None else "N/A",
+            current_ratio=fundamental.current_ratio if fundamental.current_ratio is not None else "N/A",
+            confidence=f"{fundamental.confidence:.2f}",
+            interpretation=fundamental.interpretation,
+        )
 
     def _build_comparative_section(self, comparative: ComparativeAnalysis | None) -> str:
         """Build comparative analysis section for prompt.
@@ -203,33 +184,35 @@ Analysis: {fundamental.interpretation}
         if not comparative:
             return ""
 
-        pe_vs_sector = f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector else "N/A"
-        pe_vs_market = f"{comparative.pe_vs_market:.2f}x" if comparative.pe_vs_market else "N/A"
-        perf_vs_sector_ytd = (
-            f"{comparative.perf_vs_sector_ytd:+.1f}%" if comparative.perf_vs_sector_ytd is not None else "N/A"
+        return self._prompts.load(
+            "section_comparative",
+            relative_valuation=comparative.relative_valuation.value,
+            sector_etf=comparative.sector_etf,
+            pe_vs_sector=f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector else "N/A",
+            pe_vs_market=f"{comparative.pe_vs_market:.2f}x" if comparative.pe_vs_market else "N/A",
+            perf_vs_sector_ytd=(
+                f"{comparative.perf_vs_sector_ytd:+.1f}%"
+                if comparative.perf_vs_sector_ytd is not None
+                else "N/A"
+            ),
+            perf_vs_sector_3m=(
+                f"{comparative.perf_vs_sector_3m:+.1f}%"
+                if comparative.perf_vs_sector_3m is not None
+                else "N/A"
+            ),
+            perf_vs_market_ytd=(
+                f"{comparative.perf_vs_market_ytd:+.1f}%"
+                if comparative.perf_vs_market_ytd is not None
+                else "N/A"
+            ),
+            perf_vs_market_3m=(
+                f"{comparative.perf_vs_market_3m:+.1f}%"
+                if comparative.perf_vs_market_3m is not None
+                else "N/A"
+            ),
+            confidence=f"{comparative.confidence:.2f}",
+            interpretation=comparative.interpretation,
         )
-        perf_vs_sector_3m = (
-            f"{comparative.perf_vs_sector_3m:+.1f}%" if comparative.perf_vs_sector_3m is not None else "N/A"
-        )
-        perf_vs_market_ytd = (
-            f"{comparative.perf_vs_market_ytd:+.1f}%" if comparative.perf_vs_market_ytd is not None else "N/A"
-        )
-        perf_vs_market_3m = (
-            f"{comparative.perf_vs_market_3m:+.1f}%" if comparative.perf_vs_market_3m is not None else "N/A"
-        )
-
-        return f"""COMPARATIVE ANALYSIS:
-Relative Valuation: {comparative.relative_valuation.value}
-P/E vs Sector ({comparative.sector_etf}): {pe_vs_sector}
-P/E vs Market (SPY): {pe_vs_market}
-YTD Performance vs Sector: {perf_vs_sector_ytd}
-3M Performance vs Sector: {perf_vs_sector_3m}
-YTD Performance vs Market: {perf_vs_market_ytd}
-3M Performance vs Market: {perf_vs_market_3m}
-Confidence: {comparative.confidence:.2f}
-Analysis: {comparative.interpretation}
-
-"""
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:
         """Extract trading action from response.

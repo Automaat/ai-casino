@@ -1,0 +1,7 @@
+PORTFOLIO STATUS:
+You currently own {position_qty} shares of {symbol}.
+
+VALID ACTIONS FOR CURRENT HOLDER:
+- BUY: Add to your position
+- SELL: Exit or reduce your position
+- HOLD: Maintain current position, no action needed

@@ -1,0 +1,16 @@
+Analyze these search results for {symbol} regarding {category}:
+
+{search_results}
+
+Provide:
+1. Summary (2-3 sentences)
+2. Key findings (3-5 bullet points starting with '- ')
+3. Sentiment indication (Bullish, Bearish, or Neutral)
+
+Format:
+SUMMARY: [your summary]
+FINDINGS:
+- [finding 1]
+- [finding 2]
+- [finding 3]
+SENTIMENT: [Bullish/Bearish/Neutral]

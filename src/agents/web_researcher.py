@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.tools.websearch import WebSearchTool
 
 
@@ -67,6 +68,7 @@ class WebResearchAgent:
         """
         self.llm = llm_client
         self.search_tool = search_tool or WebSearchTool()
+        self.prompts = PromptLoader("web_researcher")
         logger.info(f"Initialized WebResearchAgent (tools_enabled={llm_client.supports_tools})")
 
     async def research(
@@ -126,10 +128,7 @@ class WebResearchAgent:
 
         for category in categories:
             prompt = self._build_tool_prompt(symbol, category)
-            system = (
-                "You are a financial research analyst. Use the web_search tool to gather "
-                "information, then analyze the results and provide your findings."
-            )
+            system = self.prompts.load("system")
 
             tools = [self.search_tool.get_tool_definition()]
 
@@ -176,24 +175,11 @@ class WebResearchAgent:
 
             search_results = self.search_tool.execute(query, search_type=search_type, max_results=5)
 
-            prompt = f"""Analyze these search results for {symbol} regarding {category.value}:
+            prompt = self.prompts.load(
+                "user_template", symbol=symbol, category=category.value, search_results=search_results
+            )
 
-{search_results}
-
-Provide:
-1. Summary (2-3 sentences)
-2. Key findings (3-5 bullet points starting with '- ')
-3. Sentiment indication (Bullish, Bearish, or Neutral)
-
-Format:
-SUMMARY: [your summary]
-FINDINGS:
-- [finding 1]
-- [finding 2]
-- [finding 3]
-SENTIMENT: [Bullish/Bearish/Neutral]"""
-
-            system = "You are a financial research analyst summarizing web search results."
+            system = self.prompts.load("system_template")
             response = await self.llm.acomplete(prompt, system=system, temperature=0.3)
 
             result = self._parse_research_response(category, response, sources_count=5)
@@ -211,39 +197,14 @@ SENTIMENT: [Bullish/Bearish/Neutral]"""
         Returns:
             Prompt string
         """
-        category_instructions = {
-            ResearchCategory.LATEST_NEWS: (
-                f"Search for the latest news about {symbol} stock. "
-                "Focus on breaking news, earnings reports, and significant announcements."
-            ),
-            ResearchCategory.MARKET_SENTIMENT: (
-                f"Search for market sentiment and analyst opinions on {symbol} stock. "
-                "Look for price targets, ratings changes, and institutional sentiment."
-            ),
-            ResearchCategory.COMPANY_INFO: (
-                f"Search for recent company information about {symbol}. "
-                "Focus on product launches, partnerships, management changes, and business developments."
-            ),
-            ResearchCategory.COMPETITOR_ANALYSIS: (
-                f"Search for information comparing {symbol} to its competitors. "
-                "Look for market share data, competitive advantages, and industry positioning."
-            ),
+        prompt_map = {
+            ResearchCategory.LATEST_NEWS: "tool_latest_news",
+            ResearchCategory.MARKET_SENTIMENT: "tool_market_sentiment",
+            ResearchCategory.COMPANY_INFO: "tool_company_info",
+            ResearchCategory.COMPETITOR_ANALYSIS: "tool_competitor_analysis",
         }
 
-        return f"""{category_instructions[category]}
-
-After searching, analyze the results and provide:
-1. Summary (2-3 sentences)
-2. Key findings (3-5 bullet points starting with '- ')
-3. Sentiment indication (Bullish, Bearish, or Neutral)
-
-Format your response as:
-SUMMARY: [your summary]
-FINDINGS:
-- [finding 1]
-- [finding 2]
-- [finding 3]
-SENTIMENT: [Bullish/Bearish/Neutral]"""
+        return self.prompts.load(prompt_map[category], symbol=symbol)
 
     def _parse_research_response(
         self,

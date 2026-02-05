@@ -1,0 +1,18 @@
+Analyze these technical indicators for {symbol}:
+
+Current Price: ${latest_close}
+
+RSI ({rsi_period}): {rsi}
+- Oversold threshold: {rsi_oversold}
+- Overbought threshold: {rsi_overbought}
+- Status: {rsi_status}
+
+MACD:
+- MACD Line: {macd}
+- Signal Line: {macd_signal}
+- Histogram: {macd_hist}
+- Trend: {macd_trend}
+
+Generated Signal: {signal}
+
+Provide a concise 2-3 sentence interpretation of these indicators and their implications for trading.

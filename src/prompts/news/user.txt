@@ -1,0 +1,10 @@
+Analyze these recent news articles for {symbol}:
+
+{headlines_text}
+
+Provide:
+1. Key themes (3-5 main topics)
+2. Impact assessment (how news affects stock outlook)
+3. Trading recommendation based on news
+
+Be concise and focus on actionable insights.

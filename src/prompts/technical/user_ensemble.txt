@@ -1,0 +1,13 @@
+Analyze this multi-strategy ensemble result for {symbol}:
+
+Current Price: ${latest_close}
+
+Strategy Signals:
+{strategy_breakdown}
+
+Aggregated Signal: {signal}
+Agreement Ratio: {agreement_ratio}
+Confidence: {confidence}
+Conflict Resolved: {conflict_resolved}
+
+Provide a concise 2-3 sentence interpretation of the ensemble analysis, noting any disagreements between strategies and their implications.

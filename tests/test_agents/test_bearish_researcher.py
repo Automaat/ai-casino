@@ -161,13 +161,14 @@ class TestBearishResearcher:
         sample_fundamental_analysis,
     ):
         """Test prompt includes all analysis components."""
-        prompt = bearish_researcher._build_prompt(
+        prompt_vars = bearish_researcher._build_prompt_vars(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,
             sample_news_analysis,
             sample_fundamental_analysis,
         )
+        prompt = bearish_researcher.prompts.load("user", **prompt_vars)
 
         assert "AAPL" in prompt
         assert "TECHNICAL:" in prompt
@@ -497,13 +498,14 @@ class TestBearishResearcher:
         sample_news_analysis,
     ):
         """Test prompt contains N/A message when fundamental is None."""
-        prompt = bearish_researcher._build_prompt(
+        prompt_vars = bearish_researcher._build_prompt_vars(
             "AAPL",
             sample_technical_analysis,
             sample_sentiment_analysis,
             sample_news_analysis,
             None,
         )
+        prompt = bearish_researcher.prompts.load("user", **prompt_vars)
 
         assert "N/A (API rate limited)" in prompt
 

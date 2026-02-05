@@ -1,0 +1,15 @@
+Analyze these mean reversion indicators for {symbol}:
+
+Current Price: ${latest_close}
+
+Bollinger Bands:
+- Upper Band: {bb_upper}
+- Middle Band (SMA): {bb_middle}
+- Lower Band: {bb_lower}
+- Band Width: {bb_width}%
+- %B: {bb_percent}
+- Status: {bb_status}
+
+Generated Signal: {signal}
+
+Provide a concise 2-3 sentence interpretation of the mean reversion setup and its implications for trading.

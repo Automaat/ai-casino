@@ -4,6 +4,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.screening.screener import ScreeningOutput
 
 
@@ -17,11 +18,6 @@ class ScreeningAnalysis(BaseModel):
     next_steps: str
 
 
-SYSTEM_PROMPT = """You are a financial analyst reviewing stock screening results.
-Provide clear, actionable insights without investment advice disclaimers.
-Be concise and focus on the data presented."""
-
-
 class ScreeningAnalyzer:
     """Analyze screening results using LLM."""
 
@@ -32,6 +28,7 @@ class ScreeningAnalyzer:
             llm_client: LLM client for analysis
         """
         self._llm = llm_client
+        self._prompts = PromptLoader("screening")
         logger.info("Initialized ScreeningAnalyzer")
 
     async def analyze(
@@ -50,8 +47,9 @@ class ScreeningAnalyzer:
         """
         logger.info(f"Analyzing {len(screening_output.results)} screening results")
 
-        prompt = self._build_prompt(screening_output, market_context)
-        response = await self._llm.acomplete(prompt, system=SYSTEM_PROMPT, temperature=0.5)
+        system_prompt = self._prompts.load("system")
+        user_prompt = self._build_prompt(screening_output, market_context)
+        response = await self._llm.acomplete(user_prompt, system=system_prompt, temperature=0.5)
 
         return self._parse_response(response)
 
@@ -80,27 +78,15 @@ class ScreeningAnalyzer:
         if market_context:
             context_block = f"\nMarket Context:\n{market_context}\n"
 
-        return f"""Analyze these {output.criteria.value} screening results from {output.universe}:
-
-{results_block}
-
-Total screened: {output.total_screened}
-Failed to screen: {len(output.errors)} symbols
-{context_block}
-Provide your analysis in the following format:
-
-SUMMARY: (2-3 sentences overview of the results)
-
-TOP_PICKS: (list top 3 stocks with brief reasoning, one per line)
-1. SYMBOL - reasoning
-2. SYMBOL - reasoning
-3. SYMBOL - reasoning
-
-SECTOR_INSIGHTS: (1-2 sentences about sector concentration or patterns)
-
-RISK_FACTORS: (1-2 sentences about common risks across these picks)
-
-NEXT_STEPS: (1-2 sentences suggesting follow-up actions)"""
+        return self._prompts.load(
+            "user",
+            criteria=output.criteria.value,
+            universe=output.universe,
+            results_block=results_block,
+            total_screened=output.total_screened,
+            errors_count=len(output.errors),
+            context_block=context_block,
+        )
 
     def _parse_response(self, response: str) -> ScreeningAnalysis:
         """Parse LLM response into ScreeningAnalysis.

@@ -12,6 +12,7 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
 
 if TYPE_CHECKING:
@@ -45,6 +46,7 @@ class BullishResearcher:
             llm_client: LLM client for generating bull thesis
         """
         self.llm = llm_client
+        self._prompts = PromptLoader("bullish_researcher")
         logger.info("Initialized BullishResearcher")
 
     async def analyze(
@@ -73,14 +75,12 @@ class BullishResearcher:
         """
         logger.info(f"Constructing bull thesis for {symbol}")
 
-        prompt = self._build_prompt(
+        prompt_vars = self._build_prompt_vars(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
 
-        system_prompt = (
-            "You are an optimistic investment researcher who identifies upside opportunities "
-            "and constructs bull theses. Focus on strengths, catalysts, and positive scenarios."
-        )
+        prompt = self._prompts.load("user", **prompt_vars)
+        system_prompt = self._prompts.load("system")
 
         response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
 
@@ -101,7 +101,7 @@ class BullishResearcher:
             confidence=confidence,
         )
 
-    def _build_prompt(
+    def _build_prompt_vars(
         self,
         symbol: str,
         technical: TechnicalAnalysis,
@@ -110,8 +110,8 @@ class BullishResearcher:
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
         trump_analysis: "TrumpAnalysis | None" = None,
-    ) -> str:
-        """Build LLM prompt from all analyses.
+    ) -> dict[str, str]:
+        """Build LLM prompt variables from all analyses.
 
         Args:
             symbol: Stock ticker symbol
@@ -123,7 +123,7 @@ class BullishResearcher:
             trump_analysis: Trump social media analysis (optional)
 
         Returns:
-            Formatted prompt string
+            Dictionary of prompt variables
         """
         # Technical section
         rsi_str = f"{technical.rsi:.1f}" if technical.rsi is not None else "N/A"
@@ -178,27 +178,15 @@ class BullishResearcher:
                 f"market_relevant: {trump_analysis.market_relevant})"
             )
 
-        return f"""Construct a bull thesis for {symbol} based on:
-
-TECHNICAL: {tech_str}
-SENTIMENT: {sent_str}
-NEWS: {news_str}
-FUNDAMENTAL: {fund_str}
-COMPARATIVE: {comp_str}
-TRUMP: {trump_str}
-
-Provide:
-1. Bull thesis (3-4 sentences explaining why this stock has upside potential)
-2. Key strengths (3-5 bullet points, each starting with '- ')
-3. Target upside % (reasonable estimate or "N/A" if uncertain)
-
-Format your response as:
-THESIS: [your thesis here]
-STRENGTHS:
-- [strength 1]
-- [strength 2]
-- [strength 3]
-UPSIDE: [percentage or N/A]"""
+        return {
+            "symbol": symbol,
+            "tech_str": tech_str,
+            "sent_str": sent_str,
+            "news_str": news_str,
+            "fund_str": fund_str,
+            "comp_str": comp_str,
+            "trump_str": trump_str,
+        }
 
     def _extract_thesis(self, response: str) -> str:
         """Extract bull thesis from LLM response.

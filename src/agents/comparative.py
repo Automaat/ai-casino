@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from src.data.comparative import ComparativeData, ComparativeDataFetcher
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 
 
 class RelativeValuation(StrEnum):
@@ -60,6 +61,7 @@ class ComparativeAnalyst:
         """
         self.llm = llm_client
         self.fetcher = fetcher
+        self.prompt_loader = PromptLoader("comparative")
         logger.info("Initialized ComparativeAnalyst")
 
     async def analyze(self, symbol: str) -> ComparativeAnalysis:
@@ -78,13 +80,10 @@ class ComparativeAnalyst:
             metrics = self._calculate_relative_metrics(data)
             valuation = self._assess_relative_valuation(data, metrics)
 
-            prompt = self._build_analysis_prompt(symbol, data, metrics, valuation)
-            system = (
-                "You are a comparative analyst. Provide a concise interpretation "
-                "of how this stock compares to its sector and the broader market in 2-3 sentences."
-            )
+            system = self.prompt_loader.load("system")
+            user_prompt = self._build_analysis_prompt(symbol, data, metrics, valuation)
 
-            interpretation = await self.llm.acomplete(prompt, system=system, temperature=0.5)
+            interpretation = await self.llm.acomplete(user_prompt, system=system, temperature=0.5)
             confidence = self._calculate_confidence(data, metrics)
 
             return ComparativeAnalysis(
@@ -202,37 +201,41 @@ class ComparativeAnalyst:
         Returns:
             Formatted prompt string
         """
-        parts = [f"Analyze comparative data for {symbol} vs sector ({data.sector_etf}) and market (SPY):"]
-
-        parts.append(f"Relative Valuation: {valuation.value}")
-
+        valuation_parts = []
         if data.stock_info.pe_ratio is not None:
-            parts.append(f"Stock P/E: {data.stock_info.pe_ratio:.2f}")
+            valuation_parts.append(f"Stock P/E: {data.stock_info.pe_ratio:.2f}")
         if data.sector_pe is not None:
-            parts.append(f"Sector P/E: {data.sector_pe:.2f}")
+            valuation_parts.append(f"Sector P/E: {data.sector_pe:.2f}")
         if data.market_pe is not None:
-            parts.append(f"Market P/E: {data.market_pe:.2f}")
+            valuation_parts.append(f"Market P/E: {data.market_pe:.2f}")
 
         if metrics.get("pe_vs_sector") is not None:
-            parts.append(f"P/E vs Sector: {metrics['pe_vs_sector']:.2f}x")
+            valuation_parts.append(f"P/E vs Sector: {metrics['pe_vs_sector']:.2f}x")
         if metrics.get("pe_vs_market") is not None:
-            parts.append(f"P/E vs Market: {metrics['pe_vs_market']:.2f}x")
+            valuation_parts.append(f"P/E vs Market: {metrics['pe_vs_market']:.2f}x")
 
-        # Performance
+        performance_parts = []
         stock_perf = data.stock_performance
         if stock_perf.ytd_return is not None:
-            parts.append(f"Stock YTD: {stock_perf.ytd_return:.1f}%")
+            performance_parts.append(f"Stock YTD: {stock_perf.ytd_return:.1f}%")
         if stock_perf.three_month_return is not None:
-            parts.append(f"Stock 3M: {stock_perf.three_month_return:.1f}%")
+            performance_parts.append(f"Stock 3M: {stock_perf.three_month_return:.1f}%")
 
         if metrics.get("perf_vs_sector_ytd") is not None:
             sign = "+" if metrics["perf_vs_sector_ytd"] >= 0 else ""
-            parts.append(f"vs Sector YTD: {sign}{metrics['perf_vs_sector_ytd']:.1f}%")
+            performance_parts.append(f"vs Sector YTD: {sign}{metrics['perf_vs_sector_ytd']:.1f}%")
         if metrics.get("perf_vs_market_ytd") is not None:
             sign = "+" if metrics["perf_vs_market_ytd"] >= 0 else ""
-            parts.append(f"vs Market YTD: {sign}{metrics['perf_vs_market_ytd']:.1f}%")
+            performance_parts.append(f"vs Market YTD: {sign}{metrics['perf_vs_market_ytd']:.1f}%")
 
-        return "\n".join(parts)
+        return self.prompt_loader.load(
+            "user",
+            symbol=symbol,
+            sector_etf=data.sector_etf,
+            valuation=valuation.value,
+            valuation_metrics="\n".join(valuation_parts),
+            performance_metrics="\n".join(performance_parts),
+        )
 
     def _calculate_confidence(self, data: ComparativeData, metrics: dict[str, float | None]) -> float:
         """Calculate confidence score based on data completeness.

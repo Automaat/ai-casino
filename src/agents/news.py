@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from src.data.news import NewsArticle
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 
 
 class NewsAnalysis(BaseModel):
@@ -25,6 +26,7 @@ class NewsAnalyst:
             llm_client: LLM client for analysis
         """
         self.llm = llm_client
+        self._prompts = PromptLoader("news")
         logger.info("Initialized NewsAnalyst")
 
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> NewsAnalysis:
@@ -49,22 +51,8 @@ class NewsAnalyst:
 
         headlines_text = self._format_articles(articles)
 
-        prompt = f"""Analyze these recent news articles for {symbol}:
-
-{headlines_text}
-
-Provide:
-1. Key themes (3-5 main topics)
-2. Impact assessment (how news affects stock outlook)
-3. Trading recommendation based on news
-
-Be concise and focus on actionable insights.
-"""
-
-        system_prompt = (
-            "You are a financial news analyst. Extract key themes and assess "
-            "their potential impact on stock price and trading decisions."
-        )
+        prompt = self._prompts.load("user", symbol=symbol, headlines_text=headlines_text)
+        system_prompt = self._prompts.load("system")
 
         response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
 

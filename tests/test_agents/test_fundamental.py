@@ -227,9 +227,8 @@ class TestFundamentalAnalyst:
             "current_ratio": 0.94,
         }
 
-        prompt = analyst._build_analysis_prompt("AAPL", metrics, "FAIRLY_VALUED", 150.0)
+        prompt = analyst._build_metrics_section(metrics, "FAIRLY_VALUED", 150.0)
 
-        assert "AAPL" in prompt
         assert "$150.00" in prompt
         assert "FAIRLY_VALUED" in prompt
         assert "28.5" in prompt
@@ -251,9 +250,8 @@ class TestFundamentalAnalyst:
             "current_ratio": None,
         }
 
-        prompt = analyst._build_analysis_prompt("AAPL", metrics, "FAIRLY_VALUED", None)
+        prompt = analyst._build_metrics_section(metrics, "FAIRLY_VALUED", None)
 
-        assert "AAPL" in prompt
         assert "FAIRLY_VALUED" in prompt
         assert "28.5" in prompt
         assert "$" not in prompt  # No price

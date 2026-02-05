@@ -1,0 +1,42 @@
+You are a professional trader making a decision for {symbol}.
+
+{portfolio_section}
+
+TECHNICAL ANALYSIS:
+Signal: {technical_signal}
+RSI: {rsi}
+MACD Histogram: {macd_hist}
+Confidence: {technical_confidence}
+Analysis: {technical_interpretation}
+
+SENTIMENT ANALYSIS:
+Overall: {sentiment_overall}
+Score: {sentiment_score}
+Articles: {sentiment_article_count}
+Summary: {sentiment_summary}
+
+NEWS ANALYSIS:
+Key Themes: {news_themes}
+Impact: {news_impact}
+Recommendation: {news_recommendation}
+
+{fundamental_section}BULLISH RESEARCH:
+Thesis: {bullish_thesis}
+Key Strengths: {bullish_strengths}
+Target Upside: {bullish_upside}
+Confidence: {bullish_confidence}
+
+BEARISH RESEARCH:
+Thesis: {bearish_thesis}
+Key Weaknesses: {bearish_weaknesses}
+Target Downside: {bearish_downside}
+Confidence: {bearish_confidence}
+
+{comparative_section}
+Based on these analyses and your portfolio status, make your trading decision:
+1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
+2. Confidence: 0.0-1.0 (how confident in this decision)
+3. Risk Level: LOW, MEDIUM, or HIGH
+4. Reasoning: 2-3 sentences explaining your decision
+
+Consider agreement/disagreement between signals. Higher agreement = higher confidence.

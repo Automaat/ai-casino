@@ -1,0 +1,2 @@
+Analyze fundamental data for {symbol}:
+{metrics_section}

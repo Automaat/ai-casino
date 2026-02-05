@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from src.data.truth_social import TruthPost
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
 
 # Market-relevant keywords that historically move markets
@@ -99,6 +100,7 @@ class TrumpAnalyst:
             llm_client: LLM client for analysis
         """
         self.llm = llm_client
+        self._prompts = PromptLoader("trump")
         logger.info("Initialized TrumpAnalyst")
 
     async def analyze(self, posts: list[TruthPost]) -> TrumpAnalysis:
@@ -142,29 +144,10 @@ class TrumpAnalyst:
         market_relevant = len(market_relevant_posts) > 0
         posts_text = self._format_posts(posts[:10])  # Limit to 10 most recent
 
-        prompt = f"""Analyze these recent Truth Social posts from Donald Trump for market/trading implications:
+        system_prompt = self._prompts.load("system")
+        user_prompt = self._prompts.load("user", posts_text=posts_text)
 
-{posts_text}
-
-Provide:
-1. Overall sentiment (positive/negative/neutral)
-2. Trading signal (BUY/SELL/HOLD) - based on market impact
-3. Confidence (0.0-1.0) - how confident are you in this signal
-4. Brief interpretation (1-2 sentences)
-
-Consider:
-- Direct market calls ("time to buy", etc.)
-- Policy announcements (tariffs, trade deals)
-- Company mentions
-- Economic commentary
-"""
-
-        system_prompt = (
-            "You are a financial analyst specializing in political risk and social media sentiment. "
-            "Analyze how Trump's posts might affect markets. Be objective and focus on market impact, not politics."
-        )
-
-        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
+        response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.4)
 
         sentiment = self._extract_sentiment(response)
         signal = self._extract_signal(response)

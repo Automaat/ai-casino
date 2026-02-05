@@ -1,0 +1,9 @@
+PORTFOLIO STATUS:
+You do NOT own any shares of {symbol}.
+
+VALID ACTIONS WHEN NOT HOLDING:
+- BUY: Open a new position (only if signals strongly support entry)
+- HOLD: Do NOT buy - signals are mixed or unfavorable for entry
+
+IMPORTANT: Since you don't own this stock, SELL is NOT a valid action.
+Choose BUY only with strong conviction. Otherwise choose HOLD (meaning: don't buy yet).

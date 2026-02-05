@@ -1,0 +1,21 @@
+Analyze these {criteria} screening results from {universe}:
+
+{results_block}
+
+Total screened: {total_screened}
+Failed to screen: {errors_count} symbols
+{context_block}
+Provide your analysis in the following format:
+
+SUMMARY: (2-3 sentences overview of the results)
+
+TOP_PICKS: (list top 3 stocks with brief reasoning, one per line)
+1. SYMBOL - reasoning
+2. SYMBOL - reasoning
+3. SYMBOL - reasoning
+
+SECTOR_INSIGHTS: (1-2 sentences about sector concentration or patterns)
+
+RISK_FACTORS: (1-2 sentences about common risks across these picks)
+
+NEXT_STEPS: (1-2 sentences suggesting follow-up actions)

@@ -1,0 +1,21 @@
+Construct a bear thesis for {symbol} based on:
+
+TECHNICAL: {tech_str}
+SENTIMENT: {sent_str}
+NEWS: {news_str}
+FUNDAMENTAL: {fund_str}
+COMPARATIVE: {comp_str}
+TRUMP: {trump_str}
+
+Provide:
+1. Bear thesis (3-4 sentences explaining why this stock has downside risk)
+2. Key weaknesses (3-5 bullet points, each starting with '- ')
+3. Target downside % (reasonable estimate or "N/A" if uncertain)
+
+Format your response as:
+THESIS: [your thesis here]
+WEAKNESSES:
+- [weakness 1]
+- [weakness 2]
+- [weakness 3]
+DOWNSIDE: [percentage or N/A]
