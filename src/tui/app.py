@@ -27,51 +27,17 @@ from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
 from src.tui.widgets.autocomplete_input import AutocompleteInput
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
+from src.prompts import PromptLoader
 from src.workflows.trading import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
-AGENTIC_SYSTEM_PROMPT = """You are Donald J. Trump, 47th President of the United States, analyzing markets and stocks! 🇺🇸
-
-You LOVE the stock market - it's FANTASTIC under your leadership! You know ALL the best companies, the best deals, the best trades. Nobody knows markets like you do! BELIEVE ME! 💰📈
-
-**Your tools:**
-- get_market_data: Get prices/data (you LOVE data!) 📊
-- get_news: Get news articles (watch for FAKE NEWS!) 📰
-- web_search: Search the web (you're always searching!) 🌐
-- analyze_stock: Full trading analysis (EXPENSIVE - needs confirmation) 🎯
-- screen_stocks: Find opportunities (EXPENSIVE - needs confirmation) 🔍
-
-**Your style - AUTHENTIC TRUMP 2024-2026:**
-- CAPS for emphasis! TREMENDOUS! AMAZING! DISASTER!
-- Catchphrases: "BELIEVE ME", "Nobody does it better", "Fantastic", "Tremendous", "Make Portfolio Great Again"
-- Superlatives: "the best", "the greatest", "like never before"
-- Short punchy sentences! No long-winded explanations!
-- Reference your victories, your deals, your success! 🏆
-- When bullish: "Going to the MOON! 🚀 WINNING!"
-- When bearish: "Total DISASTER! Terrible! Sad! 📉"
-- Use markdown for readability
-- Personal pronouns: "I", "my administration", "my policies"
-- Call out competitors: "Sleepy companies", "Low energy stocks"
-- Take credit for gains, externalize blame for losses
-- Frame tariffs as "Liberation Day" - patriotic policy
-
-You make BOLD calls. You're CONFIDENT. You trade like a WINNER! 💎🏆"""
-
-STREAMING_SYSTEM_PROMPT = """You are Donald J. Trump, 47th President of the United States, talking about markets! 🇺🇸
-
-You LOVE stocks, deals, and WINNING! You know markets better than ANYONE! 📊💰
-
-**Style - AUTHENTIC TRUMP 2024-2026:**
-- CAPS for EMPHASIS! TREMENDOUS! DISASTER!
-- Catchphrases: "BELIEVE ME", "Nobody better", "Fantastic", "Make Portfolio Great Again"
-- Short sentences! Punchy! Energetic!
-- Reference YOUR success, YOUR deals! 🏆
-- Bullish = MOON 🚀 / Bearish = DISASTER 📉
-- Superlatives everywhere!
-- Use markdown
-
-You're CONFIDENT. You're a WINNER. Let's talk markets! 💎"""
+# Load chat prompts from files
+_chat_prompts = PromptLoader("chat")
+AI_CASINO_AGENTIC_PROMPT = _chat_prompts.load("ai_casino_agentic")
+AI_CASINO_STREAMING_PROMPT = _chat_prompts.load("ai_casino_streaming")
+TRUMP_AGENTIC_PROMPT = _chat_prompts.load("trump_agentic")
+TRUMP_STREAMING_PROMPT = _chat_prompts.load("trump_streaming")
 
 
 class TradingChatApp(App):
@@ -98,6 +64,7 @@ class TradingChatApp(App):
         self._tool_registry = self._create_tool_registry()
         self._pending_tool_confirmation: dict | None = None
         self._quit_pending = False
+        self._personality: str = "casino"  # "casino" or "trump"
         self._load_history()
 
     def _create_tool_registry(self) -> ToolRegistry:
@@ -115,6 +82,26 @@ class TradingChatApp(App):
         provider = os.getenv("LLM_PROVIDER", "ollama")
         model = os.getenv("LLM_MODEL", "qwen3:14b")
         return f"{provider}/{model}"
+
+    def _get_agentic_prompt(self) -> str:
+        """Get current agentic system prompt based on personality."""
+        return TRUMP_AGENTIC_PROMPT if self._personality == "trump" else AI_CASINO_AGENTIC_PROMPT
+
+    def _get_streaming_prompt(self) -> str:
+        """Get current streaming system prompt based on personality."""
+        return TRUMP_STREAMING_PROMPT if self._personality == "trump" else AI_CASINO_STREAMING_PROMPT
+
+    def set_personality(self, personality: str) -> None:
+        """Set chat personality mode.
+
+        Args:
+            personality: "casino" or "trump"
+        """
+        if personality not in ("casino", "trump"):
+            msg = f"Invalid personality: {personality}"
+            raise ValueError(msg)
+        self._personality = personality
+        logger.info(f"Switched personality to: {personality}")
 
     def _load_history(self) -> None:
         """Load chat history from file."""
@@ -156,6 +143,7 @@ class TradingChatApp(App):
         chat.show_welcome(self._model_name)
         self._sync_input_history()
         self.query_one(AutocompleteInput).focus()
+        self._command_handler._app = self  # Link app for personality commands
 
     def _sync_input_history(self) -> None:
         """Sync user message history to input widget."""
@@ -389,7 +377,7 @@ class TradingChatApp(App):
         first_token = True
 
         try:
-            async for token in self._llm.astream(text, system=STREAMING_SYSTEM_PROMPT, temperature=0.7):
+            async for token in self._llm.astream(text, system=self._get_streaming_prompt(), temperature=0.7):
                 if first_token:
                     chat.hide_thinking()
                     first_token = False
@@ -447,7 +435,7 @@ class TradingChatApp(App):
                 prompt=text,
                 tools=self._tool_registry.get_definitions(),
                 tool_executor=tool_executor,
-                system=AGENTIC_SYSTEM_PROMPT,
+                system=self._get_agentic_prompt(),
                 temperature=0.7,
                 max_tool_calls=5,
                 on_tool_call=on_tool_call,
