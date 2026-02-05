@@ -280,7 +280,7 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
         "sentiment_analysis": None,
         "news_analysis": None,
         "final_decision": TradingDecision(
-            action=Signal.BUY, confidence=0.85, reasoning="Test", risk_level="LOW"
+            action=Signal.BUY, confidence=0.85, reasoning=["Test"], risk_level="LOW"
         ),
         "risk_assessment": MagicMock(
             validation=MagicMock(approved=True),
@@ -326,7 +326,7 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
         "sentiment_analysis": None,
         "news_analysis": None,
         "final_decision": TradingDecision(
-            action=Signal.BUY, confidence=0.85, reasoning="Test", risk_level="LOW"
+            action=Signal.BUY, confidence=0.85, reasoning=["Test"], risk_level="LOW"
         ),
         "risk_assessment": MagicMock(
             validation=MagicMock(approved=True),
