@@ -1,336 +1,407 @@
-"""Worker process for running analysis outside Textual's fd context."""
+"""Isolated thread workers for running analysis without blocking Textual TUI.
+
+Architecture:
+- Workers run in dedicated threads with their own event loops
+- Communication via thread-safe callbacks (Textual's post_message)
+- No awaiting from Textual side - true fire-and-forget with message-based results
+"""
 
 import asyncio
 import contextlib
-import json
+import os
 import re
-import subprocess
-import sys
-import tempfile
+import threading
 from collections.abc import Callable
-from pathlib import Path
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from loguru import logger
+
+if TYPE_CHECKING:
+    from src.agents.technical import TechnicalAnalyst
+    from src.screening.analyzer import ScreeningAnalysis
+    from src.screening.screener import ScreeningOutput
+    from src.workflows.trading import TradingWorkflow
+
+# Configure threading/parallelism for ML libraries
+# CRITICAL: Must be set BEFORE importing torch/transformers to prevent
+# "bad value(s) in fds_to_keep" error when FinBERT uses multiprocessing
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
+# Disable PyTorch multiprocessing to avoid fd conflicts with Textual
+import torch
+
+torch.set_num_threads(1)
+with contextlib.suppress(RuntimeError):
+    # Use 'fork' instead of 'spawn' to avoid fd passing issues with Textual TUI
+    torch.multiprocessing.set_start_method("fork", force=True)
 
 
-def _raise_process_error(returncode: int, stderr_path: Path) -> None:
-    """Raise RuntimeError with stderr content if available."""
-    stderr_output = ""
-    with contextlib.suppress(OSError):
-        stderr_output = stderr_path.read_text().strip()
-    msg = f"Analysis process failed with code {returncode}"
-    if stderr_output:
-        msg = f"{msg}\nstderr: {stderr_output}"
-    raise RuntimeError(msg)
+# --- Type Definitions ---
+
+
+@dataclass
+class AnalysisJob:
+    """Represents a running analysis job."""
+
+    thread: threading.Thread
+    cancelled: threading.Event
+    symbol: str
+
+
+@dataclass
+class AnalysisParams:
+    """Parameters for analysis thread."""
+
+    symbol: str
+    period_days: int
+    progress_callback: "ProgressCallback | None"
+    result_callback: "ResultCallback"
+    error_callback: "ErrorCallback"
+    cancelled_event: threading.Event
+
+
+@dataclass
+class ScreeningParams:
+    """Parameters for screening thread."""
+
+    criteria: str
+    universe: str
+    top_n: int
+    save_to_watchlist: bool
+    progress_callback: "ProgressCallback | None"
+    result_callback: "ResultCallback"
+    error_callback: "ErrorCallback"
+    cancelled_event: threading.Event
+
+
+# Active jobs registry (thread-safe via GIL for dict operations)
+_active_jobs: dict[str, AnalysisJob] = {}
+
+
+# --- Callbacks Type Aliases ---
+
+ProgressCallback = Callable[[str, str, str], None]  # (step_id, status, detail)
+ResultCallback = Callable[[dict], None]  # (result_dict)
+ErrorCallback = Callable[[str], None]  # (error_message)
+
+
+# --- Helpers ---
 
 
 def _validate_symbol(symbol: str) -> str:
-    """Validate and sanitize stock symbol.
-
-    Args:
-        symbol: Stock ticker symbol
-
-    Returns:
-        Validated symbol
-
-    Raises:
-        ValueError: If symbol is invalid
-    """
+    """Validate and sanitize stock symbol."""
     if not symbol or not re.match(r"^[A-Z]{1,5}$", symbol.upper()):
         msg = f"Invalid stock symbol: {symbol}"
         raise ValueError(msg)
     return symbol.upper()
 
 
-_STEP_MAP = {
-    "fetch_data": "fetch_data",
-    "loading_model": "fetch_data",
-    "technical": "technical",
-    "decision": "decision",
-    "complete": "decision",
-}
+def _update_progress(step: str, detail: str, callback: ProgressCallback | None) -> None:
+    """Update progress via callback (thread-safe when using Textual post_message)."""
+    if callback:
+        callback(step, "active", detail)
 
 
-def _parse_status_file(status_path: Path) -> tuple[str, str]:
-    """Parse status file and return (step, detail)."""
+def _check_cancelled(cancelled_event: threading.Event | None) -> None:
+    """Check if operation was cancelled and raise if so."""
+    if cancelled_event and cancelled_event.is_set():
+        msg = "Operation cancelled"
+        raise asyncio.CancelledError(msg)
+
+
+def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -> "TradingWorkflow":
+    """Create workflow components with progress tracking."""
+    from src.data.fundamental import FundamentalDataFetcher
+    from src.data.market import MarketDataFetcher
+    from src.data.news import NewsFetcher
+    from src.models.llm import LLMClient
+    from src.models.sentiment import FinBERTSentiment
+    from src.workflows.trading import TradingWorkflow
+
+    llm_client = LLMClient()
+    market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
+    news_fetcher = NewsFetcher()
+
+    _update_progress("fetch_data", "Loading FinBERT model...", progress_callback)
+    finbert = FinBERTSentiment()
+    fundamental_fetcher = FundamentalDataFetcher()
+
+    return TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        broker=None,
+        metrics_tracker=None,
+        use_meta_agent=True,
+    )
+
+
+def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:
+    """Patch workflow methods to report progress."""
+    original_run_analyses = workflow._run_analyses  # noqa: SLF001
+
+    async def patched_run_analyses(state: dict, technical_analyst: "TechnicalAnalyst") -> dict:
+        _update_progress("technical", "Running technical analysis...", progress_callback)
+        return await original_run_analyses(state, technical_analyst)
+
+    workflow._run_analyses = patched_run_analyses  # noqa: SLF001
+
+    original_make_decision = workflow._make_decision  # noqa: SLF001
+
+    async def patched_make_decision(state: dict) -> dict:
+        _update_progress("decision", "Synthesizing trading decision...", progress_callback)
+        return await original_make_decision(state)
+
+    workflow._make_decision = patched_make_decision  # noqa: SLF001
+
+
+def _setup_isolated_event_loop() -> asyncio.AbstractEventLoop:
+    """Create fresh event loop for isolated thread execution.
+
+    Each thread gets its own event loop and semaphore to avoid
+    cross-loop async client issues.
+    """
+    from src.models.llm import _semaphore_holder
+
+    # Clear our semaphore (bound to old event loop)
+    _semaphore_holder.clear()
+
+    # Create fresh event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    return loop
+
+
+def _cleanup_event_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Clean up event loop: cancel tasks, close loop."""
+    # Cancel pending tasks
+    pending = asyncio.all_tasks(loop)
+    for task in pending:
+        task.cancel()
+
+    if pending:
+        with contextlib.suppress(Exception):
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+    loop.close()
+
+
+async def _run_analysis_async(
+    symbol: str,
+    period_days: int,
+    progress_callback: ProgressCallback | None,
+    cancelled_event: threading.Event | None,
+) -> dict:
+    """Internal async function that runs in isolated thread's event loop."""
+    validated_symbol = _validate_symbol(symbol)
+
     try:
-        content = status_path.read_text().strip()
-        if content:
-            status_data = json.loads(content)
-            return status_data.get("step", ""), status_data.get("detail", "")
-    except (OSError, json.JSONDecodeError):
-        # Best-effort parsing: on any read/parse error, treat status as empty
-        pass
-    return "", ""
+        _update_progress("fetch_data", "Initializing...", progress_callback)
 
+        workflow = _create_workflow_with_progress(progress_callback)
+        _patch_workflow_progress(workflow, progress_callback)
 
-def _terminate_process(process: subprocess.Popen) -> None:
-    """Terminate process gracefully, escalate to kill if needed."""
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-    except OSError:
-        pass  # Process already exited
+        # Cancellation check task
+        async def check_cancellation() -> None:
+            while True:
+                await asyncio.sleep(0.5)
+                _check_cancelled(cancelled_event)
 
+        cancellation_task = asyncio.create_task(check_cancellation()) if cancelled_event else None
 
-_WORKER_SCRIPT = """
-import asyncio
-import json
-import os
-import sys
+        try:
+            result = await workflow.analyze(validated_symbol, period_days=period_days)
+            _update_progress("decision", "Analysis complete", progress_callback)
+            return result.model_dump()
+        finally:
+            if cancellation_task:
+                cancellation_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await cancellation_task
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-
-_current_step = "fetch_data"
-_status_file = None
-
-def update_status(step, detail=""):
-    global _current_step, _status_file
-    _current_step = step
-    if _status_file:
-        with open(_status_file, "w") as f:
-            json.dump({"step": step, "detail": detail[:80] if detail else ""}, f)
-
-def update_detail(detail):
-    global _current_step, _status_file
-    if _status_file:
-        with open(_status_file, "w") as f:
-            json.dump({"step": _current_step, "detail": detail[:80] if detail else ""}, f)
-
-_last_log_time = 0
-
-def log_sink(message):
-    global _last_log_time
-    import time
-    now = time.time()
-    if now - _last_log_time < 0.3:
-        return
-    _last_log_time = now
-    record = message.record
-    msg = record["message"]
-    if msg and len(msg) > 5:
-        update_detail(msg)
-
-def main():
-    global _status_file
-    symbol = sys.argv[1]
-    period_days = int(sys.argv[2])
-    output_file = sys.argv[3]
-    _status_file = sys.argv[4]
-
-    try:
-        update_status("fetch_data")
-
-        from loguru import logger
-        logger.remove()
-        logger.add(log_sink, format="{message}", level="INFO")
-
-        from src.data.fundamental import FundamentalDataFetcher
-        from src.data.market import MarketDataFetcher
-        from src.data.news import NewsFetcher
-        from src.models.llm import LLMClient
-        from src.models.sentiment import FinBERTSentiment
-        from src.workflows.trading import TradingWorkflow
-
-        llm_client = LLMClient()
-        market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-        news_fetcher = NewsFetcher()
-
-        update_status("loading_model", "Loading FinBERT model...")
-        finbert = FinBERTSentiment()
-        fundamental_fetcher = FundamentalDataFetcher()
-
-        workflow = TradingWorkflow(
-            llm_client,
-            market_fetcher,
-            news_fetcher,
-            finbert,
-            fundamental_fetcher,
-            broker=None,
-            metrics_tracker=None,
-            use_meta_agent=True,
-        )
-
-        # Patch workflow to report progress
-        original_run_analyses = workflow._run_analyses
-        async def patched_run_analyses(state, technical_analyst):
-            update_status("technical", "Starting technical analysis...")
-            return await original_run_analyses(state, technical_analyst)
-        workflow._run_analyses = patched_run_analyses
-
-        original_make_decision = workflow._make_decision
-        async def patched_make_decision(state):
-            update_status("decision", "Synthesizing trading decision...")
-            return await original_make_decision(state)
-        workflow._make_decision = patched_make_decision
-
-        result = asyncio.run(workflow.analyze(symbol, period_days=period_days))
-        update_status("complete", "Analysis complete")
-
-        with open(output_file, "w") as f:
-            json.dump({"status": "success", "data": result.model_dump()}, f)
+    except asyncio.CancelledError:
+        logger.info(f"Analysis cancelled for {validated_symbol}")
+        raise
     except Exception as e:
-        update_status("error", str(e)[:80])
-        with open(output_file, "w") as f:
-            json.dump({"status": "error", "data": str(e)}, f)
+        logger.error(f"Analysis failed for {validated_symbol}: {e}")
+        msg = f"Analysis failed: {e}"
+        raise RuntimeError(msg) from e
 
-if __name__ == "__main__":
-    main()
-"""
+
+def _analysis_thread_target(params: AnalysisParams) -> None:
+    """Thread entry point - creates isolated event loop and runs analysis."""
+    loop = _setup_isolated_event_loop()
+    try:
+        coro = _run_analysis_async(
+            params.symbol, params.period_days, params.progress_callback, params.cancelled_event
+        )
+        result = loop.run_until_complete(coro)
+        params.result_callback(result)
+    except asyncio.CancelledError:
+        params.error_callback("Analysis cancelled")
+    except Exception as e:
+        params.error_callback(str(e))
+    finally:
+        _cleanup_event_loop(loop)
+        _active_jobs.pop(params.symbol, None)
+
+
+def start_analysis(
+    symbol: str,
+    period_days: int = 90,
+    progress_callback: ProgressCallback | None = None,
+    result_callback: ResultCallback | None = None,
+    error_callback: ErrorCallback | None = None,
+) -> str:
+    """Start analysis in isolated thread (fire-and-forget).
+
+    Returns:
+        Job ID (symbol) for cancellation
+    """
+    validated_symbol = _validate_symbol(symbol)
+
+    # Remember previous job to wait for cleanup
+    previous_job = _active_jobs.get(validated_symbol)
+
+    cancel_analysis(validated_symbol)
+
+    # Wait for previous thread to finish cleanup
+    if previous_job is not None:
+        thread = previous_job.thread
+        if thread is not None and thread.is_alive():
+            try:
+                thread.join(timeout=5.0)
+                if thread.is_alive():
+                    logger.warning(
+                        f"Previous analysis thread for {validated_symbol} "
+                        "did not terminate within 5s after cancellation."
+                    )
+            except Exception as e:
+                logger.warning(f"Error waiting for previous analysis thread for {validated_symbol}: {e}")
+
+    def noop_result(_: dict) -> None:
+        pass
+
+    def noop_error(_: str) -> None:
+        pass
+
+    params = AnalysisParams(
+        symbol=validated_symbol,
+        period_days=period_days,
+        progress_callback=progress_callback,
+        result_callback=result_callback or noop_result,
+        error_callback=error_callback or noop_error,
+        cancelled_event=threading.Event(),
+    )
+
+    thread = threading.Thread(
+        target=_analysis_thread_target,
+        args=(params,),
+        name=f"analysis-{validated_symbol}",
+        daemon=True,
+    )
+
+    job = AnalysisJob(thread=thread, cancelled=params.cancelled_event, symbol=validated_symbol)
+    _active_jobs[validated_symbol] = job
+
+    thread.start()
+    logger.info(f"Started analysis thread for {validated_symbol}")
+
+    return validated_symbol
+
+
+def cancel_analysis(symbol: str) -> bool:
+    """Cancel running analysis for symbol.
+
+    Returns:
+        True if job was cancelled, False if no active job
+    """
+    job = _active_jobs.get(symbol)
+    if job:
+        job.cancelled.set()
+        logger.info(f"Cancelled analysis for {symbol}")
+        return True
+    return False
+
+
+def is_analysis_running(symbol: str) -> bool:
+    """Check if analysis is running for symbol."""
+    job = _active_jobs.get(symbol)
+    return job is not None and job.thread.is_alive()
+
+
+# --- Legacy API (for backwards compatibility) ---
 
 
 async def run_analysis_in_process(
     symbol: str,
     period_days: int = 90,
-    progress_callback: Callable[[str, str, str], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
     is_cancelled: Callable[[], bool] | None = None,
 ) -> dict:
-    """Run analysis in a separate process to avoid Textual fd conflicts.
+    """Run analysis in isolated thread (legacy async API).
 
-    Args:
-        symbol: Stock ticker symbol
-        period_days: Days of historical data
-        progress_callback: Optional callback(step_id, status, detail) for progress updates
-        is_cancelled: Optional callback returning True if analysis should be cancelled
-
-    Returns:
-        Analysis result dict
-
-    Raises:
-        RuntimeError: If analysis fails
-        asyncio.CancelledError: If cancelled via is_cancelled callback
+    DEPRECATED: Use start_analysis() for fire-and-forget pattern.
     """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as script_file:
-        script_file.write(_WORKER_SCRIPT)
-        script_path = Path(script_file.name)
+    result_holder: dict = {}
+    error_holder: list[str] = []
+    done_event = threading.Event()
+    cancelled_event = threading.Event()
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as output_file:
-        output_path = Path(output_file.name)
+    def on_result(result: dict) -> None:
+        result_holder["data"] = result
+        done_event.set()
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".status", delete=False) as status_file:
-        status_path = Path(status_file.name)
+    def on_error(error: str) -> None:
+        error_holder.append(error)
+        done_event.set()
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".stderr", delete=False) as stderr_file:
-        stderr_path = Path(stderr_file.name)
+    def progress_with_cancel_check(step_id: str, status: str, detail: str) -> None:
+        if is_cancelled and is_cancelled():
+            cancelled_event.set()
+        if progress_callback:
+            progress_callback(step_id, status, detail)
 
+    params = AnalysisParams(
+        symbol=_validate_symbol(symbol),
+        period_days=period_days,
+        progress_callback=progress_with_cancel_check,
+        result_callback=on_result,
+        error_callback=on_error,
+        cancelled_event=cancelled_event,
+    )
+
+    thread = threading.Thread(
+        target=_analysis_thread_target,
+        args=(params,),
+        name=f"analysis-{params.symbol}",
+        daemon=True,
+    )
+    thread.start()
+
+    while not done_event.is_set():
+        await asyncio.sleep(0.1)
+        if is_cancelled and is_cancelled():
+            cancelled_event.set()
+
+    if error_holder:
+        if "cancelled" in error_holder[0].lower():
+            raise asyncio.CancelledError(error_holder[0])
+        raise RuntimeError(error_holder[0])
+
+    return result_holder["data"]
+
+
+async def _run_screening_async(params: ScreeningParams) -> dict:
+    """Internal async function that runs in isolated thread's event loop."""
     try:
-        validated_symbol = _validate_symbol(symbol)
-        cmd = [
-            sys.executable,
-            str(script_path),
-            validated_symbol,
-            str(period_days),
-            str(output_path),
-            str(status_path),
-        ]
-        with stderr_path.open("w") as stderr_fh:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=stderr_fh,
-                close_fds=True,
-                cwd=Path(__file__).parent.parent.parent,
-            )
-
-        last_step, last_detail = "", ""
-
-        cancelled = False
-        try:
-            while process.poll() is None:
-                await asyncio.sleep(0.3)
-                if is_cancelled and is_cancelled():
-                    cancelled = True
-                    break
-                if progress_callback and status_path.exists():
-                    current_step, current_detail = _parse_status_file(status_path)
-                    if (current_step and current_step != last_step) or current_detail != last_detail:
-                        step_id = _STEP_MAP.get(current_step, current_step)
-                        progress_callback(step_id, "active", current_detail)
-                        last_step, last_detail = current_step, current_detail
-        except asyncio.CancelledError:
-            cancelled = True
-
-        if cancelled:
-            _terminate_process(process)
-            raise asyncio.CancelledError
-
-        if process.returncode != 0:
-            _raise_process_error(process.returncode, stderr_path)
-
-        with output_path.open() as f:
-            result = json.load(f)
-
-        if result["status"] == "error":
-            raise RuntimeError(result["data"])
-
-        return result["data"]
-
-    finally:
-        script_path.unlink(missing_ok=True)
-        output_path.unlink(missing_ok=True)
-        status_path.unlink(missing_ok=True)
-        stderr_path.unlink(missing_ok=True)
-
-
-_SCREENING_WORKER_SCRIPT = """
-import asyncio
-import json
-import os
-import sys
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-
-_current_step = "fetch_universe"
-_status_file = None
-
-def update_status(step, detail=""):
-    global _current_step, _status_file
-    _current_step = step
-    if _status_file:
-        with open(_status_file, "w") as f:
-            json.dump({"step": step, "detail": detail[:80] if detail else ""}, f)
-
-def update_detail(detail):
-    global _current_step, _status_file
-    if _status_file:
-        with open(_status_file, "w") as f:
-            json.dump({"step": _current_step, "detail": detail[:80] if detail else ""}, f)
-
-_last_log_time = 0
-
-def log_sink(message):
-    global _last_log_time
-    import time
-    now = time.time()
-    if now - _last_log_time < 0.3:
-        return
-    _last_log_time = now
-    record = message.record
-    msg = record["message"]
-    if msg and len(msg) > 5:
-        update_detail(msg)
-
-def main():
-    global _status_file
-    criteria = sys.argv[1]
-    universe = sys.argv[2]
-    top_n = int(sys.argv[3])
-    save_to_watchlist = sys.argv[4] == "True"
-    output_file = sys.argv[5]
-    _status_file = sys.argv[6]
-
-    try:
-        update_status("fetch_universe", "Fetching stock universe...")
-
-        from loguru import logger
-        logger.remove()
-        logger.add(log_sink, format="{message}", level="INFO")
+        _update_progress("fetch_universe", "Fetching stock universe...", params.progress_callback)
 
         from src.data.universe import StockUniverseFetcher
         from src.models.llm import LLMClient
@@ -340,41 +411,208 @@ def main():
 
         universe_fetcher = StockUniverseFetcher()
 
-        update_status("screening", f"Screening {universe} for {criteria}...")
+        _update_progress(
+            "screening", f"Screening {params.universe} for {params.criteria}...", params.progress_callback
+        )
         screener = StockScreener(universe_fetcher=universe_fetcher)
-        screening_criteria = ScreeningCriteria(criteria)
-        output = screener.screen(criteria=screening_criteria, universe=universe, top_n=top_n)
+        screening_criteria = ScreeningCriteria(params.criteria)
+        output = screener.screen(criteria=screening_criteria, universe=params.universe, top_n=params.top_n)
 
-        update_status("analyzing", "Analyzing results with LLM...")
+        _check_cancelled(params.cancelled_event)
+
+        _update_progress("analyzing", "Analyzing results with LLM...", params.progress_callback)
         llm = LLMClient()
         analyzer = ScreeningAnalyzer(llm_client=llm)
-        analysis = asyncio.run(analyzer.analyze(output))
 
-        formatted = format_screening_output(output, analysis)
+        analysis = await analyzer.analyze(output)
 
-        if save_to_watchlist and output.results:
-            update_status("saving", "Saving to watchlist...")
+        _check_cancelled(params.cancelled_event)
+
+        formatted = _format_screening_output(output, analysis)
+
+        if params.save_to_watchlist and output.results:
+            _update_progress("analyzing", "Saving to watchlist...", params.progress_callback)
             exporter = ScreeningExporter()
             exporter.save_to_watchlist(output.results, screening_criteria, "default")
 
-        update_status("complete", "Screening complete")
+        _update_progress("analyzing", "Screening complete", params.progress_callback)
 
-        with open(output_file, "w") as f:
-            json.dump({
-                "status": "success",
-                "data": {
-                    "screening_output": output.model_dump(),
-                    "analysis": analysis.model_dump(),
-                    "formatted_output": formatted,
-                }
-            }, f, default=str)
+        return {
+            "screening_output": output.model_dump(),
+            "analysis": analysis.model_dump(),
+            "formatted_output": formatted,
+        }
 
+    except asyncio.CancelledError:
+        logger.info(f"Screening cancelled for {params.criteria}")
+        raise
     except Exception as e:
-        update_status("error", str(e)[:80])
-        with open(output_file, "w") as f:
-            json.dump({"status": "error", "data": str(e)}, f)
+        logger.error(f"Screening failed: {e}")
+        msg = f"Screening failed: {e}"
+        raise RuntimeError(msg) from e
 
-def format_screening_output(output, analysis):
+
+def _screening_thread_target(params: ScreeningParams) -> None:
+    """Thread entry point for screening."""
+    loop = _setup_isolated_event_loop()
+    try:
+        result = loop.run_until_complete(_run_screening_async(params))
+        params.result_callback(result)
+    except asyncio.CancelledError:
+        params.error_callback("Screening cancelled")
+    except Exception as e:
+        params.error_callback(str(e))
+    finally:
+        _cleanup_event_loop(loop)
+
+
+@dataclass
+class ScreeningCallbacks:
+    """Callbacks for screening progress and results."""
+
+    progress: ProgressCallback | None = None
+    result: ResultCallback | None = None
+    error: ErrorCallback | None = None
+
+
+def start_screening(
+    criteria: str,
+    universe: str = "COMBINED",
+    top_n: int = 10,
+    save_to_watchlist: bool = False,
+    callbacks: ScreeningCallbacks | None = None,
+) -> threading.Event:
+    """Start screening in isolated thread (fire-and-forget).
+
+    Returns:
+        Cancellation event - call .set() to cancel
+    """
+    cb = callbacks or ScreeningCallbacks()
+
+    def noop_result(_: dict) -> None:
+        pass
+
+    def noop_error(_: str) -> None:
+        pass
+
+    params = ScreeningParams(
+        criteria=criteria,
+        universe=universe,
+        top_n=top_n,
+        save_to_watchlist=save_to_watchlist,
+        progress_callback=cb.progress,
+        result_callback=cb.result or noop_result,
+        error_callback=cb.error or noop_error,
+        cancelled_event=threading.Event(),
+    )
+
+    thread = threading.Thread(
+        target=_screening_thread_target,
+        args=(params,),
+        name=f"screening-{criteria}",
+        daemon=True,
+    )
+    thread.start()
+    logger.info(f"Started screening thread for {criteria}")
+
+    return params.cancelled_event
+
+
+@dataclass
+class LegacyScreeningOptions:
+    """Options for legacy screening API."""
+
+    universe: str = "COMBINED"
+    top_n: int = 10
+    save_to_watchlist: bool = False
+    progress_callback: ProgressCallback | None = None
+    is_cancelled: Callable[[], bool] | None = None
+
+
+def _resolve_screening_options(
+    options: LegacyScreeningOptions | None,
+    legacy_kwargs: dict,
+) -> LegacyScreeningOptions:
+    """Resolve options from explicit options or legacy kwargs."""
+    if options is not None and legacy_kwargs:
+        logger.warning(
+            "run_screening_in_process received both 'options' and legacy kwargs; ignoring legacy kwargs."
+        )
+    if options is None:
+        return LegacyScreeningOptions(**legacy_kwargs) if legacy_kwargs else LegacyScreeningOptions()
+    return options
+
+
+def _handle_screening_result(error_holder: list[str], result_holder: dict) -> dict:
+    """Handle screening result or raise appropriate error."""
+    if error_holder:
+        if "cancelled" in error_holder[0].lower():
+            raise asyncio.CancelledError(error_holder[0])
+        raise RuntimeError(error_holder[0])
+    return result_holder["data"]
+
+
+async def run_screening_in_process(
+    criteria: str,
+    options: LegacyScreeningOptions | None = None,
+    **legacy_kwargs: str | int | Callable[[], bool] | ProgressCallback,
+) -> dict:
+    """Run screening in isolated thread (legacy async API).
+
+    DEPRECATED: Use start_screening() for fire-and-forget pattern.
+
+    Accepts either explicit `options` instance or legacy keyword arguments
+    matching LegacyScreeningOptions fields.
+    """
+    opts = _resolve_screening_options(options, legacy_kwargs)
+    result_holder: dict = {}
+    error_holder: list[str] = []
+    done_event = threading.Event()
+    cancelled_event = threading.Event()
+
+    def on_result(result: dict) -> None:
+        result_holder["data"] = result
+        done_event.set()
+
+    def on_error(error: str) -> None:
+        error_holder.append(error)
+        done_event.set()
+
+    def progress_with_cancel_check(step_id: str, status: str, detail: str) -> None:
+        if opts.is_cancelled and opts.is_cancelled():
+            cancelled_event.set()
+        if opts.progress_callback:
+            opts.progress_callback(step_id, status, detail)
+
+    params = ScreeningParams(
+        criteria=criteria,
+        universe=opts.universe,
+        top_n=opts.top_n,
+        save_to_watchlist=opts.save_to_watchlist,
+        progress_callback=progress_with_cancel_check,
+        result_callback=on_result,
+        error_callback=on_error,
+        cancelled_event=cancelled_event,
+    )
+
+    thread = threading.Thread(
+        target=_screening_thread_target,
+        args=(params,),
+        name=f"screening-{criteria}",
+        daemon=True,
+    )
+    thread.start()
+
+    while not done_event.is_set():
+        await asyncio.sleep(0.1)
+        if opts.is_cancelled and opts.is_cancelled():
+            cancelled_event.set()
+
+    return _handle_screening_result(error_holder, result_holder)
+
+
+def _format_screening_output(output: "ScreeningOutput", analysis: "ScreeningAnalysis") -> str:
+    """Format screening output as markdown."""
     lines = [
         f"## {output.criteria.value.title()} Screening Results",
         f"**Universe:** {output.universe} | **Screened:** {output.total_screened} stocks",
@@ -386,136 +624,28 @@ def format_screening_output(output, analysis):
     ]
     for pick in analysis.top_picks:
         lines.append(f"- {pick}")
-    lines.extend([
-        "",
-        f"**Sector Insights:** {analysis.sector_insights}",
-        f"**Risk Factors:** {analysis.risk_factors}",
-        f"**Next Steps:** {analysis.next_steps}",
-        "",
-        "### Results",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            f"**Sector Insights:** {analysis.sector_insights}",
+            f"**Risk Factors:** {analysis.risk_factors}",
+            f"**Next Steps:** {analysis.next_steps}",
+            "",
+            "### Results",
+            "",
+        ]
+    )
     for i, result in enumerate(output.results, 1):
         metrics_str = ", ".join(f"{k}={v}" for k, v in result.metrics.items())
-        lines.extend([
-            f"**{i}. {result.symbol}** - {result.name}",
-            f"   Sector: {result.sector} | Score: {result.score:.2f} | Signal: {result.signal.value}",
-            f"   Metrics: {metrics_str}",
-            f"   *{result.reason}*",
-            "",
-        ])
+        lines.extend(
+            [
+                f"**{i}. {result.symbol}** - {result.name}",
+                f"   Sector: {result.sector} | Score: {result.score:.2f} | Signal: {result.signal.value}",
+                f"   Metrics: {metrics_str}",
+                f"   *{result.reason}*",
+                "",
+            ]
+        )
     if output.errors:
         lines.append(f"*Note: {len(output.errors)} symbols failed to screen.*")
-    return "\\n".join(lines)
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-_SCREENING_STEP_MAP = {
-    "fetch_universe": "fetch_universe",
-    "screening": "screening",
-    "analyzing": "analyzing",
-    "saving": "analyzing",
-    "complete": "analyzing",
-}
-
-
-async def run_screening_in_process(  # noqa: PLR0913
-    criteria: str,
-    universe: str = "COMBINED",
-    top_n: int = 10,
-    save_to_watchlist: bool = False,
-    progress_callback: Callable[[str, str, str], None] | None = None,
-    is_cancelled: Callable[[], bool] | None = None,
-) -> dict:
-    """Run screening in a separate process to avoid Textual fd conflicts.
-
-    Args:
-        criteria: Screening criteria (momentum, value, breakout)
-        universe: Stock universe (SP500, NASDAQ100, COMBINED)
-        top_n: Number of results
-        save_to_watchlist: Save results to default watchlist
-        progress_callback: Optional callback(step_id, status, detail) for progress updates
-        is_cancelled: Optional callback returning True if screening should be cancelled
-
-    Returns:
-        Screening result dict
-
-    Raises:
-        RuntimeError: If screening fails
-        asyncio.CancelledError: If cancelled via is_cancelled callback
-    """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as script_file:
-        script_file.write(_SCREENING_WORKER_SCRIPT)
-        script_path = Path(script_file.name)
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as output_file:
-        output_path = Path(output_file.name)
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".status", delete=False) as status_file:
-        status_path = Path(status_file.name)
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".stderr", delete=False) as stderr_file:
-        stderr_path = Path(stderr_file.name)
-
-    try:
-        cmd = [
-            sys.executable,
-            str(script_path),
-            criteria,
-            universe,
-            str(top_n),
-            str(save_to_watchlist),
-            str(output_path),
-            str(status_path),
-        ]
-        with stderr_path.open("w") as stderr_fh:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=stderr_fh,
-                close_fds=True,
-                cwd=Path(__file__).parent.parent.parent,
-            )
-
-        last_step, last_detail = "", ""
-
-        cancelled = False
-        try:
-            while process.poll() is None:
-                await asyncio.sleep(0.3)
-                if is_cancelled and is_cancelled():
-                    cancelled = True
-                    break
-                if progress_callback and status_path.exists():
-                    current_step, current_detail = _parse_status_file(status_path)
-                    if (current_step and current_step != last_step) or current_detail != last_detail:
-                        step_id = _SCREENING_STEP_MAP.get(current_step, current_step)
-                        progress_callback(step_id, "active", current_detail)
-                        last_step, last_detail = current_step, current_detail
-        except asyncio.CancelledError:
-            cancelled = True
-
-        if cancelled:
-            _terminate_process(process)
-            raise asyncio.CancelledError
-
-        if process.returncode != 0:
-            _raise_process_error(process.returncode, stderr_path)
-
-        with output_path.open() as f:
-            result = json.load(f)
-
-        if result["status"] == "error":
-            raise RuntimeError(result["data"])
-
-        return result["data"]
-
-    finally:
-        script_path.unlink(missing_ok=True)
-        output_path.unlink(missing_ok=True)
-        status_path.unlink(missing_ok=True)
-        stderr_path.unlink(missing_ok=True)
+    return "\n".join(lines)

@@ -1,24 +1,49 @@
 """Tests for LLM client."""
 
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.models.llm import LLMClient
+from src.models.providers.base import ToolCall
 
 
 @pytest.fixture
-def mock_completion():
-    with patch("src.models.llm.completion") as mock:
-        response = MagicMock()
-        response.choices = [MagicMock()]
-        response.choices[0].message.content = "Mocked response"
-        mock.return_value = response
-        yield mock
+def mock_ollama_provider():
+    """Mock Ollama provider."""
+    with patch("src.models.llm.OllamaProvider") as mock:
+        provider = MagicMock()
+        provider.acomplete = AsyncMock(return_value="Mocked response")
+        provider.supports_tools = False
+        mock.return_value = provider
+        yield mock, provider
 
 
-def test_llm_client_init_ollama(monkeypatch):
+@pytest.fixture
+def mock_openai_provider():
+    """Mock OpenAI provider."""
+    with patch("src.models.llm.OpenAIProvider") as mock:
+        provider = MagicMock()
+        provider.acomplete = AsyncMock(return_value="Mocked response")
+        provider.acomplete_with_tools = AsyncMock(return_value=("No tools needed", None))
+        provider.supports_tools = True
+        mock.return_value = provider
+        yield mock, provider
+
+
+@pytest.fixture
+def mock_anthropic_provider():
+    """Mock Anthropic provider."""
+    with patch("src.models.llm.AnthropicProvider") as mock:
+        provider = MagicMock()
+        provider.acomplete = AsyncMock(return_value="Mocked response")
+        provider.acomplete_with_tools = AsyncMock(return_value=("No tools needed", None))
+        provider.supports_tools = True
+        mock.return_value = provider
+        yield mock, provider
+
+
+def test_llm_client_init_ollama(mock_ollama_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "qwen3:14b")
 
@@ -26,10 +51,10 @@ def test_llm_client_init_ollama(monkeypatch):
 
     assert client.provider == "ollama"
     assert client.model == "qwen3:14b"
-    assert client._model_id == "ollama/qwen3:14b"
+    mock_ollama_provider[0].assert_called_once_with(model="qwen3:14b", base_url="http://localhost:11434")
 
 
-def test_llm_client_init_anthropic(monkeypatch):
+def test_llm_client_init_anthropic(mock_anthropic_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("LLM_MODEL", "claude-sonnet-4-20250514")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -38,10 +63,10 @@ def test_llm_client_init_anthropic(monkeypatch):
 
     assert client.provider == "anthropic"
     assert client.model == "claude-sonnet-4-20250514"
-    assert client._model_id == "anthropic/claude-sonnet-4-20250514"
+    mock_anthropic_provider[0].assert_called_once_with(model="claude-sonnet-4-20250514")
 
 
-def test_llm_client_init_openai(monkeypatch):
+def test_llm_client_init_openai(mock_openai_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_MODEL", "gpt-4o")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -51,11 +76,10 @@ def test_llm_client_init_openai(monkeypatch):
 
     assert client.provider == "openai"
     assert client.model == "gpt-4o"
-    assert client._model_id == "openai/gpt-4o"
-    assert client._api_base is None
+    mock_openai_provider[0].assert_called_once_with(model="gpt-4o", base_url=None)
 
 
-def test_llm_client_init_openai_custom_api_base(monkeypatch):
+def test_llm_client_init_openai_custom_api_base(mock_openai_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_MODEL", "hf:moonshotai/Kimi-K2.5")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -65,8 +89,9 @@ def test_llm_client_init_openai_custom_api_base(monkeypatch):
 
     assert client.provider == "openai"
     assert client.model == "hf:moonshotai/Kimi-K2.5"
-    assert client._model_id == "openai/hf:moonshotai/Kimi-K2.5"
-    assert client._api_base == "https://api.synthetic.new/openai/v1"
+    mock_openai_provider[0].assert_called_once_with(
+        model="hf:moonshotai/Kimi-K2.5", base_url="https://api.synthetic.new/openai/v1"
+    )
 
 
 def test_llm_client_unsupported_provider(monkeypatch):
@@ -76,51 +101,39 @@ def test_llm_client_unsupported_provider(monkeypatch):
         LLMClient()
 
 
-def test_complete_with_system_prompt(mock_completion, monkeypatch):
+def test_complete_with_system_prompt(mock_ollama_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
-    client = LLMClient()
+    _, provider = mock_ollama_provider
 
+    client = LLMClient()
     result = client.complete("Test prompt", system="System message", temperature=0.5)
 
     assert result == "Mocked response"
-    mock_completion.assert_called_once()
-    call_args = mock_completion.call_args
-    assert call_args.kwargs["messages"] == [
+    provider.acomplete.assert_called_once()
+    call_args = provider.acomplete.call_args
+    assert call_args[0][0] == [
         {"role": "system", "content": "System message"},
         {"role": "user", "content": "Test prompt"},
     ]
-    assert call_args.kwargs["temperature"] == 0.5
+    assert call_args[0][1] == 0.5
 
 
-def test_complete_with_api_base(mock_completion, monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_MODEL", "hf:moonshotai/Kimi-K2.5")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_API_BASE", "https://api.synthetic.new/openai/v1")
+def test_complete_without_system_prompt(mock_ollama_provider, monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    _, provider = mock_ollama_provider
 
     client = LLMClient()
     result = client.complete("Test prompt")
 
     assert result == "Mocked response"
-    call_args = mock_completion.call_args
-    assert call_args.kwargs["api_base"] == "https://api.synthetic.new/openai/v1"
+    call_args = provider.acomplete.call_args
+    assert call_args[0][0] == [{"role": "user", "content": "Test prompt"}]
 
 
-def test_complete_without_system_prompt(mock_completion, monkeypatch):
+def test_chat(mock_ollama_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
-    client = LLMClient()
+    _, provider = mock_ollama_provider
 
-    result = client.complete("Test prompt")
-
-    assert result == "Mocked response"
-    call_args = mock_completion.call_args
-    assert call_args.kwargs["messages"] == [
-        {"role": "user", "content": "Test prompt"},
-    ]
-
-
-def test_chat(mock_completion, monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "ollama")
     client = LLMClient()
 
     messages = [
@@ -133,22 +146,24 @@ def test_chat(mock_completion, monkeypatch):
     result = client.chat(messages, temperature=0.3)
 
     assert result == "Mocked response"
-    mock_completion.assert_called_once()
-    call_args = mock_completion.call_args
-    assert call_args.kwargs["messages"] == messages
-    assert call_args.kwargs["temperature"] == 0.3
+    provider.acomplete.assert_called_once()
+    call_args = provider.acomplete.call_args
+    assert call_args[0][0] == messages
+    assert call_args[0][1] == 0.3
 
 
-def test_complete_handles_exception(monkeypatch):
+def test_complete_handles_exception(mock_ollama_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    _, provider = mock_ollama_provider
+    provider.acomplete = AsyncMock(side_effect=Exception("API Error"))
+
     client = LLMClient()
 
-    with patch("src.models.llm.completion", side_effect=Exception("API Error")):
-        with pytest.raises(Exception, match="API Error"):
-            client.complete("Test prompt")
+    with pytest.raises(Exception, match="API Error"):
+        client.complete("Test prompt")
 
 
-def test_repr(monkeypatch):
+def test_repr(mock_ollama_provider, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "qwen3:14b")
 
@@ -186,113 +201,70 @@ class TestCompleteWithTools:
 
         return executor
 
-    def test_complete_with_tools_no_tool_calls(self, monkeypatch, sample_tools, mock_tool_executor):
+    def test_complete_with_tools_no_tool_calls(
+        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+    ):
         """Test when LLM returns without tool calls."""
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+        provider.acomplete_with_tools = AsyncMock(return_value=("I don't need tools for this", None))
 
-        with patch("src.models.llm.completion") as mock:
-            response = MagicMock()
-            response.choices = [MagicMock()]
-            response.choices[0].message.content = "I don't need tools for this"
-            response.choices[0].message.tool_calls = None
-            mock.return_value = response
+        client = LLMClient()
+        result = client.complete_with_tools("Hello", sample_tools, mock_tool_executor)
 
-            client = LLMClient()
-            result = client.complete_with_tools("Hello", sample_tools, mock_tool_executor)
+        assert result == "I don't need tools for this"
+        assert provider.acomplete_with_tools.call_count == 1
 
-            assert result == "I don't need tools for this"
-            assert mock.call_count == 1
-
-    def test_complete_with_tools_executes_tool(self, monkeypatch, sample_tools, mock_tool_executor):
+    def test_complete_with_tools_executes_tool(
+        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+    ):
         """Test tool execution and final response."""
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
 
-        with patch("src.models.llm.completion") as mock:
-            # First call: LLM requests tool
-            tool_call_msg = MagicMock()
-            tool_call_msg.content = None
-            tool_call = MagicMock()
-            tool_call.id = "call_123"
-            tool_call.function.name = "get_weather"
-            tool_call.function.arguments = '{"location": "NYC"}'
-            tool_call_msg.tool_calls = [tool_call]
-            tool_call_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
-
-            # Second call: LLM returns final answer
-            final_msg = MagicMock()
-            final_msg.content = "The weather in NYC is sunny and 72°F"
-            final_msg.tool_calls = None
-
-            mock.side_effect = [
-                MagicMock(choices=[MagicMock(message=tool_call_msg)]),
-                MagicMock(choices=[MagicMock(message=final_msg)]),
+        tool_call = ToolCall(id="call_123", name="get_weather", arguments={"location": "NYC"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("The weather in NYC is sunny and 72°F", None),
             ]
+        )
 
-            client = LLMClient()
-            result = client.complete_with_tools(
-                "What's the weather in NYC?", sample_tools, mock_tool_executor
-            )
+        client = LLMClient()
+        result = client.complete_with_tools("What's the weather in NYC?", sample_tools, mock_tool_executor)
 
-            assert result == "The weather in NYC is sunny and 72°F"
-            assert mock.call_count == 2
+        assert result == "The weather in NYC is sunny and 72°F"
+        assert provider.acomplete_with_tools.call_count == 2
 
-    def test_complete_with_tools_max_calls_limit(self, monkeypatch, sample_tools, mock_tool_executor):
+    def test_complete_with_tools_max_calls_limit(
+        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+    ):
         """Test max_tool_calls limit is respected."""
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
 
-        with patch("src.models.llm.completion") as mock:
-            # Always return tool call
-            tool_call_msg = MagicMock()
-            tool_call_msg.content = None
-            tool_call = MagicMock()
-            tool_call.id = "call_123"
-            tool_call.function.name = "get_weather"
-            tool_call.function.arguments = '{"location": "NYC"}'
-            tool_call_msg.tool_calls = [tool_call]
-            tool_call_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
-
-            final_msg = MagicMock()
-            final_msg.content = "Final response after max calls"
-            final_msg.tool_calls = None
-
-            # Return tool calls until limit, then final
-            mock.side_effect = [
-                MagicMock(choices=[MagicMock(message=tool_call_msg)]),
-                MagicMock(choices=[MagicMock(message=tool_call_msg)]),
-                MagicMock(choices=[MagicMock(message=final_msg)]),
+        tool_call = ToolCall(id="call_123", name="get_weather", arguments={"location": "NYC"})
+        # Return tool calls for first 2, then final completion is called without tools
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                (None, [tool_call]),
             ]
+        )
+        provider.acomplete = AsyncMock(return_value="Final response after max calls")
 
-            client = LLMClient()
-            result = client.complete_with_tools("prompt", sample_tools, mock_tool_executor, max_tool_calls=2)
+        client = LLMClient()
+        result = client.complete_with_tools("prompt", sample_tools, mock_tool_executor, max_tool_calls=2)
 
-            assert result == "Final response after max calls"
-
-    def test_complete_with_tools_malformed_json(self, monkeypatch, sample_tools, mock_tool_executor):
-        """Test handling of malformed JSON in tool arguments."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
-
-        with patch("src.models.llm.completion") as mock:
-            tool_call_msg = MagicMock()
-            tool_call_msg.content = None
-            tool_call = MagicMock()
-            tool_call.id = "call_123"
-            tool_call.function.name = "get_weather"
-            tool_call.function.arguments = "invalid json{"
-            tool_call_msg.tool_calls = [tool_call]
-
-            mock.return_value = MagicMock(choices=[MagicMock(message=tool_call_msg)])
-
-            client = LLMClient()
-            with pytest.raises(json.JSONDecodeError):
-                client.complete_with_tools("prompt", sample_tools, mock_tool_executor)
+        assert result == "Final response after max calls"
+        assert provider.acomplete_with_tools.call_count == 2
+        assert provider.acomplete.call_count == 1
 
 
 class TestAcompleteWithTools:
@@ -325,80 +297,70 @@ class TestAcompleteWithTools:
         return executor
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_no_tool_calls(self, monkeypatch, sample_tools, mock_tool_executor):
+    async def test_acomplete_with_tools_no_tool_calls(
+        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+    ):
         """Test async when LLM returns without tool calls."""
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+        provider.acomplete_with_tools = AsyncMock(return_value=("No tools needed", None))
 
-        with patch("src.models.llm.acompletion") as mock:
-            response = MagicMock()
-            response.choices = [MagicMock()]
-            response.choices[0].message.content = "No tools needed"
-            response.choices[0].message.tool_calls = None
-            mock.return_value = response
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Hello", sample_tools, mock_tool_executor)
 
-            client = LLMClient()
-            result = await client.acomplete_with_tools("Hello", sample_tools, mock_tool_executor)
-
-            assert result == "No tools needed"
+        assert result == "No tools needed"
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_executes_tool(self, monkeypatch, sample_tools, mock_tool_executor):
+    async def test_acomplete_with_tools_executes_tool(
+        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+    ):
         """Test async tool execution."""
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
 
-        with patch("src.models.llm.acompletion") as mock:
-            # First call: LLM requests tool
-            tool_call_msg = MagicMock()
-            tool_call_msg.content = None
-            tool_call = MagicMock()
-            tool_call.id = "call_456"
-            tool_call.function.name = "search"
-            tool_call.function.arguments = '{"query": "python testing"}'
-            tool_call_msg.tool_calls = [tool_call]
-            tool_call_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
-
-            # Second call: final answer
-            final_msg = MagicMock()
-            final_msg.content = "Found results about Python testing"
-            final_msg.tool_calls = None
-
-            mock.side_effect = [
-                MagicMock(choices=[MagicMock(message=tool_call_msg)]),
-                MagicMock(choices=[MagicMock(message=final_msg)]),
+        tool_call = ToolCall(id="call_456", name="search", arguments={"query": "python testing"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Found results about Python testing", None),
             ]
+        )
 
-            client = LLMClient()
-            result = await client.acomplete_with_tools(
-                "Search for python testing", sample_tools, mock_tool_executor
-            )
+        client = LLMClient()
+        result = await client.acomplete_with_tools(
+            "Search for python testing", sample_tools, mock_tool_executor
+        )
 
-            assert result == "Found results about Python testing"
+        assert result == "Found results about Python testing"
 
 
 class TestSupportsTools:
     """Tests for supports_tools property."""
 
-    def test_supports_tools_anthropic(self, monkeypatch):
+    def test_supports_tools_anthropic(self, mock_anthropic_provider, monkeypatch):
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        _ = mock_anthropic_provider  # Fixture required to mock provider creation
 
         client = LLMClient()
         assert client.supports_tools is True
 
-    def test_supports_tools_openai(self, monkeypatch):
+    def test_supports_tools_openai(self, mock_openai_provider, monkeypatch):
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _ = mock_openai_provider  # Fixture required to mock provider creation
 
         client = LLMClient()
         assert client.supports_tools is True
 
-    def test_supports_tools_ollama(self, monkeypatch):
+    def test_supports_tools_ollama(self, mock_ollama_provider, monkeypatch):
         monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        _ = mock_ollama_provider  # Fixture required to mock provider creation
 
         client = LLMClient()
         assert client.supports_tools is False
