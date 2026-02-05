@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from src.tui.types import ProgressCallback
+
 if TYPE_CHECKING:
     from src.agents.technical import TechnicalAnalyst
     from src.screening.analyzer import ScreeningAnalysis
@@ -83,7 +85,6 @@ _active_jobs: dict[str, AnalysisJob] = {}
 
 # --- Callbacks Type Aliases ---
 
-ProgressCallback = Callable[[str, str, str], None]  # (step_id, status, detail)
 ResultCallback = Callable[[dict], None]  # (result_dict)
 ErrorCallback = Callable[[str], None]  # (error_message)
 

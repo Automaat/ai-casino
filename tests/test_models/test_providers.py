@@ -86,6 +86,133 @@ class TestOpenAIProviderStructured:
         assert provider.supports_structured_output is True
 
 
+class TestOpenAISchemaProcessing:
+    """Tests for OpenAI schema processing (_ensure_additional_properties_false)."""
+
+    @pytest.fixture
+    def provider(self, monkeypatch):
+        """Create OpenAI provider instance."""
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        with patch("src.models.providers.openai.AsyncOpenAI"):
+            from src.models.providers.openai import OpenAIProvider
+
+            return OpenAIProvider(model="gpt-4o")
+
+    def test_nested_objects_get_additional_properties_false(self, provider):
+        """Test nested objects receive additionalProperties: false."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "user": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                },
+                "address": {"type": "object", "properties": {"city": {"type": "string"}}},
+            },
+        }
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        assert result["additionalProperties"] is False
+        assert result["properties"]["user"]["additionalProperties"] is False
+        assert result["properties"]["address"]["additionalProperties"] is False
+
+    def test_array_of_objects_items_as_dict(self, provider):
+        """Test items (dict) processed for array schemas."""
+        schema = {
+            "type": "array",
+            "items": {"type": "object", "properties": {"id": {"type": "integer"}}},
+        }
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        assert result["items"]["additionalProperties"] is False
+
+    def test_tuple_validation_items_as_list(self, provider):
+        """Test items (list) processed for tuple validation."""
+        schema = {
+            "type": "array",
+            "items": [
+                {"type": "object", "properties": {"first": {"type": "string"}}},
+                {"type": "object", "properties": {"second": {"type": "integer"}}},
+            ],
+        }
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        assert result["items"][0]["additionalProperties"] is False
+        assert result["items"][1]["additionalProperties"] is False
+
+    def test_allof_anyof_oneof_combinators(self, provider):
+        """Test allOf/anyOf/oneOf combinators processed."""
+        schema = {
+            "allOf": [
+                {"type": "object", "properties": {"a": {"type": "string"}}},
+                {"type": "object", "properties": {"b": {"type": "integer"}}},
+            ],
+            "anyOf": [{"type": "object", "properties": {"c": {"type": "boolean"}}}],
+            "oneOf": [{"type": "object", "properties": {"d": {"type": "number"}}}],
+        }
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        assert result["allOf"][0]["additionalProperties"] is False
+        assert result["allOf"][1]["additionalProperties"] is False
+        assert result["anyOf"][0]["additionalProperties"] is False
+        assert result["oneOf"][0]["additionalProperties"] is False
+
+    def test_schemas_without_explicit_type_field(self, provider):
+        """Test schemas with properties but no type field."""
+        schema = {"properties": {"name": {"type": "string"}}}
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        assert result["additionalProperties"] is False
+
+    def test_circular_references_no_infinite_recursion(self, provider):
+        """Test circular references don't cause infinite recursion."""
+        # Create circular reference
+        inner_schema: dict = {"type": "object", "properties": {}}
+        schema = {"type": "object", "properties": {"child": inner_schema}}
+        inner_schema["properties"]["parent"] = schema
+
+        # Should not raise RecursionError
+        result = provider._ensure_additional_properties_false(schema)
+
+        # Both schemas should be processed
+        assert result["additionalProperties"] is False
+        assert result["properties"]["child"]["additionalProperties"] is False
+
+    @pytest.mark.asyncio
+    async def test_astructured_does_not_mutate_cached_schema(self, provider):
+        """Test deep copy prevents mutation of cached schema."""
+
+        class TestModel(BaseModel):
+            """Test model."""
+
+            value: str
+
+        # Get original schema
+        original_schema = TestModel.model_json_schema()
+        original_keys = set(original_schema.keys())
+
+        # Mock OpenAI response
+        mock_message = MagicMock()
+        mock_message.content = '{"value": "test"}'
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        # Call astructured
+        await provider.astructured([{"role": "user", "content": "test"}], TestModel)
+
+        # Original schema should not be mutated
+        current_schema = TestModel.model_json_schema()
+        assert set(current_schema.keys()) == original_keys
+
+
 class TestAnthropicProviderStructured:
     """Tests for Anthropic provider structured output."""
 

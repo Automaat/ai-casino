@@ -54,7 +54,8 @@ def chat() -> None:
 
     # Redirect stderr to log file to catch library output
     stderr_backup = sys.stderr
-    sys.stderr = open(log_file, "a", encoding="utf-8")  # noqa: SIM115, PTH123
+    log_file_handle = open(log_file, "a", encoding="utf-8")  # noqa: SIM115, PTH123
+    sys.stderr = log_file_handle
 
     try:
         # NOTE: nest_asyncio removed - breaks Python 3.14 + anyio/httpcore
@@ -65,14 +66,11 @@ def chat() -> None:
         app = TradingChatApp()
         app.run()
     except Exception as e:
-        # Restore stderr for error reporting
-        sys.stderr.close()
-        sys.stderr = stderr_backup
         typer.echo(f"TUI error: {e}")
         logger.exception("TUI failed")
         raise typer.Exit(1) from e
     finally:
-        # Always restore stderr
+        # Always restore stderr before closing to avoid corrupted file object
         if sys.stderr != stderr_backup:
-            sys.stderr.close()
             sys.stderr = stderr_backup
+            log_file_handle.close()

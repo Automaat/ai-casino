@@ -1,5 +1,6 @@
 """OpenAI LLM provider using official SDK."""
 
+import copy
 import json
 import os
 from collections.abc import AsyncIterator
@@ -118,31 +119,63 @@ class OpenAIProvider(BaseLLMProvider):
         """OpenAI supports tool calling."""
         return True
 
-    def _ensure_additional_properties_false(self, schema: dict) -> dict:
+    def _process_schema_properties(self, properties: dict, visited: set[int]) -> None:
+        """Process properties dict recursively."""
+        for prop_schema in properties.values():
+            self._ensure_additional_properties_false(prop_schema, visited)
+
+    def _process_schema_combinators(self, schemas: list, visited: set[int]) -> None:
+        """Process allOf/anyOf/oneOf combinator schemas."""
+        for sub_schema in schemas:
+            self._ensure_additional_properties_false(sub_schema, visited)
+
+    def _process_schema_items(self, items: dict | list, visited: set[int]) -> None:
+        """Process items (array or tuple validation)."""
+        if isinstance(items, dict):
+            self._ensure_additional_properties_false(items, visited)
+        elif isinstance(items, list):  # Tuple validation
+            for item_schema in items:
+                self._ensure_additional_properties_false(item_schema, visited)
+
+    def _ensure_additional_properties_false(self, schema: dict, visited: set[int] | None = None) -> dict:
         """Recursively ensure additionalProperties is false in schema (required by OpenAI strict mode).
 
         Args:
             schema: JSON schema dictionary
+            visited: Set of visited schema IDs to detect circular references
 
         Returns:
             Modified schema with additionalProperties: false
         """
-        if isinstance(schema, dict):
-            # Set additionalProperties: false for objects
-            if schema.get("type") == "object" or "properties" in schema:
-                schema["additionalProperties"] = False
+        if visited is None:
+            visited = set()
 
-            # Recursively process nested schemas
-            for key in ["properties", "items", "additionalProperties", "allOf", "anyOf", "oneOf"]:
-                if key in schema:
-                    if key == "properties" and isinstance(schema[key], dict):
-                        for prop_schema in schema[key].values():
-                            self._ensure_additional_properties_false(prop_schema)
-                    elif key in ("allOf", "anyOf", "oneOf") and isinstance(schema[key], list):
-                        for sub_schema in schema[key]:
-                            self._ensure_additional_properties_false(sub_schema)
-                    elif isinstance(schema[key], dict):
-                        self._ensure_additional_properties_false(schema[key])
+        # Detect circular references
+        schema_id = id(schema)
+        if schema_id in visited:
+            return schema
+        visited.add(schema_id)
+
+        if not isinstance(schema, dict):
+            return schema
+
+        # Set additionalProperties: false for objects
+        if schema.get("type") == "object" or "properties" in schema:
+            schema["additionalProperties"] = False
+
+        # Process nested schemas
+        if "properties" in schema and isinstance(schema["properties"], dict):
+            self._process_schema_properties(schema["properties"], visited)
+
+        if "items" in schema:
+            self._process_schema_items(schema["items"], visited)
+
+        for key in ("allOf", "anyOf", "oneOf"):
+            if key in schema and isinstance(schema[key], list):
+                self._process_schema_combinators(schema[key], visited)
+
+        if "additionalProperties" in schema and isinstance(schema["additionalProperties"], dict):
+            self._ensure_additional_properties_false(schema["additionalProperties"], visited)
 
         return schema
 
@@ -154,7 +187,8 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.7,
     ) -> T:
         """Generate structured output using native JSON schema."""
-        schema = response_model.model_json_schema()
+        # Deep copy to avoid mutating cached schema
+        schema = copy.deepcopy(response_model.model_json_schema())
         # OpenAI strict mode requires additionalProperties: false
         schema = self._ensure_additional_properties_false(schema)
 

@@ -7,13 +7,12 @@ can't be dynamically updated from outside the context manager.
 
 import contextlib
 import threading
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from dataclasses import dataclass, field
 
 from loguru import logger
 
-# Type alias for progress callback
-ProgressCallback = Callable[[str, str, str], None]
+from src.tui.types import ProgressCallback
 
 # Thread-local storage for current step (updated dynamically within context)
 _step_context = threading.local()
