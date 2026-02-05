@@ -369,6 +369,7 @@ class TradingWorkflow:
             state["news_analysis"],
             state["fundamental_analysis"],
             state["comparative_analysis"],
+            state["trump_analysis"],
         )
         bearish_task = self.bearish_researcher.analyze(
             state["symbol"],
@@ -377,6 +378,7 @@ class TradingWorkflow:
             state["news_analysis"],
             state["fundamental_analysis"],
             state["comparative_analysis"],
+            state["trump_analysis"],
         )
 
         bullish, bearish = await asyncio.gather(bullish_task, bearish_task)

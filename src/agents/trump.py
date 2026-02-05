@@ -198,10 +198,11 @@ Consider:
         for match in re.finditer(ticker_pattern, text):
             tickers.add(match.group(1))
 
-        # Company name mentions
+        # Company name mentions with word boundaries
         text_lower = text.lower()
         for company, ticker in COMPANY_TICKERS.items():
-            if company in text_lower:
+            pattern = r"\b" + re.escape(company) + r"\b"
+            if re.search(pattern, text_lower):
                 tickers.add(ticker)
 
         return tickers

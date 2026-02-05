@@ -1,6 +1,7 @@
 """Trump social media watcher daemon."""
 
 import asyncio
+import re
 import signal
 from datetime import UTC, datetime
 from typing import ClassVar
@@ -97,6 +98,7 @@ class TrumpWatcher:
                 broker=None,
                 metrics_tracker=None,
                 use_meta_agent=True,
+                trump_mode=True,
             )
             logger.info("TrumpWatcher workflow initialized")
 
@@ -141,9 +143,10 @@ class TrumpWatcher:
         tickers = set()
         combined_text = " ".join(p.content for p in posts).lower()
 
-        # Direct company mentions
+        # Direct company mentions with word boundaries
         for company, ticker in COMPANY_TICKERS.items():
-            if company in combined_text:
+            pattern = r"\b" + company + r"\b"
+            if re.search(pattern, combined_text):
                 tickers.add(ticker)
 
         # Sector keywords
@@ -157,9 +160,24 @@ class TrumpWatcher:
 
         return sorted(tickers)[: self.max_analyses]
 
+    def _sanitize_post_content(self, content: str, max_length: int = 200) -> str:
+        """Sanitize post content for LLM prompt.
+
+        Args:
+            content: Raw post content
+            max_length: Maximum length after truncation
+
+        Returns:
+            Sanitized content
+        """
+        sanitized = content[:max_length]
+        sanitized = sanitized.replace("\n", " ").replace("\r", " ")
+        sanitized = sanitized.replace("{", "{{").replace("}", "}}")
+        return sanitized.replace("```", "'''")
+
     async def _llm_identify_stocks(self, posts: list[TruthPost]) -> list[str]:
         """Use LLM to identify affected stocks."""
-        posts_text = "\n".join(f"- {p.content[:200]}" for p in posts[:5])
+        posts_text = "\n".join(f"- {self._sanitize_post_content(p.content)}" for p in posts[:5])
 
         prompt = f"""Based on these Truth Social posts from Donald Trump, identify up to 5 stock \
 tickers that could be significantly affected:
@@ -189,15 +207,19 @@ If no specific stocks are affected, return "NONE".
         return tickers[:5]
 
     async def _analyze_stocks(
-        self, symbols: list[str], _trump_analysis: TrumpAnalysis
+        self, symbols: list[str], trump_analysis: TrumpAnalysis
     ) -> dict[str, TradingWorkflowResult]:
         """Run trading analysis for affected stocks.
 
         Args:
             symbols: Stock symbols to analyze
-            _trump_analysis: Trump analysis (reserved for future weighting)
+            trump_analysis: Trump analysis with market context
         """
         self._init_components()
+        logger.debug(
+            f"Analyzing stocks with trump context: signal={trump_analysis.signal}, "
+            f"confidence={trump_analysis.confidence:.2f}"
+        )
 
         results: dict[str, TradingWorkflowResult] = {}
         semaphore = asyncio.Semaphore(2)  # Limit concurrent analyses

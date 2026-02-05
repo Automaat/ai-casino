@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import requests
+from dateutil import parser
 from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
@@ -72,21 +73,25 @@ class TruthSocialFetcher:
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
     def _parse_datetime(self, dt_str: str) -> datetime:
-        """Parse datetime string from archive."""
-        # Archive format: "2025-01-15T10:30:00.000Z" or similar
-        dt_str = dt_str.replace("Z", "+00:00")
-        if "." in dt_str:
-            # Handle milliseconds
-            parts = dt_str.split(".")
-            if len(parts) == 2:
-                ms_and_tz = parts[1]
-                if "+" in ms_and_tz:
-                    _ms, tz = ms_and_tz.split("+")
-                    dt_str = f"{parts[0]}+{tz}"
-                elif "-" in ms_and_tz and ms_and_tz.index("-") > 0:
-                    idx = ms_and_tz.index("-")
-                    dt_str = f"{parts[0]}{ms_and_tz[idx:]}"
-        return datetime.fromisoformat(dt_str)
+        """Parse datetime string from archive using python-dateutil.
+
+        Args:
+            dt_str: ISO 8601 datetime string
+
+        Returns:
+            Parsed datetime with UTC timezone
+
+        Raises:
+            ValueError: If dt_str is empty or invalid
+        """
+        if not dt_str or not dt_str.strip():
+            msg = "Empty datetime string - missing created_at field"
+            raise ValueError(msg)
+
+        parsed = parser.parse(dt_str)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed
 
     def _raw_to_post(self, raw: dict) -> TruthPost:
         """Convert raw archive entry to TruthPost."""

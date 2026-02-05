@@ -1,6 +1,7 @@
 """Bullish researcher agent for constructing optimistic investment thesis."""
 
 import re
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -12,6 +13,9 @@ from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
 from src.strategies.momentum import Signal
+
+if TYPE_CHECKING:
+    from src.agents.trump import TrumpAnalysis
 
 
 class BullishResearchAnalysis(BaseModel):
@@ -51,6 +55,7 @@ class BullishResearcher:
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
+        trump_analysis: "TrumpAnalysis | None" = None,
     ) -> BullishResearchAnalysis:
         """Construct bullish thesis from all analyses.
 
@@ -61,13 +66,16 @@ class BullishResearcher:
             news: News analysis result
             fundamental: Fundamental analysis result (None if unavailable due to API rate limit)
             comparative: Comparative analysis result (optional)
+            trump_analysis: Trump social media analysis (optional)
 
         Returns:
             BullishResearchAnalysis with thesis, strengths, upside, and confidence
         """
         logger.info(f"Constructing bull thesis for {symbol}")
 
-        prompt = self._build_prompt(symbol, technical, sentiment, news, fundamental, comparative)
+        prompt = self._build_prompt(
+            symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
+        )
 
         system_prompt = (
             "You are an optimistic investment researcher who identifies upside opportunities "
@@ -101,6 +109,7 @@ class BullishResearcher:
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
+        trump_analysis: "TrumpAnalysis | None" = None,
     ) -> str:
         """Build LLM prompt from all analyses.
 
@@ -111,6 +120,7 @@ class BullishResearcher:
             news: News analysis result
             fundamental: Fundamental analysis result
             comparative: Comparative analysis result (optional)
+            trump_analysis: Trump social media analysis (optional)
 
         Returns:
             Formatted prompt string
@@ -158,6 +168,16 @@ class BullishResearcher:
                 f"(P/E vs sector: {pe_vs_sector}, 3M perf vs sector: {perf_vs_sector})"
             )
 
+        # Trump analysis section
+        trump_str = "N/A"
+        if trump_analysis:
+            trump_str = (
+                f"{trump_analysis.signal.value} "
+                f"(sentiment: {trump_analysis.sentiment}, "
+                f"confidence: {trump_analysis.confidence:.2f}, "
+                f"market_relevant: {trump_analysis.market_relevant})"
+            )
+
         return f"""Construct a bull thesis for {symbol} based on:
 
 TECHNICAL: {tech_str}
@@ -165,6 +185,7 @@ SENTIMENT: {sent_str}
 NEWS: {news_str}
 FUNDAMENTAL: {fund_str}
 COMPARATIVE: {comp_str}
+TRUMP: {trump_str}
 
 Provide:
 1. Bull thesis (3-4 sentences explaining why this stock has upside potential)
