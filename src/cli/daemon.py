@@ -12,6 +12,7 @@ from rich.console import Console
 
 from src.daemon.config import DaemonConfig
 from src.daemon.runner import DaemonRunner
+from src.daemon.trump_watcher import TrumpWatcher
 
 console = Console()
 
@@ -49,4 +50,37 @@ def daemon(
     except Exception as e:
         console.print(f"\n[bold red]Daemon error:[/bold red] {e}")
         logger.exception("Daemon failed")
+        raise typer.Exit(1) from e
+
+
+def trump_daemon(
+    poll_interval: Annotated[int, typer.Option("--interval", "-i", help="Poll interval in seconds")] = 60,
+    max_analyses: Annotated[
+        int, typer.Option("--max-analyses", "-m", help="Max stocks to analyze per signal")
+    ] = 5,
+) -> None:
+    """Run Trump social media watcher daemon.
+
+    Monitors Trump's Truth Social posts and triggers stock analysis
+    when market-relevant posts are detected.
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+        level=os.getenv("LOG_LEVEL", "INFO"),
+    )
+
+    try:
+        watcher = TrumpWatcher(poll_interval=poll_interval, max_analyses=max_analyses)
+        asyncio.run(watcher.run())
+    except KeyboardInterrupt:
+        console.print("\n[bold yellow]Trump watcher interrupted[/bold yellow]")
+    except Exception as e:
+        console.print(f"\n[bold red]Trump watcher error:[/bold red] {e}")
+        logger.exception("Trump watcher failed")
         raise typer.Exit(1) from e

@@ -21,12 +21,14 @@ from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
+from src.agents.trump import TrumpAnalysis, TrumpAnalyst
 from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
 from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
+from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.metrics.tracker import BaseMetricsTracker, DatabaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
@@ -41,9 +43,11 @@ class TradingState(TypedDict):
     symbol: str
     market_data: pd.DataFrame | None
     news_articles: list[NewsArticle] | None
+    trump_posts: list[TruthPost] | None
     technical_analysis: TechnicalAnalysis | None
     sentiment_analysis: SentimentAnalysis | None
     news_analysis: NewsAnalysis | None
+    trump_analysis: TrumpAnalysis | None
     fundamental_analysis: FundamentalAnalysis | None
     comparative_analysis: ComparativeAnalysis | None
     web_research: WebResearchAnalysis | None
@@ -65,6 +69,7 @@ class TradingWorkflowResult(BaseModel):
     technical: TechnicalAnalysis
     sentiment: SentimentAnalysis
     news: NewsAnalysis
+    trump: TrumpAnalysis | None = None
     fundamental: FundamentalAnalysis | None = None
     comparative: ComparativeAnalysis | None = None
     web_research: WebResearchAnalysis | None = None
@@ -102,6 +107,7 @@ class TradingWorkflow:
         metrics_tracker: BaseMetricsTracker | None = None,
         use_ensemble: bool = False,
         use_meta_agent: bool = True,
+        trump_mode: bool = False,
         snapshot_on_trade: bool | None = None,
         snapshot_repository: "PortfolioSnapshotRepository | None" = None,
     ) -> None:
@@ -117,6 +123,7 @@ class TradingWorkflow:
             metrics_tracker: Optional metrics tracker for performance monitoring
             use_ensemble: Use ensemble strategy instead of momentum only (ignored if use_meta_agent=True)
             use_meta_agent: Use meta-agent for dynamic strategy selection (default True)
+            trump_mode: Enable Trump social media analysis
             snapshot_on_trade: Capture portfolio snapshot after trades (env: PORTFOLIO_SNAPSHOT_ON_TRADE)
             snapshot_repository: Repository for portfolio snapshots (required if snapshot_on_trade)
         """
@@ -135,6 +142,14 @@ class TradingWorkflow:
         self.metrics_tracker = metrics_tracker
         self.use_ensemble = use_ensemble
         self.use_meta_agent = use_meta_agent
+        self.trump_mode = trump_mode
+
+        # Trump mode components
+        self.trump_fetcher: TruthSocialFetcher | None = None
+        self.trump_analyst: TrumpAnalyst | None = None
+        if trump_mode:
+            self.trump_fetcher = TruthSocialFetcher()
+            self.trump_analyst = TrumpAnalyst(llm_client)
 
         # Meta-agent for dynamic strategy selection
         self.meta_agent: MetaAgent | None = None
@@ -159,7 +174,8 @@ class TradingWorkflow:
         self.risk_manager = RiskManagementAgent(llm_client)
 
         mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")
-        logger.info(f"Initialized TradingWorkflow (mode={mode})")
+        trump_str = "+trump" if trump_mode else ""
+        logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
 
     def _is_rate_limit_error(self, e: Exception) -> bool:
         """Check if exception is related to API rate limiting."""
@@ -173,6 +189,26 @@ class TradingWorkflow:
                 "5 api calls per minute",
             ]
         )
+
+    def _handle_fundamental_result(self, result: object, state: TradingState) -> FundamentalAnalysis | None:
+        """Handle fundamental analysis result with rate-limit awareness."""
+        if isinstance(result, Exception):
+            if self._is_rate_limit_error(result):
+                warning = f"Fundamental analysis unavailable: {result}"
+                logger.warning(warning)
+                state["warnings"].append(warning)
+                return None
+            raise result
+        return result
+
+    def _handle_optional_result(self, result: object, name: str, state: TradingState) -> object | None:
+        """Handle optional analysis result, logging failures as warnings."""
+        if isinstance(result, Exception):
+            warning = f"{name} analysis failed: {result}"
+            logger.warning(warning)
+            state["warnings"].append(warning)
+            return None
+        return result
 
     async def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -230,6 +266,7 @@ class TradingWorkflow:
             technical=state["technical_analysis"],
             sentiment=state["sentiment_analysis"],
             news=state["news_analysis"],
+            trump=state.get("trump_analysis"),
             fundamental=state["fundamental_analysis"],
             comparative=state["comparative_analysis"],
             web_research=state["web_research"],
@@ -274,7 +311,7 @@ class TradingWorkflow:
         """
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
-        # Parallel Group 1: independent analyses (comparative and web_research are optional)
+        # Parallel Group 1: independent analyses (comparative, web_research, trump are optional)
         technical_task = technical_analyst.analyze(state["symbol"], state["market_data"])
         sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
         news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
@@ -282,54 +319,46 @@ class TradingWorkflow:
         comparative_task = self.comparative_analyst.analyze(state["symbol"])
         web_research_task = self.web_researcher.research(state["symbol"])
 
-        results = await asyncio.gather(
+        # Include trump analysis if enabled
+        tasks = [
             technical_task,
             sentiment_task,
             news_task,
             fundamental_task,
             comparative_task,
             web_research_task,
-            return_exceptions=True,
-        )
-        technical, sentiment, news, fundamental_result, comparative_result, web_research_result = results
+        ]
 
-        # Re-raise if core analyses failed (fundamental is optional due to Alpha Vantage rate limits)
+        if self.trump_mode and self.trump_analyst and state["trump_posts"]:
+            trump_task = self.trump_analyst.analyze(state["trump_posts"])
+            tasks.append(trump_task)
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Core tasks count (before optional trump task)
+        core_task_count = 6
+        technical, sentiment, news, fundamental_result, comparative_result, web_research_result = results[
+            :core_task_count
+        ]
+        trump_result = results[core_task_count] if len(results) > core_task_count else None
+
+        # Re-raise if core analyses failed
         for result in (technical, sentiment, news):
             if isinstance(result, Exception):
                 raise result
 
-        # Fundamental is optional - but only swallow rate-limit errors
-        fundamental: FundamentalAnalysis | None = None
-        if isinstance(fundamental_result, Exception):
-            if self._is_rate_limit_error(fundamental_result):
-                warning = f"Fundamental analysis unavailable: {fundamental_result}"
-                logger.warning(warning)
-                state["warnings"].append(warning)
-            else:
-                raise fundamental_result
-        else:
-            fundamental = fundamental_result
-
-        # Comparative is optional - log warning and continue if it failed
-        comparative = comparative_result if not isinstance(comparative_result, Exception) else None
-        if isinstance(comparative_result, Exception):
-            warning = f"Comparative analysis failed: {comparative_result}"
-            logger.warning(warning)
-            state["warnings"].append(warning)
-
-        # Web research is optional - log warning and continue if it failed
-        web_research = web_research_result if not isinstance(web_research_result, Exception) else None
-        if isinstance(web_research_result, Exception):
-            warning = f"Web research failed: {web_research_result}"
-            logger.warning(warning)
-            state["warnings"].append(warning)
+        # Process optional analyses
+        fundamental = self._handle_fundamental_result(fundamental_result, state)
+        comparative = self._handle_optional_result(comparative_result, "Comparative", state)
+        web_research = self._handle_optional_result(web_research_result, "Web research", state)
+        trump_analysis = self._handle_optional_result(trump_result, "Trump", state) if trump_result else None
 
         state["technical_analysis"] = technical
         state["sentiment_analysis"] = sentiment
         state["news_analysis"] = news
+        state["trump_analysis"] = trump_analysis
         state["fundamental_analysis"] = fundamental
         state["comparative_analysis"] = comparative
-        # Web research stored for final result but not passed to downstream agents (informational only)
         state["web_research"] = web_research
 
         # Parallel Group 2: research (depends on Group 1)
@@ -340,6 +369,7 @@ class TradingWorkflow:
             state["news_analysis"],
             state["fundamental_analysis"],
             state["comparative_analysis"],
+            state["trump_analysis"],
         )
         bearish_task = self.bearish_researcher.analyze(
             state["symbol"],
@@ -348,6 +378,7 @@ class TradingWorkflow:
             state["news_analysis"],
             state["fundamental_analysis"],
             state["comparative_analysis"],
+            state["trump_analysis"],
         )
 
         bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
@@ -369,16 +400,27 @@ class TradingWorkflow:
         logger.info("Fetching market and news data")
 
         market_data = self.market_fetcher.fetch_daily(symbol, period_days)
-
         news_articles = self.news_fetcher.fetch_company_news(symbol, limit=10)
+
+        # Fetch Trump posts if trump_mode enabled
+        trump_posts: list[TruthPost] | None = None
+        if self.trump_mode and self.trump_fetcher:
+            try:
+                trump_data = self.trump_fetcher.fetch_recent(hours=24)
+                trump_posts = trump_data.posts
+                logger.info(f"Fetched {len(trump_posts)} Trump posts")
+            except Exception as e:
+                logger.warning(f"Failed to fetch Trump posts: {e}")
 
         return TradingState(
             symbol=symbol,
             market_data=market_data.data,
             news_articles=news_articles,
+            trump_posts=trump_posts,
             technical_analysis=None,
             sentiment_analysis=None,
             news_analysis=None,
+            trump_analysis=None,
             fundamental_analysis=None,
             comparative_analysis=None,
             web_research=None,
@@ -553,4 +595,5 @@ class TradingWorkflow:
     def __repr__(self) -> str:
         """String representation."""
         mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
-        return f"TradingWorkflow(agents=9, mode={mode})"
+        trump_str = "+trump" if self.trump_mode else ""
+        return f"TradingWorkflow(agents=9, mode={mode}{trump_str})"
