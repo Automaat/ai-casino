@@ -42,6 +42,9 @@ dependencies = [
     "ddgs==9.10.0",
     "diskcache==5.6.3",
 
+    # Reddit
+    "praw==7.8.1",
+
     # Async
     "nest-asyncio==1.6.0",
 
