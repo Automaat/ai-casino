@@ -98,8 +98,8 @@ class CommandHandler:
             )
 
         try:
-            if cmd == "analyze":
-                return await self._cmd_analyze(args, progress_callback, is_cancelled)
+            if cmd in ("analyze", "technical", "sentiment", "news"):
+                return await self._commands[cmd](args, progress_callback, is_cancelled)
             if cmd in ("screen", "discover"):
                 return await self._cmd_screen(args, progress_callback, is_cancelled)
             return await self._commands[cmd](args)
@@ -164,7 +164,12 @@ Type freely to chat about markets or ask questions."""
         cmd_result.workflow_result = result
         return cmd_result
 
-    async def _cmd_technical(self, args: list[str]) -> CommandResult:
+    async def _cmd_technical(
+        self,
+        args: list[str],
+        progress_callback: ProgressCallback | None = None,
+        is_cancelled: CancelledCallback | None = None,
+    ) -> CommandResult:
         """Run technical analysis only."""
         if not args:
             return CommandResult(success=False, message="Usage: /technical SYMBOL")
@@ -172,12 +177,26 @@ Type freely to chat about markets or ask questions."""
         symbol = args[0].upper()
         from src.tui.worker import run_analysis_in_process
 
-        result_dict = await run_analysis_in_process(symbol, period_days=90)
+        result_dict = await run_analysis_in_process(
+            symbol,
+            period_days=90,
+            progress_callback=progress_callback,
+            is_cancelled=is_cancelled,
+        )
         result = TradingWorkflowResult.model_validate(result_dict)
+
+        if progress_callback:
+            progress_callback("decision", "complete", "")
+
         msg = self._format_technical(result)
         return CommandResult(success=True, message=msg, data={"symbol": symbol})
 
-    async def _cmd_sentiment(self, args: list[str]) -> CommandResult:
+    async def _cmd_sentiment(
+        self,
+        args: list[str],
+        progress_callback: ProgressCallback | None = None,
+        is_cancelled: CancelledCallback | None = None,
+    ) -> CommandResult:
         """Run sentiment analysis only."""
         if not args:
             return CommandResult(success=False, message="Usage: /sentiment SYMBOL")
@@ -185,12 +204,26 @@ Type freely to chat about markets or ask questions."""
         symbol = args[0].upper()
         from src.tui.worker import run_analysis_in_process
 
-        result_dict = await run_analysis_in_process(symbol, period_days=90)
+        result_dict = await run_analysis_in_process(
+            symbol,
+            period_days=90,
+            progress_callback=progress_callback,
+            is_cancelled=is_cancelled,
+        )
         result = TradingWorkflowResult.model_validate(result_dict)
+
+        if progress_callback:
+            progress_callback("decision", "complete", "")
+
         msg = self._format_sentiment(result)
         return CommandResult(success=True, message=msg, data={"symbol": symbol})
 
-    async def _cmd_news(self, args: list[str]) -> CommandResult:
+    async def _cmd_news(
+        self,
+        args: list[str],
+        progress_callback: ProgressCallback | None = None,
+        is_cancelled: CancelledCallback | None = None,
+    ) -> CommandResult:
         """Run news analysis only."""
         if not args:
             return CommandResult(success=False, message="Usage: /news SYMBOL")
@@ -198,8 +231,17 @@ Type freely to chat about markets or ask questions."""
         symbol = args[0].upper()
         from src.tui.worker import run_analysis_in_process
 
-        result_dict = await run_analysis_in_process(symbol, period_days=90)
+        result_dict = await run_analysis_in_process(
+            symbol,
+            period_days=90,
+            progress_callback=progress_callback,
+            is_cancelled=is_cancelled,
+        )
         result = TradingWorkflowResult.model_validate(result_dict)
+
+        if progress_callback:
+            progress_callback("decision", "complete", "")
+
         msg = self._format_news(result)
         return CommandResult(success=True, message=msg, data={"symbol": symbol})
 

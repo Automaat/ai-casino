@@ -136,6 +136,40 @@ class TradingChatApp(App):
         user_messages = [m["content"] for m in self._history if m.get("role") == "user"]
         self.query_one(AutocompleteInput).set_input_history(list(reversed(user_messages)))
 
+    def _get_tool_completion_message(self, name: str, args: dict, result: str) -> str:
+        """Get user-friendly completion message for tool call.
+
+        Args:
+            name: Tool name
+            args: Tool arguments
+            result: Tool execution result
+
+        Returns:
+            Short completion message
+        """
+        if name == "get_news":
+            lower_result = result.lower()
+            if "failed" in lower_result or "error" in lower_result:
+                msg = "Failed to fetch news"
+            elif "no recent news found" in lower_result:
+                msg = "No news found"
+            else:
+                article_count = result.count("\n## ")
+                msg = f"Fetched {article_count} articles" if article_count > 0 else "Retrieved news"
+            return msg
+        if name == "get_market_data":
+            symbol = args.get("symbol", "")
+            return f"Retrieved data for {symbol}" if symbol else "Retrieved market data"
+        if name == "analyze_stock":
+            symbol = args.get("symbol", "")
+            return f"Analyzed {symbol}" if symbol else "Analysis complete"
+        if name == "screen_stocks":
+            return "Screening complete"
+        if name == "web_search":
+            query = args.get("query", "")
+            return f"Searched: {query[:40]}..." if len(query) > 40 else f"Searched: {query}"
+        return "Complete"
+
     async def on_autocomplete_input_submitted(self, event: AutocompleteInput.Submitted) -> None:
         """Handle input submission."""
         text = event.value.strip()
@@ -193,23 +227,40 @@ class TradingChatApp(App):
         cmd, args = self._command_handler.parse_command(text)
         symbol = args[0].upper() if args else ""
 
-        if cmd == "analyze" and symbol:
-            status_bar.set_working(f"Analyzing {symbol}...")
-            chat.show_tool_call("Trading Analysis", f"{symbol} full analysis")
+        # Route all long-running commands through workers with progress
+        if cmd in ("analyze", "technical", "sentiment", "news") and symbol:
+            labels = {
+                "analyze": ("Analyzing", "full analysis"),
+                "technical": ("Analyzing", "technical analysis"),
+                "sentiment": ("Analyzing", "sentiment analysis"),
+                "news": ("Analyzing", "news analysis"),
+            }
+            verb, desc = labels[cmd]
+
+            status_bar.set_working(f"{verb} {symbol}...")
+            chat.show_tool_call(f"{cmd.title()} Analysis", f"{symbol} {desc}")
             chat.show_progress(symbol)
-            self._analysis_worker = self._run_analysis_worker(text, symbol)
+            self._analysis_worker = self._run_analysis_worker(text, symbol, cmd)
+
+        elif cmd in ("screen", "discover"):
+            status_bar.set_working("Screening stocks...")
+            chat.show_tool_call("Stock Screening", "Finding opportunities")
+            chat.show_progress("screening")
+            self._analysis_worker = self._run_screening_worker(text)
+
         else:
             result = await self._command_handler.execute(text)
             chat.add_assistant_message(result.message)
             self._history.append({"role": "assistant", "content": result.message})
 
     @work(exclusive=True)
-    async def _run_analysis_worker(self, text: str, symbol: str) -> None:
+    async def _run_analysis_worker(self, text: str, symbol: str, command_type: str = "analyze") -> None:
         """Run analysis in background async worker.
 
         Args:
             text: Full command text
             symbol: Stock ticker symbol
+            command_type: Type of command (analyze, technical, sentiment, news)
         """
         import asyncio
 
@@ -225,9 +276,34 @@ class TradingChatApp(App):
         try:
             result = await self._command_handler.execute(text, progress_callback, is_cancelled)
             if not worker.is_cancelled:
-                self.post_message(AnalysisComplete(result, symbol))
+                self.post_message(AnalysisComplete(result, symbol, command_type))
         except asyncio.CancelledError:
             logger.info("Analysis worker cancelled for %s", symbol)
+
+    @work(exclusive=True)
+    async def _run_screening_worker(self, text: str) -> None:
+        """Run screening in background async worker.
+
+        Args:
+            text: Full command text
+        """
+        import asyncio
+
+        worker = get_current_worker()
+
+        def progress_callback(step_id: str, status: str, detail: str) -> None:
+            if not worker.is_cancelled:
+                self.post_message(AnalysisProgress(step_id, status, detail))
+
+        def is_cancelled() -> bool:
+            return worker.is_cancelled
+
+        try:
+            result = await self._command_handler.execute(text, progress_callback, is_cancelled)
+            if not worker.is_cancelled:
+                self.post_message(AnalysisComplete(result, "", "screen"))
+        except asyncio.CancelledError:
+            logger.info("Screening worker cancelled")
 
     def on_analysis_progress(self, event: AnalysisProgress) -> None:
         """Handle progress update from worker."""
@@ -245,8 +321,10 @@ class TradingChatApp(App):
         if event.result.success:
             chat.complete_progress()
             if tool_widget:
-                tool_widget.set_complete("Analysis complete")
-            if event.result.workflow_result and isinstance(
+                tool_widget.set_complete("Complete")
+
+            # Show specialized result or full workflow result
+            if event.command_type == "analyze" and isinstance(
                 event.result.workflow_result, TradingWorkflowResult
             ):
                 chat.show_result_box(event.result.workflow_result)
@@ -255,7 +333,7 @@ class TradingChatApp(App):
         else:
             chat.complete_progress()
             if tool_widget:
-                tool_widget.set_complete("Analysis failed")
+                tool_widget.set_complete("Failed")
             chat.add_assistant_message(event.result.message)
 
         status_bar.clear_working()
@@ -322,8 +400,8 @@ class TradingChatApp(App):
                 return
             args_str = ", ".join(f"{k}={v}" for k, v in args.items())
             widget = chat.show_tool_call(name, args_str)
-            result_preview = result[:100] + "..." if len(result) > 100 else result
-            widget.set_complete(result_preview)
+            completion_msg = self._get_tool_completion_message(name, args, result)
+            widget.set_complete(completion_msg)
 
         def tool_executor(name: str, args: dict) -> str:
             """Execute tool with confirmation check."""
