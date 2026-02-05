@@ -136,6 +136,33 @@ class TradingChatApp(App):
         user_messages = [m["content"] for m in self._history if m.get("role") == "user"]
         self.query_one(AutocompleteInput).set_input_history(list(reversed(user_messages)))
 
+    def _get_tool_completion_message(self, name: str, args: dict, result: str) -> str:
+        """Get user-friendly completion message for tool call.
+
+        Args:
+            name: Tool name
+            args: Tool arguments
+            result: Tool execution result
+
+        Returns:
+            Short completion message
+        """
+        if name == "get_news":
+            article_count = result.count("\n## ")
+            return f"Fetched {article_count} articles" if article_count > 0 else "Retrieved news"
+        if name == "get_market_data":
+            symbol = args.get("symbol", "")
+            return f"Retrieved data for {symbol}" if symbol else "Retrieved market data"
+        if name == "analyze_stock":
+            symbol = args.get("symbol", "")
+            return f"Analyzed {symbol}" if symbol else "Analysis complete"
+        if name == "screen_stocks":
+            return "Screening complete"
+        if name == "web_search":
+            query = args.get("query", "")
+            return f"Searched: {query[:40]}..." if len(query) > 40 else f"Searched: {query}"
+        return "Complete"
+
     async def on_autocomplete_input_submitted(self, event: AutocompleteInput.Submitted) -> None:
         """Handle input submission."""
         text = event.value.strip()
@@ -366,8 +393,8 @@ class TradingChatApp(App):
                 return
             args_str = ", ".join(f"{k}={v}" for k, v in args.items())
             widget = chat.show_tool_call(name, args_str)
-            result_preview = result[:100] + "..." if len(result) > 100 else result
-            widget.set_complete(result_preview)
+            completion_msg = self._get_tool_completion_message(name, args, result)
+            widget.set_complete(completion_msg)
 
         def tool_executor(name: str, args: dict) -> str:
             """Execute tool with confirmation check."""
