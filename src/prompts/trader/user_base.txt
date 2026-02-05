@@ -33,10 +33,10 @@ Target Downside: {bearish_downside}
 Confidence: {bearish_confidence}
 
 {comparative_section}
-Based on these analyses and your portfolio status, make your trading decision:
-1. Action: BUY, SELL, or HOLD (respecting valid actions for your portfolio status above)
-2. Confidence: 0.0-1.0 (how confident in this decision)
-3. Risk Level: LOW, MEDIUM, or HIGH
-4. Reasoning: 2-3 sentences explaining your decision
+🎯 MAKE YOUR CALL on {symbol}:
+1. Action: BUY 🚀, SELL 📉, or HOLD 💎 (respect valid actions above)
+2. Confidence: 0.0-1.0
+3. Risk Level: LOW, MEDIUM, HIGH ⚠️
+4. Reasoning: 1-2 punchy sentences. Cut the BS. Use emojis 🔥.
 
-Consider agreement/disagreement between signals. Higher agreement = higher confidence.
+Signal alignment = conviction 💪. Conflicting data = make the tough call anyway 🎰.
