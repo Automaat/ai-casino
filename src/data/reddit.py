@@ -117,12 +117,13 @@ EXCLUDED_WORDS = frozenset(
     }
 )
 
-_NO_RETRY_EXCEPTIONS = prawcore.exceptions.ResponseException
+_NO_RETRY_EXCEPTIONS = (prawcore.exceptions.Forbidden, prawcore.exceptions.InvalidToken)
 
 HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(Exception) & retry_if_not_exception_type(_NO_RETRY_EXCEPTIONS),
+    retry=retry_if_exception_type(Exception)
+    & retry_if_not_exception_type((ValueError, _NO_RETRY_EXCEPTIONS)),
     reraise=True,
     before_sleep=lambda retry_state: logger.warning(
         f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"
@@ -263,7 +264,8 @@ class RedditFetcher:
         Returns:
             True if symbol found
         """
-        pattern = rf"\${symbol}\b|\b{symbol}\b"
+        escaped_symbol = re.escape(symbol)
+        pattern = rf"\${escaped_symbol}\b|\b{escaped_symbol}\b"
         return bool(re.search(pattern, text, re.IGNORECASE))
 
     @HTTP_RETRY
@@ -352,7 +354,6 @@ class RedditFetcher:
         self,
         subreddits: list[str] | None = None,
         limit: int = 100,
-        time_filter: str = "day",
         min_mentions: int = 3,
     ) -> list[TrendingTicker]:
         """Fetch trending tickers from Reddit.
@@ -360,7 +361,6 @@ class RedditFetcher:
         Args:
             subreddits: List of subreddits to scan
             limit: Max posts per subreddit
-            time_filter: Time filter (hour, day, week, month, year, all)
             min_mentions: Minimum mentions to include ticker
 
         Returns:
@@ -369,11 +369,9 @@ class RedditFetcher:
         logger.info("Fetching trending tickers from Reddit")
         subreddits = subreddits or DEFAULT_SUBREDDITS
 
-        cache_key = self._cache_key(
-            "trending", ",".join(subreddits), str(limit), time_filter, str(min_mentions)
-        )
+        cache_key = self._cache_key("trending", ",".join(subreddits), str(limit), str(min_mentions))
         cached = self._cache.get(cache_key)
-        if cached:
+        if cached is not None:
             logger.debug("Cache hit for trending tickers")
             return [TrendingTicker.model_validate(t) for t in cached]
 
@@ -390,11 +388,15 @@ class RedditFetcher:
                     text = f"{submission.title} {submission.selftext or ''}"
                     tickers = self._extract_tickers(text)
 
+                    if not tickers:
+                        continue
+
+                    post = self._submission_to_post(submission)
+
                     for ticker in tickers:
                         if ticker not in ticker_data:
                             ticker_data[ticker] = {"posts": [], "total_score": 0, "ratios": []}
 
-                        post = self._submission_to_post(submission)
                         ticker_data[ticker]["posts"].append(post)
                         ticker_data[ticker]["total_score"] += submission.score
                         ticker_data[ticker]["ratios"].append(submission.upvote_ratio)

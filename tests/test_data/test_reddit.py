@@ -318,9 +318,9 @@ class TestRedditFetcher:
 
     def test_no_retry_on_auth_error(self, fetcher, mock_reddit):
         """Test that auth errors do not trigger retry."""
-        mock_reddit.subreddit.side_effect = prawcore.exceptions.ResponseException(MagicMock(status_code=401))
+        mock_reddit.subreddit.side_effect = prawcore.exceptions.InvalidToken(MagicMock(status_code=401))
 
-        with pytest.raises(prawcore.exceptions.ResponseException):
+        with pytest.raises(prawcore.exceptions.InvalidToken):
             fetcher.fetch_mentions("AAPL", subreddits=["wallstreetbets"])
 
         # Should have been called only once (no retry)
