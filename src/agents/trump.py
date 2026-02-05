@@ -1,14 +1,26 @@
 """Trump Social Media Analysis Agent."""
 
 import re
+from typing import Literal
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.data.truth_social import TruthPost
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
+
+
+class TrumpLLMResponse(BaseModel):
+    """LLM response structure for Trump analysis."""
+
+    signal: Literal["BUY", "SELL", "HOLD"] = Field(description="Trading signal based on posts")
+    sentiment: Literal["positive", "negative", "neutral"] = Field(description="Overall sentiment of posts")
+    confidence: float = Field(description="Confidence in the signal (0.0-1.0)", ge=0.0, le=1.0)
+    interpretation: str = Field(description="Summary interpretation of the posts")
+
 
 # Market-relevant keywords that historically move markets
 MARKET_KEYWORDS = frozenset(
@@ -147,12 +159,21 @@ class TrumpAnalyst:
         system_prompt = self._prompts.load("system")
         user_prompt = self._prompts.load("user", posts_text=posts_text)
 
-        response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.4)
-
-        sentiment = self._extract_sentiment(response)
-        signal = self._extract_signal(response)
-        confidence = self._extract_confidence(response)
-        interpretation = self._extract_interpretation(response)
+        try:
+            llm_response = await self.llm.astructured(
+                user_prompt, TrumpLLMResponse, system=system_prompt, temperature=0.4
+            )
+            sentiment = llm_response.sentiment
+            signal = Signal(llm_response.signal)
+            confidence = llm_response.confidence
+            interpretation = llm_response.interpretation
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.4)
+            sentiment = self._extract_sentiment(response)
+            signal = self._extract_signal(response)
+            confidence = self._extract_confidence(response)
+            interpretation = self._extract_interpretation(response)
 
         logger.info(f"Trump analysis complete: signal={signal}, confidence={confidence:.2f}")
 

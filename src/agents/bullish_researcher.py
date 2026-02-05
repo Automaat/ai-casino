@@ -12,11 +12,20 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
 
 if TYPE_CHECKING:
     from src.agents.trump import TrumpAnalysis
+
+
+class BullishLLMResponse(BaseModel):
+    """LLM response structure for bullish research."""
+
+    thesis: str = Field(description="Bull thesis (3-4 sentences)")
+    key_strengths: list[str] = Field(description="Top 3-5 bullish signals as bullet points")
+    target_upside: float | None = Field(description="Expected upside percentage or null if unavailable")
 
 
 class BullishResearchAnalysis(BaseModel):
@@ -82,11 +91,20 @@ class BullishResearcher:
         prompt = self._prompts.load("user", **prompt_vars)
         system_prompt = self._prompts.load("system")
 
-        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
+        try:
+            llm_response = await self.llm.astructured(
+                prompt, BullishLLMResponse, system=system_prompt, temperature=0.5
+            )
+            thesis = llm_response.thesis
+            key_strengths = llm_response.key_strengths
+            target_upside = llm_response.target_upside
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
+            thesis = self._extract_thesis(response)
+            key_strengths = self._extract_key_strengths(response)
+            target_upside = self._extract_target_upside(response)
 
-        thesis = self._extract_thesis(response)
-        key_strengths = self._extract_key_strengths(response)
-        target_upside = self._extract_target_upside(response)
         confidence = self._calculate_confidence(technical, sentiment, news, fundamental)
 
         logger.info(

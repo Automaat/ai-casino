@@ -1,11 +1,20 @@
 """News Analysis Agent."""
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.data.news import NewsArticle
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
+
+
+class NewsLLMResponse(BaseModel):
+    """LLM response structure for news analysis."""
+
+    key_themes: list[str] = Field(description="Top 3-5 key themes from the news")
+    impact_assessment: str = Field(description="Assessment of market impact")
+    recommendation: str = Field(description="Trading recommendation based on news")
 
 
 class NewsAnalysis(BaseModel):
@@ -54,11 +63,19 @@ class NewsAnalyst:
         prompt = self._prompts.load("user", symbol=symbol, headlines_text=headlines_text)
         system_prompt = self._prompts.load("system")
 
-        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
-
-        key_themes = self._extract_themes(response)
-        impact = self._extract_section(response, "impact")
-        recommendation = self._extract_section(response, "recommendation")
+        try:
+            llm_response = await self.llm.astructured(
+                prompt, NewsLLMResponse, system=system_prompt, temperature=0.4
+            )
+            key_themes = llm_response.key_themes
+            impact = llm_response.impact_assessment
+            recommendation = llm_response.recommendation
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
+            key_themes = self._extract_themes(response)
+            impact = self._extract_section(response, "impact")
+            recommendation = self._extract_section(response, "recommendation")
 
         logger.info(f"News analysis complete: {len(key_themes)} themes identified")
 

@@ -3,9 +3,10 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import BaseModel, Field
 
 from src.models.llm import LLMClient
-from src.models.providers.base import ToolCall
+from src.models.providers.base import StructuredOutputError, ToolCall
 
 
 @pytest.fixture
@@ -364,3 +365,119 @@ class TestSupportsTools:
 
         client = LLMClient()
         assert client.supports_tools is False
+
+
+class SampleResponseModel(BaseModel):
+    """Sample response model for structured output tests."""
+
+    answer: str = Field(description="The answer")
+    confidence: float = Field(description="Confidence score", ge=0.0, le=1.0)
+
+
+class TestStructuredOutput:
+    """Tests for structured output methods."""
+
+    @pytest.fixture
+    def mock_ollama_provider_structured(self):
+        """Mock Ollama provider with structured output."""
+        with patch("src.models.llm.OllamaProvider") as mock:
+            provider = MagicMock()
+            provider.acomplete = AsyncMock(return_value="Mocked response")
+            provider.supports_tools = False
+            provider.supports_structured_output = True
+            mock.return_value = provider
+            yield mock, provider
+
+    @pytest.fixture
+    def mock_openai_provider_structured(self):
+        """Mock OpenAI provider with structured output."""
+        with patch("src.models.llm.OpenAIProvider") as mock:
+            provider = MagicMock()
+            provider.acomplete = AsyncMock(return_value="Mocked response")
+            provider.supports_tools = True
+            provider.supports_structured_output = True
+            mock.return_value = provider
+            yield mock, provider
+
+    def test_supports_structured_output_ollama(self, mock_ollama_provider_structured, monkeypatch):
+        """Test supports_structured_output for Ollama."""
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        _ = mock_ollama_provider_structured
+
+        client = LLMClient()
+        assert client.supports_structured_output is True
+
+    def test_supports_structured_output_openai(self, mock_openai_provider_structured, monkeypatch):
+        """Test supports_structured_output for OpenAI."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _ = mock_openai_provider_structured
+
+        client = LLMClient()
+        assert client.supports_structured_output is True
+
+    def test_structured_returns_validated_model(self, mock_ollama_provider_structured, monkeypatch):
+        """Test structured output returns validated Pydantic model."""
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        _, provider = mock_ollama_provider_structured
+
+        expected = SampleResponseModel(answer="test answer", confidence=0.85)
+        provider.astructured = AsyncMock(return_value=expected)
+
+        client = LLMClient()
+        result = client.structured("What is 2+2?", SampleResponseModel, temperature=0.5)
+
+        assert result == expected
+        assert result.answer == "test answer"
+        assert result.confidence == 0.85
+        provider.astructured.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_astructured_returns_validated_model(self, mock_ollama_provider_structured, monkeypatch):
+        """Test async structured output returns validated Pydantic model."""
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        _, provider = mock_ollama_provider_structured
+
+        expected = SampleResponseModel(answer="async answer", confidence=0.9)
+        provider.astructured = AsyncMock(return_value=expected)
+
+        client = LLMClient()
+        result = await client.astructured("prompt", SampleResponseModel, system="system msg")
+
+        assert result == expected
+        provider.astructured.assert_called_once()
+
+    def test_structured_raises_on_error(self, mock_ollama_provider_structured, monkeypatch):
+        """Test structured output raises StructuredOutputError on failure."""
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        _, provider = mock_ollama_provider_structured
+
+        provider.astructured = AsyncMock(
+            side_effect=StructuredOutputError("Validation failed", raw_response='{"invalid": "json"}')
+        )
+
+        client = LLMClient()
+        with pytest.raises(StructuredOutputError) as exc_info:
+            client.structured("prompt", SampleResponseModel)
+
+        assert "Validation failed" in str(exc_info.value)
+        assert exc_info.value.raw_response == '{"invalid": "json"}'
+
+    def test_structured_passes_system_prompt(self, mock_ollama_provider_structured, monkeypatch):
+        """Test structured output passes system prompt correctly."""
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        _, provider = mock_ollama_provider_structured
+
+        expected = SampleResponseModel(answer="with system", confidence=0.7)
+        provider.astructured = AsyncMock(return_value=expected)
+
+        client = LLMClient()
+        client.structured("prompt", SampleResponseModel, system="You are a helpful assistant")
+
+        call_args = provider.astructured.call_args
+        messages = call_args[0][0]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"] == "You are a helpful assistant"
+        assert messages[1]["role"] == "user"

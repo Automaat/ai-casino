@@ -73,11 +73,21 @@ def sample_news_articles():
 @pytest.fixture
 def mock_llm_client():
     """Mock LLM client for testing."""
+    from src.models.providers.base import StructuredOutputError
+
     mock = MagicMock()
     mock.provider = "ollama"
     mock.model = "qwen3:14b"
     mock.complete.return_value = "Mock LLM response with analysis and high confidence."
     mock.acomplete = AsyncMock(return_value="Mock LLM response with analysis and high confidence.")
+
+    # astructured raises StructuredOutputError to trigger fallback to acomplete
+    async def astructured_side_effect(*args, **kwargs):
+        msg = "Mock structured output not configured"
+        raise StructuredOutputError(msg, raw_response=None)
+
+    mock.astructured = AsyncMock(side_effect=astructured_side_effect)
+    mock.supports_structured_output = True
     return mock
 
 
