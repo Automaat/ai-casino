@@ -34,11 +34,15 @@ from src.workflows.trading import TradingWorkflowResult
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
 # Load chat prompts from files
-_chat_prompts = PromptLoader("chat")
-AI_CASINO_AGENTIC_PROMPT = _chat_prompts.load("ai_casino_agentic")
-AI_CASINO_STREAMING_PROMPT = _chat_prompts.load("ai_casino_streaming")
-TRUMP_AGENTIC_PROMPT = _chat_prompts.load("trump_agentic")
-TRUMP_STREAMING_PROMPT = _chat_prompts.load("trump_streaming")
+try:
+    _chat_prompts = PromptLoader("chat")
+    AI_CASINO_AGENTIC_PROMPT = _chat_prompts.load("ai_casino_agentic")
+    AI_CASINO_STREAMING_PROMPT = _chat_prompts.load("ai_casino_streaming")
+    TRUMP_AGENTIC_PROMPT = _chat_prompts.load("trump_agentic")
+    TRUMP_STREAMING_PROMPT = _chat_prompts.load("trump_streaming")
+except Exception as e:
+    msg = f"Failed to load chat prompts from src/prompts/chat/: {e}"
+    raise RuntimeError(msg) from e
 
 
 class TradingChatApp(App):
