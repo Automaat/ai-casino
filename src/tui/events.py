@@ -91,13 +91,15 @@ class AnalysisProgress(Message):
 class AnalysisComplete(Message):
     """Analysis completed message."""
 
-    def __init__(self, result: CommandResult, symbol: str) -> None:
+    def __init__(self, result: CommandResult, symbol: str, command_type: str = "analyze") -> None:
         """Initialize completion message.
 
         Args:
             result: Command execution result
             symbol: Stock symbol analyzed
+            command_type: Type of command (analyze, technical, sentiment, news, screen)
         """
         self.result = result
         self.symbol = symbol
+        self.command_type = command_type
         super().__init__()
