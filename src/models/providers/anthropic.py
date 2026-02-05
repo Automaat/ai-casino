@@ -42,10 +42,18 @@ class AnthropicProvider(BaseLLMProvider):
             model: Model name (e.g., "claude-sonnet-4-20250514")
             api_key: API key (defaults to ANTHROPIC_API_KEY env var)
             max_tokens: Maximum tokens in response (default: 4096)
+
+        Raises:
+            ValueError: If API key is not provided and ANTHROPIC_API_KEY env var is empty
         """
+        resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not resolved_key:
+            msg = "Anthropic API key required: set ANTHROPIC_API_KEY env var or pass api_key"
+            raise ValueError(msg)
+
         self._model = model
         self._max_tokens = max_tokens
-        self._client = AsyncAnthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
+        self._client = AsyncAnthropic(api_key=resolved_key)
         logger.debug(f"Initialized AnthropicProvider: model={model}, max_tokens={max_tokens}")
 
     async def close(self) -> None:

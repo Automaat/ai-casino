@@ -44,9 +44,8 @@ def chat() -> None:
     )
 
     try:
-        import nest_asyncio
-
-        nest_asyncio.apply()
+        # NOTE: nest_asyncio removed - breaks Python 3.14 + anyio/httpcore
+        # Textual handles its own event loop
 
         from src.tui.app import TradingChatApp
 

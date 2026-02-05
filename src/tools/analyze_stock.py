@@ -1,14 +1,12 @@
 """Analyze stock tool for full trading workflow."""
 
 import asyncio
+import concurrent.futures
 from typing import TYPE_CHECKING
 
-import nest_asyncio
 from loguru import logger
 
 from src.tools.base import BaseTool
-
-nest_asyncio.apply()
 
 if TYPE_CHECKING:
     from src.workflows.trading import TradingWorkflowResult
@@ -73,8 +71,14 @@ class AnalyzeStockTool(BaseTool):
         """
         logger.info(f"Running full analysis for {symbol} ({period_days} days)")
 
-        try:
+        def run_in_thread() -> str:
             return asyncio.run(self._run_analysis(symbol.upper(), period_days))
+
+        try:
+            # Run in thread to avoid nested event loop issues with Python 3.14
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_in_thread)
+                return future.result()
         except Exception as e:
             logger.error(f"Analysis failed for {symbol}: {e}")
             return f"Analysis failed for {symbol}: {e}"
