@@ -5,11 +5,18 @@ import threading
 
 # Disable tokenizers parallelism to prevent subprocess fd conflicts in async environments
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+# Suppress transformers warnings
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
 import torch
 from loguru import logger
 from pydantic import BaseModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import logging as hf_logging
+
+# Suppress transformers logging (the env var alone doesn't catch everything)
+hf_logging.set_verbosity_error()
 
 
 class SentimentScore(BaseModel):
