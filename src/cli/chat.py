@@ -1,5 +1,6 @@
 """Chat subcommand for TUI mode."""
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -19,6 +20,10 @@ def chat() -> None:
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["MKL_NUM_THREADS"] = "1"
 
+    # Suppress transformers/torch warnings
+    os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+    os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+
     # Force torch to use fork-safe settings
     import torch
 
@@ -26,12 +31,9 @@ def chat() -> None:
     if hasattr(torch, "set_num_interop_threads"):
         torch.set_num_interop_threads(1)
 
+    # Configure logging - suppress all stderr output
     logger.remove()
-    logger.add(
-        sys.stderr,
-        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "WARNING"),
-    )
+
     # File logging - always capture INFO+ for debugging
     log_file = Path("~/.ai-casino/tui.log").expanduser()
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -43,6 +45,17 @@ def chat() -> None:
         retention="3 days",
     )
 
+    # Suppress all standard library logging to stderr
+    logging.basicConfig(
+        level=logging.ERROR,
+        handlers=[logging.FileHandler(log_file)],
+        format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s",
+    )
+
+    # Redirect stderr to log file to catch library output
+    stderr_backup = sys.stderr
+    sys.stderr = open(log_file, "a", encoding="utf-8")  # noqa: SIM115, PTH123
+
     try:
         # NOTE: nest_asyncio removed - breaks Python 3.14 + anyio/httpcore
         # Textual handles its own event loop
@@ -52,6 +65,14 @@ def chat() -> None:
         app = TradingChatApp()
         app.run()
     except Exception as e:
+        # Restore stderr for error reporting
+        sys.stderr.close()
+        sys.stderr = stderr_backup
         typer.echo(f"TUI error: {e}")
         logger.exception("TUI failed")
         raise typer.Exit(1) from e
+    finally:
+        # Always restore stderr
+        if sys.stderr != stderr_backup:
+            sys.stderr.close()
+            sys.stderr = stderr_backup

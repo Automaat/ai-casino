@@ -101,6 +101,9 @@ def _validate_symbol(symbol: str) -> str:
 
 def _update_progress(step: str, detail: str, callback: ProgressCallback | None) -> None:
     """Update progress via callback (thread-safe when using Textual post_message)."""
+    from src.tui.log_capture import set_active_step
+
+    set_active_step(step)  # Associate logs with this step
     if callback:
         callback(step, "active", detail)
 
@@ -143,11 +146,15 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
 
 def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:
     """Patch workflow methods to report progress."""
+    from src.tui.log_capture import clear_active_step
+
     original_run_analyses = workflow._run_analyses  # noqa: SLF001
 
     async def patched_run_analyses(state: dict, technical_analyst: "TechnicalAnalyst") -> dict:
         _update_progress("technical", "Running technical analysis...", progress_callback)
-        return await original_run_analyses(state, technical_analyst)
+        result = await original_run_analyses(state, technical_analyst)
+        clear_active_step()  # Clear after analyses complete
+        return result
 
     workflow._run_analyses = patched_run_analyses  # noqa: SLF001
 
@@ -155,7 +162,9 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
 
     async def patched_make_decision(state: dict) -> dict:
         _update_progress("decision", "Synthesizing trading decision...", progress_callback)
-        return await original_make_decision(state)
+        result = await original_make_decision(state)
+        clear_active_step()  # Clear after decision complete
+        return result
 
     workflow._make_decision = patched_make_decision  # noqa: SLF001
 
@@ -236,8 +245,16 @@ async def _run_analysis_async(
 
 def _analysis_thread_target(params: AnalysisParams) -> None:
     """Thread entry point - creates isolated event loop and runs analysis."""
+    from src.tui.log_capture import setup_log_capture, teardown_log_capture
+
     loop = _setup_isolated_event_loop()
+    handler_id = None
+
     try:
+        # Set up log capture if progress callback provided
+        if params.progress_callback:
+            handler_id = setup_log_capture(params.progress_callback)
+
         coro = _run_analysis_async(
             params.symbol, params.period_days, params.progress_callback, params.cancelled_event
         )
@@ -248,6 +265,8 @@ def _analysis_thread_target(params: AnalysisParams) -> None:
     except Exception as e:
         params.error_callback(str(e))
     finally:
+        if handler_id is not None:
+            teardown_log_capture(handler_id)
         _cleanup_event_loop(loop)
         _active_jobs.pop(params.symbol, None)
 
@@ -400,6 +419,8 @@ async def run_analysis_in_process(
 
 async def _run_screening_async(params: ScreeningParams) -> dict:
     """Internal async function that runs in isolated thread's event loop."""
+    from src.tui.log_capture import clear_active_step
+
     try:
         _update_progress("fetch_universe", "Fetching stock universe...", params.progress_callback)
 
@@ -417,6 +438,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         screener = StockScreener(universe_fetcher=universe_fetcher)
         screening_criteria = ScreeningCriteria(params.criteria)
         output = screener.screen(criteria=screening_criteria, universe=params.universe, top_n=params.top_n)
+        clear_active_step()  # Clear after screening complete
 
         _check_cancelled(params.cancelled_event)
 
@@ -425,6 +447,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
         analysis = await analyzer.analyze(output)
+        clear_active_step()  # Clear after analysis complete
 
         _check_cancelled(params.cancelled_event)
 
@@ -434,6 +457,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
             _update_progress("analyzing", "Saving to watchlist...", params.progress_callback)
             exporter = ScreeningExporter()
             exporter.save_to_watchlist(output.results, screening_criteria, "default")
+            clear_active_step()  # Clear after save complete
 
         _update_progress("analyzing", "Screening complete", params.progress_callback)
 
@@ -454,8 +478,16 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
 
 def _screening_thread_target(params: ScreeningParams) -> None:
     """Thread entry point for screening."""
+    from src.tui.log_capture import setup_log_capture, teardown_log_capture
+
     loop = _setup_isolated_event_loop()
+    handler_id = None
+
     try:
+        # Set up log capture if progress callback provided
+        if params.progress_callback:
+            handler_id = setup_log_capture(params.progress_callback)
+
         result = loop.run_until_complete(_run_screening_async(params))
         params.result_callback(result)
     except asyncio.CancelledError:
@@ -463,6 +495,8 @@ def _screening_thread_target(params: ScreeningParams) -> None:
     except Exception as e:
         params.error_callback(str(e))
     finally:
+        if handler_id is not None:
+            teardown_log_capture(handler_id)
         _cleanup_event_loop(loop)
 
 
