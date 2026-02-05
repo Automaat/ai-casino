@@ -135,18 +135,6 @@ class TechnicalAnalyst:
             return indicators.rsi, indicators.macd_hist, None
         return None, None, None
 
-    def _calculate_confidence(self, response: str, indicators: IndicatorsType) -> float:
-        """Calculate confidence based on indicator type."""
-        if isinstance(indicators, EnsembleResult):
-            return indicators.confidence
-        if isinstance(indicators, MomentumIndicators):
-            return self._extract_momentum_confidence(response, indicators)
-        if isinstance(indicators, TrendFollowingIndicators):
-            return self._extract_trend_confidence(indicators)
-        if isinstance(indicators, MeanReversionIndicators):
-            return self._extract_mean_reversion_confidence(indicators)
-        return 0.5
-
     def _calculate_confidence_with_keywords(
         self, interpretation: str, indicators: IndicatorsType, keywords: list[str]
     ) -> float:
@@ -297,27 +285,6 @@ class TechnicalAnalyst:
             "confidence": f"{result.confidence:.2f}",
             "conflict_resolved": str(result.conflict_resolved),
         }
-
-    def _extract_momentum_confidence(self, response: str, indicators: MomentumIndicators) -> float:
-        """Calculate confidence for momentum indicators."""
-        confidence = 0.5
-
-        if (indicators.rsi_oversold and indicators.macd_bullish) or (
-            indicators.rsi_overbought and indicators.macd_bearish
-        ):
-            confidence = 0.8
-        elif (
-            indicators.rsi_oversold
-            or indicators.macd_bullish
-            or indicators.rsi_overbought
-            or indicators.macd_bearish
-        ):
-            confidence = 0.6
-
-        if "high confidence" in response.lower() or "strong signal" in response.lower():
-            confidence = min(confidence + 0.1, 1.0)
-
-        return confidence
 
     def _extract_trend_confidence(self, indicators: TrendFollowingIndicators) -> float:
         """Calculate confidence for trend following indicators."""
