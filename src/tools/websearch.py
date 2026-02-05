@@ -11,6 +11,8 @@ BODY_TRUNCATE_LENGTH = 300
 class WebSearchTool(BaseTool):
     """Web search tool wrapper for LLM agents."""
 
+    TOOL_NAME = "web_search"
+
     def __init__(self, fetcher: WebSearchFetcher | None = None) -> None:
         """Initialize web search tool.
 
