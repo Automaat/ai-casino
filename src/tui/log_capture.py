@@ -92,13 +92,15 @@ def setup_log_capture(progress_callback: ProgressCallback) -> int:
         Handler ID for later teardown
     """
     sink = LogCaptureSink(progress_callback)
+    worker_thread = threading.current_thread()
 
     # Add sink with INFO+ level (no DEBUG spam)
+    # Filter to only capture logs from this worker thread
     return logger.add(
         sink,
         level="INFO",
         format="{message}",  # Sink handles formatting
-        filter=lambda _: threading.current_thread() == threading.current_thread(),  # Only this thread
+        filter=lambda record: record["thread"].id == worker_thread.ident,
     )
 
 

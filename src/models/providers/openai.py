@@ -118,6 +118,34 @@ class OpenAIProvider(BaseLLMProvider):
         """OpenAI supports tool calling."""
         return True
 
+    def _ensure_additional_properties_false(self, schema: dict) -> dict:
+        """Recursively ensure additionalProperties is false in schema (required by OpenAI strict mode).
+
+        Args:
+            schema: JSON schema dictionary
+
+        Returns:
+            Modified schema with additionalProperties: false
+        """
+        if isinstance(schema, dict):
+            # Set additionalProperties: false for objects
+            if schema.get("type") == "object" or "properties" in schema:
+                schema["additionalProperties"] = False
+
+            # Recursively process nested schemas
+            for key in ["properties", "items", "additionalProperties", "allOf", "anyOf", "oneOf"]:
+                if key in schema:
+                    if key == "properties" and isinstance(schema[key], dict):
+                        for prop_schema in schema[key].values():
+                            self._ensure_additional_properties_false(prop_schema)
+                    elif key in ("allOf", "anyOf", "oneOf") and isinstance(schema[key], list):
+                        for sub_schema in schema[key]:
+                            self._ensure_additional_properties_false(sub_schema)
+                    elif isinstance(schema[key], dict):
+                        self._ensure_additional_properties_false(schema[key])
+
+        return schema
+
     @retry(max_attempts=3, delay=1.0)
     async def astructured(
         self,
@@ -127,6 +155,9 @@ class OpenAIProvider(BaseLLMProvider):
     ) -> T:
         """Generate structured output using native JSON schema."""
         schema = response_model.model_json_schema()
+        # OpenAI strict mode requires additionalProperties: false
+        schema = self._ensure_additional_properties_false(schema)
+
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
