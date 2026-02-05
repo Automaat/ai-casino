@@ -2,11 +2,15 @@
 
 import os
 from collections.abc import AsyncIterator
+from typing import TypeVar
 
 from anthropic import AsyncAnthropic
 from loguru import logger
+from pydantic import BaseModel, ValidationError
 
-from src.models.providers.base import BaseLLMProvider, ToolCall, retry
+from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
+
+T = TypeVar("T", bound=BaseModel)
 
 
 def _convert_tools_to_anthropic(tools: list[dict]) -> list[dict]:
@@ -168,6 +172,52 @@ class AnthropicProvider(BaseLLMProvider):
     @property
     def supports_tools(self) -> bool:
         """Anthropic supports tool calling."""
+        return True
+
+    @retry(max_attempts=3, delay=1.0)
+    async def astructured(
+        self,
+        messages: list[dict],
+        response_model: type[T],
+        temperature: float = 0.7,
+    ) -> T:
+        """Generate structured output using tool use pattern."""
+        system, chat_messages = self._extract_system(messages)
+
+        schema = response_model.model_json_schema()
+        tool = {
+            "name": "respond",
+            "description": "Provide the structured response",
+            "input_schema": schema,
+        }
+
+        kwargs: dict = {
+            "model": self._model,
+            "messages": chat_messages,
+            "tools": [tool],
+            "tool_choice": {"type": "tool", "name": "respond"},
+            "temperature": temperature,
+            "max_tokens": self._max_tokens,
+        }
+        if system:
+            kwargs["system"] = system
+
+        response = await self._client.messages.create(**kwargs)
+
+        for block in response.content:
+            if block.type == "tool_use" and block.name == "respond":
+                try:
+                    return response_model.model_validate(block.input)
+                except ValidationError as e:
+                    msg = f"Validation failed: {e}"
+                    raise StructuredOutputError(msg, raw_response=str(block.input)) from e
+
+        msg = "No tool_use block in response"
+        raise StructuredOutputError(msg, raw_response=str(response.content))
+
+    @property
+    def supports_structured_output(self) -> bool:
+        """Anthropic supports structured output via tool use."""
         return True
 
     def __repr__(self) -> str:

@@ -12,11 +12,20 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
 
 if TYPE_CHECKING:
     from src.agents.trump import TrumpAnalysis
+
+
+class BearishLLMResponse(BaseModel):
+    """LLM response structure for bearish research."""
+
+    thesis: str = Field(description="Bear thesis (3-4 sentences)")
+    key_weaknesses: list[str] = Field(description="Top 3-5 bearish signals as bullet points")
+    target_downside: float | None = Field(description="Expected downside percentage or null if unavailable")
 
 
 class BearishResearchAnalysis(BaseModel):
@@ -82,11 +91,20 @@ class BearishResearcher:
         system_prompt = self.prompts.load("system")
         user_prompt = self.prompts.load("user", **prompt_vars)
 
-        response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.5)
+        try:
+            llm_response = await self.llm.astructured(
+                user_prompt, BearishLLMResponse, system=system_prompt, temperature=0.5
+            )
+            thesis = llm_response.thesis
+            key_weaknesses = llm_response.key_weaknesses
+            target_downside = llm_response.target_downside
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.5)
+            thesis = self._extract_thesis(response)
+            key_weaknesses = self._extract_key_weaknesses(response)
+            target_downside = self._extract_target_downside(response)
 
-        thesis = self._extract_thesis(response)
-        key_weaknesses = self._extract_key_weaknesses(response)
-        target_downside = self._extract_target_downside(response)
         confidence = self._calculate_confidence(technical, sentiment, news, fundamental)
 
         logger.info(

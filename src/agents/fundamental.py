@@ -3,11 +3,21 @@
 from typing import Any
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.data.fundamental import FundamentalDataFetcher
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
+
+
+class FundamentalLLMResponse(BaseModel):
+    """LLM response structure for fundamental analysis."""
+
+    interpretation: str = Field(description="Analysis interpretation of the fundamental metrics")
+    confidence_keywords: list[str] = Field(
+        description="Keywords indicating confidence level: 'strong', 'high confidence', 'clear', 'uncertain', etc."
+    )
 
 
 class FundamentalAnalysis(BaseModel):
@@ -61,8 +71,18 @@ class FundamentalAnalyst:
             prompt = self._prompts.load("user", symbol=symbol, metrics_section=metrics_section)
             system = self._prompts.load("system")
 
-            interpretation = await self.llm.acomplete(prompt, system=system, temperature=0.5)
-            confidence = self._calculate_confidence(metrics, interpretation)
+            try:
+                llm_response = await self.llm.astructured(
+                    prompt, FundamentalLLMResponse, system=system, temperature=0.5
+                )
+                interpretation = llm_response.interpretation
+                confidence = self._calculate_confidence_from_keywords(
+                    metrics, llm_response.confidence_keywords
+                )
+            except StructuredOutputError as e:
+                logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+                interpretation = await self.llm.acomplete(prompt, system=system, temperature=0.5)
+                confidence = self._calculate_confidence(metrics, interpretation)
 
             return FundamentalAnalysis(
                 valuation=valuation,
@@ -181,6 +201,37 @@ class FundamentalAnalyst:
         if any(word in interpretation_lower for word in ["strong", "high confidence", "clear"]):
             confidence += 0.1
         if any(word in interpretation_lower for word in ["uncertain", "limited data", "unclear"]):
+            confidence -= 0.2
+
+        # Clamp to [0.0, 1.0]
+        return max(0.0, min(1.0, confidence))
+
+    def _calculate_confidence_from_keywords(
+        self, metrics: dict[str, float | None], keywords: list[str]
+    ) -> float:
+        """Calculate confidence score based on data completeness and extracted keywords.
+
+        Args:
+            metrics: Extracted metrics
+            keywords: Confidence keywords from LLM
+
+        Returns:
+            Confidence score between 0.0 and 1.0
+        """
+        # Base confidence
+        confidence = 0.5
+
+        # Boost based on data completeness
+        total_metrics = len(metrics)
+        non_none_metrics = sum(1 for v in metrics.values() if v is not None)
+        completeness_ratio = non_none_metrics / total_metrics if total_metrics > 0 else 0
+        confidence += 0.3 * completeness_ratio
+
+        # Adjust based on keywords
+        keywords_lower = [k.lower() for k in keywords]
+        if any(word in keywords_lower for word in ["strong", "high confidence", "clear"]):
+            confidence += 0.1
+        if any(word in keywords_lower for word in ["uncertain", "limited data", "unclear"]):
             confidence -= 0.2
 
         # Clamp to [0.0, 1.0]

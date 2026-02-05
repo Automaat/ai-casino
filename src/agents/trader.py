@@ -1,7 +1,9 @@
 """Trader Agent for final decision making."""
 
+from typing import Literal
+
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
@@ -11,8 +13,18 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.strategies.momentum import Signal
+
+
+class TraderLLMResponse(BaseModel):
+    """LLM response structure for trading decision."""
+
+    action: Literal["BUY", "SELL", "HOLD"] = Field(description="Trading action")
+    confidence: float = Field(description="Confidence in the decision (0.0-1.0)", ge=0.0, le=1.0)
+    risk_level: Literal["LOW", "MEDIUM", "HIGH"] = Field(description="Risk level of the trade")
+    reasoning: str = Field(description="Detailed reasoning for the decision")
 
 
 class TradingDecision(BaseModel):
@@ -122,18 +134,28 @@ class TraderAgent:
 
         system_prompt = self._prompts.load("system")
 
-        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
-
-        action = self._extract_action(response, technical.signal)
-        confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)
-        risk_level = self._extract_risk_level(response, confidence)
+        try:
+            llm_response = await self.llm.astructured(
+                prompt, TraderLLMResponse, system=system_prompt, temperature=0.5
+            )
+            action = Signal(llm_response.action)
+            confidence = llm_response.confidence
+            risk_level = llm_response.risk_level
+            reasoning = llm_response.reasoning
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
+            action = self._extract_action(response, technical.signal)
+            confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)
+            risk_level = self._extract_risk_level(response, confidence)
+            reasoning = response
 
         logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
 
         return TradingDecision(
             action=action,
             confidence=confidence,
-            reasoning=response,
+            reasoning=reasoning,
             risk_level=risk_level,
             owns_position=owns_position,
             position_qty=position_qty,

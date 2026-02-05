@@ -4,14 +4,25 @@ from typing import cast
 
 import pandas as pd
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.models.llm import LLMClient
+from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.strategies.ensemble import EnsembleResult, EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionIndicators, MeanReversionStrategy
 from src.strategies.momentum import MomentumIndicators, MomentumStrategy, Signal
 from src.strategies.trend_following import TrendFollowingIndicators, TrendFollowingStrategy
+
+
+class TechnicalLLMResponse(BaseModel):
+    """LLM response structure for technical analysis."""
+
+    interpretation: str = Field(description="Technical analysis interpretation")
+    confidence_keywords: list[str] = Field(
+        description="Keywords indicating confidence: 'high confidence', 'strong signal', 'weak', 'uncertain', etc."
+    )
+
 
 StrategyType = MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy
 IndicatorsType = MomentumIndicators | MeanReversionIndicators | TrendFollowingIndicators | EnsembleResult
@@ -60,11 +71,21 @@ class TechnicalAnalyst:
         latest_close = float(market_data["Close"].iloc[-1])
 
         prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
-        response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
+
+        try:
+            llm_response = await self.llm.astructured(
+                prompt, TechnicalLLMResponse, system=system_prompt, temperature=0.3
+            )
+            interpretation = llm_response.interpretation
+            confidence_keywords = llm_response.confidence_keywords
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            interpretation = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
+            confidence_keywords = []
 
         # Extract RSI/MACD if available (for downstream agents)
         rsi, macd_hist, ensemble_result = self._extract_indicator_values(indicators)
-        confidence = self._calculate_confidence(response, indicators)
+        confidence = self._calculate_confidence_with_keywords(interpretation, indicators, confidence_keywords)
 
         logger.info(f"Technical analysis complete: {signal.value} (confidence={confidence:.2f})")
 
@@ -72,7 +93,7 @@ class TechnicalAnalyst:
             signal=signal,
             rsi=rsi,
             macd_hist=macd_hist,
-            interpretation=response,
+            interpretation=interpretation,
             confidence=confidence,
             ensemble_result=ensemble_result,
         )
@@ -124,6 +145,50 @@ class TechnicalAnalyst:
             return self._extract_trend_confidence(indicators)
         if isinstance(indicators, MeanReversionIndicators):
             return self._extract_mean_reversion_confidence(indicators)
+        return 0.5
+
+    def _calculate_confidence_with_keywords(
+        self, interpretation: str, indicators: IndicatorsType, keywords: list[str]
+    ) -> float:
+        """Calculate confidence using structured keywords when available."""
+        if isinstance(indicators, EnsembleResult):
+            return indicators.confidence
+
+        # Use keywords if available, otherwise fall back to text parsing
+        if keywords:
+            keywords_lower = [k.lower() for k in keywords]
+            has_high_confidence = any(
+                word in keywords_lower for word in ["high confidence", "strong signal", "strong"]
+            )
+        else:
+            has_high_confidence = (
+                "high confidence" in interpretation.lower() or "strong signal" in interpretation.lower()
+            )
+
+        if isinstance(indicators, MomentumIndicators):
+            confidence = self._calculate_base_momentum_confidence(indicators)
+            if has_high_confidence:
+                confidence = min(confidence + 0.1, 1.0)
+            return confidence
+        if isinstance(indicators, TrendFollowingIndicators):
+            return self._extract_trend_confidence(indicators)
+        if isinstance(indicators, MeanReversionIndicators):
+            return self._extract_mean_reversion_confidence(indicators)
+        return 0.5
+
+    def _calculate_base_momentum_confidence(self, indicators: MomentumIndicators) -> float:
+        """Calculate base confidence for momentum indicators without text parsing."""
+        if (indicators.rsi_oversold and indicators.macd_bullish) or (
+            indicators.rsi_overbought and indicators.macd_bearish
+        ):
+            return 0.8
+        if (
+            indicators.rsi_oversold
+            or indicators.macd_bullish
+            or indicators.rsi_overbought
+            or indicators.macd_bearish
+        ):
+            return 0.6
         return 0.5
 
     def _build_momentum_vars(

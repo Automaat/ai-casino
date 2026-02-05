@@ -3,11 +3,15 @@
 import json
 import os
 from collections.abc import AsyncIterator
+from typing import TypeVar
 
 from loguru import logger
 from openai import AsyncOpenAI
+from pydantic import BaseModel, ValidationError
 
-from src.models.providers.base import BaseLLMProvider, ToolCall, retry
+from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -112,6 +116,42 @@ class OpenAIProvider(BaseLLMProvider):
     @property
     def supports_tools(self) -> bool:
         """OpenAI supports tool calling."""
+        return True
+
+    @retry(max_attempts=3, delay=1.0)
+    async def astructured(
+        self,
+        messages: list[dict],
+        response_model: type[T],
+        temperature: float = 0.7,
+    ) -> T:
+        """Generate structured output using native JSON schema."""
+        schema = response_model.model_json_schema()
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=self._effective_temperature(temperature),
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_model.__name__,
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+        )
+        content = response.choices[0].message.content or ""
+        logger.debug(f"OpenAI structured response: {len(content)} chars")
+
+        try:
+            return response_model.model_validate_json(content)
+        except ValidationError as e:
+            msg = f"Validation failed: {e}"
+            raise StructuredOutputError(msg, raw_response=content) from e
+
+    @property
+    def supports_structured_output(self) -> bool:
+        """OpenAI supports structured output via JSON schema."""
         return True
 
     def __repr__(self) -> str:

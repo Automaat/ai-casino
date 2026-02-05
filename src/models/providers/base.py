@@ -14,6 +14,20 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 
+class StructuredOutputError(Exception):
+    """Error during structured output parsing or validation."""
+
+    def __init__(self, message: str, raw_response: str | None = None) -> None:
+        """Initialize error with message and optional raw response.
+
+        Args:
+            message: Error description
+            raw_response: Original LLM response that failed parsing/validation
+        """
+        super().__init__(message)
+        self.raw_response = raw_response
+
+
 class ToolCall(BaseModel):
     """Represents a tool call from the LLM."""
 
@@ -121,3 +135,29 @@ class BaseLLMProvider(ABC):
     @abstractmethod
     def supports_tools(self) -> bool:
         """Check if provider supports tool calling."""
+
+    @abstractmethod
+    async def astructured(
+        self,
+        messages: list[dict],
+        response_model: type[T],
+        temperature: float = 0.7,
+    ) -> T:
+        """Generate structured output validated against a Pydantic model.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            response_model: Pydantic model class to validate response against
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            StructuredOutputError: If response cannot be parsed or validated
+        """
+
+    @property
+    @abstractmethod
+    def supports_structured_output(self) -> bool:
+        """Check if provider supports structured output."""

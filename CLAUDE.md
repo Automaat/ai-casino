@@ -243,21 +243,72 @@ class LLMClient:
 
 ### Agent Pattern
 
-**All agents return Pydantic models with confidence scores:**
+**All agents use structured output with `*LLMResponse` models:**
 
 ```python
-def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
-    logger.info(f"Analyzing {symbol} technicals")
-    signal, indicators = self.strategy.generate_signal(market_data)
+# 1. Define LLM response model (what LLM returns)
+class TechnicalLLMResponse(BaseModel):
+    """LLM response for technical analysis."""
+    interpretation: str = Field(description="Technical analysis interpretation")
+    confidence_keywords: list[str] = Field(description="Confidence indicators")
 
-    prompt = f"Analyze indicators for {symbol}: RSI {indicators.rsi}, MACD {indicators.macd_hist}"
-    response = self.llm.complete(prompt, system="You are a technical analyst.", temperature=0.3)
+# 2. Define agent output model (final result)
+class TechnicalAnalysis(BaseModel):
+    """Technical analysis result."""
+    signal: Signal
+    rsi: float | None
+    interpretation: str
+    confidence: float
 
-    return TechnicalAnalysis(
-        signal=signal, rsi=indicators.rsi, macd_hist=indicators.macd_hist,
-        interpretation=response, confidence=self._calculate_confidence(signal, indicators)
-    )
+# 3. Use structured output with fallback
+async def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+    prompt = self._prompts.load("user", symbol=symbol, ...)
+    system = self._prompts.load("system")
+
+    try:
+        llm_response = await self.llm.astructured(prompt, TechnicalLLMResponse, system=system)
+        interpretation = llm_response.interpretation
+    except StructuredOutputError as e:
+        logger.warning(f"Structured output failed, falling back: {e}")
+        interpretation = await self.llm.acomplete(prompt, system=system)
+
+    return TechnicalAnalysis(signal=signal, interpretation=interpretation, ...)
 ```
+
+**Naming:** `{Agent}LLMResponse` (e.g., `NewsLLMResponse`, `TraderLLMResponse`)
+
+### Prompt Management
+
+**All prompts externalized to `src/prompts/{agent_name}/`:**
+
+```
+src/prompts/
+├── technical/
+│   ├── system_momentum.txt
+│   └── user_momentum.txt
+├── news/
+│   ├── system.txt
+│   └── user.txt
+└── trader/
+    ├── system.txt
+    └── user_base.txt
+```
+
+**Load via PromptLoader:**
+
+```python
+from src.prompts import PromptLoader
+
+class NewsAnalyst:
+    def __init__(self, llm_client: LLMClient) -> None:
+        self._prompts = PromptLoader("news")
+
+    async def analyze(self, symbol: str, articles: list[NewsArticle]) -> NewsAnalysis:
+        prompt = self._prompts.load("user", symbol=symbol, headlines_text=text)
+        system = self._prompts.load("system")
+```
+
+**Never hardcode prompts in agent code** - always use PromptLoader
 
 ### Workflow Pattern (Sequential Pipeline)
 

@@ -6,6 +6,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Callable
 from types import TracebackType
+from typing import TypeVar
 
 import sniffio
 from dotenv import load_dotenv
@@ -14,6 +15,8 @@ from pydantic import BaseModel
 
 from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvider, OpenAIProvider
 from src.models.providers.base import ToolCall
+
+T = TypeVar("T", bound=BaseModel)
 
 load_dotenv()
 
@@ -174,6 +177,64 @@ class LLMClient:
             True if provider supports tool calling (anthropic, openai)
         """
         return self._provider.supports_tools
+
+    @property
+    def supports_structured_output(self) -> bool:
+        """Check if current provider supports structured output.
+
+        Returns:
+            True if provider supports structured output
+        """
+        return self._provider.supports_structured_output
+
+    def structured(
+        self,
+        prompt: str,
+        response_model: type[T],
+        system: str | None = None,
+        temperature: float = 0.7,
+    ) -> T:
+        """Generate structured output validated against Pydantic model (sync wrapper).
+
+        Args:
+            prompt: User prompt
+            response_model: Pydantic model class to validate response against
+            system: System prompt (optional)
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            StructuredOutputError: If response cannot be parsed or validated
+        """
+        return asyncio.run(self.astructured(prompt, response_model, system, temperature))
+
+    async def astructured(
+        self,
+        prompt: str,
+        response_model: type[T],
+        system: str | None = None,
+        temperature: float = 0.7,
+    ) -> T:
+        """Generate structured output validated against Pydantic model (async).
+
+        Args:
+            prompt: User prompt
+            response_model: Pydantic model class to validate response against
+            system: System prompt (optional)
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Validated instance of response_model
+
+        Raises:
+            StructuredOutputError: If response cannot be parsed or validated
+        """
+        _set_asyncio_context()
+        messages = self._build_messages(prompt, system)
+        async with _get_semaphore():
+            return await self._provider.astructured(messages, response_model, temperature)
 
     def complete_with_tools(  # noqa: PLR0913
         self,

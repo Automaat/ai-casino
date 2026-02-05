@@ -9,11 +9,15 @@ tries to use anyio's CancelScope during cleanup - sync httpx avoids this.
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from typing import TypeVar
 
 import httpx
 from loguru import logger
+from pydantic import BaseModel, ValidationError
 
-from src.models.providers.base import BaseLLMProvider, ToolCall, retry
+from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -114,6 +118,76 @@ class OllamaProvider(BaseLLMProvider):
     def supports_tools(self) -> bool:
         """Ollama does not support tool calling."""
         return False
+
+    def _sync_structured(
+        self,
+        messages: list[dict],
+        response_model: type[T],
+        temperature: float,
+    ) -> T:
+        """Synchronous structured output with retry on validation failure."""
+        schema = response_model.model_json_schema()
+        schema_prompt = f"\n\nRespond with valid JSON matching this schema:\n{json.dumps(schema, indent=2)}"
+
+        augmented_messages = messages.copy()
+        if augmented_messages and augmented_messages[-1]["role"] == "user":
+            augmented_messages[-1] = {
+                "role": "user",
+                "content": augmented_messages[-1]["content"] + schema_prompt,
+            }
+        else:
+            augmented_messages.append({"role": "user", "content": schema_prompt})
+
+        client = self._get_client()
+        last_error: Exception | None = None
+        last_response: str = ""
+
+        for attempt in range(2):  # 1 initial + 1 retry
+            response = client.post(
+                "/api/chat",
+                json={
+                    "model": self._model,
+                    "messages": augmented_messages,
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": temperature},
+                },
+            )
+            response.raise_for_status()
+            content = response.json()["message"]["content"]
+            last_response = content
+            logger.debug(f"Ollama structured response (attempt {attempt + 1}): {len(content)} chars")
+
+            try:
+                data = json.loads(content)
+                return response_model.model_validate(data)
+            except (json.JSONDecodeError, ValidationError) as e:
+                last_error = e
+                if attempt == 0:
+                    logger.warning(f"Structured output validation failed, retrying: {e}")
+                    error_feedback = f"\n\nPrevious response was invalid: {e}\nPlease provide valid JSON."
+                    augmented_messages[-1] = {
+                        "role": "user",
+                        "content": augmented_messages[-1]["content"] + error_feedback,
+                    }
+
+        msg = f"Validation failed after 2 attempts: {last_error}"
+        raise StructuredOutputError(msg, raw_response=last_response)
+
+    @retry(max_attempts=3, delay=1.0)
+    async def astructured(
+        self,
+        messages: list[dict],
+        response_model: type[T],
+        temperature: float = 0.7,
+    ) -> T:
+        """Generate structured output using JSON mode with schema in prompt."""
+        return await asyncio.to_thread(self._sync_structured, messages, response_model, temperature)
+
+    @property
+    def supports_structured_output(self) -> bool:
+        """Ollama supports structured output via JSON mode."""
+        return True
 
     def __repr__(self) -> str:
         """String representation."""
