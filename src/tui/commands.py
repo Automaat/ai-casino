@@ -51,6 +51,14 @@ class CommandHandler:
         """Get list of available command names."""
         return list(self._commands.keys())
 
+    def set_app(self, app: object) -> None:
+        """Set the app instance for personality switching.
+
+        Args:
+            app: The TradingChatApp instance
+        """
+        self._app = app
+
     def is_command(self, text: str) -> bool:
         """Check if text is a slash command.
 
@@ -328,7 +336,11 @@ Type freely to chat about markets or ask questions."""
         self._app.set_personality("trump")
         return CommandResult(
             success=True,
-            message="🇺🇸 **Switched to TRUMP MODE!** 🇺🇸\n\nI'm Donald J. Trump, and we're going to Make Portfolio Great Again! The markets are FANTASTIC! Let's talk stocks - BELIEVE ME! 🚀💰",
+            message=(
+                "🇺🇸 **Switched to TRUMP MODE!** 🇺🇸\n\n"
+                "I'm Donald J. Trump, and we're going to Make Portfolio Great Again! "
+                "The markets are FANTASTIC! Let's talk stocks - BELIEVE ME! 🚀💰"
+            ),
         )
 
     async def _cmd_casino(self, _args: list[str]) -> CommandResult:
@@ -338,7 +350,10 @@ Type freely to chat about markets or ask questions."""
         self._app.set_personality("casino")
         return CommandResult(
             success=True,
-            message="🎰 **Switched to AI CASINO MODE!** 🎰\n\nBack to finding alpha and calling out BS! Let's dissect some markets! 📊🔥",
+            message=(
+                "🎰 **Switched to AI CASINO MODE!** 🎰\n\n"
+                "Back to finding alpha and calling out BS! Let's dissect some markets! 📊🔥"
+            ),
         )
 
     async def _cmd_screen(

@@ -18,7 +18,8 @@ async def test_trump_analyst_analyze(mock_llm_client, sample_trump_posts):
     Sentiment: positive
     Signal: BUY
     Confidence: 0.95
-    Interpretation: The Trump Stock Market is ROARING back! My tariff policies are WORKING - China is BEGGING for a deal. Time to BUY AMERICAN! 🇺🇸
+    Interpretation: The Trump Stock Market is ROARING back! My tariff policies are WORKING -
+        China is BEGGING for a deal. Time to BUY AMERICAN! 🇺🇸
     """
 
     analyst = TrumpAnalyst(mock_llm_client)
