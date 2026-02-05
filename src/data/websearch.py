@@ -6,8 +6,8 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
+from ddgs import DDGS
 from diskcache import Cache
-from duckduckgo_search import DDGS
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (

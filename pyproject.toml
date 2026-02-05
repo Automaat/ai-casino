@@ -38,7 +38,7 @@ dependencies = [
     "asyncpg==0.31.0",
 
     # Web Search
-    "duckduckgo-search==8.1.1",
+    "ddgs==9.10.0",
     "diskcache==5.6.3",
 
     # Async
