@@ -13,6 +13,7 @@ from textual.widgets import Static
 from textual.worker import Worker, get_current_worker
 
 from src.models.llm import LLMClient
+from src.prompts import PromptLoader
 from src.tools import (
     AnalyzeStockTool,
     GetMarketDataTool,
@@ -32,35 +33,16 @@ from src.workflows.trading import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
-AGENTIC_SYSTEM_PROMPT = """You are AI Casino, an expert assistant for stock trading and market analysis.
-You have access to the following tools to help users:
-
-- get_market_data: Fetch current stock prices and market data
-- get_news: Fetch recent news articles for a company
-- web_search: Search the web for information
-- analyze_stock: Run comprehensive trading analysis (EXPENSIVE - requires confirmation)
-- screen_stocks: Screen stocks for investment opportunities (EXPENSIVE - requires confirmation)
-- analyze_trump_posts: Analyze Trump's recent Truth Social posts for trading signals
-
-## AI Casino Features
-
-**Trump Mode**: Analyzes Trump's Truth Social posts for market-moving signals like tariff
-announcements, trade deals, crypto mentions, and company references. Use the analyze_trump_posts
-tool to fetch and analyze recent posts. For continuous monitoring, use CLI: `ai-casino daemon trump`.
-
-Use tools when appropriate to answer user questions. Be concise but informative.
-Use markdown formatting for readability."""
-
-STREAMING_SYSTEM_PROMPT = """You are AI Casino, an expert assistant for stock trading and market analysis.
-You help users understand markets, trading strategies, and financial concepts.
-
-## AI Casino Features
-
-**Trump Mode**: Analyzes Trump's Truth Social posts for market-moving signals like tariff
-announcements, trade deals, crypto mentions, and company references. For continuous monitoring,
-use CLI: `ai-casino daemon trump`.
-
-Be concise but informative. Use markdown formatting for readability."""
+# Load chat prompts from files
+try:
+    _chat_prompts = PromptLoader("chat")
+    AI_CASINO_AGENTIC_PROMPT = _chat_prompts.load("ai_casino_agentic")
+    AI_CASINO_STREAMING_PROMPT = _chat_prompts.load("ai_casino_streaming")
+    TRUMP_AGENTIC_PROMPT = _chat_prompts.load("trump_agentic")
+    TRUMP_STREAMING_PROMPT = _chat_prompts.load("trump_streaming")
+except Exception as e:
+    msg = f"Failed to load chat prompts from src/prompts/chat/: {e}"
+    raise RuntimeError(msg) from e
 
 
 class TradingChatApp(App):
@@ -87,6 +69,7 @@ class TradingChatApp(App):
         self._tool_registry = self._create_tool_registry()
         self._pending_tool_confirmation: dict | None = None
         self._quit_pending = False
+        self._personality: str = "casino"  # "casino" or "trump"
         self._load_history()
 
     def _create_tool_registry(self) -> ToolRegistry:
@@ -105,6 +88,26 @@ class TradingChatApp(App):
         provider = os.getenv("LLM_PROVIDER", "ollama")
         model = os.getenv("LLM_MODEL", "qwen3:14b")
         return f"{provider}/{model}"
+
+    def _get_agentic_prompt(self) -> str:
+        """Get current agentic system prompt based on personality."""
+        return TRUMP_AGENTIC_PROMPT if self._personality == "trump" else AI_CASINO_AGENTIC_PROMPT
+
+    def _get_streaming_prompt(self) -> str:
+        """Get current streaming system prompt based on personality."""
+        return TRUMP_STREAMING_PROMPT if self._personality == "trump" else AI_CASINO_STREAMING_PROMPT
+
+    def set_personality(self, personality: str) -> None:
+        """Set chat personality mode.
+
+        Args:
+            personality: "casino" or "trump"
+        """
+        if personality not in ("casino", "trump"):
+            msg = f"Invalid personality: {personality}"
+            raise ValueError(msg)
+        self._personality = personality
+        logger.info(f"Switched personality to: {personality}")
 
     def _load_history(self) -> None:
         """Load chat history from file."""
@@ -146,6 +149,7 @@ class TradingChatApp(App):
         chat.show_welcome(self._model_name)
         self._sync_input_history()
         self.query_one(AutocompleteInput).focus()
+        self._command_handler.set_app(self)  # Link app for personality commands
 
     def _sync_input_history(self) -> None:
         """Sync user message history to input widget."""
@@ -379,7 +383,7 @@ class TradingChatApp(App):
         first_token = True
 
         try:
-            async for token in self._llm.astream(text, system=STREAMING_SYSTEM_PROMPT, temperature=0.7):
+            async for token in self._llm.astream(text, system=self._get_streaming_prompt(), temperature=0.7):
                 if first_token:
                     chat.hide_thinking()
                     first_token = False
@@ -437,7 +441,7 @@ class TradingChatApp(App):
                 prompt=text,
                 tools=self._tool_registry.get_definitions(),
                 tool_executor=tool_executor,
-                system=AGENTIC_SYSTEM_PROMPT,
+                system=self._get_agentic_prompt(),
                 temperature=0.7,
                 max_tool_calls=5,
                 on_tool_call=on_tool_call,

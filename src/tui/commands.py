@@ -38,15 +38,26 @@ class CommandHandler:
             "discover": self._cmd_screen,  # alias
             "export": self._cmd_export,
             "watchlist": self._cmd_watchlist,
+            "trump": self._cmd_trump,
+            "casino": self._cmd_casino,
             "help": self._cmd_help,
         }
         self._last_screening_output = None  # Store last screening for export
+        self._app = None  # Will be set by app
         logger.info("CommandHandler initialized")
 
     @property
     def command_names(self) -> list[str]:
         """Get list of available command names."""
         return list(self._commands.keys())
+
+    def set_app(self, app: object) -> None:
+        """Set the app instance for personality switching.
+
+        Args:
+            app: The TradingChatApp instance
+        """
+        self._app = app
 
     def is_command(self, text: str) -> bool:
         """Check if text is a slash command.
@@ -119,6 +130,8 @@ class CommandHandler:
 - **/discover** - Alias for /screen
 - **/export [format] [filename]** - Export last screening results
 - **/watchlist [action]** - Manage watchlists
+- **/trump** - Switch to Trump personality mode 🇺🇸
+- **/casino** - Switch to AI Casino personality mode 🎰
 - **/help** - Show this help message
 
 **Screening Examples:**
@@ -315,6 +328,33 @@ Type freely to chat about markets or ask questions."""
 
 **Recommendation:**
 {result.news.recommendation}"""
+
+    async def _cmd_trump(self, _args: list[str]) -> CommandResult:
+        """Switch to Trump personality mode."""
+        if not self._app:
+            return CommandResult(success=False, message="App not initialized")
+        self._app.set_personality("trump")
+        return CommandResult(
+            success=True,
+            message=(
+                "🇺🇸 **Switched to TRUMP MODE!** 🇺🇸\n\n"
+                "I'm Donald J. Trump, and we're going to Make Portfolio Great Again! "
+                "The markets are FANTASTIC! Let's talk stocks - BELIEVE ME! 🚀💰"
+            ),
+        )
+
+    async def _cmd_casino(self, _args: list[str]) -> CommandResult:
+        """Switch to AI Casino personality mode."""
+        if not self._app:
+            return CommandResult(success=False, message="App not initialized")
+        self._app.set_personality("casino")
+        return CommandResult(
+            success=True,
+            message=(
+                "🎰 **Switched to AI CASINO MODE!** 🎰\n\n"
+                "Back to finding alpha and calling out BS! Let's dissect some markets! 📊🔥"
+            ),
+        )
 
     async def _cmd_screen(
         self,

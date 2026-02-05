@@ -1,6 +1,7 @@
 """Message widgets for chat display."""
 
 from loguru import logger
+from rich.markdown import Markdown as RichMarkdown
 from textual.reactive import reactive
 from textual.selection import Selection
 from textual.widgets import Static
@@ -83,10 +84,12 @@ class AssistantMessage(SelectionSafeMixin, Static):
             self.remove_class("streaming")
 
     def _update_display(self) -> None:
-        """Update displayed content."""
+        """Update displayed content with markdown rendering."""
         try:
-            display = self.content if self.content else "..."
-            self.update(f"● {display}")
+            content = self.content if self.content else "..."
+            # Render markdown content with Rich
+            rendered = RichMarkdown(content)
+            self.update(rendered)
             if self.parent:
                 self.parent.scroll_end(animate=False)
         except Exception as e:

@@ -24,7 +24,7 @@ class TraderLLMResponse(BaseModel):
     action: Literal["BUY", "SELL", "HOLD"] = Field(description="Trading action")
     confidence: float = Field(description="Confidence in the decision (0.0-1.0)", ge=0.0, le=1.0)
     risk_level: Literal["LOW", "MEDIUM", "HIGH"] = Field(description="Risk level of the trade")
-    reasoning: list[str] = Field(description="3-5 bullet points explaining the decision")
+    reasoning: list[str] = Field(description="1-2 punchy sentences explaining the decision")
 
 
 class TradingDecision(BaseModel):

@@ -203,3 +203,49 @@ class TestCancellationCallback:
 
         with pytest.raises(asyncio.CancelledError):
             await handler.execute("/analyze AAPL", is_cancelled=always_cancelled)
+
+
+class TestPersonalityCommands:
+    """Tests for personality switching commands."""
+
+    @pytest.mark.asyncio
+    async def test_execute_trump(self):
+        """Test /trump command switches to Trump mode."""
+        handler = CommandHandler()
+
+        # Mock app
+        class MockApp:
+            personality = None
+
+            def set_personality(self, p):
+                self.personality = p
+
+        app = MockApp()
+        handler.set_app(app)
+
+        result = await handler.execute("/trump")
+
+        assert result.success is True
+        assert "TRUMP MODE" in result.message
+        assert app.personality == "trump"
+
+    @pytest.mark.asyncio
+    async def test_execute_casino(self):
+        """Test /casino command switches to AI Casino mode."""
+        handler = CommandHandler()
+
+        # Mock app
+        class MockApp:
+            personality = None
+
+            def set_personality(self, p):
+                self.personality = p
+
+        app = MockApp()
+        handler.set_app(app)
+
+        result = await handler.execute("/casino")
+
+        assert result.success is True
+        assert "AI CASINO MODE" in result.message
+        assert app.personality == "casino"
