@@ -15,7 +15,6 @@ class TaskStep(Static):
     DEFAULT_CSS = """
     TaskStep {
         padding: 0;
-        height: auto;
         margin-left: 2;
     }
 
@@ -37,12 +36,12 @@ class TaskStep(Static):
     """
 
     status: reactive[str] = reactive("pending")
+    detail: reactive[str] = reactive("")
 
     def __init__(self, label: str, status: str = "pending") -> None:
         """Initialize task step."""
         super().__init__()
         self._label = label
-        self._detail = ""
         self.status = status
 
     def on_mount(self) -> None:
@@ -54,22 +53,24 @@ class TaskStep(Static):
         self.remove_class(old_status)
         self.add_class(new_status)
         if new_status != "active":
-            self._detail = ""
+            self.detail = ""
 
-    def set_detail(self, detail: str) -> None:
-        """Set detail text and schedule refresh."""
-        if detail != self._detail:
-            self._detail = detail
-            self.call_later(self.refresh)
+    def set_detail(self, new_detail: str) -> None:
+        """Set detail text."""
+        self.detail = new_detail
+
+    def watch_detail(self) -> None:
+        """React to detail changes - force height recalc."""
+        self.styles.height = 2 if self.detail else 1
 
     def render(self) -> str:
         """Render the step with optional detail line."""
         icons = {"pending": "○", "active": "◉", "complete": "✓", "error": "✗"}
         icon = icons.get(self.status, "○")
         line = f"{icon} {self._label}"
-        if self.status == "active" and self._detail:
-            truncated = self._detail[:60] + "..." if len(self._detail) > 60 else self._detail
-            line += f"\n    [dim]{escape(truncated)}[/dim]"
+        if self.status == "active" and self.detail:
+            truncated = self.detail[:60] + "..." if len(self.detail) > 60 else self.detail
+            line += f"\n    [#7F8C8D]{escape(truncated)}[/]"
         return line
 
     def __repr__(self) -> str:

@@ -453,6 +453,8 @@ Chat history: `~/.ai-casino/chat-history.json` (last 100 messages)
 - Ollama: Must run locally for dev (`mise ollama:start`)
 - Empty news: Handle with warning, not error
 - MACD: Needs ~35 data points minimum
+- **Transformers logging:** Must suppress BEFORE import cascade. Set env vars at CLI entry point (`src/cli/app.py`) and call `hf_logging.set_verbosity_error()` in modules that import transformers. Env vars alone don't catch all output.
+- **OpenAI structured output:** Requires `additionalProperties: false` recursively in JSON schema for strict mode
 
 ### Integration Points
 
