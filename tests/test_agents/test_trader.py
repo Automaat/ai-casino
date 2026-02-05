@@ -344,7 +344,7 @@ def test_display_action_wait_when_hold_not_owning():
     decision = TradingDecision(
         action=Signal.HOLD,
         confidence=0.5,
-        reasoning="Mixed signals",
+        reasoning=["Mixed signals"],
         risk_level="MEDIUM",
         owns_position=False,
         position_qty=None,
@@ -359,7 +359,7 @@ def test_display_action_hold_when_owning():
     decision = TradingDecision(
         action=Signal.HOLD,
         confidence=0.6,
-        reasoning="Maintain position",
+        reasoning=["Maintain position"],
         risk_level="LOW",
         owns_position=True,
         position_qty=100.0,
@@ -374,7 +374,7 @@ def test_display_action_buy_unchanged():
     decision = TradingDecision(
         action=Signal.BUY,
         confidence=0.8,
-        reasoning="Strong signals",
+        reasoning=["Strong signals"],
         risk_level="LOW",
         owns_position=False,
     )

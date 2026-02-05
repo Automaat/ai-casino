@@ -2,7 +2,14 @@
 
 from unittest.mock import MagicMock, patch
 
-from src.tools import AnalyzeStockTool, GetMarketDataTool, GetNewsTool, ToolRegistry, WebSearchTool
+from src.tools import (
+    AnalyzeStockTool,
+    GetMarketDataTool,
+    GetNewsTool,
+    ToolRegistry,
+    TrumpAnalysisTool,
+    WebSearchTool,
+)
 from src.tui.app import TradingChatApp
 
 
@@ -17,12 +24,13 @@ class TestToolRegistrySetup:
             registry = app._tool_registry
 
             assert isinstance(registry, ToolRegistry)
-            assert len(registry) == 5
+            assert len(registry) == 6
             assert "web_search" in registry.tool_names
             assert "get_market_data" in registry.tool_names
             assert "get_news" in registry.tool_names
             assert "analyze_stock" in registry.tool_names
             assert "screen_stocks" in registry.tool_names
+            assert "analyze_trump_posts" in registry.tool_names
 
     def test_registry_has_correct_tool_types(self):
         """Test that registry contains correct tool instances."""
@@ -33,6 +41,7 @@ class TestToolRegistrySetup:
             assert isinstance(app._tool_registry.get("get_market_data"), GetMarketDataTool)
             assert isinstance(app._tool_registry.get("get_news"), GetNewsTool)
             assert isinstance(app._tool_registry.get("analyze_stock"), AnalyzeStockTool)
+            assert isinstance(app._tool_registry.get("analyze_trump_posts"), TrumpAnalysisTool)
 
     def test_analyze_stock_requires_confirmation(self):
         """Test that analyze_stock tool requires confirmation."""
@@ -89,7 +98,7 @@ class TestToolDefinitions:
 
             definitions = app._tool_registry.get_definitions()
 
-            assert len(definitions) == 5
+            assert len(definitions) == 6
             for definition in definitions:
                 assert "type" in definition
                 assert definition["type"] == "function"

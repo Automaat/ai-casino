@@ -24,7 +24,7 @@ class TraderLLMResponse(BaseModel):
     action: Literal["BUY", "SELL", "HOLD"] = Field(description="Trading action")
     confidence: float = Field(description="Confidence in the decision (0.0-1.0)", ge=0.0, le=1.0)
     risk_level: Literal["LOW", "MEDIUM", "HIGH"] = Field(description="Risk level of the trade")
-    reasoning: str = Field(description="Detailed reasoning for the decision")
+    reasoning: list[str] = Field(description="3-5 bullet points explaining the decision")
 
 
 class TradingDecision(BaseModel):
@@ -32,7 +32,7 @@ class TradingDecision(BaseModel):
 
     action: Signal
     confidence: float
-    reasoning: str
+    reasoning: list[str]
     risk_level: str
     owns_position: bool = False
     position_qty: float | None = None
@@ -148,7 +148,7 @@ class TraderAgent:
             action = self._extract_action(response, technical.signal)
             confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)
             risk_level = self._extract_risk_level(response, confidence)
-            reasoning = response
+            reasoning = [response]  # Wrap fallback text in list
 
         logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
 

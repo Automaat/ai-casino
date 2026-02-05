@@ -19,6 +19,7 @@ from src.tools import (
     GetNewsTool,
     ScreenStocksTool,
     ToolRegistry,
+    TrumpAnalysisTool,
     WebSearchTool,
 )
 from src.tui.commands import CommandHandler
@@ -75,6 +76,7 @@ class TradingChatApp(App):
         registry.register(GetNewsTool())
         registry.register(AnalyzeStockTool())
         registry.register(ScreenStocksTool())
+        registry.register(TrumpAnalysisTool())
         return registry
 
     def _get_model_name(self) -> str:

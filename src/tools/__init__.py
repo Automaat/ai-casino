@@ -6,6 +6,7 @@ from src.tools.market_data import GetMarketDataTool
 from src.tools.news import GetNewsTool
 from src.tools.registry import ToolRegistry
 from src.tools.screen_stocks import ScreenStocksTool
+from src.tools.trump_analysis import TrumpAnalysisTool
 from src.tools.websearch import WebSearchTool
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "GetNewsTool",
     "ScreenStocksTool",
     "ToolRegistry",
+    "TrumpAnalysisTool",
     "WebSearchTool",
 ]

@@ -1,5 +1,7 @@
 """Result box widget for analysis output."""
 
+from rich.table import Table
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static
@@ -7,9 +9,15 @@ from textual.widgets import Static
 from src.strategies.momentum import Signal
 from src.workflows.trading import TradingWorkflowResult
 
+SIGNAL_COLORS = {
+    Signal.BUY: "green",
+    Signal.SELL: "red",
+    Signal.HOLD: "yellow",
+}
+
 
 class ResultBox(Static):
-    """Clean result display with table style."""
+    """Clean result display with bordered tables."""
 
     DEFAULT_CSS = """
     ResultBox {
@@ -17,29 +25,12 @@ class ResultBox(Static):
         padding: 0;
         margin: 1 0;
         height: auto;
+        width: 100%;
     }
 
     ResultBox .summary {
         color: #C5CDD9;
         margin-bottom: 1;
-    }
-
-    ResultBox .section-header {
-        color: #8899A6;
-        margin-top: 1;
-    }
-
-    ResultBox .table-row {
-        height: 1;
-    }
-
-    ResultBox .table-label {
-        color: #8899A6;
-        width: 15;
-    }
-
-    ResultBox .table-value {
-        color: #C5CDD9;
     }
 
     ResultBox .signal-buy {
@@ -54,19 +45,8 @@ class ResultBox(Static):
         color: #F39C12;
     }
 
-    ResultBox .reasoning {
-        color: #8899A6;
-        margin-top: 1;
-    }
-
     ResultBox .warning {
         color: #F39C12;
-        margin-top: 1;
-    }
-
-    ResultBox .warning-header {
-        color: #F39C12;
-        margin-top: 1;
     }
     """
 
@@ -84,13 +64,71 @@ class ResultBox(Static):
             return "signal-sell"
         return "signal-hold"
 
+    def _build_snapshot_table(self) -> Table:
+        """Build snapshot table with signal, confidence, risk."""
+        result = self._result
+        signal = result.decision.action
+        signal_color = SIGNAL_COLORS.get(signal, "white")
+
+        table = Table(title="Snapshot", expand=True, show_header=False, border_style="dim")
+        table.add_column("Field", style="dim")
+        table.add_column("Value", justify="right")
+
+        table.add_row("Signal", Text(signal.value, style=f"bold {signal_color}"))
+        table.add_row("Confidence", f"{result.decision.confidence:.0%}")
+        table.add_row("Risk Level", result.decision.risk_level)
+
+        return table
+
+    def _build_technical_table(self) -> Table:
+        """Build technical indicators table."""
+        result = self._result
+        rsi_str = f"{result.technical.rsi:.1f}" if result.technical.rsi is not None else "N/A"
+        macd = result.technical.macd_hist
+        macd_str = f"{macd:.4f}" if macd is not None else "N/A"
+
+        table = Table(title="Technical Indicators", expand=True, show_header=False, border_style="dim")
+        table.add_column("Field", style="dim")
+        table.add_column("Value", justify="right")
+
+        table.add_row("RSI", rsi_str)
+        table.add_row("MACD Hist", macd_str)
+        table.add_row("Tech Signal", result.technical.signal.value)
+
+        return table
+
+    def _build_sentiment_table(self) -> Table:
+        """Build sentiment table."""
+        result = self._result
+
+        table = Table(title="Sentiment", expand=True, show_header=False, border_style="dim")
+        table.add_column("Field", style="dim")
+        table.add_column("Value", justify="right")
+
+        table.add_row("Overall", result.sentiment.overall_sentiment)
+        table.add_row("Score", f"{result.sentiment.sentiment_score:.2f}")
+        table.add_row("Articles", str(result.sentiment.article_count))
+
+        return table
+
+    def _build_news_table(self) -> Table | None:
+        """Build news themes table if themes exist."""
+        result = self._result
+        if not result.news.key_themes:
+            return None
+
+        table = Table(title="News Themes", expand=True, show_header=False, border_style="dim")
+        table.add_column("Themes")
+
+        themes = ", ".join(result.news.key_themes[:3])
+        table.add_row(themes)
+
+        return table
+
     def compose(self) -> ComposeResult:
         """Compose the result display."""
         result = self._result
         signal = result.decision.action.value
-        confidence = result.decision.confidence
-        risk = result.decision.risk_level
-
         signal_class = self._signal_class()
 
         with Vertical():
@@ -99,48 +137,26 @@ class ResultBox(Static):
                 classes=f"summary {signal_class}",
             )
 
-            yield Static("Snapshot", classes="section-header")
+            yield Static(self._build_snapshot_table())
+            yield Static(self._build_technical_table())
+            yield Static(self._build_sentiment_table())
 
-            yield Static(f"  {'Signal':<12} {signal}", classes=f"table-row {signal_class}")
-            yield Static(f"  {'Confidence':<12} {confidence:.0%}", classes="table-row")
-            yield Static(f"  {'Risk Level':<12} {risk}", classes="table-row")
-
-            yield Static("Technical Indicators", classes="section-header")
-            rsi_str = f"{result.technical.rsi:.1f}" if result.technical.rsi is not None else "N/A"
-            macd = result.technical.macd_hist
-            macd_str = f"{macd:.4f}" if macd is not None else "N/A"
-            yield Static(f"  {'RSI':<12} {rsi_str}", classes="table-row")
-            yield Static(f"  {'MACD Hist':<12} {macd_str}", classes="table-row")
-            yield Static(
-                f"  {'Tech Signal':<12} {result.technical.signal.value}",
-                classes="table-row",
-            )
-
-            yield Static("Sentiment", classes="section-header")
-            yield Static(
-                f"  {'Overall':<12} {result.sentiment.overall_sentiment}",
-                classes="table-row",
-            )
-            yield Static(
-                f"  {'Score':<12} {result.sentiment.sentiment_score:.2f}",
-                classes="table-row",
-            )
-            yield Static(
-                f"  {'Articles':<12} {result.sentiment.article_count}",
-                classes="table-row",
-            )
-
-            if result.news.key_themes:
-                yield Static("News Themes", classes="section-header")
-                themes = ", ".join(result.news.key_themes[:3])
-                yield Static(f"  {themes}", classes="table-row")
+            news_table = self._build_news_table()
+            if news_table:
+                yield Static(news_table)
 
             if result.warnings:
-                yield Static("⚠️ Incomplete Data", classes="warning-header")
+                yield Static("⚠️ Incomplete Data", classes="warning")
                 for warning in result.warnings:
                     yield Static(f"  • {warning}", classes="warning")
 
-            yield Static(f"Reasoning: {result.decision.reasoning}", classes="reasoning")
+            reasoning_table = Table(
+                title="Reasoning", expand=True, show_header=False, border_style="dim", padding=(0, 1)
+            )
+            reasoning_table.add_column("Points")
+            for point in result.decision.reasoning:
+                reasoning_table.add_row(f"• {point}")
+            yield Static(reasoning_table)
 
     def __repr__(self) -> str:
         """Return string representation."""
