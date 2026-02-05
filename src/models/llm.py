@@ -33,13 +33,23 @@ def _set_asyncio_context() -> None:
 
 # Limit concurrent async requests (OpenAI allows 500 req/min = ~8 req/sec)
 MAX_CONCURRENT_REQUESTS = 1
-_semaphore_holder: dict[str, asyncio.Semaphore] = {}
+_semaphore_holder: dict[str, asyncio.Semaphore | int] = {}
 
 
 def _get_semaphore() -> asyncio.Semaphore:
-    """Get or create the global request semaphore."""
-    if "semaphore" not in _semaphore_holder:
+    """Get or create the global request semaphore for current event loop."""
+    try:
+        current_loop = asyncio.get_running_loop()
+        current_loop_id = id(current_loop)
+    except RuntimeError:
+        current_loop_id = None
+
+    # Recreate semaphore if it doesn't exist or is bound to different loop
+    stored_loop_id = _semaphore_holder.get("loop_id")
+    if "semaphore" not in _semaphore_holder or stored_loop_id != current_loop_id:
         _semaphore_holder["semaphore"] = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+        _semaphore_holder["loop_id"] = current_loop_id
+
     return _semaphore_holder["semaphore"]
 
 
