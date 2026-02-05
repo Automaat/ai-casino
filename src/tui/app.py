@@ -148,8 +148,15 @@ class TradingChatApp(App):
             Short completion message
         """
         if name == "get_news":
-            article_count = result.count("\n## ")
-            return f"Fetched {article_count} articles" if article_count > 0 else "Retrieved news"
+            lower_result = result.lower()
+            if "failed" in lower_result or "error" in lower_result:
+                msg = "Failed to fetch news"
+            elif "no recent news found" in lower_result:
+                msg = "No news found"
+            else:
+                article_count = result.count("\n## ")
+                msg = f"Fetched {article_count} articles" if article_count > 0 else "Retrieved news"
+            return msg
         if name == "get_market_data":
             symbol = args.get("symbol", "")
             return f"Retrieved data for {symbol}" if symbol else "Retrieved market data"
@@ -294,7 +301,7 @@ class TradingChatApp(App):
         try:
             result = await self._command_handler.execute(text, progress_callback, is_cancelled)
             if not worker.is_cancelled:
-                self.post_message(AnalysisComplete(result, "screening", "screen"))
+                self.post_message(AnalysisComplete(result, "", "screen"))
         except asyncio.CancelledError:
             logger.info("Screening worker cancelled")
 
