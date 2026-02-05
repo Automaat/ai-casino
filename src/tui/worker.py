@@ -265,7 +265,25 @@ def start_analysis(
         Job ID (symbol) for cancellation
     """
     validated_symbol = _validate_symbol(symbol)
+
+    # Remember previous job to wait for cleanup
+    previous_job = _active_jobs.get(validated_symbol)
+
     cancel_analysis(validated_symbol)
+
+    # Wait for previous thread to finish cleanup
+    if previous_job is not None:
+        thread = previous_job.thread
+        if thread is not None and thread.is_alive():
+            try:
+                thread.join(timeout=5.0)
+                if thread.is_alive():
+                    logger.warning(
+                        f"Previous analysis thread for {validated_symbol} "
+                        "did not terminate within 5s after cancellation."
+                    )
+            except Exception as e:
+                logger.warning(f"Error waiting for previous analysis thread for {validated_symbol}: {e}")
 
     def noop_result(_: dict) -> None:
         pass
@@ -511,12 +529,25 @@ class LegacyScreeningOptions:
     is_cancelled: Callable[[], bool] | None = None
 
 
-async def run_screening_in_process(criteria: str, options: LegacyScreeningOptions | None = None) -> dict:
+async def run_screening_in_process(
+    criteria: str,
+    options: LegacyScreeningOptions | None = None,
+    **legacy_kwargs: str | int | Callable[[], bool] | ProgressCallback,
+) -> dict:
     """Run screening in isolated thread (legacy async API).
 
     DEPRECATED: Use start_screening() for fire-and-forget pattern.
+
+    Accepts either explicit `options` instance or legacy keyword arguments
+    matching LegacyScreeningOptions fields.
     """
-    opts = options or LegacyScreeningOptions()
+    if options is not None and legacy_kwargs:
+        logger.warning(
+            "run_screening_in_process received both 'options' and legacy kwargs; ignoring legacy kwargs."
+        )
+    if options is None:
+        options = LegacyScreeningOptions(**legacy_kwargs) if legacy_kwargs else LegacyScreeningOptions()
+    opts = options
     result_holder: dict = {}
     error_holder: list[str] = []
     done_event = threading.Event()

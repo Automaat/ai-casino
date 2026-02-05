@@ -82,14 +82,21 @@ class OpenAIProvider(BaseLLMProvider):
         message = response.choices[0].message
 
         if message.tool_calls:
-            tool_calls = [
-                ToolCall(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=json.loads(tc.function.arguments),
+            tool_calls: list[ToolCall] = []
+            for tc in message.tool_calls:
+                try:
+                    arguments = json.loads(tc.function.arguments)
+                except json.JSONDecodeError as exc:
+                    logger.error(f"Failed to parse tool call arguments for tool '{tc.function.name}': {exc}")
+                    return None, None
+
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=arguments,
+                    )
                 )
-                for tc in message.tool_calls
-            ]
             return None, tool_calls
 
         return message.content, None

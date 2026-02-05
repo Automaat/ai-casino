@@ -1,9 +1,11 @@
 """LLM abstraction using custom provider implementations."""
 
 import asyncio
+import contextlib
 import json
 import os
 from collections.abc import AsyncIterator, Callable
+from types import TracebackType
 
 import sniffio
 from dotenv import load_dotenv
@@ -299,8 +301,50 @@ class LLMClient:
 
     async def close(self) -> None:
         """Close provider HTTP client."""
-        if hasattr(self._provider, "close"):
-            await self._provider.close()
+        await self._provider.close()
+
+    def _schedule_close(self) -> None:
+        """Best-effort scheduling of async close for sync contexts."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            with contextlib.suppress(RuntimeError):
+                asyncio.run(self.close())
+        else:
+            task = loop.create_task(self.close())
+            task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+
+    def __enter__(self) -> "LLMClient":
+        """Enter sync context manager."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Exit sync context manager and ensure cleanup."""
+        self._schedule_close()
+
+    async def __aenter__(self) -> "LLMClient":
+        """Enter async context manager."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Exit async context manager and ensure cleanup."""
+        await self.close()
+
+    def __del__(self) -> None:
+        """Best-effort cleanup on garbage collection."""
+        with contextlib.suppress(Exception):
+            if hasattr(self, "_provider"):
+                self._schedule_close()
 
     def __repr__(self) -> str:
         """String representation."""

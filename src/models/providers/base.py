@@ -25,7 +25,14 @@ class ToolCall(BaseModel):
 def retry(
     max_attempts: int = 3,
     delay: float = 1.0,
-    exceptions: tuple[type[Exception], ...] = (httpx.ConnectError, httpx.TimeoutException),
+    exceptions: tuple[type[Exception], ...] = (
+        httpx.ConnectError,
+        httpx.TimeoutException,
+        httpx.ReadTimeout,
+        httpx.WriteTimeout,
+        httpx.PoolTimeout,
+        httpx.HTTPStatusError,
+    ),
 ) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
     """Decorator for retrying async functions on transient errors.
 
@@ -48,7 +55,10 @@ def retry(
                         wait_time = delay * (attempt + 1)
                         logger.warning(f"Retry {attempt + 1}/{max_attempts} after {wait_time}s: {e}")
                         await asyncio.sleep(wait_time)
-            raise last_error  # type: ignore[misc]
+            if last_error is not None:
+                raise last_error
+            msg = "Retry decorator invoked with max_attempts <= 0 or no exceptions captured"
+            raise RuntimeError(msg)
 
         return wrapper
 
@@ -98,6 +108,13 @@ class BaseLLMProvider(ABC):
 
         Returns:
             Tuple of (text_response, tool_calls). One will be None.
+        """
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Release resources held by provider.
+
+        Implementations without resources can provide empty implementation.
         """
 
     @property

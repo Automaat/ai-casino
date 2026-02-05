@@ -8,12 +8,26 @@ tries to use anyio's CancelScope during cleanup - sync httpx avoids this.
 
 import asyncio
 import json
+import threading
 from collections.abc import AsyncIterator
 
 import httpx
 from loguru import logger
 
 from src.models.providers.base import BaseLLMProvider, ToolCall, retry
+
+_CLIENT: httpx.Client | None = None
+_CLIENT_LOCK = threading.Lock()
+
+
+def _get_client(base_url: str, timeout: float = 120.0) -> httpx.Client:
+    """Get or create shared httpx client for Ollama requests."""
+    global _CLIENT
+    if _CLIENT is None:
+        with _CLIENT_LOCK:
+            if _CLIENT is None:
+                _CLIENT = httpx.Client(base_url=base_url, timeout=timeout)
+    return _CLIENT
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -32,24 +46,30 @@ class OllamaProvider(BaseLLMProvider):
 
     def _sync_complete(self, messages: list[dict], temperature: float) -> str:
         """Synchronous completion - runs in thread to avoid anyio issues."""
-        with httpx.Client(base_url=self._base_url, timeout=120.0) as client:
-            response = client.post(
-                "/api/chat",
-                json={
-                    "model": self._model,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {"temperature": temperature},
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            content = data["message"]["content"]
-            logger.debug(f"Ollama response length: {len(content)} chars")
-            return content
+        client = _get_client(self._base_url)
+        response = client.post(
+            "/api/chat",
+            json={
+                "model": self._model,
+                "messages": messages,
+                "stream": False,
+                "options": {"temperature": temperature},
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        content = data["message"]["content"]
+        logger.debug(f"Ollama response length: {len(content)} chars")
+        return content
 
     async def close(self) -> None:
-        """Close HTTP client (no-op, clients are per-request)."""
+        """Close shared HTTP client."""
+        global _CLIENT
+        if _CLIENT is not None:
+            with _CLIENT_LOCK:
+                if _CLIENT is not None:
+                    _CLIENT.close()
+                    _CLIENT = None
 
     @retry(max_attempts=3, delay=1.0)
     async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
@@ -63,23 +83,23 @@ class OllamaProvider(BaseLLMProvider):
         approach. This simplified version buffers all tokens for compatibility.
         """
         tokens = []
-        with httpx.Client(base_url=self._base_url, timeout=120.0) as client:
-            with client.stream(
-                "POST",
-                "/api/chat",
-                json={
-                    "model": self._model,
-                    "messages": messages,
-                    "stream": True,
-                    "options": {"temperature": temperature},
-                },
-            ) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if line:
-                        data = json.loads(line)
-                        if content := data.get("message", {}).get("content"):
-                            tokens.append(content)
+        client = _get_client(self._base_url)
+        with client.stream(
+            "POST",
+            "/api/chat",
+            json={
+                "model": self._model,
+                "messages": messages,
+                "stream": True,
+                "options": {"temperature": temperature},
+            },
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if line:
+                    data = json.loads(line)
+                    if content := data.get("message", {}).get("content"):
+                        tokens.append(content)
         return tokens
 
     @retry(max_attempts=3, delay=1.0)

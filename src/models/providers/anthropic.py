@@ -35,16 +35,18 @@ def _convert_tools_to_anthropic(tools: list[dict]) -> list[dict]:
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic provider using official SDK."""
 
-    def __init__(self, model: str, api_key: str | None = None) -> None:
+    def __init__(self, model: str, api_key: str | None = None, max_tokens: int = 4096) -> None:
         """Initialize Anthropic provider.
 
         Args:
             model: Model name (e.g., "claude-sonnet-4-20250514")
             api_key: API key (defaults to ANTHROPIC_API_KEY env var)
+            max_tokens: Maximum tokens in response (default: 4096)
         """
         self._model = model
+        self._max_tokens = max_tokens
         self._client = AsyncAnthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
-        logger.debug(f"Initialized AnthropicProvider: model={model}")
+        logger.debug(f"Initialized AnthropicProvider: model={model}, max_tokens={max_tokens}")
 
     async def close(self) -> None:
         """Close HTTP client."""
@@ -59,13 +61,22 @@ class AnthropicProvider(BaseLLMProvider):
         Returns:
             Tuple of (system_prompt, remaining_messages)
         """
-        system = None
-        remaining = []
+        system_messages: list[str] = []
+        remaining: list[dict] = []
         for msg in messages:
-            if msg["role"] == "system":
-                system = msg["content"]
+            if msg.get("role") == "system":
+                system_messages.append(msg.get("content", ""))
             else:
                 remaining.append(msg)
+
+        system: str | None = None
+        if system_messages:
+            if len(system_messages) > 1:
+                logger.warning(
+                    f"Multiple system messages detected ({len(system_messages)}). Concatenating in order."
+                )
+            system = "\n\n".join(system_messages)
+
         return system, remaining
 
     @retry(max_attempts=3, delay=1.0)
@@ -77,7 +88,7 @@ class AnthropicProvider(BaseLLMProvider):
             "model": self._model,
             "messages": chat_messages,
             "temperature": temperature,
-            "max_tokens": 4096,
+            "max_tokens": self._max_tokens,
         }
         if system:
             kwargs["system"] = system
@@ -96,7 +107,7 @@ class AnthropicProvider(BaseLLMProvider):
             "model": self._model,
             "messages": chat_messages,
             "temperature": temperature,
-            "max_tokens": 4096,
+            "max_tokens": self._max_tokens,
         }
         if system:
             kwargs["system"] = system
@@ -120,7 +131,7 @@ class AnthropicProvider(BaseLLMProvider):
             "messages": chat_messages,
             "tools": _convert_tools_to_anthropic(tools),
             "temperature": temperature,
-            "max_tokens": 4096,
+            "max_tokens": self._max_tokens,
         }
         if system:
             kwargs["system"] = system

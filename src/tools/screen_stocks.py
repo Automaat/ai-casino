@@ -67,7 +67,7 @@ class ScreenStocksTool(BaseTool):
             },
         }
 
-    def execute(
+    async def execute(
         self,
         criteria: str,
         universe: str = "COMBINED",
@@ -105,7 +105,7 @@ class ScreenStocksTool(BaseTool):
                     f"Screened {output.total_screened} stocks."
                 )
 
-            analysis = analyzer.analyze(output)
+            analysis = await analyzer.analyze(output)
 
             return self._format_output(output, analysis)
         except Exception as e:
