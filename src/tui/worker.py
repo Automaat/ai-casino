@@ -245,7 +245,7 @@ async def _run_analysis_async(
 
 def _analysis_thread_target(params: AnalysisParams) -> None:
     """Thread entry point - creates isolated event loop and runs analysis."""
-    from src.tui.log_capture import setup_log_capture, teardown_log_capture
+    from src.tui.log_capture import setup_log_capture, teardown_log_capture, worker_log_context
 
     loop = _setup_isolated_event_loop()
     handler_id = None
@@ -255,11 +255,13 @@ def _analysis_thread_target(params: AnalysisParams) -> None:
         if params.progress_callback:
             handler_id = setup_log_capture(params.progress_callback)
 
-        coro = _run_analysis_async(
-            params.symbol, params.period_days, params.progress_callback, params.cancelled_event
-        )
-        result = loop.run_until_complete(coro)
-        params.result_callback(result)
+        # Wrap in worker_log_context so all logs get tui_worker=True
+        with worker_log_context():
+            coro = _run_analysis_async(
+                params.symbol, params.period_days, params.progress_callback, params.cancelled_event
+            )
+            result = loop.run_until_complete(coro)
+            params.result_callback(result)
     except asyncio.CancelledError:
         params.error_callback("Analysis cancelled")
     except Exception as e:
@@ -478,7 +480,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
 
 def _screening_thread_target(params: ScreeningParams) -> None:
     """Thread entry point for screening."""
-    from src.tui.log_capture import setup_log_capture, teardown_log_capture
+    from src.tui.log_capture import setup_log_capture, teardown_log_capture, worker_log_context
 
     loop = _setup_isolated_event_loop()
     handler_id = None
@@ -488,8 +490,10 @@ def _screening_thread_target(params: ScreeningParams) -> None:
         if params.progress_callback:
             handler_id = setup_log_capture(params.progress_callback)
 
-        result = loop.run_until_complete(_run_screening_async(params))
-        params.result_callback(result)
+        # Wrap in worker_log_context so all logs get tui_worker=True
+        with worker_log_context():
+            result = loop.run_until_complete(_run_screening_async(params))
+            params.result_callback(result)
     except asyncio.CancelledError:
         params.error_callback("Screening cancelled")
     except Exception as e:

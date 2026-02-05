@@ -1,48 +1,54 @@
-"""Log capture utilities for TUI progress display.
+"""Log capture utilities using loguru contextvars.
 
-Captures log messages in worker threads and displays them under active progress steps.
+Uses logger.contextualize() for thread/async-safe log scoping.
+The step context is stored in a threading.local() since contextualize()
+can't be dynamically updated from outside the context manager.
 """
 
 import contextlib
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from dataclasses import dataclass, field
 
 from loguru import logger
-
-# Thread-local storage for current active step
-_current_step = threading.local()
-
-# Thread-local storage for log buffer
-_log_buffer = threading.local()
 
 # Type alias for progress callback
 ProgressCallback = Callable[[str, str, str], None]
 
+# Thread-local storage for current step (updated dynamically within context)
+_step_context = threading.local()
+
+
+@dataclass
+class _LogCaptureState:
+    """Mutable container for log capture state."""
+
+    progress_callback: ProgressCallback | None = field(default=None)
+
+
+_state = _LogCaptureState()
+
 
 class LogCaptureSink:
-    """Custom loguru sink that captures logs and sends them to progress display."""
-
-    def __init__(self, progress_callback: ProgressCallback) -> None:
-        """Initialize log capture sink.
-
-        Args:
-            progress_callback: Callback to update progress display (step_id, status, detail)
-        """
-        self.progress_callback = progress_callback
+    """Sink that forwards logs to progress display."""
 
     def __call__(self, message: object) -> None:
-        """Handle log message from loguru.
+        """Handle log message from loguru."""
+        if not _state.progress_callback:
+            return
 
-        Args:
-            message: Log message object from loguru
-        """
-        # Get current step from thread-local storage
-        step_id = getattr(_current_step, "value", None)
-        if not step_id:
-            return  # No active step, skip
-
-        # Extract log level and message content from record
         record = message.record
+        extra = record.get("extra", {})
+
+        # Only capture logs from TUI worker context
+        if not extra.get("tui_worker"):
+            return
+
+        # Get step from thread-local storage
+        step_id = getattr(_step_context, "step", None)
+        if not step_id:
+            return
+
         level = record["level"].name
         text = record["message"]
 
@@ -51,39 +57,18 @@ class LogCaptureSink:
             formatted = f"✗ {text}"
         elif level == "WARNING":
             formatted = f"⚠ {text}"
-        else:  # INFO and below
+        else:
             formatted = text
 
-        # Truncate intelligently to ~50 chars
-        formatted = self._truncate_message(formatted)
+        # Truncate to ~50 chars
+        if len(formatted) > 50:
+            formatted = formatted[:47] + "..."
 
-        # Update progress detail via callback
-        self.progress_callback(step_id, "active", formatted)
-
-    def _truncate_message(self, msg: str) -> str:
-        """Truncate message intelligently, preserving important parts.
-
-        Args:
-            msg: Message to truncate
-
-        Returns:
-            Truncated message (~50 chars)
-        """
-        max_len = 50
-        if len(msg) <= max_len:
-            return msg
-
-        # Try to preserve start and end
-        if "..." not in msg:
-            # Simple truncation with ellipsis
-            return msg[: max_len - 3] + "..."
-
-        # Already has ellipsis, just truncate
-        return msg[:max_len]
+        _state.progress_callback(step_id, "active", formatted)
 
 
 def setup_log_capture(progress_callback: ProgressCallback) -> int:
-    """Set up log capture for current thread.
+    """Set up log capture sink.
 
     Args:
         progress_callback: Callback to update progress display
@@ -91,27 +76,34 @@ def setup_log_capture(progress_callback: ProgressCallback) -> int:
     Returns:
         Handler ID for later teardown
     """
-    sink = LogCaptureSink(progress_callback)
-    worker_thread = threading.current_thread()
+    _state.progress_callback = progress_callback
 
-    # Add sink with INFO+ level (no DEBUG spam)
-    # Filter to only capture logs from this worker thread
     return logger.add(
-        sink,
+        LogCaptureSink(),
         level="INFO",
-        format="{message}",  # Sink handles formatting
-        filter=lambda record: record["thread"].id == worker_thread.ident,
+        format="{message}",
+        filter=lambda r: r["extra"].get("tui_worker", False),
     )
 
 
 def teardown_log_capture(handler_id: int) -> None:
-    """Remove log capture sink.
-
-    Args:
-        handler_id: Handler ID from setup_log_capture()
-    """
+    """Remove log capture sink."""
     with contextlib.suppress(ValueError):
         logger.remove(handler_id)
+    _state.progress_callback = None
+
+
+@contextlib.contextmanager
+def worker_log_context() -> Generator[None, None, None]:
+    """Context manager that marks all logs as coming from TUI worker.
+
+    Usage:
+        with worker_log_context():
+            # All logger calls here will have tui_worker=True in extra
+            logger.info("This gets captured")
+    """
+    with logger.contextualize(tui_worker=True):
+        yield
 
 
 def set_active_step(step_id: str) -> None:
@@ -120,10 +112,10 @@ def set_active_step(step_id: str) -> None:
     Args:
         step_id: Step identifier to associate logs with
     """
-    _current_step.value = step_id
+    _step_context.step = step_id
 
 
 def clear_active_step() -> None:
     """Clear current active step."""
-    if hasattr(_current_step, "value"):
-        delattr(_current_step, "value")
+    if hasattr(_step_context, "step"):
+        delattr(_step_context, "step")

@@ -5,7 +5,13 @@ import threading
 import pytest
 from loguru import logger
 
-from src.tui.log_capture import clear_active_step, set_active_step, setup_log_capture, teardown_log_capture
+from src.tui.log_capture import (
+    clear_active_step,
+    set_active_step,
+    setup_log_capture,
+    teardown_log_capture,
+    worker_log_context,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -40,8 +46,9 @@ class TestLogCapture:
 
         handler_id = setup_log_capture(progress_callback)
 
-        set_active_step("test_step")
-        logger.info("Test message")
+        with worker_log_context():
+            set_active_step("test_step")
+            logger.info("Test message")
 
         teardown_log_capture(handler_id)
 
@@ -59,8 +66,9 @@ class TestLogCapture:
 
         handler_id = setup_log_capture(progress_callback)
 
-        set_active_step("test_step")
-        logger.warning("Warning message")
+        with worker_log_context():
+            set_active_step("test_step")
+            logger.warning("Warning message")
 
         teardown_log_capture(handler_id)
 
@@ -77,8 +85,9 @@ class TestLogCapture:
 
         handler_id = setup_log_capture(progress_callback)
 
-        set_active_step("test_step")
-        logger.error("Error message")
+        with worker_log_context():
+            set_active_step("test_step")
+            logger.error("Error message")
 
         teardown_log_capture(handler_id)
 
@@ -95,6 +104,24 @@ class TestLogCapture:
 
         handler_id = setup_log_capture(progress_callback)
 
+        with worker_log_context():
+            logger.info("Test message")
+
+        teardown_log_capture(handler_id)
+
+        assert len(captured_logs) == 0
+
+    def test_no_capture_without_worker_context(self) -> None:
+        """Test that logs are not captured outside worker_log_context."""
+        captured_logs = []
+
+        def progress_callback(step_id: str, status: str, detail: str) -> None:
+            captured_logs.append((step_id, status, detail))
+
+        handler_id = setup_log_capture(progress_callback)
+
+        # Log without worker context - should not capture
+        set_active_step("test_step")
         logger.info("Test message")
 
         teardown_log_capture(handler_id)
@@ -110,11 +137,12 @@ class TestLogCapture:
 
         handler_id = setup_log_capture(progress_callback)
 
-        set_active_step("test_step")
-        logger.info("Message 1")
+        with worker_log_context():
+            set_active_step("test_step")
+            logger.info("Message 1")
 
-        clear_active_step()
-        logger.info("Message 2")
+            clear_active_step()
+            logger.info("Message 2")
 
         teardown_log_capture(handler_id)
 
@@ -130,9 +158,10 @@ class TestLogCapture:
 
         handler_id = setup_log_capture(progress_callback)
 
-        set_active_step("test_step")
-        long_message = "A" * 100
-        logger.info(long_message)
+        with worker_log_context():
+            set_active_step("test_step")
+            long_message = "A" * 100
+            logger.info(long_message)
 
         teardown_log_capture(handler_id)
 
@@ -141,7 +170,7 @@ class TestLogCapture:
         assert "..." in captured_logs[0][2]
 
     def test_thread_isolation(self) -> None:
-        """Test that log capture is isolated per thread."""
+        """Test that log capture uses thread-local step storage."""
         captured_logs = []
 
         def progress_callback(step_id: str, status: str, detail: str) -> None:
@@ -152,19 +181,22 @@ class TestLogCapture:
         # Set step in main thread
         set_active_step("main_step")
 
-        # Log from different thread (should not capture)
+        # Log from different thread (has no step set, should not capture)
         def thread_func() -> None:
-            logger.info("Thread message")
+            with worker_log_context():
+                # This thread has no step set
+                logger.info("Thread message")
 
         thread = threading.Thread(target=thread_func)
         thread.start()
         thread.join()
 
-        # Log from main thread (should capture)
-        logger.info("Main message")
+        # Log from main thread with context
+        with worker_log_context():
+            logger.info("Main message")
 
         teardown_log_capture(handler_id)
 
-        # Only main thread message should be captured
+        # Only main thread message should be captured (has step set)
         assert len(captured_logs) == 1
         assert "Main message" in captured_logs[0][2]
