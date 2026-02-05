@@ -1,23 +1,43 @@
-"""LLM abstraction using LiteLLM for flexible provider switching."""
+"""LLM abstraction using custom provider implementations."""
 
+import asyncio
+import contextlib
 import json
 import os
 from collections.abc import AsyncIterator, Callable
+from types import TracebackType
 
+import sniffio
 from dotenv import load_dotenv
-from litellm import acompletion, completion
 from loguru import logger
 from pydantic import BaseModel
+
+from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvider, OpenAIProvider
+from src.models.providers.base import ToolCall
 
 load_dotenv()
 
 
-class ToolCall(BaseModel):
-    """Represents a tool call from the LLM."""
+def _set_asyncio_context() -> None:
+    """Set sniffio context to asyncio to fix detection issues with nest_asyncio.
 
-    id: str
-    name: str
-    arguments: dict
+    httpx/httpcore uses sniffio to detect the async library. When running under
+    nest_asyncio (used by CLI with asyncio.run), sniffio sometimes fails to detect
+    the context properly. This explicitly sets it to asyncio.
+    """
+    sniffio.current_async_library_cvar.set("asyncio")
+
+
+# Limit concurrent async requests (OpenAI allows 500 req/min = ~8 req/sec)
+MAX_CONCURRENT_REQUESTS = 1
+_semaphore_holder: dict[str, asyncio.Semaphore] = {}
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    """Get or create the global request semaphore."""
+    if "semaphore" not in _semaphore_holder:
+        _semaphore_holder["semaphore"] = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+    return _semaphore_holder["semaphore"]
 
 
 class ToolResult(BaseModel):
@@ -47,36 +67,33 @@ class LLMClient:
         self.model = model or os.getenv("LLM_MODEL", "qwen3:14b")
         self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
-        self._api_base: str | None = None
-
-        if self.provider == "ollama":
-            os.environ["OLLAMA_API_BASE"] = self.base_url
-            self._model_id = f"ollama/{self.model}"
-        elif self.provider == "anthropic":
-            self._model_id = f"anthropic/{self.model}"
-        elif self.provider == "openai":
-            self._model_id = f"openai/{self.model}"
-            self._api_base = os.getenv("OPENAI_API_BASE")
-        else:
-            msg = f"Unsupported provider: {self.provider}"
-            raise ValueError(msg)
-
+        self._provider: BaseLLMProvider = self._create_provider()
         logger.info(f"Initialized LLM client: provider={self.provider}, model={self.model}")
 
-    @property
-    def _is_gpt5(self) -> bool:
-        """Check if model is GPT-5 (temperature restricted)."""
-        return self.provider == "openai" and self.model.startswith("gpt-5")
+    def _create_provider(self) -> BaseLLMProvider:
+        """Create provider instance based on configuration."""
+        if self.provider == "ollama":
+            return OllamaProvider(model=self.model, base_url=self.base_url)
+        if self.provider == "anthropic":
+            return AnthropicProvider(model=self.model)
+        if self.provider == "openai":
+            return OpenAIProvider(
+                model=self.model,
+                base_url=os.getenv("OPENAI_API_BASE"),
+            )
+        msg = f"Unsupported provider: {self.provider}"
+        raise ValueError(msg)
 
-    def _effective_temperature(self, temperature: float) -> float:
-        """Get effective temperature, forcing 1.0 for GPT-5 models."""
-        if self._is_gpt5 and temperature != 1.0:
-            logger.debug(f"GPT-5 requires temperature=1, ignoring requested {temperature}")
-            return 1.0
-        return temperature
+    def _build_messages(self, prompt: str, system: str | None = None) -> list[dict[str, str]]:
+        """Build messages list from prompt and optional system message."""
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        return messages
 
     def complete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
-        """Generate completion from prompt.
+        """Generate completion from prompt (sync wrapper).
 
         Args:
             prompt: User prompt
@@ -86,28 +103,7 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        messages: list[dict[str, str]] = []
-
-        if system:
-            messages.append({"role": "system", "content": system})
-
-        messages.append({"role": "user", "content": prompt})
-
-        try:
-            kwargs: dict = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": self._effective_temperature(temperature),
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-            response = completion(**kwargs)
-            content = response.choices[0].message.content
-            logger.debug(f"LLM response length: {len(content)} chars")
-            return content
-        except Exception as e:
-            logger.error(f"LLM completion failed: {e}")
-            raise
+        return asyncio.run(self.acomplete(prompt, system, temperature))
 
     async def acomplete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
         """Generate completion from prompt asynchronously.
@@ -120,31 +116,13 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        messages: list[dict[str, str]] = []
-
-        if system:
-            messages.append({"role": "system", "content": system})
-
-        messages.append({"role": "user", "content": prompt})
-
-        try:
-            kwargs: dict = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": self._effective_temperature(temperature),
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-            response = await acompletion(**kwargs)
-            content = response.choices[0].message.content
-            logger.debug(f"LLM async response length: {len(content)} chars")
-            return content
-        except Exception as e:
-            logger.error(f"LLM async completion failed: {e}")
-            raise
+        _set_asyncio_context()
+        messages = self._build_messages(prompt, system)
+        async with _get_semaphore():
+            return await self._provider.acomplete(messages, temperature)
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
-        """Multi-turn chat completion.
+        """Multi-turn chat completion (sync wrapper).
 
         Args:
             messages: List of message dicts with 'role' and 'content'
@@ -153,21 +131,21 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        try:
-            kwargs: dict = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": self._effective_temperature(temperature),
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-            response = completion(**kwargs)
-            content = response.choices[0].message.content
-            logger.debug(f"LLM chat response length: {len(content)} chars")
-            return content
-        except Exception as e:
-            logger.error(f"LLM chat failed: {e}")
-            raise
+        return asyncio.run(self.achat(messages, temperature))
+
+    async def achat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+        """Multi-turn chat completion asynchronously.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            temperature: Sampling temperature (0.0-1.0)
+
+        Returns:
+            Generated text response
+        """
+        _set_asyncio_context()
+        async with _get_semaphore():
+            return await self._provider.acomplete(messages, temperature)
 
     async def astream(
         self, prompt: str, system: str | None = None, temperature: float = 0.7
@@ -182,32 +160,11 @@ class LLMClient:
         Yields:
             Individual tokens as they're generated
         """
-        messages: list[dict[str, str]] = []
-
-        if system:
-            messages.append({"role": "system", "content": system})
-
-        messages.append({"role": "user", "content": prompt})
-
-        try:
-            kwargs: dict = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": self._effective_temperature(temperature),
-                "stream": True,
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-
-            response = await acompletion(**kwargs)
-
-            async for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-
-        except Exception as e:
-            logger.error(f"LLM streaming failed: {e}")
-            raise
+        _set_asyncio_context()
+        messages = self._build_messages(prompt, system)
+        async with _get_semaphore():
+            async for token in self._provider.astream(messages, temperature):
+                yield token
 
     @property
     def supports_tools(self) -> bool:
@@ -216,7 +173,7 @@ class LLMClient:
         Returns:
             True if provider supports tool calling (anthropic, openai)
         """
-        return self.provider in ("anthropic", "openai")
+        return self._provider.supports_tools
 
     def complete_with_tools(  # noqa: PLR0913
         self,
@@ -228,7 +185,7 @@ class LLMClient:
         max_tool_calls: int = 5,
         on_tool_call: Callable[[str, dict, str], None] | None = None,
     ) -> str:
-        """Generate completion with tool calling support.
+        """Generate completion with tool calling support (sync wrapper).
 
         Args:
             prompt: User prompt
@@ -242,69 +199,11 @@ class LLMClient:
         Returns:
             Final text response after tool execution
         """
-        messages: list[dict] = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-
-        tool_calls_made = 0
-
-        effective_temp = self._effective_temperature(temperature)
-        try:
-            while tool_calls_made < max_tool_calls:
-                kwargs: dict = {
-                    "model": self._model_id,
-                    "messages": messages,
-                    "temperature": effective_temp,
-                    "tools": tools,
-                }
-                if self._api_base:
-                    kwargs["api_base"] = self._api_base
-
-                response = completion(**kwargs)
-                message = response.choices[0].message
-
-                if not message.tool_calls:
-                    return message.content or ""
-
-                messages.append(message.model_dump())
-
-                for tool_call in message.tool_calls:
-                    tool_calls_made += 1
-                    name = tool_call.function.name
-                    args = json.loads(tool_call.function.arguments)
-
-                    logger.debug(f"Executing tool: {name} with args: {args}")
-                    try:
-                        result = tool_executor(name, args)
-                    except Exception as tool_error:
-                        logger.error(f"Tool '{name}' execution failed: {tool_error}")
-                        result = f"Tool '{name}' failed: {tool_error}"
-
-                    if on_tool_call:
-                        on_tool_call(name, args, result)
-
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": result,
-                        }
-                    )
-
-            kwargs = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": effective_temp,
-            }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-            final_response = completion(**kwargs)
-            return final_response.choices[0].message.content or ""
-
-        except Exception as e:
-            logger.error(f"Tool calling failed: {e}")
-            raise
+        return asyncio.run(
+            self.acomplete_with_tools(
+                prompt, tools, tool_executor, system, temperature, max_tool_calls, on_tool_call
+            )
+        )
 
     async def acomplete_with_tools(  # noqa: PLR0913
         self,
@@ -330,69 +229,122 @@ class LLMClient:
         Returns:
             Final text response after tool execution
         """
-        messages: list[dict] = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-
+        _set_asyncio_context()
+        messages: list[dict] = self._build_messages(prompt, system)
         tool_calls_made = 0
-        effective_temp = self._effective_temperature(temperature)
 
-        try:
-            while tool_calls_made < max_tool_calls:
-                kwargs: dict = {
-                    "model": self._model_id,
-                    "messages": messages,
-                    "temperature": effective_temp,
-                    "tools": tools,
+        while tool_calls_made < max_tool_calls:
+            async with _get_semaphore():
+                text_response, tool_calls = await self._provider.acomplete_with_tools(
+                    messages, tools, temperature
+                )
+
+            if not tool_calls:
+                return text_response or ""
+
+            # Add assistant message with tool calls
+            messages.append(self._format_tool_call_message(tool_calls))
+
+            # Execute tools and add results
+            for tool_call in tool_calls:
+                tool_calls_made += 1
+                result = self._execute_tool(tool_call, tool_executor)
+
+                if on_tool_call:
+                    on_tool_call(tool_call.name, tool_call.arguments, result)
+
+                messages.append(self._format_tool_result_message(tool_call, result))
+
+        # Final completion without tools
+        async with _get_semaphore():
+            return await self._provider.acomplete(messages, temperature)
+
+    def _format_tool_call_message(self, tool_calls: list[ToolCall]) -> dict:
+        """Format tool calls for assistant message."""
+        if self.provider == "anthropic":
+            content = []
+            for tc in tool_calls:
+                content.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.arguments})
+            return {"role": "assistant", "content": content}
+        # OpenAI format
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
                 }
-                if self._api_base:
-                    kwargs["api_base"] = self._api_base
+                for tc in tool_calls
+            ],
+        }
 
-                response = await acompletion(**kwargs)
-                message = response.choices[0].message
-
-                if not message.tool_calls:
-                    return message.content or ""
-
-                messages.append(message.model_dump())
-
-                for tool_call in message.tool_calls:
-                    tool_calls_made += 1
-                    name = tool_call.function.name
-                    args = json.loads(tool_call.function.arguments)
-
-                    logger.debug(f"Executing tool: {name} with args: {args}")
-                    try:
-                        result = tool_executor(name, args)
-                    except Exception as tool_error:
-                        logger.error(f"Tool '{name}' execution failed: {tool_error}")
-                        result = f"Tool '{name}' failed: {tool_error}"
-
-                    if on_tool_call:
-                        on_tool_call(name, args, result)
-
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": result,
-                        }
-                    )
-
-            kwargs = {
-                "model": self._model_id,
-                "messages": messages,
-                "temperature": effective_temp,
+    def _format_tool_result_message(self, tool_call: ToolCall, result: str) -> dict:
+        """Format tool result for message."""
+        if self.provider == "anthropic":
+            return {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": tool_call.id, "content": result}],
             }
-            if self._api_base:
-                kwargs["api_base"] = self._api_base
-            final_response = await acompletion(**kwargs)
-            return final_response.choices[0].message.content or ""
+        # OpenAI format
+        return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
 
+    def _execute_tool(self, tool_call: ToolCall, executor: Callable[[str, dict], str]) -> str:
+        """Execute a tool call and handle errors."""
+        logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
+        try:
+            return executor(tool_call.name, tool_call.arguments)
         except Exception as e:
-            logger.error(f"Async tool calling failed: {e}")
-            raise
+            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            return f"Tool '{tool_call.name}' failed: {e}"
+
+    async def close(self) -> None:
+        """Close provider HTTP client."""
+        await self._provider.close()
+
+    def _schedule_close(self) -> None:
+        """Best-effort scheduling of async close for sync contexts."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            with contextlib.suppress(RuntimeError):
+                asyncio.run(self.close())
+        else:
+            task = loop.create_task(self.close())
+            task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+
+    def __enter__(self) -> "LLMClient":
+        """Enter sync context manager."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Exit sync context manager and ensure cleanup."""
+        self._schedule_close()
+
+    async def __aenter__(self) -> "LLMClient":
+        """Enter async context manager."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Exit async context manager and ensure cleanup."""
+        await self.close()
+
+    def __del__(self) -> None:
+        """Best-effort cleanup on garbage collection."""
+        with contextlib.suppress(Exception):
+            if hasattr(self, "_provider"):
+                self._schedule_close()
 
     def __repr__(self) -> str:
         """String representation."""

@@ -374,6 +374,11 @@ Optional: `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`
 LLM: `LLM_PROVIDER` (ollama|anthropic|openai), `LLM_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
 Logging: `LOG_LEVEL` (DEBUG|INFO|WARNING|ERROR)
 
+### TUI Logs
+
+TUI worker logs: `~/.ai-casino/worker.log` (debug level, includes LLM errors)
+Chat history: `~/.ai-casino/chat-history.json` (last 100 messages)
+
 ---
 
 ## Project-Specific Context

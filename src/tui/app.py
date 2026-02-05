@@ -203,9 +203,9 @@ class TradingChatApp(App):
             chat.add_assistant_message(result.message)
             self._history.append({"role": "assistant", "content": result.message})
 
-    @work(thread=True, exclusive=True)
-    def _run_analysis_worker(self, text: str, symbol: str) -> None:
-        """Run analysis in background thread.
+    @work(exclusive=True)
+    async def _run_analysis_worker(self, text: str, symbol: str) -> None:
+        """Run analysis in background async worker.
 
         Args:
             text: Full command text
@@ -223,7 +223,7 @@ class TradingChatApp(App):
             return worker.is_cancelled
 
         try:
-            result = asyncio.run(self._command_handler.execute(text, progress_callback, is_cancelled))
+            result = await self._command_handler.execute(text, progress_callback, is_cancelled)
             if not worker.is_cancelled:
                 self.post_message(AnalysisComplete(result, symbol))
         except asyncio.CancelledError:
@@ -339,17 +339,14 @@ class TradingChatApp(App):
             return self._tool_registry.execute(name, args)
 
         try:
-            import asyncio
-
-            response = await asyncio.to_thread(
-                self._llm.complete_with_tools,
-                text,
-                self._tool_registry.get_definitions(),
-                tool_executor,
-                AGENTIC_SYSTEM_PROMPT,
-                0.7,
-                5,
-                on_tool_call,
+            response = await self._llm.acomplete_with_tools(
+                prompt=text,
+                tools=self._tool_registry.get_definitions(),
+                tool_executor=tool_executor,
+                system=AGENTIC_SYSTEM_PROMPT,
+                temperature=0.7,
+                max_tool_calls=5,
+                on_tool_call=on_tool_call,
             )
 
             chat.hide_thinking()

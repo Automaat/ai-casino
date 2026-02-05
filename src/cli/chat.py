@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 import typer
 from loguru import logger
@@ -31,8 +32,21 @@ def chat() -> None:
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "WARNING"),
     )
+    # File logging - always capture INFO+ for debugging
+    log_file = Path("~/.ai-casino/tui.log").expanduser()
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        log_file,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+        level="INFO",
+        rotation="10 MB",
+        retention="3 days",
+    )
 
     try:
+        # NOTE: nest_asyncio removed - breaks Python 3.14 + anyio/httpcore
+        # Textual handles its own event loop
+
         from src.tui.app import TradingChatApp
 
         app = TradingChatApp()
