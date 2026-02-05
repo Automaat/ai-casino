@@ -16,6 +16,7 @@ from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeData, PerformanceData
 from src.data.comparative import StockInfo as ComparativeStockInfo
 from src.data.news import NewsArticle
+from src.data.truth_social import TruthPost
 from src.data.universe import StockInfo as UniverseStockInfo
 from src.data.universe import StockUniverse
 from src.data.websearch import SearchType, WebSearchResponse
@@ -619,3 +620,37 @@ def sample_screening_analysis():
         risk_factors="Correlation risk due to similar technical patterns.",
         next_steps="Research fundamental catalysts before entry.",
     )
+
+
+@pytest.fixture
+def sample_trump_posts():
+    """Sample Trump Truth Social posts for testing."""
+    return [
+        TruthPost(
+            id="123456",
+            content="Great day for America! $TSLA going to the moon! This is a GREAT TIME TO BUY!",
+            created_at=datetime(2025, 1, 15, 10, 30, tzinfo=UTC),
+            likes=50000,
+            reposts=10000,
+            replies=5000,
+            url="https://truthsocial.com/@realDonaldTrump/posts/123456",
+        ),
+        TruthPost(
+            id="123455",
+            content="Tariffs on China working great! Trade deal coming soon!",
+            created_at=datetime(2025, 1, 14, 8, 0, tzinfo=UTC),
+            likes=45000,
+            reposts=8000,
+            replies=3000,
+            url="https://truthsocial.com/@realDonaldTrump/posts/123455",
+        ),
+        TruthPost(
+            id="123454",
+            content="Just had a great meeting with Apple CEO Tim Cook!",
+            created_at=datetime(2025, 1, 13, 12, 0, tzinfo=UTC),
+            likes=40000,
+            reposts=7000,
+            replies=2500,
+            url="https://truthsocial.com/@realDonaldTrump/posts/123454",
+        ),
+    ]

@@ -3,5 +3,6 @@
 from src.daemon.config import DaemonConfig
 from src.daemon.runner import DaemonRunner
 from src.daemon.state import DaemonState
+from src.daemon.trump_watcher import TrumpSignal, TrumpWatcher
 
-__all__ = ["DaemonConfig", "DaemonRunner", "DaemonState"]
+__all__ = ["DaemonConfig", "DaemonRunner", "DaemonState", "TrumpSignal", "TrumpWatcher"]

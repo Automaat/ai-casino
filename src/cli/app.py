@@ -6,7 +6,7 @@ import typer
 
 from src.cli.analyze import analyze
 from src.cli.chat import chat as chat_cmd
-from src.cli.daemon import daemon
+from src.cli.daemon import daemon, trump_daemon
 from src.cli.optimize import optimize
 
 app = typer.Typer(
@@ -18,6 +18,7 @@ app = typer.Typer(
 app.command()(analyze)
 app.command()(optimize)
 app.command()(daemon)
+app.command(name="trump-daemon")(trump_daemon)
 app.command(name="chat")(chat_cmd)
 
 

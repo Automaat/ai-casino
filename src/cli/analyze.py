@@ -219,6 +219,36 @@ def _print_data_warnings(result: TradingWorkflowResult) -> None:
     )
 
 
+def _print_trump(result: TradingWorkflowResult) -> None:
+    """Print Trump analysis if available."""
+    if not result.trump:
+        return
+
+    trump_table = Table(title="Trump Social Media Analysis", show_header=True)
+    trump_table.add_column("Metric", style="cyan")
+    trump_table.add_column("Value", style="yellow")
+
+    relevant_str = "[green]Yes[/green]" if result.trump.market_relevant else "[dim]No[/dim]"
+    trump_table.add_row("Market Relevant", relevant_str)
+
+    signal_color = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}[result.trump.signal.value]
+    trump_table.add_row("Signal", f"[{signal_color}]{result.trump.signal.value}[/{signal_color}]")
+    trump_table.add_row("Sentiment", result.trump.sentiment)
+    trump_table.add_row("Confidence", f"{result.trump.confidence:.2f}")
+    trump_table.add_row("Posts Analyzed", str(result.trump.post_count))
+
+    if result.trump.mentioned_tickers:
+        trump_table.add_row("Mentioned Tickers", ", ".join(result.trump.mentioned_tickers))
+
+    console.print(trump_table)
+
+    if result.trump.key_phrases:
+        phrases_text = "\n".join(f"• {p[:100]}" for p in result.trump.key_phrases[:5])
+        console.print(Panel(phrases_text, title="Key Phrases"))
+
+    console.print(Panel(result.trump.interpretation, title="Trump Analysis Interpretation"))
+
+
 def _print_decision(result: TradingWorkflowResult) -> None:
     """Print final trading decision."""
     decision_color = {"BUY": "green", "SELL": "red", "HOLD": "yellow", "WAIT": "yellow"}
@@ -279,6 +309,7 @@ def _print_result(result: TradingWorkflowResult, use_meta_agent: bool = True) ->
     console.print(Panel(result.technical.interpretation, title="Technical Interpretation"))
     _print_sentiment(result)
     _print_news(result)
+    _print_trump(result)
     _print_fundamental(result)
     _print_data_warnings(result)
     _print_risk(result)
@@ -315,10 +346,12 @@ async def _analyze_stock(
     enable_trading: bool,
     show_metrics: bool,
     use_meta_agent: bool,
+    trump_mode: bool = False,
 ) -> None:
     """Run stock analysis."""
     mode_str = "meta-agent" if use_meta_agent else "momentum"
-    console.print(f"\n[bold]Initializing trading system ({mode_str} mode)...[/bold]")
+    trump_str = "+trump" if trump_mode else ""
+    console.print(f"\n[bold]Initializing trading system ({mode_str}{trump_str} mode)...[/bold]")
 
     llm_client = LLMClient()
     market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
@@ -345,6 +378,7 @@ async def _analyze_stock(
         broker,
         metrics_tracker,
         use_meta_agent=use_meta_agent,
+        trump_mode=trump_mode,
     )
 
     console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
@@ -363,6 +397,7 @@ def analyze(
     trade: Annotated[bool, typer.Option("--trade", "-t", help="Enable paper trading")] = False,
     show_metrics: Annotated[bool, typer.Option("--show-metrics", "-m", help="Show metrics")] = False,
     no_meta_agent: Annotated[bool, typer.Option("--no-meta-agent", help="Use momentum only")] = False,
+    trump_mode: Annotated[bool, typer.Option("--trump-mode", help="Trump social media analysis")] = False,
 ) -> None:
     """Analyze a stock and generate trading recommendations."""
     from dotenv import load_dotenv
@@ -377,7 +412,9 @@ def analyze(
     )
 
     try:
-        asyncio.run(_analyze_stock(symbol.upper(), period, trade, show_metrics, not no_meta_agent))
+        asyncio.run(
+            _analyze_stock(symbol.upper(), period, trade, show_metrics, not no_meta_agent, trump_mode)
+        )
     except Exception as e:
         console.print(f"\n[bold red]Error:[/bold red] {e}")
         logger.exception("Analysis failed")
