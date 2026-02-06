@@ -29,6 +29,7 @@ class DaemonState(BaseModel):
     errors: list[str] = Field(default_factory=list)
     total_analyses: int = 0
     total_trades: int = 0
+    last_journal_date: str | None = None
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":

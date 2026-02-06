@@ -26,3 +26,9 @@ timezone = "America/New_York"
 [daemon.state]
 # State persistence file
 state_file = "~/.ai-casino/daemon-state.json"
+
+[daemon.journal]
+# After-hours trade journal
+enabled = true
+journal_dir = "~/.ai-casino/journal"
+run_offset_minutes = 15

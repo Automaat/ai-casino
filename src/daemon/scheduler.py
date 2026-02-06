@@ -153,6 +153,31 @@ class MarketScheduler:
 
         return max(0, int((market_close - now).total_seconds()))
 
+    def is_journal_window(self, offset_minutes: int = 15) -> bool:
+        """Check if current time is in the after-hours journal window.
+
+        Window starts at market close + offset_minutes, lasts 30 minutes.
+        Only active on weekdays.
+
+        Args:
+            offset_minutes: Minutes after market close to start journal window
+
+        Returns:
+            True if in journal window
+        """
+        now = datetime.now(self.timezone)
+
+        # Weekend check
+        if now.weekday() >= 5:
+            return False
+
+        # Use datetime arithmetic to avoid time overflow and handle seconds correctly
+        market_close_dt = now.replace(hour=self.end_hour, minute=self.end_minute, second=0, microsecond=0)
+        window_start_dt = market_close_dt + timedelta(minutes=offset_minutes)
+        window_end_dt = window_start_dt + timedelta(minutes=30)
+
+        return window_start_dt <= now <= window_end_dt
+
     def __repr__(self) -> str:
         """Return string representation."""
         return (

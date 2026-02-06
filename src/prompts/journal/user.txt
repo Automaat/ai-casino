@@ -1,0 +1,14 @@
+Review the trading signals generated on {date} against actual market outcomes.
+
+Signal accuracy: {accuracy_pct}%
+
+{outcomes_text}
+
+Provide:
+1. Winners — which signals/symbols performed well and why
+2. Losers — which signals missed and potential reasons
+3. Lessons — 3-5 actionable insights from today's results
+4. Tomorrow's focus — specific areas or symbols to watch
+5. Overall assessment — honest evaluation of signal quality today
+
+Focus on patterns, not individual noise. Be specific and actionable.

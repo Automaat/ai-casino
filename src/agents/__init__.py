@@ -2,6 +2,7 @@
 
 from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
+from src.agents.journal import DailyJournal, TradeJournalAgent
 from src.agents.news import NewsAnalysis, NewsAnalyst
 from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis
@@ -12,6 +13,7 @@ __all__ = [
     "AccountInfo",
     "ComparativeAnalysis",
     "ComparativeAnalyst",
+    "DailyJournal",
     "FundamentalAnalysis",
     "FundamentalAnalyst",
     "NewsAnalysis",
@@ -21,6 +23,7 @@ __all__ = [
     "SentimentAnalysis",
     "TechnicalAnalysis",
     "TechnicalAnalyst",
+    "TradeJournalAgent",
     "TraderAgent",
     "TradingDecision",
 ]
