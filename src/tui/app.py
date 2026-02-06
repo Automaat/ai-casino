@@ -105,9 +105,9 @@ class TradingChatApp(App):
 
     def _get_streaming_prompt(self) -> str:
         """Get current streaming system prompt based on personality."""
-        if self._personality == "trump":
-            return self._trump_streaming_prompt
-        return self._ai_casino_streaming_prompt
+        return (
+            self._trump_streaming_prompt if self._personality == "trump" else self._ai_casino_streaming_prompt
+        )
 
     def set_personality(self, personality: str) -> None:
         """Set chat personality mode.
