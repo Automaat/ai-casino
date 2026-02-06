@@ -126,7 +126,16 @@ class WebResearchAgent:
             List of WebResearchResult
         """
         tasks = [self._research_category_with_tools(symbol, cat) for cat in categories]
-        return list(await asyncio.gather(*tasks))
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        successful_results: list[WebResearchResult] = []
+        for category, result in zip(categories, results, strict=True):
+            if isinstance(result, Exception):
+                logger.error(f"Web research category '{category}' failed for {symbol}: {result!r}")
+                continue
+            successful_results.append(result)
+
+        return successful_results
 
     async def _research_category_with_tools(
         self,
@@ -179,7 +188,16 @@ class WebResearchAgent:
             List of WebResearchResult
         """
         tasks = [self._research_category_with_template(symbol, cat) for cat in categories]
-        return list(await asyncio.gather(*tasks))
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        successful_results: list[WebResearchResult] = []
+        for category, result in zip(categories, results, strict=True):
+            if isinstance(result, Exception):
+                logger.error(f"Web research category '{category}' failed for {symbol}: {result!r}")
+                continue
+            successful_results.append(result)
+
+        return successful_results
 
     async def _research_category_with_template(
         self,
