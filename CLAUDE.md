@@ -74,6 +74,23 @@ Never skip/disable on failure - fix properly, re-run until clean.
 **Branches:** `feat/description`, `fix/description`, `chore/description`
 **Hooks:** Strict ruff - adjust to pass, never work around
 
+### Pull Requests
+
+**Format:**
+```markdown
+## Motivation
+<!-- Why are we doing this change -->
+
+## Implementation information
+<!-- Explain how this was done and potentially alternatives considered and discarded -->
+
+## Supporting documentation
+Fixes #<issue-number>
+<!-- Include MADR or related PRs if applicable -->
+```
+
+**ALWAYS link an issue** - create one if needed before PR
+
 ---
 
 ## Python Conventions
