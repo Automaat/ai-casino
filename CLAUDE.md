@@ -422,7 +422,7 @@ source .venv/bin/activate
 
 Required: `ALPHA_VANTAGE_API_KEY`
 Optional: `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`
-LLM: `LLM_PROVIDER` (ollama|anthropic|openai), `LLM_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
+LLM: `LLM_PROVIDER` (ollama|anthropic|openai), `LLM_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_MAX_CONCURRENT` (1-20, default 5)
 Logging: `LOG_LEVEL` (DEBUG|INFO|WARNING|ERROR)
 
 ### TUI Logs

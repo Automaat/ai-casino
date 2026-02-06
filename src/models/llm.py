@@ -33,8 +33,59 @@ def _set_asyncio_context() -> None:
     sniffio.current_async_library_cvar.set("asyncio")
 
 
-# Limit concurrent async requests (OpenAI allows 500 req/min = ~8 req/sec)
-MAX_CONCURRENT_REQUESTS = 1
+_DEFAULT_CONCURRENT_REQUESTS = 5
+_MIN_CONCURRENT_REQUESTS = 1
+_MAX_CONCURRENT_REQUESTS = 20
+
+
+def _parse_max_concurrent_requests() -> int:
+    """Parse and validate LLM_MAX_CONCURRENT environment variable.
+
+    Valid range is 1-20. Falls back to default (5) on invalid values.
+
+    Returns:
+        Validated concurrency limit (1-20)
+    """
+    raw_value = os.getenv("LLM_MAX_CONCURRENT")
+
+    if raw_value is None:
+        return _DEFAULT_CONCURRENT_REQUESTS
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning(
+            "Invalid LLM_MAX_CONCURRENT value %r; using default %d",
+            raw_value,
+            _DEFAULT_CONCURRENT_REQUESTS,
+        )
+        return _DEFAULT_CONCURRENT_REQUESTS
+
+    if value < _MIN_CONCURRENT_REQUESTS:
+        logger.warning(
+            "LLM_MAX_CONCURRENT value %d is below minimum %d; clamping to %d",
+            value,
+            _MIN_CONCURRENT_REQUESTS,
+            _MIN_CONCURRENT_REQUESTS,
+        )
+        return _MIN_CONCURRENT_REQUESTS
+
+    if value > _MAX_CONCURRENT_REQUESTS:
+        logger.warning(
+            "LLM_MAX_CONCURRENT value %d exceeds maximum %d; clamping to %d",
+            value,
+            _MAX_CONCURRENT_REQUESTS,
+            _MAX_CONCURRENT_REQUESTS,
+        )
+        return _MAX_CONCURRENT_REQUESTS
+
+    return value
+
+
+# Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 5)
+# With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
+# OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
+MAX_CONCURRENT_REQUESTS = _parse_max_concurrent_requests()
 _semaphore_holder: dict[str, asyncio.Semaphore | int] = {}
 
 
