@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import pandas as pd
 from loguru import logger
-from pydantic import BaseModel
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
@@ -33,7 +32,6 @@ from src.data.news import NewsArticle, NewsFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.metrics.execution import (
     ExecutionMetricsCollector,
-    WorkflowExecutionMetrics,
     current_agent,
     current_collector,
     is_metrics_enabled,
@@ -45,6 +43,7 @@ from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy, Signal
 from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
+from src.workflows.types import TradingWorkflowResult
 
 T = TypeVar("T")
 
@@ -72,38 +71,6 @@ class TradingState(TypedDict):
     regime_analysis: RegimeAnalysis | None
     strategy_selection: StrategySelection | None
     warnings: list[str]
-
-
-class TradingWorkflowResult(BaseModel):
-    """Complete trading analysis result."""
-
-    symbol: str
-    technical: TechnicalAnalysis
-    sentiment: SentimentAnalysis
-    news: NewsAnalysis
-    trump: TrumpAnalysis | None = None
-    fundamental: FundamentalAnalysis | None = None
-    comparative: ComparativeAnalysis | None = None
-    web_research: WebResearchAnalysis | None = None
-    bullish: BullishResearchAnalysis
-    bearish: BearishResearchAnalysis
-    decision: TradingDecision
-    risk: RiskAssessment
-    order: OrderStatus | None = None
-    regime: RegimeAnalysis | None = None
-    strategy_used: str | None = None
-    warnings: list[str] = []
-    execution_metrics: WorkflowExecutionMetrics | None = None
-
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
-
-    @property
-    def has_incomplete_data(self) -> bool:
-        """Check if analysis was performed with incomplete data."""
-        return len(self.warnings) > 0
 
 
 class TradingWorkflow:

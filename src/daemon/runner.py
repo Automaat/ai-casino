@@ -16,7 +16,8 @@ from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
-from src.workflows.trading import TradingWorkflow, TradingWorkflowResult
+from src.workflows.trading import TradingWorkflow
+from src.workflows.types import TradingWorkflowResult
 
 console = Console()
 

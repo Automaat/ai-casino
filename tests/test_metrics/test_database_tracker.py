@@ -21,7 +21,7 @@ from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.metrics.tracker import DatabaseMetricsTracker, PerformanceMetrics, TradeRecord
 from src.strategies.momentum import Signal
-from src.workflows.trading import TradingWorkflowResult
+from src.workflows.types import TradingWorkflowResult
 
 
 @pytest.fixture

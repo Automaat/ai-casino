@@ -8,7 +8,6 @@ Architecture:
 
 import asyncio
 import contextlib
-import os
 import re
 import threading
 from collections.abc import Callable
@@ -25,20 +24,10 @@ if TYPE_CHECKING:
     from src.screening.screener import ScreeningOutput
     from src.workflows.trading import TradingWorkflow
 
-# Configure threading/parallelism for ML libraries
-# CRITICAL: Must be set BEFORE importing torch/transformers to prevent
-# "bad value(s) in fds_to_keep" error when FinBERT uses multiprocessing
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
+from src.models.torch_config import configure_torch_env
 
-# Disable PyTorch multiprocessing to avoid fd conflicts with Textual
-import torch
-
-torch.set_num_threads(1)
-with contextlib.suppress(RuntimeError):
-    # Use 'fork' instead of 'spawn' to avoid fd passing issues with Textual TUI
-    torch.multiprocessing.set_start_method("fork", force=True)
+# Configure environment BEFORE any imports (critical for fd safety)
+configure_torch_env()
 
 
 # --- Type Definitions ---
@@ -118,6 +107,11 @@ def _check_cancelled(cancelled_event: threading.Event | None) -> None:
 
 def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -> "TradingWorkflow":
     """Create workflow components with progress tracking."""
+    # Configure torch NOW (lazy - only when analysis starts)
+    from src.models.torch_config import configure_torch_runtime
+
+    configure_torch_runtime()
+
     from src.data.fundamental import FundamentalDataFetcher
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
