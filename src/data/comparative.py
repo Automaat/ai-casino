@@ -1,5 +1,6 @@
 """Comparative data fetcher for sector/market benchmarking using yfinance."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
@@ -117,29 +118,35 @@ class ComparativeDataFetcher:
         """
         logger.info(f"Fetching comparative data for {symbol}")
 
+        # Phase 1: Sequential - fetch stock info to determine sector
         stock_info = self._fetch_stock_info(symbol)
-        stock_performance = self._fetch_performance(symbol)
-
         sector_etf = self._get_sector_etf(stock_info.sector)
-        sector_pe = self._fetch_pe_ratio(sector_etf)
-        sector_performance = self._fetch_performance(sector_etf)
 
-        market_pe = self._fetch_pe_ratio(MARKET_INDEX)
-        market_performance = self._fetch_performance(MARKET_INDEX)
+        # Phase 2: Parallel - fetch all independent metrics
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {
+                "stock_performance": executor.submit(self._fetch_performance, symbol),
+                "sector_pe": executor.submit(self._fetch_pe_ratio, sector_etf),
+                "sector_performance": executor.submit(self._fetch_performance, sector_etf),
+                "market_pe": executor.submit(self._fetch_pe_ratio, MARKET_INDEX),
+                "market_performance": executor.submit(self._fetch_performance, MARKET_INDEX),
+            }
+            results = {key: future.result() for key, future in futures.items()}
 
         logger.info(
             f"Comparative data for {symbol}: sector={sector_etf}, "
-            f"stock_pe={stock_info.pe_ratio}, sector_pe={sector_pe}, market_pe={market_pe}"
+            f"stock_pe={stock_info.pe_ratio}, sector_pe={results['sector_pe']}, "
+            f"market_pe={results['market_pe']}"
         )
 
         return ComparativeData(
             stock_info=stock_info,
-            stock_performance=stock_performance,
+            stock_performance=results["stock_performance"],
             sector_etf=sector_etf,
-            sector_pe=sector_pe,
-            sector_performance=sector_performance,
-            market_pe=market_pe,
-            market_performance=market_performance,
+            sector_pe=results["sector_pe"],
+            sector_performance=results["sector_performance"],
+            market_pe=results["market_pe"],
+            market_performance=results["market_performance"],
             fetched_at=datetime.now(UTC),
         )
 
