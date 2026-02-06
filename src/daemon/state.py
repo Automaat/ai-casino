@@ -7,6 +7,8 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.strategies.session import TradingSession
+
 
 class AnalysisRecord(BaseModel):
     """Record of a single analysis run."""
@@ -16,7 +18,7 @@ class AnalysisRecord(BaseModel):
     signal: str
     confidence: float
     executed_trade: bool = False
-    trading_session: str = "REGULAR"
+    trading_session: TradingSession = TradingSession.REGULAR
 
 
 class DaemonState(BaseModel):
@@ -75,7 +77,7 @@ class DaemonState(BaseModel):
         signal: str,
         confidence: float,
         executed: bool = False,
-        trading_session: str = "REGULAR",
+        trading_session: TradingSession = TradingSession.REGULAR,
     ) -> None:
         """Record an analysis result.
 

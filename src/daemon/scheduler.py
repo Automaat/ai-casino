@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 
+from src.strategies.session import TradingSession
+
 PRE_MARKET_START = (4, 0)  # 4:00 AM ET
 PRE_MARKET_END = (9, 30)  # 9:30 AM ET (regular market open)
 
@@ -36,14 +38,12 @@ class MarketScheduler:
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'})"
         )
 
-    def get_trading_session(self):  # noqa: ANN201
+    def get_trading_session(self) -> TradingSession | None:
         """Determine current trading session.
 
         Returns:
             TradingSession if in session (REGULAR or PRE_MARKET), None if market closed
         """
-        from src.strategies.session import TradingSession
-
         now = datetime.now(self.timezone)
         current_time = now.time()
 
@@ -57,10 +57,10 @@ class MarketScheduler:
         if market_open <= current_time <= market_close:
             return TradingSession.REGULAR
 
-        # Pre-market check (4:00 AM - 9:30 AM, if enabled)
+        # Pre-market check (4:00 AM - configured start_time, if enabled)
         if self.enable_pre_market:
             pre_open = time(*PRE_MARKET_START)
-            pre_close = time(*PRE_MARKET_END)
+            pre_close = market_open  # Use configured regular market open
             if pre_open <= current_time < pre_close:
                 return TradingSession.PRE_MARKET
 
@@ -75,37 +75,59 @@ class MarketScheduler:
         return self.get_trading_session() is not None
 
     def time_until_open(self) -> int:
-        """Calculate seconds until market opens (pre-market if enabled, else regular).
+        """Calculate seconds until next market open (pre-market if enabled, else regular).
 
         Returns:
-            Seconds until market open (0 if already open)
+            Seconds until next market open (0 if already open)
         """
         if self.is_market_open():
             return 0
 
         now = datetime.now(self.timezone)
+        current_time = now.time()
 
-        # Determine target open time
+        # Determine next target open time
         if self.enable_pre_market:
-            target_hour, target_minute = PRE_MARKET_START
-        else:
-            target_hour, target_minute = self.start_hour, self.start_minute
+            pre_open_today = now.replace(
+                hour=PRE_MARKET_START[0],
+                minute=PRE_MARKET_START[1],
+                second=0,
+                microsecond=0,
+            )
+            market_open_today = now.replace(
+                hour=self.start_hour,
+                minute=self.start_minute,
+                second=0,
+                microsecond=0,
+            )
 
-        target_open = now.replace(
-            hour=target_hour,
-            minute=target_minute,
-            second=0,
-            microsecond=0,
-        )
+            # If before pre-market, target pre-market
+            if current_time < time(*PRE_MARKET_START):
+                target_open = pre_open_today
+            # If in gap between pre-market close and regular open, target regular
+            elif current_time < time(self.start_hour, self.start_minute):
+                target_open = market_open_today
+            # Otherwise past regular open, target next day
+            else:
+                target_open = pre_open_today + timedelta(days=1)
+        else:
+            # No pre-market, target regular market open
+            target_open = now.replace(
+                hour=self.start_hour,
+                minute=self.start_minute,
+                second=0,
+                microsecond=0,
+            )
+            # If past regular open, target next day
+            if current_time >= time(self.start_hour, self.start_minute):
+                target_open = target_open + timedelta(days=1)
 
         # If past today's market close, calculate next trading day
         if now.time() > time(self.end_hour, self.end_minute):
-            days_to_add = 1
             if now.weekday() == 4:  # Friday
-                days_to_add = 3
+                target_open = target_open + timedelta(days=2 if target_open.date() == now.date() else 0)
             elif now.weekday() == 5:  # Saturday
-                days_to_add = 2
-            target_open = target_open + timedelta(days=days_to_add)
+                target_open = target_open + timedelta(days=1)
         elif now.weekday() >= 5:  # Weekend
             days_until_monday = 7 - now.weekday()
             target_open = target_open + timedelta(days=days_until_monday)
