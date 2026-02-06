@@ -278,7 +278,7 @@ class TradingWorkflow:
             collector: Optional metrics collector
         """
         start = time.perf_counter()
-        state = self._fetch_data(symbol, period_days)
+        state = await self._fetch_data(symbol, period_days)
         self._record_stage(collector, "fetch_data", start)
 
         start = time.perf_counter()
@@ -519,8 +519,8 @@ class TradingWorkflow:
 
         return state
 
-    def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
-        """Fetch market and news data.
+    async def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
+        """Fetch market and news data (async, parallel execution).
 
         Args:
             symbol: Stock ticker
@@ -531,18 +531,44 @@ class TradingWorkflow:
         """
         logger.info("Fetching market and news data")
 
-        market_data = self.market_fetcher.fetch_daily(symbol, period_days)
-        news_articles = self.news_fetcher.fetch_company_news(symbol, limit=10)
+        # Create parallel tasks
+        tasks = [
+            asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days),
+            asyncio.to_thread(self.news_fetcher.fetch_company_news, symbol, limit=10),
+        ]
 
-        # Fetch Trump posts if trump_mode enabled
-        trump_posts: list[TruthPost] | None = None
+        # Add trump task if enabled
+        trump_index = None
         if self.trump_mode and self.trump_fetcher:
-            try:
-                trump_data = self.trump_fetcher.fetch_recent(hours=24)
-                trump_posts = trump_data.posts
+            trump_index = len(tasks)
+            tasks.append(asyncio.to_thread(self.trump_fetcher.fetch_recent, hours=24))
+
+        # Execute in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Extract results
+        market_result, news_result = results[0], results[1]
+        trump_result = results[trump_index] if trump_index is not None else None
+
+        # Handle critical fetches (re-raise on failure)
+        if isinstance(market_result, Exception):
+            logger.error(f"Market data fetch failed: {market_result}")
+            raise market_result
+        if isinstance(news_result, Exception):
+            logger.error(f"News fetch failed: {news_result}")
+            raise news_result
+
+        market_data = market_result
+        news_articles = news_result
+
+        # Handle optional trump fetch
+        trump_posts: list[TruthPost] | None = None
+        if trump_result is not None:
+            if isinstance(trump_result, Exception):
+                logger.warning(f"Failed to fetch Trump posts: {trump_result}")
+            else:
+                trump_posts = trump_result.posts
                 logger.info(f"Fetched {len(trump_posts)} Trump posts")
-            except Exception as e:
-                logger.warning(f"Failed to fetch Trump posts: {e}")
 
         return TradingState(
             symbol=symbol,

@@ -136,14 +136,15 @@ async def test_trading_workflow_analyze_with_meta_agent(mock_workflow_dependenci
     assert isinstance(result.risk, RiskAssessment)
 
 
-def test_fetch_data(mock_workflow_dependencies):
+@pytest.mark.asyncio
+async def test_fetch_data(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
     workflow = TradingWorkflow(
         llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
     )
 
-    state = workflow._fetch_data("AAPL", 90)
+    state = await workflow._fetch_data("AAPL", 90)
 
     assert state["symbol"] == "AAPL"
     assert state["market_data"] is not None
