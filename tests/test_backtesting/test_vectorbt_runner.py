@@ -107,6 +107,9 @@ def test_run_backtest(mock_fetch_data, sample_backtest_data):
     assert isinstance(result.total_trades, int)
     assert isinstance(result.equity_curve, list)
     assert len(result.equity_curve) == 100
+    assert isinstance(result.equity_dates, list)
+    assert len(result.equity_dates) == 100
+    assert all(isinstance(d, datetime) for d in result.equity_dates)
     assert result.start_date == datetime(2023, 1, 1)
     assert result.end_date == datetime(2023, 4, 10)
 
@@ -141,8 +144,7 @@ def test_run_portfolio_backtest(mock_fetch_data, sample_backtest_data):
     assert "MSFT" in result.correlation_matrix["AAPL"]
 
 
-@patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
-def test_generate_signals(mock_fetch_data, sample_backtest_data):
+def test_generate_signals(sample_backtest_data):
     """_generate_signals returns boolean entry/exit arrays."""
     runner = VectorBTRunner()
     entries, exits = runner._generate_signals(sample_backtest_data)
@@ -165,6 +167,7 @@ def test_vectorbt_result_model():
         profit_factor=2.0,
         total_trades=10,
         equity_curve=[100000.0, 100500.0, 101000.0],
+        equity_dates=[datetime(2023, 1, 1), datetime(2023, 1, 2), datetime(2023, 1, 3)],
         symbol="AAPL",
         start_date=datetime(2023, 1, 1),
         end_date=datetime(2023, 4, 10),
@@ -173,3 +176,4 @@ def test_vectorbt_result_model():
     assert result.total_return == 0.15
     assert result.symbol == "AAPL"
     assert len(result.equity_curve) == 3
+    assert len(result.equity_dates) == 3

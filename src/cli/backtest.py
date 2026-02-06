@@ -4,6 +4,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 
+import typer
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
@@ -12,6 +13,22 @@ from src.backtesting.runner import BacktestResult, BacktestRunner
 from src.backtesting.vectorbt_runner import MultiAssetBacktest, VectorBTResult, VectorBTRunner
 
 console = Console()
+
+
+def _validate_legacy_engine(symbol: str, portfolio: bool) -> None:
+    """Validate legacy backtesting engine constraints."""
+    if "," in symbol:
+        console.print(
+            "[bold red]Error:[/bold red] Legacy 'backtesting' engine does not support "
+            "multiple symbols. Use engine='vectorbt' or provide a single symbol."
+        )
+        raise typer.Exit(1)
+    if portfolio:
+        console.print(
+            "[bold red]Error:[/bold red] Legacy 'backtesting' engine does not support "
+            "portfolio mode. Use engine='vectorbt' or remove --portfolio flag."
+        )
+        raise typer.Exit(1)
 
 
 def _print_vectorbt_result(result: VectorBTResult) -> None:
@@ -128,12 +145,13 @@ def backtest(
 
     if engine not in ("vectorbt", "backtesting"):
         console.print(f"[bold red]Unknown engine:[/bold red] {engine}. Use 'vectorbt' or 'backtesting'.")
-        raise SystemExit(1)
+        raise typer.Exit(1)
 
     try:
         if engine == "vectorbt":
             runner = VectorBTRunner(cash=cash)
-            symbols = [s.strip().upper() for s in symbol.split(",")]
+            symbols = [s.strip().upper() for s in symbol.split(",") if s.strip()]
+            symbols = list(dict.fromkeys(symbols))  # Deduplicate while preserving order
 
             if portfolio or len(symbols) > 1:
                 result = runner.run_portfolio_backtest(symbols, start_date, end_date)
@@ -142,10 +160,11 @@ def backtest(
                 result = runner.run_backtest(symbols[0], start_date, end_date)
                 _print_vectorbt_result(result)
         else:
+            _validate_legacy_engine(symbol, portfolio)
             bt_runner = BacktestRunner(cash=cash)
             result = bt_runner.run_backtest(symbol.upper(), start_date, end_date)
             _print_backtest_result(result)
     except Exception as e:
         console.print(f"\n[bold red]Backtest failed:[/bold red] {e}")
         logger.exception("Backtest failed")
-        raise SystemExit(1) from e
+        raise typer.Exit(1) from e

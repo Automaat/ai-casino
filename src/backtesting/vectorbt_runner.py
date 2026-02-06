@@ -23,6 +23,7 @@ class VectorBTResult(BaseModel):
     profit_factor: float
     total_trades: int
     equity_curve: list[float]
+    equity_dates: list[datetime]
     symbol: str
     start_date: datetime
     end_date: datetime
@@ -133,11 +134,12 @@ class VectorBTRunner:
             result = self.run_backtest(symbol, start_date, end_date)
             results.append(result)
 
-            equity = pd.Series(result.equity_curve)
+            equity = pd.Series(result.equity_curve, index=result.equity_dates)
             daily_returns = equity.pct_change().dropna()
             returns_dict[symbol] = daily_returns
 
-        returns_df = pd.DataFrame(returns_dict)
+        # Align returns on common dates (intersection) before correlation
+        returns_df = pd.DataFrame(returns_dict).dropna()
         correlation_matrix = {
             sym: {other: float(returns_df[sym].corr(returns_df[other])) for other in symbols}
             for sym in symbols
@@ -199,26 +201,33 @@ class VectorBTRunner:
     def _build_positions(
         self, entries_arr: np.ndarray, exits_arr: np.ndarray, n: int
     ) -> tuple[np.ndarray, list[int], list[int]]:
-        """Build position array and trade entry/exit indices from signals."""
-        position = np.zeros(n, dtype=np.int8)
-        in_pos = False
-        trade_entries: list[int] = []
-        trade_exits: list[int] = []
+        """Build position array and trade entry/exit indices from signals using vectorized ops."""
+        # Create state change markers: +1 for entry, -1 for exit
+        changes = np.zeros(n, dtype=np.int8)
+        changes[entries_arr] = 1
+        changes[exits_arr] = -1
 
-        for i in range(n):
-            if not in_pos and entries_arr[i]:
-                in_pos = True
-                trade_entries.append(i)
-            elif in_pos and exits_arr[i]:
-                in_pos = False
-                trade_exits.append(i)
-            position[i] = 1 if in_pos else 0
+        # Handle conflicts: if both entry and exit on same bar, prioritize exit
+        conflicts = entries_arr & exits_arr
+        changes[conflicts] = -1
+
+        # Accumulate state changes to get position array (0 or 1)
+        position_raw = np.cumsum(changes)
+        position = np.clip(position_raw, 0, 1).astype(np.int8)
+
+        # Extract trade indices: entries where position goes 0→1, exits where 1→0
+        position_shift = np.roll(position, 1)
+        position_shift[0] = 0  # First bar has no prior position
+
+        trade_entries = np.where((position_shift == 0) & (position == 1))[0].tolist()
+        trade_exits = np.where((position_shift == 1) & (position == 0))[0].tolist()
 
         return position, trade_entries, trade_exits
 
     def _simulate(self, sim: _SimulationInput) -> VectorBTResult:
         """Simulate portfolio from entry/exit signals using vectorized ops."""
         close = sim.data["Close"].values
+        dates = sim.data.index.to_pydatetime().tolist()
         entries_arr = sim.entries.values.astype(bool)
         exits_arr = sim.exits.values.astype(bool)
         n = len(close)
@@ -267,7 +276,7 @@ class VectorBTRunner:
         sharpe = self._calc_sharpe(strategy_returns_series)
         sortino = self._calc_sortino(strategy_returns_series)
         max_dd = self._calc_max_drawdown(equity_curve)
-        calmar = abs(total_return / max_dd) if max_dd != 0 else 0.0
+        calmar = total_return / abs(max_dd) if max_dd != 0 else 0.0
 
         return VectorBTResult(
             total_return=total_return,
@@ -279,6 +288,7 @@ class VectorBTRunner:
             profit_factor=profit_factor,
             total_trades=total_trades,
             equity_curve=equity_curve.tolist(),
+            equity_dates=dates,
             symbol=sim.symbol,
             start_date=sim.start_date,
             end_date=sim.end_date,
@@ -286,16 +296,20 @@ class VectorBTRunner:
 
     def _calc_sharpe(self, returns: pd.Series, trading_days: int = 252) -> float:
         """Annualized Sharpe ratio."""
-        if returns.std() == 0:
+        mean = returns.mean()
+        std = returns.std()
+        if pd.isna(mean) or pd.isna(std) or std == 0:
             return 0.0
-        return float(returns.mean() / returns.std() * np.sqrt(trading_days))
+        return float(mean / std * np.sqrt(trading_days))
 
     def _calc_sortino(self, returns: pd.Series, trading_days: int = 252) -> float:
         """Annualized Sortino ratio."""
         downside = returns[returns < 0]
-        if len(downside) == 0 or downside.std() == 0:
+        mean = returns.mean()
+        downside_std = downside.std()
+        if len(downside) == 0 or pd.isna(mean) or pd.isna(downside_std) or downside_std == 0:
             return 0.0
-        return float(returns.mean() / downside.std() * np.sqrt(trading_days))
+        return float(mean / downside_std * np.sqrt(trading_days))
 
     def _calc_max_drawdown(self, equity_curve: np.ndarray) -> float:
         """Maximum drawdown from equity curve."""
