@@ -123,6 +123,15 @@ class TestWebResearchAgent:
         mock_llm_client_with_tools.acomplete_with_tools.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_research_with_tools_respects_max_calls(self, agent_with_tools, mock_llm_client_with_tools):
+        """Test research with tool calling respects max_tool_calls=3."""
+        await agent_with_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
+
+        # Verify acomplete_with_tools called with max_tool_calls=3
+        call_args = mock_llm_client_with_tools.acomplete_with_tools.call_args
+        assert call_args.kwargs["max_tool_calls"] == 3
+
+    @pytest.mark.asyncio
     async def test_research_all_categories(self, agent_no_tools):
         """Test research with all categories."""
         result = await agent_no_tools.research("AAPL")
