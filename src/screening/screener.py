@@ -20,7 +20,7 @@ from tenacity import (
 )
 
 from src.data.universe import StockInfo, StockUniverseFetcher
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 MIN_MACD_DATA_POINTS = 35
 RSI_OVERSOLD_THRESHOLD = 40

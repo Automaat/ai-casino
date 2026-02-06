@@ -14,7 +14,7 @@ from src.agents.risk import (
     TrailingStopConfig,
 )
 from src.agents.technical import TechnicalAnalysis
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 @pytest.fixture

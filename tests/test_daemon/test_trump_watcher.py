@@ -8,7 +8,7 @@ import pytest
 from src.agents.trump import TrumpAnalysis
 from src.daemon.trump_watcher import TrumpSignal, TrumpWatcher
 from src.data.truth_social import TrumpPostData, TruthPost
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 @pytest.fixture

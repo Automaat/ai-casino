@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from src.strategies.mean_reversion import MeanReversionIndicators, MeanReversionStrategy
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 @pytest.fixture

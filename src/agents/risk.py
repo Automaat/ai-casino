@@ -10,7 +10,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.models.llm import LLMClient
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 class AccountInfo(BaseModel):

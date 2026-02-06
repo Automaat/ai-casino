@@ -12,7 +12,7 @@ from src.metrics.performance import (
     calculate_win_rate,
 )
 from src.metrics.tracker import TradeRecord
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 @pytest.fixture

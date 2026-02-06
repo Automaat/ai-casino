@@ -7,7 +7,7 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TraderAgent, TradingDecision
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 def test_trader_agent_init(mock_llm_client):

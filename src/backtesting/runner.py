@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from backtesting import Backtest
 from src.backtesting.strategies import MomentumBacktestStrategy
 from src.metrics.tracker import TradeRecord
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 class BacktestResult(BaseModel):

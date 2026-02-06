@@ -82,7 +82,7 @@ class TestFormatAnalysis:
     def mock_analysis(self):
         """Create mock analysis result."""
         from src.agents.trump import TrumpAnalysis
-        from src.strategies.momentum import Signal
+        from src.strategies.signal import Signal
 
         return TrumpAnalysis(
             market_relevant=True,

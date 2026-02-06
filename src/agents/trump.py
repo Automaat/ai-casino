@@ -10,7 +10,7 @@ from src.data.truth_social import TruthPost
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 class TrumpLLMResponse(BaseModel):

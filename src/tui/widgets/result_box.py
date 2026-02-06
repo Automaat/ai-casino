@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 if TYPE_CHECKING:
     from src.workflows.types import TradingWorkflowResult

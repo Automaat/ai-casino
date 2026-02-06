@@ -3,7 +3,8 @@
 import pandas as pd
 import pytest
 
-from src.strategies.momentum import MomentumIndicators, MomentumStrategy, Signal
+from src.strategies.momentum import MomentumIndicators, MomentumStrategy
+from src.strategies.signal import Signal
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import TradeORM
 from src.database.repositories.base import BaseRepository
 from src.metrics.tracker import TradeRecord
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 class TradeRepository(BaseRepository[TradeRecord]):

@@ -1,21 +1,12 @@
 """Momentum strategy using RSI and MACD indicators."""
 
-from enum import StrEnum
-
 import pandas as pd
 import pandas_ta_classic  # noqa: F401 - Required to register .ta accessor on DataFrame
 from loguru import logger
 from pydantic import BaseModel
 
 from src.metrics.execution import timed_operation
-
-
-class Signal(StrEnum):
-    """Trading signal."""
-
-    BUY = "BUY"
-    SELL = "SELL"
-    HOLD = "HOLD"
+from src.strategies.signal import Signal
 
 
 class MomentumIndicators(BaseModel):
