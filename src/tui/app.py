@@ -17,8 +17,13 @@ from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 from src.tools import (
     AnalyzeStockTool,
+    GenerateTearsheetTool,
     GetMarketDataTool,
     GetNewsTool,
+    GetRiskMetricsTool,
+    GetSocialSentimentTool,
+    OptimizePortfolioTool,
+    RunBacktestTool,
     ScreenStocksTool,
     ToolRegistry,
     TrumpAnalysisTool,
@@ -70,6 +75,11 @@ class TradingChatApp(App):
         registry.register(AnalyzeStockTool())
         registry.register(ScreenStocksTool())
         registry.register(TrumpAnalysisTool())
+        registry.register(GetSocialSentimentTool())
+        registry.register(GetRiskMetricsTool())
+        registry.register(RunBacktestTool())
+        registry.register(GenerateTearsheetTool())
+        registry.register(OptimizePortfolioTool())
         return registry
 
     def _get_model_name(self) -> str:
