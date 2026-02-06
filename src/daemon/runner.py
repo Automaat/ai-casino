@@ -2,7 +2,7 @@
 
 import asyncio
 import signal
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -154,6 +154,49 @@ class DaemonRunner:
         console.print("-" * 50)
         console.print(f"Total: {len(results)} symbols analyzed\n")
 
+    async def _maybe_run_journal(self) -> None:
+        """Run after-hours journal if conditions are met."""
+        if not self.config.journal.enabled:
+            return
+
+        if not self.scheduler.is_journal_window(self.config.journal.run_offset_minutes):
+            return
+
+        today = date.today()  # noqa: DTZ011
+        if self.state.last_journal_date == today.isoformat():
+            return
+
+        # Filter today's analysis records
+        today_records = [r for r in self.state.analyses if r.timestamp.date() == today]
+        if not today_records:
+            logger.info("No analyses today, skipping journal")
+            return
+
+        logger.info(f"Generating trade journal for {today} ({len(today_records)} records)")
+        console.print(f"\n[bold magenta]Generating trade journal for {today}...[/bold magenta]")
+
+        try:
+            from src.agents.journal import TradeJournalAgent
+
+            workflow = self._init_workflow()
+            market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
+            journal_agent = TradeJournalAgent(workflow.llm_client, market_fetcher)
+
+            journal = await journal_agent.generate(today, today_records)
+            file_path = journal_agent.persist(journal, self.config.journal.journal_dir)
+
+            self.state.last_journal_date = today.isoformat()
+            self.state.save(self.config.state.state_file)
+
+            correct = sum(1 for o in journal.outcomes if o.signal_correct)
+            total = len(journal.outcomes)
+            console.print(f"[bold magenta]Journal saved:[/bold magenta] {file_path}")
+            if total > 0:
+                console.print(f"[bold magenta]Signal accuracy:[/bold magenta] {correct}/{total}")
+        except Exception as e:
+            logger.error(f"Journal generation failed: {e}")
+            self.state.record_error(f"Journal failed: {e}")
+
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle.
 
@@ -161,6 +204,7 @@ class DaemonRunner:
             Seconds to sleep before next cycle
         """
         if self.config.market_hours_only and not self.scheduler.is_market_open():
+            await self._maybe_run_journal()
             wait_time = self.scheduler.time_until_open()
             if wait_time > 0:
                 logger.info(f"Market closed, waiting {wait_time // 60} minutes until open")

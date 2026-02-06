@@ -21,6 +21,14 @@ class StateConfig(BaseModel):
     state_file: str = "~/.ai-casino/daemon-state.json"
 
 
+class JournalConfig(BaseModel):
+    """Configuration for after-hours trade journal."""
+
+    enabled: bool = True
+    journal_dir: str = "~/.ai-casino/journal"
+    run_offset_minutes: int = 15
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -31,6 +39,7 @@ class DaemonConfig(BaseModel):
     max_concurrent_analyses: int = 3
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     state: StateConfig = Field(default_factory=StateConfig)
+    journal: JournalConfig = Field(default_factory=JournalConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -49,11 +58,13 @@ class DaemonConfig(BaseModel):
 
         schedule_data = daemon_data.pop("schedule", {})
         state_data = daemon_data.pop("state", {})
+        journal_data = daemon_data.pop("journal", {})
 
         return cls(
             **daemon_data,
             schedule=ScheduleConfig(**schedule_data),
             state=StateConfig(**state_data),
+            journal=JournalConfig(**journal_data),
         )
 
     def __repr__(self) -> str:

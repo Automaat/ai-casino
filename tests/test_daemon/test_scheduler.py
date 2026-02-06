@@ -186,3 +186,52 @@ class TestMarketScheduler:
             mock_dt.side_effect = datetime
 
             assert scheduler.get_trading_session() == TradingSession.REGULAR
+
+    def test_is_journal_window_during_window(self):
+        """Test 16:15 ET is in journal window (default 15min offset)."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 16, 20, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.is_journal_window() is True
+
+    def test_is_journal_window_before_window(self):
+        """Test 16:00 ET is before journal window."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 16, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.is_journal_window() is False
+
+    def test_is_journal_window_after_window(self):
+        """Test 17:00 ET is after journal window."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 17, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.is_journal_window() is False
+
+    def test_is_journal_window_weekend(self):
+        """Test journal window is inactive on weekends."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        # Saturday at 16:20
+        mock_time = datetime(2024, 1, 20, 16, 20, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.is_journal_window() is False

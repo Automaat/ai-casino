@@ -12,9 +12,11 @@ from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
 from src.agents.web_researcher import ResearchCategory, WebResearchAnalysis, WebResearchResult
+from src.daemon.state import AnalysisRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeData, PerformanceData
 from src.data.comparative import StockInfo as ComparativeStockInfo
+from src.data.market import MarketData
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
 from src.data.universe import StockInfo as UniverseStockInfo
@@ -707,3 +709,51 @@ def sample_trades_for_tearsheet():
         trades.append(trade)
 
     return trades
+
+
+@pytest.fixture
+def sample_analysis_records():
+    """Sample analysis records for journal testing."""
+    return [
+        AnalysisRecord(
+            symbol="AAPL",
+            timestamp=datetime(2024, 1, 15, 10, 30),
+            signal="BUY",
+            confidence=0.8,
+        ),
+        AnalysisRecord(
+            symbol="TSLA",
+            timestamp=datetime(2024, 1, 15, 11, 0),
+            signal="SELL",
+            confidence=0.7,
+        ),
+        AnalysisRecord(
+            symbol="GOOGL",
+            timestamp=datetime(2024, 1, 15, 11, 30),
+            signal="HOLD",
+            confidence=0.6,
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_market_fetcher():
+    """Mock MarketDataFetcher returning canned OHLCV data."""
+    mock = MagicMock()
+
+    def fetch_daily(symbol: str, period_days: int = 90) -> MarketData:
+        prices = {"AAPL": (150.0, 155.0), "TSLA": (200.0, 195.0), "GOOGL": (140.0, 140.5)}
+        open_price, close_price = prices.get(symbol, (100.0, 101.0))
+        df = pd.DataFrame(
+            {
+                "Open": [open_price],
+                "High": [max(open_price, close_price) + 2],
+                "Low": [min(open_price, close_price) - 2],
+                "Close": [close_price],
+                "Volume": [1000000],
+            }
+        )
+        return MarketData(symbol=symbol, data=df, last_updated=datetime(2024, 1, 15, 16, 0))
+
+    mock.fetch_daily = MagicMock(side_effect=fetch_daily)
+    return mock
