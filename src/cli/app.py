@@ -103,6 +103,22 @@ def tearsheet(
     return tearsheet_impl(symbol, period, benchmark if not no_benchmark else None)
 
 
+@app.command(name="optimize-portfolio")
+def optimize_portfolio(
+    symbols: Annotated[str, typer.Argument(help="Comma-separated stock symbols")],
+    method: Annotated[str, typer.Option("--method", "-m", help="Optimization method")] = "max_sharpe",
+    period: Annotated[int, typer.Option("--period", "-p", help="Historical period in days")] = 365,
+    rebalance: Annotated[bool, typer.Option("--rebalance", help="Compare with Alpaca portfolio")] = False,
+    rebalance_from: Annotated[
+        str | None, typer.Option("--rebalance-from", help="Custom current weights JSON")
+    ] = None,
+) -> None:
+    """Optimize portfolio allocation using modern portfolio theory."""
+    from src.cli.optimize_portfolio import optimize_portfolio as optimize_portfolio_impl
+
+    return optimize_portfolio_impl(symbols, method, period, rebalance, rebalance_from)
+
+
 def main() -> None:
     """CLI entry point - defaults to chat mode."""
     if len(sys.argv) == 1:
