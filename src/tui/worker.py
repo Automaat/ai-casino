@@ -116,7 +116,7 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
     from src.models.llm import LLMClient
-    from src.models.sentiment import FinBERTSentiment
+    from src.models.sentiment import get_finbert_sentiment
     from src.workflows.trading import TradingWorkflow
 
     llm_client = LLMClient()
@@ -124,7 +124,7 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
     news_fetcher = NewsFetcher()
 
     _update_progress("fetch_data", "Loading FinBERT model...", progress_callback)
-    finbert = FinBERTSentiment()
+    finbert = get_finbert_sentiment()
     fundamental_fetcher = FundamentalDataFetcher()
 
     return TradingWorkflow(

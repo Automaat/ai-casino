@@ -97,13 +97,13 @@ class AnalyzeStockTool(BaseTool):
         from src.data.market import MarketDataFetcher
         from src.data.news import NewsFetcher
         from src.models.llm import LLMClient
-        from src.models.sentiment import FinBERTSentiment
+        from src.models.sentiment import get_finbert_sentiment
         from src.workflows.trading import TradingWorkflow
 
         llm = LLMClient()
         market_fetcher = MarketDataFetcher()
         news_fetcher = NewsFetcher()
-        finbert = FinBERTSentiment()
+        finbert = get_finbert_sentiment()
         fundamental_fetcher = FundamentalDataFetcher()
 
         workflow = TradingWorkflow(

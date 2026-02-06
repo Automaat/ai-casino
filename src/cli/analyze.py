@@ -18,7 +18,7 @@ from src.data.news import NewsFetcher
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
-from src.models.sentiment import FinBERTSentiment
+from src.models.sentiment import get_finbert_sentiment
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -390,7 +390,7 @@ async def _analyze_stock(
     llm_client = LLMClient()
     market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
     news_fetcher = NewsFetcher()
-    finbert = FinBERTSentiment()
+    finbert = get_finbert_sentiment()
     fundamental_fetcher = FundamentalDataFetcher()
 
     broker = None
