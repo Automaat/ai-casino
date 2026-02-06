@@ -33,8 +33,10 @@ def _set_asyncio_context() -> None:
     sniffio.current_async_library_cvar.set("asyncio")
 
 
-# Limit concurrent async requests (OpenAI allows 500 req/min = ~8 req/sec)
-MAX_CONCURRENT_REQUESTS = 1
+# Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 5)
+# With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
+# OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
+MAX_CONCURRENT_REQUESTS = int(os.getenv("LLM_MAX_CONCURRENT", "5"))
 _semaphore_holder: dict[str, asyncio.Semaphore | int] = {}
 
 
