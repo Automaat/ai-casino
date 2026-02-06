@@ -10,6 +10,8 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel
 
+from src.metrics.execution import LLMUsageStats
+
 P = ParamSpec("P")
 T = TypeVar("T")
 
@@ -81,6 +83,13 @@ def retry(
 
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers."""
+
+    _last_usage: LLMUsageStats | None = None
+
+    @property
+    def last_usage(self) -> LLMUsageStats | None:
+        """Get usage stats from the last API call."""
+        return self._last_usage
 
     @abstractmethod
     async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:

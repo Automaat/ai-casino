@@ -15,6 +15,7 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
+from src.metrics.execution import LLMUsageStats
 from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
 
 T = TypeVar("T", bound=BaseModel)
@@ -55,6 +56,10 @@ class OllamaProvider(BaseLLMProvider):
         )
         response.raise_for_status()
         data = response.json()
+        self._last_usage = LLMUsageStats(
+            input_tokens=data.get("prompt_eval_count"),
+            output_tokens=data.get("eval_count"),
+        )
         content = data["message"]["content"]
         logger.debug(f"Ollama response length: {len(content)} chars")
         return content
@@ -154,7 +159,12 @@ class OllamaProvider(BaseLLMProvider):
                 },
             )
             response.raise_for_status()
-            content = response.json()["message"]["content"]
+            resp_data = response.json()
+            self._last_usage = LLMUsageStats(
+                input_tokens=resp_data.get("prompt_eval_count"),
+                output_tokens=resp_data.get("eval_count"),
+            )
+            content = resp_data["message"]["content"]
             last_response = content
             logger.debug(f"Ollama structured response (attempt {attempt + 1}): {len(content)} chars")
 

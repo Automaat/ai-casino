@@ -8,6 +8,7 @@ from anthropic import AsyncAnthropic
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
+from src.metrics.execution import LLMUsageStats
 from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
 
 T = TypeVar("T", bound=BaseModel)
@@ -106,6 +107,10 @@ class AnthropicProvider(BaseLLMProvider):
             kwargs["system"] = system
 
         response = await self._client.messages.create(**kwargs)
+        self._last_usage = LLMUsageStats(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
         content = response.content[0].text if response.content else ""
         logger.debug(f"Anthropic response length: {len(content)} chars")
         return content
@@ -149,6 +154,10 @@ class AnthropicProvider(BaseLLMProvider):
             kwargs["system"] = system
 
         response = await self._client.messages.create(**kwargs)
+        self._last_usage = LLMUsageStats(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
 
         text_content = None
         tool_calls = []
@@ -203,6 +212,10 @@ class AnthropicProvider(BaseLLMProvider):
             kwargs["system"] = system
 
         response = await self._client.messages.create(**kwargs)
+        self._last_usage = LLMUsageStats(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
 
         for block in response.content:
             if block.type == "tool_use" and block.name == "respond":

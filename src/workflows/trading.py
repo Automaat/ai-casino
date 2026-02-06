@@ -1,6 +1,7 @@
 """Trading workflow orchestrating all agents."""
 
 import asyncio
+import time
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -29,6 +30,14 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
+from src.metrics.execution import (
+    ExecutionMetricsCollector,
+    WorkflowExecutionMetrics,
+    current_agent,
+    current_collector,
+    is_metrics_enabled,
+    persist_jsonl,
+)
 from src.metrics.tracker import BaseMetricsTracker, DatabaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
@@ -81,6 +90,7 @@ class TradingWorkflowResult(BaseModel):
     regime: RegimeAnalysis | None = None
     strategy_used: str | None = None
     warnings: list[str] = []
+    execution_metrics: WorkflowExecutionMetrics | None = None
 
     class Config:
         """Pydantic config."""
@@ -222,31 +232,106 @@ class TradingWorkflow:
         """
         logger.info(f"Starting trading workflow for {symbol}")
 
-        state = self._fetch_data(symbol, period_days)
-        state = self._fetch_account_info(state)
+        # Set up execution metrics collector if enabled
+        collector: ExecutionMetricsCollector | None = None
+        collector_token = None
+        if is_metrics_enabled():
+            collector = ExecutionMetricsCollector(symbol, self.llm_client.provider, self.llm_client.model)
+            self.llm_client.set_metrics_collector(collector)
+            collector_token = current_collector.set(collector)
 
-        # Strategy selection via meta-agent or fallback to default
-        strategy_name: str | None = None
+        try:
+            return await self._analyze_instrumented(symbol, period_days, collector)
+        finally:
+            if collector_token is not None:
+                current_collector.reset(collector_token)
+            self.llm_client.set_metrics_collector(None)
+
+    def _record_stage(
+        self,
+        collector: ExecutionMetricsCollector | None,
+        stage: str,
+        start: float,
+    ) -> None:
+        """Record pipeline stage timing if collector is active.
+
+        Args:
+            collector: Optional metrics collector
+            stage: Stage name
+            start: perf_counter start time
+        """
+        if collector:
+            collector.record_pipeline_stage(stage, (time.perf_counter() - start) * 1000)
+
+    async def _select_strategy(
+        self,
+        symbol: str,
+        state: TradingState,
+        collector: ExecutionMetricsCollector | None,
+    ) -> tuple[object, str]:
+        """Select trading strategy via meta-agent or fallback.
+
+        Args:
+            symbol: Stock ticker
+            state: Current workflow state
+            collector: Optional metrics collector
+
+        Returns:
+            Tuple of (strategy_instance, strategy_name)
+        """
         if self.meta_agent:
-            selection = await self.meta_agent.select_strategy(symbol, state["market_data"])
-            strategy = selection.strategy_instance
-            strategy_name = selection.strategy_name
+            selection = await self._timed_agent_call(
+                "meta_agent",
+                self.meta_agent.select_strategy(symbol, state["market_data"]),
+                collector,
+            )
             state["regime_analysis"] = selection.regime_analysis
             state["strategy_selection"] = selection
-        else:
-            strategy = self._default_strategy
-            strategy_name = "ensemble" if self.use_ensemble else "momentum"
-            state["regime_analysis"] = None
-            state["strategy_selection"] = None
+            return selection.strategy_instance, selection.strategy_name
 
-        # Create TechnicalAnalyst with selected strategy
+        state["regime_analysis"] = None
+        state["strategy_selection"] = None
+        name = "ensemble" if self.use_ensemble else "momentum"
+        return self._default_strategy, name
+
+    async def _analyze_instrumented(
+        self,
+        symbol: str,
+        period_days: int,
+        collector: ExecutionMetricsCollector | None,
+    ) -> TradingWorkflowResult:
+        """Run analysis pipeline with optional metrics instrumentation.
+
+        Args:
+            symbol: Stock ticker symbol
+            period_days: Days of historical data
+            collector: Optional metrics collector
+        """
+        start = time.perf_counter()
+        state = self._fetch_data(symbol, period_days)
+        self._record_stage(collector, "fetch_data", start)
+
+        start = time.perf_counter()
+        state = self._fetch_account_info(state)
+        self._record_stage(collector, "fetch_account_info", start)
+
+        start = time.perf_counter()
+        strategy, strategy_name = await self._select_strategy(symbol, state, collector)
+        self._record_stage(collector, "strategy_selection", start)
+
         technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
 
-        # Run all analyses (parallel where possible)
-        state = await self._run_analyses(state, technical_analyst)
+        start = time.perf_counter()
+        state = await self._run_analyses(state, technical_analyst, collector)
+        self._record_stage(collector, "analyses", start)
 
-        state = await self._make_decision(state)
+        start = time.perf_counter()
+        state = await self._timed_agent_call("trader", self._make_decision(state), collector)
+        self._record_stage(collector, "decision", start)
+
+        start = time.perf_counter()
         state = self._assess_risk(state)
+        self._record_stage(collector, "risk_assessment", start)
 
         if (
             self.broker
@@ -260,6 +345,25 @@ class TradingWorkflow:
             f"(confidence={state['final_decision'].confidence:.2f}, "
             f"risk_approved={state['risk_assessment'].validation.approved})"
         )
+
+        return await self._build_and_persist_result(symbol, state, strategy_name, collector)
+
+    async def _build_and_persist_result(
+        self,
+        symbol: str,
+        state: TradingState,
+        strategy_name: str,
+        collector: ExecutionMetricsCollector | None,
+    ) -> TradingWorkflowResult:
+        """Build workflow result and persist metrics/snapshots.
+
+        Args:
+            symbol: Stock ticker
+            state: Final workflow state
+            strategy_name: Selected strategy name
+            collector: Optional metrics collector
+        """
+        execution_metrics = collector.finalize() if collector else None
 
         result = TradingWorkflowResult(
             symbol=symbol,
@@ -278,7 +382,11 @@ class TradingWorkflow:
             regime=state.get("regime_analysis"),
             strategy_used=strategy_name,
             warnings=state.get("warnings", []),
+            execution_metrics=execution_metrics,
         )
+
+        if execution_metrics:
+            persist_jsonl(execution_metrics)
 
         if self.metrics_tracker:
             try:
@@ -299,12 +407,41 @@ class TradingWorkflow:
 
         return result
 
-    async def _run_analyses(self, state: TradingState, technical_analyst: TechnicalAnalyst) -> TradingState:
+    async def _timed_agent_call(
+        self,
+        agent_name: str,
+        coro: object,
+        collector: ExecutionMetricsCollector | None,
+    ) -> object:
+        """Wrap an agent coroutine with timing and context var tracking.
+
+        Args:
+            agent_name: Agent name for metrics
+            coro: Coroutine to execute
+            collector: Optional metrics collector
+        """
+        if collector is None:
+            return await coro
+        token = current_agent.set(agent_name)
+        start = time.perf_counter()
+        try:
+            return await coro
+        finally:
+            collector.record_agent_timing(agent_name, (time.perf_counter() - start) * 1000)
+            current_agent.reset(token)
+
+    async def _run_analyses(
+        self,
+        state: TradingState,
+        technical_analyst: TechnicalAnalyst,
+        collector: ExecutionMetricsCollector | None = None,
+    ) -> TradingState:
         """Run all analysis agents in parallel groups.
 
         Args:
             state: Current workflow state
             technical_analyst: Technical analyst with selected strategy
+            collector: Optional metrics collector
 
         Returns:
             Updated state with all analyses
@@ -312,12 +449,24 @@ class TradingWorkflow:
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
         # Parallel Group 1: independent analyses (comparative, web_research, trump are optional)
-        technical_task = technical_analyst.analyze(state["symbol"], state["market_data"])
-        sentiment_task = self.sentiment_analyst.analyze(state["symbol"], state["news_articles"])
-        news_task = self.news_analyst.analyze(state["symbol"], state["news_articles"])
-        fundamental_task = self.fundamental_analyst.analyze(state["symbol"], current_price)
-        comparative_task = self.comparative_analyst.analyze(state["symbol"])
-        web_research_task = self.web_researcher.research(state["symbol"])
+        technical_task = self._timed_agent_call(
+            "technical", technical_analyst.analyze(state["symbol"], state["market_data"]), collector
+        )
+        sentiment_task = self._timed_agent_call(
+            "sentiment", self.sentiment_analyst.analyze(state["symbol"], state["news_articles"]), collector
+        )
+        news_task = self._timed_agent_call(
+            "news", self.news_analyst.analyze(state["symbol"], state["news_articles"]), collector
+        )
+        fundamental_task = self._timed_agent_call(
+            "fundamental", self.fundamental_analyst.analyze(state["symbol"], current_price), collector
+        )
+        comparative_task = self._timed_agent_call(
+            "comparative", self.comparative_analyst.analyze(state["symbol"]), collector
+        )
+        web_research_task = self._timed_agent_call(
+            "web_research", self.web_researcher.research(state["symbol"]), collector
+        )
 
         # Include trump analysis if enabled
         tasks = [
@@ -330,7 +479,9 @@ class TradingWorkflow:
         ]
 
         if self.trump_mode and self.trump_analyst and state["trump_posts"]:
-            trump_task = self.trump_analyst.analyze(state["trump_posts"])
+            trump_task = self._timed_agent_call(
+                "trump", self.trump_analyst.analyze(state["trump_posts"]), collector
+            )
             tasks.append(trump_task)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -362,23 +513,31 @@ class TradingWorkflow:
         state["web_research"] = web_research
 
         # Parallel Group 2: research (depends on Group 1)
-        bullish_task = self.bullish_researcher.analyze(
-            state["symbol"],
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
-            state["fundamental_analysis"],
-            state["comparative_analysis"],
-            state["trump_analysis"],
+        bullish_task = self._timed_agent_call(
+            "bullish_researcher",
+            self.bullish_researcher.analyze(
+                state["symbol"],
+                state["technical_analysis"],
+                state["sentiment_analysis"],
+                state["news_analysis"],
+                state["fundamental_analysis"],
+                state["comparative_analysis"],
+                state["trump_analysis"],
+            ),
+            collector,
         )
-        bearish_task = self.bearish_researcher.analyze(
-            state["symbol"],
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
-            state["fundamental_analysis"],
-            state["comparative_analysis"],
-            state["trump_analysis"],
+        bearish_task = self._timed_agent_call(
+            "bearish_researcher",
+            self.bearish_researcher.analyze(
+                state["symbol"],
+                state["technical_analysis"],
+                state["sentiment_analysis"],
+                state["news_analysis"],
+                state["fundamental_analysis"],
+                state["comparative_analysis"],
+                state["trump_analysis"],
+            ),
+            collector,
         )
 
         bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
