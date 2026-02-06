@@ -76,7 +76,7 @@ class SocialSentimentAnalyst:
 
         # Compute individual sentiments
         finnhub_sentiment = self._compute_finnhub_sentiment(finnhub_social)
-        reddit_sentiment = self._compute_reddit_sentiment(reddit_data)
+        reddit_sentiment = await self._compute_reddit_sentiment(reddit_data)
 
         # Compute overall score and momentum
         overall_score = self._compute_overall_social_score(finnhub_social, finnhub_news, reddit_sentiment)
@@ -85,11 +85,13 @@ class SocialSentimentAnalyst:
 
         # LLM interpretation
         interpretation, sentiment_label, confidence_keywords = await self._get_llm_interpretation(
-            symbol, finnhub_social, finnhub_news, reddit_data, overall_score, momentum
+            symbol, finnhub_social, finnhub_news, reddit_data, reddit_sentiment, overall_score, momentum
         )
 
         # Compute confidence
-        confidence = self._compute_confidence(finnhub_social, finnhub_news, reddit_data, confidence_keywords)
+        confidence = self._compute_confidence(
+            finnhub_social, finnhub_news, reddit_data, reddit_sentiment, confidence_keywords
+        )
 
         logger.info(
             f"Social sentiment analysis complete for {symbol}: "
@@ -181,7 +183,7 @@ class SocialSentimentAnalyst:
 
         return float(np.mean(scores)) if scores else None
 
-    def _compute_reddit_sentiment(self, data: RedditSentimentData | None) -> float | None:
+    async def _compute_reddit_sentiment(self, data: RedditSentimentData | None) -> float | None:
         """Compute weighted Reddit sentiment using FinBERT.
 
         Args:
@@ -193,15 +195,19 @@ class SocialSentimentAnalyst:
         if not data or not data.posts:
             return None
 
-        # Analyze posts with FinBERT
+        # Analyze posts with FinBERT (async to avoid blocking)
         texts = [f"{post.title} {post.body}" for post in data.posts]
-        sentiments: list[SentimentScore] = self.finbert.analyze_batch(texts)
+
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+        sentiments: list[SentimentScore] = await loop.run_in_executor(None, self.finbert.analyze_batch, texts)
 
         # Weight by upvote_ratio * score
         weighted_sum = 0.0
         total_weight = 0.0
 
-        for post, sentiment in zip(data.posts, sentiments, strict=False):
+        for post, sentiment in zip(data.posts, sentiments, strict=True):
             weight = post.upvote_ratio * max(1, post.score)
             weighted_sum += sentiment.score * weight
             total_weight += weight
@@ -253,7 +259,7 @@ class SocialSentimentAnalyst:
         total_weight = sum(weights)
         normalized_weights = [w / total_weight for w in weights]
 
-        return sum(score * weight for score, weight in zip(scores, normalized_weights, strict=False))
+        return sum(score * weight for score, weight in zip(scores, normalized_weights, strict=True))
 
     def _compute_social_momentum(self, finnhub_social: SocialSentimentData | None) -> str:
         """Compute social momentum trend.
@@ -300,6 +306,7 @@ class SocialSentimentAnalyst:
         finnhub_social: SocialSentimentData | None,
         finnhub_news: NewsSentimentData | None,
         reddit_data: RedditSentimentData | None,
+        reddit_sentiment: float | None,
         overall_score: float,
         momentum: str,
     ) -> tuple[str, str, list[str]]:
@@ -310,6 +317,7 @@ class SocialSentimentAnalyst:
             finnhub_social: Finnhub social data
             finnhub_news: Finnhub news data
             reddit_data: Reddit data
+            reddit_sentiment: Precomputed Reddit sentiment
             overall_score: Computed overall score
             momentum: Social momentum
 
@@ -325,7 +333,7 @@ class SocialSentimentAnalyst:
             symbol=symbol,
             finnhub_social_summary=finnhub_social_summary,
             wsb_mentions=reddit_data.mention_count if reddit_data else 0,
-            reddit_sentiment=self._compute_reddit_sentiment(reddit_data),
+            reddit_sentiment=reddit_sentiment,
             top_reddit_posts=reddit_posts_text,
             finnhub_news_summary=finnhub_news_summary,
             overall_score=overall_score,
@@ -430,6 +438,7 @@ class SocialSentimentAnalyst:
         finnhub_social: SocialSentimentData | None,
         finnhub_news: NewsSentimentData | None,
         reddit_data: RedditSentimentData | None,
+        reddit_sentiment: float | None,
         llm_keywords: list[str],
     ) -> float:
         """Compute multi-factor confidence score.
@@ -438,6 +447,7 @@ class SocialSentimentAnalyst:
             finnhub_social: Finnhub social data
             finnhub_news: Finnhub news data
             reddit_data: Reddit data
+            reddit_sentiment: Precomputed Reddit sentiment
             llm_keywords: Confidence keywords from LLM
 
         Returns:
@@ -470,10 +480,8 @@ class SocialSentimentAnalyst:
             finnhub_sent = self._compute_finnhub_sentiment(finnhub_social)
             if finnhub_sent is not None:
                 scores.append(finnhub_sent)
-        if reddit_data:
-            reddit_sent = self._compute_reddit_sentiment(reddit_data)
-            if reddit_sent is not None:
-                scores.append(reddit_sent)
+        if reddit_sentiment is not None:
+            scores.append(reddit_sentiment)
         if finnhub_news:
             news_score = (finnhub_news.sentiment.bullish_percent - 50.0) / 50.0
             scores.append(news_score)

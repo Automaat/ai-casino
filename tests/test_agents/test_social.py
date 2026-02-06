@@ -332,7 +332,9 @@ def test_compute_confidence_high():
         symbol="AAPL", posts=posts, mention_count=60, avg_score=100.0, avg_upvote_ratio=0.85, fetched_at=now
     )
 
-    confidence = analyst._compute_confidence(finnhub_social, finnhub_news, reddit_data, ["strong", "clear"])
+    confidence = analyst._compute_confidence(
+        finnhub_social, finnhub_news, reddit_data, 0.7, ["strong", "clear"]
+    )
 
     assert confidence >= 0.8
 
@@ -351,18 +353,19 @@ def test_compute_confidence_low():
         fetched_at=datetime.now(tz=UTC),
     )
 
-    confidence = analyst._compute_confidence(None, None, reddit_data, [])
+    confidence = analyst._compute_confidence(None, None, reddit_data, None, [])
 
     assert confidence <= 0.5
 
 
-def test_compute_reddit_sentiment_weighted():
+@pytest.mark.asyncio
+async def test_compute_reddit_sentiment_weighted():
     """Test Reddit sentiment weighting."""
     analyst = SocialSentimentAnalyst(MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
     # Mock FinBERT to return positive sentiment
     analyst.finbert.analyze_batch.return_value = [
-        SentimentScore(positive=0.8, neutral=0.1, negative=0.1, label="positive", score=0.7) for _ in range(3)
+        SentimentScore(positive=0.8, neutral=0.1, negative=0.1, label="positive", score=0.7) for _ in range(2)
     ]
 
     posts = [
@@ -399,7 +402,7 @@ def test_compute_reddit_sentiment_weighted():
         fetched_at=datetime.now(tz=UTC),
     )
 
-    sentiment = analyst._compute_reddit_sentiment(reddit_data)
+    sentiment = await analyst._compute_reddit_sentiment(reddit_data)
 
     assert sentiment is not None
     assert -1.0 <= sentiment <= 1.0
