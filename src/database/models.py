@@ -77,3 +77,52 @@ class PortfolioSnapshotORM(Base):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"PortfolioSnapshotORM(id={self.id}, timestamp={self.timestamp}, value={self.portfolio_value})"
+
+
+class TearSheetORM(Base):
+    """TearSheet ORM model."""
+
+    __tablename__ = "tearsheets"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    symbol: Mapped[str] = mapped_column(String(10), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    cagr: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    sharpe_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    sortino_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    calmar_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    max_drawdown: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    max_drawdown_duration_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    volatility_annual: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    win_rate: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    profit_factor: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    avg_win: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
+    avg_loss: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
+    best_day: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    worst_day: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    monthly_returns: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    benchmark_symbol: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    benchmark_cagr: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    benchmark_sharpe: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    alpha: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    beta: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
+    html_report_path: Mapped[str] = mapped_column(String, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_tearsheets_symbol", "symbol"),
+        Index("idx_tearsheets_generated_at", "generated_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"TearSheetORM(id={self.id}, symbol={self.symbol}, generated_at={self.generated_at})"

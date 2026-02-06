@@ -1,0 +1,219 @@
+"""QuantStats-based performance reporting."""
+
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pandas as pd
+import quantstats as qs
+from loguru import logger
+
+from src.metrics.performance import build_daily_equity_curve, equity_curve_to_returns
+from src.metrics.tracker import TearSheet, TradeRecord
+
+
+class QuantStatsReporter:
+    """Generate QuantStats performance tearsheets."""
+
+    def __init__(self, risk_free_rate: float | None = None) -> None:
+        """Initialize QuantStats reporter.
+
+        Args:
+            risk_free_rate: Annual risk-free rate (default from env or 0.02)
+        """
+        self.risk_free_rate = risk_free_rate or float(os.getenv("RISK_FREE_RATE", "0.02"))
+        logger.info(f"Initialized QuantStatsReporter (risk_free_rate={self.risk_free_rate:.4f})")
+
+    def generate_tearsheet(
+        self,
+        symbol: str,
+        trades: list[TradeRecord],
+        benchmark_symbol: str | None = None,
+        benchmark_returns: pd.Series | None = None,
+    ) -> TearSheet:
+        """Generate tearsheet from trades.
+
+        Args:
+            symbol: Stock ticker symbol
+            trades: List of closed TradeRecord objects
+            benchmark_symbol: Optional benchmark symbol (e.g., "SPY")
+            benchmark_returns: Optional pre-fetched benchmark returns series
+
+        Returns:
+            TearSheet with metrics and HTML report path
+        """
+        qs.stats.RISK_FREE_RATE = self.risk_free_rate
+
+        logger.info(f"Generating tearsheet for {symbol} ({len(trades)} trades)")
+
+        equity_curve = build_daily_equity_curve(trades)
+        if equity_curve.empty:
+            msg = f"Cannot generate tearsheet: no closed trades for {symbol}"
+            raise ValueError(msg)
+
+        returns = equity_curve_to_returns(equity_curve)
+
+        metrics = self._calculate_metrics(returns, benchmark_returns)
+
+        html_path = self._generate_html(symbol, returns, benchmark_returns, benchmark_symbol)
+
+        start_date = equity_curve.index[0]
+        end_date = equity_curve.index[-1]
+
+        return TearSheet(
+            symbol=symbol,
+            start_date=pd.Timestamp(start_date).to_pydatetime().replace(tzinfo=UTC),
+            end_date=pd.Timestamp(end_date).to_pydatetime().replace(tzinfo=UTC),
+            benchmark_symbol=benchmark_symbol,
+            html_report_path=html_path,
+            generated_at=datetime.now(UTC),
+            **metrics,
+        )
+
+    def _calculate_metrics(self, returns: pd.Series, benchmark_returns: pd.Series | None = None) -> dict:
+        """Calculate QuantStats metrics.
+
+        Args:
+            returns: Daily returns series
+            benchmark_returns: Optional benchmark returns series
+
+        Returns:
+            Dictionary of metrics
+        """
+        logger.debug("Calculating QuantStats metrics")
+
+        cagr = qs.stats.cagr(returns, rf=self.risk_free_rate)
+        sharpe = qs.stats.sharpe(returns, rf=self.risk_free_rate)
+        sortino = qs.stats.sortino(returns, rf=self.risk_free_rate)
+        calmar = qs.stats.calmar(returns)
+        max_dd = qs.stats.max_drawdown(returns)
+        volatility = qs.stats.volatility(returns)
+
+        winning_days = returns[returns > 0]
+        losing_days = returns[returns < 0]
+        win_rate = len(winning_days) / len(returns[returns != 0]) if len(returns[returns != 0]) > 0 else 0.0
+        avg_win = winning_days.mean() if len(winning_days) > 0 else 0.0
+        avg_loss = losing_days.mean() if len(losing_days) > 0 else 0.0
+        profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0.0
+
+        best_day = returns.max()
+        worst_day = returns.min()
+
+        monthly_returns_series = qs.stats.monthly_returns(returns)
+        monthly_returns_dict = {}
+        for idx, val in monthly_returns_series.items():
+            key = idx.strftime("%Y-%m") if hasattr(idx, "strftime") else str(idx)
+            monthly_returns_dict[key] = float(val)
+
+        dd_details = qs.stats.to_drawdown_series(returns)
+        dd_duration = self._calculate_max_dd_duration(dd_details)
+
+        metrics = {
+            "cagr": float(cagr) if pd.notna(cagr) else None,
+            "sharpe_ratio": float(sharpe) if pd.notna(sharpe) else None,
+            "sortino_ratio": float(sortino) if pd.notna(sortino) else None,
+            "calmar_ratio": float(calmar) if pd.notna(calmar) else None,
+            "max_drawdown": float(max_dd) if pd.notna(max_dd) else None,
+            "max_drawdown_duration_days": dd_duration,
+            "volatility_annual": float(volatility) if pd.notna(volatility) else None,
+            "win_rate": float(win_rate),
+            "profit_factor": float(profit_factor),
+            "avg_win": float(avg_win),
+            "avg_loss": float(avg_loss),
+            "best_day": float(best_day),
+            "worst_day": float(worst_day),
+            "monthly_returns": monthly_returns_dict,
+        }
+
+        if benchmark_returns is not None:
+            benchmark_cagr = qs.stats.cagr(benchmark_returns, rf=self.risk_free_rate)
+            benchmark_sharpe = qs.stats.sharpe(benchmark_returns, rf=self.risk_free_rate)
+            alpha = qs.stats.alpha(returns, benchmark_returns, rf=self.risk_free_rate)
+            beta = qs.stats.beta(returns, benchmark_returns)
+
+            metrics["benchmark_cagr"] = float(benchmark_cagr) if pd.notna(benchmark_cagr) else None
+            metrics["benchmark_sharpe"] = float(benchmark_sharpe) if pd.notna(benchmark_sharpe) else None
+            metrics["alpha"] = float(alpha) if pd.notna(alpha) else None
+            metrics["beta"] = float(beta) if pd.notna(beta) else None
+        else:
+            metrics["benchmark_cagr"] = None
+            metrics["benchmark_sharpe"] = None
+            metrics["alpha"] = None
+            metrics["beta"] = None
+
+        logger.debug(f"Calculated metrics: CAGR={metrics['cagr']:.4f}, Sharpe={metrics['sharpe_ratio']:.4f}")
+        return metrics
+
+    def _calculate_max_dd_duration(self, dd_series: pd.Series) -> int | None:
+        """Calculate maximum drawdown duration in days.
+
+        Args:
+            dd_series: Drawdown series from QuantStats
+
+        Returns:
+            Maximum drawdown duration in days
+        """
+        if dd_series.empty:
+            return None
+
+        current_duration = 0
+        max_duration = 0
+
+        for val in dd_series:
+            if val < 0:
+                current_duration += 1
+                max_duration = max(max_duration, current_duration)
+            else:
+                current_duration = 0
+
+        return max_duration if max_duration > 0 else None
+
+    def _generate_html(
+        self,
+        symbol: str,
+        returns: pd.Series,
+        benchmark_returns: pd.Series | None = None,
+        benchmark_symbol: str | None = None,
+    ) -> str:
+        """Generate HTML tearsheet report.
+
+        Args:
+            symbol: Stock ticker symbol
+            returns: Daily returns series
+            benchmark_returns: Optional benchmark returns series
+            benchmark_symbol: Optional benchmark symbol for labeling
+
+        Returns:
+            Path to generated HTML file
+        """
+        output_dir = Path.home() / ".ai-casino" / "tearsheets"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        output_path = output_dir / f"{symbol}_{timestamp}.html"
+
+        logger.info(f"Generating HTML tearsheet to {output_path}")
+
+        title = f"{symbol} Performance Tearsheet"
+        if benchmark_symbol:
+            title += f" vs {benchmark_symbol}"
+
+        try:
+            qs.reports.html(
+                returns,
+                benchmark=benchmark_returns,
+                output=str(output_path),
+                title=title,
+                periods_per_year=252,
+                download_filename=f"{symbol}_tearsheet.html",
+            )
+            logger.info(f"Successfully generated HTML tearsheet: {output_path}")
+        except Exception as e:
+            logger.error(f"Failed to generate HTML tearsheet: {e}")
+            raise
+
+        return str(output_path)
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"QuantStatsReporter(risk_free_rate={self.risk_free_rate})"
