@@ -1,6 +1,6 @@
 """Portfolio optimization using scipy."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -14,6 +14,13 @@ from src.data.market import MarketDataFetcher
 
 if TYPE_CHECKING:
     from src.data.broker import AlpacaBroker
+
+# Constants
+MIN_WEIGHT_THRESHOLD = 0.001  # Minimum weight to include in portfolio (0.1%)
+REBALANCE_THRESHOLD = 0.01  # Minimum weight delta to trigger rebalance (1%)
+MIN_SYMBOLS = 2  # Minimum symbols required for optimization
+MIN_DATA_POINTS = 30  # Minimum historical data points required
+WARN_DATA_POINTS = 50  # Data points threshold for warning
 
 
 class PortfolioAllocation(BaseModel):
@@ -50,6 +57,12 @@ class PortfolioRebalance(BaseModel):
     delta: float = Field(description="Weight delta (target - current)")
     action: str = Field(description="BUY, SELL, or HOLD")
     shares_to_trade: int | None = Field(default=None, description="Shares to buy/sell if broker available")
+
+
+def _raise_optimization_error(message: str) -> None:
+    """Raise optimization error with formatted message."""
+    msg = f"Optimization failed: {message}"
+    raise ValueError(msg)
 
 
 class PortfolioOptimizer:
@@ -116,8 +129,7 @@ class PortfolioOptimizer:
 
                 cleaned_weights = dict(zip(symbols, weights, strict=True))
             else:
-                msg = f"Optimization failed: {result.message}"
-                raise ValueError(msg)
+                _raise_optimization_error(result.message)
 
         except Exception as e:
             logger.warning(f"Optimization failed, falling back to equal weights: {e}")
@@ -127,7 +139,7 @@ class PortfolioOptimizer:
         allocations = [
             PortfolioAllocation(symbol=symbol, weight=weight, expected_return=None, contribution_to_risk=None)
             for symbol, weight in cleaned_weights.items()
-            if weight > 0.001
+            if weight > MIN_WEIGHT_THRESHOLD
         ]
 
         return OptimizedPortfolio(
@@ -136,7 +148,7 @@ class PortfolioOptimizer:
             expected_volatility=volatility,
             sharpe_ratio=sharpe,
             method="max_sharpe",
-            optimization_date=datetime.now(),
+            optimization_date=datetime.now(tz=UTC),
         )
 
     def optimize_min_volatility(self, symbols: list[str]) -> OptimizedPortfolio:
@@ -179,8 +191,7 @@ class PortfolioOptimizer:
 
                 cleaned_weights = dict(zip(symbols, weights, strict=True))
             else:
-                msg = f"Optimization failed: {result.message}"
-                raise ValueError(msg)
+                _raise_optimization_error(result.message)
 
         except Exception as e:
             logger.warning(f"Optimization failed, falling back to equal weights: {e}")
@@ -190,7 +201,7 @@ class PortfolioOptimizer:
         allocations = [
             PortfolioAllocation(symbol=symbol, weight=weight, expected_return=None, contribution_to_risk=None)
             for symbol, weight in cleaned_weights.items()
-            if weight > 0.001
+            if weight > MIN_WEIGHT_THRESHOLD
         ]
 
         return OptimizedPortfolio(
@@ -199,7 +210,7 @@ class PortfolioOptimizer:
             expected_volatility=volatility,
             sharpe_ratio=sharpe,
             method="min_volatility",
-            optimization_date=datetime.now(),
+            optimization_date=datetime.now(tz=UTC),
         )
 
     def optimize_hrp(self, symbols: list[str]) -> OptimizedPortfolio:
@@ -219,8 +230,8 @@ class PortfolioOptimizer:
             corr = returns_df.corr()
             dist = ((1 - corr) / 2) ** 0.5
 
-            # Hierarchical clustering
-            link = linkage(dist, method="single")
+            # Hierarchical clustering (for structure analysis)
+            _ = linkage(dist, method="single")
 
             # Quasi-diagonalization (simplified HRP)
             n = len(symbols)
@@ -247,7 +258,7 @@ class PortfolioOptimizer:
         allocations = [
             PortfolioAllocation(symbol=symbol, weight=weight, expected_return=None, contribution_to_risk=None)
             for symbol, weight in weights_dict.items()
-            if weight > 0.001
+            if weight > MIN_WEIGHT_THRESHOLD
         ]
 
         return OptimizedPortfolio(
@@ -256,7 +267,7 @@ class PortfolioOptimizer:
             expected_volatility=volatility,
             sharpe_ratio=sharpe,
             method="hrp",
-            optimization_date=datetime.now(),
+            optimization_date=datetime.now(tz=UTC),
         )
 
     def get_current_portfolio(self) -> dict[str, float]:
@@ -269,7 +280,8 @@ class PortfolioOptimizer:
             ValueError: If broker not configured
         """
         if not self.broker:
-            raise ValueError("Broker not configured - cannot fetch current portfolio")
+            err_msg = "Broker not configured - cannot fetch current portfolio"
+            raise ValueError(err_msg)
 
         account_info = self.broker.get_account_info()
         portfolio_value = account_info.portfolio_value
@@ -299,7 +311,8 @@ class PortfolioOptimizer:
         """
         if current is None:
             if not self.broker:
-                raise ValueError("No current portfolio provided and broker not configured")
+                err_msg = "No current portfolio provided and broker not configured"
+                raise ValueError(err_msg)
             current = self.get_current_portfolio()
 
         logger.info(
@@ -315,10 +328,7 @@ class PortfolioOptimizer:
             target_weight = next((a.weight for a in target.allocations if a.symbol == symbol), 0.0)
             delta = target_weight - current_weight
 
-            if abs(delta) > 0.01:
-                action = "BUY" if delta > 0 else "SELL"
-            else:
-                action = "HOLD"
+            action = ("BUY" if delta > 0 else "SELL") if abs(delta) > REBALANCE_THRESHOLD else "HOLD"
 
             rebalances.append(
                 PortfolioRebalance(
@@ -361,8 +371,9 @@ class PortfolioOptimizer:
         Raises:
             ValueError: If insufficient symbols or data
         """
-        if len(symbols) < 2:
-            raise ValueError("Portfolio optimization requires at least 2 symbols")
+        if len(symbols) < MIN_SYMBOLS:
+            err_msg = f"Portfolio optimization requires at least {MIN_SYMBOLS} symbols"
+            raise ValueError(err_msg)
 
         logger.info(f"Fetching {self.period_days} days of data for {len(symbols)} symbols")
 
@@ -380,18 +391,22 @@ class PortfolioOptimizer:
             except Exception as e:
                 logger.warning(f"Failed to fetch data for {symbol}: {e}, skipping")
 
-        if len(prices_data) < 2:
-            raise ValueError(f"Insufficient data: only {len(prices_data)}/{len(symbols)} symbols fetched")
+        if len(prices_data) < MIN_SYMBOLS:
+            err_msg = f"Insufficient data: only {len(prices_data)}/{len(symbols)} symbols fetched"
+            raise ValueError(err_msg)
 
         # Build aligned price DataFrame
         prices_df = pd.DataFrame(prices_data)
         prices_df = prices_df.dropna()
 
-        if len(prices_df) < 30:
-            raise ValueError(f"Insufficient data points: {len(prices_df)} < 30")
+        if len(prices_df) < MIN_DATA_POINTS:
+            err_msg = f"Insufficient data points: {len(prices_df)} < {MIN_DATA_POINTS}"
+            raise ValueError(err_msg)
 
-        if len(prices_df) < 50:
-            logger.warning(f"Limited data points: {len(prices_df)} < 50, optimization may be less robust")
+        if len(prices_df) < WARN_DATA_POINTS:
+            logger.warning(
+                f"Limited data points: {len(prices_df)} < {WARN_DATA_POINTS}, optimization may be less robust"
+            )
 
         # Calculate returns
         returns_df = prices_df.pct_change().dropna()
