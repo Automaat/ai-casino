@@ -70,7 +70,11 @@ def __getattr__(name: str) -> type:
     if name in ("MomentumIndicators", "MomentumStrategy"):
         from src.strategies.momentum import MomentumIndicators, MomentumStrategy
 
-        return {"MomentumIndicators": MomentumIndicators, "MomentumStrategy": MomentumStrategy}[name]
+        mapping = {
+            "MomentumIndicators": MomentumIndicators,
+            "MomentumStrategy": MomentumStrategy,
+        }
+        return mapping[name]
 
     # Trend following imports
     if name in ("TrendFollowingIndicators", "TrendFollowingStrategy"):
