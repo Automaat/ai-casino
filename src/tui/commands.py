@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from src.screening.exporter import ScreeningExporter, Watchlist
-from src.workflows.types import TradingWorkflowResult
+if TYPE_CHECKING:
+    from src.screening.exporter import ScreeningExporter, Watchlist
+    from src.workflows.types import TradingWorkflowResult
 
 ProgressCallback = Callable[[str, str, str], None]
 CancelledCallback = Callable[[], bool]
@@ -168,6 +170,8 @@ Type freely to chat about markets or ask questions."""
         result_dict = await run_analysis_in_process(
             symbol, period_days=90, progress_callback=progress_callback, is_cancelled=is_cancelled
         )
+        from src.workflows.types import TradingWorkflowResult
+
         result = TradingWorkflowResult.model_validate(result_dict)
 
         if progress_callback:
@@ -196,6 +200,8 @@ Type freely to chat about markets or ask questions."""
             progress_callback=progress_callback,
             is_cancelled=is_cancelled,
         )
+        from src.workflows.types import TradingWorkflowResult
+
         result = TradingWorkflowResult.model_validate(result_dict)
 
         if progress_callback:
@@ -223,6 +229,8 @@ Type freely to chat about markets or ask questions."""
             progress_callback=progress_callback,
             is_cancelled=is_cancelled,
         )
+        from src.workflows.types import TradingWorkflowResult
+
         result = TradingWorkflowResult.model_validate(result_dict)
 
         if progress_callback:
@@ -250,6 +258,8 @@ Type freely to chat about markets or ask questions."""
             progress_callback=progress_callback,
             is_cancelled=is_cancelled,
         )
+        from src.workflows.types import TradingWorkflowResult
+
         result = TradingWorkflowResult.model_validate(result_dict)
 
         if progress_callback:
