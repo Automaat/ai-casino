@@ -671,3 +671,39 @@ def sample_trump_posts():
             url="https://truthsocial.com/@realDonaldTrump/posts/123454",
         ),
     ]
+
+
+@pytest.fixture
+def sample_trades_for_tearsheet():
+    """Sample trades for tearsheet testing (20 trades, 6 months, 2/3 winners)."""
+    from datetime import timedelta
+
+    base_date = datetime(2024, 1, 1, tzinfo=UTC)
+    trades = []
+
+    for i in range(20):
+        is_winner = (i % 3) != 0
+        entry_price = 100.0 + i
+        pnl_percent = 5.0 if is_winner else -3.0
+        exit_price = entry_price * (1 + pnl_percent / 100.0)
+        shares = 100
+        pnl = (exit_price - entry_price) * shares
+
+        trade = TradeRecord(
+            timestamp=base_date + timedelta(days=i * 9),
+            symbol="AAPL",
+            action=Signal.BUY,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            shares=shares,
+            stop_loss_price=entry_price * 0.95,
+            confidence=0.75 if is_winner else 0.65,
+            risk_level="LOW" if is_winner else "MEDIUM",
+            status="CLOSED",
+            pnl=pnl,
+            pnl_percent=pnl_percent,
+            strategy_name="momentum",
+        )
+        trades.append(trade)
+
+    return trades

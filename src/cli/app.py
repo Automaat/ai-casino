@@ -90,6 +90,19 @@ def chat() -> None:
     return chat_impl()
 
 
+@app.command()
+def tearsheet(
+    symbol: Annotated[str, typer.Argument(help="Stock ticker symbol")],
+    period: Annotated[str, typer.Option("--period", "-p", help="Time period")] = "1y",
+    benchmark: Annotated[str | None, typer.Option("--benchmark", "-b", help="Benchmark symbol")] = "SPY",
+    no_benchmark: Annotated[bool, typer.Option("--no-benchmark", help="Disable benchmark")] = False,
+) -> None:
+    """Generate QuantStats performance tearsheet."""
+    from src.cli.tearsheet import tearsheet as tearsheet_impl
+
+    return tearsheet_impl(symbol, period, benchmark if not no_benchmark else None)
+
+
 def main() -> None:
     """CLI entry point - defaults to chat mode."""
     if len(sys.argv) == 1:

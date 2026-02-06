@@ -95,6 +95,36 @@ class PerformanceMetrics(BaseModel):
     end_date: datetime
 
 
+class TearSheet(BaseModel):
+    """QuantStats performance tearsheet."""
+
+    id: str | None = None
+    symbol: str
+    start_date: datetime
+    end_date: datetime
+    cagr: float | None
+    sharpe_ratio: float | None
+    sortino_ratio: float | None
+    calmar_ratio: float | None
+    max_drawdown: float | None
+    max_drawdown_duration_days: int | None
+    volatility_annual: float | None
+    win_rate: float | None
+    profit_factor: float | None
+    avg_win: float | None
+    avg_loss: float | None
+    best_day: float | None
+    worst_day: float | None
+    monthly_returns: dict[str, float]
+    benchmark_symbol: str | None = None
+    benchmark_cagr: float | None = None
+    benchmark_sharpe: float | None = None
+    alpha: float | None = None
+    beta: float | None = None
+    html_report_path: str
+    generated_at: datetime
+
+
 class BaseMetricsTracker(ABC):
     """Abstract base class for metrics trackers."""
 

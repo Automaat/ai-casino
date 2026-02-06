@@ -2,6 +2,7 @@
 
 import math
 
+import pandas as pd
 from loguru import logger
 
 EPSILON = 1e-10
@@ -172,3 +173,49 @@ def calculate_risk_adjusted_returns(returns: list[float]) -> float:
         f"(mean={mean_return:.4f}, downside_dev={downside_deviation:.4f})"
     )
     return annualized
+
+
+def build_daily_equity_curve(trades: list, initial_capital: float = 100000.0) -> pd.Series:
+    """Build daily equity curve from trades.
+
+    Args:
+        trades: List of TradeRecord objects (must be closed with pnl)
+        initial_capital: Starting capital in dollars (default $100k)
+
+    Returns:
+        pandas Series with datetime index and daily equity values
+    """
+    closed = sorted([t for t in trades if t.is_closed() and t.pnl is not None], key=lambda t: t.timestamp)
+
+    if not closed:
+        logger.debug("No closed trades, returning empty equity curve")
+        return pd.Series(dtype=float)
+
+    equity_points = [(closed[0].timestamp.date(), initial_capital)]
+    cumulative_pnl = 0.0
+
+    for trade in closed:
+        cumulative_pnl += trade.pnl
+        equity_points.append((trade.timestamp.date(), initial_capital + cumulative_pnl))
+
+    df = pd.DataFrame(equity_points, columns=["date", "equity"])
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date")
+    daily = df.resample("D").last().ffill()
+
+    logger.debug(f"Built equity curve: {len(daily)} days from {len(closed)} trades")
+    return daily["equity"]
+
+
+def equity_curve_to_returns(equity_series: pd.Series) -> pd.Series:
+    """Convert equity curve to daily returns.
+
+    Args:
+        equity_series: pandas Series with equity values and datetime index
+
+    Returns:
+        pandas Series with daily return percentages (as decimals)
+    """
+    returns = equity_series.pct_change().fillna(0.0)
+    logger.debug(f"Converted equity curve to {len(returns)} daily returns")
+    return returns
