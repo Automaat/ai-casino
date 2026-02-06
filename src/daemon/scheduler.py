@@ -171,15 +171,12 @@ class MarketScheduler:
         if now.weekday() >= 5:
             return False
 
-        current_time = now.time()
-        close_minutes = self.end_hour * 60 + self.end_minute
-        window_start_minutes = close_minutes + offset_minutes
-        window_end_minutes = window_start_minutes + 30
+        # Use datetime arithmetic to avoid time overflow and handle seconds correctly
+        market_close_dt = now.replace(hour=self.end_hour, minute=self.end_minute, second=0, microsecond=0)
+        window_start_dt = market_close_dt + timedelta(minutes=offset_minutes)
+        window_end_dt = window_start_dt + timedelta(minutes=30)
 
-        window_start = time(window_start_minutes // 60, window_start_minutes % 60)
-        window_end = time(window_end_minutes // 60, window_end_minutes % 60)
-
-        return window_start <= current_time <= window_end
+        return window_start_dt <= now <= window_end_dt
 
     def __repr__(self) -> str:
         """Return string representation."""

@@ -1,5 +1,6 @@
 """Trade Journal Agent for after-hours signal review."""
 
+import asyncio
 from datetime import date
 from pathlib import Path
 
@@ -93,22 +94,24 @@ class TradeJournalAgent:
             ):
                 latest_by_symbol[record.symbol] = record
 
-        # Build outcomes by fetching closing prices
+        # Build outcomes by fetching closing prices (async with concurrency limit)
         outcomes: list[SignalOutcome] = []
-        for symbol, record in latest_by_symbol.items():
-            try:
-                market_data = self.market_fetcher.fetch_daily(symbol, period_days=1)
-                df = market_data.data
-                if df.empty:
-                    logger.warning(f"No market data for {symbol}, skipping")
-                    continue
+        semaphore = asyncio.Semaphore(5)  # Limit concurrent fetches
 
-                price_open = float(df["Open"].iloc[-1])
-                price_close = float(df["Close"].iloc[-1])
-                price_change_pct = ((price_close - price_open) / price_open) * 100
+        async def fetch_outcome(symbol: str, record: AnalysisRecord) -> SignalOutcome | None:
+            async with semaphore:
+                try:
+                    market_data = await asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, 1)
+                    df = market_data.data
+                    if df.empty:
+                        logger.warning(f"No market data for {symbol}, skipping")
+                        return None
 
-                outcomes.append(
-                    SignalOutcome(
+                    price_open = float(df["Open"].iloc[-1])
+                    price_close = float(df["Close"].iloc[-1])
+                    price_change_pct = ((price_close - price_open) / price_open) * 100
+
+                    return SignalOutcome(
                         symbol=symbol,
                         signal=record.signal,
                         confidence=record.confidence,
@@ -117,9 +120,13 @@ class TradeJournalAgent:
                         price_change_pct=round(price_change_pct, 2),
                         signal_correct=self._evaluate_signal(record.signal, price_change_pct),
                     )
-                )
-            except Exception as e:
-                logger.warning(f"Failed to fetch closing price for {symbol}: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch closing price for {symbol}: {e}")
+                    return None
+
+        tasks = [fetch_outcome(symbol, record) for symbol, record in latest_by_symbol.items()]
+        raw_outcomes = await asyncio.gather(*tasks)
+        outcomes = [o for o in raw_outcomes if o is not None]
 
         if not outcomes:
             return DailyJournal(

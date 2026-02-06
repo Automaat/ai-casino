@@ -26,7 +26,12 @@ class JournalConfig(BaseModel):
 
     enabled: bool = True
     journal_dir: str = "~/.ai-casino/journal"
-    run_offset_minutes: int = 15
+    run_offset_minutes: int = Field(
+        default=15,
+        ge=0,
+        lt=24 * 60,
+        description="Minutes after market close to start journal window (0-1439)",
+    )
 
 
 class DaemonConfig(BaseModel):

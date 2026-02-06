@@ -2,7 +2,7 @@
 
 import asyncio
 import signal
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
@@ -162,7 +162,7 @@ class DaemonRunner:
         if not self.scheduler.is_journal_window(self.config.journal.run_offset_minutes):
             return
 
-        today = date.today()  # noqa: DTZ011
+        today = datetime.now(self.scheduler.timezone).date()
         if self.state.last_journal_date == today.isoformat():
             return
 
@@ -196,6 +196,7 @@ class DaemonRunner:
         except Exception as e:
             logger.error(f"Journal generation failed: {e}")
             self.state.record_error(f"Journal failed: {e}")
+            self.state.save(self.config.state.state_file)
 
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle.
@@ -215,6 +216,9 @@ class DaemonRunner:
 
         results = await self._analyze_watchlist()
         self._log_results(results)
+
+        # Check journal regardless of market_hours_only setting
+        await self._maybe_run_journal()
 
         self.state.save(self.config.state.state_file)
         return self.config.interval_minutes * 60
