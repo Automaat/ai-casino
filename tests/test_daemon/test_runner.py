@@ -16,17 +16,15 @@ def sample_config(tmp_path: Path) -> DaemonConfig:
     """Create sample daemon config."""
     config_dict = {
         "watchlist": ["TSLA", "MSFT"],
+        "interval_minutes": 30,
+        "market_hours_only": True,
+        "auto_trade": False,
+        "max_concurrent_analyses": 5,
         "schedule": {
             "start_time": "09:30",
             "end_time": "16:00",
             "timezone": "America/New_York",
             "enable_pre_market": False,
-        },
-        "trading": {
-            "interval_minutes": 30,
-            "market_hours_only": True,
-            "auto_trade": False,
-            "max_concurrent_analyses": 5,
         },
         "state": {
             "state_file": str(tmp_path / "daemon_state.json"),
@@ -179,7 +177,9 @@ async def test_analyze_watchlist_uses_merged(
 
     monkeypatch.setattr(runner, "_analyze_symbol", mock_analyze)
 
-    await runner._analyze_watchlist()
+    # Get merged watchlist and pass it to _analyze_watchlist
+    merged = runner._get_merged_watchlist()
+    await runner._analyze_watchlist(merged)
 
     # Should analyze merged watchlist: TSLA, MSFT from config + AAPL, NVDA from positions
     assert set(analyzed_symbols) == {"TSLA", "MSFT", "AAPL", "NVDA"}
