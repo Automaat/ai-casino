@@ -1,5 +1,6 @@
 """Web research agent for gathering real-time market intelligence."""
 
+import asyncio
 import re
 from enum import StrEnum
 
@@ -124,34 +125,44 @@ class WebResearchAgent:
         Returns:
             List of WebResearchResult
         """
-        results = []
+        tasks = [self._research_category_with_tools(symbol, cat) for cat in categories]
+        return list(await asyncio.gather(*tasks))
 
-        for category in categories:
-            prompt = self._build_tool_prompt(symbol, category)
-            system = self.prompts.load("system")
+    async def _research_category_with_tools(
+        self,
+        symbol: str,
+        category: ResearchCategory,
+    ) -> WebResearchResult:
+        """Research a single category using LLM tool calling.
 
-            tools = [self.search_tool.get_tool_definition()]
+        Args:
+            symbol: Stock ticker symbol
+            category: Research category
 
-            def tool_executor(name: str, args: dict) -> str:
-                if name == WebSearchTool.TOOL_NAME:
-                    return self.search_tool.execute(
-                        query=args.get("query", ""),
-                        search_type=args.get("search_type", "general"),
-                    )
-                return f"Unknown tool: {name}"
+        Returns:
+            WebResearchResult
+        """
+        prompt = self._build_tool_prompt(symbol, category)
+        system = self.prompts.load("system")
+        tools = [self.search_tool.get_tool_definition()]
 
-            response = await self.llm.acomplete_with_tools(
-                prompt=prompt,
-                tools=tools,
-                tool_executor=tool_executor,
-                system=system,
-                temperature=0.3,
-            )
+        def tool_executor(name: str, args: dict) -> str:
+            if name == WebSearchTool.TOOL_NAME:
+                return self.search_tool.execute(
+                    query=args.get("query", ""),
+                    search_type=args.get("search_type", "general"),
+                )
+            return f"Unknown tool: {name}"
 
-            result = self._parse_research_response(category, response)
-            results.append(result)
+        response = await self.llm.acomplete_with_tools(
+            prompt=prompt,
+            tools=tools,
+            tool_executor=tool_executor,
+            system=system,
+            temperature=0.3,
+        )
 
-        return results
+        return self._parse_research_response(category, response)
 
     async def _research_with_templates(
         self,
@@ -167,25 +178,36 @@ class WebResearchAgent:
         Returns:
             List of WebResearchResult
         """
-        results = []
+        tasks = [self._research_category_with_template(symbol, cat) for cat in categories]
+        return list(await asyncio.gather(*tasks))
 
-        for category in categories:
-            query = QUERY_TEMPLATES[category].format(symbol=symbol)
-            search_type = "news" if category == ResearchCategory.LATEST_NEWS else "general"
+    async def _research_category_with_template(
+        self,
+        symbol: str,
+        category: ResearchCategory,
+    ) -> WebResearchResult:
+        """Research a single category using predefined query template.
 
-            search_results = self.search_tool.execute(query, search_type=search_type, max_results=5)
+        Args:
+            symbol: Stock ticker symbol
+            category: Research category
 
-            prompt = self.prompts.load(
-                "user_template", symbol=symbol, category=category.value, search_results=search_results
-            )
+        Returns:
+            WebResearchResult
+        """
+        query = QUERY_TEMPLATES[category].format(symbol=symbol)
+        search_type = "news" if category == ResearchCategory.LATEST_NEWS else "general"
 
-            system = self.prompts.load("system_template")
-            response = await self.llm.acomplete(prompt, system=system, temperature=0.3)
+        search_results = self.search_tool.execute(query, search_type=search_type, max_results=5)
 
-            result = self._parse_research_response(category, response, sources_count=5)
-            results.append(result)
+        prompt = self.prompts.load(
+            "user_template", symbol=symbol, category=category.value, search_results=search_results
+        )
 
-        return results
+        system = self.prompts.load("system_template")
+        response = await self.llm.acomplete(prompt, system=system, temperature=0.3)
+
+        return self._parse_research_response(category, response, sources_count=5)
 
     def _build_tool_prompt(self, symbol: str, category: ResearchCategory) -> str:
         """Build prompt for tool-calling research.
