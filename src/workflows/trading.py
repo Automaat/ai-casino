@@ -46,6 +46,7 @@ from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
+from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
 from src.workflows.types import TradingWorkflowResult
 
@@ -196,17 +197,23 @@ class TradingWorkflow:
             return None
         return result
 
-    async def analyze(self, symbol: str, period_days: int = 90) -> TradingWorkflowResult:
+    async def analyze(
+        self,
+        symbol: str,
+        period_days: int = 90,
+        trading_session: TradingSession = TradingSession.REGULAR,
+    ) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
         Args:
             symbol: Stock ticker symbol
             period_days: Days of historical data to fetch
+            trading_session: Trading session type (REGULAR or PRE_MARKET)
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
         """
-        logger.info(f"Starting trading workflow for {symbol}")
+        logger.info(f"Starting trading workflow for {symbol} (session={trading_session.value})")
 
         # Set up execution metrics collector if enabled
         collector: ExecutionMetricsCollector | None = None
@@ -217,7 +224,7 @@ class TradingWorkflow:
             collector_token = current_collector.set(collector)
 
         try:
-            return await self._analyze_instrumented(symbol, period_days, collector)
+            return await self._analyze_instrumented(symbol, period_days, trading_session, collector)
         finally:
             if collector_token is not None:
                 current_collector.reset(collector_token)
@@ -274,6 +281,7 @@ class TradingWorkflow:
         self,
         symbol: str,
         period_days: int,
+        trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
     ) -> TradingWorkflowResult:
         """Run analysis pipeline with optional metrics instrumentation.
@@ -281,6 +289,7 @@ class TradingWorkflow:
         Args:
             symbol: Stock ticker symbol
             period_days: Days of historical data
+            trading_session: Trading session type (REGULAR or PRE_MARKET)
             collector: Optional metrics collector
         """
         start = time.perf_counter()
@@ -322,13 +331,14 @@ class TradingWorkflow:
             f"risk_approved={state['risk_assessment'].validation.approved})"
         )
 
-        return await self._build_and_persist_result(symbol, state, strategy_name, collector)
+        return await self._build_and_persist_result(symbol, state, strategy_name, trading_session, collector)
 
     async def _build_and_persist_result(
         self,
         symbol: str,
         state: TradingState,
         strategy_name: str,
+        trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
     ) -> TradingWorkflowResult:
         """Build workflow result and persist metrics/snapshots.
@@ -337,12 +347,14 @@ class TradingWorkflow:
             symbol: Stock ticker
             state: Final workflow state
             strategy_name: Selected strategy name
+            trading_session: Trading session type
             collector: Optional metrics collector
         """
         execution_metrics = collector.finalize() if collector else None
 
         result = TradingWorkflowResult(
             symbol=symbol,
+            trading_session=trading_session,
             technical=state["technical_analysis"],
             sentiment=state["sentiment_analysis"],
             news=state["news_analysis"],

@@ -412,6 +412,25 @@ def calculate_indicators(self, df: pd.DataFrame) -> IndicatorData:
     return IndicatorData(rsi=df["RSI_14"].iloc[-1], macd_hist=df["MACDh_12_26_9"].iloc[-1])
 ```
 
+### Trading Sessions
+
+**Session types (StrEnum):**
+- `REGULAR`: 9:30 AM - 4:00 PM ET (standard market hours)
+- `PRE_MARKET`: 4:00 AM - 9:30 AM ET (optional, config-enabled)
+
+**Daemon config:**
+```toml
+[daemon.schedule]
+enable_pre_market = true  # Default: false
+```
+
+**Behavior:**
+- Same analysis pipeline both sessions
+- No automatic confidence adjustment (data quality varies naturally)
+- Session flagged in `TradingWorkflowResult.trading_session` and state
+- UI shows `(PRE-MARKET)` badge in daemon logs
+- Same interval as regular hours
+
 ---
 
 ## Common Commands
