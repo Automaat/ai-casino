@@ -2,7 +2,8 @@
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from collections.abc import Coroutine
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import pandas as pd
 from loguru import logger
@@ -44,6 +45,8 @@ from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy, Signal
 from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
+
+T = TypeVar("T")
 
 
 class TradingState(TypedDict):
@@ -386,7 +389,10 @@ class TradingWorkflow:
         )
 
         if execution_metrics:
-            persist_jsonl(execution_metrics)
+            try:
+                persist_jsonl(execution_metrics)
+            except Exception as e:
+                logger.error(f"Failed to persist execution metrics (continuing): {e}")
 
         if self.metrics_tracker:
             try:
@@ -410,9 +416,9 @@ class TradingWorkflow:
     async def _timed_agent_call(
         self,
         agent_name: str,
-        coro: object,
+        coro: Coroutine[Any, Any, T],
         collector: ExecutionMetricsCollector | None,
-    ) -> object:
+    ) -> T:
         """Wrap an agent coroutine with timing and context var tracking.
 
         Args:

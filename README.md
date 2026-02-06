@@ -103,6 +103,12 @@ python -m src.main AAPL
 python -m src.main TSLA --period 180
 ```
 
+### View Execution Metrics
+
+```bash
+python -m src.main AAPL --metrics
+```
+
 ### Output Example
 
 ```
