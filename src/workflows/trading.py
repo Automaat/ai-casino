@@ -745,7 +745,10 @@ class TradingWorkflow:
                 side=action.value.lower(),
                 stop_loss_price=risk.stop_loss.stop_loss_price,
             )
-            logger.info(f"Executed {action.value}: {state['symbol']} x{order.qty}")
+            logger.info(
+                f"Executed {action.value}: {state['symbol']} "
+                f"x{order.qty} (stop-loss={risk.stop_loss.stop_loss_price:.2f})"
+            )
         except Exception:
             logger.exception(f"Failed to submit order for {state['symbol']} with action {action.value}")
 

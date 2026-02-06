@@ -44,10 +44,18 @@ class DaemonRunner:
         self.running = False
         self._workflow: TradingWorkflow | None = None
         self.broker: AlpacaBroker | None = None
-        if config.auto_trade or (os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY")):
+        if config.auto_trade:
+            api_key = os.getenv("ALPACA_API_KEY")
+            secret_key = os.getenv("ALPACA_SECRET_KEY")
+            if not api_key or not secret_key:
+                msg = "auto_trade=true requires ALPACA_API_KEY and ALPACA_SECRET_KEY env vars"
+                raise ValueError(msg)
+            self.broker = AlpacaBroker(paper=True)
+            logger.info("Alpaca broker initialized for auto-trading")
+        elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
             try:
                 self.broker = AlpacaBroker(paper=True)
-                logger.info("Alpaca broker initialized for daemon")
+                logger.info("Alpaca broker initialized for watchlist merging")
             except Exception as e:
                 logger.exception(f"Failed to initialize broker: {e}")
                 self.broker = None
@@ -136,7 +144,7 @@ class DaemonRunner:
                 symbol=symbol,
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
-                executed=False,
+                executed=result.order is not None,
                 trading_session=result.trading_session.value,
             )
 

@@ -8,7 +8,7 @@ import pytest
 
 from src.daemon.config import DaemonConfig
 from src.daemon.runner import DaemonRunner
-from src.data.broker import BrokerAccountInfo, BrokerPosition
+from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 
 
 @pytest.fixture
@@ -132,7 +132,7 @@ def test_get_merged_watchlist_empty_positions(sample_config: DaemonConfig, mock_
 
 @patch("src.daemon.runner.AlpacaBroker")
 def test_broker_init_with_credentials(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
-    """Test broker initialization when credentials present."""
+    """Test broker initialization for watchlist merging when credentials present."""
     with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
         runner = DaemonRunner(sample_config)
 
@@ -152,13 +152,33 @@ def test_broker_init_no_credentials(mock_broker_class: Mock, sample_config: Daem
 
 @patch("src.daemon.runner.AlpacaBroker")
 def test_broker_init_failure(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
-    """Test daemon continues if broker init fails."""
+    """Test daemon continues if broker init fails with auto_trade=false."""
     mock_broker_class.side_effect = ValueError("Invalid credentials")
 
     with patch.dict(os.environ, {"ALPACA_API_KEY": "bad_key", "ALPACA_SECRET_KEY": "bad_secret"}):
         runner = DaemonRunner(sample_config)
 
         assert runner.broker is None
+
+
+def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None:
+    """Test auto_trade=true raises ValueError when keys missing."""
+    sample_config.auto_trade = True
+
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="auto_trade=true requires"):
+        DaemonRunner(sample_config)
+
+
+@patch("src.daemon.runner.AlpacaBroker")
+def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
+    """Test auto_trade=true initializes broker when keys present."""
+    sample_config.auto_trade = True
+
+    with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
+        runner = DaemonRunner(sample_config)
+
+        assert runner.broker is not None
+        mock_broker_class.assert_called_once_with(paper=True)
 
 
 @pytest.mark.asyncio
@@ -210,3 +230,85 @@ async def test_run_cycle_uses_merged_watchlist(
 
     # Should log 4 symbols (2 config + 2 positions)
     assert any("4 symbols" in msg for msg in logged_messages)
+
+
+@pytest.mark.asyncio
+async def test_analyze_symbol_records_executed_trade(
+    sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test executed_trade=True when result.order is not None."""
+    from datetime import datetime
+
+    from src.strategies.session import TradingSession
+
+    runner = DaemonRunner(sample_config)
+
+    mock_order = OrderStatus(
+        order_id="test-123",
+        symbol="TSLA",
+        qty=10.0,
+        filled_qty=10.0,
+        side="buy",
+        status="filled",
+        submitted_at=datetime(2024, 1, 1),
+        filled_at=datetime(2024, 1, 1),
+        filled_avg_price=150.0,
+    )
+
+    mock_result = Mock()
+    mock_result.decision.action.value = "BUY"
+    mock_result.decision.confidence = 0.85
+    mock_result.trading_session = TradingSession.REGULAR
+    mock_result.order = mock_order
+
+    mock_workflow = AsyncMock()
+    mock_workflow.analyze.return_value = mock_result
+    monkeypatch.setattr(runner, "_init_workflow", lambda: mock_workflow)
+
+    mock_state = Mock()
+    runner.state = mock_state
+
+    result = await runner._analyze_symbol("TSLA")
+
+    assert result is mock_result
+    mock_state.record_analysis.assert_called_once_with(
+        symbol="TSLA",
+        signal="BUY",
+        confidence=0.85,
+        executed=True,
+        trading_session="REGULAR",
+    )
+
+
+@pytest.mark.asyncio
+async def test_analyze_symbol_records_not_executed(
+    sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test executed_trade=False when result.order is None."""
+    from src.strategies.session import TradingSession
+
+    runner = DaemonRunner(sample_config)
+
+    mock_result = Mock()
+    mock_result.decision.action.value = "HOLD"
+    mock_result.decision.confidence = 0.6
+    mock_result.trading_session = TradingSession.REGULAR
+    mock_result.order = None
+
+    mock_workflow = AsyncMock()
+    mock_workflow.analyze.return_value = mock_result
+    monkeypatch.setattr(runner, "_init_workflow", lambda: mock_workflow)
+
+    mock_state = Mock()
+    runner.state = mock_state
+
+    result = await runner._analyze_symbol("TSLA")
+
+    assert result is mock_result
+    mock_state.record_analysis.assert_called_once_with(
+        symbol="TSLA",
+        signal="HOLD",
+        confidence=0.6,
+        executed=False,
+        trading_session="REGULAR",
+    )
