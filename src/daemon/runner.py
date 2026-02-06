@@ -36,6 +36,7 @@ class DaemonRunner:
             start_time=config.schedule.start_time,
             end_time=config.schedule.end_time,
             timezone=config.schedule.timezone,
+            enable_pre_market=config.schedule.enable_pre_market,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -73,15 +74,22 @@ class DaemonRunner:
         Returns:
             TradingWorkflowResult or None on error
         """
+        from src.strategies.session import TradingSession
+
         try:
             workflow = self._init_workflow()
-            result = await workflow.analyze(symbol, period_days=90)
+
+            # Determine current session (default to REGULAR if called outside market hours)
+            session = self.scheduler.get_trading_session() or TradingSession.REGULAR
+
+            result = await workflow.analyze(symbol, period_days=90, trading_session=session)
 
             self.state.record_analysis(
                 symbol=symbol,
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
                 executed=False,
+                trading_session=result.trading_session.value,
             )
 
             return result
@@ -123,16 +131,24 @@ class DaemonRunner:
         Args:
             results: List of analysis results
         """
+        from src.strategies.session import TradingSession
+
         console.print(f"\n[bold cyan]Analysis Results ({datetime.now():%Y-%m-%d %H:%M})[/bold cyan]")  # noqa: DTZ005
         console.print("-" * 50)
 
         for result in results:
             signal = result.decision.action.value
             color = {"BUY": "green", "SELL": "red"}.get(signal, "yellow")
+
+            # Add pre-market badge if applicable
+            session_badge = ""
+            if result.trading_session == TradingSession.PRE_MARKET:
+                session_badge = " [dim](PRE-MARKET)[/dim]"
+
             console.print(
                 f"[bold]{result.symbol}[/bold]: "
                 f"[{color}]{signal}[/{color}] "
-                f"(confidence: {result.decision.confidence:.2f})"
+                f"(confidence: {result.decision.confidence:.2f}){session_badge}"
             )
 
         console.print("-" * 50)

@@ -5,6 +5,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from src.daemon.scheduler import MarketScheduler
+from src.strategies.session import TradingSession
 
 
 class TestMarketScheduler:
@@ -76,3 +77,112 @@ class TestMarketScheduler:
 
         assert "09:30" in repr_str
         assert "16:00" in repr_str
+
+    def test_get_trading_session_pre_market(self):
+        """Test pre-market session detection (4:00-9:30 AM)."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        # 6:00 AM on Monday = PRE_MARKET
+        mock_time = datetime(2024, 1, 15, 6, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            session = scheduler.get_trading_session()
+            assert session == TradingSession.PRE_MARKET
+            assert scheduler.is_market_open() is True
+
+    def test_get_trading_session_regular(self):
+        """Test regular session detection (9:30 AM-4:00 PM)."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        # 12:00 PM on Monday = REGULAR
+        mock_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            session = scheduler.get_trading_session()
+            assert session == TradingSession.REGULAR
+
+    def test_get_trading_session_disabled(self):
+        """Test pre-market disabled (returns None before 9:30 AM)."""
+        scheduler = MarketScheduler(enable_pre_market=False)
+        tz = ZoneInfo("America/New_York")
+
+        # 6:00 AM on Monday, pre-market disabled
+        mock_time = datetime(2024, 1, 15, 6, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            session = scheduler.get_trading_session()
+            assert session is None
+            assert scheduler.is_market_open() is False
+
+    def test_get_trading_session_weekend_pre_market(self):
+        """Test pre-market disabled on weekends."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        # 6:00 AM on Saturday (pre-market enabled but weekend)
+        mock_time = datetime(2024, 1, 20, 6, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            session = scheduler.get_trading_session()
+            assert session is None
+            assert scheduler.is_market_open() is False
+
+    def test_time_until_open_pre_market(self):
+        """Test countdown to pre-market open (4:00 AM)."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        # 2:00 AM on Monday (2 hours until pre-market)
+        mock_time = datetime(2024, 1, 15, 2, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            wait_time = scheduler.time_until_open()
+            assert wait_time == 2 * 3600  # 2 hours in seconds
+
+    def test_pre_market_boundary_4am(self):
+        """Test boundary: 4:00 AM = pre-market open."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 4, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.get_trading_session() == TradingSession.PRE_MARKET
+
+    def test_pre_market_boundary_929am(self):
+        """Test boundary: 9:29 AM = still pre-market."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 9, 29, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.get_trading_session() == TradingSession.PRE_MARKET
+
+    def test_regular_market_boundary_930am(self):
+        """Test boundary: 9:30 AM = regular market open."""
+        scheduler = MarketScheduler(enable_pre_market=True)
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+            mock_dt.side_effect = datetime
+
+            assert scheduler.get_trading_session() == TradingSession.REGULAR
