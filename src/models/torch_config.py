@@ -2,8 +2,10 @@
 
 import contextlib
 import os
+import threading
 
 _torch_configured = False
+_torch_lock = threading.Lock()
 
 
 def configure_torch_env() -> None:
@@ -18,17 +20,19 @@ def configure_torch_env() -> None:
 def configure_torch_runtime() -> None:
     """Configure torch AFTER import (call when analysis starts)."""
     global _torch_configured  # noqa: PLW0603
-    if _torch_configured:
-        return
 
-    import torch
+    with _torch_lock:
+        if _torch_configured:
+            return
 
-    torch.set_num_threads(1)
+        import torch
 
-    with contextlib.suppress(RuntimeError):
-        torch.multiprocessing.set_start_method("fork", force=True)
+        torch.set_num_threads(1)
 
-    if hasattr(torch, "set_num_interop_threads"):
-        torch.set_num_interop_threads(1)
+        with contextlib.suppress(RuntimeError):
+            torch.multiprocessing.set_start_method("fork", force=True)
 
-    _torch_configured = True
+        if hasattr(torch, "set_num_interop_threads"):
+            torch.set_num_interop_threads(1)
+
+        _torch_configured = True

@@ -14,11 +14,10 @@ def chat() -> None:
 
     load_dotenv()
 
-    # Configure torch environment and runtime (chat.py triggers analysis immediately)
-    from src.models.torch_config import configure_torch_env, configure_torch_runtime
+    # Configure torch environment (env vars only, no imports - defer torch import until analysis)
+    from src.models.torch_config import configure_torch_env
 
     configure_torch_env()
-    configure_torch_runtime()
 
     # Configure logging - suppress all stderr output
     logger.remove()

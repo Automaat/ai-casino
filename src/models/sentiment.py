@@ -3,14 +3,7 @@
 # NOTE: This module intentionally imports torch at module level (it USES torch for inference).
 # Environment config handled by src/models/torch_config.py before import cascade reaches here.
 
-import os
 import threading
-
-# Disable tokenizers parallelism to prevent subprocess fd conflicts in async environments
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-# Suppress transformers warnings
-os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
-os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
 import torch
 from loguru import logger
