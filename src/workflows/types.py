@@ -19,12 +19,14 @@ from src.agents.web_researcher import WebResearchAnalysis
 from src.data.broker import OrderStatus
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.strategies.regime import RegimeAnalysis
+from src.strategies.session import TradingSession
 
 
 class TradingWorkflowResult(BaseModel):
     """Complete trading analysis result."""
 
     symbol: str
+    trading_session: TradingSession = TradingSession.REGULAR
     technical: TechnicalAnalysis
     sentiment: SentimentAnalysis
     news: NewsAnalysis
