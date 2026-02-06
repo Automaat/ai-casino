@@ -1,6 +1,7 @@
 """Main daemon runner for autonomous trading."""
 
 import asyncio
+import os
 import signal
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from rich.console import Console
 from src.daemon.config import DaemonConfig
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState
+from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
@@ -41,6 +43,14 @@ class DaemonRunner:
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
         self._workflow: TradingWorkflow | None = None
+        self.broker: AlpacaBroker | None = None
+        if config.auto_trade or (os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY")):
+            try:
+                self.broker = AlpacaBroker(paper=True)
+                logger.info("Alpaca broker initialized for daemon")
+            except Exception as e:
+                logger.exception(f"Failed to initialize broker: {e}")
+                self.broker = None
         logger.info(f"DaemonRunner initialized with {config}")
 
     def _init_workflow(self) -> TradingWorkflow:
@@ -58,12 +68,50 @@ class DaemonRunner:
                 news_fetcher,
                 finbert,
                 fundamental_fetcher,
-                broker=None,
+                broker=self.broker,
                 metrics_tracker=None,
                 use_meta_agent=True,
             )
             logger.info("Trading workflow initialized")
         return self._workflow
+
+    def _get_merged_watchlist(self) -> list[str]:
+        """Get watchlist merged with broker positions.
+
+        Returns:
+            Deduplicated list combining config watchlist and broker positions.
+            Config order is preserved, new positions are appended alphabetically.
+        """
+        # Preserve config order - manual dedup to maintain insertion order
+        merged_watchlist = []
+        seen = set()
+
+        for symbol in self.config.watchlist:
+            if symbol not in seen:
+                merged_watchlist.append(symbol)
+                seen.add(symbol)
+
+        if not self.broker:
+            logger.debug("No broker configured, using config watchlist only")
+            return merged_watchlist
+
+        try:
+            account_info = self.broker.get_account_info()
+            position_symbols = set(account_info.positions.keys())
+
+            if position_symbols:
+                added = position_symbols - seen
+                if added:
+                    logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
+                    # Append new positions in sorted order
+                    merged_watchlist.extend(sorted(added))
+                return merged_watchlist
+
+            logger.debug("No positions to merge")
+            return merged_watchlist
+        except Exception as e:
+            logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
+            return merged_watchlist
 
     async def _analyze_symbol(self, symbol: str) -> TradingWorkflowResult | None:
         """Analyze a single symbol.
@@ -99,8 +147,11 @@ class DaemonRunner:
             self.state.record_error(error_msg)
             return None
 
-    async def _analyze_watchlist(self) -> list[TradingWorkflowResult]:
+    async def _analyze_watchlist(self, watchlist: list[str]) -> list[TradingWorkflowResult]:
         """Analyze all symbols in watchlist.
+
+        Args:
+            watchlist: List of symbols to analyze
 
         Returns:
             List of analysis results
@@ -112,12 +163,12 @@ class DaemonRunner:
             async with semaphore:
                 return await self._analyze_symbol(symbol)
 
-        tasks = [analyze_with_limit(s) for s in self.config.watchlist]
+        tasks = [analyze_with_limit(s) for s in watchlist]
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for i, result in enumerate(raw_results):
             if isinstance(result, Exception):
-                symbol = self.config.watchlist[i]
+                symbol = watchlist[i]
                 logger.error(f"Analysis failed for {symbol}: {result}")
                 self.state.record_error(f"{symbol}: {result}")
             elif result is not None:
@@ -166,10 +217,11 @@ class DaemonRunner:
                 logger.info(f"Market closed, waiting {wait_time // 60} minutes until open")
                 return min(wait_time, 60)
 
-        logger.info(f"Starting analysis cycle for {len(self.config.watchlist)} symbols")
+        watchlist = self._get_merged_watchlist()
+        logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
         console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now():%H:%M:%S})")  # noqa: DTZ005
 
-        results = await self._analyze_watchlist()
+        results = await self._analyze_watchlist(watchlist)
         self._log_results(results)
 
         self.state.save(self.config.state.state_file)
