@@ -1,0 +1,26 @@
+Analyze social sentiment for {symbol}:
+
+## Finnhub Social Data (Reddit + Twitter, 7 days)
+{finnhub_social_summary}
+
+## Reddit Analysis (24 hours)
+- WallStreetBets mentions: {wsb_mentions}
+- FinBERT sentiment score: {reddit_sentiment}
+
+Top Reddit posts:
+{top_reddit_posts}
+
+## Finnhub News Buzz
+{finnhub_news_summary}
+
+## Computed Metrics
+- Overall social score: {overall_score}
+- Social momentum: {momentum}
+
+Provide a bullish/bearish interpretation synthesizing all sources. Consider:
+1. Retail investor sentiment strength
+2. Agreement across sources (Finnhub, Reddit, news buzz)
+3. Momentum direction (rising/falling/stable)
+4. Mention volume significance
+
+Return your analysis as structured output with interpretation, sentiment_label, and confidence_keywords.

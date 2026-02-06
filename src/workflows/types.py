@@ -11,6 +11,7 @@ from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
+from src.agents.social import SocialSentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis
@@ -31,6 +32,7 @@ class TradingWorkflowResult(BaseModel):
     fundamental: FundamentalAnalysis | None = None
     comparative: ComparativeAnalysis | None = None
     web_research: WebResearchAnalysis | None = None
+    social_sentiment: SocialSentimentAnalysis | None = None
     bullish: BullishResearchAnalysis
     bearish: BearishResearchAnalysis
     decision: TradingDecision

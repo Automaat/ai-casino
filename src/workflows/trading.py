@@ -20,15 +20,18 @@ from src.agents.meta import MetaAgent, StrategySelection
 from src.agents.news import NewsAnalysis, NewsAnalyst
 from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
+from src.agents.social import SocialSentimentAnalysis, SocialSentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
 from src.agents.trump import TrumpAnalysis, TrumpAnalyst
 from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
 from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
+from src.data.finnhub import FinnhubFetcher
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
+from src.data.reddit import RedditFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.metrics.execution import (
     ExecutionMetricsCollector,
@@ -63,6 +66,7 @@ class TradingState(TypedDict):
     fundamental_analysis: FundamentalAnalysis | None
     comparative_analysis: ComparativeAnalysis | None
     web_research: WebResearchAnalysis | None
+    social_sentiment_analysis: SocialSentimentAnalysis | None
     bullish_research: BullishResearchAnalysis | None
     bearish_research: BearishResearchAnalysis | None
     final_decision: TradingDecision | None
@@ -149,6 +153,7 @@ class TradingWorkflow:
         self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
         self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
         self.web_researcher = WebResearchAgent(llm_client)
+        self.social_analyst = SocialSentimentAnalyst(llm_client, FinnhubFetcher(), RedditFetcher(), finbert)
         self.bullish_researcher = BullishResearcher(llm_client)
         self.bearish_researcher = BearishResearcher(llm_client)
         self.trader = TraderAgent(llm_client)
@@ -345,6 +350,7 @@ class TradingWorkflow:
             fundamental=state["fundamental_analysis"],
             comparative=state["comparative_analysis"],
             web_research=state["web_research"],
+            social_sentiment=state.get("social_sentiment_analysis"),
             bullish=state["bullish_research"],
             bearish=state["bearish_research"],
             decision=state["final_decision"],
@@ -422,7 +428,7 @@ class TradingWorkflow:
         """
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
-        # Parallel Group 1: independent analyses (comparative, web_research, trump are optional)
+        # Parallel Group 1: independent analyses (comparative, web_research, social, trump are optional)
         technical_task = self._timed_agent_call(
             "technical", technical_analyst.analyze(state["symbol"], state["market_data"]), collector
         )
@@ -441,6 +447,9 @@ class TradingWorkflow:
         web_research_task = self._timed_agent_call(
             "web_research", self.web_researcher.research(state["symbol"]), collector
         )
+        social_task = self._timed_agent_call(
+            "social", self.social_analyst.analyze(state["symbol"]), collector
+        )
 
         # Include trump analysis if enabled
         tasks = [
@@ -450,6 +459,7 @@ class TradingWorkflow:
             fundamental_task,
             comparative_task,
             web_research_task,
+            social_task,
         ]
 
         if self.trump_mode and self.trump_analyst and state["trump_posts"]:
@@ -461,10 +471,16 @@ class TradingWorkflow:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Core tasks count (before optional trump task)
-        core_task_count = 6
-        technical, sentiment, news, fundamental_result, comparative_result, web_research_result = results[
-            :core_task_count
-        ]
+        core_task_count = 7
+        (
+            technical,
+            sentiment,
+            news,
+            fundamental_result,
+            comparative_result,
+            web_research_result,
+            social_result,
+        ) = results[:core_task_count]
         trump_result = results[core_task_count] if len(results) > core_task_count else None
 
         # Re-raise if core analyses failed
@@ -476,6 +492,7 @@ class TradingWorkflow:
         fundamental = self._handle_fundamental_result(fundamental_result, state)
         comparative = self._handle_optional_result(comparative_result, "Comparative", state)
         web_research = self._handle_optional_result(web_research_result, "Web research", state)
+        social_sentiment = self._handle_optional_result(social_result, "Social sentiment", state)
         trump_analysis = self._handle_optional_result(trump_result, "Trump", state) if trump_result else None
 
         state["technical_analysis"] = technical
@@ -484,6 +501,7 @@ class TradingWorkflow:
         state["trump_analysis"] = trump_analysis
         state["fundamental_analysis"] = fundamental
         state["comparative_analysis"] = comparative
+        state["social_sentiment_analysis"] = social_sentiment
         state["web_research"] = web_research
 
         # Parallel Group 2: research (depends on Group 1)
