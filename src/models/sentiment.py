@@ -16,6 +16,10 @@ from src.metrics.execution import timed_operation
 # Suppress transformers logging (the env var alone doesn't catch everything)
 hf_logging.set_verbosity_error()
 
+# Module-level singleton state
+_finbert_instance: "FinBERTSentiment | None" = None
+_finbert_lock = threading.Lock()
+
 
 class SentimentScore(BaseModel):
     """Sentiment analysis result."""
@@ -135,3 +139,47 @@ class FinBERTSentiment:
     def __repr__(self) -> str:
         """String representation."""
         return f"FinBERTSentiment(device={self.device})"
+
+
+def get_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
+    """Get or create singleton FinBERT sentiment analyzer.
+
+    Lazy-loads model on first call. Subsequent calls return cached instance.
+    Thread-safe. Device parameter only used on first initialization.
+
+    Args:
+        device: Device for inference (cuda/cpu). Auto-detect if None.
+                Only used on first call; ignored on subsequent calls.
+
+    Returns:
+        FinBERTSentiment singleton instance
+    """
+    global _finbert_instance  # noqa: PLW0603
+
+    # Fast path: already initialized (no lock needed)
+    if _finbert_instance is not None:
+        if device is not None and device != _finbert_instance.device:
+            cached_device = _finbert_instance.device
+            logger.warning(
+                f"Device parameter '{device}' ignored - using cached instance with device '{cached_device}'"
+            )
+        return _finbert_instance
+
+    # Slow path: first call, acquire lock
+    with _finbert_lock:
+        # Double-check after lock (another thread may have initialized)
+        if _finbert_instance is not None:
+            return _finbert_instance
+
+        _finbert_instance = FinBERTSentiment(device=device)
+        logger.info(f"FinBERT singleton initialized on {_finbert_instance.device}")
+        return _finbert_instance
+
+
+def clear_finbert_sentiment() -> None:
+    """Clear cached FinBERT instance (for testing/cleanup)."""
+    global _finbert_instance  # noqa: PLW0603
+
+    with _finbert_lock:
+        _finbert_instance = None
+        logger.debug("FinBERT singleton cleared")

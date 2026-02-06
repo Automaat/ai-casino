@@ -22,7 +22,7 @@ from src.data.universe import StockUniverse
 from src.data.websearch import SearchType, WebSearchResponse
 from src.data.websearch import WebSearchResult as SearchResult
 from src.metrics.tracker import TradeRecord
-from src.models.sentiment import SentimentScore
+from src.models.sentiment import SentimentScore, clear_finbert_sentiment
 from src.screening.analyzer import ScreeningAnalysis
 from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
 from src.strategies.momentum import Signal
@@ -107,6 +107,13 @@ def mock_finbert():
         SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
     ]
     return mock
+
+
+@pytest.fixture(autouse=True)
+def _clear_finbert_between_tests():
+    """Clear FinBERT singleton between tests for isolation."""
+    yield
+    clear_finbert_sentiment()
 
 
 @pytest.fixture

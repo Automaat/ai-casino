@@ -120,3 +120,68 @@ def test_finbert_analyze_batch_empty():
 def test_finbert_repr(mock_finbert):
     sentiment = FinBERTSentiment(device="cpu")
     assert repr(sentiment) == "FinBERTSentiment(device=cpu)"
+
+
+def test_get_finbert_singleton_caching():
+    """Verify singleton returns same instance across calls."""
+    from src.models.sentiment import clear_finbert_sentiment, get_finbert_sentiment
+
+    clear_finbert_sentiment()
+
+    with (
+        patch("src.models.sentiment.AutoTokenizer.from_pretrained"),
+        patch("src.models.sentiment.AutoModelForSequenceClassification.from_pretrained"),
+    ):
+        instance1 = get_finbert_sentiment()
+        instance2 = get_finbert_sentiment()
+
+        assert instance1 is instance2
+
+    clear_finbert_sentiment()
+
+
+def test_get_finbert_device_parameter_first_call_only():
+    """Device param only used on first initialization."""
+    from src.models.sentiment import clear_finbert_sentiment, get_finbert_sentiment
+
+    clear_finbert_sentiment()
+
+    with (
+        patch("src.models.sentiment.AutoTokenizer.from_pretrained"),
+        patch("src.models.sentiment.AutoModelForSequenceClassification.from_pretrained"),
+    ):
+        instance1 = get_finbert_sentiment(device="cpu")
+        assert instance1.device == "cpu"
+
+        # Second call ignores device param
+        instance2 = get_finbert_sentiment(device="cuda")
+        assert instance2.device == "cpu"  # Still cpu
+        assert instance1 is instance2
+
+    clear_finbert_sentiment()
+
+
+def test_get_finbert_thread_safety():
+    """Verify thread safety of concurrent singleton initialization."""
+    import concurrent.futures
+
+    from src.models.sentiment import clear_finbert_sentiment, get_finbert_sentiment
+
+    clear_finbert_sentiment()
+
+    def get_instance():
+        return get_finbert_sentiment()
+
+    with (
+        patch("src.models.sentiment.AutoTokenizer.from_pretrained"),
+        patch("src.models.sentiment.AutoModelForSequenceClassification.from_pretrained"),
+    ):
+        # 10 threads simultaneously request instance
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(get_instance) for _ in range(10)]
+            instances = [f.result() for f in futures]
+
+        # All should get same instance
+        assert all(inst is instances[0] for inst in instances)
+
+    clear_finbert_sentiment()
