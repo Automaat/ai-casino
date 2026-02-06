@@ -35,7 +35,7 @@ dependencies = [
     "optuna==4.7.0",
     "riskfolio-lib==6.3.1",
     "quantstats==0.0.81",
-    "ipython==9.4.0",
+    "ipython==9.10.0",
 
     # Database
     "sqlalchemy[asyncio]==2.0.46",
