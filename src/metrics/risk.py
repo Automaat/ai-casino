@@ -57,6 +57,11 @@ def calculate_volatility(returns: list[float]) -> float:
 
     mean_return = sum(returns) / len(returns)
     variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
+
+    if variance < EPSILON:
+        logger.debug("Near-zero variance, returning zero volatility")
+        return 0.0
+
     std_dev = math.sqrt(variance)
 
     annualized_volatility = std_dev * math.sqrt(252)
@@ -244,7 +249,9 @@ class RiskMetricsCalculator:
 
         Args:
             returns: List of returns (as decimals)
-            confidence: Confidence level (0.0-1.0, default 0.95)
+            confidence: Confidence level strictly between 0 and 1 (default 0.95).
+                       Must be in range (0, 1) exclusive because alpha = 1 - confidence
+                       and riskfolio-lib requires alpha ∈ (0, 1).
 
         Returns:
             CVaR value (expected loss beyond VaR threshold)
