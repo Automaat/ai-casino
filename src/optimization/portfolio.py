@@ -1,5 +1,6 @@
 """Portfolio optimization using scipy."""
 
+import math
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -7,7 +8,6 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
-from scipy.cluster.hierarchy import linkage
 from scipy.optimize import minimize
 
 from src.data.market import MarketDataFetcher
@@ -226,21 +226,29 @@ class PortfolioOptimizer:
         returns_df = self._fetch_returns_data(symbols)
 
         try:
-            # Calculate correlation matrix
-            corr = returns_df.corr()
-            dist = ((1 - corr) / 2) ** 0.5
-
-            # Hierarchical clustering (for structure analysis)
-            _ = linkage(dist, method="single")
-
             # Quasi-diagonalization (simplified HRP)
             n = len(symbols)
-            weights = np.ones(n) / n  # Start with equal weights
 
             # Simple inverse variance weighting as proxy for HRP
             cov = returns_df.cov() * 252
-            inv_var = 1 / np.diag(cov)
-            weights = inv_var / inv_var.sum()
+            var = np.diag(cov)
+
+            # Guard against zero, negative, or non-finite variances
+            valid = np.isfinite(var) & (var > 0)
+            if not np.any(valid):
+                logger.warning("HRP optimization: no valid variances found; using equal weights.")
+                weights = np.ones(n) / n
+            else:
+                eps = 1e-8
+                inv_var = np.zeros_like(var, dtype=float)
+                inv_var[valid] = 1.0 / np.maximum(var[valid], eps)
+
+                total_inv_var = inv_var.sum()
+                if total_inv_var <= 0 or not np.isfinite(total_inv_var):
+                    logger.warning("HRP optimization: invalid inverse-variance sum; using equal weights.")
+                    weights = np.ones(n) / n
+                else:
+                    weights = inv_var / total_inv_var
 
             # Calculate metrics
             mu = returns_df.mean() * 252
@@ -343,21 +351,51 @@ class PortfolioOptimizer:
 
         # Calculate shares from broker positions if available
         if self.broker:
-            account_info = self.broker.get_account_info()
-            portfolio_value = account_info.portfolio_value
-
-            for rebalance in rebalances:
-                symbol = rebalance.symbol
-                if symbol in account_info.positions:
-                    position = account_info.positions[symbol]
-                    current_price = position.market_value / position.qty if position.qty > 0 else 0
-                    if current_price > 0:
-                        dollar_delta = rebalance.delta * portfolio_value
-                        rebalance.shares_to_trade = int(dollar_delta / current_price)
+            self._calculate_shares_to_trade(rebalances)
 
         # Sort by absolute delta descending
         rebalances.sort(key=lambda r: abs(r.delta), reverse=True)
         return rebalances
+
+    def _calculate_shares_to_trade(self, rebalances: list[PortfolioRebalance]) -> None:
+        """Calculate shares to trade for rebalancing (mutates rebalances list)."""
+        account_info = self.broker.get_account_info()
+        portfolio_value = account_info.portfolio_value
+
+        for rebalance in rebalances:
+            symbol = rebalance.symbol
+            if symbol not in account_info.positions:
+                continue
+
+            position = account_info.positions[symbol]
+            current_price = position.market_value / position.qty if position.qty > 0 else 0
+            if current_price <= 0:
+                continue
+
+            dollar_delta = rebalance.delta * portfolio_value
+            shares = dollar_delta / current_price
+
+            # Sign-preserving rounding: floor for sells, ceil for buys
+            if shares < 0:
+                rebalance.shares_to_trade = math.floor(shares)
+            elif shares > 0:
+                rebalance.shares_to_trade = math.ceil(shares)
+            else:
+                rebalance.shares_to_trade = 0
+
+            # Validate action matches share direction
+            self._validate_rebalance_action(rebalance, symbol)
+
+    def _validate_rebalance_action(self, rebalance: PortfolioRebalance, symbol: str) -> None:
+        """Validate rebalance action matches share direction (mutates rebalance)."""
+        if rebalance.shares_to_trade == 0:
+            rebalance.action = "HOLD"
+        elif rebalance.shares_to_trade < 0 and rebalance.action != "SELL":
+            logger.warning(f"{symbol}: shares negative but action {rebalance.action}, correcting to SELL")
+            rebalance.action = "SELL"
+        elif rebalance.shares_to_trade > 0 and rebalance.action != "BUY":
+            logger.warning(f"{symbol}: shares positive but action {rebalance.action}, correcting to BUY")
+            rebalance.action = "BUY"
 
     def _fetch_returns_data(self, symbols: list[str]) -> pd.DataFrame:
         """Fetch and prepare returns data for optimization.

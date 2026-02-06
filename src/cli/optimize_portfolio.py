@@ -31,7 +31,11 @@ def _validate_inputs(symbols: str, method: str) -> list[str]:
     Raises:
         typer.Exit: On validation failure
     """
-    symbol_list = [s.strip().upper() for s in symbols.split(",")]
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    # Deduplicate while preserving order
+    seen = set()
+    symbol_list = [s for s in symbol_list if s not in seen and not seen.add(s)]
+
     if len(symbol_list) < MIN_SYMBOLS:
         console.print("[bold red]Error:[/bold red] Portfolio optimization requires at least 2 symbols")
         raise typer.Exit(1)
