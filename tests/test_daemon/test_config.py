@@ -33,6 +33,7 @@ class TestDaemonConfig:
         assert config.start_time == "09:30"
         assert config.end_time == "16:00"
         assert config.timezone == "America/New_York"
+        assert config.enable_pre_market is False
 
     def test_state_config_defaults(self):
         config = StateConfig()
@@ -72,6 +73,31 @@ state_file = "/tmp/test-state.json"
         assert config.schedule.end_time == "17:00"
         assert config.schedule.timezone == "America/Chicago"
         assert "test-state.json" in config.state.state_file
+
+        path.unlink()
+
+    def test_schedule_config_pre_market_enabled(self):
+        """Test pre-market can be enabled."""
+        config = ScheduleConfig(enable_pre_market=True)
+        assert config.enable_pre_market is True
+
+    def test_from_toml_with_pre_market(self):
+        """Test loading pre-market config from TOML."""
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+interval_minutes = 30
+
+[daemon.schedule]
+enable_pre_market = true
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+        assert config.schedule.enable_pre_market is True
 
         path.unlink()
 

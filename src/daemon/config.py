@@ -12,6 +12,7 @@ class ScheduleConfig(BaseModel):
     start_time: str = "09:30"
     end_time: str = "16:00"
     timezone: str = "America/New_York"
+    enable_pre_market: bool = False
 
 
 class StateConfig(BaseModel):

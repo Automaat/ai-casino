@@ -16,6 +16,7 @@ class AnalysisRecord(BaseModel):
     signal: str
     confidence: float
     executed_trade: bool = False
+    trading_session: str = "REGULAR"
 
 
 class DaemonState(BaseModel):
@@ -68,7 +69,14 @@ class DaemonState(BaseModel):
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
 
-    def record_analysis(self, symbol: str, signal: str, confidence: float, executed: bool = False) -> None:
+    def record_analysis(
+        self,
+        symbol: str,
+        signal: str,
+        confidence: float,
+        executed: bool = False,
+        trading_session: str = "REGULAR",
+    ) -> None:
         """Record an analysis result.
 
         Args:
@@ -76,6 +84,7 @@ class DaemonState(BaseModel):
             signal: Trading signal (BUY/SELL/HOLD)
             confidence: Signal confidence
             executed: Whether trade was executed
+            trading_session: Trading session type (REGULAR/PRE_MARKET)
         """
         self.analyses.append(
             AnalysisRecord(
@@ -84,6 +93,7 @@ class DaemonState(BaseModel):
                 signal=signal,
                 confidence=confidence,
                 executed_trade=executed,
+                trading_session=trading_session,
             )
         )
         self.total_analyses += 1
