@@ -192,6 +192,8 @@ class GenerateTearsheetTool(BaseTool):
         Returns:
             Formatted markdown string
         """
+        from pathlib import Path
+
         lines = [
             f"# {tearsheet.symbol} Performance Tearsheet",
             f"*{tearsheet.start_date:%Y-%m-%d} to {tearsheet.end_date:%Y-%m-%d}*",
@@ -200,14 +202,16 @@ class GenerateTearsheetTool(BaseTool):
 
         self._add_performance_section(lines, tearsheet)
         self._add_risk_section(lines, tearsheet)
+        self._add_win_loss_section(lines, tearsheet)
         self._add_benchmark_section(lines, tearsheet)
 
-        lines.extend(["", f"**HTML Report:** {tearsheet.html_report_path}"])
+        filename = Path(tearsheet.html_report_path).name
+        lines.extend(["", f"**HTML Report:** {filename}"])
 
         return "\n".join(lines)
 
     def _add_performance_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
-        """Add performance and win/loss metrics to lines."""
+        """Add performance metrics to lines."""
         lines.append("## Performance")
         metrics = [
             (tearsheet.cagr, "CAGR", ".2%"),
@@ -219,20 +223,21 @@ class GenerateTearsheetTool(BaseTool):
             if value is not None:
                 lines.append(f"- {label}: {value:{fmt}}")
 
+    def _add_risk_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
+        """Add risk metrics to lines."""
         lines.extend(["", "## Risk"])
         if tearsheet.max_drawdown is not None:
             lines.append(f"- Max Drawdown: {tearsheet.max_drawdown:.2%}")
         if tearsheet.volatility_annual is not None:
             lines.append(f"- Annual Volatility: {tearsheet.volatility_annual:.2%}")
 
+    def _add_win_loss_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
+        """Add win/loss metrics to lines."""
         lines.extend(["", "## Win/Loss"])
         if tearsheet.win_rate is not None:
             lines.append(f"- Win Rate: {tearsheet.win_rate:.2%}")
         if tearsheet.profit_factor is not None:
             lines.append(f"- Profit Factor: {tearsheet.profit_factor:.2f}")
-
-    def _add_risk_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
-        """Placeholder for additional risk details (reserved for future use)."""
 
     def _add_benchmark_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
         """Add benchmark comparison metrics to lines."""
