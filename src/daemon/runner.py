@@ -254,13 +254,11 @@ class DaemonRunner:
 
     def _run_after_hours_screening(self) -> None:
         """Run after-hours screening for watchlist candidates."""
-        from datetime import UTC
-
         from src.data.universe import StockUniverseFetcher
         from src.screening.screener import ScreeningCriteria, StockScreener
 
         # Check if already screened today
-        now = datetime.now(UTC)
+        now = datetime.now(self.scheduler.timezone)
         if self.state.last_after_hours_screening:
             last_date = self.state.last_after_hours_screening.date()
             if last_date == now.date():
@@ -306,11 +304,13 @@ class DaemonRunner:
                 universe=self.config.schedule.after_hours_universe,
                 candidates=output.results,
                 top_n=self.config.schedule.after_hours_top_n,
+                screened_at=output.screened_at,
             )
             self.state.save(self.config.state.state_file)
 
             console.print(
-                f"\n[dim]Full results saved to daemon state ({len(output.results)} candidates)[/dim]\n"
+                f"\n[dim]Top {self.config.schedule.after_hours_top_n} candidates saved to daemon state "
+                f"({len(output.results)} total screened)[/dim]\n"
             )
             logger.info(f"After-hours screening completed: {len(output.results)} candidates")
 

@@ -607,6 +607,7 @@ Type freely to chat about markets or ask questions."""
             _state_file: Path to state file (unused but kept for consistency)
         """
         from src.screening.exporter import ScreeningExporter
+        from src.screening.screener import ScreeningCriteria
 
         if not symbols:
             return CommandResult(success=False, message="Usage: /candidates add SYMBOL [SYMBOL...]")
@@ -617,27 +618,27 @@ Type freely to chat about markets or ask questions."""
         latest = state.screening_history[-1]
         exporter = ScreeningExporter()
 
-        # Find matching candidates
+        # Find matching candidates and add to watchlist
+        selected = []
         added = []
         for sym in symbols:
             sym_upper = sym.upper()
             candidate = next((c for c in latest.candidates if c.symbol == sym_upper), None)
             if candidate:
-                exporter.add_to_watchlist(
-                    symbol=candidate.symbol,
-                    name=candidate.name,
-                    score=candidate.score,
-                    criteria=candidate.signal.value,
-                    watchlist_name="default",
-                )
+                selected.append(candidate)
                 added.append(sym_upper)
 
-        if added:
+        if selected:
+            # Use save_to_watchlist with criteria from ScreeningRecord
+            criteria = ScreeningCriteria(latest.criteria)
+            exporter.save_to_watchlist(selected, criteria, "default")
+
             return CommandResult(
                 success=True,
                 message=f"Added to watchlist: {', '.join(added)}",
                 data={"added": added},
             )
+
         return CommandResult(
             success=False,
             message=f"No matching candidates found for: {', '.join(symbols)}",

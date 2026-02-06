@@ -66,7 +66,7 @@ class MarketScheduler:
         # Regular hours check (9:30 AM - 4:00 PM)
         market_open = time(self.start_hour, self.start_minute)
         market_close = time(self.end_hour, self.end_minute)
-        if market_open <= current_time <= market_close:
+        if market_open <= current_time < market_close:
             return TradingSession.REGULAR
 
         # Pre-market check (4:00 AM - configured start_time, if enabled)
@@ -88,10 +88,13 @@ class MarketScheduler:
     def is_market_open(self) -> bool:
         """Check if market is currently open (regular OR pre-market if enabled).
 
+        AFTER_HOURS is NOT considered "market open" to prevent normal analysis cycles.
+
         Returns:
             True if current time is within trading hours (regular or pre-market)
         """
-        return self.get_trading_session() is not None
+        session = self.get_trading_session()
+        return session in (TradingSession.REGULAR, TradingSession.PRE_MARKET)
 
     def time_until_open(self) -> int:
         """Calculate seconds until next market open (pre-market if enabled, else regular).

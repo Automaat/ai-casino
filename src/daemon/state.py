@@ -1,7 +1,7 @@
 """Daemon state persistence."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -139,16 +139,18 @@ class DaemonState(BaseModel):
         universe: str,
         candidates: list[ScreeningResult],
         top_n: int = 10,
+        screened_at: datetime | None = None,
     ) -> None:
         """Record after-hours screening results.
 
         Args:
             criteria: Screening criteria
             universe: Universe screened
-            candidates: Full candidate list
+            candidates: Candidate list (typically top-N from screening)
             top_n: Number of top symbols to track
+            screened_at: Timestamp when screening was performed (defaults to now)
         """
-        now = datetime.now()  # noqa: DTZ005
+        now = datetime.now(UTC)
         top_symbols = [c.symbol for c in candidates[:top_n]]
 
         self.screening_history.append(
@@ -158,7 +160,7 @@ class DaemonState(BaseModel):
                 universe=universe,
                 top_symbols=top_symbols,
                 candidates=candidates[:top_n],
-                screened_at=now,
+                screened_at=screened_at or now,
             )
         )
         self.last_after_hours_screening = now

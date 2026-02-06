@@ -2,8 +2,9 @@
 
 import tomllib
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ScheduleConfig(BaseModel):
@@ -16,9 +17,27 @@ class ScheduleConfig(BaseModel):
     enable_after_hours: bool = False
     after_hours_screen_time: str = "16:30"
     after_hours_screen_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
-    after_hours_criteria: str = "momentum"
-    after_hours_universe: str = "COMBINED"
+    after_hours_criteria: Literal["momentum", "value", "breakout"] = "momentum"
+    after_hours_universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
     after_hours_top_n: int = 10
+
+    @model_validator(mode="after")
+    def validate_after_hours_screen_time(self) -> "ScheduleConfig":
+        """Validate after_hours_screen_time is within 16:00-20:00."""
+        if not self.enable_after_hours:
+            return self
+
+        try:
+            hour, minute = map(int, self.after_hours_screen_time.split(":"))
+        except ValueError as e:
+            msg = f"after_hours_screen_time must be in HH:MM format, got {self.after_hours_screen_time}"
+            raise ValueError(msg) from e
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"after_hours_screen_time must be between 16:00-20:00, got {self.after_hours_screen_time}"
+            raise ValueError(msg)
+
+        return self
 
 
 class StateConfig(BaseModel):
