@@ -35,17 +35,20 @@ def __getattr__(name: str) -> type:
     if name == "AnthropicProvider":
         from src.models.providers.anthropic import AnthropicProvider
 
-        return AnthropicProvider
+        mapping = {"AnthropicProvider": AnthropicProvider}
+        return mapping[name]
 
     if name == "OpenAIProvider":
         from src.models.providers.openai import OpenAIProvider
 
-        return OpenAIProvider
+        mapping = {"OpenAIProvider": OpenAIProvider}
+        return mapping[name]
 
     if name == "OllamaProvider":
         from src.models.providers.ollama import OllamaProvider
 
-        return OllamaProvider
+        mapping = {"OllamaProvider": OllamaProvider}
+        return mapping[name]
 
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)

@@ -9,7 +9,8 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from src.metrics.execution import LLMUsageStats
-from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
+from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall
+from src.models.providers.retry import retry
 
 T = TypeVar("T", bound=BaseModel)
 
