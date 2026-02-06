@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 
 from src.screening.exporter import ScreeningExporter, Watchlist
-from src.workflows.trading import TradingWorkflowResult
+from src.workflows.types import TradingWorkflowResult
 
 ProgressCallback = Callable[[str, str, str], None]
 CancelledCallback = Callable[[], bool]

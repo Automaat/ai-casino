@@ -29,7 +29,7 @@ from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
 from src.tui.widgets.autocomplete_input import AutocompleteInput
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
-from src.workflows.trading import TradingWorkflowResult
+from src.workflows.types import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 

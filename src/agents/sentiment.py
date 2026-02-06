@@ -1,12 +1,15 @@
 """Sentiment Analysis Agent."""
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel
 
 from src.data.news import NewsArticle
-from src.models.sentiment import FinBERTSentiment, SentimentScore
+
+if TYPE_CHECKING:
+    from src.models.sentiment import FinBERTSentiment, SentimentScore
 
 
 class SentimentAnalysis(BaseModel):
@@ -27,7 +30,7 @@ class SentimentAnalyst:
     POSITIVE_THRESHOLD = 0.2
     NEGATIVE_THRESHOLD = -0.2
 
-    def __init__(self, finbert: FinBERTSentiment) -> None:
+    def __init__(self, finbert: "FinBERTSentiment") -> None:
         """Initialize sentiment analyst.
 
         Args:
@@ -97,7 +100,7 @@ class SentimentAnalyst:
             summary=summary,
         )
 
-    def _aggregate_sentiment(self, scores: list[SentimentScore]) -> float:
+    def _aggregate_sentiment(self, scores: list["SentimentScore"]) -> float:
         """Aggregate individual sentiment scores.
 
         Args:

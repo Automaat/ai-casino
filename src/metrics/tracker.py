@@ -14,7 +14,7 @@ from src.strategies.momentum import Signal
 
 if TYPE_CHECKING:
     from src.database.repositories.trade import TradeRepository
-    from src.workflows.trading import TradingWorkflowResult
+    from src.workflows.types import TradingWorkflowResult
 
 
 class TradeRecord(BaseModel):

@@ -89,7 +89,17 @@ Never skip/disable on failure - fix properly, re-run until clean.
 
 **Order:** stdlib → third-party (alphabetical) → local (relative)
 
-**Never use `TYPE_CHECKING` blocks** - keep all imports at top level for clarity. Ignore TC003 linter warnings.
+**TYPE_CHECKING blocks:** Generally avoid for clarity. **Exception:** Use for deferring expensive imports (torch, transformers, large models) when only type hints needed. Import actual classes for runtime usage.
+
+Example:
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.workflows.types import TradingWorkflowResult  # Heavy type
+
+def process(result: "TradingWorkflowResult") -> None:  # String annotation
+```
 
 ```python
 """Module docstring - Google style."""

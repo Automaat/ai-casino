@@ -9,7 +9,7 @@ from loguru import logger
 from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
-    from src.workflows.trading import TradingWorkflowResult
+    from src.workflows.types import TradingWorkflowResult
 
 
 class AnalyzeStockTool(BaseTool):

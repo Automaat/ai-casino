@@ -1,5 +1,8 @@
 """FinBERT sentiment analysis model wrapper."""
 
+# NOTE: This module intentionally imports torch at module level (it USES torch for inference).
+# Environment config handled by src/models/torch_config.py before import cascade reaches here.
+
 import os
 import threading
 

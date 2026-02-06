@@ -1,12 +1,16 @@
 """Chat view widget for message display."""
 
+from typing import TYPE_CHECKING
+
 from textual.containers import VerticalScroll
 
 from src.tui.widgets.message import AssistantMessage, ToolCallWidget, UserMessage, WelcomeWidget
 from src.tui.widgets.progress import ProgressPanel
 from src.tui.widgets.result_box import ResultBox
 from src.tui.widgets.thinking import ThinkingIndicator
-from src.workflows.trading import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.workflows.types import TradingWorkflowResult
 
 
 class ChatView(VerticalScroll):
@@ -134,7 +138,7 @@ class ChatView(VerticalScroll):
             self._progress_panel.complete()
             self._progress_panel = None
 
-    def show_result_box(self, result: TradingWorkflowResult) -> ResultBox:
+    def show_result_box(self, result: "TradingWorkflowResult") -> ResultBox:
         """Show a boxed analysis result.
 
         Args:

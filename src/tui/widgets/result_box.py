@@ -1,5 +1,7 @@
 """Result box widget for analysis output."""
 
+from typing import TYPE_CHECKING
+
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
@@ -7,7 +9,9 @@ from textual.containers import Vertical
 from textual.widgets import Static
 
 from src.strategies.momentum import Signal
-from src.workflows.trading import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.workflows.types import TradingWorkflowResult
 
 SIGNAL_COLORS = {
     Signal.BUY: "green",
@@ -50,7 +54,7 @@ class ResultBox(Static):
     }
     """
 
-    def __init__(self, result: TradingWorkflowResult) -> None:
+    def __init__(self, result: "TradingWorkflowResult") -> None:
         """Initialize result box."""
         super().__init__()
         self._result = result

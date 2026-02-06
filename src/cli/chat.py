@@ -1,7 +1,6 @@
 """Chat subcommand for TUI mode."""
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -15,21 +14,11 @@ def chat() -> None:
 
     load_dotenv()
 
-    # Disable parallelism to prevent subprocess fd conflicts with Textual
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    os.environ["OMP_NUM_THREADS"] = "1"
-    os.environ["MKL_NUM_THREADS"] = "1"
+    # Configure torch environment and runtime (chat.py triggers analysis immediately)
+    from src.models.torch_config import configure_torch_env, configure_torch_runtime
 
-    # Suppress transformers/torch warnings
-    os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-    os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-
-    # Force torch to use fork-safe settings
-    import torch
-
-    torch.set_num_threads(1)
-    if hasattr(torch, "set_num_interop_threads"):
-        torch.set_num_interop_threads(1)
+    configure_torch_env()
+    configure_torch_runtime()
 
     # Configure logging - suppress all stderr output
     logger.remove()
