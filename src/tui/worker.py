@@ -151,9 +151,13 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
 
     original_run_analyses = workflow._run_analyses  # noqa: SLF001
 
-    async def patched_run_analyses(state: dict, technical_analyst: "TechnicalAnalyst") -> dict:
+    async def patched_run_analyses(
+        state: dict,
+        technical_analyst: "TechnicalAnalyst",
+        collector: object = None,
+    ) -> dict:
         _update_progress("technical", "Running technical analysis...", progress_callback)
-        result = await original_run_analyses(state, technical_analyst)
+        result = await original_run_analyses(state, technical_analyst, collector)
         clear_active_step()  # Clear after analyses complete
         return result
 

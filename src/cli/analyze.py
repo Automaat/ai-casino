@@ -15,6 +15,7 @@ from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
@@ -294,6 +295,35 @@ def _print_order(result: TradingWorkflowResult) -> None:
     console.print(order_table)
 
 
+def _print_execution_metrics(metrics: WorkflowExecutionMetrics) -> None:
+    """Print execution performance metrics summary."""
+    metrics_table = Table(title="Execution Metrics", show_header=True)
+    metrics_table.add_column("Metric", style="cyan")
+    metrics_table.add_column("Value", style="yellow")
+
+    metrics_table.add_row("Total time", f"{metrics.total_latency_ms / 1000:.1f}s")
+    metrics_table.add_row("LLM calls", str(len(metrics.llm_calls)))
+    metrics_table.add_row("Input tokens", f"{metrics.total_input_tokens:,}")
+    metrics_table.add_row("Output tokens", f"{metrics.total_output_tokens:,}")
+    metrics_table.add_row("Estimated cost", f"${metrics.total_estimated_cost_usd:.4f}")
+
+    if metrics.agent_timings:
+        slowest = max(metrics.agent_timings, key=lambda a: a.latency_ms)
+        metrics_table.add_row("Slowest agent", f"{slowest.agent_name} ({slowest.latency_ms / 1000:.1f}s)")
+
+    console.print(metrics_table)
+
+    if metrics.sub_operations:
+        sub_ops_text = ", ".join(f"{op.name}({op.latency_ms / 1000:.1f}s)" for op in metrics.sub_operations)
+        console.print(f"[dim]Sub-operations: {sub_ops_text}[/dim]")
+
+    if metrics.pipeline_stages:
+        stages_text = ", ".join(f"{s.stage}({s.latency_ms / 1000:.1f}s)" for s in metrics.pipeline_stages)
+        console.print(f"[dim]Pipeline: {stages_text}[/dim]")
+
+    console.print("[dim]Metrics saved to: logs/execution_metrics.jsonl[/dim]\n")
+
+
 def _print_result(result: TradingWorkflowResult, use_meta_agent: bool = True) -> None:
     """Print trading analysis results."""
     console.print(f"\n[bold cyan]Trading Analysis for {result.symbol}[/bold cyan]\n")
@@ -347,8 +377,11 @@ async def _analyze_stock(
     show_metrics: bool,
     use_meta_agent: bool,
     trump_mode: bool = False,
+    execution_metrics: bool = False,
 ) -> None:
     """Run stock analysis."""
+    if execution_metrics:
+        os.environ["EXECUTION_METRICS"] = "true"
     mode_str = "meta-agent" if use_meta_agent else "momentum"
     trump_str = "+trump" if trump_mode else ""
     console.print(f"\n[bold]Initializing trading system ({mode_str}{trump_str} mode)...[/bold]")
@@ -387,6 +420,9 @@ async def _analyze_stock(
 
     _print_result(result, use_meta_agent=use_meta_agent)
 
+    if result.execution_metrics:
+        _print_execution_metrics(result.execution_metrics)
+
     if metrics_tracker:
         _print_metrics_summary(metrics_tracker)
 
@@ -398,6 +434,7 @@ def analyze(
     show_metrics: Annotated[bool, typer.Option("--show-metrics", "-m", help="Show metrics")] = False,
     no_meta_agent: Annotated[bool, typer.Option("--no-meta-agent", help="Use momentum only")] = False,
     trump_mode: Annotated[bool, typer.Option("--trump-mode", help="Trump social media analysis")] = False,
+    metrics: Annotated[bool, typer.Option("--metrics", help="Show execution performance metrics")] = False,
 ) -> None:
     """Analyze a stock and generate trading recommendations."""
     from dotenv import load_dotenv
@@ -413,7 +450,9 @@ def analyze(
 
     try:
         asyncio.run(
-            _analyze_stock(symbol.upper(), period, trade, show_metrics, not no_meta_agent, trump_mode)
+            _analyze_stock(
+                symbol.upper(), period, trade, show_metrics, not no_meta_agent, trump_mode, metrics
+            )
         )
     except Exception as e:
         console.print(f"\n[bold red]Error:[/bold red] {e}")

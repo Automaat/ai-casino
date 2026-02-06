@@ -17,6 +17,8 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.metrics.execution import timed_operation
+
 load_dotenv()
 
 HTTP_RETRY = retry(
@@ -90,9 +92,11 @@ class MarketDataFetcher:
         """
         logger.info(f"Fetching {period_days} days of data for {symbol}")
 
-        if self.use_alpha_vantage:
-            return self._fetch_alpha_vantage(symbol)
-        return self._fetch_yfinance(symbol, period_days)
+        source = "alpha_vantage" if self.use_alpha_vantage else "yfinance"
+        with timed_operation("market_data_fetch", source=source):
+            if self.use_alpha_vantage:
+                return self._fetch_alpha_vantage(symbol)
+            return self._fetch_yfinance(symbol, period_days)
 
     @HTTP_RETRY
     def _fetch_alpha_vantage(self, symbol: str) -> MarketData:

@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import os
+import time
 from collections.abc import AsyncIterator, Callable
 from types import TracebackType
 from typing import TypeVar
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
 
+from src.metrics.execution import ExecutionMetricsCollector
 from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvider, OpenAIProvider
 from src.models.providers.base import ToolCall
 
@@ -81,7 +83,16 @@ class LLMClient:
         self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
         self._provider: BaseLLMProvider = self._create_provider()
+        self._metrics_collector: ExecutionMetricsCollector | None = None
         logger.info(f"Initialized LLM client: provider={self.provider}, model={self.model}")
+
+    def set_metrics_collector(self, collector: ExecutionMetricsCollector | None) -> None:
+        """Set or clear the execution metrics collector.
+
+        Args:
+            collector: Collector instance, or None to disable
+        """
+        self._metrics_collector = collector
 
     def _create_provider(self) -> BaseLLMProvider:
         """Create provider instance based on configuration."""
@@ -131,8 +142,23 @@ class LLMClient:
         """
         _set_asyncio_context()
         messages = self._build_messages(prompt, system)
-        async with _get_semaphore():
-            return await self._provider.acomplete(messages, temperature)
+        start = time.perf_counter() if self._metrics_collector else None
+        error_msg = None
+        try:
+            async with _get_semaphore():
+                return await self._provider.acomplete(messages, temperature)
+        except Exception as e:
+            error_msg = str(e)
+            raise
+        finally:
+            if self._metrics_collector and start is not None:
+                self._metrics_collector.record_llm_call(
+                    method="acomplete",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    usage=self._provider.last_usage,
+                    success=error_msg is None,
+                    error=error_msg,
+                )
 
     def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         """Multi-turn chat completion (sync wrapper).
@@ -157,8 +183,23 @@ class LLMClient:
             Generated text response
         """
         _set_asyncio_context()
-        async with _get_semaphore():
-            return await self._provider.acomplete(messages, temperature)
+        start = time.perf_counter() if self._metrics_collector else None
+        error_msg = None
+        try:
+            async with _get_semaphore():
+                return await self._provider.acomplete(messages, temperature)
+        except Exception as e:
+            error_msg = str(e)
+            raise
+        finally:
+            if self._metrics_collector and start is not None:
+                self._metrics_collector.record_llm_call(
+                    method="achat",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    usage=self._provider.last_usage,
+                    success=error_msg is None,
+                    error=error_msg,
+                )
 
     async def astream(
         self, prompt: str, system: str | None = None, temperature: float = 0.7
@@ -243,8 +284,23 @@ class LLMClient:
         """
         _set_asyncio_context()
         messages = self._build_messages(prompt, system)
-        async with _get_semaphore():
-            return await self._provider.astructured(messages, response_model, temperature)
+        start = time.perf_counter() if self._metrics_collector else None
+        error_msg = None
+        try:
+            async with _get_semaphore():
+                return await self._provider.astructured(messages, response_model, temperature)
+        except Exception as e:
+            error_msg = str(e)
+            raise
+        finally:
+            if self._metrics_collector and start is not None:
+                self._metrics_collector.record_llm_call(
+                    method="astructured",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    usage=self._provider.last_usage,
+                    success=error_msg is None,
+                    error=error_msg,
+                )
 
     def complete_with_tools(  # noqa: PLR0913
         self,
@@ -305,10 +361,25 @@ class LLMClient:
         tool_calls_made = 0
 
         while tool_calls_made < max_tool_calls:
-            async with _get_semaphore():
-                text_response, tool_calls = await self._provider.acomplete_with_tools(
-                    messages, tools, temperature
-                )
+            start = time.perf_counter() if self._metrics_collector else None
+            error_msg = None
+            try:
+                async with _get_semaphore():
+                    text_response, tool_calls = await self._provider.acomplete_with_tools(
+                        messages, tools, temperature
+                    )
+            except Exception as e:
+                error_msg = str(e)
+                raise
+            finally:
+                if self._metrics_collector and start is not None:
+                    self._metrics_collector.record_llm_call(
+                        method="acomplete_with_tools",
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                        usage=self._provider.last_usage,
+                        success=error_msg is None,
+                        error=error_msg,
+                    )
 
             if not tool_calls:
                 return text_response or ""

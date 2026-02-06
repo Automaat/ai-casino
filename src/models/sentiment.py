@@ -15,6 +15,8 @@ from pydantic import BaseModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import logging as hf_logging
 
+from src.metrics.execution import timed_operation
+
 # Suppress transformers logging (the env var alone doesn't catch everything)
 hf_logging.set_verbosity_error()
 
@@ -112,18 +114,19 @@ class FinBERTSentiment:
         if not texts:
             return []
 
-        inputs = self.tokenizer(
-            texts,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
-            padding=True,
-        )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with timed_operation("finbert_inference", batch_size=len(texts)):
+            inputs = self.tokenizer(
+                texts,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True,
+            )
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
 
         labels = ["positive", "negative", "neutral"]
         results = [

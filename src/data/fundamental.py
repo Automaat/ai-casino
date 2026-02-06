@@ -6,6 +6,8 @@ from typing import Any
 from alpha_vantage.fundamentaldata import FundamentalData
 from loguru import logger
 
+from src.metrics.execution import timed_operation
+
 
 class FundamentalDataFetcher:
     """Fetches fundamental company data via Alpha Vantage."""
@@ -37,20 +39,21 @@ class FundamentalDataFetcher:
             ValueError: If no data available for symbol
             Exception: On API errors
         """
-        try:
-            logger.info(f"Fetching fundamental overview for {symbol}")
-            data, _ = self.fd.get_company_overview(symbol)
+        with timed_operation("fundamental_data_fetch", source="alpha_vantage"):
+            try:
+                logger.info(f"Fetching fundamental overview for {symbol}")
+                data, _ = self.fd.get_company_overview(symbol)
 
-            if not data or "Symbol" not in data:
-                msg = f"No fundamental data available for {symbol}"
-                raise ValueError(msg)
+                if not data or "Symbol" not in data:
+                    msg = f"No fundamental data available for {symbol}"
+                    raise ValueError(msg)
 
-            logger.info(f"Retrieved {len(data)} fundamental fields for {symbol}")
-            return data
+                logger.info(f"Retrieved {len(data)} fundamental fields for {symbol}")
+                return data
 
-        except Exception as e:
-            logger.error(f"Failed to fetch fundamental data for {symbol}: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Failed to fetch fundamental data for {symbol}: {e}")
+                raise
 
     def __repr__(self) -> str:
         """Return string representation."""

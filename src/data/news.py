@@ -9,6 +9,8 @@ from loguru import logger
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from src.metrics.execution import timed_operation
+
 load_dotenv()
 
 HTTP_RETRY = retry(
@@ -80,32 +82,33 @@ class NewsFetcher:
         if self.api_key:
             params["api_token"] = self.api_key
 
-        try:
-            response = requests.get(self.BASE_URL, params=params, timeout=30)
-            response.raise_for_status()
+        with timed_operation("news_fetch", source="marketaux"):
+            try:
+                response = requests.get(self.BASE_URL, params=params, timeout=30)
+                response.raise_for_status()
 
-            data = response.json()
-            articles = []
+                data = response.json()
+                articles = []
 
-            for item in data.get("data", []):
-                articles.append(
-                    NewsArticle(
-                        title=item.get("title", ""),
-                        description=item.get("description", ""),
-                        url=item.get("url", ""),
-                        published_at=datetime.fromisoformat(
-                            item.get("published_at", "").replace("Z", "+00:00")
-                        ),
-                        source=item.get("source", ""),
+                for item in data.get("data", []):
+                    articles.append(
+                        NewsArticle(
+                            title=item.get("title", ""),
+                            description=item.get("description", ""),
+                            url=item.get("url", ""),
+                            published_at=datetime.fromisoformat(
+                                item.get("published_at", "").replace("Z", "+00:00")
+                            ),
+                            source=item.get("source", ""),
+                        )
                     )
-                )
 
-            logger.info(f"Fetched {len(articles)} articles")
-            return articles
+                logger.info(f"Fetched {len(articles)} articles")
+                return articles
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"News fetch failed: {e}")
-            raise
+            except requests.exceptions.RequestException as e:
+                logger.error(f"News fetch failed: {e}")
+                raise
 
     @HTTP_RETRY
     def fetch_market_news(self, limit: int = 20) -> list[NewsArticle]:

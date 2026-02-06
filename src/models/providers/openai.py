@@ -10,6 +10,7 @@ from loguru import logger
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
+from src.metrics.execution import LLMUsageStats
 from src.models.providers.base import BaseLLMProvider, StructuredOutputError, ToolCall, retry
 
 T = TypeVar("T", bound=BaseModel)
@@ -61,6 +62,11 @@ class OpenAIProvider(BaseLLMProvider):
             messages=messages,
             temperature=self._effective_temperature(temperature),
         )
+        if response.usage:
+            self._last_usage = LLMUsageStats(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
         content = response.choices[0].message.content or ""
         logger.debug(f"OpenAI response length: {len(content)} chars")
         return content
@@ -92,6 +98,11 @@ class OpenAIProvider(BaseLLMProvider):
             tools=tools,
             temperature=self._effective_temperature(temperature),
         )
+        if response.usage:
+            self._last_usage = LLMUsageStats(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
         message = response.choices[0].message
 
         if message.tool_calls:
@@ -205,6 +216,11 @@ class OpenAIProvider(BaseLLMProvider):
                 },
             },
         )
+        if response.usage:
+            self._last_usage = LLMUsageStats(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
         content = response.choices[0].message.content or ""
         logger.debug(f"OpenAI structured response: {len(content)} chars")
 

@@ -7,6 +7,8 @@ import pandas_ta_classic  # noqa: F401 - Required to register .ta accessor on Da
 from loguru import logger
 from pydantic import BaseModel
 
+from src.metrics.execution import timed_operation
+
 
 class Signal(StrEnum):
     """Trading signal."""
@@ -73,14 +75,15 @@ class MomentumStrategy:
         """
         df = data.copy()
 
-        df.ta.rsi(length=self.rsi_period, append=True)
+        with timed_operation("pandas_ta_indicators", rows=len(df)):
+            df.ta.rsi(length=self.rsi_period, append=True)
 
-        df.ta.macd(
-            fast=self.macd_fast,
-            slow=self.macd_slow,
-            signal=self.macd_signal,
-            append=True,
-        )
+            df.ta.macd(
+                fast=self.macd_fast,
+                slow=self.macd_slow,
+                signal=self.macd_signal,
+                append=True,
+            )
 
         logger.debug(f"Calculated indicators for {len(df)} rows")
         return df
