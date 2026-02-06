@@ -13,6 +13,12 @@ class ScheduleConfig(BaseModel):
     end_time: str = "16:00"
     timezone: str = "America/New_York"
     enable_pre_market: bool = False
+    enable_after_hours: bool = False
+    after_hours_screen_time: str = "16:30"
+    after_hours_screen_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
+    after_hours_criteria: str = "momentum"
+    after_hours_universe: str = "COMBINED"
+    after_hours_top_n: int = 10
 
 
 class StateConfig(BaseModel):

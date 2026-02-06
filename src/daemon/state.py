@@ -7,6 +7,7 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
 
@@ -21,6 +22,17 @@ class AnalysisRecord(BaseModel):
     trading_session: TradingSession = TradingSession.REGULAR
 
 
+class ScreeningRecord(BaseModel):
+    """Record of an after-hours screening run."""
+
+    timestamp: datetime
+    criteria: str
+    universe: str
+    top_symbols: list[str]
+    candidates: list[ScreeningResult]
+    screened_at: datetime
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -30,6 +42,8 @@ class DaemonState(BaseModel):
     total_analyses: int = 0
     total_trades: int = 0
     last_journal_date: str | None = None
+    last_after_hours_screening: datetime | None = None
+    screening_history: list[ScreeningRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -118,6 +132,40 @@ class DaemonState(BaseModel):
 
         if len(self.errors) > 100:
             self.errors = self.errors[-50:]
+
+    def record_after_hours_screening(
+        self,
+        criteria: str,
+        universe: str,
+        candidates: list[ScreeningResult],
+        top_n: int = 10,
+    ) -> None:
+        """Record after-hours screening results.
+
+        Args:
+            criteria: Screening criteria
+            universe: Universe screened
+            candidates: Full candidate list
+            top_n: Number of top symbols to track
+        """
+        now = datetime.now()  # noqa: DTZ005
+        top_symbols = [c.symbol for c in candidates[:top_n]]
+
+        self.screening_history.append(
+            ScreeningRecord(
+                timestamp=now,
+                criteria=criteria,
+                universe=universe,
+                top_symbols=top_symbols,
+                candidates=candidates[:top_n],
+                screened_at=now,
+            )
+        )
+        self.last_after_hours_screening = now
+
+        # Keep last 30 days (assume max 1 screening per day)
+        if len(self.screening_history) > 30:
+            self.screening_history = self.screening_history[-30:]
 
     def __repr__(self) -> str:
         """Return string representation."""

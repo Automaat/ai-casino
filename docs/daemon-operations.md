@@ -40,6 +40,12 @@ classDiagram
         +str end_time = "16:00"
         +str timezone = "America/New_York"
         +bool enable_pre_market = false
+        +bool enable_after_hours = false
+        +str after_hours_screen_time = "16:30"
+        +list~str~ after_hours_screen_days = ["mon", "tue", "wed", "thu", "fri"]
+        +str after_hours_criteria = "momentum"
+        +str after_hours_universe = "COMBINED"
+        +int after_hours_top_n = 10
     }
 
     class StateConfig {
@@ -68,6 +74,14 @@ end_time = "16:00"
 timezone = "America/New_York"
 enable_pre_market = false
 
+# After-hours screening (16:00-20:00 ET)
+enable_after_hours = true
+after_hours_screen_time = "16:30"
+after_hours_screen_days = ["mon", "tue", "wed", "thu", "fri"]
+after_hours_criteria = "momentum"  # momentum, value, breakout
+after_hours_universe = "COMBINED"  # SP500, NASDAQ100, COMBINED
+after_hours_top_n = 10
+
 [daemon.state]
 state_file = "~/.ai-casino/daemon-state.json"
 ```
@@ -85,6 +99,12 @@ state_file = "~/.ai-casino/daemon-state.json"
 | `schedule.end_time` | `str` | `"16:00"` | Market close (HH:MM) |
 | `schedule.timezone` | `str` | `"America/New_York"` | Market timezone |
 | `schedule.enable_pre_market` | `bool` | `false` | Enable 04:00-09:30 ET session |
+| `schedule.enable_after_hours` | `bool` | `false` | Enable after-hours screening (16:00-20:00 ET) |
+| `schedule.after_hours_screen_time` | `str` | `"16:30"` | Time to run screening (HH:MM) |
+| `schedule.after_hours_screen_days` | `list[str]` | `["mon", "tue", "wed", "thu", "fri"]` | Days to run screening |
+| `schedule.after_hours_criteria` | `str` | `"momentum"` | Screening criteria (momentum/value/breakout) |
+| `schedule.after_hours_universe` | `str` | `"COMBINED"` | Stock universe (SP500/NASDAQ100/COMBINED) |
+| `schedule.after_hours_top_n` | `int` | `10` | Number of top candidates to track |
 | `state.state_file` | `str` | `"~/.ai-casino/daemon-state.json"` | State persistence path |
 
 ### Environment Variables
@@ -107,6 +127,58 @@ state_file = "~/.ai-casino/daemon-state.json"
 | `MAX_EXPOSURE` | No | `80.0` | Max total exposure (%) |
 | `MAX_SINGLE_POSITION` | No | `20.0` | Max single position (%) |
 
+### After-Hours Screening
+
+After-hours screening runs daily (when enabled) to discover new watchlist candidates. Screens full universe (~600 stocks) using momentum/value/breakout criteria.
+
+**Schedule:**
+- Runs between 16:00-20:00 ET (after regular market close)
+- Configurable time and days (default: 16:30 weekdays)
+- Deduplication prevents multiple runs per day
+
+**Criteria:**
+- **Momentum**: RSI < 40 + MACD bullish + price > 50-day MA
+- **Value**: Low P/E + P/B < 3 + positive momentum
+- **Breakout**: Within 5% of 52-week high + volume > 1.5x avg
+
+**Universe:**
+- **SP500**: ~500 stocks from S&P 500
+- **NASDAQ100**: ~100 stocks from NASDAQ 100
+- **COMBINED**: ~600 stocks (default)
+
+**Viewing Results:**
+
+```bash
+# View latest candidates in TUI
+/candidates
+
+# Add candidates to watchlist
+/candidates add NVDA AMD TSLA
+
+# Clear old screening records
+/candidates clear
+
+# View state file directly
+cat ~/.ai-casino/daemon-state.json | jq .screening_history
+```
+
+**Example Output:**
+
+```
+After-Hours Screening (16:30)
+──────────────────────────────
+Momentum Screening
+Universe: COMBINED, Screened: 603
+
+1. NVDA (NVIDIA Corporation) - Score: 0.82
+   RSI 38.2 (oversold), MACD bullish (0.0234), volume 3.2x avg
+
+2. AMD (Advanced Micro Devices) - Score: 0.76
+   RSI 35.1 (oversold), MACD bullish (0.0189), earnings in 2 days
+
+[Full results in daemon state]
+```
+
 ## State Management
 
 ### State Data Model
@@ -119,10 +191,13 @@ classDiagram
         +list~str~ errors = []
         +int total_analyses = 0
         +int total_trades = 0
+        +datetime|None last_after_hours_screening = None
+        +list~ScreeningRecord~ screening_history = []
         +load(path: str) DaemonState
         +save(path: str) None
         +record_analysis(...) None
         +record_error(error: str) None
+        +record_after_hours_screening(...) None
     }
 
     class AnalysisRecord {

@@ -39,6 +39,9 @@ class DaemonRunner:
             end_time=config.schedule.end_time,
             timezone=config.schedule.timezone,
             enable_pre_market=config.schedule.enable_pre_market,
+            enable_after_hours=config.schedule.enable_after_hours,
+            after_hours_screen_time=config.schedule.after_hours_screen_time,
+            after_hours_screen_days=config.schedule.after_hours_screen_days,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -249,12 +252,95 @@ class DaemonRunner:
             self.state.record_error(f"Journal failed: {e}")
             self.state.save(self.config.state.state_file)
 
+    def _run_after_hours_screening(self) -> None:
+        """Run after-hours screening for watchlist candidates."""
+        from datetime import UTC
+
+        from src.data.universe import StockUniverseFetcher
+        from src.screening.screener import ScreeningCriteria, StockScreener
+
+        # Check if already screened today
+        now = datetime.now(UTC)
+        if self.state.last_after_hours_screening:
+            last_date = self.state.last_after_hours_screening.date()
+            if last_date == now.date():
+                logger.debug("After-hours screening already completed today")
+                return
+
+        logger.info("Starting after-hours watchlist screening")
+        console.print(f"\n[bold cyan]After-Hours Screening ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            # Initialize screener
+            universe_fetcher = StockUniverseFetcher()
+            screener = StockScreener(universe_fetcher)
+
+            # Parse criteria
+            criteria_map = {
+                "momentum": ScreeningCriteria.MOMENTUM,
+                "value": ScreeningCriteria.VALUE,
+                "breakout": ScreeningCriteria.BREAKOUT,
+            }
+            criteria = criteria_map.get(
+                self.config.schedule.after_hours_criteria.lower(), ScreeningCriteria.MOMENTUM
+            )
+
+            # Run screening
+            console.print(
+                f"[dim]{criteria.value.title()} Screening[/dim]\n"
+                f"[dim]Universe: {self.config.schedule.after_hours_universe}[/dim]"
+            )
+            output = screener.screen(
+                criteria=criteria,
+                universe=self.config.schedule.after_hours_universe,
+                top_n=self.config.schedule.after_hours_top_n,
+            )
+
+            # Log top 5 to console
+            self._log_screening_results(output.results[:5])
+
+            # Record in state
+            self.state.record_after_hours_screening(
+                criteria=criteria.value,
+                universe=self.config.schedule.after_hours_universe,
+                candidates=output.results,
+                top_n=self.config.schedule.after_hours_top_n,
+            )
+            self.state.save(self.config.state.state_file)
+
+            console.print(
+                f"\n[dim]Full results saved to daemon state ({len(output.results)} candidates)[/dim]\n"
+            )
+            logger.info(f"After-hours screening completed: {len(output.results)} candidates")
+
+        except Exception as e:
+            error_msg = f"After-hours screening failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _log_screening_results(self, results: list) -> None:
+        """Log screening results to console.
+
+        Args:
+            results: List of ScreeningResult objects (top 5)
+        """
+        for i, result in enumerate(results, 1):
+            console.print(
+                f"[bold]{i}. {result.symbol}[/bold] ({result.name}) - Score: {result.score:.2f}\n"
+                f"   {result.reason}"
+            )
+
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle.
 
         Returns:
             Seconds to sleep before next cycle
         """
+        # Check if it's time for after-hours screening (before regular analysis)
+        if self.scheduler.is_after_hours_screening_time():
+            self._run_after_hours_screening()
+
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             await self._maybe_run_journal()
             wait_time = self.scheduler.time_until_open()
