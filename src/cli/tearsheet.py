@@ -4,6 +4,7 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 
+import pandas as pd
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
@@ -139,7 +140,7 @@ def _parse_period(period: str) -> int:
         return 365
 
 
-async def _fetch_benchmark_returns(benchmark: str, period_days: int) -> None:
+async def _fetch_benchmark_returns(benchmark: str, period_days: int) -> pd.Series:
     """Fetch benchmark returns data.
 
     Args:
@@ -159,7 +160,7 @@ async def _fetch_benchmark_returns(benchmark: str, period_days: int) -> None:
         msg = f"No market data available for benchmark {benchmark}"
         raise ValueError(msg)
 
-    equity = market_data.data["close"]
+    equity = market_data.data.get("close", market_data.data["Close"])
 
     returns = equity.pct_change().fillna(0.0)
 

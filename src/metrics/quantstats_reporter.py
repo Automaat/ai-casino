@@ -141,7 +141,11 @@ class QuantStatsReporter:
             metrics["alpha"] = None
             metrics["beta"] = None
 
-        logger.debug(f"Calculated metrics: CAGR={metrics['cagr']:.4f}, Sharpe={metrics['sharpe_ratio']:.4f}")
+        cagr = metrics.get("cagr")
+        sharpe_ratio = metrics.get("sharpe_ratio")
+        cagr_str = f"{cagr:.4f}" if isinstance(cagr, (int, float)) else "N/A"
+        sharpe_str = f"{sharpe_ratio:.4f}" if isinstance(sharpe_ratio, (int, float)) else "N/A"
+        logger.debug(f"Calculated metrics: CAGR={cagr_str}, Sharpe={sharpe_str}")
         return metrics
 
     def _calculate_max_dd_duration(self, dd_series: pd.Series) -> int | None:
