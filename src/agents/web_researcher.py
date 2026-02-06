@@ -169,6 +169,7 @@ class WebResearchAgent:
             tool_executor=tool_executor,
             system=system,
             temperature=0.3,
+            max_tool_calls=2,  # Limit to 2 searches per category (8 total for 4 categories)
         )
 
         return self._parse_research_response(category, response)
