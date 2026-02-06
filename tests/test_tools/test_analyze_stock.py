@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 from src.tools.analyze_stock import AnalyzeStockTool
 
 

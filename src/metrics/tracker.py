@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 if TYPE_CHECKING:
     from src.database.repositories.trade import TradeRepository

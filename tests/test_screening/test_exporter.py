@@ -13,7 +13,7 @@ from src.screening.exporter import (
     WatchlistEntry,
 )
 from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 @pytest.fixture

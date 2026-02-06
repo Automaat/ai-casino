@@ -41,8 +41,9 @@ from src.metrics.tracker import BaseMetricsTracker, DatabaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
-from src.strategies.momentum import MomentumStrategy, Signal
+from src.strategies.momentum import MomentumStrategy
 from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
+from src.strategies.signal import Signal
 from src.workflows.types import TradingWorkflowResult
 
 T = TypeVar("T")

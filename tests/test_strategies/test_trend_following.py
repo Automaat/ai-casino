@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 from src.strategies.trend_following import TrendFollowingIndicators, TrendFollowingStrategy
 
 

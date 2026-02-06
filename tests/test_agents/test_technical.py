@@ -3,7 +3,8 @@
 import pytest
 
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
-from src.strategies.momentum import MomentumStrategy, Signal
+from src.strategies.momentum import MomentumStrategy
+from src.strategies.signal import Signal
 
 
 def test_technical_analyst_init(mock_llm_client):

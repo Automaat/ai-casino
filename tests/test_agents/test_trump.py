@@ -3,7 +3,7 @@
 import pytest
 
 from src.agents.trump import COMPANY_TICKERS, MARKET_KEYWORDS, TrumpAnalysis, TrumpAnalyst
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 def test_trump_analyst_init(mock_llm_client):

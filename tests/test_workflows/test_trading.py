@@ -14,7 +14,7 @@ from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.data.market import MarketData
 from src.strategies.ensemble import EnsembleStrategy
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 

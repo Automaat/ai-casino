@@ -5,7 +5,7 @@ import pandas_ta_classic  # noqa: F401 - Required to register .ta accessor on Da
 from loguru import logger
 from pydantic import BaseModel
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 class MeanReversionIndicators(BaseModel):

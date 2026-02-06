@@ -11,7 +11,8 @@ from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.strategies.ensemble import EnsembleResult, EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionIndicators, MeanReversionStrategy
-from src.strategies.momentum import MomentumIndicators, MomentumStrategy, Signal
+from src.strategies.momentum import MomentumIndicators, MomentumStrategy
+from src.strategies.signal import Signal
 from src.strategies.trend_following import TrendFollowingIndicators, TrendFollowingStrategy
 
 

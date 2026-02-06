@@ -20,7 +20,7 @@ from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.metrics.tracker import DatabaseMetricsTracker, PerformanceMetrics, TradeRecord
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 from src.workflows.types import TradingWorkflowResult
 
 
