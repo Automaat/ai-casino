@@ -158,6 +158,11 @@ def get_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
 
     # Fast path: already initialized (no lock needed)
     if _finbert_instance is not None:
+        if device is not None and device != _finbert_instance.device:
+            cached_device = _finbert_instance.device
+            logger.warning(
+                f"Device parameter '{device}' ignored - using cached instance with device '{cached_device}'"
+            )
         return _finbert_instance
 
     # Slow path: first call, acquire lock

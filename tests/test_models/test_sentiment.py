@@ -5,14 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from src.models.sentiment import FinBERTSentiment, SentimentScore, clear_finbert_sentiment
-
-
-@pytest.fixture(autouse=True)
-def _clear_finbert_between_tests():
-    """Clear FinBERT singleton between tests for isolation."""
-    yield
-    clear_finbert_sentiment()
+from src.models.sentiment import FinBERTSentiment, SentimentScore
 
 
 def test_sentiment_score_dominant():
