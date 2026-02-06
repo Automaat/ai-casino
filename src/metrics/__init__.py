@@ -17,16 +17,21 @@ from src.metrics.performance import (
     calculate_sharpe_ratio,
     calculate_win_rate,
 )
+from src.metrics.risk import DrawdownMetrics, RiskMetrics, RiskMetricsCalculator, VaRMetrics
 from src.metrics.tracker import MetricsTracker, PerformanceMetrics, TradeRecord
 
 __all__ = [
+    "DrawdownMetrics",
     "ExecutionMetricsCollector",
     "LLMCallMetric",
     "LLMUsageStats",
     "MetricsTracker",
     "PerformanceMetrics",
+    "RiskMetrics",
+    "RiskMetricsCalculator",
     "SubOperationMetric",
     "TradeRecord",
+    "VaRMetrics",
     "WorkflowExecutionMetrics",
     "calculate_max_drawdown",
     "calculate_returns_from_trades",
