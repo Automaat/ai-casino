@@ -103,6 +103,23 @@ def tearsheet(
     return tearsheet_impl(symbol, period, benchmark if not no_benchmark else None)
 
 
+@app.command()
+def backtest(
+    symbol: Annotated[str, typer.Argument(help="Stock ticker symbol (comma-separated for portfolio)")],
+    engine: Annotated[
+        str, typer.Option("--engine", "-e", help="Engine: vectorbt or backtesting")
+    ] = "vectorbt",
+    start: Annotated[str | None, typer.Option("--start", help="Start date (YYYY-MM-DD)")] = None,
+    end: Annotated[str | None, typer.Option("--end", help="End date (YYYY-MM-DD)")] = None,
+    cash: Annotated[float, typer.Option("--cash", help="Initial cash")] = 100_000.0,
+    portfolio: Annotated[bool, typer.Option("--portfolio", help="Run portfolio backtest")] = False,
+) -> None:
+    """Run backtest on a symbol or portfolio."""
+    from src.cli.backtest import backtest as backtest_impl
+
+    return backtest_impl(symbol, engine, start, end, cash, portfolio)
+
+
 @app.command(name="optimize-portfolio")
 def optimize_portfolio(
     symbols: Annotated[str, typer.Argument(help="Comma-separated stock symbols")],
