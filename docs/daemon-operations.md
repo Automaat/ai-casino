@@ -12,7 +12,7 @@ python -m src.main daemon
 python -m src.main daemon --config daemon.toml
 
 # Start Trump watcher
-python -m src.main trump-watch
+python -m src.main trump-daemon --interval 5 --max-analyses 10
 
 # Stop daemon
 # Send SIGINT (Ctrl+C) or SIGTERM — graceful shutdown with state save
@@ -55,19 +55,20 @@ classDiagram
 ```toml
 # daemon.toml
 
+[daemon]
 watchlist = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
 interval_minutes = 30
 market_hours_only = true
 auto_trade = false
 max_concurrent_analyses = 3
 
-[schedule]
+[daemon.schedule]
 start_time = "09:30"
 end_time = "16:00"
 timezone = "America/New_York"
 enable_pre_market = false
 
-[state]
+[daemon.state]
 state_file = "~/.ai-casino/daemon-state.json"
 ```
 
@@ -100,6 +101,8 @@ state_file = "~/.ai-casino/daemon-state.json"
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API key |
 | `OPENAI_API_KEY` | No | — | OpenAI API key |
 | `LOG_LEVEL` | No | `INFO` | Logging level |
+| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
+| `ALPACA_BASE_URL` | No | `https://paper-api.alpaca.markets` | Alpaca API base URL |
 | `MAX_POSITION_RISK` | No | `2.0` | Max risk per trade (%) |
 | `MAX_EXPOSURE` | No | `80.0` | Max total exposure (%) |
 | `MAX_SINGLE_POSITION` | No | `20.0` | Max single position (%) |
@@ -186,7 +189,7 @@ sequenceDiagram
 | Error Type | Handler | Recovery |
 |---|---|---|
 | Single symbol failure | `_analyze_symbol` try/except | Log error, skip symbol, continue cycle |
-| Watchlist cycle failure | `_analyze_watchlist` try/except | Record error in state, continue |
+| Watchlist cycle failure | `_analyze_watchlist` using `asyncio.gather(..., return_exceptions=True)` | Record error in state, continue |
 | Daemon loop exception | `run()` try/except | Log exception, sleep 60s, retry |
 | `asyncio.CancelledError` | Explicit catch | Graceful shutdown, save state |
 | State load failure | `DaemonState.load()` | Warning, fresh state |
@@ -198,7 +201,7 @@ sequenceDiagram
 
 | Log | Path | Level |
 |---|---|---|
-| TUI worker log | `~/.ai-casino/worker.log` | DEBUG |
+| Daemon log | stderr (via LOG_LEVEL) | INFO (default) |
 | Risk audit log | `logs/risk_audit.jsonl` | — (structured JSONL) |
 | Console output | stdout (via Rich) | Configurable via `LOG_LEVEL` |
 
@@ -232,7 +235,7 @@ INFO | DaemonRunner | Shutting down, saving state...
 | Analysis period | 30 days | Market data lookback for analysis |
 | Concurrent analyses | 2 | Hardcoded semaphore limit |
 
-**Sector-stock mapping** (`SECTOR_STOCKS`): tariff, china, crypto, oil, bank, tech, defense, pharma — 5 tickers each, top 2 selected per keyword match.
+**Sector-stock mapping** (`SECTOR_STOCKS`): tariff, china, crypto, oil, bank, tech, defense, pharma — each mapped to a small list of tickers, with the top 2 selected per keyword match.
 
 ---
 

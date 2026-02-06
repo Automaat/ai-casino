@@ -71,7 +71,7 @@ graph TD
 |---|---|---|---|
 | 1. Data Fetch | Yes | — | Symbol input |
 | 2. Strategy Selection | Yes | MetaAgent | Market data |
-| 3. Group 1 | Parallel | 8 agents | Data + strategy |
+| 3. Group 1 | Parallel | 7 core + optional Trump analysis | Data + strategy |
 | 4. Group 2 | Parallel | 2 agents | Group 1 results |
 | 5. Decision | Sequential | TraderAgent | All analyses |
 | 6. Risk Gate | Sequential | RiskManagementAgent | Decision + account |
@@ -92,7 +92,7 @@ graph TD
     Regime --> |< 0.5| Ensemble[EnsembleStrategy]
     Ensemble --> Weights[Calculate Weights]
     Weights --> |Base| BW["momentum: 0.33<br/>mean_reversion: 0.33<br/>trend_following: 0.34"]
-    BW --> Boost["+ Regime boost: 0.2<br/>+ Performance boost: 0.1"]
+    BW --> Boost["+ Regime boost: up to 0.2<br/>+ Performance boost: recent_score × 0.1 (when metrics available)"]
     Boost --> Normalize[Normalize to Σ=1.0]
 ```
 

@@ -66,8 +66,7 @@ graph TD
     TradingWorkflow --> BER
     TradingWorkflow --> Trader
     TradingWorkflow --> RM
-
-    RM --> AB
+    TradingWorkflow --> AB
     TradingWorkflow --> MT
     TradingWorkflow --> PSR
 ```
@@ -190,7 +189,7 @@ graph LR
 | Trump concurrent analyses | 2 | No (hardcoded) | `trump_watcher.py` |
 | LLM concurrent calls | 5 | `LLM_MAX_CONCURRENT` env var (1-20) | `models/llm.py` |
 
-All semaphores use `asyncio.Semaphore` — no threading, fully async.
+All semaphores use `asyncio.Semaphore`; concurrency is async, with blocking market/news (and optional Truth Social) fetches offloaded to a thread pool via `asyncio.to_thread(...)`.
 
 ## Trading Sessions Timeline
 
