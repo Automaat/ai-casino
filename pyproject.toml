@@ -33,6 +33,7 @@ dependencies = [
 
     # Optimization
     "optuna==4.7.0",
+    "riskfolio-lib==6.3.1",
 
     # Database
     "sqlalchemy[asyncio]==2.0.46",
