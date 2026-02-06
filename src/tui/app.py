@@ -30,7 +30,6 @@ from src.tui.themes import NORD_LIGHT_THEME, detect_dark_mode
 from src.tui.widgets.autocomplete_input import AutocompleteInput
 from src.tui.widgets.chat_view import ChatView
 from src.tui.widgets.status_bar import StatusBar
-from src.workflows.types import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
@@ -356,10 +355,11 @@ class TradingChatApp(App):
                 tool_widget.set_complete("Complete")
 
             # Show specialized result or full workflow result
-            if event.command_type == "analyze" and isinstance(
-                event.result.workflow_result, TradingWorkflowResult
-            ):
-                chat.show_result_box(event.result.workflow_result)
+            if event.command_type == "analyze":
+                from src.workflows.types import TradingWorkflowResult
+
+                if isinstance(event.result.workflow_result, TradingWorkflowResult):
+                    chat.show_result_box(event.result.workflow_result)
             else:
                 chat.add_assistant_message(event.result.message)
         else:
