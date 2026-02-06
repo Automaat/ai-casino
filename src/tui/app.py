@@ -2,6 +2,7 @@
 
 import json
 import os
+from functools import cached_property
 from pathlib import Path
 
 from loguru import logger
@@ -32,17 +33,6 @@ from src.tui.widgets.status_bar import StatusBar
 from src.workflows.types import TradingWorkflowResult
 
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
-
-# Load chat prompts from files
-try:
-    _chat_prompts = PromptLoader("chat")
-    AI_CASINO_AGENTIC_PROMPT = _chat_prompts.load("ai_casino_agentic")
-    AI_CASINO_STREAMING_PROMPT = _chat_prompts.load("ai_casino_streaming")
-    TRUMP_AGENTIC_PROMPT = _chat_prompts.load("trump_agentic")
-    TRUMP_STREAMING_PROMPT = _chat_prompts.load("trump_streaming")
-except Exception as e:
-    msg = f"Failed to load chat prompts from src/prompts/chat/: {e}"
-    raise RuntimeError(msg) from e
 
 
 class TradingChatApp(App):
@@ -89,13 +79,35 @@ class TradingChatApp(App):
         model = os.getenv("LLM_MODEL", "qwen3:14b")
         return f"{provider}/{model}"
 
+    @cached_property
+    def _ai_casino_agentic_prompt(self) -> str:
+        """Load AI Casino agentic prompt (lazy)."""
+        return PromptLoader("chat").load("ai_casino_agentic")
+
+    @cached_property
+    def _ai_casino_streaming_prompt(self) -> str:
+        """Load AI Casino streaming prompt (lazy)."""
+        return PromptLoader("chat").load("ai_casino_streaming")
+
+    @cached_property
+    def _trump_agentic_prompt(self) -> str:
+        """Load Trump agentic prompt (lazy)."""
+        return PromptLoader("chat").load("trump_agentic")
+
+    @cached_property
+    def _trump_streaming_prompt(self) -> str:
+        """Load Trump streaming prompt (lazy)."""
+        return PromptLoader("chat").load("trump_streaming")
+
     def _get_agentic_prompt(self) -> str:
         """Get current agentic system prompt based on personality."""
-        return TRUMP_AGENTIC_PROMPT if self._personality == "trump" else AI_CASINO_AGENTIC_PROMPT
+        return self._trump_agentic_prompt if self._personality == "trump" else self._ai_casino_agentic_prompt
 
     def _get_streaming_prompt(self) -> str:
         """Get current streaming system prompt based on personality."""
-        return TRUMP_STREAMING_PROMPT if self._personality == "trump" else AI_CASINO_STREAMING_PROMPT
+        return (
+            self._trump_streaming_prompt if self._personality == "trump" else self._ai_casino_streaming_prompt
+        )
 
     def set_personality(self, personality: str) -> None:
         """Set chat personality mode.
