@@ -1,0 +1,11 @@
+Triage the following event for trading relevance:
+
+{event_text}
+
+Analyze the event and provide:
+1. Relevance score (0.0-1.0): How relevant is this for stock trading?
+2. Stock symbols: Extract all mentioned tickers (uppercase, e.g., AAPL, TSLA)
+3. Urgency: IMMEDIATE (analyze now), WATCHLIST (monitor), or IGNORE (skip)
+4. Sentiment: BULLISH, BEARISH, or NEUTRAL
+5. Confidence: How confident are you in this triage? (0.0-1.0)
+6. Reasoning: Brief explanation for your decision

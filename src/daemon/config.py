@@ -400,6 +400,57 @@ class EarningsCalendarConfig(BaseModel):
         return self
 
 
+class NewsWatcherConfig(BaseModel):
+    """Configuration for news watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=5, ge=1, le=60)
+    breaking_threshold_minutes: int = Field(default=15, ge=5, le=120)
+    relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    cooldown_minutes: int = Field(default=15, ge=1, le=120)
+    max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+
+
+class SocialWatcherConfig(BaseModel):
+    """Configuration for social media watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=15, ge=5, le=60)
+    volume_spike_threshold: float = Field(default=0.5, ge=0.1, le=2.0)
+    viral_score_threshold: int = Field(default=1000, ge=100, le=10000)
+    viral_upvote_ratio: float = Field(default=0.8, ge=0.5, le=1.0)
+    subreddits: list[str] = Field(default_factory=lambda: ["wallstreetbets", "stocks"])
+    relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    cooldown_minutes: int = Field(default=15, ge=1, le=120)
+    max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+
+
+class FilingsWatcherConfig(BaseModel):
+    """Configuration for SEC filings watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=10, ge=5, le=60)
+    filing_types: list[str] = Field(default_factory=lambda: ["8-K", "4", "13D"])
+    cik_ticker_mapping_file: str = "~/.ai-casino/cik_ticker_map.json"
+    relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    cooldown_minutes: int = Field(default=15, ge=1, le=120)
+    max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+
+
+class AnomalyWatcherConfig(BaseModel):
+    """Configuration for market anomaly watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=15, ge=5, le=60)
+    volume_spike_multiplier: float = Field(default=2.0, ge=1.5, le=5.0)
+    price_move_threshold_pct: float = Field(default=5.0, ge=2.0, le=20.0)
+    gap_threshold_pct: float = Field(default=3.0, ge=1.0, le=10.0)
+    watchlist_only: bool = True
+    relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    cooldown_minutes: int = Field(default=15, ge=1, le=120)
+    max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -426,6 +477,10 @@ class DaemonConfig(BaseModel):
     pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
+    news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
+    social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
+    filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
+    anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -460,6 +515,10 @@ class DaemonConfig(BaseModel):
         pre_trade_backtesting_data = daemon_data.pop("pre_trade_backtesting", {})
         game_plan_data = daemon_data.pop("game_plan", {})
         position_management_data = daemon_data.pop("position_management", {})
+        news_watcher_data = daemon_data.pop("news_watcher", {})
+        social_watcher_data = daemon_data.pop("social_watcher", {})
+        filings_watcher_data = daemon_data.pop("filings_watcher", {})
+        anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {})
 
         return cls(
             **daemon_data,
@@ -481,6 +540,10 @@ class DaemonConfig(BaseModel):
             pre_trade_backtesting=PreTradeBacktestingConfig(**pre_trade_backtesting_data),
             game_plan=GamePlanConfig(**game_plan_data),
             position_management=PositionManagementConfig(**position_management_data),
+            news_watcher=NewsWatcherConfig(**news_watcher_data),
+            social_watcher=SocialWatcherConfig(**social_watcher_data),
+            filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
+            anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
         )
 
     def __repr__(self) -> str:
