@@ -116,3 +116,22 @@ loss_threshold = 0.10
 max_acceptable_prob = 0.15
 # Enable automatic position sizing adjustment based on stress test results (opt-in)
 adjust_position_sizing = false
+
+[daemon.notifications]
+# Push notifications for trading signals and risk alerts
+enabled = false
+# Notification channels to use (telegram only in MVP)
+channels = ["telegram"]
+# Minimum confidence threshold for signal notifications (0.0-1.0)
+min_confidence = 0.7
+# Events to notify on
+notify_on = ["signal", "risk_rejection", "portfolio_var_breach", "health_failure"]
+# Rate limiting
+rate_limit_enabled = true
+rate_limit_per_symbol_minutes = 60
+
+[daemon.notifications.telegram]
+# Telegram bot token (or set TELEGRAM_BOT_TOKEN env var)
+# bot_token = "your_bot_token_here"
+# Telegram chat ID (or set TELEGRAM_CHAT_ID env var)
+# chat_id = "your_chat_id_here"

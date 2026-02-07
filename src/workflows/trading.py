@@ -12,6 +12,7 @@ from loguru import logger
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
+    from src.daemon.notifications import NotificationService
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.optimization.param_store import OptimizedParamStore
@@ -122,6 +123,7 @@ class TradingWorkflow:
         portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
         pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
+        notification_service: "NotificationService | None" = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -143,6 +145,7 @@ class TradingWorkflow:
             portfolio_var_calculator: Optional VaR calculator for portfolio-level risk limits
             portfolio_var_config: Optional VaR limit configuration
             pre_trade_backtest_config: Optional pre-trade backtesting configuration
+            notification_service: Optional notification service for risk rejection alerts
         """
         import os
 
@@ -150,6 +153,7 @@ class TradingWorkflow:
             snapshot_on_trade = os.getenv("PORTFOLIO_SNAPSHOT_ON_TRADE", "false").lower() == "true"
         self.snapshot_on_trade = snapshot_on_trade
         self.snapshot_repository = snapshot_repository
+        self.notification_service = notification_service
         self.llm_client = llm_client
         self.market_fetcher = market_fetcher
         self.news_fetcher = news_fetcher
@@ -496,6 +500,14 @@ class TradingWorkflow:
         start = time.perf_counter()
         state = self._assess_risk(state)
         self._record_stage(collector, "risk_assessment", start)
+
+        # Notify if trade rejected by risk gate
+        if (
+            not state["risk_assessment"].validation.approved
+            and state["final_decision"].action != Signal.HOLD
+            and self.notification_service
+        ):
+            await self._notify_risk_rejection(symbol, state)
 
         if (
             self.broker
@@ -1023,6 +1035,38 @@ class TradingWorkflow:
             logger.info("Captured portfolio snapshot (trigger=TRADE)")
         except Exception as e:
             logger.error(f"Failed to capture portfolio snapshot: {e}")
+
+    async def _notify_risk_rejection(self, symbol: str, state: TradingState) -> None:
+        """Send risk rejection notification.
+
+        Args:
+            symbol: Stock symbol
+            state: Current workflow state
+        """
+        from datetime import UTC
+
+        from src.daemon.config import NotificationTrigger
+        from src.daemon.notifications import NotificationMessage
+
+        risk = state["risk_assessment"]
+        decision = state["final_decision"]
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.RISK_REJECTION,
+            title=f"Trade Blocked: {symbol}",
+            body=risk.validation.reasoning,
+            metadata={
+                "symbol": symbol,
+                "signal": decision.action.value,
+                "price": risk.current_price,
+                "confidence": decision.confidence,
+                "rejection_reason": risk.validation.reasoning,
+                "risk_score": risk.validation.risk_score,
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        await self.notification_service.notify(NotificationTrigger.RISK_REJECTION, message)
 
     def __repr__(self) -> str:
         """String representation."""
