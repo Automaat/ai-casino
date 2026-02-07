@@ -146,6 +146,45 @@ class FilingEvent(BaseModel):
         return f"FilingEvent(symbol={self.symbol}, type={self.filing.filing_type})"
 
 
+class VolumeSpike(BaseModel):
+    """Volume spike detection data."""
+
+    current_volume: float
+    avg_volume_20d: float
+    spike_multiplier: float
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"VolumeSpike({self.spike_multiplier:.1f}x)"
+
+
+class PriceMove(BaseModel):
+    """Intraday price move data."""
+
+    open_price: float
+    current_price: float
+    change_pct: float
+    high: float
+    low: float
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"PriceMove({self.change_pct:+.1f}%)"
+
+
+class Gap(BaseModel):
+    """Gap detection data."""
+
+    previous_close: float
+    open_price: float
+    gap_pct: float
+    gap_direction: str  # "up" or "down"
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"Gap({self.gap_direction} {abs(self.gap_pct):.1f}%)"
+
+
 class AnomalyEvent(BaseModel):
     """Market data anomaly event (volume spike, price move, gap)."""
 
@@ -154,28 +193,49 @@ class AnomalyEvent(BaseModel):
     timestamp: datetime
     source: str = "market_data"
     symbol: str
-    anomaly_type: Literal["volume_spike", "price_move", "gap"]
-    volume_ratio: float | None = Field(default=None, description="Current volume / avg volume")
-    price_change_pct: float | None = Field(default=None, description="Intraday price change %")
+    anomaly_types: list[str]  # ["volume_spike", "price_move", "gap"]
+
+    volume_spike_data: VolumeSpike | None = None
+    price_move_data: PriceMove | None = None
+    gap_data: Gap | None = None
 
     def to_prompt_text(self) -> str:
         """Format anomaly event for triage."""
         details = []
-        if self.volume_ratio:
-            details.append(f"Volume: {self.volume_ratio:.1f}x average")
-        if self.price_change_pct:
-            details.append(f"Price change: {self.price_change_pct:+.1f}%")
 
+        if self.volume_spike_data:
+            details.append(
+                f"Volume Spike: {self.volume_spike_data.current_volume:,.0f} "
+                f"({self.volume_spike_data.spike_multiplier:.1f}x 20-day avg of "
+                f"{self.volume_spike_data.avg_volume_20d:,.0f})"
+            )
+
+        if self.price_move_data:
+            details.append(
+                f"Price Move: ${self.price_move_data.open_price:.2f} → "
+                f"${self.price_move_data.current_price:.2f} "
+                f"({self.price_move_data.change_pct:+.1f}%) "
+                f"[H: ${self.price_move_data.high:.2f}, L: ${self.price_move_data.low:.2f}]"
+            )
+
+        if self.gap_data:
+            details.append(
+                f"Gap: ${self.gap_data.previous_close:.2f} → ${self.gap_data.open_price:.2f} "
+                f"({self.gap_data.gap_direction} {abs(self.gap_data.gap_pct):.1f}%)"
+            )
+
+        details_text = "\n".join(f"  - {d}" for d in details)
         return (
             f"MARKET ANOMALY:\n"
             f"Symbol: {self.symbol}\n"
-            f"Type: {self.anomaly_type}\n"
-            f"Details: {', '.join(details)}"
+            f"Anomaly Types: {', '.join(self.anomaly_types)}\n"
+            f"Details:\n{details_text}"
         )
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"AnomalyEvent(symbol={self.symbol}, type={self.anomaly_type})"
+        types_str = "+".join(self.anomaly_types)
+        return f"AnomalyEvent(symbol={self.symbol}, types={types_str})"
 
 
 class TriageResult(BaseModel):
