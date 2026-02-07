@@ -91,8 +91,8 @@ class EarningsCalendarFetcher:
                 estimate_eps=estimate_eps,
             )
         except Exception as e:
-            logger.warning(f"Failed to fetch earnings for {symbol}: {e}")
-            return None
+            logger.error(f"Failed to fetch earnings for {symbol}: {e}")
+            raise  # Allow tenacity to retry transient failures
 
     def _extract_earnings_date(self, calendar: object) -> date | None:
         """Extract earnings date from yfinance calendar data.
@@ -120,7 +120,8 @@ class EarningsCalendarFetcher:
                     return self._parse_date(raw.iloc[0])
                 return self._parse_date(raw)
         except (KeyError, IndexError):
-            pass
+            # Missing or malformed earnings date entry; treat as no earnings date.
+            logger.debug("Earnings date not found or malformed in calendar data; returning None.")
 
         return None
 

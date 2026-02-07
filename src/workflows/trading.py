@@ -391,6 +391,7 @@ class TradingWorkflow:
             regime=state.get("regime_analysis"),
             strategy_used=strategy_name,
             warnings=state.get("warnings", []),
+            earnings_context=state.get("earnings_context"),
             execution_metrics=execution_metrics,
         )
 

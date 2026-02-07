@@ -31,7 +31,7 @@ class DaemonEarningsCalendar:
 
         Args:
             events: All earnings events
-            days_ahead: Number of trading days to look ahead
+            days_ahead: Number of calendar days to look ahead
 
         Returns:
             Events within the lookahead window

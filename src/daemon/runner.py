@@ -794,11 +794,11 @@ class DaemonRunner:
             if last_date == now.date():
                 logger.debug("Earnings calendar already fetched today")
                 return
-            # Skip if fetched earlier this week (within 7 days)
-            days_since = (now.date() - last_date).days
-            if days_since < 7:
-                logger.debug(f"Earnings calendar fetched {days_since} days ago, skipping (weekly)")
-                return
+
+        # Check calendar-aware weekly schedule
+        if not self.scheduler.is_earnings_calendar_time(self.config.earnings_calendar.time):
+            logger.debug("Not earnings calendar time, skipping")
+            return
 
         logger.info("Starting earnings calendar fetch")
         console.print(f"\n[bold cyan]Earnings Calendar Fetch ({now:%H:%M})[/bold cyan]")
@@ -821,11 +821,20 @@ class DaemonRunner:
                 for e in calendar.events
             ]
 
-            symbols_failed = len(watchlist) - len(calendar.events)
+            symbols_with_earnings = len(calendar.events)
+            symbols_without_earnings = max(0, len(watchlist) - symbols_with_earnings)
+            if symbols_without_earnings:
+                logger.info(
+                    "Earnings calendar: %d symbols with earnings data, %d symbols with no earnings data",
+                    symbols_with_earnings,
+                    symbols_without_earnings,
+                )
+
+            # NOTE: Missing earnings data is normal, not a failure
             self.state.record_earnings_fetch(
                 events=event_records,
-                symbols_fetched=len(calendar.events),
-                symbols_failed=symbols_failed,
+                symbols_fetched=symbols_with_earnings,
+                symbols_failed=0,  # Only track known fetch failures
             )
             self.state.save(self.config.state.state_file)
 

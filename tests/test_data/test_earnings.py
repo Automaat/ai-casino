@@ -3,6 +3,8 @@
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.data.earnings import EarningsCalendar, EarningsCalendarFetcher, EarningsEvent
 
 
@@ -62,9 +64,9 @@ class TestEarningsCalendarFetcher:
         mock_ticker_cls.side_effect = Exception("API error")
 
         fetcher = EarningsCalendarFetcher(delay_seconds=0)
-        result = fetcher.fetch_earnings_dates(["BAD"])
-
-        assert len(result.events) == 0
+        # After retry fix: exceptions propagate after retry attempts
+        with pytest.raises(Exception, match="API error"):
+            fetcher.fetch_earnings_dates(["BAD"])
 
     @patch("src.data.earnings.yf.Ticker")
     def test_fetch_with_eps_estimate(self, mock_ticker_cls):
