@@ -4,12 +4,14 @@ import asyncio
 import json
 import os
 import signal
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
 from rich.console import Console
 
+from src.agents.news import NewsAnalysis
+from src.agents.sentiment import SentimentAnalysis
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
@@ -67,6 +69,8 @@ class DaemonRunner:
             rebalancing_time=config.rebalancing.run_time,
             rebalancing_days=config.rebalancing.run_days,
             enable_rebalancing=config.rebalancing.enabled,
+            signal_tracking_time=config.signal_tracking.tracking_time,
+            enable_signal_tracking=config.signal_tracking.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -307,12 +311,61 @@ class DaemonRunner:
                 trading_session=result.trading_session.value,
             )
 
+            # Record enriched signal for accuracy tracking (best-effort)
+            try:
+                self._historical_cache.record_signal_outcome(
+                    symbol=symbol,
+                    timestamp=datetime.now(UTC),
+                    signal=result.decision.action.value,
+                    confidence=result.decision.confidence,
+                    price_at_signal=result.risk.current_price,
+                    strategy_used=result.strategy_used,
+                    regime=result.regime.regime.value if result.regime else None,
+                    trading_session=result.trading_session.value,
+                    technical_signal=result.technical.signal.value,
+                    sentiment_signal=self._extract_sentiment_signal(result.sentiment),
+                    news_signal=self._extract_news_signal(result.news),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
+
             return result
         except Exception as e:
             error_msg = f"Failed to analyze {symbol}: {e}"
             logger.error(error_msg)
             self.state.record_error(error_msg)
             return None
+
+    def _extract_sentiment_signal(self, sentiment: SentimentAnalysis) -> str:
+        """Extract signal from sentiment analysis.
+
+        Args:
+            sentiment: Sentiment analysis result
+
+        Returns:
+            Signal string (BUY/SELL/NEUTRAL)
+        """
+        if sentiment.sentiment_score > 0.2:
+            return "BUY"
+        if sentiment.sentiment_score < -0.2:
+            return "SELL"
+        return "NEUTRAL"
+
+    def _extract_news_signal(self, news: NewsAnalysis) -> str:
+        """Extract signal from news analysis.
+
+        Args:
+            news: News analysis result
+
+        Returns:
+            Signal string (BUY/SELL/NEUTRAL)
+        """
+        recommendation = news.recommendation.upper()
+        if "BUY" in recommendation:
+            return "BUY"
+        if "SELL" in recommendation:
+            return "SELL"
+        return "NEUTRAL"
 
     def _format_sector_context(self, record: SectorRotationRecord) -> str:
         """Format sector rotation record as text for trader prompt.
@@ -1300,7 +1353,38 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
-    def _run_scheduled_tasks(self) -> None:
+    def _run_signal_tracking(self) -> None:
+        """Update signal outcomes with T+1d/5d/20d prices."""
+        if not self.config.signal_tracking.enabled:
+            return
+
+        # Dedup: check if already ran today
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_signal_tracking:
+            last_date = self.state.last_signal_tracking.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Signal tracking already completed today")
+                return
+
+        console.print(f"\n[bold cyan]Running Signal Tracking ({now:%H:%M})[/bold cyan]")
+
+        try:
+            from src.daemon.signal_tracker import SignalOutcomeTracker
+
+            tracker = SignalOutcomeTracker(self._historical_cache, self.broker)
+            stats = tracker.update_outcomes()
+
+            self.state.last_signal_tracking = datetime.now(UTC)
+            self.state.save(self.config.state.state_file)
+
+            console.print(f"[dim]Signal tracking: {stats}[/dim]\n")
+            logger.info(f"Signal tracking completed: {stats}")
+        except Exception as e:
+            error_msg = f"Signal tracking failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _run_scheduled_tasks(self) -> None:  # noqa: C901
         """Run all scheduled after-hours tasks."""
         # Check if it's time for data prefetching (before screening)
         if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
@@ -1333,6 +1417,10 @@ class DaemonRunner:
         # Check if it's time for parameter optimization
         if self.config.optimization.enabled and self.scheduler.is_optimization_time():
             self._run_optimization()
+
+        # Signal outcome tracking (after market close)
+        if self.scheduler.is_signal_tracking_time():
+            self._run_signal_tracking()
 
         # Daily risk report (after-hours only, before journal)
         if not self.scheduler.is_market_open():

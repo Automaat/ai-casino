@@ -249,6 +249,35 @@ class RiskLimitsConfig(BaseModel):
     report_dir: str = "~/.ai-casino/risk-reports"
 
 
+class SignalTrackingConfig(BaseModel):
+    """Configuration for signal accuracy tracking."""
+
+    enabled: bool = True
+    tracking_time: str = "17:00"
+
+    @model_validator(mode="after")
+    def validate_tracking_time(self) -> "SignalTrackingConfig":
+        """Validate tracking_time is in HH:MM format within 16:00-20:00."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.tracking_time)
+        if not match:
+            msg = f"tracking_time must be in HH:MM format (00:00-23:59), got {self.tracking_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"tracking_time must be between 16:00-20:00, got {self.tracking_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class EarningsCalendarConfig(BaseModel):
     """Configuration for earnings calendar preparation."""
 
@@ -303,6 +332,7 @@ class DaemonConfig(BaseModel):
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
     rebalancing: PortfolioRebalancingConfig = Field(default_factory=PortfolioRebalancingConfig)
+    signal_tracking: SignalTrackingConfig = Field(default_factory=SignalTrackingConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -332,6 +362,7 @@ class DaemonConfig(BaseModel):
         reporting_data = daemon_data.pop("reporting", {})
         risk_limits_data = daemon_data.pop("risk_limits", {})
         rebalancing_data = daemon_data.pop("rebalancing", {})
+        signal_tracking_data = daemon_data.pop("signal_tracking", {})
 
         return cls(
             **daemon_data,
@@ -348,6 +379,7 @@ class DaemonConfig(BaseModel):
             reporting=ReportingConfig(**reporting_data),
             risk_limits=RiskLimitsConfig(**risk_limits_data),
             rebalancing=PortfolioRebalancingConfig(**rebalancing_data),
+            signal_tracking=SignalTrackingConfig(**signal_tracking_data),
         )
 
     def __repr__(self) -> str:

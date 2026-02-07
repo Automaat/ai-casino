@@ -263,3 +263,207 @@ class TestStats:
         cache.store_ohlcv("AAPL", sample_ohlcv_df)
         stats = cache.stats()
         assert stats["ohlcv_daily"] == 5
+
+
+class TestSignalOutcomes:
+    def test_record_and_retrieve(self, cache):
+        now = datetime.now(UTC)
+
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now,
+            signal="BUY",
+            confidence=0.85,
+            price_at_signal=150.0,
+            strategy_used="momentum",
+            regime="BULL",
+            trading_session="REGULAR",
+            technical_signal="BUY",
+            sentiment_signal="POSITIVE",
+            news_signal="BULLISH",
+        )
+
+        signals = cache.get_signal_outcomes(window="all")
+        assert len(signals) == 1
+        assert signals[0]["symbol"] == "AAPL"
+        assert signals[0]["signal"] == "BUY"
+        assert signals[0]["confidence"] == 0.85
+        assert signals[0]["price_at_signal"] == 150.0
+        assert signals[0]["strategy_used"] == "momentum"
+        assert signals[0]["regime"] == "BULL"
+
+    def test_unique_constraint_symbol_timestamp(self, cache):
+        now = datetime.now(UTC)
+
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now,
+            signal="BUY",
+            confidence=0.85,
+            price_at_signal=150.0,
+        )
+
+        # Should ignore duplicate, not replace
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now,
+            signal="SELL",
+            confidence=0.90,
+            price_at_signal=151.0,
+        )
+
+        signals = cache.get_signal_outcomes(window="all")
+        assert len(signals) == 1
+        assert signals[0]["signal"] == "BUY"
+        assert signals[0]["confidence"] == 0.85
+
+    def test_get_signals_needing_update_1d_5d_20d(self, cache):
+        now = datetime.now(UTC)
+
+        # Recent signal (should not appear in any horizon)
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now,
+            signal="BUY",
+            confidence=0.85,
+            price_at_signal=150.0,
+        )
+
+        # Old signals (should appear based on horizon)
+        from pandas.tseries.offsets import BDay
+
+        old_2d = now - BDay(2)
+        old_6d = now - BDay(6)
+        old_21d = now - BDay(21)
+
+        cache.record_signal_outcome(
+            symbol="TSLA",
+            timestamp=old_2d,
+            signal="BUY",
+            confidence=0.80,
+            price_at_signal=200.0,
+        )
+
+        cache.record_signal_outcome(
+            symbol="MSFT",
+            timestamp=old_6d,
+            signal="SELL",
+            confidence=0.75,
+            price_at_signal=300.0,
+        )
+
+        cache.record_signal_outcome(
+            symbol="GOOGL",
+            timestamp=old_21d,
+            signal="BUY",
+            confidence=0.70,
+            price_at_signal=100.0,
+        )
+
+        # Check 1d horizon (should get 2d, 6d, 21d old)
+        signals_1d = cache.get_signals_needing_update("1d")
+        assert len(signals_1d) == 3
+        symbols_1d = {s["symbol"] for s in signals_1d}
+        assert symbols_1d == {"TSLA", "MSFT", "GOOGL"}
+
+        # Check 5d horizon (should get 6d, 21d old)
+        signals_5d = cache.get_signals_needing_update("5d")
+        assert len(signals_5d) == 2
+        symbols_5d = {s["symbol"] for s in signals_5d}
+        assert symbols_5d == {"MSFT", "GOOGL"}
+
+        # Check 20d horizon (should get only 21d old)
+        signals_20d = cache.get_signals_needing_update("20d")
+        assert len(signals_20d) == 1
+        assert signals_20d[0]["symbol"] == "GOOGL"
+
+    def test_update_signal_outcome(self, cache):
+        now = datetime.now(UTC)
+
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now,
+            signal="BUY",
+            confidence=0.85,
+            price_at_signal=150.0,
+        )
+
+        signals = cache.get_signal_outcomes(window="all")
+        signal_id = signals[0]["id"]
+
+        # Update with 1d price
+        cache.update_signal_outcome(
+            signal_id,
+            price_at_1d=155.0,
+            outcome_updated_at=now.isoformat(),
+        )
+
+        # Update with 5d and 20d prices
+        cache.update_signal_outcome(
+            signal_id,
+            price_at_5d=160.0,
+            price_at_20d=170.0,
+            outcome_updated_at=now.isoformat(),
+        )
+
+        # Update with early exit
+        cache.update_signal_outcome(
+            signal_id,
+            actual_exit_price=158.0,
+            actual_exit_date=now.isoformat(),
+            outcome_updated_at=now.isoformat(),
+        )
+
+        signals = cache.get_signal_outcomes(window="all")
+        assert signals[0]["price_at_1d"] == 155.0
+        assert signals[0]["price_at_5d"] == 160.0
+        assert signals[0]["price_at_20d"] == 170.0
+        assert signals[0]["actual_exit_price"] == 158.0
+        assert signals[0]["actual_exit_date"] is not None
+
+    def test_get_signal_outcomes_window_filtering(self, cache):
+        now = datetime.now(UTC)
+
+        # Create signals at different ages
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now - timedelta(days=5),
+            signal="BUY",
+            confidence=0.85,
+            price_at_signal=150.0,
+        )
+
+        cache.record_signal_outcome(
+            symbol="TSLA",
+            timestamp=now - timedelta(days=25),
+            signal="SELL",
+            confidence=0.80,
+            price_at_signal=200.0,
+        )
+
+        cache.record_signal_outcome(
+            symbol="MSFT",
+            timestamp=now - timedelta(days=80),
+            signal="BUY",
+            confidence=0.75,
+            price_at_signal=300.0,
+        )
+
+        # Test 7d window
+        signals_7d = cache.get_signal_outcomes(window="7d")
+        assert len(signals_7d) == 1
+        assert signals_7d[0]["symbol"] == "AAPL"
+
+        # Test 30d window
+        signals_30d = cache.get_signal_outcomes(window="30d")
+        assert len(signals_30d) == 2
+        symbols_30d = {s["symbol"] for s in signals_30d}
+        assert symbols_30d == {"AAPL", "TSLA"}
+
+        # Test 90d window
+        signals_90d = cache.get_signal_outcomes(window="90d")
+        assert len(signals_90d) == 3
+
+        # Test all window
+        signals_all = cache.get_signal_outcomes(window="all")
+        assert len(signals_all) == 3

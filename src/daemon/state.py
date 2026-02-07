@@ -155,6 +155,7 @@ class DaemonState(BaseModel):
     last_portfolio_rebalancing: datetime | None = None
     portfolio_rebalancing_history: list[PortfolioRebalancingRecord] = Field(default_factory=list)
     active_target_allocations: dict[str, float] | None = None
+    last_signal_tracking: datetime | None = None
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
