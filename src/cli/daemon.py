@@ -132,7 +132,7 @@ def events_daemon(
             console.print("Enable at least one watcher in daemon.toml:")
             console.print("  [daemon.news_watcher]")
             console.print("  enabled = true")
-            raise typer.Exit(1)  # noqa: TRY301
+            raise typer.Exit(1)
 
         # Initialize enabled watchers
         watchers = []

@@ -93,6 +93,7 @@ ignore = [
 ]
 "src/cli/*.py" = [
     "PLR0913", # many args OK for typer CLI commands
+    "TRY301",  # raise in try OK for CLI error handling (typer.Exit)
 ]
 "src/daemon/*.py" = [
     "PLR2004", # magic values OK for time calculations and limits
