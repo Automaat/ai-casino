@@ -178,7 +178,7 @@ class Gap(BaseModel):
     previous_close: float
     open_price: float
     gap_pct: float
-    gap_direction: str  # "up" or "down"
+    gap_direction: Literal["up", "down"]
 
     def __repr__(self) -> str:
         """String representation."""
@@ -193,7 +193,7 @@ class AnomalyEvent(BaseModel):
     timestamp: datetime
     source: str = "market_data"
     symbol: str
-    anomaly_types: list[str]  # ["volume_spike", "price_move", "gap"]
+    anomaly_types: list[Literal["volume_spike", "price_move", "gap"]]
 
     volume_spike_data: VolumeSpike | None = None
     price_move_data: PriceMove | None = None

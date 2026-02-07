@@ -116,13 +116,14 @@ class AnomalyWatcher(EventWatcher):
         """
         if symbol in self._volume_baselines:
             self._volume_baselines.move_to_end(symbol)
-        else:
-            self._volume_baselines[symbol] = avg_volume
-            # LRU eviction at 300 symbols
-            if len(self._volume_baselines) > 300:
-                oldest = next(iter(self._volume_baselines))
-                del self._volume_baselines[oldest]
-                logger.debug(f"LRU eviction: removed {oldest} baseline")
+
+        self._volume_baselines[symbol] = avg_volume
+
+        # LRU eviction at 300 symbols
+        if len(self._volume_baselines) > 300:
+            oldest = next(iter(self._volume_baselines))
+            del self._volume_baselines[oldest]
+            logger.debug(f"LRU eviction: removed {oldest} baseline")
 
     def _refresh_previous_close_if_needed(self) -> None:
         """Clear previous close cache on new trading day."""
@@ -228,6 +229,9 @@ class AnomalyWatcher(EventWatcher):
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
         self._init_components()
 
+        # Refresh previous close cache if needed (new day)
+        self._refresh_previous_close_if_needed()
+
         if not self.watchlist:
             logger.warning("No watchlist configured")
             return []
@@ -251,13 +255,21 @@ class AnomalyWatcher(EventWatcher):
                     logger.debug(f"No intraday data for {symbol}")
                     continue
 
-                # Extract current bar data
-                latest = intraday.data.iloc[-1]
-                current_volume = float(latest["Volume"])
-                current_price = float(latest["Close"])
-                open_price = float(latest["Open"])
-                high = float(latest["High"])
-                low = float(latest["Low"])
+                # Aggregate current trading day bars
+                latest_ts = intraday.data.index[-1]
+                current_date = latest_ts.date()
+                day_bars = intraday.data[intraday.data.index.date == current_date]
+
+                if day_bars.empty:
+                    # Fallback to single bar if date filtering fails
+                    day_bars = intraday.data.iloc[[-1]]
+
+                # Extract day-level aggregated metrics
+                open_price = float(day_bars["Open"].iloc[0])  # Market open
+                current_price = float(day_bars["Close"].iloc[-1])  # Latest close
+                high = float(day_bars["High"].max())  # Session high
+                low = float(day_bars["Low"].min())  # Session low
+                current_volume = float(day_bars["Volume"].sum())  # Total volume
 
                 # Run anomaly detections
                 anomaly_types = []
@@ -294,9 +306,6 @@ class AnomalyWatcher(EventWatcher):
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {e}")
                 continue
-
-        # Refresh previous close cache if needed (new day)
-        self._refresh_previous_close_if_needed()
 
         return events
 
