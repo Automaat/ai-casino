@@ -30,6 +30,9 @@ class MarketScheduler:
         health_check_time: str = "17:00",
         prefetch_time: str = "16:30",
         pre_market_refresh_time: str = "04:00",
+        sector_rotation_time: str = "16:15",
+        sector_rotation_days: list[str] | None = None,
+        enable_sector_rotation: bool = False,
     ) -> None:
         """Initialize market scheduler.
 
@@ -46,6 +49,9 @@ class MarketScheduler:
             health_check_time: Time to run health check (HH:MM format)
             prefetch_time: Time to run after-hours data prefetch (HH:MM format)
             pre_market_refresh_time: Time to run pre-market data refresh (HH:MM format)
+            sector_rotation_time: Time to run sector rotation analysis (HH:MM format)
+            sector_rotation_days: Days to run sector rotation (e.g., ["mon", ..., "fri"])
+            enable_sector_rotation: Enable sector rotation analysis
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -59,6 +65,9 @@ class MarketScheduler:
         self.health_check_time = health_check_time
         self.prefetch_time = prefetch_time
         self.pre_market_refresh_time = pre_market_refresh_time
+        self.sector_rotation_time = sector_rotation_time
+        self.sector_rotation_days = sector_rotation_days or ["mon", "tue", "wed", "thu", "fri"]
+        self.enable_sector_rotation = enable_sector_rotation
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -328,6 +337,29 @@ class MarketScheduler:
         except (ValueError, AttributeError) as e:
             logger.warning(f"Malformed pre_market_refresh_time '{self.pre_market_refresh_time}': {e}")
             return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_sector_rotation_time(self) -> bool:
+        """Check if current time matches sector rotation schedule.
+
+        Returns:
+            True if within 1 minute of configured time on configured day
+        """
+        if not self.enable_sector_rotation:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.sector_rotation_days:
+            return False
+
+        target_hour, target_minute = map(int, self.sector_rotation_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute

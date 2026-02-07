@@ -49,6 +49,9 @@ class DaemonRunner:
             health_check_time=config.health.run_time,
             prefetch_time=config.prefetch.prefetch_time,
             pre_market_refresh_time=config.prefetch.pre_market_refresh_time,
+            sector_rotation_time=config.sector_rotation.run_time,
+            sector_rotation_days=config.sector_rotation.run_days,
+            enable_sector_rotation=config.sector_rotation.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -196,7 +199,21 @@ class DaemonRunner:
             # Determine current session (default to REGULAR if called outside market hours)
             session = self.scheduler.get_trading_session() or TradingSession.REGULAR
 
-            result = await workflow.analyze(symbol, period_days=90, trading_session=session)
+            # Build sector rotation context if available
+            sector_context: str | None = None
+            if self.config.sector_rotation.enabled and self.state.sector_rotation_history:
+                try:
+                    from src.metrics.sector_rotation import SectorRotationAnalyzer
+
+                    analyzer = SectorRotationAnalyzer()
+                    rotation = analyzer.analyze()
+                    sector_context = analyzer.format_context(rotation)
+                except Exception as e:
+                    logger.warning(f"Failed to build sector context: {e}")
+
+            result = await workflow.analyze(
+                symbol, period_days=90, trading_session=session, sector_context=sector_context
+            )
 
             self.state.record_analysis(
                 symbol=symbol,
@@ -521,13 +538,32 @@ class DaemonRunner:
                 top_n=self.config.screening.top_n,
             )
 
+            # Apply sector rotation weighting if available
+            results_to_save = output.results
+            if self.config.sector_rotation.enabled and self.state.sector_rotation_history:
+                try:
+                    from src.daemon.sector_rotation import DaemonSectorRotation
+                    from src.metrics.sector_rotation import SectorRotationAnalyzer
+
+                    analyzer = SectorRotationAnalyzer()
+                    rotation_analysis = analyzer.analyze()
+                    daemon_rotation = DaemonSectorRotation()
+                    results_to_save = daemon_rotation.weight_candidates(
+                        output.results,
+                        rotation_analysis,
+                        self.config.sector_rotation.boost_factor,
+                    )
+                    logger.info("Applied sector rotation weighting to screening candidates")
+                except Exception as e:
+                    logger.warning(f"Failed to apply sector weighting: {e}")
+
             # Log top 5 to console
-            self._log_screening_results(output.results[:5])
+            self._log_screening_results(results_to_save[:5])
 
             # Save to watchlist file
             exporter = ScreeningExporter()
             exporter.save_to_watchlist(
-                results=output.results[: self.config.screening.top_n],
+                results=results_to_save[: self.config.screening.top_n],
                 criteria=criteria,
                 watchlist_name=self.config.screening.watchlist_name,
             )
@@ -536,7 +572,7 @@ class DaemonRunner:
             self.state.record_after_hours_screening(
                 criteria=criteria.value,
                 universe=self.config.screening.universe,
-                candidates=output.results,
+                candidates=results_to_save,
                 top_n=self.config.screening.top_n,
                 screened_at=output.screened_at,
             )
@@ -550,6 +586,64 @@ class DaemonRunner:
 
         except Exception as e:
             error_msg = f"After-hours screening failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _run_sector_rotation(self) -> None:
+        """Run sector rotation analysis."""
+        from src.daemon.sector_rotation import DaemonSectorRotation
+
+        # Check if already ran today
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_sector_rotation:
+            last_date = self.state.last_sector_rotation.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Sector rotation already completed today")
+                return
+
+        logger.info("Starting sector rotation analysis")
+        console.print(f"\n[bold cyan]Sector Rotation Analysis ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            daemon_rotation = DaemonSectorRotation()
+            analysis = daemon_rotation.run()
+
+            # Flag positions in weak sectors
+            flagged: list[str] = []
+            if self.broker:
+                try:
+                    account_info = self.broker.get_account_info()
+                    position_symbols = list(account_info.positions.keys())
+                    flagged = daemon_rotation.flag_weak_positions(position_symbols, analysis)
+                except Exception as e:
+                    logger.warning(f"Failed to flag positions: {e}")
+
+            # Record in state
+            sector_strengths = {s.sector: s.relative_strength for s in analysis.sectors}
+            sector_momenta = {s.sector: s.momentum.value for s in analysis.sectors}
+
+            self.state.record_sector_rotation(
+                leading_sectors=analysis.leading_sectors,
+                lagging_sectors=analysis.lagging_sectors,
+                sector_strengths=sector_strengths,
+                sector_momenta=sector_momenta,
+                flagged_positions=flagged,
+            )
+            self.state.save(self.config.state.state_file)
+
+            # Console output
+            console.print(f"[dim]Leading: {', '.join(analysis.leading_sectors)}[/dim]")
+            console.print(f"[dim]Lagging: {', '.join(analysis.lagging_sectors)}[/dim]")
+            if flagged:
+                console.print(f"[bold yellow]Flagged positions: {', '.join(flagged)}[/bold yellow]")
+            console.print(
+                f"\n[dim]Sector rotation complete: {len(analysis.sectors)} sectors analyzed[/dim]\n"
+            )
+            logger.info("Sector rotation analysis completed")
+
+        except Exception as e:
+            error_msg = f"Sector rotation failed: {e}"
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
@@ -612,6 +706,10 @@ class DaemonRunner:
         # Check if it's time for pre-market data refresh
         if self.config.prefetch.enabled and self.scheduler.is_pre_market_refresh_time():
             self._run_pre_market_refresh()
+
+        # Check if it's time for sector rotation (before screening)
+        if self.scheduler.is_sector_rotation_time():
+            self._run_sector_rotation()
 
         # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():

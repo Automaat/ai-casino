@@ -70,6 +70,7 @@ class TraderAgent:
         comparative: ComparativeAnalysis | None = None,
         owns_position: bool = False,
         position_qty: float | None = None,
+        sector_context: str | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -84,6 +85,7 @@ class TraderAgent:
             comparative: Comparative analysis results (optional)
             owns_position: Whether user owns this stock
             position_qty: Number of shares owned (if any)
+            sector_context: Formatted sector rotation context (optional)
 
         Returns:
             TradingDecision with action and reasoning
@@ -101,6 +103,7 @@ class TraderAgent:
 
         fundamental_section = self._build_fundamental_section(fundamental)
         comparative_section = self._build_comparative_section(comparative)
+        sector_rotation_section = self._build_sector_rotation_section(sector_context)
 
         prompt = self._prompts.load(
             "user_base",
@@ -130,6 +133,7 @@ class TraderAgent:
             else "N/A",
             bearish_confidence=f"{bearish.confidence:.2f}",
             comparative_section=comparative_section,
+            sector_rotation_section=sector_rotation_section,
         )
 
         system_prompt = self._prompts.load("system")
@@ -234,6 +238,38 @@ class TraderAgent:
             ),
             confidence=f"{comparative.confidence:.2f}",
             interpretation=comparative.interpretation,
+        )
+
+    def _build_sector_rotation_section(self, sector_context: str | None) -> str:
+        """Build sector rotation section for prompt.
+
+        Args:
+            sector_context: Formatted sector rotation context (optional)
+
+        Returns:
+            Formatted section string (empty if None)
+        """
+        if not sector_context:
+            return ""
+
+        # Parse leading/lagging from context (first two lines)
+        lines = sector_context.strip().split("\n")
+        leading = ""
+        lagging = ""
+        details_lines = []
+        for line in lines:
+            if line.startswith("Leading Sectors:"):
+                leading = line.replace("Leading Sectors: ", "")
+            elif line.startswith("Lagging Sectors:"):
+                lagging = line.replace("Lagging Sectors: ", "")
+            elif line.strip():
+                details_lines.append(line)
+
+        return self._prompts.load(
+            "section_sector_rotation",
+            leading_sectors=leading,
+            lagging_sectors=lagging,
+            sector_details="\n".join(details_lines),
         )
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:

@@ -77,6 +77,7 @@ class TradingState(TypedDict):
     order_status: OrderStatus | None
     regime_analysis: RegimeAnalysis | None
     strategy_selection: StrategySelection | None
+    sector_rotation_context: str | None
     warnings: list[str]
 
 
@@ -205,6 +206,7 @@ class TradingWorkflow:
         symbol: str,
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
+        sector_context: str | None = None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
@@ -212,6 +214,7 @@ class TradingWorkflow:
             symbol: Stock ticker symbol
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
+            sector_context: Formatted sector rotation context for trader prompt
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
@@ -227,7 +230,9 @@ class TradingWorkflow:
             collector_token = current_collector.set(collector)
 
         try:
-            return await self._analyze_instrumented(symbol, period_days, trading_session, collector)
+            return await self._analyze_instrumented(
+                symbol, period_days, trading_session, collector, sector_context
+            )
         finally:
             if collector_token is not None:
                 current_collector.reset(collector_token)
@@ -286,6 +291,7 @@ class TradingWorkflow:
         period_days: int,
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
+        sector_context: str | None = None,
     ) -> TradingWorkflowResult:
         """Run analysis pipeline with optional metrics instrumentation.
 
@@ -294,9 +300,11 @@ class TradingWorkflow:
             period_days: Days of historical data
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             collector: Optional metrics collector
+            sector_context: Formatted sector rotation context for trader prompt
         """
         start = time.perf_counter()
         state = await self._fetch_data(symbol, period_days)
+        state["sector_rotation_context"] = sector_context
         self._record_stage(collector, "fetch_data", start)
 
         start = time.perf_counter()
@@ -624,6 +632,7 @@ class TradingWorkflow:
             order_status=None,
             regime_analysis=None,
             strategy_selection=None,
+            sector_rotation_context=None,
             warnings=[],
         )
 
@@ -667,6 +676,7 @@ class TradingWorkflow:
             comparative=state["comparative_analysis"],
             owns_position=owns_position,
             position_qty=position_qty,
+            sector_context=state.get("sector_rotation_context"),
         )
 
         state["final_decision"] = decision

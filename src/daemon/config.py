@@ -108,6 +108,39 @@ class PrefetchConfig(BaseModel):
     check_connectivity: bool = True
 
 
+class SectorRotationConfig(BaseModel):
+    """Configuration for sector rotation analysis."""
+
+    enabled: bool = False
+    run_time: str = "16:15"
+    run_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
+    boost_factor: float = Field(
+        default=0.15, ge=0.0, le=1.0, description="Sector weight boost factor (0.0-1.0)"
+    )
+
+    @model_validator(mode="after")
+    def validate_run_time(self) -> "SectorRotationConfig":
+        """Validate run_time is in HH:MM format within 16:00-20:00."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.run_time)
+        if not match:
+            msg = f"run_time must be in HH:MM format (00:00-23:59), got {self.run_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"run_time must be between 16:00-20:00, got {self.run_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -123,6 +156,7 @@ class DaemonConfig(BaseModel):
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
     prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
+    sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -146,6 +180,7 @@ class DaemonConfig(BaseModel):
         optimization_data = daemon_data.pop("optimization", {})
         screening_data = daemon_data.pop("screening", {})
         prefetch_data = daemon_data.pop("prefetch", {})
+        sector_rotation_data = daemon_data.pop("sector_rotation", {})
 
         return cls(
             **daemon_data,
@@ -156,6 +191,7 @@ class DaemonConfig(BaseModel):
             optimization=OptimizationConfig(**optimization_data),
             screening=ScreeningConfig(**screening_data),
             prefetch=PrefetchConfig(**prefetch_data),
+            sector_rotation=SectorRotationConfig(**sector_rotation_data),
         )
 
     def __repr__(self) -> str:
