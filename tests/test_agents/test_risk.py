@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from src.agents.risk import (
+    AccountInfo,
     PortfolioRiskReport,
     PortfolioVaRConfig,
     PositionSizeCalculation,
@@ -667,3 +668,107 @@ class TestGenerateRiskReport:
         assert report.risk_status == "BREACH"
         assert report.var_limit_breached is True
         assert report.cvar_limit_breached is True
+
+
+class TestWeightBasedPositionSizing:
+    def test_weight_based_position_sizing(self, mock_llm_client):
+        agent = RiskManagementAgent(mock_llm_client)
+
+        account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
+
+        stop_loss = StopLossCalculation(
+            stop_loss_price=95.0,
+            stop_loss_percent=5.0,
+            risk_per_share=5.0,
+            max_loss_amount=0.0,
+            methodology="ATR",
+        )
+
+        # Test 10% target weight
+        result = agent._calculate_weight_based_position(
+            current_price=100.0,
+            stop_loss=stop_loss,
+            account_info=account_info,
+            target_weight=0.10,
+        )
+
+        expected_shares = 100  # 10% of 100k = 10k / 100 = 100 shares
+        assert result.recommended_shares == expected_shares
+        assert result.position_value == 10000.0
+        assert result.risk_amount == 500.0  # 100 shares * 5.0 risk_per_share
+        assert result.risk_percent == 0.5
+        assert "Portfolio-weighted position" in result.reasoning
+        assert "10.0% target" in result.reasoning
+
+    def test_weight_based_constrained_by_cash(self, mock_llm_client):
+        agent = RiskManagementAgent(mock_llm_client)
+
+        account_info = AccountInfo(balance=100000.0, available_cash=5000.0, positions={}, total_exposure=0.0)
+
+        stop_loss = StopLossCalculation(
+            stop_loss_price=95.0,
+            stop_loss_percent=5.0,
+            risk_per_share=5.0,
+            max_loss_amount=0.0,
+            methodology="ATR",
+        )
+
+        # Target 20% but only have 5% cash available
+        result = agent._calculate_weight_based_position(
+            current_price=100.0,
+            stop_loss=stop_loss,
+            account_info=account_info,
+            target_weight=0.20,
+        )
+
+        expected_shares = 50  # Limited by 5k cash / 100 = 50 shares
+        assert result.recommended_shares == expected_shares
+        assert result.position_value == 5000.0
+
+    def test_weight_based_constrained_by_max_position(self, mock_llm_client):
+        agent = RiskManagementAgent(mock_llm_client, max_single_position=10.0)
+
+        account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
+
+        stop_loss = StopLossCalculation(
+            stop_loss_price=95.0,
+            stop_loss_percent=5.0,
+            risk_per_share=5.0,
+            max_loss_amount=0.0,
+            methodology="ATR",
+        )
+
+        # Target 20% but max position is 10%
+        result = agent._calculate_weight_based_position(
+            current_price=100.0,
+            stop_loss=stop_loss,
+            account_info=account_info,
+            target_weight=0.20,
+        )
+
+        expected_shares = 100  # Limited by 10% max = 10k / 100 = 100 shares
+        assert result.recommended_shares == expected_shares
+        assert result.position_value == 10000.0
+
+    def test_assess_with_target_weight(self, mock_llm_client, sample_ohlcv_data):
+        agent = RiskManagementAgent(mock_llm_client)
+
+        account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
+
+        sample_ohlcv_data["Close"] = [100.0] * len(sample_ohlcv_data)
+        sample_ohlcv_data["High"] = [105.0] * len(sample_ohlcv_data)
+        sample_ohlcv_data["Low"] = [95.0] * len(sample_ohlcv_data)
+
+        result = agent.assess(
+            symbol="AAPL",
+            action=Signal.BUY,
+            current_price=100.0,
+            account_info=account_info,
+            market_data=sample_ohlcv_data,
+            decision_confidence=0.85,
+            target_portfolio_weight=0.15,
+        )
+
+        assert result.position_sizing.recommended_shares > 0
+        assert "Portfolio-weighted position" in result.position_sizing.reasoning
+        assert result.position_sizing.position_value <= 15000.0  # 15% target

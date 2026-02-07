@@ -186,6 +186,18 @@ class TradingWorkflow:
         trump_str = "+trump" if trump_mode else ""
         logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
 
+        self._target_allocations: dict[str, float] | None = None
+
+    def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
+        """Set target portfolio allocations for position sizing.
+
+        Args:
+            allocations: Dict of {symbol: weight} for target portfolio
+        """
+        self._target_allocations = allocations
+        if allocations:
+            logger.info(f"Set target allocations for {len(allocations)} symbols")
+
     def _is_rate_limit_error(self, e: Exception) -> bool:
         """Check if exception is related to API rate limiting."""
         msg = str(e).lower()
@@ -739,6 +751,9 @@ class TradingWorkflow:
 
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
+        # Get target weight from allocations if available
+        target_weight = self._target_allocations.get(state["symbol"]) if self._target_allocations else None
+
         risk_assessment = self.risk_manager.assess(
             symbol=state["symbol"],
             action=state["final_decision"].action,
@@ -748,6 +763,7 @@ class TradingWorkflow:
             decision_confidence=state["final_decision"].confidence,
             broker_positions=state.get("broker_positions"),
             portfolio_value=state.get("portfolio_value"),
+            target_portfolio_weight=target_weight,
         )
 
         state["risk_assessment"] = risk_assessment

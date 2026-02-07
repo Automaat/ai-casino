@@ -33,6 +33,28 @@ class ScreeningRecord(BaseModel):
     screened_at: datetime
 
 
+class PortfolioAllocationRecord(BaseModel):
+    """Single asset allocation in rebalancing record."""
+
+    symbol: str
+    weight: float
+    action: str
+    delta: float
+
+
+class PortfolioRebalancingRecord(BaseModel):
+    """Record of portfolio rebalancing analysis."""
+
+    timestamp: datetime
+    method: str
+    allocations: list[PortfolioAllocationRecord]
+    expected_return: float
+    expected_volatility: float
+    sharpe_ratio: float
+    rebalances_executed: int
+    rebalances_pending: int
+
+
 class OptimizationRecord(BaseModel):
     """Record of a parameter optimization run."""
 
@@ -130,6 +152,9 @@ class DaemonState(BaseModel):
     last_tearsheet: datetime | None = None
     last_risk_report: datetime | None = None
     risk_report_history: list[RiskReportRecord] = Field(default_factory=list)
+    last_portfolio_rebalancing: datetime | None = None
+    portfolio_rebalancing_history: list[PortfolioRebalancingRecord] = Field(default_factory=list)
+    active_target_allocations: dict[str, float] | None = None
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -282,6 +307,48 @@ class DaemonState(BaseModel):
 
         if len(self.optimization_history) > 10:
             self.optimization_history = self.optimization_history[-10:]
+
+    def record_portfolio_rebalancing(  # noqa: PLR0913
+        self,
+        method: str,
+        allocations: list[PortfolioAllocationRecord],
+        expected_return: float,
+        expected_volatility: float,
+        sharpe_ratio: float,
+        rebalances_executed: int,
+        rebalances_pending: int,
+    ) -> None:
+        """Record portfolio rebalancing run.
+
+        Args:
+            method: Optimization method used
+            allocations: Asset allocation records
+            expected_return: Expected portfolio return
+            expected_volatility: Expected portfolio volatility
+            sharpe_ratio: Portfolio Sharpe ratio
+            rebalances_executed: Number of rebalances executed
+            rebalances_pending: Number of rebalances pending
+        """
+        now = datetime.now(UTC)
+
+        self.portfolio_rebalancing_history.append(
+            PortfolioRebalancingRecord(
+                timestamp=now,
+                method=method,
+                allocations=allocations,
+                expected_return=expected_return,
+                expected_volatility=expected_volatility,
+                sharpe_ratio=sharpe_ratio,
+                rebalances_executed=rebalances_executed,
+                rebalances_pending=rebalances_pending,
+            )
+        )
+        self.last_portfolio_rebalancing = now
+
+        if len(self.portfolio_rebalancing_history) > 30:
+            self.portfolio_rebalancing_history = self.portfolio_rebalancing_history[-30:]
+
+        self.active_target_allocations = {a.symbol: a.weight for a in allocations}
 
     def record_prefetch(
         self,
