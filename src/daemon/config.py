@@ -70,6 +70,19 @@ class HealthConfig(BaseModel):
     archive_dir: str = "~/.ai-casino/archive"
 
 
+class OptimizationConfig(BaseModel):
+    """Configuration for after-hours strategy parameter optimization."""
+
+    enabled: bool = False
+    optimization_time: str = "17:00"
+    optimization_days: list[str] = Field(default_factory=lambda: ["sat"])
+    n_trials: int = 100
+    min_trades: int = 100
+    params_file: str = "~/.ai-casino/optimized-params.json"
+    refresh_days: int = 30
+    strategies: list[str] = Field(default_factory=lambda: ["momentum", "mean_reversion", "trend_following"])
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -82,6 +95,7 @@ class DaemonConfig(BaseModel):
     state: StateConfig = Field(default_factory=StateConfig)
     journal: JournalConfig = Field(default_factory=JournalConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
+    optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -102,6 +116,7 @@ class DaemonConfig(BaseModel):
         state_data = daemon_data.pop("state", {})
         journal_data = daemon_data.pop("journal", {})
         health_data = daemon_data.pop("health", {})
+        optimization_data = daemon_data.pop("optimization", {})
 
         return cls(
             **daemon_data,
@@ -109,6 +124,7 @@ class DaemonConfig(BaseModel):
             state=StateConfig(**state_data),
             journal=JournalConfig(**journal_data),
             health=HealthConfig(**health_data),
+            optimization=OptimizationConfig(**optimization_data),
         )
 
     def __repr__(self) -> str:

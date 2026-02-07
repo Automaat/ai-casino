@@ -11,6 +11,7 @@ from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.optimization.param_store import OptimizedParamStore
 
 from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
 from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
@@ -96,6 +97,7 @@ class TradingWorkflow:
         trump_mode: bool = False,
         snapshot_on_trade: bool | None = None,
         snapshot_repository: "PortfolioSnapshotRepository | None" = None,
+        param_store: "OptimizedParamStore | None" = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -112,6 +114,7 @@ class TradingWorkflow:
             trump_mode: Enable Trump social media analysis
             snapshot_on_trade: Capture portfolio snapshot after trades (env: PORTFOLIO_SNAPSHOT_ON_TRADE)
             snapshot_repository: Repository for portfolio snapshots (required if snapshot_on_trade)
+            param_store: Optional optimized parameter store for strategy tuning
         """
         import os
 
@@ -141,7 +144,7 @@ class TradingWorkflow:
         self.meta_agent: MetaAgent | None = None
         if use_meta_agent:
             regime_detector = MarketRegimeDetector()
-            self.meta_agent = MetaAgent(llm_client, regime_detector, metrics_tracker)
+            self.meta_agent = MetaAgent(llm_client, regime_detector, metrics_tracker, param_store=param_store)
 
         # Default strategy (used if meta-agent disabled)
         self._default_strategy: MomentumStrategy | EnsembleStrategy = (

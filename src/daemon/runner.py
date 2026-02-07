@@ -18,6 +18,7 @@ from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.models.llm import LLMClient
 from src.models.sentiment import get_finbert_sentiment
+from src.optimization.param_store import OptimizedParamStore
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -42,10 +43,23 @@ class DaemonRunner:
             enable_after_hours=config.schedule.enable_after_hours,
             after_hours_screen_time=config.schedule.after_hours_screen_time,
             after_hours_screen_days=config.schedule.after_hours_screen_days,
+            optimization_time=config.optimization.optimization_time,
+            optimization_days=config.optimization.optimization_days,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
         self._workflow: TradingWorkflow | None = None
+        self.param_store: OptimizedParamStore | None = None
+        self._daemon_optimizer = None
+        if config.optimization.enabled:
+            self.param_store = OptimizedParamStore(config.optimization.params_file)
+            from src.daemon.optimization import DaemonOptimizer
+
+            self._daemon_optimizer = DaemonOptimizer(
+                param_store=self.param_store,
+                n_trials=config.optimization.n_trials,
+                min_trades=config.optimization.min_trades,
+            )
         self.broker: AlpacaBroker | None = None
         if config.auto_trade:
             api_key = os.getenv("ALPACA_API_KEY")
@@ -82,6 +96,7 @@ class DaemonRunner:
                 broker=self.broker,
                 metrics_tracker=None,
                 use_meta_agent=True,
+                param_store=self.param_store,
             )
             logger.info("Trading workflow initialized")
         return self._workflow
@@ -260,6 +275,59 @@ class DaemonRunner:
             self.state.record_error(f"Journal failed: {e}")
             self.state.save(self.config.state.state_file)
 
+    def _run_optimization(self) -> None:
+        """Run after-hours strategy parameter optimization."""
+        if not self._daemon_optimizer:
+            return
+
+        # Check if already optimized today
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_optimization:
+            last_date = self.state.last_optimization.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Optimization already completed today")
+                return
+
+        logger.info("Starting after-hours parameter optimization")
+        console.print(f"\n[bold cyan]Parameter Optimization ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            import time as time_mod
+
+            start_time = time_mod.time()
+            watchlist = self._get_merged_watchlist()
+
+            optimized, skipped, failed = self._daemon_optimizer.optimize_watchlist(
+                watchlist=watchlist,
+                strategies=self.config.optimization.strategies,
+                refresh_days=self.config.optimization.refresh_days,
+            )
+
+            total_time = time_mod.time() - start_time
+
+            self.state.record_optimization(
+                symbols_optimized=optimized,
+                symbols_skipped=skipped,
+                total_time_seconds=total_time,
+            )
+            self.state.save(self.config.state.state_file)
+
+            if failed:
+                for symbol, strategies_str in failed:
+                    logger.warning(f"Failed to optimize {symbol}: {strategies_str}")
+
+            console.print(
+                f"\n[dim]Optimization complete: {len(optimized)} symbols optimized, "
+                f"{len(skipped)} skipped ({total_time:.0f}s)[/dim]\n"
+            )
+            logger.info(f"Parameter optimization completed in {total_time:.0f}s")
+
+        except Exception as e:
+            error_msg = f"Parameter optimization failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
     def _run_after_hours_screening(self) -> None:
         """Run after-hours screening for watchlist candidates."""
         from src.data.universe import StockUniverseFetcher
@@ -268,7 +336,7 @@ class DaemonRunner:
         # Check if already screened today
         now = datetime.now(self.scheduler.timezone)
         if self.state.last_after_hours_screening:
-            last_date = self.state.last_after_hours_screening.date()
+            last_date = self.state.last_after_hours_screening.astimezone(self.scheduler.timezone).date()
             if last_date == now.date():
                 logger.debug("After-hours screening already completed today")
                 return
@@ -384,6 +452,10 @@ class DaemonRunner:
             self._run_after_hours_screening()
 
         await self._maybe_run_health_check()
+
+        # Check if it's time for parameter optimization
+        if self.config.optimization.enabled and self.scheduler.is_optimization_time():
+            self._run_optimization()
 
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             await self._maybe_run_journal()
