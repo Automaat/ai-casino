@@ -25,6 +25,7 @@ class AnalysisRecord(BaseModel):
     confidence: float
     executed_trade: bool = False
     trading_session: TradingSession = TradingSession.REGULAR
+    is_paper_trade: bool = True
 
 
 class ScreeningRecord(BaseModel):
@@ -195,6 +196,8 @@ class DaemonState(BaseModel):
     errors: list[str] = Field(default_factory=list)
     total_analyses: int = 0
     total_trades: int = 0
+    paper_trading_start_date: datetime | None = None
+    current_trading_mode: str = "paper"
     last_journal_date: str | None = None
     last_after_hours_screening: datetime | None = None
     last_health_check: datetime | None = None
@@ -268,13 +271,14 @@ class DaemonState(BaseModel):
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
 
-    def record_analysis(
+    def record_analysis(  # noqa: PLR0913
         self,
         symbol: str,
         signal: str,
         confidence: float,
         executed: bool = False,
         trading_session: TradingSession = TradingSession.REGULAR,
+        is_paper_trade: bool = True,
     ) -> None:
         """Record an analysis result.
 
@@ -284,6 +288,7 @@ class DaemonState(BaseModel):
             confidence: Signal confidence
             executed: Whether trade was executed
             trading_session: Trading session type (REGULAR/PRE_MARKET)
+            is_paper_trade: Whether trade was paper or live
         """
         self.analyses.append(
             AnalysisRecord(
@@ -293,6 +298,7 @@ class DaemonState(BaseModel):
                 confidence=confidence,
                 executed_trade=executed,
                 trading_session=trading_session,
+                is_paper_trade=is_paper_trade,
             )
         )
         self.total_analyses += 1

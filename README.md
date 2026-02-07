@@ -130,6 +130,88 @@ Confidence: 0.85
 Risk Level: LOW
 ```
 
+## Trading Modes
+
+### Paper Trading (Default)
+
+Paper trading mode allows safe strategy testing without risking real capital:
+
+```bash
+# Set paper trading credentials (optional, falls back to live if not set)
+export ALPACA_PAPER_API_KEY=<key>
+export ALPACA_PAPER_SECRET_KEY=<secret>
+
+# In daemon.toml
+[daemon]
+trading_mode = "paper"  # Default
+auto_trade = true
+```
+
+### Live Trading Promotion
+
+**IMPORTANT:** Live trading requires passing paper trading validation first. The system enforces minimum criteria before allowing live trades:
+
+1. **Validate Readiness**
+   ```bash
+   ai-casino validate-paper-trading --config daemon.toml
+   ```
+
+   Checks:
+   - Min 30 days paper trading
+   - Min 20 executed trades
+   - Sharpe ratio ≥ 0.5
+   - Max drawdown ≤ 15%
+   - Win rate ≥ 45%
+
+2. **Configure Live Mode**
+   ```bash
+   # Set live credentials
+   export ALPACA_API_KEY=<key>
+   export ALPACA_SECRET_KEY=<secret>
+
+   # In daemon.toml
+   [daemon]
+   trading_mode = "live"
+   ```
+
+3. **Start Daemon**
+   ```bash
+   # Requires validation to pass
+   ai-casino daemon --config daemon.toml
+
+   # Or bypass validation (advanced users only)
+   ai-casino daemon --config daemon.toml --force-live
+   ```
+
+### Validation Criteria
+
+Configure paper trading requirements in `daemon.toml`:
+
+```toml
+[daemon.paper_trading]
+min_duration_days = 30        # Minimum paper trading period
+min_trades = 20               # Minimum executed trades
+min_sharpe = 0.5              # Minimum Sharpe ratio
+max_drawdown_percent = 15.0   # Maximum drawdown allowed
+min_win_rate = 0.45           # Minimum win rate (45%)
+```
+
+### Automated Notifications
+
+When paper trading criteria are met, you'll receive a Telegram notification (if configured):
+
+```
+🎉 Paper Trading Validation Complete
+
+Duration: 32 days
+Trades: 25
+Sharpe: 0.68
+Max DD: 12.3%
+
+✅ Ready for live trading promotion
+Run: ai-casino validate-paper-trading to review
+```
+
 ## Development
 
 ### Run Tests

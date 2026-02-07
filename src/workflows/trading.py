@@ -610,10 +610,15 @@ class TradingWorkflow:
 
         if self.metrics_tracker:
             try:
+                is_paper = self.broker.paper if self.broker else True
                 if isinstance(self.metrics_tracker, DatabaseMetricsTracker):
-                    await self.metrics_tracker.record_decision_async(result, strategy_name=strategy_name)
+                    await self.metrics_tracker.record_decision_async(
+                        result, strategy_name=strategy_name, is_paper_trade=is_paper
+                    )
                 else:
-                    self.metrics_tracker.record_decision(result, strategy_name=strategy_name)
+                    self.metrics_tracker.record_decision(
+                        result, strategy_name=strategy_name, is_paper_trade=is_paper
+                    )
             except Exception as e:
                 logger.error(f"Failed to record metrics (continuing): {e}")
 

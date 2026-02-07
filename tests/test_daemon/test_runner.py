@@ -12,6 +12,11 @@ from src.daemon.runner import DaemonRunner
 from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 
+# Test credentials - not real secrets
+TEST_API_KEY = "test_key"
+TEST_SECRET_KEY = "test_secret"
+TEST_BASE_URL = "https://paper-api.alpaca.markets"
+
 
 @pytest.fixture
 def sample_config(tmp_path: Path) -> DaemonConfig:
@@ -167,20 +172,30 @@ def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None
     """Test auto_trade=true raises ValueError when keys missing."""
     sample_config.auto_trade = True
 
-    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="auto_trade=true requires"):
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="auto_trade with"):
         DaemonRunner(sample_config)
 
 
+@patch("src.daemon.runner.AlpacaBroker.get_credentials")
 @patch("src.daemon.runner.AlpacaBroker")
-def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
+def test_auto_trade_inits_broker(
+    mock_broker_class: Mock, mock_get_credentials: Mock, sample_config: DaemonConfig
+) -> None:
     """Test auto_trade=true initializes broker when keys present."""
     sample_config.auto_trade = True
+    mock_get_credentials.return_value = (TEST_API_KEY, TEST_SECRET_KEY, TEST_BASE_URL)
 
-    with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
+    with patch.dict(os.environ, {"ALPACA_API_KEY": TEST_API_KEY, "ALPACA_SECRET_KEY": TEST_SECRET_KEY}):
         runner = DaemonRunner(sample_config)
 
         assert runner.broker is not None
-        mock_broker_class.assert_called_once_with(paper=True, historical_cache=ANY)
+        mock_broker_class.assert_called_once_with(
+            api_key=TEST_API_KEY,
+            secret_key=TEST_SECRET_KEY,
+            base_url=TEST_BASE_URL,
+            paper=True,
+            historical_cache=ANY,
+        )
 
 
 @pytest.mark.asyncio
@@ -281,6 +296,7 @@ async def test_analyze_symbol_records_executed_trade(
         confidence=0.85,
         executed=True,
         trading_session="REGULAR",
+        is_paper_trade=True,
     )
 
 
@@ -315,6 +331,7 @@ async def test_analyze_symbol_records_not_executed(
         confidence=0.6,
         executed=False,
         trading_session="REGULAR",
+        is_paper_trade=True,
     )
 
 

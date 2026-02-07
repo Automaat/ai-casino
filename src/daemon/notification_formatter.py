@@ -59,6 +59,8 @@ class NotificationFormatter:
             return NotificationFormatter._format_var_breach(message)
         if message.trigger == NotificationTrigger.HEALTH_FAILURE:
             return NotificationFormatter._format_health_failure(message)
+        if message.trigger == NotificationTrigger.PAPER_TRADING_READY:
+            return NotificationFormatter._format_paper_trading_ready(message)
         return f"*{message.title}*\n\n{message.body}"
 
     @staticmethod
@@ -149,4 +151,25 @@ class NotificationFormatter:
             f"⚠️ *API Health Check Failed*\n\n"
             f"*Services Down:* {services}\n\n"
             f"Analysis quality may be affected. Check health report."
+        )
+
+    @staticmethod
+    def _format_paper_trading_ready(message: NotificationMessage) -> str:
+        """Format paper trading readiness notification.
+
+        Args:
+            message: Notification message
+
+        Returns:
+            Formatted markdown string
+        """
+        m = message.metadata
+        return (
+            f"🎉 *Paper Trading Validation Complete*\n\n"
+            f"*Duration:* {m['duration_days']} days\n"
+            f"*Trades:* {m['total_trades']}\n"
+            f"*Sharpe:* {m['sharpe']:.2f}\n"
+            f"*Max DD:* {m['max_dd']:.1f}%\n\n"
+            f"✅ Ready for live trading promotion\n"
+            f"Run: `ai-casino validate-paper-trading` to review"
         )

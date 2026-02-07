@@ -63,6 +63,8 @@ ignore = [
 [lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",    # assert allowed in tests
+    "S105",    # hardcoded password false positives in test fixtures
+    "S106",    # hardcoded password false positives in test arguments
     "ANN",     # type annotations not required in tests
     "D",       # docstrings not required in tests
     "PLR2004", # magic values OK in tests

@@ -175,7 +175,7 @@ class TestRedditFetcher:
     def test_init_with_explicit_credentials(self, tmp_path):
         """Test init with explicit credentials."""
         test_client_id = "explicit_id"
-        test_client_secret = "explicit_secret"  # noqa: S105
+        test_client_secret = "explicit_secret"
         test_user_agent = "explicit_agent"
         fetcher = RedditFetcher(
             client_id=test_client_id,

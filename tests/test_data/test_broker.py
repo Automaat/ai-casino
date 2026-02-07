@@ -72,11 +72,11 @@ def test_broker_init_with_env_vars(mock_trading_client, monkeypatch):
     broker = AlpacaBroker()
 
     assert broker.api_key == "test-key"
-    assert broker.secret_key == "test-secret"  # noqa: S105
+    assert broker.secret_key == "test-secret"
     assert broker.paper is True
     mock_trading_client.assert_called_once_with(
         api_key="test-key",
-        secret_key="test-secret",  # noqa: S106
+        secret_key="test-secret",
         paper=True,
         base_url="https://paper-api.alpaca.markets",
     )
@@ -86,13 +86,13 @@ def test_broker_init_with_args(mock_trading_client):
     """Test broker initialization with explicit arguments."""
     broker = AlpacaBroker(
         api_key="key1",
-        secret_key="secret1",  # noqa: S106
+        secret_key="secret1",
         base_url="https://test.com",
         paper=False,
     )
 
     assert broker.api_key == "key1"
-    assert broker.secret_key == "secret1"  # noqa: S105
+    assert broker.secret_key == "secret1"
     assert broker.base_url == "https://test.com"
     assert broker.paper is False
 

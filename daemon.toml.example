@@ -17,6 +17,22 @@ auto_trade = false
 # Maximum concurrent analyses
 max_concurrent_analyses = 3
 
+# Trading mode: "paper" (default) or "live"
+# WARNING: "live" mode requires passing paper trading validation
+trading_mode = "paper"
+
+[daemon.paper_trading]
+# Minimum duration in paper trading before live promotion (days)
+min_duration_days = 30
+# Minimum number of executed trades
+min_trades = 20
+# Minimum Sharpe ratio required
+min_sharpe = 0.5
+# Maximum drawdown allowed (percent)
+max_drawdown_percent = 15.0
+# Minimum win rate required (0.0-1.0)
+min_win_rate = 0.45
+
 [daemon.schedule]
 # Market hours (Eastern Time)
 start_time = "09:30"

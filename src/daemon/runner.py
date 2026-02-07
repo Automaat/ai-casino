@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import signal
+import sys
 import time as time_mod
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.health import HealthReport
 from src.cache.historical import HistoricalCache
-from src.daemon.config import DaemonConfig
+from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord, SectorRotationRecord
@@ -30,6 +31,7 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.metrics.sector_rotation import SectorRotationAnalysis
+from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.models.llm import LLMClient
 from src.models.sentiment import get_finbert_sentiment
 from src.optimization.param_store import OptimizedParamStore
@@ -42,7 +44,7 @@ console = Console()
 class DaemonRunner:
     """Main daemon runner for autonomous trading."""
 
-    def __init__(self, config: DaemonConfig) -> None:  # noqa: PLR0915
+    def __init__(self, config: DaemonConfig) -> None:  # noqa: PLR0915, C901, PLR0912
         """Initialize daemon runner.
 
         Args:
@@ -90,6 +92,7 @@ class DaemonRunner:
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
         self._workflow: TradingWorkflow | None = None
+        self._metrics_tracker: BaseMetricsTracker | None = None
         self.param_store: OptimizedParamStore | None = None
         self._daemon_optimizer = None
         if config.optimization.enabled:
@@ -103,13 +106,83 @@ class DaemonRunner:
             )
         self.broker: AlpacaBroker | None = None
         if config.auto_trade:
-            api_key = os.getenv("ALPACA_API_KEY")
-            secret_key = os.getenv("ALPACA_SECRET_KEY")
+            api_key, secret_key, base_url = AlpacaBroker.get_credentials(config.trading_mode.value)
+
             if not api_key or not secret_key:
-                msg = "auto_trade=true requires ALPACA_API_KEY and ALPACA_SECRET_KEY env vars"
+                if config.trading_mode == TradingMode.LIVE:
+                    msg = "auto_trade with live mode requires ALPACA_API_KEY/ALPACA_SECRET_KEY"
+                else:
+                    msg = (
+                        "auto_trade with paper mode requires "
+                        "ALPACA_PAPER_API_KEY/ALPACA_PAPER_SECRET_KEY "
+                        "or ALPACA_API_KEY/ALPACA_SECRET_KEY as a fallback"
+                    )
                 raise ValueError(msg)
-            self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
-            logger.info("Alpaca broker initialized for auto-trading")
+
+            is_paper = config.trading_mode.value == "paper"
+            self.broker = AlpacaBroker(
+                api_key=api_key,
+                secret_key=secret_key,
+                base_url=base_url,
+                paper=is_paper,
+                historical_cache=self._historical_cache,
+            )
+            logger.info(f"Alpaca broker initialized (mode={config.trading_mode.value})")
+
+            # Initialize paper trading start date
+            if config.trading_mode.value == "paper":
+                if self.state.paper_trading_start_date is None:
+                    self.state.paper_trading_start_date = datetime.now(UTC)
+                if self.state.current_trading_mode != "paper":
+                    self.state.current_trading_mode = "paper"
+                    self.state.paper_trading_start_date = datetime.now(UTC)
+                    logger.warning("Switched to paper mode, reset start date")
+
+            # Validate live mode readiness
+            if config.trading_mode == TradingMode.LIVE:
+                logger.warning("LIVE TRADING MODE - real capital at risk")
+
+                force_live = "--force-live" in sys.argv
+
+                if not force_live:
+                    from src.daemon.paper_trading_validator import PaperTradingValidator
+
+                    # Initialize tracker early for validation
+                    if self._metrics_tracker is None:
+                        trade_repository = None
+                        if os.getenv("DATABASE_URL"):
+                            try:
+                                from src.database.repositories.trade import TradeRepository
+                                from src.database.session import get_session_factory
+
+                                session_factory = get_session_factory()
+                                trade_repository = TradeRepository(session_factory())
+                            except Exception as e:
+                                logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+
+                        self._metrics_tracker = create_metrics_tracker(trade_repository)
+
+                    validator = PaperTradingValidator(
+                        config=config.paper_trading,
+                        state=self.state,
+                        metrics_tracker=self._metrics_tracker,
+                    )
+
+                    try:
+                        report = validator.assess_readiness()
+
+                        if not report.ready_for_live:
+                            failed = [c.name for c in report.criteria if not c.passed]
+                            logger.error(f"Paper trading validation failed: {', '.join(failed)}")
+                            msg = "Cannot start live trading - use --force-live to bypass"
+                            raise ValueError(msg)  # noqa: TRY301
+
+                        logger.info("Paper trading validation passed")
+                    except Exception as e:
+                        logger.error(f"Validation error: {e}")
+                        raise
+                else:
+                    logger.warning("--force-live flag used, skipping validation")
         elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
             try:
                 self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
@@ -211,6 +284,21 @@ class DaemonRunner:
             finbert = get_finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
+            # Initialize metrics tracker (DB or JSONL based on DATABASE_URL)
+            if self._metrics_tracker is None:
+                trade_repository = None
+                if os.getenv("DATABASE_URL"):
+                    try:
+                        from src.database.repositories.trade import TradeRepository
+                        from src.database.session import get_session_factory
+
+                        session_factory = get_session_factory()
+                        trade_repository = TradeRepository(session_factory())
+                    except Exception as e:
+                        logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+
+                self._metrics_tracker = create_metrics_tracker(trade_repository)
+
             # Portfolio VaR calculator (if risk limits enabled)
             portfolio_var_calculator = None
             portfolio_var_config = None
@@ -237,7 +325,7 @@ class DaemonRunner:
                 finbert,
                 fundamental_fetcher,
                 broker=self.broker,
-                metrics_tracker=None,
+                metrics_tracker=self._metrics_tracker,
                 use_meta_agent=True,
                 param_store=self.param_store,
                 historical_cache=self._historical_cache,
@@ -383,6 +471,7 @@ class DaemonRunner:
                 confidence=result.decision.confidence,
                 executed=result.order is not None,
                 trading_session=result.trading_session.value,
+                is_paper_trade=self.config.trading_mode.value == "paper",
             )
 
             # Record enriched signal for accuracy tracking (best-effort)
@@ -841,6 +930,55 @@ class DaemonRunner:
             logger.error(f"Journal generation failed: {e}")
             self.state.record_error(f"Journal failed: {e}")
             self.state.save(self.config.state.state_file)
+
+    async def _maybe_check_paper_readiness(self) -> None:
+        """Check paper trading readiness and notify if ready (once per day)."""
+        if self.config.trading_mode != TradingMode.PAPER:
+            return
+
+        if not self.notification_service:
+            return
+
+        if not hasattr(self, "_last_readiness_check"):
+            self._last_readiness_check = None
+            self._notified_paper_ready = False
+
+        now = datetime.now(UTC)
+
+        # Check once per day
+        if self._last_readiness_check is not None:
+            elapsed_days = (now - self._last_readiness_check).days
+            if elapsed_days < 1:
+                return
+
+        self._last_readiness_check = now
+
+        try:
+            from src.daemon.notification_formatter import NotificationTrigger
+            from src.daemon.paper_trading_validator import PaperTradingValidator
+
+            validator = PaperTradingValidator(
+                config=self.config.paper_trading,
+                state=self.state,
+                metrics_tracker=self._metrics_tracker,
+            )
+            report = validator.assess_readiness()
+
+            if report.ready_for_live and not self._notified_paper_ready:
+                await self.notification_service.notify(
+                    symbol="SYSTEM",
+                    trigger=NotificationTrigger.PAPER_TRADING_READY,
+                    message_data={
+                        "duration_days": report.paper_trading_duration_days,
+                        "total_trades": report.total_paper_trades,
+                        "sharpe": report.metrics.sharpe_ratio,
+                        "max_dd": report.metrics.max_drawdown_percent,
+                    },
+                )
+                self._notified_paper_ready = True
+                logger.info("Sent paper trading readiness notification")
+        except Exception as e:
+            logger.debug(f"Paper readiness check failed: {e}")
 
     def _run_optimization(self) -> None:
         """Run after-hours strategy parameter optimization."""
@@ -2006,6 +2144,9 @@ class DaemonRunner:
 
         # Check journal regardless of market_hours_only setting
         await self._maybe_run_journal()
+
+        # Check paper trading readiness (once per day)
+        await self._maybe_check_paper_readiness()
 
         self.state.save(self.config.state.state_file)
         return self.config.interval_minutes * 60
