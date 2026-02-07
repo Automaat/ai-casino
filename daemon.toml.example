@@ -94,3 +94,25 @@ pre_market_refresh_time = "04:00"
 warm_finbert = true
 # Check API connectivity during prefetch
 check_connectivity = true
+
+[daemon.monte_carlo]
+# Monte Carlo stress testing
+enabled = false
+# Time to run stress test (HH:MM, 16:00-20:00 for weekdays, any time for weekends)
+schedule_time = "17:00"
+# Days to run stress test (mon/tue/wed/thu/fri/sat/sun)
+schedule_days = ["sun"]
+# Number of simulation paths (100-10000)
+num_simulations = 5000
+# Simulation horizon in trading days (1-504)
+horizon_days = 252
+# Simulation method: PARAMETRIC (normal dist), BOOTSTRAP (historical), or GBM (geometric brownian motion)
+simulation_method = "PARAMETRIC"
+# Minimum historical days required for simulation
+min_historical_days = 90
+# Loss threshold for alerts (0.0-1.0)
+loss_threshold = 0.10
+# Maximum acceptable probability of exceeding loss threshold
+max_acceptable_prob = 0.15
+# Enable automatic position sizing adjustment based on stress test results (opt-in)
+adjust_position_sizing = false

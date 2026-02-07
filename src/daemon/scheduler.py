@@ -51,6 +51,8 @@ class MarketScheduler:
         enable_signal_tracking: bool = True,
         game_plan_time: str = "04:00",
         enable_game_plan: bool = False,
+        monte_carlo_time: str = "17:00",
+        monte_carlo_days: list[str] | None = None,
     ) -> None:
         """Initialize market scheduler.
 
@@ -88,6 +90,8 @@ class MarketScheduler:
             enable_signal_tracking: Enable signal tracking
             game_plan_time: Time to generate game plan (HH:MM format)
             enable_game_plan: Enable game plan generation
+            monte_carlo_time: Time to run Monte Carlo stress test (HH:MM format)
+            monte_carlo_days: Days to run stress test (e.g., ["sun"])
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -122,6 +126,8 @@ class MarketScheduler:
         self.enable_signal_tracking = enable_signal_tracking
         self.game_plan_time = game_plan_time
         self.enable_game_plan = enable_game_plan
+        self.monte_carlo_time = monte_carlo_time
+        self.monte_carlo_days = monte_carlo_days or ["sun"]
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -610,6 +616,26 @@ class MarketScheduler:
         except (ValueError, AttributeError) as e:
             logger.warning(f"Malformed game_plan_time '{self.game_plan_time}': {e}")
             return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_monte_carlo_time(self) -> bool:
+        """Check if current time matches Monte Carlo stress test schedule.
+
+        Returns:
+            True if current time is within 1 minute of configured time on configured day
+        """
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.monte_carlo_days:
+            return False
+
+        target_hour, target_minute = map(int, self.monte_carlo_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
