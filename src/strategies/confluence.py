@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from loguru import logger
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 from src.strategies.timeframe import Timeframe, TimeframeResult
 
 
@@ -12,9 +12,9 @@ class ConfluenceCalculator:
     """Calculate signal confluence across multiple timeframes."""
 
     TIMEFRAME_WEIGHTS: ClassVar[dict[Timeframe, float]] = {
-        Timeframe.DAILY: 0.60,
-        Timeframe.HOURLY: 0.40,
-        Timeframe.FIFTEEN_MIN: 0.15,
+        Timeframe.DAILY: 0.52,
+        Timeframe.HOURLY: 0.35,
+        Timeframe.FIFTEEN_MIN: 0.13,
     }
 
     SIGNAL_VALUES: ClassVar[dict[Signal, float]] = {Signal.BUY: 1.0, Signal.HOLD: 0.0, Signal.SELL: -1.0}

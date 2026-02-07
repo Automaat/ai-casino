@@ -156,6 +156,12 @@ class TechnicalAnalyst:
                 interpretation, indicators, confidence_keywords
             )
 
+            indicators = {}
+            if rsi is not None:
+                indicators["rsi"] = rsi
+            if macd_hist is not None:
+                indicators["macd_hist"] = macd_hist
+
             timeframe_results[timeframe] = TimeframeResult(
                 timeframe=timeframe,
                 signal=signal,
@@ -163,7 +169,7 @@ class TechnicalAnalyst:
                 macd_hist=macd_hist,
                 interpretation=interpretation,
                 confidence=confidence,
-                indicators={"rsi": rsi, "macd_hist": macd_hist} if rsi or macd_hist else {},
+                indicators=indicators,
             )
 
             logger.debug(f"{timeframe}: {signal.value} (confidence={confidence:.2f})")

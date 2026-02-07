@@ -102,8 +102,8 @@ def test_confluence_daily_buy_hourly_hold():
     signal, confluence, conflict = calculator.calculate_confluence(results)
 
     assert signal == Signal.BUY
-    # Confluence 0.60 = 60% daily agrees, 40% hourly HOLD treated as partial agreement
-    assert 0.6 <= confluence <= 0.85
+    # Confluence 0.60 = 52% daily agrees, 35% hourly HOLD treated as partial agreement (13% from 15min unused)
+    assert 0.55 <= confluence <= 0.85
     assert conflict is False
 
 

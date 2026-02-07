@@ -275,7 +275,12 @@ class MarketDataFetcher:
         now = datetime.now(UTC)
         cutoff_time = now - timedelta(minutes=INTRADAY_CACHE_TTL_MINUTES)
 
-        closed_rows = df[df.index < cutoff_time] if self._is_market_hours() else df
+        if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is None:
+            cutoff_for_filter = cutoff_time.replace(tzinfo=None)
+        else:
+            cutoff_for_filter = cutoff_time
+
+        closed_rows = df[df.index < cutoff_for_filter] if self._is_market_hours() else df
 
         if not closed_rows.empty:
             self._cache.store_ohlcv_intraday(symbol, interval, closed_rows)

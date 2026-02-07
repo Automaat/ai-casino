@@ -763,31 +763,51 @@ class TradingWorkflow:
         """
         logger.info("Fetching market and news data")
 
-        market_data: pd.DataFrame | MultiTimeframeData
+        # Prepare parallel tasks
         if enable_multi_timeframe and self._is_market_hours():
             logger.info("Multi-timeframe mode enabled (market hours)")
-            market_result = await self.market_fetcher.fetch_multi_timeframe(
+            market_task = self.market_fetcher.fetch_multi_timeframe(
                 symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
             )
-            market_data = market_result
         else:
             if enable_multi_timeframe and not self._is_market_hours():
                 logger.info("Multi-timeframe requested but outside market hours, using daily only")
-            market_result = await asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days)
+            market_task = asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days)
+
+        news_task = asyncio.to_thread(self.news_fetcher.fetch_company_news, symbol, limit=10)
+        tasks = [market_task, news_task]
+
+        if self.trump_mode and self.trump_fetcher:
+            tasks.append(asyncio.to_thread(self.trump_fetcher.fetch_recent, hours=24))
+
+        # Execute in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Extract market data
+        if isinstance(results[0], Exception):
+            logger.error(f"Market data fetch failed: {results[0]}")
+            raise results[0]
+        market_result = results[0]
+        if enable_multi_timeframe and self._is_market_hours():
+            market_data = market_result
+        else:
             market_data = market_result.data
 
-        # Fetch news in parallel
-        news_result = await asyncio.to_thread(self.news_fetcher.fetch_company_news, symbol, limit=10)
+        # Extract news data
+        if isinstance(results[1], Exception):
+            logger.error(f"News fetch failed: {results[1]}")
+            raise results[1]
+        news_result = results[1]
 
-        # Add trump task if enabled
+        # Extract trump data
         trump_posts: list[TruthPost] | None = None
         if self.trump_mode and self.trump_fetcher:
-            try:
-                trump_result = await asyncio.to_thread(self.trump_fetcher.fetch_recent, hours=24)
+            trump_result = results[2]
+            if isinstance(trump_result, Exception):
+                logger.warning(f"Failed to fetch Trump posts: {trump_result}")
+            else:
                 trump_posts = trump_result.posts
                 logger.info(f"Fetched {len(trump_posts)} Trump posts")
-            except Exception as e:
-                logger.warning(f"Failed to fetch Trump posts: {e}")
 
         return TradingState(
             symbol=symbol,

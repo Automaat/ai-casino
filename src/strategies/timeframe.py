@@ -6,7 +6,7 @@ from enum import StrEnum
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 class Timeframe(StrEnum):

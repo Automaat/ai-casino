@@ -283,16 +283,15 @@ class HistoricalCache:
             )
 
         with self._lock:
-            cursor = self._conn.executemany(
+            self._conn.executemany(
                 "INSERT OR IGNORE INTO ohlcv_intraday "
                 "(symbol, datetime, interval, open, high, low, close, volume) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
             self._conn.commit()
-            inserted = cursor.rowcount
-        logger.debug(f"Stored {inserted} intraday OHLCV rows for {symbol} ({interval}, {len(rows)} total)")
-        return inserted
+        logger.debug(f"Stored intraday OHLCV rows for {symbol} ({interval}, {len(rows)} total)")
+        return len(rows)
 
     def store_ohlcv(self, symbol: str, df: pd.DataFrame) -> int:
         """Store OHLCV rows (INSERT OR IGNORE for dedup).
