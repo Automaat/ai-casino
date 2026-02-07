@@ -82,6 +82,22 @@ def trump_daemon(
     return trump_daemon_impl(poll_interval, max_analyses)
 
 
+@app.command(name="events-daemon")
+def events_daemon(
+    config: Annotated[
+        Path | None, typer.Option("--config", "-c", help="Path to daemon config file (TOML)")
+    ] = None,
+) -> None:
+    """Run event-driven analysis daemon.
+
+    Monitors real-time events (news, social, filings, anomalies) and triggers
+    immediate trading analysis for high-relevance signals.
+    """
+    from src.cli.daemon import events_daemon as events_daemon_impl
+
+    return events_daemon_impl(config)
+
+
 @app.command(name="chat")
 def chat() -> None:
     """Launch interactive TUI chat interface."""
