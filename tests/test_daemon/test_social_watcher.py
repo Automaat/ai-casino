@@ -1,13 +1,21 @@
 """Tests for SocialWatcher."""
 
+import os
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from src.cache.historical import HistoricalCache
 from src.daemon.watchers.social_watcher import SocialWatcher
 from src.data.reddit import RedditPost, TrendingTicker
+
+
+@pytest.fixture(autouse=True)
+def _mock_env_vars():
+    """Set required env vars for tests."""
+    with patch.dict(os.environ, {"ALPHA_VANTAGE_API_KEY": "test_key"}):
+        yield
 
 
 @pytest.fixture
