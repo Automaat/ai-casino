@@ -39,6 +39,8 @@ class MarketScheduler:
         peer_analysis_time: str = "17:30",
         peer_analysis_days: list[str] | None = None,
         enable_peer_analysis: bool = False,
+        tearsheet_time: str = "16:30",
+        enable_reporting: bool = False,
     ) -> None:
         """Initialize market scheduler.
 
@@ -64,6 +66,8 @@ class MarketScheduler:
             peer_analysis_time: Time to run deep peer analysis (HH:MM format)
             peer_analysis_days: Days to run peer analysis (e.g., ["sun"])
             enable_peer_analysis: Enable deep peer analysis
+            tearsheet_time: Time to generate tearsheets (HH:MM format)
+            enable_reporting: Enable tearsheet generation
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -86,6 +90,8 @@ class MarketScheduler:
         self.peer_analysis_time = peer_analysis_time
         self.peer_analysis_days = peer_analysis_days or ["sun"]
         self.enable_peer_analysis = enable_peer_analysis
+        self.tearsheet_time = tearsheet_time
+        self.enable_reporting = enable_reporting
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -424,6 +430,32 @@ class MarketScheduler:
             return False
 
         target_hour, target_minute = map(int, self.peer_analysis_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_tearsheet_time(self) -> bool:
+        """Check if current time matches tearsheet generation schedule.
+
+        Returns:
+            True if within 1 minute of configured time on weekday
+        """
+        if not self.enable_reporting:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        # Weekday check
+        if now.weekday() >= 5:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.tearsheet_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Malformed tearsheet_time '{self.tearsheet_time}': {e}")
+            return False
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
