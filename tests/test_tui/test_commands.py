@@ -249,3 +249,146 @@ class TestPersonalityCommands:
         assert result.success is True
         assert "AI CASINO MODE" in result.message
         assert app.personality == "casino"
+
+
+class TestCandidatesCommands:
+    """Tests for /candidates command."""
+
+    def test_candidates_add_no_symbols(self):
+        """Test /candidates add without symbols."""
+        from unittest.mock import MagicMock
+
+        handler = CommandHandler()
+        state = MagicMock()
+
+        result = handler._handle_candidates_add([], state, "")
+
+        assert result.success is False
+        assert "Usage" in result.message
+
+    def test_candidates_add_no_history(self):
+        """Test /candidates add with no screening history."""
+        from unittest.mock import MagicMock
+
+        handler = CommandHandler()
+        state = MagicMock()
+        state.screening_history = []
+
+        result = handler._handle_candidates_add(["AAPL"], state, "")
+
+        assert result.success is False
+        assert "No screening candidates" in result.message
+
+    def test_candidates_add_success(self):
+        """Test /candidates add SYMBOL."""
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock, patch
+
+        from src.daemon.state import ScreeningRecord
+        from src.screening.screener import ScreeningResult
+        from src.strategies.signal import Signal
+
+        handler = CommandHandler()
+        state = MagicMock()
+
+        candidates = [
+            ScreeningResult(
+                symbol="AAPL",
+                name="Apple Inc",
+                sector="Technology",
+                score=85.5,
+                signal=Signal.BUY,
+                metrics={},
+                reason="Strong",
+            )
+        ]
+        state.screening_history = [
+            ScreeningRecord(
+                timestamp=datetime.now(UTC),
+                criteria="momentum",
+                universe="SP500",
+                top_symbols=["AAPL"],
+                candidates=candidates,
+                screened_at=datetime.now(UTC),
+            )
+        ]
+
+        with (
+            patch("src.screening.exporter.ScreeningExporter") as mock_exporter_class,
+            patch("src.screening.screener.ScreeningCriteria") as mock_criteria_class,
+        ):
+            mock_exporter = MagicMock()
+            mock_exporter_class.return_value = mock_exporter
+            mock_criteria_class.return_value = MagicMock()
+
+            result = handler._handle_candidates_add(["AAPL"], state, "")
+
+            assert result.success is True
+            assert "AAPL" in result.data["added"]
+            mock_exporter.save_to_watchlist.assert_called_once()
+
+    def test_candidates_add_not_found(self):
+        """Test /candidates add with symbol not in candidates."""
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        from src.daemon.state import ScreeningRecord
+        from src.screening.screener import ScreeningResult
+        from src.strategies.signal import Signal
+
+        handler = CommandHandler()
+        state = MagicMock()
+
+        candidates = [
+            ScreeningResult(
+                symbol="AAPL",
+                name="Apple Inc",
+                sector="Technology",
+                score=85.5,
+                signal=Signal.BUY,
+                metrics={},
+                reason="Strong",
+            )
+        ]
+        state.screening_history = [
+            ScreeningRecord(
+                timestamp=datetime.now(UTC),
+                criteria="momentum",
+                universe="SP500",
+                top_symbols=["AAPL"],
+                candidates=candidates,
+                screened_at=datetime.now(UTC),
+            )
+        ]
+
+        result = handler._handle_candidates_add(["TSLA"], state, "")
+
+        assert result.success is False
+        assert "No matching candidates" in result.message
+
+    def test_candidates_clear(self):
+        """Test /candidates clear."""
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        from src.daemon.state import ScreeningRecord
+
+        handler = CommandHandler()
+        state = MagicMock()
+        state.screening_history = [
+            ScreeningRecord(
+                timestamp=datetime.now(UTC),
+                criteria="momentum",
+                universe="SP500",
+                top_symbols=[],
+                candidates=[],
+                screened_at=datetime.now(UTC),
+            )
+        ]
+
+        result = handler._handle_candidates_clear(state, "~/.ai-casino/state.json")
+
+        assert result.success is True
+        assert state.screening_history == []
+        assert state.last_after_hours_screening is None
+        state.save.assert_called_once_with("~/.ai-casino/state.json")

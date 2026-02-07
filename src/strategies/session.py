@@ -8,3 +8,4 @@ class TradingSession(StrEnum):
 
     REGULAR = "REGULAR"
     PRE_MARKET = "PRE_MARKET"
+    AFTER_HOURS = "AFTER_HOURS"

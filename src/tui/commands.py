@@ -40,6 +40,7 @@ class CommandHandler:
             "discover": self._cmd_screen,  # alias
             "export": self._cmd_export,
             "watchlist": self._cmd_watchlist,
+            "candidates": self._cmd_candidates,
             "trump": self._cmd_trump,
             "casino": self._cmd_casino,
             "help": self._cmd_help,
@@ -132,6 +133,9 @@ class CommandHandler:
 - **/discover** - Alias for /screen
 - **/export [format] [filename]** - Export last screening results
 - **/watchlist [action]** - Manage watchlists
+- **/candidates** - Show after-hours screening candidates
+- **/candidates add SYMBOLS** - Add candidates to watchlist
+- **/candidates clear** - Clear old candidates
 - **/trump** - Switch to Trump personality mode 🇺🇸
 - **/casino** - Switch to AI Casino personality mode 🎰
 - **/help** - Show this help message
@@ -550,6 +554,135 @@ Type freely to chat about markets or ask questions."""
             success=False,
             message=f"{symbol} not found in watchlist '{watchlist_name}'.",
         )
+
+    async def _cmd_candidates(self, args: list[str]) -> CommandResult:
+        """Manage after-hours screening candidates.
+
+        Usage:
+            /candidates              - show latest screening candidates
+            /candidates add SYM...   - add candidates to watchlist
+            /candidates clear        - clear old candidates
+        """
+        from pathlib import Path
+
+        from src.daemon.config import DaemonConfig
+        from src.daemon.state import DaemonState
+
+        # Load daemon state
+        config_path = Path("~/.ai-casino/daemon.toml").expanduser()
+        if config_path.exists():
+            config = DaemonConfig.from_toml(config_path)
+            state_file = config.state.state_file
+        else:
+            state_file = "~/.ai-casino/daemon-state.json"
+
+        state = DaemonState.load(state_file)
+
+        # Handle subcommands
+        if args and args[0].lower() == "add":
+            return self._handle_candidates_add(args[1:], state, state_file)
+        if args and args[0].lower() == "clear":
+            return self._handle_candidates_clear(state, state_file)
+
+        # Show latest candidates
+        if not state.screening_history:
+            return CommandResult(
+                success=True,
+                message="No screening candidates yet. Enable after-hours screening in daemon.toml.",
+            )
+
+        latest = state.screening_history[-1]
+        return CommandResult(
+            success=True,
+            message=self._format_candidates(latest),
+            data={"count": len(latest.candidates)},
+        )
+
+    def _handle_candidates_add(self, symbols: list[str], state: object, _state_file: str) -> CommandResult:
+        """Add candidates to watchlist.
+
+        Args:
+            symbols: List of stock symbols to add
+            state: DaemonState instance
+            _state_file: Path to state file (unused but kept for consistency)
+        """
+        from src.screening.exporter import ScreeningExporter
+        from src.screening.screener import ScreeningCriteria
+
+        if not symbols:
+            return CommandResult(success=False, message="Usage: /candidates add SYMBOL [SYMBOL...]")
+
+        if not state.screening_history:
+            return CommandResult(success=False, message="No screening candidates available.")
+
+        latest = state.screening_history[-1]
+        exporter = ScreeningExporter()
+
+        # Find matching candidates and add to watchlist
+        selected = []
+        added = []
+        for sym in symbols:
+            sym_upper = sym.upper()
+            candidate = next((c for c in latest.candidates if c.symbol == sym_upper), None)
+            if candidate:
+                selected.append(candidate)
+                added.append(sym_upper)
+
+        if selected:
+            # Use save_to_watchlist with criteria from ScreeningRecord
+            criteria = ScreeningCriteria(latest.criteria)
+            exporter.save_to_watchlist(selected, criteria, "default")
+
+            return CommandResult(
+                success=True,
+                message=f"Added to watchlist: {', '.join(added)}",
+                data={"added": added},
+            )
+
+        return CommandResult(
+            success=False,
+            message=f"No matching candidates found for: {', '.join(symbols)}",
+        )
+
+    def _handle_candidates_clear(self, state: object, state_file: str) -> CommandResult:
+        """Clear old screening candidates."""
+        cleared = len(state.screening_history)
+        state.screening_history = []
+        state.last_after_hours_screening = None
+        state.save(state_file)
+
+        return CommandResult(
+            success=True,
+            message=f"Cleared {cleared} screening record(s).",
+            data={"cleared": cleared},
+        )
+
+    def _format_candidates(self, record: object) -> str:
+        """Format screening candidates for display.
+
+        Args:
+            record: ScreeningRecord instance or dict
+        """
+        from src.daemon.state import ScreeningRecord
+
+        if isinstance(record, dict):
+            record = ScreeningRecord.model_validate(record)
+
+        lines = [
+            "## After-Hours Screening Candidates",
+            f"*{record.criteria.title()} | {record.universe} | "
+            f"{record.screened_at.strftime('%Y-%m-%d %H:%M')}*",
+            "",
+        ]
+
+        for i, candidate in enumerate(record.candidates, 1):
+            lines.append(
+                f"{i}. **{candidate.symbol}** ({candidate.name}) - Score: {candidate.score:.2f}\n"
+                f"   {candidate.reason}"
+            )
+
+        lines.append("\n*Use `/candidates add SYMBOL [SYMBOL...]` to add to watchlist*")
+        return "\n".join(lines)
 
     def _format_watchlist(self, watchlist: Watchlist) -> str:
         """Format watchlist for display."""
