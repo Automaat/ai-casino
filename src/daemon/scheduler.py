@@ -23,8 +23,9 @@ class MarketScheduler:
         timezone: str = "America/New_York",
         enable_pre_market: bool = False,
         enable_after_hours: bool = False,
-        after_hours_screen_time: str = "16:30",
-        after_hours_screen_days: list[str] | None = None,
+        enable_screening: bool = False,
+        screen_time: str = "16:30",
+        screen_days: list[str] | None = None,
         optimization_time: str = "17:00",
         optimization_days: list[str] | None = None,
     ) -> None:
@@ -35,9 +36,10 @@ class MarketScheduler:
             end_time: Market close time (HH:MM format)
             timezone: Market timezone
             enable_pre_market: Enable pre-market hours (4:00-9:30 AM ET)
-            enable_after_hours: Enable after-hours screening (16:00-20:00 ET)
-            after_hours_screen_time: Time to run after-hours screening (HH:MM format)
-            after_hours_screen_days: Days to run screening (e.g., ["mon", "tue", "wed", "thu", "fri"])
+            enable_after_hours: Enable after-hours trading session (16:00-20:00 ET)
+            enable_screening: Enable after-hours watchlist screening
+            screen_time: Time to run screening (HH:MM format)
+            screen_days: Days to run screening (e.g., ["mon", "tue", "wed", "thu", "fri"])
             optimization_time: Time to run parameter optimization (HH:MM format)
             optimization_days: Days to run optimization (e.g., ["sat"])
         """
@@ -46,14 +48,16 @@ class MarketScheduler:
         self.timezone = ZoneInfo(timezone)
         self.enable_pre_market = enable_pre_market
         self.enable_after_hours = enable_after_hours
-        self.after_hours_screen_time = after_hours_screen_time
-        self.after_hours_screen_days = after_hours_screen_days or ["mon", "tue", "wed", "thu", "fri"]
+        self.enable_screening = enable_screening
+        self.screen_time = screen_time
+        self.screen_days = screen_days or ["mon", "tue", "wed", "thu", "fri"]
         self.optimization_time = optimization_time
         self.optimization_days = optimization_days or ["sat"]
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
-            f"after-hours={'enabled' if enable_after_hours else 'disabled'})"
+            f"after-hours={'enabled' if enable_after_hours else 'disabled'}, "
+            f"screening={'enabled' if enable_screening else 'disabled'})"
         )
 
     def get_trading_session(self) -> TradingSession | None:
@@ -206,13 +210,13 @@ class MarketScheduler:
 
         return window_start_dt <= now <= window_end_dt
 
-    def is_after_hours_screening_time(self) -> bool:
-        """Check if current time matches after-hours screening schedule.
+    def is_screening_time(self) -> bool:
+        """Check if current time matches screening schedule.
 
         Returns:
             True if current time is within 1 minute of configured screening time on configured day
         """
-        if not self.enable_after_hours:
+        if not self.enable_screening:
             return False
 
         now = datetime.now(self.timezone)
@@ -220,11 +224,11 @@ class MarketScheduler:
         # Check if current day is in configured days
         day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         current_day = day_names[now.weekday()]
-        if current_day not in self.after_hours_screen_days:
+        if current_day not in self.screen_days:
             return False
 
         # Parse target time
-        target_hour, target_minute = map(int, self.after_hours_screen_time.split(":"))
+        target_hour, target_minute = map(int, self.screen_time.split(":"))
 
         # Check if within 1 minute of target time
         current_minutes = now.hour * 60 + now.minute
