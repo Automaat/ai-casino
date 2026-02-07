@@ -136,6 +136,16 @@ def optimize_portfolio(
     return optimize_portfolio_impl(symbols, method, period, rebalance, rebalance_from)
 
 
+@app.command(name="signal-accuracy")
+def signal_accuracy(
+    window: Annotated[str, typer.Option("--window", "-w", help="Time window")] = "30d",
+) -> None:
+    """Display signal accuracy metrics."""
+    from src.cli.signal_accuracy import signal_accuracy as signal_accuracy_impl
+
+    return signal_accuracy_impl(window)
+
+
 def main() -> None:
     """CLI entry point - defaults to chat mode."""
     if len(sys.argv) == 1:

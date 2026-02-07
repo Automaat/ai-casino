@@ -105,6 +105,30 @@ class HistoricalCache:
                 PRIMARY KEY (symbol, id)
             );
             CREATE INDEX IF NOT EXISTS idx_reddit_symbol ON reddit_posts(symbol);
+
+            CREATE TABLE IF NOT EXISTS signal_outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                signal TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                price_at_signal REAL NOT NULL,
+                strategy_used TEXT,
+                regime TEXT,
+                trading_session TEXT,
+                technical_signal TEXT,
+                sentiment_signal TEXT,
+                news_signal TEXT,
+                price_at_1d REAL,
+                price_at_5d REAL,
+                price_at_20d REAL,
+                actual_exit_price REAL,
+                actual_exit_date TEXT,
+                outcome_updated_at TEXT,
+                UNIQUE(symbol, timestamp)
+            );
+            CREATE INDEX IF NOT EXISTS idx_signal_outcomes_symbol ON signal_outcomes(symbol);
+            CREATE INDEX IF NOT EXISTS idx_signal_outcomes_timestamp ON signal_outcomes(timestamp);
         """)
 
     def get_ohlcv(self, symbol: str) -> pd.DataFrame:
@@ -430,6 +454,169 @@ class HistoricalCache:
         logger.debug(f"Stored {inserted} Reddit posts for {symbol}")
         return inserted
 
+    def record_signal_outcome(  # noqa: PLR0913
+        self,
+        symbol: str,
+        timestamp: datetime,
+        signal: str,
+        confidence: float,
+        price_at_signal: float,
+        strategy_used: str | None = None,
+        regime: str | None = None,
+        trading_session: str | None = None,
+        technical_signal: str | None = None,
+        sentiment_signal: str | None = None,
+        news_signal: str | None = None,
+    ) -> None:
+        """Record a signal outcome for accuracy tracking.
+
+        Args:
+            symbol: Stock ticker symbol
+            timestamp: Signal generation timestamp (timezone-aware)
+            signal: Trading signal (BUY/SELL/HOLD)
+            confidence: Signal confidence (0.0-1.0)
+            price_at_signal: Price when signal was generated
+            strategy_used: Strategy name (e.g., "momentum")
+            regime: Market regime (e.g., "trending_bullish")
+            trading_session: Trading session (REGULAR/PRE_MARKET)
+            technical_signal: Technical analysis signal
+            sentiment_signal: Sentiment analysis signal
+            news_signal: News analysis signal
+        """
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO signal_outcomes "
+                "(symbol, timestamp, signal, confidence, price_at_signal, "
+                "strategy_used, regime, trading_session, technical_signal, sentiment_signal, news_signal) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    symbol,
+                    timestamp.isoformat(),
+                    signal,
+                    confidence,
+                    price_at_signal,
+                    strategy_used,
+                    regime,
+                    trading_session,
+                    technical_signal,
+                    sentiment_signal,
+                    news_signal,
+                ),
+            )
+            self._conn.commit()
+        logger.debug(f"Recorded signal outcome for {symbol} ({signal} @ {price_at_signal:.2f})")
+
+    def get_signals_needing_update(self, horizon: str) -> list[dict]:
+        """Get signals that need outcome price updates for a given horizon.
+
+        Args:
+            horizon: Time horizon ("1d", "5d", "20d")
+
+        Returns:
+            List of signal records missing outcome prices for the given horizon
+        """
+        field = f"price_at_{horizon}"
+        cutoff_days = {"1d": 1, "5d": 5, "20d": 20}[horizon]
+
+        cutoff_date = (datetime.now(UTC) - timedelta(days=cutoff_days)).isoformat()
+
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT id, symbol, timestamp, signal, price_at_signal, actual_exit_price "  # noqa: S608
+                f"FROM signal_outcomes "
+                f"WHERE {field} IS NULL AND timestamp < ? "
+                f"ORDER BY timestamp DESC",
+                (cutoff_date,),
+            ).fetchall()
+
+        return [
+            {
+                "id": r[0],
+                "symbol": r[1],
+                "timestamp": r[2],
+                "signal": r[3],
+                "price_at_signal": r[4],
+                "actual_exit_price": r[5],
+            }
+            for r in rows
+        ]
+
+    def update_signal_outcome(self, signal_id: int, **fields: float | str | None) -> None:
+        """Update signal outcome fields.
+
+        Args:
+            signal_id: Signal outcome ID
+            **fields: Fields to update (e.g., price_at_1d=150.5, outcome_updated_at="...")
+        """
+        if not fields:
+            return
+
+        set_clause = ", ".join(f"{k} = ?" for k in fields)
+        values = list(fields.values())
+        values.append(signal_id)
+
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE signal_outcomes SET {set_clause} WHERE id = ?",  # noqa: S608
+                values,
+            )
+            self._conn.commit()
+
+    def get_signal_outcomes(
+        self,
+        window: str = "all",
+        signal_type: str | None = None,
+    ) -> list[dict]:
+        """Get signal outcomes for metrics calculation.
+
+        Args:
+            window: Time window ("7d", "30d", "90d", "all")
+            signal_type: Filter by signal type (BUY/SELL/HOLD) or None for all
+
+        Returns:
+            List of signal outcome records
+        """
+        query = "SELECT * FROM signal_outcomes WHERE 1=1"
+        params = []
+
+        if window != "all":
+            days = int(window.rstrip("d"))
+            cutoff_date = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+            query += " AND timestamp >= ?"
+            params.append(cutoff_date)
+
+        if signal_type:
+            query += " AND signal = ?"
+            params.append(signal_type)
+
+        query += " ORDER BY timestamp DESC"
+
+        with self._lock:
+            rows = self._conn.execute(query, params).fetchall()
+
+        cols = [
+            "id",
+            "symbol",
+            "timestamp",
+            "signal",
+            "confidence",
+            "price_at_signal",
+            "strategy_used",
+            "regime",
+            "trading_session",
+            "technical_signal",
+            "sentiment_signal",
+            "news_signal",
+            "price_at_1d",
+            "price_at_5d",
+            "price_at_20d",
+            "actual_exit_price",
+            "actual_exit_date",
+            "outcome_updated_at",
+        ]
+
+        return [dict(zip(cols, row, strict=False)) for row in rows]
+
     def stats(self) -> dict[str, int]:
         """Get row counts for all tables.
 
@@ -443,6 +630,7 @@ class HistoricalCache:
             "order_fills",
             "truth_social_posts",
             "reddit_posts",
+            "signal_outcomes",
         ]
         counts = {}
         with self._lock:

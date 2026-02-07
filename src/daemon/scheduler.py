@@ -44,6 +44,8 @@ class MarketScheduler:
         rebalancing_time: str = "16:45",
         rebalancing_days: list[str] | None = None,
         enable_rebalancing: bool = False,
+        signal_tracking_time: str = "17:00",
+        enable_signal_tracking: bool = True,
     ) -> None:
         """Initialize market scheduler.
 
@@ -74,6 +76,8 @@ class MarketScheduler:
             rebalancing_time: Time to run portfolio rebalancing (HH:MM format)
             rebalancing_days: Days to run rebalancing (e.g., ["mon"])
             enable_rebalancing: Enable portfolio rebalancing
+            signal_tracking_time: Time to run signal tracking (HH:MM format)
+            enable_signal_tracking: Enable signal tracking
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -101,6 +105,8 @@ class MarketScheduler:
         self.rebalancing_time = rebalancing_time
         self.rebalancing_days = rebalancing_days or ["mon"]
         self.enable_rebalancing = enable_rebalancing
+        self.signal_tracking_time = signal_tracking_time
+        self.enable_signal_tracking = enable_signal_tracking
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -487,6 +493,59 @@ class MarketScheduler:
             target_hour, target_minute = map(int, self.tearsheet_time.split(":"))
         except (ValueError, AttributeError) as e:
             logger.warning(f"Malformed tearsheet_time '{self.tearsheet_time}': {e}")
+            return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_signal_tracking_time(self) -> bool:
+        """Check if current time matches signal tracking schedule.
+
+        Returns:
+            True if within 1 minute of configured time on weekday
+        """
+        if not self.enable_signal_tracking:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        # Weekday check
+        if now.weekday() >= 5:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.signal_tracking_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Malformed signal_tracking_time '{self.signal_tracking_time}': {e}")
+            return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_rebalancing_time(self) -> bool:
+        """Check if current time matches portfolio rebalancing schedule.
+
+        Returns:
+            True if within 1 minute of configured time on configured day
+        """
+        if not self.enable_rebalancing:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.rebalancing_days:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.rebalancing_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Malformed rebalancing_time '{self.rebalancing_time}': {e}")
             return False
 
         current_minutes = now.hour * 60 + now.minute
