@@ -28,6 +28,8 @@ class MarketScheduler:
         optimization_time: str = "17:00",
         optimization_days: list[str] | None = None,
         health_check_time: str = "17:00",
+        prefetch_time: str = "16:30",
+        pre_market_refresh_time: str = "04:00",
     ) -> None:
         """Initialize market scheduler.
 
@@ -42,6 +44,8 @@ class MarketScheduler:
             optimization_time: Time to run parameter optimization (HH:MM format)
             optimization_days: Days to run optimization (e.g., ["sat"])
             health_check_time: Time to run health check (HH:MM format)
+            prefetch_time: Time to run after-hours data prefetch (HH:MM format)
+            pre_market_refresh_time: Time to run pre-market data refresh (HH:MM format)
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -53,6 +57,8 @@ class MarketScheduler:
         self.optimization_time = optimization_time
         self.optimization_days = optimization_days or ["sat"]
         self.health_check_time = health_check_time
+        self.prefetch_time = prefetch_time
+        self.pre_market_refresh_time = pre_market_refresh_time
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -276,6 +282,44 @@ class MarketScheduler:
             return False
 
         target_hour, target_minute = map(int, self.optimization_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_prefetch_time(self) -> bool:
+        """Check if current time matches after-hours prefetch schedule.
+
+        Returns:
+            True if current time is within 1 minute of configured prefetch time on weekday
+        """
+        now = datetime.now(self.timezone)
+
+        # Weekday check
+        if now.weekday() >= 5:
+            return False
+
+        target_hour, target_minute = map(int, self.prefetch_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_pre_market_refresh_time(self) -> bool:
+        """Check if current time matches pre-market refresh schedule.
+
+        Returns:
+            True if current time is within 1 minute of configured refresh time on weekday
+        """
+        now = datetime.now(self.timezone)
+
+        # Weekday check
+        if now.weekday() >= 5:
+            return False
+
+        target_hour, target_minute = map(int, self.pre_market_refresh_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
