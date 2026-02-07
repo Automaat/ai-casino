@@ -42,10 +42,7 @@ class DaemonSectorRotation:
         Returns:
             Candidates sorted by sector-adjusted score (descending)
         """
-        # Build sector strength lookup by ETF
-        strength_by_etf: dict[str, float] = {}
-        for s in analysis.sectors:
-            strength_by_etf[s.etf] = s.relative_strength
+        from src.data.comparative import SECTOR_MAPPING
 
         leading_set = set(analysis.leading_sectors)
         lagging_set = set(analysis.lagging_sectors)
@@ -55,12 +52,20 @@ class DaemonSectorRotation:
         # We need to match against leading/lagging sector names (e.g., "TECHNOLOGY")
 
         def _adjusted_score(candidate: ScreeningResult) -> float:
-            sector_upper = candidate.sector.upper().replace(" ", "_")
+            # Normalize sector name using existing mapping
+            sector_lower = (candidate.sector or "").strip().casefold()
+
+            # Lookup in SECTOR_MAPPING (Wikipedia/yfinance → Sector enum)
+            sector_enum = SECTOR_MAPPING.get(sector_lower)
+            sector_key = (
+                sector_enum.name if sector_enum else candidate.sector.upper().replace(" ", "_")
+            )
+
             base_score = candidate.score
 
-            if sector_upper in leading_set:
+            if sector_key in leading_set:
                 return base_score * (1 + boost_factor)
-            if sector_upper in lagging_set:
+            if sector_key in lagging_set:
                 return base_score * (1 - boost_factor)
             return base_score
 

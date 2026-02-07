@@ -119,8 +119,6 @@ class TestDaemonState:
         assert len(state.sector_rotation_history) == 30
 
     def test_sector_rotation_save_load(self):
-        import tempfile
-
         with tempfile.TemporaryDirectory() as tmpdir:
             path = f"{tmpdir}/state.json"
 

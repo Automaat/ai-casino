@@ -76,7 +76,21 @@ class SectorRotationAnalyzer:
 
         closes = self._fetch_sector_data()
 
+        # Validate SPY data availability
+        if MARKET_INDEX not in closes:
+            msg = f"Missing market index data for {MARKET_INDEX}; cannot compute sector rotation"
+            logger.error(msg)
+            raise ValueError(msg)
+
         spy_close = closes[MARKET_INDEX]
+        if len(spy_close) <= TRADING_DAYS_3M:
+            msg = (
+                f"Insufficient price history for {MARKET_INDEX}: "
+                f"needed >{TRADING_DAYS_3M} points, got {len(spy_close)}"
+            )
+            logger.error(msg)
+            raise ValueError(msg)
+
         spy_return_1w = self._calculate_return(spy_close, TRADING_DAYS_1W)
         spy_return_1m = self._calculate_return(spy_close, TRADING_DAYS_1M)
         spy_return_3m = self._calculate_return(spy_close, TRADING_DAYS_3M)
