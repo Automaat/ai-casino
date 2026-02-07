@@ -59,6 +59,10 @@ dependencies = [
     "loguru==0.7.3",
     "pydantic==2.12.5",
 
+    # API Server
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+
     # CLI & TUI
     "typer==0.21.1",
     "textual==7.5.0",

@@ -1,6 +1,7 @@
 """Main daemon runner for autonomous trading."""
 
 import asyncio
+import contextlib
 import json
 import os
 import signal
@@ -18,6 +19,8 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 
 if TYPE_CHECKING:
+    import uvicorn
+
     from src.agents.risk import PortfolioRiskReport
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
@@ -40,6 +43,14 @@ from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 console = Console()
+
+try:
+    import uvicorn
+
+    UVICORN_AVAILABLE = True
+except ImportError:
+    UVICORN_AVAILABLE = False
+    logger.warning("uvicorn not installed, API server disabled")
 
 
 class DaemonRunner:
@@ -233,6 +244,10 @@ class DaemonRunner:
 
             self.notification_service = NotificationService(config.notifications)
             logger.info("Notification service enabled")
+
+        # API server components
+        self._api_server: uvicorn.Server | None = None
+        self._api_task: asyncio.Task | None = None
 
         logger.info(f"DaemonRunner initialized with {config}")
 
@@ -2273,6 +2288,8 @@ class DaemonRunner:
         def shutdown_handler(sig: int, _frame: object) -> None:
             logger.info(f"Received signal {sig}, shutting down...")
             self.running = False
+            if self._api_server:
+                self._api_server.should_exit = True
 
         signal.signal(signal.SIGINT, shutdown_handler)
         signal.signal(signal.SIGTERM, shutdown_handler)
@@ -2283,6 +2300,10 @@ class DaemonRunner:
         console.print(f"Market hours only: {self.config.market_hours_only}")
         console.print(f"Auto trade: {self.config.auto_trade}")
         console.print()
+
+        # Start API server if enabled
+        if self.config.api.enabled:
+            self._start_api_server()
 
         while self.running:
             try:
@@ -2296,9 +2317,57 @@ class DaemonRunner:
                 self.state.record_error(str(e))
                 await asyncio.sleep(60)
 
+        # Stop API server before saving state
+        await self._stop_api_server()
+
         self.state.save(self.config.state.state_file)
         console.print("\n[bold yellow]Daemon stopped[/bold yellow]")
         logger.info("Daemon shutdown complete")
+
+    def _start_api_server(self) -> None:
+        """Start embedded API server as background task."""
+        if not UVICORN_AVAILABLE:
+            logger.warning("Cannot start API server, uvicorn not installed")
+            return
+
+        try:
+            from src.daemon.api import create_api_app
+
+            app = create_api_app(self)
+            config = uvicorn.Config(
+                app,
+                host=self.config.api.host,
+                port=self.config.api.port,
+                log_level="info",
+                access_log=False,
+            )
+            self._api_server = uvicorn.Server(config)
+            self._api_task = asyncio.create_task(self._api_server.serve())
+
+            logger.info(f"API server started at http://{self.config.api.host}:{self.config.api.port}")
+            console.print(
+                f"[bold cyan]API server: http://{self.config.api.host}:{self.config.api.port}[/bold cyan]"
+            )
+        except Exception as e:
+            logger.error(f"Failed to start API server: {e}")
+            self._api_server = None
+            self._api_task = None
+
+    async def _stop_api_server(self) -> None:
+        """Stop embedded API server gracefully."""
+        if self._api_server and self._api_task:
+            try:
+                logger.info("Stopping API server...")
+                self._api_server.should_exit = True
+                await asyncio.wait_for(self._api_task, timeout=5.0)
+                logger.info("API server stopped")
+            except TimeoutError:
+                logger.warning("API server shutdown timed out, cancelling task")
+                self._api_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._api_task
+            except Exception as e:
+                logger.error(f"Error stopping API server: {e}")
 
     @classmethod
     def from_config_file(cls, path: Path) -> "DaemonRunner":
