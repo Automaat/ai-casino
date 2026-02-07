@@ -11,6 +11,7 @@ from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.optimization.param_store import OptimizedParamStore
 
 from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
@@ -19,7 +20,7 @@ from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
 from src.agents.meta import MetaAgent, StrategySelection
 from src.agents.news import NewsAnalysis, NewsAnalyst
-from src.agents.risk import AccountInfo, RiskAssessment, RiskManagementAgent
+from src.agents.risk import AccountInfo, PortfolioVaRConfig, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 from src.agents.social import SocialSentimentAnalysis, SocialSentimentAnalyst
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
@@ -27,7 +28,7 @@ from src.agents.trader import TraderAgent, TradingDecision
 from src.agents.trump import TrumpAnalysis, TrumpAnalyst
 from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
 from src.cache.historical import HistoricalCache
-from src.data.broker import AlpacaBroker, OrderStatus
+from src.data.broker import AlpacaBroker, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
 from src.data.finnhub import FinnhubFetcher
 from src.data.fundamental import FundamentalDataFetcher
@@ -81,6 +82,8 @@ class TradingState(TypedDict):
     sector_rotation_context: str | None
     earnings_context: str | None
     peer_analysis_context: str | None
+    broker_positions: dict[str, BrokerPosition] | None
+    portfolio_value: float | None
     warnings: list[str]
 
 
@@ -103,6 +106,8 @@ class TradingWorkflow:
         snapshot_repository: "PortfolioSnapshotRepository | None" = None,
         param_store: "OptimizedParamStore | None" = None,
         historical_cache: HistoricalCache | None = None,
+        portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
+        portfolio_var_config: PortfolioVaRConfig | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -121,6 +126,8 @@ class TradingWorkflow:
             snapshot_repository: Repository for portfolio snapshots (required if snapshot_on_trade)
             param_store: Optional optimized parameter store for strategy tuning
             historical_cache: Optional permanent cache for historical data
+            portfolio_var_calculator: Optional VaR calculator for portfolio-level risk limits
+            portfolio_var_config: Optional VaR limit configuration
         """
         import os
 
@@ -169,7 +176,11 @@ class TradingWorkflow:
         self.bullish_researcher = BullishResearcher(llm_client)
         self.bearish_researcher = BearishResearcher(llm_client)
         self.trader = TraderAgent(llm_client)
-        self.risk_manager = RiskManagementAgent(llm_client)
+        self.risk_manager = RiskManagementAgent(
+            llm_client,
+            portfolio_var_calculator=portfolio_var_calculator,
+            portfolio_var_config=portfolio_var_config,
+        )
 
         mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")
         trump_str = "+trump" if trump_mode else ""
@@ -653,6 +664,8 @@ class TradingWorkflow:
             sector_rotation_context=None,
             earnings_context=None,
             peer_analysis_context=None,
+            broker_positions=None,
+            portfolio_value=None,
             warnings=[],
         )
 
@@ -663,10 +676,19 @@ class TradingWorkflow:
             state: Current workflow state
 
         Returns:
-            Updated state with account info
+            Updated state with account info and broker positions
         """
         logger.info("Fetching account info")
         state["account_info"] = self._get_account_info()
+
+        if self.broker:
+            try:
+                broker_info = self.broker.get_account_info()
+                state["broker_positions"] = broker_info.positions
+                state["portfolio_value"] = broker_info.portfolio_value
+            except Exception:
+                logger.warning("Failed to fetch broker positions for VaR, continuing without")
+
         return state
 
     async def _make_decision(self, state: TradingState) -> TradingState:
@@ -724,6 +746,8 @@ class TradingWorkflow:
             account_info=state["account_info"],
             market_data=state["market_data"],
             decision_confidence=state["final_decision"].confidence,
+            broker_positions=state.get("broker_positions"),
+            portfolio_value=state.get("portfolio_value"),
         )
 
         state["risk_assessment"] = risk_assessment

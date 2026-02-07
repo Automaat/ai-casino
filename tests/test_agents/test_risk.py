@@ -1,11 +1,14 @@
 """Tests for risk management agent."""
 
 import json
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
 from src.agents.risk import (
+    PortfolioRiskReport,
+    PortfolioVaRConfig,
     PositionSizeCalculation,
     RiskAssessment,
     RiskManagementAgent,
@@ -14,6 +17,8 @@ from src.agents.risk import (
     TrailingStopConfig,
 )
 from src.agents.technical import TechnicalAnalysis
+from src.data.broker import BrokerPosition
+from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
 from src.strategies.signal import Signal
 
 
@@ -428,3 +433,237 @@ def test_repr(risk_agent):
     assert "RiskManagementAgent" in repr_str
     assert "max_risk=2.0%" in repr_str
     assert "trailing=True" in repr_str
+
+
+# --- Portfolio VaR tests ---
+
+
+def _make_var_result(
+    var_95: float = 0.02, cvar_99: float = 0.04, cdar_95: float = 0.05
+) -> PortfolioVaRResult:
+    return PortfolioVaRResult(
+        var_95=var_95,
+        var_99=0.03,
+        cvar_95=0.03,
+        cvar_99=cvar_99,
+        cdar_95=cdar_95,
+        max_drawdown=0.08,
+        portfolio_volatility=0.15,
+        num_positions=2,
+        lookback_days=90,
+        sufficient_data=True,
+    )
+
+
+def _make_mock_var_calculator(var_result: PortfolioVaRResult) -> MagicMock:
+    mock = MagicMock(spec=PortfolioVaRCalculator)
+    mock.calculate_with_hypothetical.return_value = var_result
+    mock.calculate.return_value = var_result
+    return mock
+
+
+def _make_position(symbol: str, market_value: float) -> BrokerPosition:
+    return BrokerPosition(
+        symbol=symbol,
+        qty=10.0,
+        market_value=market_value,
+        avg_entry_price=market_value / 10,
+        unrealized_pnl=0.0,
+        unrealized_pnl_percent=0.0,
+    )
+
+
+class TestPortfolioVaRValidation:
+    def test_within_limits(self, mock_llm_client):
+        var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_config=PortfolioVaRConfig(enabled=True),
+        )
+
+        warnings: list[str] = []
+        result = agent._validate_portfolio_var(
+            "AAPL",
+            Signal.BUY,
+            15000.0,
+            {"SPY": _make_position("SPY", 20000.0)},
+            100000.0,
+            warnings,
+        )
+
+        assert result is True
+        assert len(warnings) == 0
+
+    def test_breach(self, mock_llm_client):
+        var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
+        )
+
+        warnings: list[str] = []
+        result = agent._validate_portfolio_var(
+            "AAPL",
+            Signal.BUY,
+            15000.0,
+            {"SPY": _make_position("SPY", 20000.0)},
+            100000.0,
+            warnings,
+        )
+
+        assert result is False
+        assert any("VaR95" in w for w in warnings)
+        assert any("CVaR99" in w for w in warnings)
+
+    def test_disabled(self, mock_llm_client):
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_config=PortfolioVaRConfig(enabled=False),
+        )
+
+        warnings: list[str] = []
+        result = agent._validate_portfolio_var(
+            "AAPL",
+            Signal.BUY,
+            15000.0,
+            {},
+            100000.0,
+            warnings,
+        )
+
+        assert result is True
+
+    def test_insufficient_data(self, mock_llm_client):
+        insufficient_result = PortfolioVaRResult(
+            var_95=0.0,
+            var_99=0.0,
+            cvar_95=0.0,
+            cvar_99=0.0,
+            cdar_95=0.0,
+            max_drawdown=0.0,
+            portfolio_volatility=0.0,
+            num_positions=0,
+            lookback_days=90,
+            sufficient_data=False,
+        )
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_calculator=_make_mock_var_calculator(insufficient_result),
+            portfolio_var_config=PortfolioVaRConfig(enabled=True),
+        )
+
+        warnings: list[str] = []
+        result = agent._validate_portfolio_var(
+            "AAPL",
+            Signal.BUY,
+            15000.0,
+            {},
+            100000.0,
+            warnings,
+        )
+
+        assert result is True
+        assert any("Insufficient" in w for w in warnings)
+
+    def test_sell_always_approved(self, mock_llm_client):
+        var_result = _make_var_result(var_95=0.10, cvar_99=0.20)
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_config=PortfolioVaRConfig(enabled=True),
+        )
+
+        warnings: list[str] = []
+        result = agent._validate_portfolio_var(
+            "AAPL",
+            Signal.SELL,
+            15000.0,
+            {"AAPL": _make_position("AAPL", 15000.0)},
+            100000.0,
+            warnings,
+        )
+
+        assert result is True
+
+
+class TestAdaptiveStopLoss:
+    def test_high_cdar(self, mock_llm_client):
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_config=PortfolioVaRConfig(
+                enabled=True,
+                adaptive_stop_loss=True,
+                cdar_stop_threshold=0.10,
+                atr_multiplier_min=1.0,
+            ),
+        )
+        # CDaR at 2x threshold → multiplier should be at min
+        agent._portfolio_cdar = 0.20
+        multiplier = agent._get_adaptive_atr_multiplier()
+
+        assert multiplier == agent._var_config.atr_multiplier_min
+
+    def test_low_cdar(self, mock_llm_client):
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_config=PortfolioVaRConfig(
+                enabled=True,
+                adaptive_stop_loss=True,
+                cdar_stop_threshold=0.10,
+            ),
+        )
+        # CDaR below threshold → default multiplier
+        agent._portfolio_cdar = 0.05
+        multiplier = agent._get_adaptive_atr_multiplier()
+
+        assert multiplier == agent.ATR_MULTIPLIER
+
+    def test_disabled(self, mock_llm_client):
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_config=PortfolioVaRConfig(
+                enabled=True,
+                adaptive_stop_loss=False,
+            ),
+        )
+        agent._portfolio_cdar = 0.30
+        multiplier = agent._get_adaptive_atr_multiplier()
+
+        assert multiplier == agent.ATR_MULTIPLIER
+
+
+class TestGenerateRiskReport:
+    def test_fields(self, mock_llm_client):
+        var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_config=PortfolioVaRConfig(enabled=True),
+        )
+
+        positions = {"AAPL": _make_position("AAPL", 30000.0)}
+        report = agent.generate_risk_report(positions, 100000.0, 30000.0)
+
+        assert isinstance(report, PortfolioRiskReport)
+        assert report.var_95 == 0.02
+        assert report.cvar_99 == 0.03
+        assert report.num_positions == 2
+        assert report.current_exposure_percent == 30.0
+        assert report.risk_status == "HEALTHY"
+
+    def test_breach_status(self, mock_llm_client):
+        var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
+        agent = RiskManagementAgent(
+            mock_llm_client,
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
+        )
+
+        positions = {"AAPL": _make_position("AAPL", 50000.0)}
+        report = agent.generate_risk_report(positions, 100000.0, 50000.0)
+
+        assert report.risk_status == "BREACH"
+        assert report.var_limit_breached is True
+        assert report.cvar_limit_breached is True

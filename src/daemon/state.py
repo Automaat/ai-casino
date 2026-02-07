@@ -74,6 +74,19 @@ class PeerAnalysisRecord(BaseModel):
     total_duration_seconds: float
 
 
+class RiskReportRecord(BaseModel):
+    """Record of a portfolio risk report."""
+
+    timestamp: datetime
+    var_95: float
+    var_99: float
+    cvar_95: float
+    cvar_99: float
+    cdar_95: float
+    max_drawdown: float
+    risk_status: str
+
+
 class EarningsEventRecord(BaseModel):
     """Record of a single earnings event."""
 
@@ -114,6 +127,8 @@ class DaemonState(BaseModel):
     earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
     last_peer_analysis: datetime | None = None
     peer_analysis_history: list[PeerAnalysisRecord] = Field(default_factory=list)
+    last_risk_report: datetime | None = None
+    risk_report_history: list[RiskReportRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -393,6 +408,18 @@ class DaemonState(BaseModel):
 
         if len(self.peer_analysis_history) > 10:
             self.peer_analysis_history = self.peer_analysis_history[-10:]
+
+    def record_risk_report(self, report: RiskReportRecord) -> None:
+        """Record a portfolio risk report.
+
+        Args:
+            report: Risk report record to store
+        """
+        self.risk_report_history.append(report)
+        self.last_risk_report = report.timestamp
+
+        if len(self.risk_report_history) > 30:
+            self.risk_report_history = self.risk_report_history[-30:]
 
     def __repr__(self) -> str:
         """Return string representation."""

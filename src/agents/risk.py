@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from src.data.broker import BrokerPosition
+from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
 from src.models.llm import LLMClient
 from src.strategies.signal import Signal
 
@@ -62,6 +64,36 @@ class RiskValidation(BaseModel):
     reasoning: str
 
 
+class PortfolioVaRConfig(BaseModel):
+    """Configuration for portfolio-level VaR limits."""
+
+    enabled: bool = False
+    max_var_95: float = Field(default=0.03, ge=0.001, le=0.20)
+    max_cvar_99: float = Field(default=0.05, ge=0.001, le=0.30)
+    lookback_days: int = Field(default=90, ge=20, le=365)
+    adaptive_stop_loss: bool = True
+    cdar_stop_threshold: float = Field(default=0.10, ge=0.01, le=0.50)
+    atr_multiplier_min: float = Field(default=1.0, ge=0.5, le=2.0)
+
+
+class PortfolioRiskReport(BaseModel):
+    """Daily portfolio risk report."""
+
+    date: str
+    var_95: float
+    var_99: float
+    cvar_95: float
+    cvar_99: float
+    cdar_95: float
+    max_drawdown: float
+    portfolio_volatility: float
+    current_exposure_percent: float
+    num_positions: int
+    var_limit_breached: bool
+    cvar_limit_breached: bool
+    risk_status: str
+
+
 class RiskAssessment(BaseModel):
     """Complete risk management assessment."""
 
@@ -73,6 +105,7 @@ class RiskAssessment(BaseModel):
     stop_loss: StopLossCalculation
     validation: RiskValidation
     confidence: float
+    portfolio_var: PortfolioVaRResult | None = None
 
 
 class RiskManagementAgent:
@@ -99,6 +132,8 @@ class RiskManagementAgent:
         max_exposure: float | None = None,
         max_single_position: float | None = None,
         enable_trailing_stop: bool = True,
+        portfolio_var_calculator: PortfolioVaRCalculator | None = None,
+        portfolio_var_config: PortfolioVaRConfig | None = None,
     ) -> None:
         """Initialize risk management agent.
 
@@ -108,6 +143,8 @@ class RiskManagementAgent:
             max_exposure: Override max total exposure (%)
             max_single_position: Override max single position size (%)
             enable_trailing_stop: Enable trailing stop-loss
+            portfolio_var_calculator: Optional VaR calculator for portfolio-level limits
+            portfolio_var_config: Optional VaR limit configuration
         """
         self.llm = llm_client
         self.max_position_risk = max_position_risk or float(
@@ -120,14 +157,19 @@ class RiskManagementAgent:
             os.getenv("MAX_SINGLE_POSITION", str(self.MAX_SINGLE_POSITION_PERCENT))
         )
         self.enable_trailing_stop = enable_trailing_stop
+        self._var_calculator = portfolio_var_calculator
+        self._var_config = portfolio_var_config or PortfolioVaRConfig()
+        self._portfolio_cdar: float | None = None
+        self._latest_portfolio_var: PortfolioVaRResult | None = None
 
         self.audit_log_path = Path("logs/risk_audit.jsonl")
         self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
 
+        var_str = f", var_limits={'ON' if self._var_config.enabled else 'OFF'}"
         logger.info(
             f"Initialized RiskManagementAgent "
             f"(max_risk={self.max_position_risk}%, max_exposure={self.max_exposure}%, "
-            f"max_single={self.max_single_position}%, trailing={enable_trailing_stop})"
+            f"max_single={self.max_single_position}%, trailing={enable_trailing_stop}{var_str})"
         )
 
     def assess(
@@ -138,6 +180,8 @@ class RiskManagementAgent:
         account_info: AccountInfo,
         market_data: pd.DataFrame,
         decision_confidence: float,
+        broker_positions: dict[str, BrokerPosition] | None = None,
+        portfolio_value: float | None = None,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
 
@@ -148,11 +192,16 @@ class RiskManagementAgent:
             account_info: Account balance and positions
             market_data: OHLCV data for volatility analysis
             decision_confidence: Trading decision confidence
+            broker_positions: Optional broker positions for VaR calculation
+            portfolio_value: Optional portfolio value for VaR calculation
 
         Returns:
             RiskAssessment with sizing, stop-loss, validation
         """
         logger.info(f"Assessing risk for {action.value} {symbol} @ ${current_price:.2f}")
+
+        self._portfolio_cdar = None
+        self._latest_portfolio_var = None
 
         if action == Signal.HOLD:
             assessment = self._hold_assessment(symbol, current_price, account_info)
@@ -164,7 +213,13 @@ class RiskManagementAgent:
             stop_loss.max_loss_amount = position_sizing.risk_amount
 
             validation = self._validate_risk(
-                symbol, action, position_sizing, account_info, decision_confidence
+                symbol,
+                action,
+                position_sizing,
+                account_info,
+                decision_confidence,
+                broker_positions=broker_positions,
+                portfolio_value=portfolio_value,
             )
 
             confidence = self._calculate_risk_confidence(validation, decision_confidence)
@@ -183,6 +238,7 @@ class RiskManagementAgent:
                 stop_loss=stop_loss,
                 validation=validation,
                 confidence=confidence,
+                portfolio_var=self._latest_portfolio_var,
             )
 
         self._audit_log(assessment)
@@ -206,14 +262,15 @@ class RiskManagementAgent:
             StopLossCalculation with stop price and methodology
         """
         atr = self._get_atr(market_data)
+        atr_multiplier = self._get_adaptive_atr_multiplier()
 
         if atr and atr > 0:
-            stop_distance = atr * self.ATR_MULTIPLIER
+            stop_distance = atr * atr_multiplier
             if action == Signal.BUY:
                 stop_loss_price = current_price - stop_distance
             else:
                 stop_loss_price = current_price + stop_distance
-            methodology = f"ATR-based ({self.ATR_MULTIPLIER}x ATR)"
+            methodology = f"ATR-based ({atr_multiplier:.1f}x ATR)"
             stop_loss_percent = (stop_distance / current_price) * 100
         else:
             stop_loss_percent = self.DEFAULT_STOP_LOSS_PERCENT
@@ -367,6 +424,8 @@ class RiskManagementAgent:
         position_sizing: PositionSizeCalculation,
         account_info: AccountInfo,
         decision_confidence: float,
+        broker_positions: dict[str, BrokerPosition] | None = None,
+        portfolio_value: float | None = None,
     ) -> RiskValidation:
         """Validate risk constraints and generate approval.
 
@@ -376,6 +435,8 @@ class RiskManagementAgent:
             position_sizing: Position sizing calculation
             account_info: Account information
             decision_confidence: Decision confidence score
+            broker_positions: Optional broker positions for VaR check
+            portfolio_value: Optional portfolio value for VaR check
 
         Returns:
             RiskValidation with approval status
@@ -410,6 +471,16 @@ class RiskManagementAgent:
                 action, symbol, account_info, warnings
             )
 
+        if self._var_config.enabled and self._var_calculator:
+            constraints_met["portfolio_var"] = self._validate_portfolio_var(
+                symbol,
+                action,
+                position_sizing.position_value,
+                broker_positions or {},
+                portfolio_value or account_info.balance,
+                warnings,
+            )
+
         approved = all(constraints_met.values())
 
         risk_score = self._calculate_risk_score(
@@ -438,6 +509,154 @@ class RiskManagementAgent:
             warnings=warnings,
             constraints_met=constraints_met,
             reasoning=reasoning,
+        )
+
+    def _validate_portfolio_var(
+        self,
+        symbol: str,
+        action: Signal,
+        position_value: float,
+        broker_positions: dict[str, BrokerPosition],
+        portfolio_value: float,
+        warnings: list[str],
+    ) -> bool:
+        """Validate portfolio-level VaR limits.
+
+        Args:
+            symbol: Stock ticker
+            action: Trading action
+            position_value: Proposed position value
+            broker_positions: Current broker positions
+            portfolio_value: Current portfolio value
+            warnings: Warning list to append to
+
+        Returns:
+            True if within limits
+        """
+        if action == Signal.SELL:
+            return True
+
+        if not self._var_calculator:
+            return True
+
+        try:
+            var_result = self._var_calculator.calculate_with_hypothetical(
+                broker_positions, portfolio_value, symbol, position_value, self._var_config.lookback_days
+            )
+            self._latest_portfolio_var = var_result
+
+            if not var_result.sufficient_data:
+                warnings.append("Insufficient data for portfolio VaR check, approving trade")
+                return True
+
+            self._portfolio_cdar = var_result.cdar_95
+
+            var_ok = var_result.var_95 <= self._var_config.max_var_95
+            cvar_ok = var_result.cvar_99 <= self._var_config.max_cvar_99
+
+            if not var_ok:
+                warnings.append(
+                    f"Portfolio VaR95 {var_result.var_95:.4f} exceeds limit {self._var_config.max_var_95:.4f}"
+                )
+            if not cvar_ok:
+                warnings.append(
+                    f"Portfolio CVaR99 {var_result.cvar_99:.4f} exceeds limit {self._var_config.max_cvar_99:.4f}"
+                )
+
+            return var_ok and cvar_ok
+        except Exception as e:
+            logger.error(f"Portfolio VaR validation failed: {e}")
+            warnings.append(f"Portfolio VaR check failed: {e}")
+            return True
+
+    def _get_adaptive_atr_multiplier(self) -> float:
+        """Get ATR multiplier, adjusted for CDaR if adaptive stops enabled.
+
+        Returns:
+            ATR multiplier (default 2.0, reduced when CDaR is high)
+        """
+        if (
+            not self._var_config.adaptive_stop_loss
+            or self._portfolio_cdar is None
+            or self._portfolio_cdar <= self._var_config.cdar_stop_threshold
+        ):
+            return self.ATR_MULTIPLIER
+
+        # Linear interpolation: as CDaR goes from threshold to 2x threshold,
+        # multiplier goes from ATR_MULTIPLIER down to atr_multiplier_min
+        cdar_ratio = min(self._portfolio_cdar / self._var_config.cdar_stop_threshold, 2.0)
+        t = cdar_ratio - 1.0  # 0.0 at threshold, 1.0 at 2x threshold
+        multiplier = self.ATR_MULTIPLIER - t * (self.ATR_MULTIPLIER - self._var_config.atr_multiplier_min)
+
+        logger.debug(
+            f"Adaptive stop: CDaR={self._portfolio_cdar:.4f}, "
+            f"threshold={self._var_config.cdar_stop_threshold:.4f}, multiplier={multiplier:.2f}"
+        )
+        return multiplier
+
+    def generate_risk_report(
+        self,
+        broker_positions: dict[str, BrokerPosition],
+        portfolio_value: float,
+        total_exposure: float,
+        lookback_days: int = 90,
+    ) -> PortfolioRiskReport:
+        """Generate daily portfolio risk report.
+
+        Args:
+            broker_positions: Current broker positions
+            portfolio_value: Total portfolio value
+            total_exposure: Current total exposure
+            lookback_days: Historical lookback period
+
+        Returns:
+            PortfolioRiskReport with current risk state
+        """
+        exposure_percent = (total_exposure / portfolio_value * 100) if portfolio_value > 0 else 0.0
+
+        if not self._var_calculator or not broker_positions:
+            return PortfolioRiskReport(
+                date=datetime.now(UTC).date().isoformat(),
+                var_95=0.0,
+                var_99=0.0,
+                cvar_95=0.0,
+                cvar_99=0.0,
+                cdar_95=0.0,
+                max_drawdown=0.0,
+                portfolio_volatility=0.0,
+                current_exposure_percent=exposure_percent,
+                num_positions=len(broker_positions) if broker_positions else 0,
+                var_limit_breached=False,
+                cvar_limit_breached=False,
+                risk_status="HEALTHY",
+            )
+
+        var_result = self._var_calculator.calculate(broker_positions, portfolio_value, lookback_days)
+
+        var_breached = var_result.var_95 > self._var_config.max_var_95
+        cvar_breached = var_result.cvar_99 > self._var_config.max_cvar_99
+
+        if var_breached or cvar_breached:
+            risk_status = "BREACH"
+        elif var_result.var_95 > self._var_config.max_var_95 * 0.8:
+            risk_status = "WARNING"
+        else:
+            risk_status = "HEALTHY"
+
+        return PortfolioRiskReport(
+            date=datetime.now(UTC).date().isoformat(),
+            var_95=var_result.var_95,
+            var_99=var_result.var_99,
+            cvar_95=var_result.cvar_95,
+            cvar_99=var_result.cvar_99,
+            cdar_95=var_result.cdar_95,
+            max_drawdown=var_result.max_drawdown,
+            portfolio_volatility=var_result.portfolio_volatility,
+            current_exposure_percent=exposure_percent,
+            num_positions=var_result.num_positions,
+            var_limit_breached=var_breached,
+            cvar_limit_breached=cvar_breached,
+            risk_status=risk_status,
         )
 
     def _get_atr(self, market_data: pd.DataFrame, period: int = 14) -> float | None:
@@ -577,6 +796,11 @@ class RiskManagementAgent:
                 "stop_loss_price": assessment.stop_loss.stop_loss_price,
                 "warnings": assessment.validation.warnings,
             }
+
+            if assessment.portfolio_var:
+                log_entry["portfolio_var_95"] = assessment.portfolio_var.var_95
+                log_entry["portfolio_cvar_99"] = assessment.portfolio_var.cvar_99
+                log_entry["portfolio_cdar_95"] = assessment.portfolio_var.cdar_95
 
             with self.audit_log_path.open("a") as f:
                 f.write(json.dumps(log_entry) + "\n")

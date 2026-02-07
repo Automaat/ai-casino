@@ -168,6 +168,19 @@ class PeerAnalysisConfig(BaseModel):
         return self
 
 
+class RiskLimitsConfig(BaseModel):
+    """Configuration for portfolio-level VaR risk limits."""
+
+    enabled: bool = False
+    max_var_95: float = Field(default=0.03, ge=0.001, le=0.20)
+    max_cvar_99: float = Field(default=0.05, ge=0.001, le=0.30)
+    lookback_days: int = Field(default=90, ge=20, le=365)
+    adaptive_stop_loss: bool = True
+    cdar_stop_threshold: float = Field(default=0.10, ge=0.01, le=0.50)
+    atr_multiplier_min: float = Field(default=1.0, ge=0.5, le=2.0)
+    report_dir: str = "~/.ai-casino/risk-reports"
+
+
 class EarningsCalendarConfig(BaseModel):
     """Configuration for earnings calendar preparation."""
 
@@ -219,6 +232,7 @@ class DaemonConfig(BaseModel):
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
     peer_analysis: PeerAnalysisConfig = Field(default_factory=PeerAnalysisConfig)
+    risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -245,6 +259,7 @@ class DaemonConfig(BaseModel):
         sector_rotation_data = daemon_data.pop("sector_rotation", {})
         earnings_calendar_data = daemon_data.pop("earnings_calendar", {})
         peer_analysis_data = daemon_data.pop("peer_analysis", {})
+        risk_limits_data = daemon_data.pop("risk_limits", {})
 
         return cls(
             **daemon_data,
@@ -258,6 +273,7 @@ class DaemonConfig(BaseModel):
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
             earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
             peer_analysis=PeerAnalysisConfig(**peer_analysis_data),
+            risk_limits=RiskLimitsConfig(**risk_limits_data),
         )
 
     def __repr__(self) -> str:

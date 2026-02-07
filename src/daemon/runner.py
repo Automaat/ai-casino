@@ -1,6 +1,7 @@
 """Main daemon runner for autonomous trading."""
 
 import asyncio
+import json
 import os
 import signal
 from datetime import datetime
@@ -13,7 +14,7 @@ from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
-from src.daemon.state import DaemonState, EarningsEventRecord, SectorRotationRecord
+from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord, SectorRotationRecord
 from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
@@ -132,6 +133,25 @@ class DaemonRunner:
             finbert = get_finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
+            # Portfolio VaR calculator (if risk limits enabled)
+            portfolio_var_calculator = None
+            portfolio_var_config = None
+            if self.config.risk_limits.enabled:
+                from src.agents.risk import PortfolioVaRConfig
+                from src.metrics.portfolio_var import PortfolioVaRCalculator
+                from src.metrics.risk import RiskMetricsCalculator
+
+                portfolio_var_calculator = PortfolioVaRCalculator(RiskMetricsCalculator(), market_fetcher)
+                portfolio_var_config = PortfolioVaRConfig(
+                    enabled=self.config.risk_limits.enabled,
+                    max_var_95=self.config.risk_limits.max_var_95,
+                    max_cvar_99=self.config.risk_limits.max_cvar_99,
+                    lookback_days=self.config.risk_limits.lookback_days,
+                    adaptive_stop_loss=self.config.risk_limits.adaptive_stop_loss,
+                    cdar_stop_threshold=self.config.risk_limits.cdar_stop_threshold,
+                    atr_multiplier_min=self.config.risk_limits.atr_multiplier_min,
+                )
+
             self._workflow = TradingWorkflow(
                 llm_client,
                 market_fetcher,
@@ -143,6 +163,8 @@ class DaemonRunner:
                 use_meta_agent=True,
                 param_store=self.param_store,
                 historical_cache=self._historical_cache,
+                portfolio_var_calculator=portfolio_var_calculator,
+                portfolio_var_config=portfolio_var_config,
             )
             logger.info("Trading workflow initialized")
         return self._workflow
@@ -1014,12 +1036,73 @@ class DaemonRunner:
             self.state.record_error(f"Health check failed: {e}")
             self.state.save(self.config.state.state_file)
 
-    async def _run_cycle(self) -> int:
-        """Run a single analysis cycle.
+    def _run_daily_risk_report(self) -> None:
+        """Generate and persist daily portfolio risk report."""
+        if not self.config.risk_limits.enabled or not self.broker:
+            return
 
-        Returns:
-            Seconds to sleep before next cycle
-        """
+        # Dedup: only run once per day
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_risk_report:
+            last_date = self.state.last_risk_report.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Risk report already generated today")
+                return
+
+        logger.info("Generating daily portfolio risk report")
+        console.print(f"\n[bold cyan]Portfolio Risk Report ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            account_info = self.broker.get_account_info()
+            workflow = self._init_workflow()
+
+            report = workflow.risk_manager.generate_risk_report(
+                broker_positions=account_info.positions,
+                portfolio_value=account_info.portfolio_value,
+                total_exposure=account_info.total_exposure,
+                lookback_days=self.config.risk_limits.lookback_days,
+            )
+
+            # Persist to JSON file
+            report_dir = Path(self.config.risk_limits.report_dir).expanduser()
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_path = report_dir / f"risk-report-{report.date}.json"
+            with report_path.open("w") as f:
+                json.dump(report.model_dump(), f, indent=2)
+
+            # Record in state
+            from datetime import UTC
+
+            self.state.record_risk_report(
+                RiskReportRecord(
+                    timestamp=datetime.now(UTC),
+                    var_95=report.var_95,
+                    var_99=report.var_99,
+                    cvar_95=report.cvar_95,
+                    cvar_99=report.cvar_99,
+                    cdar_95=report.cdar_95,
+                    max_drawdown=report.max_drawdown,
+                    risk_status=report.risk_status,
+                )
+            )
+            self.state.save(self.config.state.state_file)
+
+            status_color = {"HEALTHY": "green", "WARNING": "yellow", "BREACH": "red"}.get(
+                report.risk_status, "white"
+            )
+            console.print(f"[{status_color}]Risk status: {report.risk_status}[/{status_color}]")
+            console.print(f"[dim]VaR95={report.var_95:.4f}, CVaR99={report.cvar_99:.4f}[/dim]")
+            console.print(f"[dim]Report saved: {report_path}[/dim]\n")
+            logger.info(f"Risk report generated: {report.risk_status}")
+
+        except Exception as e:
+            error_msg = f"Risk report generation failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _run_scheduled_tasks(self) -> None:
+        """Run all scheduled after-hours tasks."""
         # Check if it's time for data prefetching (before screening)
         if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
             self._run_prefetch()
@@ -1044,11 +1127,22 @@ class DaemonRunner:
         if self.scheduler.is_after_hours_screening_time():
             self._run_after_hours_screening()
 
-        await self._maybe_run_health_check()
-
         # Check if it's time for parameter optimization
         if self.config.optimization.enabled and self.scheduler.is_optimization_time():
             self._run_optimization()
+
+        # Daily risk report (after-hours only, before journal)
+        if not self.scheduler.is_market_open():
+            self._run_daily_risk_report()
+
+    async def _run_cycle(self) -> int:
+        """Run a single analysis cycle.
+
+        Returns:
+            Seconds to sleep before next cycle
+        """
+        self._run_scheduled_tasks()
+        await self._maybe_run_health_check()
 
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             await self._maybe_run_journal()
