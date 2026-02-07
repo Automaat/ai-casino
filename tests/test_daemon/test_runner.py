@@ -194,7 +194,9 @@ async def test_analyze_watchlist_uses_merged(
     # Mock _analyze_symbol to track which symbols are analyzed
     analyzed_symbols: list[str] = []
 
-    async def mock_analyze(symbol: str, position_context: dict | None = None) -> None:
+    async def mock_analyze(
+        symbol: str, position_context: dict | None = None, degradation_context: object = None
+    ) -> None:
         analyzed_symbols.append(symbol)
 
     monkeypatch.setattr(runner, "_analyze_symbol", mock_analyze)

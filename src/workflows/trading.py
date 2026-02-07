@@ -12,6 +12,7 @@ from loguru import logger
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
+    from src.daemon.degradation import DegradationContext
     from src.daemon.notifications import NotificationService
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
     from src.metrics.portfolio_var import PortfolioVaRCalculator
@@ -98,6 +99,7 @@ class TradingState(TypedDict):
     broker_positions: dict[str, BrokerPosition] | None
     portfolio_value: float | None
     backtest_validation: BacktestValidation | None
+    degradation_context: "DegradationContext | None"
     warnings: list[str]
 
 
@@ -255,13 +257,14 @@ class TradingWorkflow:
             return None
         return result
 
-    async def analyze(
+    async def analyze(  # noqa: PLR0913
         self,
         symbol: str,
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
         position_context: dict[str, object] | None = None,
         enable_multi_timeframe: bool = False,
+        degradation_context: "DegradationContext | None" = None,
         **context_kwargs: str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -272,6 +275,7 @@ class TradingWorkflow:
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             position_context: Optional position context (entry price, P&L, days held)
             enable_multi_timeframe: Enable multi-timeframe analysis (requires market hours)
+            degradation_context: Optional degradation context
             **context_kwargs: Optional context keys: sector_context, earnings_context,
                 peer_analysis_context, game_plan_context
 
@@ -296,6 +300,7 @@ class TradingWorkflow:
                 "game_plan_context": context_kwargs.get("game_plan_context"),
                 "position_context": position_context,
                 "enable_multi_timeframe": enable_multi_timeframe,
+                "degradation_context": degradation_context,
             }
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
@@ -462,9 +467,18 @@ class TradingWorkflow:
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             collector: Optional metrics collector
             extra_context: Optional dict with sector_rotation_context, earnings_context,
-                enable_multi_timeframe
+                enable_multi_timeframe, degradation_context
         """
+        from src.daemon.degradation import DegradationContext, DegradationTier
+
         ctx = extra_context or {}
+        degradation_context: DegradationContext | None = ctx.get("degradation_context")  # type: ignore[assignment]
+
+        # Check if halted
+        if degradation_context and degradation_context.tier == DegradationTier.HALTED:
+            msg = f"Analysis halted: {degradation_context.halt_reason}"
+            raise RuntimeError(msg)
+
         enable_multi_timeframe = bool(ctx.get("enable_multi_timeframe", False))
         start = time.perf_counter()
         state = await self._fetch_data(symbol, period_days, enable_multi_timeframe)
@@ -473,6 +487,7 @@ class TradingWorkflow:
         state["peer_analysis_context"] = ctx.get("peer_analysis_context")
         state["game_plan_context"] = ctx.get("game_plan_context")
         state["position_context"] = ctx.get("position_context")
+        state["degradation_context"] = degradation_context
         self._record_stage(collector, "fetch_data", start)
 
         start = time.perf_counter()
@@ -543,6 +558,13 @@ class TradingWorkflow:
         """
         execution_metrics = collector.finalize() if collector else None
 
+        # Extract degradation fields
+        degradation_context = state.get("degradation_context")
+        degradation_tier = degradation_context.tier.value if degradation_context else None
+        degradation_confidence_penalty = (
+            (1 - degradation_context.confidence_adjustment) if degradation_context else None
+        )
+
         result = TradingWorkflowResult(
             symbol=symbol,
             trading_session=trading_session,
@@ -566,6 +588,8 @@ class TradingWorkflow:
             peer_analysis_context=state.get("peer_analysis_context"),
             execution_metrics=execution_metrics,
             backtest_validation=state.get("backtest_validation"),
+            degradation_tier=degradation_tier,
+            degradation_confidence_penalty=degradation_confidence_penalty,
         )
 
         if execution_metrics:
@@ -909,6 +933,7 @@ class TradingWorkflow:
             backtest_validation=state.get("backtest_validation"),
             game_plan_context=state.get("game_plan_context"),
             position_context=state.get("position_context"),
+            degradation_context=state.get("degradation_context"),
         )
 
         state["final_decision"] = decision
@@ -941,6 +966,7 @@ class TradingWorkflow:
             portfolio_value=state.get("portfolio_value"),
             target_portfolio_weight=target_weight,
             backtest_validation=state.get("backtest_validation"),
+            degradation_context=state.get("degradation_context"),
         )
 
         state["risk_assessment"] = risk_assessment

@@ -18,6 +18,8 @@ from src.agents.sentiment import SentimentAnalysis
 
 if TYPE_CHECKING:
     from src.agents.risk import PortfolioRiskReport
+    from src.daemon.degradation import DegradationContext
+    from src.daemon.health import HealthReport
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
@@ -305,12 +307,14 @@ class DaemonRunner:
         self,
         symbol: str,
         position_context: dict[str, object] | None = None,
+        degradation_context: "DegradationContext | None" = None,
     ) -> TradingWorkflowResult | None:
         """Analyze a single symbol.
 
         Args:
             symbol: Stock ticker symbol
             position_context: Position context (entry price, P&L, days held) (optional)
+            degradation_context: Optional degradation context
 
         Returns:
             TradingWorkflowResult or None on error
@@ -366,6 +370,7 @@ class DaemonRunner:
                 earnings_context=earnings_context,
                 peer_analysis_context=peer_context,
                 game_plan_context=game_plan_context,
+                degradation_context=degradation_context,
             )
 
             # Send notification if enabled
@@ -500,6 +505,74 @@ class DaemonRunner:
 
         await self.notification_service.notify(NotificationTrigger.PORTFOLIO_VAR_BREACH, message)
 
+    def _evaluate_degradation(self) -> "DegradationContext":
+        """Load latest health report and evaluate degradation tier.
+
+        Returns:
+            DegradationContext with tier and available agents
+        """
+        from src.daemon.degradation import DegradationPolicy
+
+        policy = DegradationPolicy(self.config)
+        health_report = self._load_latest_health_report()
+        return policy.evaluate_degradation(health_report)
+
+    def _load_latest_health_report(self) -> "HealthReport | None":
+        """Load most recent health report from disk.
+
+        Returns:
+            HealthReport if available, None otherwise
+        """
+        from src.daemon.health import HealthReport
+
+        health_dir = Path(self.config.health.health_dir).expanduser()
+        if not health_dir.exists():
+            return None
+
+        report_files = sorted(health_dir.glob("health-*.json"), reverse=True)
+        if not report_files:
+            return None
+
+        try:
+            with report_files[0].open() as f:
+                return HealthReport.model_validate(json.load(f))
+        except Exception as e:
+            logger.warning(f"Failed to load health report: {e}")
+            return None
+
+    async def _notify_degradation(self, context: "DegradationContext") -> None:
+        """Send degradation notification.
+
+        Args:
+            context: Degradation context
+        """
+        from src.daemon.config import NotificationTrigger
+        from src.daemon.degradation import DegradationTier
+        from src.daemon.notifications import NotificationMessage
+
+        # Determine title and body
+        if context.tier == DegradationTier.HALTED:
+            title = "Trading System HALTED"
+            body = context.halt_reason or "Critical services unavailable"
+        else:
+            title = f"Trading System {context.tier.value}"
+            services = ", ".join(context.unavailable_services) if context.unavailable_services else "Unknown"
+            body = f"APIs down: {services}"
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.HEALTH_FAILURE,
+            title=title,
+            body=body,
+            metadata={
+                "tier": context.tier.value,
+                "unavailable_services": context.unavailable_services,
+                "confidence_adjustment": context.confidence_adjustment,
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        await self.notification_service.notify(NotificationTrigger.HEALTH_FAILURE, message)
+
     def _format_sector_context(self, record: SectorRotationRecord) -> str:
         """Format sector rotation record as text for trader prompt.
 
@@ -574,11 +647,16 @@ class DaemonRunner:
             timestamp=record.timestamp,
         )
 
-    async def _analyze_watchlist(self, watchlist: list[str]) -> list[TradingWorkflowResult]:  # noqa: C901, PLR0912, PLR0915
+    async def _analyze_watchlist(  # noqa: C901, PLR0912, PLR0915
+        self,
+        watchlist: list[str],
+        degradation_context: "DegradationContext | None" = None,
+    ) -> list[TradingWorkflowResult]:
         """Analyze all symbols in watchlist.
 
         Args:
             watchlist: List of symbols to analyze
+            degradation_context: Optional degradation context
 
         Returns:
             List of analysis results
@@ -655,7 +733,7 @@ class DaemonRunner:
                     }
 
             async with semaphore:
-                return await self._analyze_symbol(symbol, position_context)
+                return await self._analyze_symbol(symbol, position_context, degradation_context)
 
         tasks = [analyze_with_limit(s) for s in watchlist]
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1876,8 +1954,41 @@ class DaemonRunner:
         Returns:
             Seconds to sleep before next cycle
         """
+        from src.daemon.degradation import DegradationTier
+
         self._run_scheduled_tasks()
         await self._maybe_run_health_check()
+
+        # Evaluate degradation before analysis
+        degradation_context = self._evaluate_degradation()
+
+        if degradation_context.tier == DegradationTier.HALTED:
+            logger.warning(f"Analysis HALTED: {degradation_context.halt_reason}")
+            console.print(f"[red]HALTED: {degradation_context.halt_reason}[/red]")
+
+            # Notify on every halted cycle
+            if self.notification_service:
+                await self._notify_degradation(degradation_context)
+
+            # Record in state
+            self.state.record_degradation(degradation_context)
+            self.state.save(self.config.state.state_file)
+
+            return 60  # Retry in 1 minute
+
+        # Log degradation status if not FULL
+        if degradation_context.tier != DegradationTier.FULL:
+            logger.warning(
+                f"Degraded mode: {degradation_context.tier}, "
+                f"unavailable: {degradation_context.unavailable_services}"
+            )
+            console.print(f"[yellow]DEGRADED: {degradation_context.tier}[/yellow]")
+
+            # Notify on every degraded cycle
+            if self.notification_service:
+                await self._notify_degradation(degradation_context)
+
+            self.state.record_degradation(degradation_context)
 
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             await self._maybe_run_journal()
@@ -1890,7 +2001,7 @@ class DaemonRunner:
         logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
         console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now():%H:%M:%S})")  # noqa: DTZ005
 
-        results = await self._analyze_watchlist(watchlist)
+        results = await self._analyze_watchlist(watchlist, degradation_context)
         self._log_results(results)
 
         # Check journal regardless of market_hours_only setting

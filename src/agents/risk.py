@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from src.daemon.degradation import DegradationContext
     from src.workflows.types import BacktestValidation
 
 from src.data.broker import BrokerPosition
@@ -188,6 +189,7 @@ class RiskManagementAgent:
         portfolio_value: float | None = None,
         target_portfolio_weight: float | None = None,
         backtest_validation: "BacktestValidation | None" = None,
+        degradation_context: "DegradationContext | None" = None,  # noqa: ARG002
     ) -> RiskAssessment:
         """Perform complete risk assessment.
 
@@ -202,6 +204,7 @@ class RiskManagementAgent:
             portfolio_value: Optional portfolio value for VaR calculation
             target_portfolio_weight: Optional target portfolio weight for allocation-based sizing
             backtest_validation: Optional pre-trade backtest validation result
+            degradation_context: Optional degradation context
 
         Returns:
             RiskAssessment with sizing, stop-loss, validation
