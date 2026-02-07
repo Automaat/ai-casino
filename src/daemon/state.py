@@ -144,7 +144,7 @@ class MonteCarloRecord(BaseModel):
     horizon_days: int
 
     # Key results
-    prob_loss_gt_10pct: float
+    prob_loss_gt_threshold: float
     expected_worst_drawdown: float
     var_95: float
     cvar_95: float
@@ -679,15 +679,16 @@ class DaemonState(BaseModel):
             return None
         return PositionRecord.model_validate(self.active_positions[symbol])
 
-    def record_monte_carlo_test(self, record: MonteCarloRecord) -> None:
-        """Add Monte Carlo test record (keep last 52 weeks).
+    def record_monte_carlo_test(self, record: MonteCarloRecord, max_records: int = 52) -> None:
+        """Add Monte Carlo test record.
 
         Args:
             record: Monte Carlo test record
+            max_records: Maximum records to retain (default 52)
         """
         self.monte_carlo_tests.append(record)
-        if len(self.monte_carlo_tests) > 52:
-            self.monte_carlo_tests = self.monte_carlo_tests[-52:]
+        if len(self.monte_carlo_tests) > max_records:
+            self.monte_carlo_tests = self.monte_carlo_tests[-max_records:]
 
     def __repr__(self) -> str:
         """Return string representation."""

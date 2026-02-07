@@ -79,16 +79,17 @@ class DaemonStressTester:
             horizon_days=self.config.horizon_days,
             method=method,
             random_seed=self.config.random_seed,
+            loss_threshold=self.config.loss_threshold,
         )
 
         # Check against risk tolerance
-        exceeds_tolerance = result.prob_loss_gt_10pct > self.config.max_acceptable_prob
+        exceeds_tolerance = result.prob_loss_gt_threshold > self.config.max_acceptable_prob
         alert_message = None
 
         if exceeds_tolerance:
             alert_message = (
                 f"Portfolio tail risk exceeds threshold: "
-                f"P(loss>{self.config.loss_threshold:.0%})={result.prob_loss_gt_10pct:.1%} "
+                f"P(loss>{self.config.loss_threshold:.0%})={result.prob_loss_gt_threshold:.1%} "
                 f"(max {self.config.max_acceptable_prob:.1%}), "
                 f"Expected worst drawdown={result.expected_worst_drawdown:.1%}"
             )
@@ -99,7 +100,7 @@ class DaemonStressTester:
             simulation_method=result.simulation_method.value,
             num_simulations=result.num_simulations,
             horizon_days=result.horizon_days,
-            prob_loss_gt_10pct=result.prob_loss_gt_10pct,
+            prob_loss_gt_threshold=result.prob_loss_gt_threshold,
             expected_worst_drawdown=result.expected_worst_drawdown,
             var_95=result.var_95,
             cvar_95=result.cvar_95,
@@ -110,8 +111,10 @@ class DaemonStressTester:
             total_market_value=total_value,
         )
 
+        threshold_pct = self.config.loss_threshold
+        prob_pct = result.prob_loss_gt_threshold
         logger.info(
-            f"[STRESS TEST] Complete - P(loss>10%)={result.prob_loss_gt_10pct:.1%}, "
+            f"[STRESS TEST] Complete - P(loss>{threshold_pct:.0%})={prob_pct:.1%}, "
             f"VaR95={result.var_95:.1%}, CVaR95={result.cvar_95:.1%}"
         )
 
@@ -137,14 +140,16 @@ class DaemonStressTester:
                 market_data = self.market.fetch_daily(symbol, period_days=lookback_days)
                 df = market_data.data
 
-                if len(df) < self.config.min_historical_days:
+                # Calculate daily returns first
+                returns = df["close"].pct_change().dropna()
+
+                if len(returns) < self.config.min_historical_days:
                     msg = (
-                        f"{symbol}: Only {len(df)} days available (minimum {self.config.min_historical_days})"
+                        f"{symbol}: Only {len(returns)} return days available "
+                        f"(minimum {self.config.min_historical_days})"
                     )
                     raise ValueError(msg)  # noqa: TRY301
 
-                # Calculate daily returns
-                returns = df["close"].pct_change().dropna()
                 returns_dict[symbol] = returns
 
             except Exception as e:

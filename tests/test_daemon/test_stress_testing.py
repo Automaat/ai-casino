@@ -1,8 +1,10 @@
 """Tests for Monte Carlo stress testing daemon integration."""
 
+import zlib
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -11,6 +13,7 @@ from src.daemon.state import MonteCarloRecord
 from src.daemon.stress_testing import DaemonStressTester
 from src.data.broker import BrokerPosition
 from src.data.market import MarketData
+from src.metrics.monte_carlo import MonteCarloResult, SimulationMethod
 
 
 @pytest.fixture
@@ -55,15 +58,13 @@ def mock_broker(mocker):
 @pytest.fixture
 def mock_market_fetcher(mocker):
     """Mock market data fetcher."""
-    import numpy as np
-
     fetcher = mocker.Mock()
     # Use a shared date range for all symbols to ensure alignment
     shared_dates = pd.date_range(end=datetime.now(UTC), periods=100, freq="D")
 
     def fetch_daily(symbol, period_days):
         # Generate sample historical data with slight variations per symbol
-        np.random.seed(hash(symbol) % 2**32)  # Different seed per symbol
+        np.random.seed(zlib.crc32(symbol.encode()) % 2**32)  # Stable hash per symbol
         base_price = 150.0
         close_prices = base_price + np.random.normal(0, 2, 100).cumsum()
 
@@ -93,7 +94,7 @@ def test_executor_end_to_end(mock_broker, mock_market_fetcher, monte_carlo_confi
     assert record.num_simulations == 1000
     assert record.horizon_days == 252
     assert record.simulation_method == "PARAMETRIC"
-    assert 0.0 <= record.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= record.prob_loss_gt_threshold <= 1.0
     assert record.cvar_95 <= record.var_95  # CVaR more negative than VaR
     assert record.total_market_value == 2500.0
 
@@ -112,8 +113,6 @@ def test_executor_handles_insufficient_data(mock_broker, mock_market_fetcher, mo
 
     def fetch_daily_limited(symbol, period_days):
         # Only 20 days of data
-        import numpy as np
-
         np.random.seed(42)
         dates = pd.date_range(end=datetime.now(UTC), periods=20, freq="D")
         base_price = 150.0
@@ -138,21 +137,44 @@ def test_executor_handles_insufficient_data(mock_broker, mock_market_fetcher, mo
         executor.execute()
 
 
-def test_executor_risk_threshold_alert(mock_broker, mock_market_fetcher):
+def test_executor_risk_threshold_alert(mock_broker, mock_market_fetcher, mocker):
     """Test alert when risk exceeds threshold."""
+    from src.metrics.monte_carlo import MonteCarloSimulator
+
     config = MonteCarloConfig(
         enabled=True,
-        num_simulations=1000,
-        max_acceptable_prob=0.01,  # Very low threshold to trigger alert
+        num_simulations=100,
+        max_acceptable_prob=0.05,  # Very low threshold
+        random_seed=42,
     )
 
     executor = DaemonStressTester(mock_broker, mock_market_fetcher, config)
+
+    # Patch simulator result to force high probability exceeding threshold
+    mock_result = MonteCarloResult(
+        simulation_method=SimulationMethod.PARAMETRIC,
+        num_simulations=100,
+        horizon_days=252,
+        prob_loss_gt_threshold=0.20,  # Exceeds 5% threshold
+        expected_worst_drawdown=-0.15,
+        var_95=-0.08,
+        cvar_95=-0.12,
+        median_recovery_days=30.0,
+        mean_return=0.05,
+        std_return=0.15,
+        min_return=-0.25,
+        max_return=0.35,
+        simulated_returns=[],
+    )
+    mocker.patch.object(MonteCarloSimulator, "simulate", return_value=mock_result)
+
     record = executor.execute()
 
-    # With normal market data, should likely exceed very low threshold
-    # (Can't guarantee since it's probabilistic, but very likely)
+    # Now we can assert deterministically
     assert isinstance(record, MonteCarloRecord)
-    assert record.alert_message is not None or record.alert_message is None  # Either is valid
+    assert record.exceeds_risk_tolerance is True
+    assert record.alert_message is not None
+    assert "exceeds threshold" in record.alert_message.lower()
 
 
 def test_executor_fetches_correct_lookback(mock_broker, mock_market_fetcher, monte_carlo_config):
@@ -174,7 +196,7 @@ def test_executor_bootstrap_method(mock_broker, mock_market_fetcher):
     record = executor.execute()
 
     assert record.simulation_method == "BOOTSTRAP"
-    assert 0.0 <= record.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= record.prob_loss_gt_threshold <= 1.0
 
 
 def test_executor_gbm_method(mock_broker, mock_market_fetcher):
@@ -185,4 +207,4 @@ def test_executor_gbm_method(mock_broker, mock_market_fetcher):
     record = executor.execute()
 
     assert record.simulation_method == "GBM"
-    assert 0.0 <= record.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= record.prob_loss_gt_threshold <= 1.0

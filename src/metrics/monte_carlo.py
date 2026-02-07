@@ -27,10 +27,10 @@ class MonteCarloResult(BaseModel):
     horizon_days: int
 
     # Key metrics
-    prob_loss_gt_10pct: float  # Probability of >10% portfolio loss
-    expected_worst_drawdown: float  # Mean of worst 5% scenarios
-    var_95: float  # 95th percentile loss
-    cvar_95: float  # Expected loss beyond VaR
+    prob_loss_gt_threshold: float  # Probability portfolio loss exceeds threshold
+    expected_worst_drawdown: float  # Mean of worst 5% max drawdowns
+    var_95: float  # 5th percentile portfolio return (≈ 95% one-sided VaR)
+    cvar_95: float  # Expected return in worst 5% scenarios (CVaR, loss beyond VaR)
     median_recovery_days: float | None  # Median days to recover from drawdown
 
     # Distribution stats
@@ -63,13 +63,14 @@ class MonteCarloSimulator:
             logger.warning("Singular covariance matrix, adding ridge regularization")
             self.cov_matrix += 1e-6 * np.eye(len(self.cov_matrix))
 
-    def simulate(
+    def simulate(  # noqa: PLR0913
         self,
         positions: dict[str, float],
         num_simulations: int = 1000,
         horizon_days: int = 252,
         method: SimulationMethod = SimulationMethod.PARAMETRIC,
         random_seed: int | None = None,
+        loss_threshold: float = 0.10,
     ) -> MonteCarloResult:
         """Run Monte Carlo simulation on portfolio.
 
@@ -79,6 +80,7 @@ class MonteCarloSimulator:
             horizon_days: Simulation horizon in days (default 1 year)
             method: Simulation method (PARAMETRIC/BOOTSTRAP/GBM)
             random_seed: Random seed for reproducibility
+            loss_threshold: Loss threshold for probability calculation (default 0.10)
 
         Returns:
             MonteCarloResult with tail risk metrics
@@ -105,8 +107,7 @@ class MonteCarloSimulator:
                 f"Large simulation ({memory_mb:.0f} MB), consider reducing num_simulations or horizon_days"
             )
 
-        if random_seed is not None:
-            np.random.seed(random_seed)
+        rng = np.random.default_rng(random_seed) if random_seed is not None else np.random.default_rng()
 
         # Align positions with returns columns
         symbols = [sym for sym in self.returns.columns if sym in positions]
@@ -121,11 +122,11 @@ class MonteCarloSimulator:
 
         # Generate simulations based on method
         if method == SimulationMethod.PARAMETRIC:
-            sim_returns = self._simulate_parametric(symbols, num_simulations, horizon_days)
+            sim_returns = self._simulate_parametric(symbols, num_simulations, horizon_days, rng)
         elif method == SimulationMethod.BOOTSTRAP:
-            sim_returns = self._simulate_bootstrap(symbols, num_simulations, horizon_days)
+            sim_returns = self._simulate_bootstrap(symbols, num_simulations, horizon_days, rng)
         elif method == SimulationMethod.GBM:
-            sim_returns = self._simulate_gbm(symbols, num_simulations, horizon_days)
+            sim_returns = self._simulate_gbm(symbols, num_simulations, horizon_days, rng)
         else:
             msg = f"Unknown simulation method: {method}"
             raise ValueError(msg)
@@ -141,12 +142,17 @@ class MonteCarloSimulator:
         final_returns = cumulative_returns[:, -1]  # (num_sims,)
 
         # Calculate metrics
-        loss_threshold = -0.10
-        prob_loss_gt_10pct = float((final_returns < loss_threshold).mean())
+        prob_loss_gt_threshold = float((final_returns < -loss_threshold).mean())
         var_95 = float(np.percentile(final_returns, 5))
         cvar_95 = float(final_returns[final_returns <= var_95].mean())
-        worst_5pct = final_returns[final_returns <= np.percentile(final_returns, 5)]
-        expected_worst_drawdown = float(worst_5pct.mean())
+
+        # Calculate expected worst drawdown (true max drawdown from equity curve)
+        wealth = 1.0 + cumulative_returns
+        running_max = np.maximum.accumulate(wealth, axis=1)
+        drawdowns = wealth / running_max - 1.0
+        max_drawdowns = drawdowns.min(axis=1)
+        worst_5pct_drawdowns = max_drawdowns[max_drawdowns <= np.percentile(max_drawdowns, 5)]
+        expected_worst_drawdown = float(worst_5pct_drawdowns.mean())
 
         # Calculate recovery time (median days to recover from max drawdown)
         median_recovery_days = self._calculate_recovery_time(cumulative_returns)
@@ -155,7 +161,7 @@ class MonteCarloSimulator:
             simulation_method=method,
             num_simulations=num_simulations,
             horizon_days=horizon_days,
-            prob_loss_gt_10pct=prob_loss_gt_10pct,
+            prob_loss_gt_threshold=prob_loss_gt_threshold,
             expected_worst_drawdown=expected_worst_drawdown,
             var_95=var_95,
             cvar_95=cvar_95,
@@ -167,7 +173,9 @@ class MonteCarloSimulator:
             simulated_returns=final_returns.tolist(),
         )
 
-    def _simulate_parametric(self, symbols: list[str], num_simulations: int, horizon_days: int) -> np.ndarray:
+    def _simulate_parametric(
+        self, symbols: list[str], num_simulations: int, horizon_days: int, rng: np.random.Generator
+    ) -> np.ndarray:
         """Parametric simulation using multivariate normal distribution.
 
         Returns:
@@ -177,9 +185,11 @@ class MonteCarloSimulator:
         cov = self.cov_matrix.loc[symbols, symbols].values
 
         # Generate random returns: (num_sims, horizon_days, num_assets)
-        return np.random.multivariate_normal(mean=mean, cov=cov, size=(num_simulations, horizon_days))
+        return rng.multivariate_normal(mean=mean, cov=cov, size=(num_simulations, horizon_days))
 
-    def _simulate_bootstrap(self, symbols: list[str], num_simulations: int, horizon_days: int) -> np.ndarray:
+    def _simulate_bootstrap(
+        self, symbols: list[str], num_simulations: int, horizon_days: int, rng: np.random.Generator
+    ) -> np.ndarray:
         """Bootstrap simulation using historical resampling.
 
         Returns:
@@ -188,10 +198,12 @@ class MonteCarloSimulator:
         returns_data = self.returns[symbols].values
 
         # Resample with replacement (preserves correlation)
-        indices = np.random.randint(0, len(returns_data), size=(num_simulations, horizon_days))
+        indices = rng.integers(0, len(returns_data), size=(num_simulations, horizon_days))
         return returns_data[indices]  # (num_sims, horizon_days, num_assets)
 
-    def _simulate_gbm(self, symbols: list[str], num_simulations: int, horizon_days: int) -> np.ndarray:
+    def _simulate_gbm(
+        self, symbols: list[str], num_simulations: int, horizon_days: int, rng: np.random.Generator
+    ) -> np.ndarray:
         """Geometric Brownian Motion simulation.
 
         Returns:
@@ -204,9 +216,7 @@ class MonteCarloSimulator:
         num_assets = len(symbols)
 
         # Generate correlated random shocks
-        z = np.random.multivariate_normal(
-            mean=np.zeros(num_assets), cov=cov, size=(num_simulations, horizon_days)
-        )
+        z = rng.multivariate_normal(mean=np.zeros(num_assets), cov=cov, size=(num_simulations, horizon_days))
 
         # GBM returns using drift-diffusion formula
         sigma = np.sqrt(np.diag(cov))
@@ -227,17 +237,18 @@ class MonteCarloSimulator:
         recovery_times = []
 
         for sim_path in cumulative_returns:
-            # Find max drawdown point
-            running_max = np.maximum.accumulate(sim_path)
-            drawdowns = sim_path - running_max
+            # Convert to equity (wealth)
+            equity = 1.0 + sim_path
+            running_max = np.maximum.accumulate(equity)
+            drawdowns = (equity - running_max) / running_max
             max_dd_idx = np.argmin(drawdowns)
 
             if max_dd_idx == len(sim_path) - 1:
                 # Max drawdown at end, no recovery
                 continue
 
-            # Find recovery point (first time returns >= running max)
-            recovery_idx = np.where(sim_path[max_dd_idx:] >= running_max[max_dd_idx])[0]
+            # Find recovery point (first time equity >= running max)
+            recovery_idx = np.where(equity[max_dd_idx:] >= running_max[max_dd_idx])[0]
             if len(recovery_idx) > 0:
                 recovery_times.append(float(recovery_idx[0]))
 

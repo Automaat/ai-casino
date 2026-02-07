@@ -1716,7 +1716,7 @@ class DaemonRunner:
             )
             record = executor.execute()
 
-            self.state.record_monte_carlo_test(record)
+            self.state.record_monte_carlo_test(record, self.config.monte_carlo.max_history_records)
             self.state.save(self.config.state.state_file)
 
             if record.exceeds_risk_tolerance:

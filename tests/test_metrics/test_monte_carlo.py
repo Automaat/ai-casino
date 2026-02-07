@@ -41,7 +41,7 @@ def test_parametric_simulation(sample_returns_df, sample_positions):
     assert isinstance(result, MonteCarloResult)
     assert result.simulation_method == SimulationMethod.PARAMETRIC
     assert result.num_simulations == 1000
-    assert 0.0 <= result.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= result.prob_loss_gt_threshold <= 1.0
     assert result.cvar_95 <= result.var_95  # CVaR more negative than VaR (worse loss)
     assert len(result.simulated_returns) == 1000
     assert isinstance(result.mean_return, float)
@@ -60,7 +60,7 @@ def test_bootstrap_simulation(sample_returns_df, sample_positions):
 
     assert isinstance(result, MonteCarloResult)
     assert result.simulation_method == SimulationMethod.BOOTSTRAP
-    assert 0.0 <= result.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= result.prob_loss_gt_threshold <= 1.0
     assert result.cvar_95 <= result.var_95
 
 
@@ -76,7 +76,7 @@ def test_gbm_simulation(sample_returns_df, sample_positions):
 
     assert isinstance(result, MonteCarloResult)
     assert result.simulation_method == SimulationMethod.GBM
-    assert 0.0 <= result.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= result.prob_loss_gt_threshold <= 1.0
     assert result.cvar_95 <= result.var_95
 
 
@@ -103,7 +103,7 @@ def test_singular_covariance_matrix():
     )
 
     assert isinstance(result, MonteCarloResult)
-    assert 0.0 <= result.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= result.prob_loss_gt_threshold <= 1.0
 
 
 def test_insufficient_data():
@@ -158,7 +158,7 @@ def test_metrics_consistency(sample_returns_df, sample_positions):
     assert result.expected_worst_drawdown <= 0.0
 
     # Probability should be between 0 and 1
-    assert 0.0 <= result.prob_loss_gt_10pct <= 1.0
+    assert 0.0 <= result.prob_loss_gt_threshold <= 1.0
 
     # Mean return can be positive or negative
     assert -1.0 <= result.mean_return <= 1.0
@@ -174,7 +174,7 @@ def test_reproducibility(sample_returns_df, sample_positions):
     result1 = simulator.simulate(positions=sample_positions, num_simulations=1000, random_seed=123)
     result2 = simulator.simulate(positions=sample_positions, num_simulations=1000, random_seed=123)
 
-    assert result1.prob_loss_gt_10pct == result2.prob_loss_gt_10pct
+    assert result1.prob_loss_gt_threshold == result2.prob_loss_gt_threshold
     assert result1.var_95 == result2.var_95
     assert result1.cvar_95 == result2.cvar_95
     assert result1.simulated_returns == result2.simulated_returns

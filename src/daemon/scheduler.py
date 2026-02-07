@@ -632,10 +632,15 @@ class MarketScheduler:
 
         day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         current_day = day_names[now.weekday()]
-        if current_day not in self.monte_carlo_days:
+        normalized_days = {day.lower() for day in self.monte_carlo_days}
+        if current_day not in normalized_days:
             return False
 
-        target_hour, target_minute = map(int, self.monte_carlo_time.split(":"))
+        try:
+            target_hour, target_minute = map(int, self.monte_carlo_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Invalid monte_carlo_time format: {self.monte_carlo_time}: {e}")
+            return False
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute

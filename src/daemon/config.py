@@ -388,6 +388,9 @@ class MonteCarloConfig(BaseModel):
     # Position sizing integration (opt-in)
     adjust_position_sizing: bool = False
 
+    # History retention
+    max_history_records: int = Field(default=52, ge=1, le=520)
+
     @model_validator(mode="after")
     def validate_schedule_time(self) -> "MonteCarloConfig":
         """Validate schedule_time is within 16:00-20:00 for after-hours or any time for weekends."""
@@ -407,7 +410,7 @@ class MonteCarloConfig(BaseModel):
 
         # Allow any time for weekend runs, restrict to 16:00-20:00 for weekdays
         weekday_days = ["mon", "tue", "wed", "thu", "fri"]
-        is_weekday_only = all(d.lower() in weekday_days for d in self.schedule_days)
+        is_weekday_only = any(d.lower() in weekday_days for d in self.schedule_days)
 
         if is_weekday_only and not (16 <= hour < 20 or (hour == 20 and minute == 0)):
             msg = f"Weekday schedule_time must be 16:00-20:00, got {self.schedule_time}"
