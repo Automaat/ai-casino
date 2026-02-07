@@ -741,3 +741,42 @@ async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
         mock_analyze.return_value = []
 
         await runner._run_cycle()
+
+
+@pytest.mark.asyncio
+async def test_api_server_lifecycle(sample_config: DaemonConfig) -> None:
+    """Test API server starts and stops with daemon."""
+    sample_config.api.enabled = True
+    sample_config.api.port = 18484
+
+    runner = DaemonRunner(sample_config)
+
+    # Mock _run_cycle to stop daemon after one cycle
+    async def mock_cycle() -> int:
+        runner.running = False
+        return 1
+
+    with patch.object(runner, "_run_cycle", new=mock_cycle):
+        run_task = asyncio.create_task(runner.run())
+
+        # Poll for API server readiness with timeout
+        async def wait_for_api_ready() -> None:
+            """Wait for API server to start with timeout."""
+            for _ in range(100):  # 100 * 0.05s = 5s timeout
+                if runner._api_server is not None and runner._api_task is not None:
+                    return
+                await asyncio.sleep(0.05)
+            msg = "API server did not start within 5 seconds"
+            raise TimeoutError(msg)
+
+        await wait_for_api_ready()
+
+        # Verify API server started
+        assert runner._api_server is not None
+        assert runner._api_task is not None
+
+        # Wait for daemon to stop
+        await asyncio.wait_for(run_task, timeout=10.0)
+
+        # Verify API server stopped
+        assert runner._api_task.done()

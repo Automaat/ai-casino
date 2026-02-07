@@ -5,7 +5,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from loguru import logger
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ScheduleConfig(BaseModel):
@@ -140,6 +141,30 @@ class PrefetchConfig(BaseModel):
     cache_dir: str = "data/cache/prefetch"
     warm_finbert: bool = True
     check_connectivity: bool = True
+
+
+class ApiConfig(BaseModel):
+    """Configuration for embedded API server."""
+
+    enabled: bool = False
+    host: str = "127.0.0.1"
+    port: int = Field(
+        default=8484,
+        ge=1,
+        le=65535,
+        description="TCP port for embedded API server (1-65535)",
+    )
+
+    @field_validator("host")
+    @classmethod
+    def warn_non_localhost(cls, v: str) -> str:
+        """Warn if API binds to non-localhost (security risk)."""
+        if v not in ("127.0.0.1", "localhost", "::1"):
+            logger.warning(
+                f"API host '{v}' is not localhost - daemon exposed to network without auth. "
+                "Only use for development in trusted environments."
+            )
+        return v
 
 
 class SectorRotationConfig(BaseModel):
@@ -591,6 +616,7 @@ class DaemonConfig(BaseModel):
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
+    api: ApiConfig = Field(default_factory=ApiConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -632,6 +658,7 @@ class DaemonConfig(BaseModel):
         social_watcher_data = daemon_data.pop("social_watcher", {})
         filings_watcher_data = daemon_data.pop("filings_watcher", {})
         anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {})
+        api_data = daemon_data.pop("api", {})
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {})
@@ -665,6 +692,7 @@ class DaemonConfig(BaseModel):
             social_watcher=SocialWatcherConfig(**social_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
             anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
+            api=ApiConfig(**api_data),
         )
 
     def __repr__(self) -> str:
