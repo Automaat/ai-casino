@@ -367,7 +367,16 @@ class TestFullRun:
     @pytest.mark.asyncio
     async def test_run_all_skipped(self, checker: HealthChecker):
         """All services skipped when no API keys configured."""
-        with patch.dict(os.environ, {}, clear=True):
+        mock_response = AsyncMock()
+        mock_response.raise_for_status = Mock()
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("src.daemon.health.httpx.AsyncClient") as mock_client,
+        ):
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             report = await checker.run()
 
         assert isinstance(report, HealthReport)
@@ -378,7 +387,16 @@ class TestFullRun:
 
     @pytest.mark.asyncio
     async def test_run_persists_report(self, checker: HealthChecker):
-        with patch.dict(os.environ, {}, clear=True):
+        mock_response = AsyncMock()
+        mock_response.raise_for_status = Mock()
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("src.daemon.health.httpx.AsyncClient") as mock_client,
+        ):
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             await checker.run()
 
         health_dir = Path(checker.config.health.health_dir).expanduser()
