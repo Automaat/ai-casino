@@ -152,6 +152,7 @@ class TestTelegramChannel:
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
             mock_response.status_code = 200
+            mock_response.json.return_value = {"ok": True, "result": {"message_id": 123}}
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
 
             success = await channel.send(message)

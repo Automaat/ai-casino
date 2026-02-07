@@ -104,6 +104,8 @@ class NotificationService:
 
     def _init_channels(self) -> None:
         """Initialize configured notification channels."""
+        if not self.config.enabled:
+            return
         from src.daemon.notification_channels import TelegramChannel
 
         if "telegram" in self.config.channels:
@@ -133,7 +135,7 @@ class NotificationService:
         tasks = [self._send_to_channel(name, ch, message) for name, ch in self.channels.items()]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        if self.config.rate_limit_enabled:
+        if self.config.rate_limit_enabled and self.channels:
             self.rate_limiter.record_notification(symbol, trigger)
 
     async def _send_to_channel(

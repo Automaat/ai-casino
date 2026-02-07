@@ -55,8 +55,25 @@ class TelegramChannel(NotificationChannel):
                 },
             )
             response.raise_for_status()
-            logger.debug(f"Telegram API response: {response.status_code}")
-            return True
+            logger.debug(f"Telegram API HTTP response status: {response.status_code}")
+
+            try:
+                data = response.json()
+            except ValueError:
+                logger.error(f"Telegram API returned non-JSON response: {response.text!r}")
+                return False
+
+            ok = data.get("ok")
+            if ok is True:
+                logger.debug("Telegram API reported successful delivery.")
+                return True
+
+            description = data.get("description")
+            if description:
+                logger.error(f"Telegram API error: ok={ok}, description={description}")
+            else:
+                logger.error(f"Telegram API error: ok={ok}, response={data}")
+            return False
 
     def __repr__(self) -> str:
         """Return string representation."""

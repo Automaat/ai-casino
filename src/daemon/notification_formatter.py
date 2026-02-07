@@ -8,6 +8,40 @@ class NotificationFormatter:
     """Format notification messages for different channels."""
 
     @staticmethod
+    def _escape_markdown(text: str) -> str:
+        """Escape markdown special characters.
+
+        Args:
+            text: Raw text with potential markdown chars
+
+        Returns:
+            Escaped text safe for Telegram Markdown
+        """
+        special_chars = [
+            "_",
+            "*",
+            "[",
+            "]",
+            "(",
+            ")",
+            "~",
+            "`",
+            ">",
+            "#",
+            "+",
+            "-",
+            "=",
+            "|",
+            "{",
+            "}",
+            ".",
+            "!",
+        ]
+        for char in special_chars:
+            text = text.replace(char, f"\\{char}")
+        return text
+
+    @staticmethod
     def format_for_telegram(message: NotificationMessage) -> str:
         """Format message for Telegram.
 
@@ -48,11 +82,12 @@ class NotificationFormatter:
             f"{m.get('macd'):.2f}" if isinstance(m.get("macd"), (int, float)) else str(m.get("macd", "N/A"))
         )
 
+        reasoning = NotificationFormatter._escape_markdown(m.get("reasoning", "No reasoning provided"))
         return (
             f"{signal_emoji} *{m['signal']} {m['symbol']}* at ${m['price']:.2f}{session_tag}\n\n"
             f"*Confidence:* {m['confidence']:.1%} | *Risk:* {m['risk_level']}\n"
             f"*RSI:* {rsi_value} | *MACD:* {macd_value}\n\n"
-            f"_{m.get('reasoning', 'No reasoning provided')}_"
+            f"_{reasoning}_"
         )
 
     @staticmethod
@@ -70,10 +105,11 @@ class NotificationFormatter:
             f"{m.get('risk_score'):.2f}" if isinstance(m.get("risk_score"), (int, float)) else "N/A"
         )
 
+        rejection_reason = NotificationFormatter._escape_markdown(m["rejection_reason"])
         return (
             f"⛔ *Trade Blocked: {m['symbol']}*\n\n"
             f"*Action:* {m['signal']} at ${m['price']:.2f}\n"
-            f"*Reason:* {m['rejection_reason']}\n"
+            f"*Reason:* {rejection_reason}\n"
             f"*Confidence:* {m['confidence']:.1%}\n"
             f"*Risk Score:* {risk_score_str}"
         )
