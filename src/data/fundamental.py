@@ -48,7 +48,7 @@ class FundamentalDataFetcher:
         """
         if self._cache:
             cached = self._cache.get_fundamentals(symbol)
-            if cached:
+            if cached is not None:
                 logger.info(f"Cache hit for {symbol} fundamentals")
                 return cached
 

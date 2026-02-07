@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import threading
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -29,6 +30,7 @@ class HistoricalCache:
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         self._db_path = db_path
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._create_tables()
@@ -50,12 +52,13 @@ class HistoricalCache:
             CREATE INDEX IF NOT EXISTS idx_ohlcv_symbol ON ohlcv_daily(symbol);
 
             CREATE TABLE IF NOT EXISTS news_articles (
-                url          TEXT PRIMARY KEY,
                 symbol       TEXT NOT NULL,
+                url          TEXT NOT NULL,
                 title        TEXT NOT NULL,
                 description  TEXT NOT NULL,
                 published_at TEXT NOT NULL,
-                source       TEXT NOT NULL
+                source       TEXT NOT NULL,
+                PRIMARY KEY (symbol, url)
             );
             CREATE INDEX IF NOT EXISTS idx_news_symbol ON news_articles(symbol);
 
@@ -89,8 +92,8 @@ class HistoricalCache:
             );
 
             CREATE TABLE IF NOT EXISTS reddit_posts (
-                id            TEXT PRIMARY KEY,
                 symbol        TEXT NOT NULL,
+                id            TEXT NOT NULL,
                 title         TEXT NOT NULL,
                 body          TEXT NOT NULL,
                 subreddit     TEXT NOT NULL,
@@ -98,7 +101,8 @@ class HistoricalCache:
                 upvote_ratio  REAL NOT NULL,
                 url           TEXT NOT NULL,
                 created_utc   TEXT NOT NULL,
-                num_comments  INTEGER NOT NULL
+                num_comments  INTEGER NOT NULL,
+                PRIMARY KEY (symbol, id)
             );
             CREATE INDEX IF NOT EXISTS idx_reddit_symbol ON reddit_posts(symbol);
         """)
@@ -112,10 +116,11 @@ class HistoricalCache:
         Returns:
             DataFrame with OHLCV data (empty if no cache)
         """
-        rows = self._conn.execute(
-            "SELECT date, open, high, low, close, volume FROM ohlcv_daily WHERE symbol = ? ORDER BY date",
-            (symbol,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT date, open, high, low, close, volume FROM ohlcv_daily WHERE symbol = ? ORDER BY date",
+                (symbol,),
+            ).fetchall()
 
         if not rows:
             return pd.DataFrame()
@@ -135,10 +140,11 @@ class HistoricalCache:
         Returns:
             Most recent date or None
         """
-        row = self._conn.execute(
-            "SELECT MAX(date) FROM ohlcv_daily WHERE symbol = ?",
-            (symbol,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MAX(date) FROM ohlcv_daily WHERE symbol = ?",
+                (symbol,),
+            ).fetchone()
 
         if row and row[0]:
             return date.fromisoformat(row[0])
@@ -153,10 +159,11 @@ class HistoricalCache:
         Returns:
             Row count
         """
-        row = self._conn.execute(
-            "SELECT COUNT(*) FROM ohlcv_daily WHERE symbol = ?",
-            (symbol,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM ohlcv_daily WHERE symbol = ?",
+                (symbol,),
+            ).fetchone()
         return row[0] if row else 0
 
     def store_ohlcv(self, symbol: str, df: pd.DataFrame) -> int:
@@ -187,13 +194,14 @@ class HistoricalCache:
                 )
             )
 
-        cursor = self._conn.executemany(
-            "INSERT OR IGNORE INTO ohlcv_daily (symbol, date, open, high, low, close, volume) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-        self._conn.commit()
-        inserted = cursor.rowcount
+        with self._lock:
+            cursor = self._conn.executemany(
+                "INSERT OR IGNORE INTO ohlcv_daily (symbol, date, open, high, low, close, volume) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            self._conn.commit()
+            inserted = cursor.rowcount
         logger.debug(f"Stored {inserted} OHLCV rows for {symbol} ({len(rows)} total)")
         return inserted
 
@@ -206,10 +214,11 @@ class HistoricalCache:
         Returns:
             Set of cached article URLs
         """
-        rows = self._conn.execute(
-            "SELECT url FROM news_articles WHERE symbol = ?",
-            (symbol,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT url FROM news_articles WHERE symbol = ?",
+                (symbol,),
+            ).fetchall()
         return {r[0] for r in rows}
 
     def store_news_articles(self, symbol: str, articles: list) -> int:
@@ -229,8 +238,8 @@ class HistoricalCache:
         for article in articles:
             rows.append(
                 (
-                    article.url,
                     symbol,
+                    article.url,
                     article.title,
                     article.description,
                     article.published_at.isoformat(),
@@ -238,13 +247,14 @@ class HistoricalCache:
                 )
             )
 
-        cursor = self._conn.executemany(
-            "INSERT OR IGNORE INTO news_articles (url, symbol, title, description, published_at, source) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-        self._conn.commit()
-        inserted = cursor.rowcount
+        with self._lock:
+            cursor = self._conn.executemany(
+                "INSERT OR IGNORE INTO news_articles (symbol, url, title, description, published_at, source) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            self._conn.commit()
+            inserted = cursor.rowcount
         logger.debug(f"Stored {inserted} news articles for {symbol}")
         return inserted
 
@@ -257,10 +267,11 @@ class HistoricalCache:
         Returns:
             Fundamentals dict or None if missing/expired
         """
-        row = self._conn.execute(
-            "SELECT data, fetched_at FROM fundamentals WHERE symbol = ?",
-            (symbol,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT data, fetched_at FROM fundamentals WHERE symbol = ?",
+                (symbol,),
+            ).fetchone()
 
         if not row:
             return None
@@ -280,11 +291,12 @@ class HistoricalCache:
             symbol: Stock ticker symbol
             data: Fundamentals dictionary
         """
-        self._conn.execute(
-            "INSERT OR REPLACE INTO fundamentals (symbol, data, fetched_at) VALUES (?, ?, ?)",
-            (symbol, json.dumps(data), datetime.now(UTC).isoformat()),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO fundamentals (symbol, data, fetched_at) VALUES (?, ?, ?)",
+                (symbol, json.dumps(data), datetime.now(UTC).isoformat()),
+            )
+            self._conn.commit()
         logger.debug(f"Stored fundamentals for {symbol}")
 
     def store_order_fill(self, order: object) -> None:
@@ -293,23 +305,23 @@ class HistoricalCache:
         Args:
             order: OrderStatus object
         """
-        self._conn.execute(
-            "INSERT OR IGNORE INTO order_fills "
-            "(order_id, symbol, qty, filled_qty, side, status, submitted_at, filled_at, filled_avg_price) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                order.order_id,
-                order.symbol,
-                order.qty,
-                order.filled_qty,
-                order.side,
-                order.status,
-                order.submitted_at.isoformat(),
-                order.filled_at.isoformat() if order.filled_at else None,
-                order.filled_avg_price,
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO order_fills (order_id, symbol, qty, filled_qty, side, status, "
+                "submitted_at, filled_at, filled_avg_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    order.order_id,
+                    order.symbol,
+                    order.qty,
+                    order.filled_qty,
+                    order.side,
+                    order.status,
+                    order.submitted_at.isoformat(),
+                    order.filled_at.isoformat() if order.filled_at else None,
+                    order.filled_avg_price,
+                ),
+            )
+            self._conn.commit()
         logger.debug(f"Stored order fill {order.order_id}")
 
     def get_cached_post_ids(self) -> set[str]:
@@ -318,7 +330,8 @@ class HistoricalCache:
         Returns:
             Set of cached post IDs
         """
-        rows = self._conn.execute("SELECT id FROM truth_social_posts").fetchall()
+        with self._lock:
+            rows = self._conn.execute("SELECT id FROM truth_social_posts").fetchall()
         return {r[0] for r in rows}
 
     def store_truth_social_posts(self, posts: list) -> int:
@@ -347,14 +360,15 @@ class HistoricalCache:
                 )
             )
 
-        cursor = self._conn.executemany(
-            "INSERT OR IGNORE INTO truth_social_posts "
-            "(id, content, created_at, likes, reposts, replies, url) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-        self._conn.commit()
-        inserted = cursor.rowcount
+        with self._lock:
+            cursor = self._conn.executemany(
+                "INSERT OR IGNORE INTO truth_social_posts "
+                "(id, content, created_at, likes, reposts, replies, url) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            self._conn.commit()
+            inserted = cursor.rowcount
         logger.debug(f"Stored {inserted} Truth Social posts")
         return inserted
 
@@ -367,10 +381,11 @@ class HistoricalCache:
         Returns:
             Set of cached post IDs
         """
-        rows = self._conn.execute(
-            "SELECT id FROM reddit_posts WHERE symbol = ?",
-            (symbol,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id FROM reddit_posts WHERE symbol = ?",
+                (symbol,),
+            ).fetchall()
         return {r[0] for r in rows}
 
     def store_reddit_posts(self, symbol: str, posts: list) -> int:
@@ -390,8 +405,8 @@ class HistoricalCache:
         for post in posts:
             rows.append(
                 (
-                    post.id,
                     symbol,
+                    post.id,
                     post.title,
                     post.body,
                     post.subreddit,
@@ -403,14 +418,15 @@ class HistoricalCache:
                 )
             )
 
-        cursor = self._conn.executemany(
-            "INSERT OR IGNORE INTO reddit_posts "
-            "(id, symbol, title, body, subreddit, score, upvote_ratio, url, created_utc, num_comments) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-        self._conn.commit()
-        inserted = cursor.rowcount
+        with self._lock:
+            cursor = self._conn.executemany(
+                "INSERT OR IGNORE INTO reddit_posts "
+                "(symbol, id, title, body, subreddit, score, upvote_ratio, url, created_utc, num_comments) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            self._conn.commit()
+            inserted = cursor.rowcount
         logger.debug(f"Stored {inserted} Reddit posts for {symbol}")
         return inserted
 
@@ -429,14 +445,16 @@ class HistoricalCache:
             "reddit_posts",
         ]
         counts = {}
-        for table in tables:
-            row = self._conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()  # noqa: S608
-            counts[table] = row[0] if row else 0
+        with self._lock:
+            for table in tables:
+                row = self._conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()  # noqa: S608
+                counts[table] = row[0] if row else 0
         return counts
 
     def close(self) -> None:
         """Close the database connection."""
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
         logger.debug("HistoricalCache closed")
 
     def __repr__(self) -> str:
