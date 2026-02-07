@@ -32,6 +32,7 @@ classDiagram
         +int max_concurrent_analyses = 3
         +ScheduleConfig schedule
         +StateConfig state
+        +ScreeningConfig screening
         +from_toml(path: Path) DaemonConfig
     }
 
@@ -41,19 +42,25 @@ classDiagram
         +str timezone = "America/New_York"
         +bool enable_pre_market = false
         +bool enable_after_hours = false
-        +str after_hours_screen_time = "16:30"
-        +list~str~ after_hours_screen_days = ["mon", "tue", "wed", "thu", "fri"]
-        +str after_hours_criteria = "momentum"
-        +str after_hours_universe = "COMBINED"
-        +int after_hours_top_n = 10
     }
 
     class StateConfig {
         +str state_file = "~/.ai-casino/daemon-state.json"
     }
 
+    class ScreeningConfig {
+        +bool enabled = false
+        +str screen_time = "16:30"
+        +list~str~ screen_days = ["mon"..."fri"]
+        +str criteria = "momentum"
+        +str universe = "COMBINED"
+        +int top_n = 10
+        +str watchlist_name = "daemon-screening"
+    }
+
     DaemonConfig *-- ScheduleConfig
     DaemonConfig *-- StateConfig
+    DaemonConfig *-- ScreeningConfig
 ```
 
 ### Complete TOML Example
@@ -74,13 +81,14 @@ end_time = "16:00"
 timezone = "America/New_York"
 enable_pre_market = false
 
-# After-hours screening (16:00-20:00 ET)
-enable_after_hours = true
-after_hours_screen_time = "16:30"
-after_hours_screen_days = ["mon", "tue", "wed", "thu", "fri"]
-after_hours_criteria = "momentum"  # momentum, value, breakout
-after_hours_universe = "COMBINED"  # SP500, NASDAQ100, COMBINED
-after_hours_top_n = 10
+[daemon.screening]
+enabled = true
+screen_time = "16:30"
+screen_days = ["mon", "tue", "wed", "thu", "fri"]
+criteria = "momentum"        # momentum, value, breakout
+universe = "COMBINED"        # SP500, NASDAQ100, COMBINED
+top_n = 10
+watchlist_name = "daemon-screening"
 
 [daemon.state]
 state_file = "~/.ai-casino/daemon-state.json"
@@ -99,12 +107,14 @@ state_file = "~/.ai-casino/daemon-state.json"
 | `schedule.end_time` | `str` | `"16:00"` | Market close (HH:MM) |
 | `schedule.timezone` | `str` | `"America/New_York"` | Market timezone |
 | `schedule.enable_pre_market` | `bool` | `false` | Enable 04:00-09:30 ET session |
-| `schedule.enable_after_hours` | `bool` | `false` | Enable after-hours screening (16:00-20:00 ET) |
-| `schedule.after_hours_screen_time` | `str` | `"16:30"` | Time to run screening (HH:MM) |
-| `schedule.after_hours_screen_days` | `list[str]` | `["mon", "tue", "wed", "thu", "fri"]` | Days to run screening |
-| `schedule.after_hours_criteria` | `str` | `"momentum"` | Screening criteria (momentum/value/breakout) |
-| `schedule.after_hours_universe` | `str` | `"COMBINED"` | Stock universe (SP500/NASDAQ100/COMBINED) |
-| `schedule.after_hours_top_n` | `int` | `10` | Number of top candidates to track |
+| `schedule.enable_after_hours` | `bool` | `false` | Enable after-hours trading session (16:00-20:00 ET) |
+| `screening.enabled` | `bool` | `false` | Enable after-hours watchlist screening |
+| `screening.screen_time` | `str` | `"16:30"` | Time to run screening (HH:MM, 16:00-20:00) |
+| `screening.screen_days` | `list[str]` | `["mon", "tue", "wed", "thu", "fri"]` | Days to run screening |
+| `screening.criteria` | `str` | `"momentum"` | Screening criteria (momentum/value/breakout) |
+| `screening.universe` | `str` | `"COMBINED"` | Stock universe (SP500/NASDAQ100/COMBINED) |
+| `screening.top_n` | `int` | `10` | Number of top candidates to track |
+| `screening.watchlist_name` | `str` | `"daemon-screening"` | Watchlist file name for exports |
 | `state.state_file` | `str` | `"~/.ai-casino/daemon-state.json"` | State persistence path |
 
 ### Environment Variables

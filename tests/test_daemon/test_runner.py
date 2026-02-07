@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.daemon.config import DaemonConfig
+from src.daemon.config import DaemonConfig, ScreeningConfig
 from src.daemon.runner import DaemonRunner
+from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 
 
@@ -313,6 +314,92 @@ async def test_analyze_symbol_records_not_executed(
         executed=False,
         trading_session="REGULAR",
     )
+
+
+def test_get_merged_watchlist_with_screening(sample_config: DaemonConfig) -> None:
+    """Test screening candidates merged into watchlist."""
+    sample_config.screening = ScreeningConfig(enabled=True)
+    runner = DaemonRunner(sample_config)
+    runner.broker = None
+
+    runner.state.screening_history = [
+        ScreeningRecord(
+            timestamp=datetime(2024, 1, 15),
+            criteria="momentum",
+            universe="COMBINED",
+            top_symbols=["NVDA", "AMD", "PLTR"],
+            candidates=[],
+            screened_at=datetime(2024, 1, 15),
+        ),
+    ]
+
+    watchlist = runner._get_merged_watchlist()
+
+    assert watchlist == ["TSLA", "MSFT", "NVDA", "AMD", "PLTR"]
+    assert len(watchlist) == 5
+
+
+def test_get_merged_watchlist_screening_disabled(sample_config: DaemonConfig) -> None:
+    """Test screening candidates ignored when disabled."""
+    sample_config.screening = ScreeningConfig(enabled=False)
+    runner = DaemonRunner(sample_config)
+    runner.broker = None
+
+    runner.state.screening_history = [
+        ScreeningRecord(
+            timestamp=datetime(2024, 1, 15),
+            criteria="momentum",
+            universe="COMBINED",
+            top_symbols=["NVDA", "AMD"],
+            candidates=[],
+            screened_at=datetime(2024, 1, 15),
+        ),
+    ]
+
+    watchlist = runner._get_merged_watchlist()
+
+    assert watchlist == ["TSLA", "MSFT"]
+    assert len(watchlist) == 2
+
+
+def test_get_merged_watchlist_all_three_sources(sample_config: DaemonConfig, mock_broker: Mock) -> None:
+    """Test 3-source deduplication: config + positions + screening."""
+    sample_config.screening = ScreeningConfig(enabled=True)
+    runner = DaemonRunner(sample_config)
+    runner.broker = mock_broker
+
+    runner.state.screening_history = [
+        ScreeningRecord(
+            timestamp=datetime(2024, 1, 15),
+            criteria="momentum",
+            universe="COMBINED",
+            top_symbols=["AAPL", "PLTR", "MSFT"],  # AAPL=position, MSFT=config → deduped
+            candidates=[],
+            screened_at=datetime(2024, 1, 15),
+        ),
+    ]
+
+    watchlist = runner._get_merged_watchlist()
+
+    # TSLA, MSFT (config) + AAPL, NVDA (positions) + PLTR (screening, only new)
+    assert set(watchlist) == {"TSLA", "MSFT", "AAPL", "NVDA", "PLTR"}
+    assert len(watchlist) == 5
+    assert watchlist.count("AAPL") == 1
+    assert watchlist.count("MSFT") == 1
+
+
+def test_get_merged_watchlist_empty_screening_history(sample_config: DaemonConfig) -> None:
+    """Test no crash on empty screening history."""
+    sample_config.screening = ScreeningConfig(enabled=True)
+    runner = DaemonRunner(sample_config)
+    runner.broker = None
+
+    assert runner.state.screening_history == []
+
+    watchlist = runner._get_merged_watchlist()
+
+    assert watchlist == ["TSLA", "MSFT"]
+    assert len(watchlist) == 2
 
 
 class TestHealthCheckIntegration:

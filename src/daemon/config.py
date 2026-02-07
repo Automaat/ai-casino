@@ -15,26 +15,39 @@ class ScheduleConfig(BaseModel):
     timezone: str = "America/New_York"
     enable_pre_market: bool = False
     enable_after_hours: bool = False
-    after_hours_screen_time: str = "16:30"
-    after_hours_screen_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
-    after_hours_criteria: Literal["momentum", "value", "breakout"] = "momentum"
-    after_hours_universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
-    after_hours_top_n: int = 10
+
+
+class ScreeningConfig(BaseModel):
+    """Configuration for after-hours watchlist screening."""
+
+    enabled: bool = False
+    screen_time: str = "16:30"
+    screen_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
+    criteria: Literal["momentum", "value", "breakout"] = "momentum"
+    universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
+    top_n: int = 10
+    watchlist_name: str = "daemon-screening"
 
     @model_validator(mode="after")
-    def validate_after_hours_screen_time(self) -> "ScheduleConfig":
-        """Validate after_hours_screen_time is within 16:00-20:00."""
-        if not self.enable_after_hours:
+    def validate_screen_time(self) -> "ScreeningConfig":
+        """Validate screen_time is within 16:00-20:00."""
+        if not self.enabled:
             return self
 
-        try:
-            hour, minute = map(int, self.after_hours_screen_time.split(":"))
-        except ValueError as e:
-            msg = f"after_hours_screen_time must be in HH:MM format, got {self.after_hours_screen_time}"
-            raise ValueError(msg) from e
+        # Strict HH:MM format validation
+        import re
 
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.screen_time)
+        if not match:
+            msg = f"screen_time must be in HH:MM format (00:00-23:59), got {self.screen_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        # Validate 16:00-20:00 range
         if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
-            msg = f"after_hours_screen_time must be between 16:00-20:00, got {self.after_hours_screen_time}"
+            msg = f"screen_time must be between 16:00-20:00, got {self.screen_time}"
             raise ValueError(msg)
 
         return self
@@ -96,6 +109,7 @@ class DaemonConfig(BaseModel):
     journal: JournalConfig = Field(default_factory=JournalConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
+    screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -117,6 +131,7 @@ class DaemonConfig(BaseModel):
         journal_data = daemon_data.pop("journal", {})
         health_data = daemon_data.pop("health", {})
         optimization_data = daemon_data.pop("optimization", {})
+        screening_data = daemon_data.pop("screening", {})
 
         return cls(
             **daemon_data,
@@ -125,6 +140,7 @@ class DaemonConfig(BaseModel):
             journal=JournalConfig(**journal_data),
             health=HealthConfig(**health_data),
             optimization=OptimizationConfig(**optimization_data),
+            screening=ScreeningConfig(**screening_data),
         )
 
     def __repr__(self) -> str:

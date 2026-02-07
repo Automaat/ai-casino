@@ -40,11 +40,12 @@ class DaemonRunner:
             end_time=config.schedule.end_time,
             timezone=config.schedule.timezone,
             enable_pre_market=config.schedule.enable_pre_market,
-            enable_after_hours=config.schedule.enable_after_hours,
-            after_hours_screen_time=config.schedule.after_hours_screen_time,
-            after_hours_screen_days=config.schedule.after_hours_screen_days,
+            enable_after_hours=config.screening.enabled,
+            after_hours_screen_time=config.screening.screen_time,
+            after_hours_screen_days=config.screening.screen_days,
             optimization_time=config.optimization.optimization_time,
             optimization_days=config.optimization.optimization_days,
+            health_check_time=config.health.run_time,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -102,42 +103,53 @@ class DaemonRunner:
         return self._workflow
 
     def _get_merged_watchlist(self) -> list[str]:
-        """Get watchlist merged with broker positions.
+        """Get watchlist merged with broker positions and screening candidates.
 
         Returns:
-            Deduplicated list combining config watchlist and broker positions.
-            Config order is preserved, new positions are appended alphabetically.
+            Deduplicated list combining config watchlist, broker positions,
+            and latest screening candidates. Config order is preserved,
+            broker positions are appended in alphabetical order, and screening
+            candidates are appended in the order of ``latest.top_symbols``
+            (typically ordered by screening score/rank).
         """
-        # Preserve config order - manual dedup to maintain insertion order
-        merged_watchlist = []
-        seen = set()
+        # Source 1: config watchlist (preserve order)
+        merged_watchlist: list[str] = []
+        seen: set[str] = set()
 
         for symbol in self.config.watchlist:
             if symbol not in seen:
                 merged_watchlist.append(symbol)
                 seen.add(symbol)
 
-        if not self.broker:
-            logger.debug("No broker configured, using config watchlist only")
-            return merged_watchlist
+        # Source 2: broker positions
+        if self.broker:
+            try:
+                account_info = self.broker.get_account_info()
+                position_symbols = set(account_info.positions.keys())
 
-        try:
-            account_info = self.broker.get_account_info()
-            position_symbols = set(account_info.positions.keys())
+                if position_symbols:
+                    added = position_symbols - seen
+                    if added:
+                        logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
+                        merged_watchlist.extend(sorted(added))
+                        seen.update(added)
+                else:
+                    logger.debug("No positions to merge")
+            except Exception as e:
+                logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
+        else:
+            logger.debug("No broker configured, skipping position merge")
 
-            if position_symbols:
-                added = position_symbols - seen
-                if added:
-                    logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
-                    # Append new positions in sorted order
-                    merged_watchlist.extend(sorted(added))
-                return merged_watchlist
+        # Source 3: latest screening candidates (ordered by score)
+        if self.config.screening.enabled and self.state.screening_history:
+            latest = self.state.screening_history[-1]
+            new_symbols = [s for s in latest.top_symbols if s not in seen]
+            if new_symbols:
+                logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
+                merged_watchlist.extend(new_symbols)
+                seen.update(new_symbols)
 
-            logger.debug("No positions to merge")
-            return merged_watchlist
-        except Exception as e:
-            logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
-            return merged_watchlist
+        return merged_watchlist
 
     async def _analyze_symbol(self, symbol: str) -> TradingWorkflowResult | None:
         """Analyze a single symbol.
@@ -331,6 +343,7 @@ class DaemonRunner:
     def _run_after_hours_screening(self) -> None:
         """Run after-hours screening for watchlist candidates."""
         from src.data.universe import StockUniverseFetcher
+        from src.screening.exporter import ScreeningExporter
         from src.screening.screener import ScreeningCriteria, StockScreener
 
         # Check if already screened today
@@ -356,36 +369,42 @@ class DaemonRunner:
                 "value": ScreeningCriteria.VALUE,
                 "breakout": ScreeningCriteria.BREAKOUT,
             }
-            criteria = criteria_map.get(
-                self.config.schedule.after_hours_criteria.lower(), ScreeningCriteria.MOMENTUM
-            )
+            criteria = criteria_map.get(self.config.screening.criteria.lower(), ScreeningCriteria.MOMENTUM)
 
             # Run screening
             console.print(
                 f"[dim]{criteria.value.title()} Screening[/dim]\n"
-                f"[dim]Universe: {self.config.schedule.after_hours_universe}[/dim]"
+                f"[dim]Universe: {self.config.screening.universe}[/dim]"
             )
             output = screener.screen(
                 criteria=criteria,
-                universe=self.config.schedule.after_hours_universe,
-                top_n=self.config.schedule.after_hours_top_n,
+                universe=self.config.screening.universe,
+                top_n=self.config.screening.top_n,
             )
 
             # Log top 5 to console
             self._log_screening_results(output.results[:5])
 
+            # Save to watchlist file
+            exporter = ScreeningExporter()
+            exporter.save_to_watchlist(
+                results=output.results[: self.config.screening.top_n],
+                criteria=criteria,
+                watchlist_name=self.config.screening.watchlist_name,
+            )
+
             # Record in state
             self.state.record_after_hours_screening(
                 criteria=criteria.value,
-                universe=self.config.schedule.after_hours_universe,
+                universe=self.config.screening.universe,
                 candidates=output.results,
-                top_n=self.config.schedule.after_hours_top_n,
+                top_n=self.config.screening.top_n,
                 screened_at=output.screened_at,
             )
             self.state.save(self.config.state.state_file)
 
             console.print(
-                f"\n[dim]Top {self.config.schedule.after_hours_top_n} candidates saved to daemon state "
+                f"\n[dim]Top {self.config.screening.top_n} candidates saved to daemon state "
                 f"({len(output.results)} total screened)[/dim]\n"
             )
             logger.info(f"After-hours screening completed: {len(output.results)} candidates")
@@ -447,7 +466,7 @@ class DaemonRunner:
         Returns:
             Seconds to sleep before next cycle
         """
-        # Check if it's time for after-hours screening (before regular analysis)
+        # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():
             self._run_after_hours_screening()
 

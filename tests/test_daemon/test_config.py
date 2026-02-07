@@ -3,7 +3,9 @@
 import tempfile
 from pathlib import Path
 
-from src.daemon.config import DaemonConfig, HealthConfig, ScheduleConfig, StateConfig
+import pytest
+
+from src.daemon.config import DaemonConfig, HealthConfig, ScheduleConfig, ScreeningConfig, StateConfig
 
 
 class TestDaemonConfig:
@@ -34,6 +36,7 @@ class TestDaemonConfig:
         assert config.end_time == "16:00"
         assert config.timezone == "America/New_York"
         assert config.enable_pre_market is False
+        assert config.enable_after_hours is False
 
     def test_state_config_defaults(self):
         config = StateConfig()
@@ -108,6 +111,107 @@ enable_pre_market = true
         assert "AAPL" in repr_str
         assert "60" in repr_str
         assert "auto_trade=True" in repr_str
+
+
+class TestScreeningConfig:
+    def test_defaults(self):
+        config = ScreeningConfig()
+
+        assert config.enabled is False
+        assert config.screen_time == "16:30"
+        assert config.screen_days == ["mon", "tue", "wed", "thu", "fri"]
+        assert config.criteria == "momentum"
+        assert config.universe == "COMBINED"
+        assert config.top_n == 10
+        assert config.watchlist_name == "daemon-screening"
+
+    def test_custom(self):
+        config = ScreeningConfig(
+            enabled=True,
+            screen_time="17:00",
+            screen_days=["mon", "wed", "fri"],
+            criteria="breakout",
+            universe="SP500",
+            top_n=5,
+            watchlist_name="custom-screen",
+        )
+
+        assert config.enabled is True
+        assert config.screen_time == "17:00"
+        assert config.screen_days == ["mon", "wed", "fri"]
+        assert config.criteria == "breakout"
+        assert config.universe == "SP500"
+        assert config.top_n == 5
+        assert config.watchlist_name == "custom-screen"
+
+    def test_validate_screen_time_valid(self):
+        config = ScreeningConfig(enabled=True, screen_time="18:00")
+        assert config.screen_time == "18:00"
+
+    def test_validate_screen_time_boundary_2000(self):
+        config = ScreeningConfig(enabled=True, screen_time="20:00")
+        assert config.screen_time == "20:00"
+
+    def test_validate_screen_time_invalid_format(self):
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="bad")
+
+    def test_validate_screen_time_out_of_range(self):
+        with pytest.raises(ValueError, match="16:00-20:00"):
+            ScreeningConfig(enabled=True, screen_time="21:00")
+
+    def test_validate_screen_time_skipped_when_disabled(self):
+        config = ScreeningConfig(enabled=False, screen_time="99:99")
+        assert config.screen_time == "99:99"
+
+    def test_validate_screen_time_strict_format(self):
+        """Test strict HH:MM format enforcement."""
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="16:3")
+
+    def test_validate_screen_time_invalid_minute(self):
+        """Test minute bounds validation."""
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="19:99")
+
+    def test_validate_screen_time_invalid_hour(self):
+        """Test hour bounds validation."""
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="25:00")
+
+    def test_daemon_config_has_screening(self):
+        config = DaemonConfig()
+        assert isinstance(config.screening, ScreeningConfig)
+        assert config.screening.enabled is False
+
+    def test_from_toml_with_screening(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.screening]
+enabled = true
+screen_time = "17:00"
+criteria = "breakout"
+universe = "SP500"
+top_n = 5
+watchlist_name = "my-screen"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.screening.enabled is True
+        assert config.screening.screen_time == "17:00"
+        assert config.screening.criteria == "breakout"
+        assert config.screening.universe == "SP500"
+        assert config.screening.top_n == 5
+        assert config.screening.watchlist_name == "my-screen"
+
+        path.unlink()
 
 
 class TestHealthConfig:
