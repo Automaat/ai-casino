@@ -34,12 +34,18 @@ class ScreeningConfig(BaseModel):
         if not self.enabled:
             return self
 
-        try:
-            hour, minute = map(int, self.screen_time.split(":"))
-        except ValueError as e:
-            msg = f"screen_time must be in HH:MM format, got {self.screen_time}"
-            raise ValueError(msg) from e
+        # Strict HH:MM format validation
+        import re
 
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.screen_time)
+        if not match:
+            msg = f"screen_time must be in HH:MM format (00:00-23:59), got {self.screen_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        # Validate 16:00-20:00 range
         if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
             msg = f"screen_time must be between 16:00-20:00, got {self.screen_time}"
             raise ValueError(msg)

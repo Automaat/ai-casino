@@ -164,6 +164,21 @@ class TestScreeningConfig:
         config = ScreeningConfig(enabled=False, screen_time="99:99")
         assert config.screen_time == "99:99"
 
+    def test_validate_screen_time_strict_format(self):
+        """Test strict HH:MM format enforcement."""
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="16:3")
+
+    def test_validate_screen_time_invalid_minute(self):
+        """Test minute bounds validation."""
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="19:99")
+
+    def test_validate_screen_time_invalid_hour(self):
+        """Test hour bounds validation."""
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ScreeningConfig(enabled=True, screen_time="25:00")
+
     def test_daemon_config_has_screening(self):
         config = DaemonConfig()
         assert isinstance(config.screening, ScreeningConfig)

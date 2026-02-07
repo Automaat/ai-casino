@@ -107,8 +107,10 @@ class DaemonRunner:
 
         Returns:
             Deduplicated list combining config watchlist, broker positions,
-            and latest screening candidates. Config order preserved, new
-            symbols appended alphabetically per source.
+            and latest screening candidates. Config order is preserved,
+            broker positions are appended in alphabetical order, and screening
+            candidates are appended in the order of ``latest.top_symbols``
+            (typically ordered by screening score/rank).
         """
         # Source 1: config watchlist (preserve order)
         merged_watchlist: list[str] = []
@@ -136,7 +138,7 @@ class DaemonRunner:
             except Exception as e:
                 logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
         else:
-            logger.debug("No broker configured, using config watchlist only")
+            logger.debug("No broker configured, skipping position merge")
 
         # Source 3: latest screening candidates (ordered by score)
         if self.config.screening.enabled and self.state.screening_history:
