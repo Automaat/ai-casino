@@ -226,6 +226,28 @@ class MarketScheduler:
 
         return abs(current_minutes - target_minutes) <= 1
 
+    def is_health_check_time(self, health_run_time: str = "17:00") -> bool:
+        """Check if current time matches health check schedule.
+
+        Args:
+            health_run_time: Time to run health checks (HH:MM format)
+
+        Returns:
+            True if current time is within 1 minute of configured health check time on weekday
+        """
+        now = datetime.now(self.timezone)
+
+        # Weekend check
+        if now.weekday() >= 5:
+            return False
+
+        target_hour, target_minute = map(int, health_run_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
     def __repr__(self) -> str:
         """Return string representation."""
         return (

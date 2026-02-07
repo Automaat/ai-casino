@@ -43,6 +43,7 @@ class DaemonState(BaseModel):
     total_trades: int = 0
     last_journal_date: str | None = None
     last_after_hours_screening: datetime | None = None
+    last_health_check: datetime | None = None
     screening_history: list[ScreeningRecord] = Field(default_factory=list)
 
     @classmethod

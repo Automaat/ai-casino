@@ -304,3 +304,73 @@ class TestMarketScheduler:
             mock_dt.now.return_value = mock_time
 
             assert scheduler.is_after_hours_screening_time() is False
+
+
+class TestHealthCheckTime:
+    def test_match_default_time(self):
+        """Test 17:00 matches default health check time."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 17, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time() is True
+
+    def test_tolerance_plus_one(self):
+        """Test +1 minute tolerance."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 17, 1, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time() is True
+
+    def test_tolerance_minus_one(self):
+        """Test -1 minute tolerance."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 16, 59, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time() is True
+
+    def test_miss_outside_tolerance(self):
+        """Test 17:02 is outside tolerance."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 17, 2, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time() is False
+
+    def test_weekend_returns_false(self):
+        """Test health check skipped on weekends."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        # Saturday at 17:00
+        mock_time = datetime(2024, 1, 20, 17, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time() is False
+
+    def test_custom_time(self):
+        """Test custom health check time."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 18, 30, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time("18:30") is True
+            assert scheduler.is_health_check_time("17:00") is False

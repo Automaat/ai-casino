@@ -59,6 +59,17 @@ class JournalConfig(BaseModel):
     )
 
 
+class HealthConfig(BaseModel):
+    """Configuration for API health checks and state cleanup."""
+
+    enabled: bool = True
+    run_time: str = "17:00"
+    archive_days: int = 30
+    log_max_size_mb: int = 5
+    health_dir: str = "~/.ai-casino/health"
+    archive_dir: str = "~/.ai-casino/archive"
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -70,6 +81,7 @@ class DaemonConfig(BaseModel):
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     state: StateConfig = Field(default_factory=StateConfig)
     journal: JournalConfig = Field(default_factory=JournalConfig)
+    health: HealthConfig = Field(default_factory=HealthConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -89,12 +101,14 @@ class DaemonConfig(BaseModel):
         schedule_data = daemon_data.pop("schedule", {})
         state_data = daemon_data.pop("state", {})
         journal_data = daemon_data.pop("journal", {})
+        health_data = daemon_data.pop("health", {})
 
         return cls(
             **daemon_data,
             schedule=ScheduleConfig(**schedule_data),
             state=StateConfig(**state_data),
             journal=JournalConfig(**journal_data),
+            health=HealthConfig(**health_data),
         )
 
     def __repr__(self) -> str:
