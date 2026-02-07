@@ -39,6 +39,9 @@ class MarketScheduler:
         peer_analysis_time: str = "17:30",
         peer_analysis_days: list[str] | None = None,
         enable_peer_analysis: bool = False,
+        correlation_audit_time: str = "17:45",
+        correlation_audit_days: list[str] | None = None,
+        enable_correlation_audit: bool = False,
         tearsheet_time: str = "16:30",
         enable_reporting: bool = False,
         rebalancing_time: str = "16:45",
@@ -71,6 +74,9 @@ class MarketScheduler:
             peer_analysis_time: Time to run deep peer analysis (HH:MM format)
             peer_analysis_days: Days to run peer analysis (e.g., ["sun"])
             enable_peer_analysis: Enable deep peer analysis
+            correlation_audit_time: Time to run correlation audit (HH:MM format)
+            correlation_audit_days: Days to run correlation audit (e.g., ["sun"])
+            enable_correlation_audit: Enable correlation audit
             tearsheet_time: Time to generate tearsheets (HH:MM format)
             enable_reporting: Enable tearsheet generation
             rebalancing_time: Time to run portfolio rebalancing (HH:MM format)
@@ -100,6 +106,9 @@ class MarketScheduler:
         self.peer_analysis_time = peer_analysis_time
         self.peer_analysis_days = peer_analysis_days or ["sun"]
         self.enable_peer_analysis = enable_peer_analysis
+        self.correlation_audit_time = correlation_audit_time
+        self.correlation_audit_days = correlation_audit_days or ["sun"]
+        self.enable_correlation_audit = enable_correlation_audit
         self.tearsheet_time = tearsheet_time
         self.enable_reporting = enable_reporting
         self.rebalancing_time = rebalancing_time
@@ -468,6 +477,29 @@ class MarketScheduler:
             return False
 
         target_hour, target_minute = map(int, self.peer_analysis_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_correlation_audit_time(self) -> bool:
+        """Check if current time matches correlation audit schedule.
+
+        Returns:
+            True if within 1 minute of configured time on configured day
+        """
+        if not self.enable_correlation_audit:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.correlation_audit_days:
+            return False
+
+        target_hour, target_minute = map(int, self.correlation_audit_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute

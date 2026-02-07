@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import signal
+import time as time_mod
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -64,6 +65,9 @@ class DaemonRunner:
             peer_analysis_time=config.peer_analysis.run_time,
             peer_analysis_days=config.peer_analysis.run_days,
             enable_peer_analysis=config.peer_analysis.enabled,
+            correlation_audit_time=config.correlation_audit.run_time,
+            correlation_audit_days=config.correlation_audit.run_days,
+            enable_correlation_audit=config.correlation_audit.enabled,
             tearsheet_time=config.reporting.tearsheet_time,
             enable_reporting=config.reporting.enabled,
             rebalancing_time=config.rebalancing.run_time,
@@ -1162,6 +1166,92 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
+    def _run_correlation_audit(self) -> None:  # noqa: C901
+        """Run portfolio correlation audit."""
+        from src.metrics.correlation import CorrelationAuditor
+
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_correlation_audit:
+            last_date = self.state.last_correlation_audit.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Correlation audit already run today")
+                return
+
+        logger.info("Starting portfolio correlation audit")
+        console.print(f"\n[bold cyan]Portfolio Correlation Audit ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            if not self.broker:
+                logger.warning("No broker configured")
+                return
+
+            account_info = self.broker.get_account_info()
+            positions = account_info.positions
+
+            if len(positions) < 2:
+                logger.info(f"Insufficient positions ({len(positions)}), need ≥2")
+                console.print("[dim]Insufficient positions[/dim]\n")
+                self.state.last_correlation_audit = now
+                return
+
+            screening_results = None
+            if self.state.screening_history:
+                screening_results = self.state.screening_history[-1].candidates
+
+            workflow = self._init_workflow()
+            market_fetcher = workflow.market_fetcher
+            auditor = CorrelationAuditor(
+                market_fetcher=market_fetcher,
+                correlation_threshold=self.config.correlation_audit.correlation_threshold,
+                lookback_days=self.config.correlation_audit.lookback_days,
+                output_dir=self.config.correlation_audit.output_dir,
+            )
+
+            start = time_mod.time()
+            result = auditor.audit(positions, screening_results)
+            duration = time_mod.time() - start
+
+            self.state.record_correlation_audit(
+                num_positions=result.num_positions,
+                num_correlated_pairs=len(result.highly_correlated_pairs),
+                max_correlation=result.max_correlation,
+                avg_correlation=result.avg_correlation,
+                diversification_ratio=result.diversification_ratio,
+                num_substitutions=len(result.substitution_suggestions),
+                total_duration_seconds=duration,
+            )
+            self.state.save(self.config.state.state_file)
+
+            console.print(f"[dim]Positions: {result.num_positions}[/dim]")
+            console.print(f"[dim]Diversification ratio: {result.diversification_ratio:.3f}[/dim]")
+
+            if result.highly_correlated_pairs:
+                console.print(
+                    f"\n[bold yellow]Correlated Pairs ({len(result.highly_correlated_pairs)}):[/bold yellow]"
+                )
+                for pair in result.highly_correlated_pairs[:5]:
+                    console.print(f"  {pair.symbol_a} ↔ {pair.symbol_b}: {pair.correlation:.3f}")
+
+            if result.substitution_suggestions:
+                console.print(
+                    f"\n[bold yellow]Substitutions ({len(result.substitution_suggestions)}):[/bold yellow]"
+                )
+                for suggestion in result.substitution_suggestions[:3]:
+                    alts = ", ".join(suggestion.alternatives)
+                    console.print(f"  Replace {suggestion.symbol_to_replace}: {suggestion.reason}")
+                    console.print(f"    → {alts}")
+
+            if result.warnings:
+                console.print(f"\n[dim]Warnings: {', '.join(result.warnings)}[/dim]")
+
+            console.print(f"\n[dim]Complete in {duration:.1f}s[/dim]\n")
+
+        except Exception as e:
+            error_msg = f"Correlation audit failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
     def _build_peer_context(self, symbol: str) -> str | None:
         """Build peer analysis context string from persisted data.
 
@@ -1409,6 +1499,10 @@ class DaemonRunner:
         # Check if it's time for peer benchmarking analysis
         if self.scheduler.is_peer_analysis_time():
             self._run_peer_analysis()
+
+        # Check if it's time for correlation audit
+        if self.scheduler.is_correlation_audit_time():
+            self._run_correlation_audit()
 
         # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():
