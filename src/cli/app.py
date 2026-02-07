@@ -162,6 +162,16 @@ def signal_accuracy(
     return signal_accuracy_impl(window)
 
 
+@app.command(name="validate-paper-trading")
+def validate_paper_trading(
+    config: Annotated[str, typer.Option("--config", "-c", help="Path to daemon config file")] = "daemon.toml",
+) -> None:
+    """Validate paper trading readiness for live promotion."""
+    from src.cli.validate_paper_trading import validate_paper_trading as validate_impl
+
+    return validate_impl(config)
+
+
 def main() -> None:
     """CLI entry point - defaults to chat mode."""
     if len(sys.argv) == 1:

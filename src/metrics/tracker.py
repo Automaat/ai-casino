@@ -34,6 +34,7 @@ class TradeRecord(BaseModel):
     pnl: float | None
     pnl_percent: float | None
     strategy_name: str | None = None
+    is_paper_trade: bool = True
 
     def is_open(self) -> bool:
         """Check if trade is open."""
@@ -144,6 +145,7 @@ class BaseMetricsTracker(ABC):
         self,
         result: "TradingWorkflowResult",
         strategy_name: str | None = None,
+        is_paper_trade: bool = True,
     ) -> TradeRecord:
         """Record a trading decision."""
 
@@ -196,12 +198,14 @@ class MetricsTracker(BaseMetricsTracker):
         self,
         result: "TradingWorkflowResult",
         strategy_name: str | None = None,
+        is_paper_trade: bool = True,
     ) -> TradeRecord:
         """Record a trading decision.
 
         Args:
             result: Trading workflow result with decision and risk assessment
             strategy_name: Optional name of strategy used (e.g., "momentum", "ensemble")
+            is_paper_trade: Whether trade is paper or live
 
         Returns:
             Created TradeRecord
@@ -228,6 +232,7 @@ class MetricsTracker(BaseMetricsTracker):
             pnl=None,
             pnl_percent=None,
             strategy_name=strategy_name,
+            is_paper_trade=is_paper_trade,
         )
 
         self.trades.append(trade)
@@ -499,6 +504,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         self,
         result: "TradingWorkflowResult",
         strategy_name: str | None = None,
+        is_paper_trade: bool = True,
     ) -> TradeRecord:
         """Record a trading decision (sync wrapper).
 
@@ -506,18 +512,20 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         """
         import asyncio
 
-        return asyncio.run(self.record_decision_async(result, strategy_name))
+        return asyncio.run(self.record_decision_async(result, strategy_name, is_paper_trade))
 
     async def record_decision_async(
         self,
         result: "TradingWorkflowResult",
         strategy_name: str | None = None,
+        is_paper_trade: bool = True,
     ) -> TradeRecord:
         """Record a trading decision to database.
 
         Args:
             result: Trading workflow result
             strategy_name: Optional strategy name
+            is_paper_trade: Whether trade is paper or live
 
         Returns:
             Created TradeRecord
@@ -544,6 +552,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             pnl=None,
             pnl_percent=None,
             strategy_name=strategy_name,
+            is_paper_trade=is_paper_trade,
         )
 
         await self._repo.create(trade)

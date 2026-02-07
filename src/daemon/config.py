@@ -420,6 +420,23 @@ class MonteCarloConfig(BaseModel):
         return self
 
 
+class TradingMode(StrEnum):
+    """Trading mode for broker execution."""
+
+    PAPER = "paper"
+    LIVE = "live"
+
+
+class PaperTradingConfig(BaseModel):
+    """Paper trading validation configuration."""
+
+    min_duration_days: int = Field(default=30, ge=1, le=365)
+    min_trades: int = Field(default=20, ge=5, le=1000)
+    min_sharpe: float = Field(default=0.5, ge=-1.0, le=5.0)
+    max_drawdown_percent: float = Field(default=15.0, ge=1.0, le=50.0)
+    min_win_rate: float = Field(default=0.45, ge=0.0, le=1.0)
+
+
 class NotificationTrigger(StrEnum):
     """Trigger types for notifications."""
 
@@ -427,6 +444,7 @@ class NotificationTrigger(StrEnum):
     RISK_REJECTION = "risk_rejection"
     PORTFOLIO_VAR_BREACH = "portfolio_var_breach"
     HEALTH_FAILURE = "health_failure"
+    PAPER_TRADING_READY = "paper_trading_ready"
 
 
 class TelegramNotificationConfig(BaseModel):
@@ -547,6 +565,8 @@ class DaemonConfig(BaseModel):
     market_hours_only: bool = True
     auto_trade: bool = False
     max_concurrent_analyses: int = 3
+    trading_mode: TradingMode = TradingMode.PAPER
+    paper_trading: PaperTradingConfig = Field(default_factory=PaperTradingConfig)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     state: StateConfig = Field(default_factory=StateConfig)
     journal: JournalConfig = Field(default_factory=JournalConfig)
@@ -587,6 +607,7 @@ class DaemonConfig(BaseModel):
 
         daemon_data = data.get("daemon", {})
 
+        paper_trading_data = daemon_data.pop("paper_trading", {})
         schedule_data = daemon_data.pop("schedule", {})
         state_data = daemon_data.pop("state", {})
         journal_data = daemon_data.pop("journal", {})
@@ -617,6 +638,7 @@ class DaemonConfig(BaseModel):
 
         return cls(
             **daemon_data,
+            paper_trading=PaperTradingConfig(**paper_trading_data),
             schedule=ScheduleConfig(**schedule_data),
             state=StateConfig(**state_data),
             journal=JournalConfig(**journal_data),

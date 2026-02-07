@@ -54,6 +54,29 @@ class OrderStatus(BaseModel):
 class AlpacaBroker:
     """Alpaca broker client for paper trading."""
 
+    @staticmethod
+    def get_credentials(trading_mode: str) -> tuple[str | None, str | None, str]:
+        """Get credentials based on trading mode.
+
+        Args:
+            trading_mode: Trading mode ("paper" or "live")
+
+        Returns:
+            Tuple of (api_key, secret_key, base_url)
+        """
+        if trading_mode == "paper":
+            return (
+                os.getenv("ALPACA_PAPER_API_KEY") or os.getenv("ALPACA_API_KEY"),
+                os.getenv("ALPACA_PAPER_SECRET_KEY") or os.getenv("ALPACA_SECRET_KEY"),
+                "https://paper-api.alpaca.markets",
+            )
+        # live
+        return (
+            os.getenv("ALPACA_API_KEY"),
+            os.getenv("ALPACA_SECRET_KEY"),
+            "https://api.alpaca.markets",
+        )
+
     def __init__(
         self,
         api_key: str | None = None,
