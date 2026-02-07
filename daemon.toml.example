@@ -32,3 +32,21 @@ state_file = "~/.ai-casino/daemon-state.json"
 enabled = true
 journal_dir = "~/.ai-casino/journal"
 run_offset_minutes = 15
+
+[daemon.optimization]
+# After-hours strategy parameter optimization
+enabled = false
+# Time to run optimization (HH:MM, in schedule timezone)
+optimization_time = "17:00"
+# Days to run optimization (mon/tue/wed/thu/fri/sat/sun)
+optimization_days = ["sat"]
+# Optuna trials per symbol-strategy pair
+n_trials = 100
+# Minimum trades in validation backtest to accept params
+min_trades = 100
+# File to store optimized parameters
+params_file = "~/.ai-casino/optimized-params.json"
+# Skip re-optimization if params are newer than this (days)
+refresh_days = 30
+# Strategies to optimize per symbol
+strategies = ["momentum", "mean_reversion", "trend_following"]

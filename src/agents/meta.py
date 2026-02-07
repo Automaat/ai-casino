@@ -1,6 +1,9 @@
 """Meta-agent for dynamic strategy selection based on market regime."""
 
-import pandas as pd
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from loguru import logger
 from pydantic import BaseModel
 
@@ -11,6 +14,11 @@ from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.regime import MarketRegime, MarketRegimeDetector, RegimeAnalysis
 from src.strategies.trend_following import TrendFollowingStrategy
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from src.optimization.param_store import OptimizedParamStore
 
 StrategyType = MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy
 
@@ -56,6 +64,7 @@ class MetaAgent:
         llm_client: LLMClient,
         regime_detector: MarketRegimeDetector,
         metrics_tracker: MetricsTracker | None = None,
+        param_store: OptimizedParamStore | None = None,
     ) -> None:
         """Initialize meta-agent.
 
@@ -63,28 +72,55 @@ class MetaAgent:
             llm_client: LLM client (for future use)
             regime_detector: Market regime detector
             metrics_tracker: Optional metrics tracker for performance-based selection
+            param_store: Optional store for optimized strategy parameters
         """
         self.llm = llm_client
         self.regime_detector = regime_detector
         self.metrics_tracker = metrics_tracker
+        self.param_store = param_store
 
         logger.info("Initialized MetaAgent")
 
-    def _create_strategy(self, strategy_name: str) -> StrategyType:
-        """Create strategy instance by name.
+    def _get_optimized_kwargs(self, symbol: str | None, strategy_name: str) -> dict:
+        """Look up optimized params for symbol+strategy from param store.
+
+        Args:
+            symbol: Stock ticker (None to skip lookup)
+            strategy_name: Strategy name
+
+        Returns:
+            Dict of kwargs to pass to strategy constructor
+        """
+        if not self.param_store or not symbol:
+            return {}
+
+        stored = self.param_store.get(symbol, strategy_name)
+        if stored is None:
+            return {}
+
+        logger.info(f"Using optimized params for {symbol}/{strategy_name}: {stored.params}")
+        return dict(stored.params)
+
+    def _create_strategy(self, strategy_name: str, symbol: str | None = None) -> StrategyType:
+        """Create strategy instance by name, optionally with optimized params.
 
         Args:
             strategy_name: Name of strategy to create
+            symbol: Stock ticker for optimized param lookup
 
         Returns:
             Strategy instance
         """
+        kwargs = self._get_optimized_kwargs(symbol, strategy_name)
+
         if strategy_name == "momentum":
-            return MomentumStrategy()
+            return MomentumStrategy(**kwargs)
         if strategy_name == "mean_reversion":
-            return MeanReversionStrategy()
+            return MeanReversionStrategy(**kwargs)
         if strategy_name == "trend_following":
-            return TrendFollowingStrategy(sma_fast=20, sma_slow=50)
+            defaults = {"sma_fast": 20, "sma_slow": 50}
+            defaults.update(kwargs)
+            return TrendFollowingStrategy(**defaults)
         msg = f"Unknown strategy: {strategy_name}"
         raise ValueError(msg)
 
@@ -158,7 +194,12 @@ class MetaAgent:
         # Low confidence -> use ensemble with adjusted weights
         if regime_confidence < LOW_CONFIDENCE_THRESHOLD:
             weights = self._calculate_ensemble_weights(regime)
-            strategy = EnsembleStrategy(weights=weights)
+            strategy = EnsembleStrategy(
+                momentum=self._create_strategy("momentum", symbol),
+                mean_reversion=self._create_strategy("mean_reversion", symbol),
+                trend_following=self._create_strategy("trend_following", symbol),
+                weights=weights,
+            )
             reasoning = (
                 f"Low regime confidence ({regime_confidence:.2f}), using ensemble. "
                 f"Detected {regime.value}, weights adjusted: {weights}"
@@ -178,7 +219,7 @@ class MetaAgent:
 
         # High confidence -> use regime-matched strategy
         strategy_name = STRATEGY_REGIME_MAP[regime]
-        strategy = self._create_strategy(strategy_name)
+        strategy = self._create_strategy(strategy_name, symbol)
         reasoning = (
             f"Regime: {regime.value} (confidence={regime_confidence:.2f}). "
             f"Selected {strategy_name} strategy. {regime_analysis.reasoning}"
@@ -199,4 +240,5 @@ class MetaAgent:
     def __repr__(self) -> str:
         """String representation."""
         has_tracker = self.metrics_tracker is not None
-        return f"MetaAgent(has_metrics_tracker={has_tracker})"
+        has_params = self.param_store is not None
+        return f"MetaAgent(has_metrics_tracker={has_tracker}, has_param_store={has_params})"
