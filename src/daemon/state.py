@@ -135,6 +135,30 @@ class RiskReportRecord(BaseModel):
     risk_status: str
 
 
+class MonteCarloRecord(BaseModel):
+    """Record of Monte Carlo stress test execution."""
+
+    timestamp: datetime
+    simulation_method: str
+    num_simulations: int
+    horizon_days: int
+
+    # Key results
+    prob_loss_gt_threshold: float
+    expected_worst_drawdown: float
+    var_95: float
+    cvar_95: float
+    median_recovery_days: float | None
+
+    # Alert status
+    exceeds_risk_tolerance: bool
+    alert_message: str | None
+
+    # Portfolio snapshot
+    portfolio_symbols: list[str]
+    total_market_value: float
+
+
 class EarningsEventRecord(BaseModel):
     """Record of a single earnings event."""
 
@@ -188,6 +212,7 @@ class DaemonState(BaseModel):
     game_plan_history: list[GamePlanRecord] = Field(default_factory=list)
     active_positions: dict[str, dict] = Field(default_factory=dict)
     position_management_history: list[dict] = Field(default_factory=list)
+    monte_carlo_tests: list[MonteCarloRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -653,6 +678,17 @@ class DaemonState(BaseModel):
         if symbol not in self.active_positions:
             return None
         return PositionRecord.model_validate(self.active_positions[symbol])
+
+    def record_monte_carlo_test(self, record: MonteCarloRecord, max_records: int = 52) -> None:
+        """Add Monte Carlo test record.
+
+        Args:
+            record: Monte Carlo test record
+            max_records: Maximum records to retain (default 52)
+        """
+        self.monte_carlo_tests.append(record)
+        if len(self.monte_carlo_tests) > max_records:
+            self.monte_carlo_tests = self.monte_carlo_tests[-max_records:]
 
     def __repr__(self) -> str:
         """Return string representation."""
