@@ -221,3 +221,45 @@ def test_fetch_alpha_vantage_exhausts_retries(monkeypatch):
             fetcher.fetch_daily("AAPL")
 
         assert mock_instance.get_daily.call_count == 3
+
+
+def test_fetch_overnight_futures_valid():
+    """Test fetch_overnight_futures with valid data."""
+    with patch("src.data.market.yf.Ticker") as mock_ticker:
+        mock_instance = MagicMock()
+        mock_ticker.return_value = mock_instance
+        mock_df = pd.DataFrame({"Close": [100.0, 102.0]})
+        mock_instance.history.return_value = mock_df
+
+        fetcher = MarketDataFetcher(use_alpha_vantage=False)
+        result = fetcher.fetch_overnight_futures(["ES=F", "NQ=F"])
+
+        assert result == {"ES=F": 2.0, "NQ=F": 2.0}
+        assert mock_instance.history.call_count == 2
+
+
+def test_fetch_overnight_futures_insufficient_data():
+    """Test fetch_overnight_futures with insufficient data (skipped symbols)."""
+    with patch("src.data.market.yf.Ticker") as mock_ticker:
+        mock_instance = MagicMock()
+        mock_ticker.return_value = mock_instance
+        mock_df = pd.DataFrame({"Close": [100.0]})
+        mock_instance.history.return_value = mock_df
+
+        fetcher = MarketDataFetcher(use_alpha_vantage=False)
+
+        with pytest.raises(ValueError, match="No futures data available"):
+            fetcher.fetch_overnight_futures(["ES=F"])
+
+
+def test_fetch_overnight_futures_all_fail():
+    """Test fetch_overnight_futures when all symbols fail."""
+    with patch("src.data.market.yf.Ticker") as mock_ticker:
+        mock_instance = MagicMock()
+        mock_ticker.return_value = mock_instance
+        mock_instance.history.side_effect = Exception("Network error")
+
+        fetcher = MarketDataFetcher(use_alpha_vantage=False)
+
+        with pytest.raises(ValueError, match="No futures data available"):
+            fetcher.fetch_overnight_futures(["ES=F", "NQ=F"])

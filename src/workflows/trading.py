@@ -84,6 +84,7 @@ class TradingState(TypedDict):
     sector_rotation_context: str | None
     earnings_context: str | None
     peer_analysis_context: str | None
+    game_plan_context: str | None
     broker_positions: dict[str, BrokerPosition] | None
     portfolio_value: float | None
     backtest_validation: BacktestValidation | None
@@ -255,7 +256,7 @@ class TradingWorkflow:
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             **context_kwargs: Optional context keys: sector_context, earnings_context,
-                peer_analysis_context
+                peer_analysis_context, game_plan_context
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
@@ -275,6 +276,7 @@ class TradingWorkflow:
                 "sector_rotation_context": context_kwargs.get("sector_context"),
                 "earnings_context": context_kwargs.get("earnings_context"),
                 "peer_analysis_context": context_kwargs.get("peer_analysis_context"),
+                "game_plan_context": context_kwargs.get("game_plan_context"),
             }
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
@@ -843,6 +845,7 @@ class TradingWorkflow:
             earnings_context=state.get("earnings_context"),
             peer_analysis_context=state.get("peer_analysis_context"),
             backtest_validation=state.get("backtest_validation"),
+            game_plan_context=state.get("game_plan_context"),
         )
 
         state["final_decision"] = decision
