@@ -28,6 +28,7 @@ from src.models.sentiment import SentimentScore, clear_finbert_sentiment
 from src.screening.analyzer import ScreeningAnalysis
 from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
 from src.strategies.signal import Signal
+from src.strategies.timeframe import MultiTimeframeData, Timeframe
 
 
 @pytest.fixture
@@ -41,6 +42,32 @@ def sample_ohlcv_data():
             "Close": [104 + i for i in range(50)],
             "Volume": [1000000] * 50,
         }
+    )
+
+
+@pytest.fixture
+def sample_intraday_ohlcv_data():
+    """Sample intraday OHLCV data for testing."""
+    dates = pd.date_range(end=datetime.now(), periods=100, freq="1h")
+    return pd.DataFrame(
+        {
+            "Open": [140 + i * 0.1 for i in range(100)],
+            "High": [141 + i * 0.1 for i in range(100)],
+            "Low": [139 + i * 0.1 for i in range(100)],
+            "Close": [140.5 + i * 0.1 for i in range(100)],
+            "Volume": [500000 + i * 5000 for i in range(100)],
+        },
+        index=dates,
+    )
+
+
+@pytest.fixture
+def sample_multi_timeframe_data(sample_ohlcv_data, sample_intraday_ohlcv_data):
+    """Sample multi-timeframe data for testing."""
+    return MultiTimeframeData(
+        symbol="AAPL",
+        timeframes={Timeframe.DAILY: sample_ohlcv_data, Timeframe.HOURLY: sample_intraday_ohlcv_data},
+        last_updated=datetime.now(),
     )
 
 

@@ -1,0 +1,16 @@
+Synthesize multi-timeframe analysis for {symbol}:
+
+TIMEFRAME RESULTS:
+{timeframe_summaries}
+
+CONFLUENCE METRICS:
+Final Signal: {final_signal}
+Confluence Score: {confluence_score} (0=divergent, 1=aligned)
+Conflict Detected: {conflict_detected}
+
+Provide a 2-3 paragraph interpretation that:
+1. Summarizes the primary trend and signal strength
+2. Explains timeframe agreement/disagreement
+3. Recommends action based on confluence
+
+Focus on actionable insights for the trader.

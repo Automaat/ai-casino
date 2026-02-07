@@ -52,6 +52,19 @@ class HistoricalCache:
             );
             CREATE INDEX IF NOT EXISTS idx_ohlcv_symbol ON ohlcv_daily(symbol);
 
+            CREATE TABLE IF NOT EXISTS ohlcv_intraday (
+                symbol   TEXT NOT NULL,
+                datetime TEXT NOT NULL,
+                interval TEXT NOT NULL,
+                open     REAL NOT NULL,
+                high     REAL NOT NULL,
+                low      REAL NOT NULL,
+                close    REAL NOT NULL,
+                volume   REAL NOT NULL,
+                PRIMARY KEY (symbol, datetime, interval)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ohlcv_intraday_symbol ON ohlcv_intraday(symbol, interval);
+
             CREATE TABLE IF NOT EXISTS news_articles (
                 symbol       TEXT NOT NULL,
                 url          TEXT NOT NULL,
@@ -190,6 +203,95 @@ class HistoricalCache:
                 (symbol,),
             ).fetchone()
         return row[0] if row else 0
+
+    def get_ohlcv_intraday(self, symbol: str, interval: str) -> pd.DataFrame:
+        """Get cached intraday OHLCV rows for a symbol and interval.
+
+        Args:
+            symbol: Stock ticker symbol
+            interval: Time interval (60min, 15min)
+
+        Returns:
+            DataFrame with OHLCV data (empty if no cache)
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT datetime, open, high, low, close, volume "
+                "FROM ohlcv_intraday "
+                "WHERE symbol = ? AND interval = ? "
+                "ORDER BY datetime",
+                (symbol, interval),
+            ).fetchall()
+
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows, columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.set_index("Date")
+        df.index.name = "Date"
+        return df
+
+    def get_last_intraday_datetime(self, symbol: str, interval: str) -> datetime | None:
+        """Get the most recent cached intraday datetime for a symbol and interval.
+
+        Args:
+            symbol: Stock ticker symbol
+            interval: Time interval (60min, 15min)
+
+        Returns:
+            Most recent datetime or None
+        """
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MAX(datetime) FROM ohlcv_intraday WHERE symbol = ? AND interval = ?",
+                (symbol, interval),
+            ).fetchone()
+
+        if row and row[0]:
+            return datetime.fromisoformat(row[0])
+        return None
+
+    def store_ohlcv_intraday(self, symbol: str, interval: str, df: pd.DataFrame) -> int:
+        """Store intraday OHLCV rows (INSERT OR IGNORE for dedup).
+
+        Args:
+            symbol: Stock ticker symbol
+            interval: Time interval (60min, 15min)
+            df: DataFrame with OHLCV data (index=datetime, columns=Open/High/Low/Close/Volume)
+
+        Returns:
+            Number of new rows inserted
+        """
+        if df.empty:
+            return 0
+
+        rows = []
+        for idx, row in df.iterrows():
+            dt_str = idx.isoformat() if hasattr(idx, "isoformat") and callable(idx.isoformat) else str(idx)
+            rows.append(
+                (
+                    symbol,
+                    dt_str,
+                    interval,
+                    float(row["Open"]),
+                    float(row["High"]),
+                    float(row["Low"]),
+                    float(row["Close"]),
+                    float(row["Volume"]),
+                )
+            )
+
+        with self._lock:
+            self._conn.executemany(
+                "INSERT OR IGNORE INTO ohlcv_intraday "
+                "(symbol, datetime, interval, open, high, low, close, volume) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            self._conn.commit()
+        logger.debug(f"Stored intraday OHLCV rows for {symbol} ({interval}, {len(rows)} total)")
+        return len(rows)
 
     def store_ohlcv(self, symbol: str, df: pd.DataFrame) -> int:
         """Store OHLCV rows (INSERT OR IGNORE for dedup).
@@ -626,6 +728,7 @@ class HistoricalCache:
         """
         tables = [
             "ohlcv_daily",
+            "ohlcv_intraday",
             "news_articles",
             "fundamentals",
             "order_fills",
