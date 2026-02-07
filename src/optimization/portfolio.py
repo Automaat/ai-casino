@@ -306,13 +306,17 @@ class PortfolioOptimizer:
         return weights
 
     def calculate_rebalance(
-        self, target: OptimizedPortfolio, current: dict[str, float] | None = None
+        self,
+        target: OptimizedPortfolio,
+        current: dict[str, float] | None = None,
+        threshold: float = REBALANCE_THRESHOLD,
     ) -> list[PortfolioRebalance]:
         """Calculate rebalancing instructions.
 
         Args:
             target: Target optimized portfolio
             current: Current portfolio weights, auto-fetched if None
+            threshold: Minimum weight delta to trigger rebalance (default 1%)
 
         Returns:
             List of rebalancing instructions sorted by abs(delta)
@@ -336,7 +340,7 @@ class PortfolioOptimizer:
             target_weight = next((a.weight for a in target.allocations if a.symbol == symbol), 0.0)
             delta = target_weight - current_weight
 
-            action = ("BUY" if delta > 0 else "SELL") if abs(delta) > REBALANCE_THRESHOLD else "HOLD"
+            action = ("BUY" if delta > 0 else "SELL") if abs(delta) > threshold else "HOLD"
 
             rebalances.append(
                 PortfolioRebalance(
@@ -365,6 +369,20 @@ class PortfolioOptimizer:
         for rebalance in rebalances:
             symbol = rebalance.symbol
             if symbol not in account_info.positions:
+                # New position: calculate shares based on target weight
+                if rebalance.action == "BUY":
+                    try:
+                        market_data = self.market_fetcher.fetch_daily(symbol, period_days=1)
+                        latest_price = market_data.data["close"].iloc[-1]
+                        if latest_price and latest_price > 0:
+                            target_value = rebalance.target_weight * portfolio_value
+                            rebalance.shares_to_trade = int(target_value / latest_price)
+                            logger.debug(
+                                f"New position {symbol}: {rebalance.shares_to_trade} shares "
+                                f"@ ${latest_price:.2f} = ${target_value:.2f}"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch latest price for {symbol}: {e}")
                 continue
 
             position = account_info.positions[symbol]

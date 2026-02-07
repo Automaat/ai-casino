@@ -90,10 +90,12 @@ class DaemonRebalancer:
             f"Vol={optimized.expected_volatility:.2%}, SR={optimized.sharpe_ratio:.2f}"
         )
 
-        # Calculate rebalancing instructions
-        rebalance_instructions = self.optimizer.calculate_rebalance(optimized, current_portfolio)
+        # Calculate rebalancing instructions using daemon's threshold
+        rebalance_instructions = self.optimizer.calculate_rebalance(
+            optimized, current_portfolio, threshold=self.rebalance_threshold
+        )
 
-        # Filter by threshold
+        # Filter by threshold (redundant check but explicit for clarity)
         significant_rebalances = [
             r for r in rebalance_instructions if abs(r.delta) >= self.rebalance_threshold
         ]

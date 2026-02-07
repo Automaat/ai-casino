@@ -410,15 +410,24 @@ class RiskManagementAgent:
         recommended_shares = int(target_position_value / current_price)
         position_value = recommended_shares * current_price
 
-        # Calculate risk based on stop loss
-        risk_amount = recommended_shares * stop_loss.risk_per_share
-        risk_percent = (risk_amount / account_info.balance) * 100 if account_info.balance > 0 else 0.0
+        # Treat zero shares as constraint violation
+        if recommended_shares <= 0:
+            risk_percent = 100.0
+            risk_amount = account_info.balance
+            reasoning = (
+                f"Portfolio-weighted position: {target_weight:.1%} target would result in 0 shares "
+                f"@ ${current_price:.2f}. Insufficient capital for minimum position."
+            )
+        else:
+            # Calculate risk based on stop loss
+            risk_amount = recommended_shares * stop_loss.risk_per_share
+            risk_percent = (risk_amount / account_info.balance) * 100 if account_info.balance > 0 else 0.0
 
-        reasoning = (
-            f"Portfolio-weighted position: {target_weight:.1%} target, {recommended_shares} shares "
-            f"(${position_value:.2f}). Risk {risk_percent:.2f}% (${risk_amount:.2f}) "
-            f"with stop @ ${stop_loss.stop_loss_price:.2f}."
-        )
+            reasoning = (
+                f"Portfolio-weighted position: {target_weight:.1%} target, {recommended_shares} shares "
+                f"(${position_value:.2f}). Risk {risk_percent:.2f}% (${risk_amount:.2f}) "
+                f"with stop @ ${stop_loss.stop_loss_price:.2f}."
+            )
 
         return PositionSizeCalculation(
             recommended_shares=recommended_shares,

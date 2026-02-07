@@ -406,7 +406,6 @@ class DaemonRunner:
             if days_old < 7:
                 # Store allocations to apply in _init_workflow
                 self._target_allocations_to_apply = self.state.active_target_allocations
-                self._target_allocations_days_old = days_old
                 logger.info(f"Using target allocations from {days_old} days ago")
             else:
                 self._target_allocations_to_apply = None
