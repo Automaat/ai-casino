@@ -374,3 +374,17 @@ class TestHealthCheckTime:
 
             assert scheduler.is_health_check_time("18:30") is True
             assert scheduler.is_health_check_time("17:00") is False
+
+    def test_malformed_time(self):
+        """Test malformed health_run_time strings return False."""
+        scheduler = MarketScheduler()
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 17, 0, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_health_check_time("bad") is False
+            assert scheduler.is_health_check_time("17") is False
+            assert scheduler.is_health_check_time("17:xx") is False
+            assert scheduler.is_health_check_time("") is False

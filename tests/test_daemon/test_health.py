@@ -203,7 +203,7 @@ class TestCheckLLM:
         mock_llm.close = AsyncMock()
 
         with (
-            patch.dict(os.environ, {"LLM_PROVIDER": "anthropic"}),
+            patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}),
             patch("src.models.llm.LLMClient", return_value=mock_llm),
         ):
             result = await checker._check_llm()
@@ -326,7 +326,8 @@ class TestRotateLogs:
             result = checker._rotate_logs()
 
         assert result.files_affected == 1
-        assert result.bytes_freed == 100
+        assert result.bytes_freed == 0
+        assert "100 bytes" in result.message
         assert not big_log.exists()
 
 
@@ -348,14 +349,18 @@ class TestVerifyStateIntegrity:
         assert result.files_affected == 0
         assert "valid" in result.message
 
-    def test_corrupt_state_reports_valid_due_to_graceful_load(self, checker: HealthChecker, tmp_path: Path):
-        """DaemonState.load() handles corrupt files gracefully (returns fresh state)."""
+    def test_corrupt_state_backed_up(self, checker: HealthChecker, tmp_path: Path):
+        """Corrupt state file is backed up when detected."""
         state_file = tmp_path / "state.json"
         state_file.write_text("{corrupt json!!")
         checker.config.state.state_file = str(state_file)
 
         result = checker._verify_state_integrity()
-        assert "valid" in result.message
+        assert result.files_affected == 1
+        assert "backed up" in result.message
+        assert not state_file.exists()
+        backup_files = list(tmp_path.glob("state.corrupt.*"))
+        assert len(backup_files) == 1
 
 
 class TestFullRun:

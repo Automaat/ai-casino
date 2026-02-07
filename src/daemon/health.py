@@ -1,5 +1,7 @@
 """API health checks and state cleanup for the trading daemon."""
 
+import asyncio
+import json
 import os
 import time
 from datetime import UTC, datetime, timedelta
@@ -113,8 +115,15 @@ class HealthChecker:
             total_duration_ms=total_ms,
         )
 
-        self._persist_report(report)
-        self._prune_old_reports()
+        try:
+            self._persist_report(report)
+        except Exception as e:
+            logger.error(f"Failed to persist report: {e}")
+
+        try:
+            self._prune_old_reports()
+        except Exception as e:
+            logger.error(f"Failed to prune old reports: {e}")
 
         return report
 
@@ -135,7 +144,7 @@ class HealthChecker:
             from alpha_vantage.timeseries import TimeSeries
 
             ts = TimeSeries(key=api_key)
-            ts.get_daily("SPY", outputsize="compact")
+            await asyncio.to_thread(ts.get_daily, "SPY", outputsize="compact")
             duration = (time.perf_counter() - start) * 1000
             return ServiceCheckResult(
                 service="alpha_vantage",
@@ -210,7 +219,7 @@ class HealthChecker:
             from alpaca.trading.client import TradingClient
 
             client = TradingClient(api_key=api_key, secret_key=secret_key, paper=True)
-            client.get_account()
+            await asyncio.to_thread(client.get_account)
             duration = (time.perf_counter() - start) * 1000
             return ServiceCheckResult(
                 service="alpaca",
@@ -232,6 +241,24 @@ class HealthChecker:
     async def _check_llm(self) -> ServiceCheckResult:
         """Check LLM provider connectivity."""
         provider = os.getenv("LLM_PROVIDER", "ollama")
+
+        # Check API keys for non-Ollama providers
+        if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
+            return ServiceCheckResult(
+                service=f"llm_{provider}",
+                status=ServiceStatus.SKIPPED,
+                message="ANTHROPIC_API_KEY not configured",
+                duration_ms=0,
+                checked_at=datetime.now(UTC),
+            )
+        if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+            return ServiceCheckResult(
+                service=f"llm_{provider}",
+                status=ServiceStatus.SKIPPED,
+                message="OPENAI_API_KEY not configured",
+                duration_ms=0,
+                checked_at=datetime.now(UTC),
+            )
 
         start = time.perf_counter()
         try:
@@ -306,7 +333,7 @@ class HealthChecker:
     def _archive_old_analyses(self) -> CleanupResult:
         """Archive analyses older than archive_days from state."""
         cutoff = datetime.now(UTC) - timedelta(days=self.config.health.archive_days)
-        old = [a for a in self.state.analyses if a.timestamp.replace(tzinfo=UTC) < cutoff]
+        old = [a for a in self.state.analyses if a.timestamp < cutoff]
 
         if not old:
             return CleanupResult(
@@ -327,7 +354,7 @@ class HealthChecker:
                 f.write(line)
                 bytes_written += len(line.encode())
 
-        self.state.analyses = [a for a in self.state.analyses if a.timestamp.replace(tzinfo=UTC) >= cutoff]
+        self.state.analyses = [a for a in self.state.analyses if a.timestamp >= cutoff]
 
         return CleanupResult(
             operation="archive_analyses",
@@ -400,8 +427,12 @@ class HealthChecker:
         return CleanupResult(
             operation="rotate_logs",
             files_affected=rotated,
-            bytes_freed=bytes_freed,
-            message=f"Rotated {rotated} log files" if rotated else "No logs exceeded size limit",
+            bytes_freed=0,
+            message=(
+                f"Rotated {rotated} log files ({bytes_freed} bytes)"
+                if rotated
+                else "No logs exceeded size limit"
+            ),
         )
 
     def _verify_state_integrity(self) -> CleanupResult:
@@ -417,7 +448,9 @@ class HealthChecker:
             )
 
         try:
-            DaemonState.load(self.config.state.state_file)
+            with state_path.open() as f:
+                data = json.load(f)
+            DaemonState.model_validate(data)
             return CleanupResult(
                 operation="verify_state",
                 files_affected=0,
