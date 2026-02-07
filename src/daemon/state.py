@@ -33,6 +33,15 @@ class ScreeningRecord(BaseModel):
     screened_at: datetime
 
 
+class OptimizationRecord(BaseModel):
+    """Record of a parameter optimization run."""
+
+    timestamp: datetime
+    symbols_optimized: list[str]
+    symbols_skipped: list[str]
+    total_time_seconds: float
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -44,6 +53,8 @@ class DaemonState(BaseModel):
     last_journal_date: str | None = None
     last_after_hours_screening: datetime | None = None
     screening_history: list[ScreeningRecord] = Field(default_factory=list)
+    last_optimization: datetime | None = None
+    optimization_history: list[OptimizationRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -168,6 +179,34 @@ class DaemonState(BaseModel):
         # Keep last 30 days (assume max 1 screening per day)
         if len(self.screening_history) > 30:
             self.screening_history = self.screening_history[-30:]
+
+    def record_optimization(
+        self,
+        symbols_optimized: list[str],
+        symbols_skipped: list[str],
+        total_time_seconds: float,
+    ) -> None:
+        """Record a parameter optimization run.
+
+        Args:
+            symbols_optimized: Symbols that were optimized
+            symbols_skipped: Symbols skipped (non-stale)
+            total_time_seconds: Total optimization duration
+        """
+        now = datetime.now(UTC)
+
+        self.optimization_history.append(
+            OptimizationRecord(
+                timestamp=now,
+                symbols_optimized=symbols_optimized,
+                symbols_skipped=symbols_skipped,
+                total_time_seconds=total_time_seconds,
+            )
+        )
+        self.last_optimization = now
+
+        if len(self.optimization_history) > 10:
+            self.optimization_history = self.optimization_history[-10:]
 
     def __repr__(self) -> str:
         """Return string representation."""
