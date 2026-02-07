@@ -62,6 +62,9 @@ class DaemonRunner:
             peer_analysis_time=config.peer_analysis.run_time,
             peer_analysis_days=config.peer_analysis.run_days,
             enable_peer_analysis=config.peer_analysis.enabled,
+            rebalancing_time=config.rebalancing.run_time,
+            rebalancing_days=config.rebalancing.run_days,
+            enable_rebalancing=config.rebalancing.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -93,7 +96,26 @@ class DaemonRunner:
             except Exception as e:
                 logger.exception(f"Failed to initialize broker: {e}")
                 self.broker = None
+        self._daemon_rebalancer = None
+        if config.rebalancing.enabled:
+            from src.daemon.rebalancing import DaemonRebalancer
+            from src.optimization.portfolio import PortfolioOptimizer
+
+            market_fetcher = MarketDataFetcher(
+                use_alpha_vantage=False, historical_cache=self._historical_cache
+            )
+            portfolio_optimizer = PortfolioOptimizer(
+                market_fetcher=market_fetcher,
+                broker=self.broker,
+                period_days=config.rebalancing.lookback_days,
+            )
+            self._daemon_rebalancer = DaemonRebalancer(
+                optimizer=portfolio_optimizer,
+                broker=self.broker if config.auto_trade else None,
+                rebalance_threshold=config.rebalancing.rebalance_threshold,
+            )
         self._prefetcher: DataPrefetcher | None = None
+        self._target_allocations_to_apply: dict[str, float] | None = None
         logger.info(f"DaemonRunner initialized with {config}")
 
     def _init_prefetcher(self) -> DataPrefetcher | None:
@@ -167,6 +189,11 @@ class DaemonRunner:
                 portfolio_var_config=portfolio_var_config,
             )
             logger.info("Trading workflow initialized")
+
+        # Apply target allocations if available
+        if hasattr(self, "_target_allocations_to_apply") and self._target_allocations_to_apply:
+            self._workflow.set_target_allocations(self._target_allocations_to_apply)
+
         return self._workflow
 
     def _get_merged_watchlist(self) -> list[str]:
@@ -368,6 +395,22 @@ class DaemonRunner:
         Returns:
             List of analysis results
         """
+        # Set target allocations from last rebalancing (if recent)
+        # This will be picked up by _init_workflow in _analyze_symbol
+        if self.state.active_target_allocations and self.state.last_portfolio_rebalancing:
+            from datetime import UTC
+
+            days_old = (datetime.now(UTC) - self.state.last_portfolio_rebalancing).days
+            if days_old < 7:
+                # Store allocations to apply in _init_workflow
+                self._target_allocations_to_apply = self.state.active_target_allocations
+                self._target_allocations_days_old = days_old
+                logger.info(f"Using target allocations from {days_old} days ago")
+            else:
+                self._target_allocations_to_apply = None
+        else:
+            self._target_allocations_to_apply = None
+
         results: list[TradingWorkflowResult] = []
         semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
 
@@ -511,6 +554,99 @@ class DaemonRunner:
 
         except Exception as e:
             error_msg = f"Parameter optimization failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _run_portfolio_rebalancing(self) -> None:
+        """Run portfolio rebalancing optimization."""
+        if not self._daemon_rebalancer:
+            return
+
+        # Check if already rebalanced today
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_portfolio_rebalancing:
+            last_date = self.state.last_portfolio_rebalancing.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Portfolio rebalancing already completed today")
+                return
+
+        logger.info("Starting portfolio rebalancing")
+        console.print(f"\n[bold cyan]Portfolio Rebalancing ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            watchlist = self._get_merged_watchlist()
+            method = self.config.rebalancing.method
+            auto_execute = self.config.auto_trade
+
+            console.print(f"[dim]Method: {method}, Universe: {len(watchlist)} symbols[/dim]")
+
+            result = self._daemon_rebalancer.run(watchlist, method, auto_execute)
+
+            # Convert to state records
+            from src.daemon.state import PortfolioAllocationRecord
+
+            allocations = [
+                PortfolioAllocationRecord(symbol=alloc.symbol, weight=alloc.weight, action="HOLD", delta=0.0)
+                for alloc in result.optimized_portfolio.allocations
+            ]
+
+            # Update allocations with rebalance actions
+            rebalance_map = {r.symbol: r for r in result.rebalance_instructions}
+            for alloc in allocations:
+                if alloc.symbol in rebalance_map:
+                    rebalance = rebalance_map[alloc.symbol]
+                    alloc.action = rebalance.action
+                    alloc.delta = rebalance.delta
+
+            self.state.record_portfolio_rebalancing(
+                method=method,
+                allocations=allocations,
+                expected_return=result.optimized_portfolio.expected_return,
+                expected_volatility=result.optimized_portfolio.expected_volatility,
+                sharpe_ratio=result.optimized_portfolio.sharpe_ratio,
+                rebalances_executed=result.executed_count,
+                rebalances_pending=result.pending_count,
+            )
+            self.state.save(self.config.state.state_file)
+
+            # Display summary
+            console.print("\n[bold]Portfolio Metrics:[/bold]")
+            console.print(f"  Expected Return: {result.optimized_portfolio.expected_return:.2%}")
+            console.print(f"  Volatility: {result.optimized_portfolio.expected_volatility:.2%}")
+            console.print(f"  Sharpe Ratio: {result.optimized_portfolio.sharpe_ratio:.2f}")
+
+            if result.rebalance_instructions:
+                console.print("\n[bold]Rebalancing Instructions:[/bold]")
+                for rebalance in result.rebalance_instructions[:10]:
+                    action_color = (
+                        "green"
+                        if rebalance.action == "BUY"
+                        else "red"
+                        if rebalance.action == "SELL"
+                        else "dim"
+                    )
+                    console.print(
+                        f"  [{action_color}]{rebalance.action:4}[/{action_color}] "
+                        f"{rebalance.symbol:6} "
+                        f"{rebalance.target_weight:6.2%} "
+                        f"({rebalance.delta:+.2%})"
+                    )
+
+                if len(result.rebalance_instructions) > 10:
+                    console.print(f"  [dim]... and {len(result.rebalance_instructions) - 10} more[/dim]")
+
+            console.print(
+                f"\n[dim]Rebalancing complete: {result.executed_count} executed, "
+                f"{result.pending_count} pending[/dim]\n"
+            )
+            logger.info(
+                f"Portfolio rebalancing completed: {result.executed_count}/"
+                f"{len(result.rebalance_instructions)} executed"
+            )
+
+        except Exception as e:
+            error_msg = f"Portfolio rebalancing failed: {e}"
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
@@ -1180,6 +1316,10 @@ class DaemonRunner:
         # Check if it's time for sector rotation (before screening)
         if self.scheduler.is_sector_rotation_time():
             self._run_sector_rotation()
+
+        # Check if it's time for portfolio rebalancing
+        if self.scheduler.is_portfolio_rebalancing_time():
+            self._run_portfolio_rebalancing()
 
         # Check if it's time for peer benchmarking analysis
         if self.scheduler.is_peer_analysis_time():

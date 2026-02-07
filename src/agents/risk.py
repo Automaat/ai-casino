@@ -182,6 +182,7 @@ class RiskManagementAgent:
         decision_confidence: float,
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
+        target_portfolio_weight: float | None = None,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
 
@@ -194,6 +195,7 @@ class RiskManagementAgent:
             decision_confidence: Trading decision confidence
             broker_positions: Optional broker positions for VaR calculation
             portfolio_value: Optional portfolio value for VaR calculation
+            target_portfolio_weight: Optional target portfolio weight for allocation-based sizing
 
         Returns:
             RiskAssessment with sizing, stop-loss, validation
@@ -208,7 +210,9 @@ class RiskManagementAgent:
         else:
             stop_loss = self._calculate_stop_loss(current_price, market_data, action)
 
-            position_sizing = self._calculate_position_size(current_price, stop_loss, account_info)
+            position_sizing = self._calculate_position_size(
+                current_price, stop_loss, account_info, target_portfolio_weight
+            )
 
             stop_loss.max_loss_amount = position_sizing.risk_amount
 
@@ -305,6 +309,7 @@ class RiskManagementAgent:
         current_price: float,
         stop_loss: StopLossCalculation,
         account_info: AccountInfo,
+        target_portfolio_weight: float | None = None,
     ) -> PositionSizeCalculation:
         """Calculate position size based on risk parameters.
 
@@ -312,6 +317,7 @@ class RiskManagementAgent:
             current_price: Current price
             stop_loss: Stop-loss calculation
             account_info: Account information
+            target_portfolio_weight: Optional target portfolio weight for allocation-based sizing
 
         Returns:
             PositionSizeCalculation with sizing details
@@ -320,6 +326,13 @@ class RiskManagementAgent:
             msg = f"Invalid current_price: {current_price}. Must be positive."
             raise ValueError(msg)
 
+        # If target weight provided, use weight-based sizing
+        if target_portfolio_weight is not None and target_portfolio_weight > 0:
+            return self._calculate_weight_based_position(
+                current_price, stop_loss, account_info, target_portfolio_weight
+            )
+
+        # Otherwise use risk-based sizing (existing logic continues...)
         max_risk_amount = account_info.balance * (self.max_position_risk / 100)
 
         risk_per_share = stop_loss.risk_per_share
@@ -355,6 +368,56 @@ class RiskManagementAgent:
         reasoning = (
             f"Risk {risk_percent:.2f}% (${risk_amount:.2f}) on {recommended_shares} shares. "
             f"Stop @ ${stop_loss.stop_loss_price:.2f} ({stop_loss.stop_loss_percent:.1f}% from entry)."
+        )
+
+        return PositionSizeCalculation(
+            recommended_shares=recommended_shares,
+            position_value=position_value,
+            risk_amount=risk_amount,
+            risk_percent=risk_percent,
+            reasoning=reasoning,
+        )
+
+    def _calculate_weight_based_position(
+        self,
+        current_price: float,
+        stop_loss: StopLossCalculation,
+        account_info: AccountInfo,
+        target_weight: float,
+    ) -> PositionSizeCalculation:
+        """Calculate position size based on target portfolio weight.
+
+        Args:
+            current_price: Current price
+            stop_loss: Stop-loss calculation
+            account_info: Account information
+            target_weight: Target portfolio weight (0-1)
+
+        Returns:
+            PositionSizeCalculation with sizing details
+        """
+        # Calculate target position value based on portfolio weight
+        target_position_value = account_info.balance * target_weight
+
+        # Constrain by available cash
+        target_position_value = min(target_position_value, account_info.available_cash)
+
+        # Constrain by max single position limit
+        max_position_value = account_info.balance * (self.max_single_position / 100)
+        target_position_value = min(target_position_value, max_position_value)
+
+        # Calculate shares
+        recommended_shares = int(target_position_value / current_price)
+        position_value = recommended_shares * current_price
+
+        # Calculate risk based on stop loss
+        risk_amount = recommended_shares * stop_loss.risk_per_share
+        risk_percent = (risk_amount / account_info.balance) * 100 if account_info.balance > 0 else 0.0
+
+        reasoning = (
+            f"Portfolio-weighted position: {target_weight:.1%} target, {recommended_shares} shares "
+            f"(${position_value:.2f}). Risk {risk_percent:.2f}% (${risk_amount:.2f}) "
+            f"with stop @ ${stop_loss.stop_loss_price:.2f}."
         )
 
         return PositionSizeCalculation(

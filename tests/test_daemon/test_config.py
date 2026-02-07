@@ -10,6 +10,7 @@ from src.daemon.config import (
     EarningsCalendarConfig,
     HealthConfig,
     PeerAnalysisConfig,
+    PortfolioRebalancingConfig,
     ReportingConfig,
     RiskLimitsConfig,
     ScheduleConfig,
@@ -756,5 +757,116 @@ watchlist = ["AAPL"]
 
         assert config.risk_limits.enabled is False
         assert config.risk_limits.max_var_95 == 0.03
+
+        path.unlink()
+
+
+class TestPortfolioRebalancingConfig:
+    def test_default_config(self):
+        config = PortfolioRebalancingConfig()
+
+        assert config.enabled is False
+        assert config.method == "max_sharpe"
+        assert config.run_time == "16:45"
+        assert config.run_days == ["mon"]
+        assert config.rebalance_threshold == 0.01
+        assert config.lookback_days == 90
+
+    def test_custom_config(self):
+        config = PortfolioRebalancingConfig(
+            enabled=True,
+            method="min_volatility",
+            run_time="17:00",
+            run_days=["mon", "fri"],
+            rebalance_threshold=0.05,
+            lookback_days=180,
+        )
+
+        assert config.enabled is True
+        assert config.method == "min_volatility"
+        assert config.run_time == "17:00"
+        assert config.run_days == ["mon", "fri"]
+        assert config.rebalance_threshold == 0.05
+        assert config.lookback_days == 180
+
+    def test_validate_run_time_valid(self):
+        config = PortfolioRebalancingConfig(enabled=True, run_time="16:30")
+        assert config.run_time == "16:30"
+
+        config = PortfolioRebalancingConfig(enabled=True, run_time="19:59")
+        assert config.run_time == "19:59"
+
+        config = PortfolioRebalancingConfig(enabled=True, run_time="20:00")
+        assert config.run_time == "20:00"
+
+    def test_validate_run_time_invalid_format(self):
+        with pytest.raises(ValueError, match="must be in HH:MM format"):
+            PortfolioRebalancingConfig(enabled=True, run_time="25:00")
+
+        with pytest.raises(ValueError, match="must be in HH:MM format"):
+            PortfolioRebalancingConfig(enabled=True, run_time="16:60")
+
+        with pytest.raises(ValueError, match="must be in HH:MM format"):
+            PortfolioRebalancingConfig(enabled=True, run_time="invalid")
+
+    def test_validate_run_time_out_of_range(self):
+        with pytest.raises(ValueError, match="must be between 16:00-20:00"):
+            PortfolioRebalancingConfig(enabled=True, run_time="15:59")
+
+        with pytest.raises(ValueError, match="must be between 16:00-20:00"):
+            PortfolioRebalancingConfig(enabled=True, run_time="20:01")
+
+        with pytest.raises(ValueError, match="must be between 16:00-20:00"):
+            PortfolioRebalancingConfig(enabled=True, run_time="09:00")
+
+    def test_validate_run_time_skipped_when_disabled(self):
+        config = PortfolioRebalancingConfig(enabled=False, run_time="09:00")
+        assert config.run_time == "09:00"
+
+    def test_threshold_bounds(self):
+        with pytest.raises(ValueError, match="rebalance_threshold"):
+            PortfolioRebalancingConfig(rebalance_threshold=0.0005)
+
+        with pytest.raises(ValueError, match="rebalance_threshold"):
+            PortfolioRebalancingConfig(rebalance_threshold=0.25)
+
+    def test_lookback_days_bounds(self):
+        with pytest.raises(ValueError, match="lookback_days"):
+            PortfolioRebalancingConfig(lookback_days=20)
+
+        with pytest.raises(ValueError, match="lookback_days"):
+            PortfolioRebalancingConfig(lookback_days=400)
+
+    def test_daemon_config_has_rebalancing(self):
+        config = DaemonConfig()
+        assert isinstance(config.rebalancing, PortfolioRebalancingConfig)
+        assert config.rebalancing.enabled is False
+
+    def test_from_toml_with_rebalancing(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.rebalancing]
+enabled = true
+method = "hrp"
+run_time = "17:30"
+run_days = ["mon", "wed", "fri"]
+rebalance_threshold = 0.02
+lookback_days = 120
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.rebalancing.enabled is True
+        assert config.rebalancing.method == "hrp"
+        assert config.rebalancing.run_time == "17:30"
+        assert config.rebalancing.run_days == ["mon", "wed", "fri"]
+        assert config.rebalancing.rebalance_threshold == 0.02
+        assert config.rebalancing.lookback_days == 120
 
         path.unlink()

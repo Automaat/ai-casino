@@ -96,6 +96,39 @@ class OptimizationConfig(BaseModel):
     strategies: list[str] = Field(default_factory=lambda: ["momentum", "mean_reversion", "trend_following"])
 
 
+class PortfolioRebalancingConfig(BaseModel):
+    """Configuration for portfolio rebalancing."""
+
+    enabled: bool = False
+    method: Literal["max_sharpe", "min_volatility", "hrp"] = "max_sharpe"
+    run_time: str = "16:45"
+    run_days: list[str] = Field(default_factory=lambda: ["mon"])
+    rebalance_threshold: float = Field(default=0.01, ge=0.001, le=0.20)
+    lookback_days: int = Field(default=90, ge=30, le=365)
+
+    @model_validator(mode="after")
+    def validate_run_time(self) -> "PortfolioRebalancingConfig":
+        """Validate run_time is in HH:MM format within 16:00-20:00."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.run_time)
+        if not match:
+            msg = f"run_time must be in HH:MM format (00:00-23:59), got {self.run_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"run_time must be between 16:00-20:00, got {self.run_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class PrefetchConfig(BaseModel):
     """Configuration for after-hours data prefetching."""
 
@@ -269,6 +302,7 @@ class DaemonConfig(BaseModel):
     peer_analysis: PeerAnalysisConfig = Field(default_factory=PeerAnalysisConfig)
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
+    rebalancing: PortfolioRebalancingConfig = Field(default_factory=PortfolioRebalancingConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -297,6 +331,7 @@ class DaemonConfig(BaseModel):
         peer_analysis_data = daemon_data.pop("peer_analysis", {})
         reporting_data = daemon_data.pop("reporting", {})
         risk_limits_data = daemon_data.pop("risk_limits", {})
+        rebalancing_data = daemon_data.pop("rebalancing", {})
 
         return cls(
             **daemon_data,
@@ -312,6 +347,7 @@ class DaemonConfig(BaseModel):
             peer_analysis=PeerAnalysisConfig(**peer_analysis_data),
             reporting=ReportingConfig(**reporting_data),
             risk_limits=RiskLimitsConfig(**risk_limits_data),
+            rebalancing=PortfolioRebalancingConfig(**rebalancing_data),
         )
 
     def __repr__(self) -> str:

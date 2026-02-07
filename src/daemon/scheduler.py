@@ -41,6 +41,9 @@ class MarketScheduler:
         enable_peer_analysis: bool = False,
         tearsheet_time: str = "16:30",
         enable_reporting: bool = False,
+        rebalancing_time: str = "16:45",
+        rebalancing_days: list[str] | None = None,
+        enable_rebalancing: bool = False,
     ) -> None:
         """Initialize market scheduler.
 
@@ -68,6 +71,9 @@ class MarketScheduler:
             enable_peer_analysis: Enable deep peer analysis
             tearsheet_time: Time to generate tearsheets (HH:MM format)
             enable_reporting: Enable tearsheet generation
+            rebalancing_time: Time to run portfolio rebalancing (HH:MM format)
+            rebalancing_days: Days to run rebalancing (e.g., ["mon"])
+            enable_rebalancing: Enable portfolio rebalancing
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -92,6 +98,9 @@ class MarketScheduler:
         self.enable_peer_analysis = enable_peer_analysis
         self.tearsheet_time = tearsheet_time
         self.enable_reporting = enable_reporting
+        self.rebalancing_time = rebalancing_time
+        self.rebalancing_days = rebalancing_days or ["mon"]
+        self.enable_rebalancing = enable_rebalancing
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -315,6 +324,29 @@ class MarketScheduler:
             return False
 
         target_hour, target_minute = map(int, self.optimization_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_portfolio_rebalancing_time(self) -> bool:
+        """Check if current time matches portfolio rebalancing schedule.
+
+        Returns:
+            True if current time is within 1 minute of configured rebalancing time on configured day
+        """
+        if not self.enable_rebalancing:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.rebalancing_days:
+            return False
+
+        target_hour, target_minute = map(int, self.rebalancing_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
