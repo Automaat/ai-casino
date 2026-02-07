@@ -1101,12 +1101,8 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
-    async def _run_cycle(self) -> int:
-        """Run a single analysis cycle.
-
-        Returns:
-            Seconds to sleep before next cycle
-        """
+    def _run_scheduled_tasks(self) -> None:
+        """Run all scheduled after-hours tasks."""
         # Check if it's time for data prefetching (before screening)
         if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
             self._run_prefetch()
@@ -1131,8 +1127,6 @@ class DaemonRunner:
         if self.scheduler.is_after_hours_screening_time():
             self._run_after_hours_screening()
 
-        await self._maybe_run_health_check()
-
         # Check if it's time for parameter optimization
         if self.config.optimization.enabled and self.scheduler.is_optimization_time():
             self._run_optimization()
@@ -1140,6 +1134,15 @@ class DaemonRunner:
         # Daily risk report (after-hours only, before journal)
         if not self.scheduler.is_market_open():
             self._run_daily_risk_report()
+
+    async def _run_cycle(self) -> int:
+        """Run a single analysis cycle.
+
+        Returns:
+            Seconds to sleep before next cycle
+        """
+        self._run_scheduled_tasks()
+        await self._maybe_run_health_check()
 
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             await self._maybe_run_journal()
