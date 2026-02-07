@@ -41,10 +41,6 @@ class AgentClassification(BaseModel):
         ge=0.0,
         le=100.0,
     )
-    depends_on: list[AgentType] = Field(
-        default_factory=list,
-        description="Agents this one depends on",
-    )
 
 
 class DegradationContext(BaseModel):
@@ -116,13 +112,11 @@ class DegradationPolicy:
                 agent=AgentType.BULLISH,
                 required=False,
                 confidence_penalty_pct=0.0,
-                depends_on=[AgentType.TECHNICAL, AgentType.SENTIMENT, AgentType.NEWS],
             ),
             AgentType.BEARISH: AgentClassification(
                 agent=AgentType.BEARISH,
                 required=False,
                 confidence_penalty_pct=0.0,
-                depends_on=[AgentType.TECHNICAL, AgentType.SENTIMENT, AgentType.NEWS],
             ),
         }
 

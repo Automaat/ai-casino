@@ -226,7 +226,7 @@ def test_confidence_penalty_capped_at_50_percent(policy):
                 message="Down",
                 duration_ms=100.0,
                 checked_at=datetime.now(UTC),
-            ),  # -15% (10% fundamental + 0% social, but social shares finnhub)
+            ),  # -10% (10% fundamental + 0% social)
         ],
         cleanup_results=[],
         total_duration_ms=300.0,

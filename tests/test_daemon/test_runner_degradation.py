@@ -41,8 +41,9 @@ def daemon_config_with_health(tmp_path, temp_health_dir):
 
 def create_health_report(temp_health_dir, service_checks):
     """Create health report file."""
+    now = datetime.now(UTC)
     report = HealthReport(
-        timestamp=datetime.now(UTC),
+        timestamp=now,
         overall_status=(
             ServiceStatus.UNHEALTHY
             if any(c.status == ServiceStatus.UNHEALTHY for c in service_checks)
@@ -53,7 +54,7 @@ def create_health_report(temp_health_dir, service_checks):
         total_duration_ms=100.0,
     )
 
-    report_path = temp_health_dir / f"health-{datetime.now(UTC).strftime('%Y-%m-%d')}.json"
+    report_path = temp_health_dir / f"health-{now.strftime('%Y-%m-%d')}.json"
     with report_path.open("w") as f:
         json.dump(report.model_dump(mode="json"), f)
 
@@ -220,9 +221,9 @@ async def test_notification_sent_on_degradation(daemon_config_with_health, temp_
         await runner._run_cycle()
 
         # Verify notification sent
-        mock_notification_service.notify.assert_called_once()
-        call_args = mock_notification_service.notify.call_args
-        message = call_args[0][1]
+        mock_notification_service.notify.assert_awaited_once()
+        await_args = mock_notification_service.notify.await_args
+        message = await_args.args[1]
         assert "DEGRADED" in message.title or "degraded" in message.body.lower()
 
 

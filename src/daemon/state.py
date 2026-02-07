@@ -321,16 +321,17 @@ class DaemonState(BaseModel):
         Args:
             context: Degradation context
         """
+        now = datetime.now(UTC)
         self.degradation_history.append(
             DegradationRecord(
-                timestamp=datetime.now(UTC),
+                timestamp=now,
                 tier=context.tier.value,
                 unavailable_services=context.unavailable_services,
                 confidence_adjustment=context.confidence_adjustment,
                 halt_reason=context.halt_reason,
             )
         )
-        self.last_degradation = datetime.now(UTC)
+        self.last_degradation = now
 
         # Keep last 100 records
         if len(self.degradation_history) > 100:

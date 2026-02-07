@@ -103,6 +103,17 @@ class TradingState(TypedDict):
     warnings: list[str]
 
 
+class WorkflowExtraContext(TypedDict, total=False):
+    """Optional context passed to workflow pipeline."""
+
+    degradation_context: "DegradationContext | None"
+    enable_multi_timeframe: bool
+    sector_rotation_context: str | None
+    earnings_context: str | None
+    peer_analysis_context: str | None
+    game_plan_context: str | None
+
+
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
@@ -457,7 +468,7 @@ class TradingWorkflow:
         period_days: int,
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
-        extra_context: dict[str, str | bool | None] | None = None,
+        extra_context: WorkflowExtraContext | None = None,
     ) -> TradingWorkflowResult:
         """Run analysis pipeline with optional metrics instrumentation.
 
@@ -466,13 +477,12 @@ class TradingWorkflow:
             period_days: Days of historical data
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             collector: Optional metrics collector
-            extra_context: Optional dict with sector_rotation_context, earnings_context,
-                enable_multi_timeframe, degradation_context
+            extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
         from src.daemon.degradation import DegradationContext, DegradationTier
 
         ctx = extra_context or {}
-        degradation_context: DegradationContext | None = ctx.get("degradation_context")  # type: ignore[assignment]
+        degradation_context: DegradationContext | None = ctx.get("degradation_context")
 
         # Check if halted
         if degradation_context and degradation_context.tier == DegradationTier.HALTED:
