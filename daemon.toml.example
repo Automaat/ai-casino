@@ -50,3 +50,18 @@ params_file = "~/.ai-casino/optimized-params.json"
 refresh_days = 30
 # Strategies to optimize per symbol
 strategies = ["momentum", "mean_reversion", "trend_following"]
+
+[daemon.prefetch]
+# After-hours data prefetching (warm cache for morning)
+# Requires ALPHA_VANTAGE_API_KEY env var
+enabled = false
+# Time to prefetch after market close (HH:MM, in schedule timezone)
+prefetch_time = "16:30"
+# Refresh cache before pre-market session
+enable_pre_market_refresh = false
+# Time to refresh pre-market data
+pre_market_refresh_time = "04:00"
+# Warm FinBERT model during prefetch
+warm_finbert = true
+# Check API connectivity during prefetch
+check_connectivity = true

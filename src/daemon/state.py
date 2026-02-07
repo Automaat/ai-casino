@@ -42,6 +42,16 @@ class OptimizationRecord(BaseModel):
     total_time_seconds: float
 
 
+class PrefetchRecord(BaseModel):
+    """Record of a data prefetch run."""
+
+    timestamp: datetime
+    symbols_prefetched: int
+    symbols_failed: int
+    finbert_ready: bool
+    total_duration_seconds: float
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -56,6 +66,9 @@ class DaemonState(BaseModel):
     screening_history: list[ScreeningRecord] = Field(default_factory=list)
     last_optimization: datetime | None = None
     optimization_history: list[OptimizationRecord] = Field(default_factory=list)
+    last_prefetch: datetime | None = None
+    last_pre_market_refresh: datetime | None = None
+    prefetch_history: list[PrefetchRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -208,6 +221,37 @@ class DaemonState(BaseModel):
 
         if len(self.optimization_history) > 10:
             self.optimization_history = self.optimization_history[-10:]
+
+    def record_prefetch(
+        self,
+        symbols_prefetched: int,
+        symbols_failed: int,
+        finbert_ready: bool,
+        total_duration_seconds: float,
+    ) -> None:
+        """Record a data prefetch run.
+
+        Args:
+            symbols_prefetched: Number of symbols successfully prefetched
+            symbols_failed: Number of symbols that failed
+            finbert_ready: Whether FinBERT was warmed up
+            total_duration_seconds: Total prefetch duration
+        """
+        now = datetime.now(UTC)
+
+        self.prefetch_history.append(
+            PrefetchRecord(
+                timestamp=now,
+                symbols_prefetched=symbols_prefetched,
+                symbols_failed=symbols_failed,
+                finbert_ready=finbert_ready,
+                total_duration_seconds=total_duration_seconds,
+            )
+        )
+        self.last_prefetch = now
+
+        if len(self.prefetch_history) > 30:
+            self.prefetch_history = self.prefetch_history[-30:]
 
     def __repr__(self) -> str:
         """Return string representation."""

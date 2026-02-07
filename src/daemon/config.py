@@ -96,6 +96,18 @@ class OptimizationConfig(BaseModel):
     strategies: list[str] = Field(default_factory=lambda: ["momentum", "mean_reversion", "trend_following"])
 
 
+class PrefetchConfig(BaseModel):
+    """Configuration for after-hours data prefetching."""
+
+    enabled: bool = False
+    prefetch_time: str = "16:30"
+    enable_pre_market_refresh: bool = False
+    pre_market_refresh_time: str = "04:00"
+    cache_dir: str = "data/cache/prefetch"
+    warm_finbert: bool = True
+    check_connectivity: bool = True
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -110,6 +122,7 @@ class DaemonConfig(BaseModel):
     health: HealthConfig = Field(default_factory=HealthConfig)
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
+    prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -132,6 +145,7 @@ class DaemonConfig(BaseModel):
         health_data = daemon_data.pop("health", {})
         optimization_data = daemon_data.pop("optimization", {})
         screening_data = daemon_data.pop("screening", {})
+        prefetch_data = daemon_data.pop("prefetch", {})
 
         return cls(
             **daemon_data,
@@ -141,6 +155,7 @@ class DaemonConfig(BaseModel):
             health=HealthConfig(**health_data),
             optimization=OptimizationConfig(**optimization_data),
             screening=ScreeningConfig(**screening_data),
+            prefetch=PrefetchConfig(**prefetch_data),
         )
 
     def __repr__(self) -> str:

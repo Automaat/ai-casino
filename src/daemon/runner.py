@@ -10,6 +10,7 @@ from loguru import logger
 from rich.console import Console
 
 from src.daemon.config import DaemonConfig
+from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState
 from src.data.broker import AlpacaBroker
@@ -46,6 +47,8 @@ class DaemonRunner:
             optimization_time=config.optimization.optimization_time,
             optimization_days=config.optimization.optimization_days,
             health_check_time=config.health.run_time,
+            prefetch_time=config.prefetch.prefetch_time,
+            pre_market_refresh_time=config.prefetch.pre_market_refresh_time,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -77,7 +80,32 @@ class DaemonRunner:
             except Exception as e:
                 logger.exception(f"Failed to initialize broker: {e}")
                 self.broker = None
+        self._prefetcher: DataPrefetcher | None = None
         logger.info(f"DaemonRunner initialized with {config}")
+
+    def _init_prefetcher(self) -> DataPrefetcher | None:
+        """Initialize data prefetcher (lazy initialization).
+
+        Returns:
+            DataPrefetcher instance or None if API key missing
+        """
+        if self._prefetcher is None:
+            try:
+                market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
+                news_fetcher = NewsFetcher()
+                fundamental_fetcher = FundamentalDataFetcher()
+
+                self._prefetcher = DataPrefetcher(
+                    market_fetcher=market_fetcher,
+                    news_fetcher=news_fetcher,
+                    fundamental_fetcher=fundamental_fetcher,
+                    cache_dir=self.config.prefetch.cache_dir,
+                )
+                logger.info("DataPrefetcher initialized")
+            except ValueError as e:
+                logger.warning(f"Failed to initialize prefetcher: {e}")
+                return None
+        return self._prefetcher
 
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
@@ -340,6 +368,117 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
+    def _run_prefetch(self) -> None:
+        """Run after-hours data prefetching for watchlist symbols."""
+        if not self.config.prefetch.enabled:
+            return
+
+        # Dedup check
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_prefetch:
+            last_date = self.state.last_prefetch.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Prefetch already completed today")
+                return
+
+        logger.info("Starting after-hours data prefetching")
+        console.print(f"\n[bold cyan]Data Prefetch ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            prefetcher = self._init_prefetcher()
+            if prefetcher is None:
+                logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
+                return
+
+            watchlist = self._get_merged_watchlist()
+
+            console.print(f"[dim]Prefetching {len(watchlist)} symbols...[/dim]")
+            report = prefetcher.prefetch_watchlist(watchlist)
+
+            # Warm FinBERT if configured
+            finbert_ready = False
+            if self.config.prefetch.warm_finbert:
+                console.print("[dim]Warming FinBERT model...[/dim]")
+                finbert_ready = prefetcher.warm_finbert()
+            report.finbert_ready = finbert_ready
+
+            # Check API connectivity if configured
+            if self.config.prefetch.check_connectivity:
+                report.api_connectivity = prefetcher.check_api_key_presence()
+
+            # Count successes/failures
+            succeeded = sum(1 for r in report.results if r.market_data or r.news or r.fundamentals)
+            failed = len(report.results) - succeeded
+
+            self.state.record_prefetch(
+                symbols_prefetched=succeeded,
+                symbols_failed=failed,
+                finbert_ready=finbert_ready,
+                total_duration_seconds=report.total_duration_seconds,
+            )
+            self.state.save(self.config.state.state_file)
+
+            console.print(
+                f"\n[dim]Prefetch complete: {succeeded} symbols cached, "
+                f"{failed} failed ({report.total_duration_seconds:.0f}s)[/dim]\n"
+            )
+            logger.info(
+                f"Data prefetch completed: {succeeded} cached, {failed} failed "
+                f"in {report.total_duration_seconds:.0f}s"
+            )
+
+        except Exception as e:
+            error_msg = f"Data prefetch failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _run_pre_market_refresh(self) -> None:
+        """Run pre-market data refresh to update stale cache."""
+        if not self.config.prefetch.enabled or not self.config.prefetch.enable_pre_market_refresh:
+            return
+
+        # Dedup check
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_pre_market_refresh:
+            last_date = self.state.last_pre_market_refresh.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Pre-market refresh already completed today")
+                return
+
+        logger.info("Starting pre-market data refresh")
+        console.print(f"\n[bold cyan]Pre-Market Data Refresh ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            prefetcher = self._init_prefetcher()
+            if prefetcher is None:
+                logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
+                return
+
+            watchlist = self._get_merged_watchlist()
+
+            console.print(f"[dim]Refreshing {len(watchlist)} symbols...[/dim]")
+            report = prefetcher.prefetch_watchlist(watchlist)
+
+            succeeded = sum(1 for r in report.results if r.market_data or r.news or r.fundamentals)
+
+            self.state.last_pre_market_refresh = datetime.now(self.scheduler.timezone)
+            self.state.save(self.config.state.state_file)
+
+            console.print(
+                f"\n[dim]Pre-market refresh complete: {succeeded} symbols updated "
+                f"({report.total_duration_seconds:.0f}s)[/dim]\n"
+            )
+            logger.info(
+                f"Pre-market refresh completed: {succeeded} symbols in {report.total_duration_seconds:.0f}s"
+            )
+
+        except Exception as e:
+            error_msg = f"Pre-market refresh failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
     def _run_after_hours_screening(self) -> None:
         """Run after-hours screening for watchlist candidates."""
         from src.data.universe import StockUniverseFetcher
@@ -466,6 +605,14 @@ class DaemonRunner:
         Returns:
             Seconds to sleep before next cycle
         """
+        # Check if it's time for data prefetching (before screening)
+        if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
+            self._run_prefetch()
+
+        # Check if it's time for pre-market data refresh
+        if self.config.prefetch.enabled and self.scheduler.is_pre_market_refresh_time():
+            self._run_pre_market_refresh()
+
         # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():
             self._run_after_hours_screening()
