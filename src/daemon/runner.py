@@ -40,12 +40,12 @@ class DaemonRunner:
             end_time=config.schedule.end_time,
             timezone=config.schedule.timezone,
             enable_pre_market=config.schedule.enable_pre_market,
-            enable_after_hours=config.schedule.enable_after_hours,
-            enable_screening=config.screening.enabled,
-            screen_time=config.screening.screen_time,
-            screen_days=config.screening.screen_days,
+            enable_after_hours=config.screening.enabled,
+            after_hours_screen_time=config.screening.screen_time,
+            after_hours_screen_days=config.screening.screen_days,
             optimization_time=config.optimization.optimization_time,
             optimization_days=config.optimization.optimization_days,
+            health_check_time=config.health.run_time,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -467,7 +467,7 @@ class DaemonRunner:
             Seconds to sleep before next cycle
         """
         # Check if it's time for screening (before regular analysis)
-        if self.scheduler.is_screening_time():
+        if self.scheduler.is_after_hours_screening_time():
             self._run_after_hours_screening()
 
         await self._maybe_run_health_check()
