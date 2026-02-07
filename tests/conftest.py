@@ -784,3 +784,19 @@ def mock_market_fetcher():
 
     mock.fetch_daily = MagicMock(side_effect=fetch_daily)
     return mock
+
+
+@pytest.fixture
+def event_bus():
+    """EventBus instance for testing."""
+    from src.daemon.event_bus import EventBus
+
+    return EventBus(history_size=50, queue_size=10)
+
+
+@pytest.fixture
+async def event_subscriber(event_bus):
+    """EventBus subscriber with automatic cleanup."""
+    sub_id, queue = await event_bus.subscribe()
+    yield sub_id, queue
+    await event_bus.unsubscribe(sub_id)

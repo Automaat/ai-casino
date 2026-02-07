@@ -623,3 +623,120 @@ class TestSectorRotationIntegration:
             runner._run_sector_rotation()
 
         assert not rotation_ran
+
+
+@pytest.mark.asyncio
+async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_bus) -> None:
+    """Test runner publishes CYCLE_START and CYCLE_COMPLETE events."""
+    runner = DaemonRunner(sample_config, event_bus=event_bus)
+
+    sub_id, queue = await event_bus.subscribe()
+
+    with (
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(runner.scheduler, "is_market_open", return_value=True),
+        patch.object(runner, "_maybe_run_journal", new_callable=AsyncMock),
+    ):
+        mock_analyze.return_value = []
+
+        await runner._run_cycle()
+
+    cycle_start = await queue.get()
+    assert cycle_start.event_type.value == "CYCLE_START"
+    assert "watchlist_size" in cycle_start.data
+    assert "degradation_tier" in cycle_start.data
+
+    cycle_complete = await queue.get()
+    assert cycle_complete.event_type.value == "CYCLE_COMPLETE"
+    assert "results_count" in cycle_complete.data
+    assert "errors_count" in cycle_complete.data
+    assert "duration_seconds" in cycle_complete.data
+
+    await event_bus.unsubscribe(sub_id)
+
+
+@pytest.mark.asyncio
+async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, event_bus) -> None:
+    """Test runner publishes ANALYSIS_START and ANALYSIS_COMPLETE events."""
+    from src.strategies.signal import Signal
+
+    runner = DaemonRunner(sample_config, event_bus=event_bus)
+
+    sub_id, queue = await event_bus.subscribe()
+
+    with patch.object(runner, "_init_workflow") as mock_init_workflow:
+        mock_workflow = Mock()
+        mock_result = Mock()
+        mock_result.decision.action = Signal.BUY
+        mock_result.decision.confidence = 0.85
+        mock_result.order = None
+        mock_result.trading_session.value = "REGULAR"
+        mock_result.risk.current_price = 150.0
+        mock_result.strategy_used = "momentum"
+        mock_result.regime = None
+        mock_result.technical.signal = Signal.BUY
+        mock_workflow.analyze = AsyncMock(return_value=mock_result)
+        mock_init_workflow.return_value = mock_workflow
+
+        result = await runner._analyze_symbol("AAPL")
+
+    assert result is not None
+
+    analysis_start = await queue.get()
+    assert analysis_start.event_type.value == "ANALYSIS_START"
+    assert analysis_start.data["symbol"] == "AAPL"
+    assert "trading_session" in analysis_start.data
+
+    analysis_complete = await queue.get()
+    assert analysis_complete.event_type.value == "ANALYSIS_COMPLETE"
+    assert analysis_complete.data["symbol"] == "AAPL"
+    assert analysis_complete.data["signal"] == "BUY"
+    assert analysis_complete.data["confidence"] == 0.85
+    assert analysis_complete.data["executed"] is False
+
+    await event_bus.unsubscribe(sub_id)
+
+
+@pytest.mark.asyncio
+async def test_runner_publishes_analysis_error(sample_config: DaemonConfig, event_bus) -> None:
+    """Test runner publishes ANALYSIS_ERROR event on failure."""
+    runner = DaemonRunner(sample_config, event_bus=event_bus)
+
+    sub_id, queue = await event_bus.subscribe()
+
+    with patch.object(runner, "_init_workflow") as mock_init_workflow:
+        mock_workflow = Mock()
+        mock_workflow.analyze = AsyncMock(side_effect=ValueError("Test error"))
+        mock_init_workflow.return_value = mock_workflow
+
+        result = await runner._analyze_symbol("AAPL")
+
+    assert result is None
+
+    analysis_start = await queue.get()
+    assert analysis_start.event_type.value == "ANALYSIS_START"
+
+    analysis_error = await queue.get()
+    assert analysis_error.event_type.value == "ANALYSIS_ERROR"
+    assert analysis_error.data["symbol"] == "AAPL"
+    assert "error" in analysis_error.data
+    assert "Test error" in analysis_error.data["error"]
+
+    await event_bus.unsubscribe(sub_id)
+
+
+@pytest.mark.asyncio
+async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
+    """Test runner works without event_bus (None)."""
+    runner = DaemonRunner(sample_config, event_bus=None)
+
+    assert runner.event_bus is None
+
+    with (
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(runner.scheduler, "is_market_open", return_value=True),
+        patch.object(runner, "_maybe_run_journal", new_callable=AsyncMock),
+    ):
+        mock_analyze.return_value = []
+
+        await runner._run_cycle()
