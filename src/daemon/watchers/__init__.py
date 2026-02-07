@@ -1,5 +1,6 @@
 """Event watcher implementations."""
 
 from src.daemon.watchers.news_watcher import NewsWatcher
+from src.daemon.watchers.social_watcher import SocialWatcher
 
-__all__ = ["NewsWatcher"]
+__all__ = ["NewsWatcher", "SocialWatcher"]

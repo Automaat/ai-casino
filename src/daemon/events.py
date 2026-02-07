@@ -89,7 +89,7 @@ class SocialEvent(BaseModel):
                 f"Subreddit: {self.viral_post.subreddit}\n"
                 f"Title: {self.viral_post.title}\n"
                 f"Score: {self.viral_post.score} (upvote ratio: {self.viral_post.upvote_ratio:.1%})\n"
-                f"Content: {self.viral_post.content[:500]}\n"
+                f"Content: {self.viral_post.body[:500]}\n"
                 f"URL: {self.viral_post.url}"
             )
         return (
