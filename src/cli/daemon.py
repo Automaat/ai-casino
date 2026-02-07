@@ -14,7 +14,7 @@ from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
-from src.daemon.watchers.news_watcher import NewsWatcher
+from src.daemon.watchers import NewsWatcher, SocialWatcher
 
 console = Console()
 
@@ -88,6 +88,52 @@ def trump_daemon(
         raise typer.Exit(1) from e
 
 
+def _load_daemon_config(config: Path | None) -> DaemonConfig:
+    """Load daemon config from file or defaults."""
+    if config is not None:
+        if not config.exists():
+            console.print(f"[bold red]Error:[/bold red] Config file not found: {config}")
+            raise typer.Exit(1)
+        return DaemonConfig.from_toml(config)
+    return DaemonConfig()
+
+
+def _init_event_watchers(daemon_config: DaemonConfig, historical_cache: HistoricalCache) -> list:
+    """Initialize enabled event watchers."""
+    watchers = []
+
+    if daemon_config.news_watcher.enabled:
+        watchers.append(
+            NewsWatcher(
+                historical_cache=historical_cache,
+                poll_interval=daemon_config.news_watcher.poll_interval_minutes * 60,
+                relevance_threshold=daemon_config.news_watcher.relevance_threshold,
+                cooldown_minutes=daemon_config.news_watcher.cooldown_minutes,
+                breaking_threshold_minutes=daemon_config.news_watcher.breaking_threshold_minutes,
+                max_concurrent_analyses=daemon_config.news_watcher.max_concurrent_analyses,
+            )
+        )
+        console.print("[green]✓[/green] NewsWatcher enabled")
+
+    if daemon_config.social_watcher.enabled:
+        watchers.append(
+            SocialWatcher(
+                historical_cache=historical_cache,
+                poll_interval=daemon_config.social_watcher.poll_interval_minutes * 60,
+                relevance_threshold=daemon_config.social_watcher.relevance_threshold,
+                cooldown_minutes=daemon_config.social_watcher.cooldown_minutes,
+                volume_spike_threshold=daemon_config.social_watcher.volume_spike_threshold,
+                viral_score_threshold=daemon_config.social_watcher.viral_score_threshold,
+                viral_upvote_ratio=daemon_config.social_watcher.viral_upvote_ratio,
+                subreddits=daemon_config.social_watcher.subreddits,
+                max_concurrent_analyses=daemon_config.social_watcher.max_concurrent_analyses,
+            )
+        )
+        console.print("[green]✓[/green] SocialWatcher enabled")
+
+    return watchers
+
+
 def events_daemon(
     config: Annotated[
         Path | None, typer.Option("--config", "-c", help="Path to daemon config file (TOML)")
@@ -110,14 +156,7 @@ def events_daemon(
     )
 
     try:
-        # Load config
-        if config is not None:
-            if not config.exists():
-                console.print(f"[bold red]Error:[/bold red] Config file not found: {config}")
-                raise typer.Exit(1)
-            daemon_config = DaemonConfig.from_toml(config)
-        else:
-            daemon_config = DaemonConfig()
+        daemon_config = _load_daemon_config(config)
 
         # Check if any watcher enabled
         any_enabled = (
@@ -134,24 +173,8 @@ def events_daemon(
             console.print("  enabled = true")
             raise typer.Exit(1)
 
-        # Initialize enabled watchers
-        watchers = []
         historical_cache = HistoricalCache()
-
-        if daemon_config.news_watcher.enabled:
-            watchers.append(
-                NewsWatcher(
-                    historical_cache=historical_cache,
-                    poll_interval=daemon_config.news_watcher.poll_interval_minutes * 60,
-                    relevance_threshold=daemon_config.news_watcher.relevance_threshold,
-                    cooldown_minutes=daemon_config.news_watcher.cooldown_minutes,
-                    breaking_threshold_minutes=daemon_config.news_watcher.breaking_threshold_minutes,
-                    max_concurrent_analyses=daemon_config.news_watcher.max_concurrent_analyses,
-                )
-            )
-            console.print("[green]✓[/green] NewsWatcher enabled")
-
-        # TODO: Add other watchers (social, filings, anomaly) when implemented
+        watchers = _init_event_watchers(daemon_config, historical_cache)
 
         async def run_all() -> None:
             """Run all enabled watchers with graceful shutdown."""
