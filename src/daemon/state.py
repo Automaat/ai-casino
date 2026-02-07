@@ -96,6 +96,19 @@ class PeerAnalysisRecord(BaseModel):
     total_duration_seconds: float
 
 
+class CorrelationAuditRecord(BaseModel):
+    """Record of a portfolio correlation audit run."""
+
+    timestamp: datetime
+    num_positions: int
+    num_correlated_pairs: int
+    max_correlation: float
+    avg_correlation: float
+    diversification_ratio: float
+    num_substitutions: int
+    total_duration_seconds: float
+
+
 class RiskReportRecord(BaseModel):
     """Record of a portfolio risk report."""
 
@@ -149,6 +162,8 @@ class DaemonState(BaseModel):
     earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
     last_peer_analysis: datetime | None = None
     peer_analysis_history: list[PeerAnalysisRecord] = Field(default_factory=list)
+    last_correlation_audit: datetime | None = None
+    correlation_audit_history: list[CorrelationAuditRecord] = Field(default_factory=list)
     last_tearsheet: datetime | None = None
     last_risk_report: datetime | None = None
     risk_report_history: list[RiskReportRecord] = Field(default_factory=list)
@@ -477,6 +492,46 @@ class DaemonState(BaseModel):
 
         if len(self.peer_analysis_history) > 10:
             self.peer_analysis_history = self.peer_analysis_history[-10:]
+
+    def record_correlation_audit(  # noqa: PLR0913
+        self,
+        num_positions: int,
+        num_correlated_pairs: int,
+        max_correlation: float,
+        avg_correlation: float,
+        diversification_ratio: float,
+        num_substitutions: int,
+        total_duration_seconds: float,
+    ) -> None:
+        """Record a correlation audit run.
+
+        Args:
+            num_positions: Number of positions analyzed
+            num_correlated_pairs: Number of highly correlated pairs found
+            max_correlation: Maximum correlation found
+            avg_correlation: Average portfolio correlation
+            diversification_ratio: Portfolio diversification ratio
+            num_substitutions: Number of substitution suggestions
+            total_duration_seconds: Total audit duration
+        """
+        now = datetime.now(UTC)
+
+        self.correlation_audit_history.append(
+            CorrelationAuditRecord(
+                timestamp=now,
+                num_positions=num_positions,
+                num_correlated_pairs=num_correlated_pairs,
+                max_correlation=max_correlation,
+                avg_correlation=avg_correlation,
+                diversification_ratio=diversification_ratio,
+                num_substitutions=num_substitutions,
+                total_duration_seconds=total_duration_seconds,
+            )
+        )
+        self.last_correlation_audit = now
+
+        if len(self.correlation_audit_history) > 10:
+            self.correlation_audit_history = self.correlation_audit_history[-10:]
 
     def record_tearsheet(self, symbol: str, html_path: str) -> None:
         """Record a tearsheet generation run.

@@ -201,6 +201,33 @@ class PeerAnalysisConfig(BaseModel):
         return self
 
 
+class CorrelationAuditConfig(BaseModel):
+    """Configuration for weekly portfolio correlation audit."""
+
+    enabled: bool = False
+    run_time: str = "17:45"
+    run_days: list[str] = Field(default_factory=lambda: ["sun"])
+    correlation_threshold: float = Field(default=0.8, ge=0.5, le=0.95)
+    lookback_days: int = Field(default=90, ge=30, le=180)
+    output_dir: str = "~/.ai-casino/correlation-audits"
+
+    @model_validator(mode="after")
+    def validate_run_time(self) -> "CorrelationAuditConfig":
+        """Validate run_time is in HH:MM format."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.run_time)
+        if not match:
+            msg = f"run_time must be in HH:MM format (00:00-23:59), got {self.run_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class ReportingConfig(BaseModel):
     """Configuration for automated performance reporting."""
 
@@ -329,6 +356,7 @@ class DaemonConfig(BaseModel):
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
     peer_analysis: PeerAnalysisConfig = Field(default_factory=PeerAnalysisConfig)
+    correlation_audit: CorrelationAuditConfig = Field(default_factory=CorrelationAuditConfig)
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
     rebalancing: PortfolioRebalancingConfig = Field(default_factory=PortfolioRebalancingConfig)
@@ -359,6 +387,7 @@ class DaemonConfig(BaseModel):
         sector_rotation_data = daemon_data.pop("sector_rotation", {})
         earnings_calendar_data = daemon_data.pop("earnings_calendar", {})
         peer_analysis_data = daemon_data.pop("peer_analysis", {})
+        correlation_audit_data = daemon_data.pop("correlation_audit", {})
         reporting_data = daemon_data.pop("reporting", {})
         risk_limits_data = daemon_data.pop("risk_limits", {})
         rebalancing_data = daemon_data.pop("rebalancing", {})
@@ -376,6 +405,7 @@ class DaemonConfig(BaseModel):
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
             earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
             peer_analysis=PeerAnalysisConfig(**peer_analysis_data),
+            correlation_audit=CorrelationAuditConfig(**correlation_audit_data),
             reporting=ReportingConfig(**reporting_data),
             risk_limits=RiskLimitsConfig(**risk_limits_data),
             rebalancing=PortfolioRebalancingConfig(**rebalancing_data),
