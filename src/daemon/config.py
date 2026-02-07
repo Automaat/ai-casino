@@ -347,6 +347,26 @@ class GamePlanConfig(BaseModel):
         return self
 
 
+class PositionManagementConfig(BaseModel):
+    """Configuration for position management."""
+
+    enabled: bool = False
+    trailing_stop_enabled: bool = True
+    trailing_stop_percent: float = Field(default=3.0, ge=0.5, le=10.0)
+    partial_profit_enabled: bool = True
+    profit_target_1_percent: float = Field(default=5.0, ge=1.0, le=20.0)
+    profit_target_1_sell_pct: float = Field(default=0.5, ge=0.1, le=1.0)
+    profit_target_2_percent: float = Field(default=10.0, ge=5.0, le=50.0)
+    profit_target_2_sell_pct: float = Field(default=1.0, ge=0.1, le=1.0)
+    time_exit_enabled: bool = True
+    max_holding_days: int = Field(default=30, ge=1, le=180)
+    breakeven_enabled: bool = True
+    breakeven_activation_percent: float = Field(default=5.0, ge=1.0, le=20.0)
+    conviction_scaling_enabled: bool = True
+    conviction_decrease_threshold: float = Field(default=0.15, ge=0.05, le=0.5)
+    conviction_scale_out_percent: float = Field(default=0.5, ge=0.1, le=1.0)
+
+
 class EarningsCalendarConfig(BaseModel):
     """Configuration for earnings calendar preparation."""
 
@@ -405,6 +425,7 @@ class DaemonConfig(BaseModel):
     signal_tracking: SignalTrackingConfig = Field(default_factory=SignalTrackingConfig)
     pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
+    position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -438,6 +459,7 @@ class DaemonConfig(BaseModel):
         signal_tracking_data = daemon_data.pop("signal_tracking", {})
         pre_trade_backtesting_data = daemon_data.pop("pre_trade_backtesting", {})
         game_plan_data = daemon_data.pop("game_plan", {})
+        position_management_data = daemon_data.pop("position_management", {})
 
         return cls(
             **daemon_data,
@@ -458,6 +480,7 @@ class DaemonConfig(BaseModel):
             signal_tracking=SignalTrackingConfig(**signal_tracking_data),
             pre_trade_backtesting=PreTradeBacktestingConfig(**pre_trade_backtesting_data),
             game_plan=GamePlanConfig(**game_plan_data),
+            position_management=PositionManagementConfig(**position_management_data),
         )
 
     def __repr__(self) -> str:

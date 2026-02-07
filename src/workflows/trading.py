@@ -85,6 +85,7 @@ class TradingState(TypedDict):
     earnings_context: str | None
     peer_analysis_context: str | None
     game_plan_context: str | None
+    position_context: dict[str, object] | None
     broker_positions: dict[str, BrokerPosition] | None
     portfolio_value: float | None
     backtest_validation: BacktestValidation | None
@@ -247,6 +248,7 @@ class TradingWorkflow:
         symbol: str,
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
+        position_context: dict[str, object] | None = None,
         **context_kwargs: str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -255,6 +257,7 @@ class TradingWorkflow:
             symbol: Stock ticker symbol
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
+            position_context: Optional position context (entry price, P&L, days held)
             **context_kwargs: Optional context keys: sector_context, earnings_context,
                 peer_analysis_context, game_plan_context
 
@@ -277,6 +280,7 @@ class TradingWorkflow:
                 "earnings_context": context_kwargs.get("earnings_context"),
                 "peer_analysis_context": context_kwargs.get("peer_analysis_context"),
                 "game_plan_context": context_kwargs.get("game_plan_context"),
+                "position_context": position_context,
             }
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
@@ -450,6 +454,7 @@ class TradingWorkflow:
         state["sector_rotation_context"] = ctx.get("sector_rotation_context")
         state["earnings_context"] = ctx.get("earnings_context")
         state["peer_analysis_context"] = ctx.get("peer_analysis_context")
+        state["position_context"] = ctx.get("position_context")
         self._record_stage(collector, "fetch_data", start)
 
         start = time.perf_counter()
@@ -787,6 +792,7 @@ class TradingWorkflow:
             sector_rotation_context=None,
             earnings_context=None,
             peer_analysis_context=None,
+            position_context=None,
             broker_positions=None,
             portfolio_value=None,
             warnings=[],
@@ -846,6 +852,7 @@ class TradingWorkflow:
             peer_analysis_context=state.get("peer_analysis_context"),
             backtest_validation=state.get("backtest_validation"),
             game_plan_context=state.get("game_plan_context"),
+            position_context=state.get("position_context"),
         )
 
         state["final_decision"] = decision

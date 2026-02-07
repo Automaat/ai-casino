@@ -130,6 +130,18 @@ class DaemonRunner:
         self._prefetcher: DataPrefetcher | None = None
         self._target_allocations_to_apply: dict[str, float] | None = None
         self._game_plan_agent: GamePlanAgent | None = None
+
+        # Position manager
+        self._position_manager = None
+        if config.position_management.enabled:
+            if not config.auto_trade or not self.broker:
+                msg = "position_management requires auto_trade=true"
+                raise ValueError(msg)
+            from src.daemon.positions import PositionManager
+
+            self._position_manager = PositionManager(self.broker, config.position_management)
+            logger.info("Position management enabled")
+
         logger.info(f"DaemonRunner initialized with {config}")
 
     def _init_prefetcher(self) -> DataPrefetcher | None:
@@ -274,11 +286,16 @@ class DaemonRunner:
 
         return merged_watchlist
 
-    async def _analyze_symbol(self, symbol: str) -> TradingWorkflowResult | None:  # noqa: C901
+    async def _analyze_symbol(  # noqa: C901
+        self,
+        symbol: str,
+        position_context: dict[str, object] | None = None,
+    ) -> TradingWorkflowResult | None:
         """Analyze a single symbol.
 
         Args:
             symbol: Stock ticker symbol
+            position_context: Position context (entry price, P&L, days held) (optional)
 
         Returns:
             TradingWorkflowResult or None on error
@@ -329,6 +346,7 @@ class DaemonRunner:
                 symbol,
                 period_days=90,
                 trading_session=session,
+                position_context=position_context,
                 sector_context=sector_context,
                 earnings_context=earnings_context,
                 peer_analysis_context=peer_context,
@@ -473,7 +491,7 @@ class DaemonRunner:
             timestamp=record.timestamp,
         )
 
-    async def _analyze_watchlist(self, watchlist: list[str]) -> list[TradingWorkflowResult]:
+    async def _analyze_watchlist(self, watchlist: list[str]) -> list[TradingWorkflowResult]:  # noqa: C901, PLR0912, PLR0915
         """Analyze all symbols in watchlist.
 
         Args:
@@ -482,6 +500,19 @@ class DaemonRunner:
         Returns:
             List of analysis results
         """
+        # Sync positions with broker (if position management enabled)
+        if self._position_manager:
+            try:
+                new_positions, closed_symbols = self._position_manager.sync_with_broker(
+                    {sym: self.state.get_position(sym) for sym in self.state.active_positions}
+                )
+                for pos in new_positions:
+                    self.state.add_position(pos)
+                for symbol in closed_symbols:
+                    self.state.remove_position(symbol)
+            except Exception as e:
+                logger.error(f"Failed to sync positions: {e}")
+
         # Set target allocations from last rebalancing (if recent)
         # This will be picked up by _init_workflow in _analyze_symbol
         if self.state.active_target_allocations and self.state.last_portfolio_rebalancing:
@@ -501,8 +532,37 @@ class DaemonRunner:
         semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
 
         async def analyze_with_limit(symbol: str) -> TradingWorkflowResult | None:
+            # Build position context if holding
+            position_context = None
+            if symbol in self.state.active_positions:
+                pos = self.state.get_position(symbol)
+                if pos:
+                    # Get current price (try to fetch from broker, fallback to 0)
+                    current_price = 0.0
+                    try:
+                        if self.broker:
+                            broker_info = self.broker.get_account_info()
+                            if symbol in broker_info.positions:
+                                current_price = broker_info.positions[symbol].current_price
+                    except Exception as e:
+                        logger.warning(f"Failed to get current price for {symbol}: {e}")
+
+                    unrealized_pnl_pct = 0.0
+                    if current_price > 0 and pos.entry_price > 0:
+                        unrealized_pnl_pct = ((current_price - pos.entry_price) / pos.entry_price) * 100
+
+                    position_context = {
+                        "has_position": True,
+                        "symbol": symbol,
+                        "entry_price": pos.entry_price,
+                        "entry_confidence": pos.entry_confidence,
+                        "unrealized_pnl_percent": unrealized_pnl_pct,
+                        "days_held": pos.days_held,
+                        "current_qty": pos.current_qty,
+                    }
+
             async with semaphore:
-                return await self._analyze_symbol(symbol)
+                return await self._analyze_symbol(symbol, position_context)
 
         tasks = [analyze_with_limit(s) for s in watchlist]
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -514,6 +574,26 @@ class DaemonRunner:
                 self.state.record_error(f"{symbol}: {result}")
             elif result is not None:
                 results.append(result)
+
+        # Apply position management rules (if enabled)
+        if self._position_manager:
+            for result in results:
+                if result.symbol in self.state.active_positions:
+                    try:
+                        pos = self.state.get_position(result.symbol)
+                        if pos:
+                            actions = self._position_manager.review_position(
+                                pos,
+                                result.risk.current_price,
+                                result,
+                            )
+                            for action in actions:
+                                self.state.record_position_action(action)
+                                logger.info(
+                                    f"Position action: {action.action_type} {action.symbol} - {action.reason}"
+                                )
+                    except Exception as e:
+                        logger.error(f"Failed to review position {result.symbol}: {e}")
 
         return results
 

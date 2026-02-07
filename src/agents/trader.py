@@ -78,6 +78,7 @@ class TraderAgent:
         peer_analysis_context: str | None = None,
         backtest_validation: "BacktestValidation | None" = None,
         game_plan_context: str | None = None,
+        position_context: dict[str, object] | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -97,6 +98,7 @@ class TraderAgent:
             peer_analysis_context: Formatted peer benchmarking context (optional)
             backtest_validation: Pre-trade backtesting validation result (optional)
             game_plan_context: Formatted game plan context (optional)
+            position_context: Position context (entry price, P&L, days held) (optional)
 
         Returns:
             TradingDecision with action and reasoning
@@ -119,6 +121,7 @@ class TraderAgent:
         peer_analysis_section = self._build_peer_analysis_section(peer_analysis_context)
         backtest_section = self._build_backtest_section(backtest_validation)
         game_plan_section = self._build_game_plan_section(game_plan_context)
+        position_context_section = self._build_position_context_section(position_context)
 
         prompt = self._prompts.load(
             "user_base",
@@ -153,6 +156,7 @@ class TraderAgent:
             peer_analysis_section=peer_analysis_section,
             backtest_section=backtest_section,
             game_plan_section=game_plan_section,
+            position_context_section=position_context_section,
         )
 
         system_prompt = self._prompts.load("system")
@@ -393,6 +397,28 @@ class TraderAgent:
             trades=backtest_validation.total_trades,
             lookback=backtest_validation.lookback_days,
             issues=issues,
+        )
+
+    def _build_position_context_section(self, position_context: dict[str, object] | None) -> str:
+        """Build position context section for prompt.
+
+        Args:
+            position_context: Position context dict (optional)
+
+        Returns:
+            Formatted section string (empty if None)
+        """
+        if not position_context or not position_context.get("has_position"):
+            return ""
+
+        return self._prompts.load(
+            "section_position_context",
+            entry_price=f"{position_context.get('entry_price', 0.0):.2f}",
+            entry_confidence=f"{position_context.get('entry_confidence', 0.0):.2f}",
+            days_held=str(position_context.get("days_held", 0)),
+            unrealized_pnl_percent=f"{position_context.get('unrealized_pnl_percent', 0.0):+.2f}",
+            current_qty=f"{position_context.get('current_qty', 0.0):.0f}",
+            symbol=position_context.get("symbol", ""),
         )
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:

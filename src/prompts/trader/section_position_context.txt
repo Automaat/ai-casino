@@ -1,0 +1,16 @@
+## CURRENT POSITION CONTEXT
+
+You already hold a position in {{ symbol }}:
+- Entry Price: ${{ entry_price }}
+- Entry Conviction: {{ entry_confidence }}
+- Days Held: {{ days_held }}
+- Current P&L: {{ unrealized_pnl_percent }}%
+- Quantity: {{ current_qty }} shares
+
+When making your decision, compare current analysis conviction vs entry conviction ({{ entry_confidence }}):
+- If conviction DECREASED significantly (>15%): Recommend REDUCE to scale out 50%
+- If conviction MAINTAINED: Recommend HOLD
+- If conviction INCREASED: Recommend HOLD or consider ADD (if risk allows)
+- If conditions DETERIORATED: Recommend SELL to close entire position
+
+Consider: Are the original reasons for entry still valid? Has anything fundamentally changed?

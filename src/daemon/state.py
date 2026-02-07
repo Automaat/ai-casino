@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field
 from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
+if False:
+    from src.daemon.positions import PositionManagementAction, PositionRecord
+
 
 class AnalysisRecord(BaseModel):
     """Record of a single analysis run."""
@@ -182,6 +185,8 @@ class DaemonState(BaseModel):
     last_signal_tracking: datetime | None = None
     last_game_plan: datetime | None = None
     game_plan_history: list[GamePlanRecord] = Field(default_factory=list)
+    active_positions: dict[str, dict] = Field(default_factory=dict)
+    position_management_history: list[dict] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -594,6 +599,59 @@ class DaemonState(BaseModel):
 
         if len(self.game_plan_history) > 30:
             self.game_plan_history = self.game_plan_history[-30:]
+
+    def add_position(self, position: "PositionRecord") -> None:
+        """Add or update position in state.
+
+        Args:
+            position: Position record to add
+        """
+        self.active_positions[position.symbol] = position.model_dump(mode="json")
+        logger.debug(f"Added position: {position.symbol}")
+
+    def remove_position(self, symbol: str) -> None:
+        """Remove position from state.
+
+        Args:
+            symbol: Stock ticker to remove
+        """
+        if symbol in self.active_positions:
+            self.active_positions.pop(symbol)
+            logger.debug(f"Removed position: {symbol}")
+
+    def update_position(self, position: "PositionRecord") -> None:
+        """Update existing position in state.
+
+        Args:
+            position: Position record to update
+        """
+        self.add_position(position)
+
+    def record_position_action(self, action: "PositionManagementAction") -> None:
+        """Record position management action.
+
+        Args:
+            action: Action to record
+        """
+        self.position_management_history.append(action.model_dump(mode="json"))
+
+        if len(self.position_management_history) > 100:
+            self.position_management_history = self.position_management_history[-100:]
+
+    def get_position(self, symbol: str) -> "PositionRecord | None":
+        """Get position record by symbol.
+
+        Args:
+            symbol: Stock ticker
+
+        Returns:
+            PositionRecord or None
+        """
+        from src.daemon.positions import PositionRecord
+
+        if symbol not in self.active_positions:
+            return None
+        return PositionRecord.model_validate(self.active_positions[symbol])
 
     def __repr__(self) -> str:
         """Return string representation."""
