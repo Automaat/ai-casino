@@ -407,6 +407,40 @@ class DaemonRunner:
                 f"   {result.reason}"
             )
 
+    async def _maybe_run_health_check(self) -> None:
+        """Run health check if conditions are met."""
+        if not self.config.health.enabled:
+            return
+
+        if not self.scheduler.is_health_check_time(self.config.health.run_time):
+            return
+
+        today = datetime.now(self.scheduler.timezone).date()
+        if self.state.last_health_check and self.state.last_health_check.date() == today:
+            return
+
+        logger.info("Starting API health checks")
+        console.print(f"\n[bold cyan]Running Health Checks ({datetime.now():%H:%M})[/bold cyan]")  # noqa: DTZ005
+
+        try:
+            from src.daemon.health import HealthChecker
+
+            checker = HealthChecker(self.config, self.state)
+            report = await checker.run()
+
+            self.state.last_health_check = datetime.now(tz=self.scheduler.timezone)
+            self.state.save(self.config.state.state_file)
+
+            console.print(
+                f"[bold cyan]Health:[/bold cyan] {report.overall_status} "
+                f"({len(report.service_checks)} services, {report.total_duration_ms:.0f}ms)"
+            )
+            logger.info(f"Health check complete: {report.overall_status}")
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            self.state.record_error(f"Health check failed: {e}")
+            self.state.save(self.config.state.state_file)
+
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle.
 
@@ -416,6 +450,8 @@ class DaemonRunner:
         # Check if it's time for after-hours screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():
             self._run_after_hours_screening()
+
+        await self._maybe_run_health_check()
 
         # Check if it's time for parameter optimization
         if self.config.optimization.enabled and self.scheduler.is_optimization_time():
