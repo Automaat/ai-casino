@@ -2,7 +2,9 @@
 
 import asyncio
 import time
+import zoneinfo
 from collections.abc import Coroutine
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import pandas as pd
@@ -53,16 +55,22 @@ from src.strategies.momentum import MomentumStrategy
 from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
+from src.strategies.timeframe import MultiTimeframeData, Timeframe
 from src.workflows.types import BacktestValidation, TradingWorkflowResult
 
 T = TypeVar("T")
+
+ET_TIMEZONE = zoneinfo.ZoneInfo("America/New_York")
+MARKET_HOURS_START = 4
+MARKET_HOURS_END = 20
 
 
 class TradingState(TypedDict):
     """State for trading workflow."""
 
     symbol: str
-    market_data: pd.DataFrame | None
+    market_data: pd.DataFrame | MultiTimeframeData | None
+    enable_multi_timeframe: bool
     news_articles: list[NewsArticle] | None
     trump_posts: list[TruthPost] | None
     technical_analysis: TechnicalAnalysis | None
@@ -249,6 +257,7 @@ class TradingWorkflow:
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
         position_context: dict[str, object] | None = None,
+        enable_multi_timeframe: bool = False,
         **context_kwargs: str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -258,6 +267,7 @@ class TradingWorkflow:
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             position_context: Optional position context (entry price, P&L, days held)
+            enable_multi_timeframe: Enable multi-timeframe analysis (requires market hours)
             **context_kwargs: Optional context keys: sector_context, earnings_context,
                 peer_analysis_context, game_plan_context
 
@@ -283,7 +293,7 @@ class TradingWorkflow:
                 "position_context": position_context,
             }
             return await self._analyze_instrumented(
-                symbol, period_days, trading_session, collector, extra_context
+                symbol, period_days, trading_session, collector, extra_context, enable_multi_timeframe
             )
         finally:
             if collector_token is not None:
@@ -438,6 +448,7 @@ class TradingWorkflow:
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
         extra_context: dict[str, str | None] | None = None,
+        enable_multi_timeframe: bool = False,
     ) -> TradingWorkflowResult:
         """Run analysis pipeline with optional metrics instrumentation.
 
@@ -447,13 +458,15 @@ class TradingWorkflow:
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             collector: Optional metrics collector
             extra_context: Optional dict with sector_rotation_context, earnings_context
+            enable_multi_timeframe: Enable multi-timeframe analysis
         """
         ctx = extra_context or {}
         start = time.perf_counter()
-        state = await self._fetch_data(symbol, period_days)
+        state = await self._fetch_data(symbol, period_days, enable_multi_timeframe)
         state["sector_rotation_context"] = ctx.get("sector_rotation_context")
         state["earnings_context"] = ctx.get("earnings_context")
         state["peer_analysis_context"] = ctx.get("peer_analysis_context")
+        state["game_plan_context"] = ctx.get("game_plan_context")
         state["position_context"] = ctx.get("position_context")
         self._record_stage(collector, "fetch_data", start)
 
@@ -606,11 +619,21 @@ class TradingWorkflow:
         Returns:
             Updated state with all analyses
         """
-        current_price = float(state["market_data"]["Close"].iloc[-1])
+        market_data = state["market_data"]
+        if isinstance(market_data, MultiTimeframeData):
+            daily_data = market_data.timeframes[Timeframe.DAILY]
+        else:
+            daily_data = market_data
+
+        current_price = float(daily_data["Close"].iloc[-1])
 
         # Parallel Group 1: independent analyses (comparative, web_research, social, trump are optional)
         technical_task = self._timed_agent_call(
-            "technical", technical_analyst.analyze(state["symbol"], state["market_data"]), collector
+            "technical",
+            technical_analyst.analyze(
+                state["symbol"], state["market_data"], enable_multi_timeframe=state["enable_multi_timeframe"]
+            ),
+            collector,
         )
         sentiment_task = self._timed_agent_call(
             "sentiment", self.sentiment_analyst.analyze(state["symbol"], state["news_articles"]), collector
@@ -718,61 +741,58 @@ class TradingWorkflow:
 
         return state
 
-    async def _fetch_data(self, symbol: str, period_days: int) -> TradingState:
+    @staticmethod
+    def _is_market_hours() -> bool:
+        """Check if currently within market hours (4am-8pm ET)."""
+        now = datetime.now(ET_TIMEZONE)
+        return MARKET_HOURS_START <= now.hour < MARKET_HOURS_END
+
+    async def _fetch_data(
+        self, symbol: str, period_days: int, enable_multi_timeframe: bool = False
+    ) -> TradingState:
         """Fetch market and news data (async, parallel execution).
 
         Args:
             symbol: Stock ticker
             period_days: Historical data period
+            enable_multi_timeframe: Enable multi-timeframe data fetching
 
         Returns:
             Updated state with data
         """
         logger.info("Fetching market and news data")
 
-        # Create parallel tasks
-        tasks = [
-            asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days),
-            asyncio.to_thread(self.news_fetcher.fetch_company_news, symbol, limit=10),
-        ]
+        market_data: pd.DataFrame | MultiTimeframeData
+        if enable_multi_timeframe and self._is_market_hours():
+            logger.info("Multi-timeframe mode enabled (market hours)")
+            market_result = await self.market_fetcher.fetch_multi_timeframe(
+                symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
+            )
+            market_data = market_result
+        else:
+            if enable_multi_timeframe and not self._is_market_hours():
+                logger.info("Multi-timeframe requested but outside market hours, using daily only")
+            market_result = await asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days)
+            market_data = market_result.data
+
+        # Fetch news in parallel
+        news_result = await asyncio.to_thread(self.news_fetcher.fetch_company_news, symbol, limit=10)
 
         # Add trump task if enabled
-        trump_index = None
-        if self.trump_mode and self.trump_fetcher:
-            trump_index = len(tasks)
-            tasks.append(asyncio.to_thread(self.trump_fetcher.fetch_recent, hours=24))
-
-        # Execute in parallel
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Extract results
-        market_result, news_result = results[0], results[1]
-        trump_result = results[trump_index] if trump_index is not None else None
-
-        # Handle critical fetches (re-raise on failure)
-        if isinstance(market_result, Exception):
-            logger.error(f"Market data fetch failed: {market_result}")
-            raise market_result
-        if isinstance(news_result, Exception):
-            logger.error(f"News fetch failed: {news_result}")
-            raise news_result
-
-        market_data = market_result
-        news_articles = news_result
-
-        # Handle optional trump fetch
         trump_posts: list[TruthPost] | None = None
-        if trump_result is not None:
-            if isinstance(trump_result, Exception):
-                logger.warning(f"Failed to fetch Trump posts: {trump_result}")
-            else:
+        if self.trump_mode and self.trump_fetcher:
+            try:
+                trump_result = await asyncio.to_thread(self.trump_fetcher.fetch_recent, hours=24)
                 trump_posts = trump_result.posts
                 logger.info(f"Fetched {len(trump_posts)} Trump posts")
+            except Exception as e:
+                logger.warning(f"Failed to fetch Trump posts: {e}")
 
         return TradingState(
             symbol=symbol,
-            market_data=market_data.data,
-            news_articles=news_articles,
+            market_data=market_data,
+            enable_multi_timeframe=enable_multi_timeframe,
+            news_articles=news_result,
             trump_posts=trump_posts,
             technical_analysis=None,
             sentiment_analysis=None,
@@ -781,6 +801,7 @@ class TradingWorkflow:
             fundamental_analysis=None,
             comparative_analysis=None,
             web_research=None,
+            social_sentiment_analysis=None,
             bullish_research=None,
             bearish_research=None,
             final_decision=None,
@@ -792,9 +813,11 @@ class TradingWorkflow:
             sector_rotation_context=None,
             earnings_context=None,
             peer_analysis_context=None,
+            game_plan_context=None,
             position_context=None,
             broker_positions=None,
             portfolio_value=None,
+            backtest_validation=None,
             warnings=[],
         )
 

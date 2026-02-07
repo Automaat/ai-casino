@@ -9,10 +9,12 @@ from pydantic import BaseModel, Field
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
+from src.strategies.confluence import ConfluenceCalculator
 from src.strategies.ensemble import EnsembleResult, EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionIndicators, MeanReversionStrategy
 from src.strategies.momentum import MomentumIndicators, MomentumStrategy
 from src.strategies.signal import Signal
+from src.strategies.timeframe import MultiTimeframeAnalysis, MultiTimeframeData, Timeframe, TimeframeResult
 from src.strategies.trend_following import TrendFollowingIndicators, TrendFollowingStrategy
 
 
@@ -38,6 +40,7 @@ class TechnicalAnalysis(BaseModel):
     interpretation: str
     confidence: float
     ensemble_result: EnsembleResult | None = None
+    multi_timeframe: MultiTimeframeAnalysis | None = None
 
 
 class TechnicalAnalyst:
@@ -56,20 +59,37 @@ class TechnicalAnalyst:
         self._prompt_loader = PromptLoader("technical")
         logger.info(f"Initialized TechnicalAnalyst (strategy={self._strategy_type})")
 
-    async def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+    async def analyze(
+        self,
+        symbol: str,
+        market_data: pd.DataFrame | MultiTimeframeData,
+        enable_multi_timeframe: bool = False,
+    ) -> TechnicalAnalysis:
         """Perform technical analysis on market data.
 
         Args:
             symbol: Stock ticker symbol
-            market_data: OHLCV dataframe
+            market_data: OHLCV dataframe or MultiTimeframeData
+            enable_multi_timeframe: Enable multi-timeframe analysis (requires MultiTimeframeData)
 
         Returns:
             TechnicalAnalysis with signal and interpretation
         """
+        if isinstance(market_data, MultiTimeframeData) and enable_multi_timeframe:
+            return await self._analyze_multi_timeframe(symbol, market_data)
+
+        if isinstance(market_data, MultiTimeframeData):
+            if Timeframe.DAILY not in market_data.timeframes:
+                msg = "Daily timeframe required for single-timeframe analysis"
+                raise ValueError(msg)
+            daily_data = market_data.timeframes[Timeframe.DAILY]
+        else:
+            daily_data = market_data
+
         logger.info(f"Analyzing {symbol} technicals with {self._strategy_type}")
 
-        signal, indicators = self.strategy.generate_signal(market_data)
-        latest_close = float(market_data["Close"].iloc[-1])
+        signal, indicators = self.strategy.generate_signal(daily_data)
+        latest_close = float(daily_data["Close"].iloc[-1])
 
         prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
 
@@ -84,7 +104,6 @@ class TechnicalAnalyst:
             interpretation = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
             confidence_keywords = []
 
-        # Extract RSI/MACD if available (for downstream agents)
         rsi, macd_hist, ensemble_result = self._extract_indicator_values(indicators)
         confidence = self._calculate_confidence_with_keywords(interpretation, indicators, confidence_keywords)
 
@@ -98,6 +117,140 @@ class TechnicalAnalyst:
             confidence=confidence,
             ensemble_result=ensemble_result,
         )
+
+    async def _analyze_multi_timeframe(
+        self, symbol: str, multi_data: MultiTimeframeData
+    ) -> TechnicalAnalysis:
+        """Perform multi-timeframe analysis.
+
+        Args:
+            symbol: Stock ticker symbol
+            multi_data: Multi-timeframe market data
+
+        Returns:
+            TechnicalAnalysis with multi-timeframe results
+        """
+        logger.info(f"Multi-timeframe analysis for {symbol} ({list(multi_data.timeframes.keys())})")
+
+        timeframe_results: dict[Timeframe, TimeframeResult] = {}
+
+        for timeframe, data in multi_data.timeframes.items():
+            signal, indicators = self.strategy.generate_signal(data)
+            latest_close = float(data["Close"].iloc[-1])
+
+            prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
+
+            try:
+                llm_response = await self.llm.astructured(
+                    prompt, TechnicalLLMResponse, system=system_prompt, temperature=0.3
+                )
+                interpretation = llm_response.interpretation
+                confidence_keywords = llm_response.confidence_keywords
+            except StructuredOutputError as e:
+                logger.warning(f"Structured output failed for {timeframe}, falling back: {e}")
+                interpretation = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
+                confidence_keywords = []
+
+            rsi, macd_hist, _ = self._extract_indicator_values(indicators)
+            confidence = self._calculate_confidence_with_keywords(
+                interpretation, indicators, confidence_keywords
+            )
+
+            timeframe_results[timeframe] = TimeframeResult(
+                timeframe=timeframe,
+                signal=signal,
+                rsi=rsi,
+                macd_hist=macd_hist,
+                interpretation=interpretation,
+                confidence=confidence,
+                indicators={"rsi": rsi, "macd_hist": macd_hist} if rsi or macd_hist else {},
+            )
+
+            logger.debug(f"{timeframe}: {signal.value} (confidence={confidence:.2f})")
+
+        calculator = ConfluenceCalculator()
+        final_signal, confluence_score, conflict_detected = calculator.calculate_confluence(timeframe_results)
+
+        primary_timeframe = (
+            Timeframe.DAILY if Timeframe.DAILY in timeframe_results else next(iter(timeframe_results.keys()))
+        )
+        base_confidence = timeframe_results[primary_timeframe].confidence
+        final_confidence = calculator.adjust_confidence(base_confidence, confluence_score)
+
+        multi_interpretation = await self._generate_multi_timeframe_interpretation(
+            symbol, timeframe_results, final_signal, confluence_score, conflict_detected
+        )
+
+        multi_analysis = MultiTimeframeAnalysis(
+            signal=final_signal,
+            confidence=final_confidence,
+            confluence_score=confluence_score,
+            timeframe_results=timeframe_results,
+            primary_timeframe=primary_timeframe,
+            conflict_detected=conflict_detected,
+            interpretation=multi_interpretation,
+        )
+
+        primary_result = timeframe_results[primary_timeframe]
+
+        logger.info(
+            f"Multi-timeframe complete: {final_signal.value} "
+            f"(confidence={final_confidence:.2f}, confluence={confluence_score:.2f})"
+        )
+
+        return TechnicalAnalysis(
+            signal=final_signal,
+            rsi=primary_result.rsi,
+            macd_hist=primary_result.macd_hist,
+            interpretation=multi_interpretation,
+            confidence=final_confidence,
+            ensemble_result=None,
+            multi_timeframe=multi_analysis,
+        )
+
+    async def _generate_multi_timeframe_interpretation(
+        self,
+        symbol: str,
+        timeframe_results: dict[Timeframe, TimeframeResult],
+        final_signal: Signal,
+        confluence_score: float,
+        conflict_detected: bool,
+    ) -> str:
+        """Generate aggregated interpretation for multi-timeframe analysis.
+
+        Args:
+            symbol: Stock ticker symbol
+            timeframe_results: Results for each timeframe
+            final_signal: Final aggregated signal
+            confluence_score: Confluence score (0-1)
+            conflict_detected: Whether conflicting signals detected
+
+        Returns:
+            LLM-generated interpretation
+        """
+        timeframe_summaries = []
+        for tf, result in timeframe_results.items():
+            timeframe_summaries.append(
+                f"{tf.value}: {result.signal.value} (confidence={result.confidence:.2f})\n"
+                f"  Interpretation: {result.interpretation}"
+            )
+
+        prompt_vars = {
+            "symbol": symbol,
+            "final_signal": final_signal.value,
+            "confluence_score": f"{confluence_score:.2f}",
+            "conflict_detected": str(conflict_detected),
+            "timeframe_summaries": "\n\n".join(timeframe_summaries),
+        }
+
+        system = self._prompt_loader.load("system_multi_timeframe")
+        user = self._prompt_loader.load("user_multi_timeframe", **prompt_vars)
+
+        try:
+            return await self.llm.acomplete(user, system=system, temperature=0.3)
+        except Exception as e:
+            logger.error(f"Failed to generate multi-timeframe interpretation: {e}")
+            raise
 
     def _build_prompt(
         self, symbol: str, latest_close: float, signal: Signal, indicators: IndicatorsType
