@@ -1,7 +1,7 @@
 """Market data fetchers for stock prices and fundamentals."""
 
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import yfinance as yf
@@ -17,6 +17,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.cache.historical import HistoricalCache
 from src.metrics.execution import timed_operation
 
 load_dotenv()
@@ -58,13 +59,19 @@ class MarketData(BaseModel):
 class MarketDataFetcher:
     """Fetch market data from Alpha Vantage or yfinance."""
 
-    def __init__(self, use_alpha_vantage: bool = True) -> None:
+    def __init__(
+        self,
+        use_alpha_vantage: bool = True,
+        historical_cache: HistoricalCache | None = None,
+    ) -> None:
         """Initialize market data fetcher.
 
         Args:
             use_alpha_vantage: Use Alpha Vantage (True) or yfinance (False)
+            historical_cache: Optional permanent cache for OHLCV data
         """
         self.use_alpha_vantage = use_alpha_vantage
+        self._cache = historical_cache
 
         if use_alpha_vantage:
             api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
@@ -75,6 +82,59 @@ class MarketDataFetcher:
             logger.info("Initialized Alpha Vantage client")
         else:
             logger.info("Using yfinance for market data")
+
+    @staticmethod
+    def _previous_business_day() -> date:
+        """Get the previous business day (Mon-Fri)."""
+        today = datetime.now(UTC).date()
+        weekday = today.weekday()
+        if weekday == 0:  # Monday → Friday
+            return today - timedelta(days=3)
+        if weekday == 6:  # Sunday → Friday
+            return today - timedelta(days=2)
+        return today - timedelta(days=1)
+
+    def _try_cache(self, symbol: str, period_days: int) -> MarketData | None:
+        """Try to serve from cache if fresh enough.
+
+        Args:
+            symbol: Stock ticker
+            period_days: Required history depth
+
+        Returns:
+            MarketData from cache or None
+        """
+        if not self._cache:
+            return None
+
+        last_date = self._cache.get_last_ohlcv_date(symbol)
+        if last_date is None:
+            return None
+
+        prev_bday = self._previous_business_day()
+        cached_rows = self._cache.get_ohlcv_count(symbol)
+
+        if last_date >= prev_bday and cached_rows >= period_days:
+            df = self._cache.get_ohlcv(symbol)
+            logger.info(f"Cache hit for {symbol} ({cached_rows} rows, last={last_date})")
+            return MarketData(symbol=symbol, data=df.tail(period_days), last_updated=datetime.now())
+
+        return None
+
+    def _store_to_cache(self, symbol: str, df: pd.DataFrame) -> None:
+        """Store closed-day rows to cache.
+
+        Args:
+            symbol: Stock ticker
+            df: OHLCV dataframe
+        """
+        if not self._cache or df.empty:
+            return
+
+        today = datetime.now(UTC).date()
+        closed_rows = df[df.index.map(lambda d: d.date() if hasattr(d, "date") else d) < today]
+        if not closed_rows.empty:
+            self._cache.store_ohlcv(symbol, closed_rows)
 
     def fetch_daily(
         self,
@@ -92,11 +152,19 @@ class MarketDataFetcher:
         """
         logger.info(f"Fetching {period_days} days of data for {symbol}")
 
+        cached = self._try_cache(symbol, period_days)
+        if cached:
+            return cached
+
         source = "alpha_vantage" if self.use_alpha_vantage else "yfinance"
         with timed_operation("market_data_fetch", source=source):
             if self.use_alpha_vantage:
-                return self._fetch_alpha_vantage(symbol)
-            return self._fetch_yfinance(symbol, period_days)
+                result = self._fetch_alpha_vantage(symbol)
+            else:
+                result = self._fetch_yfinance(symbol, period_days)
+
+        self._store_to_cache(symbol, result.data)
+        return result
 
     @HTTP_RETRY
     def _fetch_alpha_vantage(self, symbol: str) -> MarketData:

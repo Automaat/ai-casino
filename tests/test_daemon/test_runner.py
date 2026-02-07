@@ -3,7 +3,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 
@@ -139,7 +139,7 @@ def test_broker_init_with_credentials(mock_broker_class: Mock, sample_config: Da
         runner = DaemonRunner(sample_config)
 
         assert runner.broker is not None
-        mock_broker_class.assert_called_once_with(paper=True)
+        mock_broker_class.assert_called_once_with(paper=True, historical_cache=ANY)
 
 
 @patch("src.daemon.runner.AlpacaBroker")
@@ -180,7 +180,7 @@ def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonC
         runner = DaemonRunner(sample_config)
 
         assert runner.broker is not None
-        mock_broker_class.assert_called_once_with(paper=True)
+        mock_broker_class.assert_called_once_with(paper=True, historical_cache=ANY)
 
 
 @pytest.mark.asyncio

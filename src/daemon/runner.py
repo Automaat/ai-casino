@@ -9,6 +9,7 @@ from pathlib import Path
 from loguru import logger
 from rich.console import Console
 
+from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
@@ -36,6 +37,7 @@ class DaemonRunner:
             config: Daemon configuration
         """
         self.config = config
+        self._historical_cache = HistoricalCache()
         self.scheduler = MarketScheduler(
             start_time=config.schedule.start_time,
             end_time=config.schedule.end_time,
@@ -71,11 +73,11 @@ class DaemonRunner:
             if not api_key or not secret_key:
                 msg = "auto_trade=true requires ALPACA_API_KEY and ALPACA_SECRET_KEY env vars"
                 raise ValueError(msg)
-            self.broker = AlpacaBroker(paper=True)
+            self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
             logger.info("Alpaca broker initialized for auto-trading")
         elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
             try:
-                self.broker = AlpacaBroker(paper=True)
+                self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
                 logger.info("Alpaca broker initialized for watchlist merging")
             except Exception as e:
                 logger.exception(f"Failed to initialize broker: {e}")
@@ -91,9 +93,11 @@ class DaemonRunner:
         """
         if self._prefetcher is None:
             try:
-                market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-                news_fetcher = NewsFetcher()
-                fundamental_fetcher = FundamentalDataFetcher()
+                market_fetcher = MarketDataFetcher(
+                    use_alpha_vantage=False, historical_cache=self._historical_cache
+                )
+                news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
+                fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
                 self._prefetcher = DataPrefetcher(
                     market_fetcher=market_fetcher,
@@ -111,10 +115,12 @@ class DaemonRunner:
         """Initialize trading workflow (lazy initialization)."""
         if self._workflow is None:
             llm_client = LLMClient()
-            market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-            news_fetcher = NewsFetcher()
+            market_fetcher = MarketDataFetcher(
+                use_alpha_vantage=False, historical_cache=self._historical_cache
+            )
+            news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
             finbert = get_finbert_sentiment()
-            fundamental_fetcher = FundamentalDataFetcher()
+            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
             self._workflow = TradingWorkflow(
                 llm_client,
@@ -126,6 +132,7 @@ class DaemonRunner:
                 metrics_tracker=None,
                 use_meta_agent=True,
                 param_store=self.param_store,
+                historical_cache=self._historical_cache,
             )
             logger.info("Trading workflow initialized")
         return self._workflow

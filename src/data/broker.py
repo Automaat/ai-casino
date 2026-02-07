@@ -13,6 +13,8 @@ from alpaca.trading.requests import MarketOrderRequest, StopLossRequest
 from loguru import logger
 from pydantic import BaseModel
 
+from src.cache.historical import HistoricalCache
+
 
 class BrokerPosition(BaseModel):
     """Broker position information."""
@@ -58,6 +60,7 @@ class AlpacaBroker:
         secret_key: str | None = None,
         base_url: str | None = None,
         paper: bool = True,
+        historical_cache: HistoricalCache | None = None,
     ) -> None:
         """Initialize Alpaca broker client.
 
@@ -66,11 +69,13 @@ class AlpacaBroker:
             secret_key: Alpaca secret key (from env if not provided)
             base_url: Alpaca base URL (from env if not provided)
             paper: Whether to use paper trading (default True)
+            historical_cache: Optional permanent cache for order fills
         """
         self.api_key = api_key or os.getenv("ALPACA_API_KEY")
         self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY")
         self.base_url = base_url or os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
         self.paper = paper
+        self._cache = historical_cache
 
         if not self.api_key or not self.secret_key:
             msg = "ALPACA_API_KEY and ALPACA_SECRET_KEY must be set"
@@ -162,7 +167,7 @@ class AlpacaBroker:
 
             logger.info(f"Submitted order: {side.upper()} {qty} {symbol}")
 
-            return OrderStatus(
+            order_status = OrderStatus(
                 order_id=str(order.id),
                 symbol=order.symbol,
                 qty=float(order.qty),
@@ -173,6 +178,11 @@ class AlpacaBroker:
                 filled_at=order.filled_at,
                 filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
             )
+
+            if self._cache:
+                self._cache.store_order_fill(order_status)
+
+            return order_status
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
             raise

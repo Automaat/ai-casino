@@ -11,6 +11,8 @@ from loguru import logger
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from src.cache.historical import HistoricalCache
+
 CACHE_TTL = 300  # 5 minutes (matches archive update frequency)
 
 HTTP_RETRY = retry(
@@ -56,15 +58,21 @@ class TruthSocialFetcher:
 
     CNN_ARCHIVE_URL = "https://ix.cnn.io/data/truth-social/truth_archive.json"
 
-    def __init__(self, cache_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        cache_dir: str | None = None,
+        historical_cache: HistoricalCache | None = None,
+    ) -> None:
         """Initialize Truth Social fetcher.
 
         Args:
             cache_dir: Cache directory path
+            historical_cache: Optional permanent cache for posts
         """
         self._cache_dir = Path(cache_dir or "data/cache/truth_social")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache = Cache(str(self._cache_dir))
+        self._historical_cache = historical_cache
         logger.info(f"Initialized TruthSocialFetcher (cache_dir={self._cache_dir})")
 
     def _cache_key(self, prefix: str, *args: str) -> str:
@@ -160,6 +168,8 @@ class TruthSocialFetcher:
         # Sort by created_at descending (newest first)
         posts.sort(key=lambda p: p.created_at, reverse=True)
 
+        self._store_posts_to_cache(posts)
+
         latest = posts[0].created_at if posts else None
         logger.info(f"Found {len(posts)} posts since {since}")
 
@@ -170,6 +180,11 @@ class TruthSocialFetcher:
             fetched_at=datetime.now(UTC),
         )
 
+    def _store_posts_to_cache(self, posts: list[TruthPost]) -> None:
+        """Store posts to permanent cache if available."""
+        if self._historical_cache and posts:
+            self._historical_cache.store_truth_social_posts(posts)
+
     def fetch_all(self) -> TrumpPostData:
         """Fetch all available Trump posts."""
         logger.info("Fetching all Trump posts from archive")
@@ -177,6 +192,8 @@ class TruthSocialFetcher:
 
         posts = [self._raw_to_post(raw) for raw in raw_data]
         posts.sort(key=lambda p: p.created_at, reverse=True)
+
+        self._store_posts_to_cache(posts)
 
         latest = posts[0].created_at if posts else None
 
