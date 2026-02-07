@@ -10,6 +10,7 @@ from src.daemon.config import (
     EarningsCalendarConfig,
     HealthConfig,
     PeerAnalysisConfig,
+    RiskLimitsConfig,
     ScheduleConfig,
     ScreeningConfig,
     SectorRotationConfig,
@@ -559,5 +560,101 @@ watchlist = ["AAPL"]
 
         assert config.peer_analysis.enabled is False
         assert config.peer_analysis.run_time == "17:30"
+
+        path.unlink()
+
+
+class TestRiskLimitsConfig:
+    def test_defaults(self):
+        config = RiskLimitsConfig()
+
+        assert config.enabled is False
+        assert config.max_var_95 == 0.03
+        assert config.max_cvar_99 == 0.05
+        assert config.lookback_days == 90
+        assert config.adaptive_stop_loss is True
+        assert config.cdar_stop_threshold == 0.10
+        assert config.atr_multiplier_min == 1.0
+        assert config.report_dir == "~/.ai-casino/risk-reports"
+
+    def test_custom(self):
+        config = RiskLimitsConfig(
+            enabled=True,
+            max_var_95=0.05,
+            max_cvar_99=0.08,
+            lookback_days=120,
+            adaptive_stop_loss=False,
+            cdar_stop_threshold=0.15,
+            atr_multiplier_min=1.5,
+            report_dir="~/.ai-casino/custom-reports",
+        )
+
+        assert config.enabled is True
+        assert config.max_var_95 == 0.05
+        assert config.max_cvar_99 == 0.08
+        assert config.lookback_days == 120
+        assert config.adaptive_stop_loss is False
+        assert config.cdar_stop_threshold == 0.15
+        assert config.atr_multiplier_min == 1.5
+        assert config.report_dir == "~/.ai-casino/custom-reports"
+
+    def test_validation_bounds(self):
+        with pytest.raises(ValueError, match=r"greater than or equal to 0\.001"):
+            RiskLimitsConfig(max_var_95=0.0)
+        with pytest.raises(ValueError, match=r"less than or equal to 0\.2"):
+            RiskLimitsConfig(max_var_95=0.25)
+        with pytest.raises(ValueError, match=r"greater than or equal to 20"):
+            RiskLimitsConfig(lookback_days=5)
+        with pytest.raises(ValueError, match=r"less than or equal to 365"):
+            RiskLimitsConfig(lookback_days=400)
+        with pytest.raises(ValueError, match=r"greater than or equal to 0\.5"):
+            RiskLimitsConfig(atr_multiplier_min=0.1)
+
+    def test_daemon_config_has_risk_limits(self):
+        config = DaemonConfig()
+        assert isinstance(config.risk_limits, RiskLimitsConfig)
+        assert config.risk_limits.enabled is False
+
+    def test_from_toml_with_risk_limits(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.risk_limits]
+enabled = true
+max_var_95 = 0.05
+max_cvar_99 = 0.08
+lookback_days = 120
+adaptive_stop_loss = false
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.risk_limits.enabled is True
+        assert config.risk_limits.max_var_95 == 0.05
+        assert config.risk_limits.max_cvar_99 == 0.08
+        assert config.risk_limits.lookback_days == 120
+        assert config.risk_limits.adaptive_stop_loss is False
+
+        path.unlink()
+
+    def test_from_toml_without_risk_limits_uses_defaults(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.risk_limits.enabled is False
+        assert config.risk_limits.max_var_95 == 0.03
 
         path.unlink()

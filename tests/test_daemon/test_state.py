@@ -1,8 +1,9 @@
 """Tests for daemon state."""
 
 import tempfile
+from datetime import UTC, datetime
 
-from src.daemon.state import DaemonState, EarningsEventRecord
+from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord
 
 
 class TestDaemonState:
@@ -234,6 +235,69 @@ class TestDaemonState:
             assert len(loaded.peer_analysis_history) == 1
             assert loaded.last_peer_analysis is not None
             assert loaded.peer_analysis_history[0].symbols_analyzed == ["AAPL"]
+
+    def test_record_risk_report(self):
+        state = DaemonState()
+
+        record = RiskReportRecord(
+            timestamp=datetime.now(UTC),
+            var_95=0.02,
+            var_99=0.03,
+            cvar_95=0.03,
+            cvar_99=0.04,
+            cdar_95=0.05,
+            max_drawdown=0.08,
+            risk_status="HEALTHY",
+        )
+        state.record_risk_report(record)
+
+        assert len(state.risk_report_history) == 1
+        assert state.last_risk_report is not None
+        assert state.risk_report_history[0].var_95 == 0.02
+        assert state.risk_report_history[0].cvar_99 == 0.04
+        assert state.risk_report_history[0].risk_status == "HEALTHY"
+
+    def test_risk_report_history_limit(self):
+        state = DaemonState()
+
+        for i in range(35):
+            record = RiskReportRecord(
+                timestamp=datetime.now(UTC),
+                var_95=0.01 * i,
+                var_99=0.02 * i,
+                cvar_95=0.01 * i,
+                cvar_99=0.02 * i,
+                cdar_95=0.01 * i,
+                max_drawdown=0.03 * i,
+                risk_status="HEALTHY",
+            )
+            state.record_risk_report(record)
+
+        assert len(state.risk_report_history) == 30
+
+    def test_risk_report_save_load(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = f"{tmpdir}/state.json"
+
+            state = DaemonState()
+            record = RiskReportRecord(
+                timestamp=datetime.now(UTC),
+                var_95=0.02,
+                var_99=0.03,
+                cvar_95=0.03,
+                cvar_99=0.04,
+                cdar_95=0.05,
+                max_drawdown=0.08,
+                risk_status="WARNING",
+            )
+            state.record_risk_report(record)
+            state.save(path)
+
+            loaded = DaemonState.load(path)
+
+            assert len(loaded.risk_report_history) == 1
+            assert loaded.last_risk_report is not None
+            assert loaded.risk_report_history[0].risk_status == "WARNING"
 
     def test_repr(self):
         state = DaemonState()
