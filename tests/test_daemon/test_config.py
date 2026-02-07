@@ -10,6 +10,7 @@ from src.daemon.config import (
     EarningsCalendarConfig,
     HealthConfig,
     PeerAnalysisConfig,
+    ReportingConfig,
     RiskLimitsConfig,
     ScheduleConfig,
     ScreeningConfig,
@@ -560,6 +561,105 @@ watchlist = ["AAPL"]
 
         assert config.peer_analysis.enabled is False
         assert config.peer_analysis.run_time == "17:30"
+
+        path.unlink()
+
+
+class TestReportingConfig:
+    def test_defaults(self):
+        config = ReportingConfig()
+
+        assert config.enabled is False
+        assert config.tearsheet_time == "16:30"
+        assert config.benchmark == "SPY"
+        assert config.retention_days == 30
+
+    def test_custom(self):
+        config = ReportingConfig(
+            enabled=True,
+            tearsheet_time="17:00",
+            benchmark="QQQ",
+            retention_days=60,
+        )
+
+        assert config.enabled is True
+        assert config.tearsheet_time == "17:00"
+        assert config.benchmark == "QQQ"
+        assert config.retention_days == 60
+
+    def test_validate_tearsheet_time_valid(self):
+        config = ReportingConfig(enabled=True, tearsheet_time="18:00")
+        assert config.tearsheet_time == "18:00"
+
+    def test_validate_tearsheet_time_invalid_format(self):
+        with pytest.raises(ValueError, match="HH:MM format"):
+            ReportingConfig(enabled=True, tearsheet_time="bad")
+
+    def test_validate_tearsheet_time_out_of_range(self):
+        with pytest.raises(ValueError, match="16:00-20:00"):
+            ReportingConfig(enabled=True, tearsheet_time="21:00")
+
+    def test_validate_tearsheet_time_skipped_when_disabled(self):
+        config = ReportingConfig(enabled=False, tearsheet_time="99:99")
+        assert config.tearsheet_time == "99:99"
+
+    def test_validate_retention_days_invalid(self):
+        with pytest.raises(ValueError, match="retention_days must be >= 1"):
+            ReportingConfig(enabled=True, retention_days=0)
+
+        with pytest.raises(ValueError, match="retention_days must be >= 1"):
+            ReportingConfig(enabled=True, retention_days=-5)
+
+    def test_validate_retention_days_skipped_when_disabled(self):
+        config = ReportingConfig(enabled=False, retention_days=-1)
+        assert config.retention_days == -1
+
+    def test_daemon_config_has_reporting(self):
+        config = DaemonConfig()
+        assert isinstance(config.reporting, ReportingConfig)
+        assert config.reporting.enabled is False
+
+    def test_from_toml_with_reporting(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.reporting]
+enabled = true
+tearsheet_time = "17:00"
+benchmark = "QQQ"
+retention_days = 60
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.reporting.enabled is True
+        assert config.reporting.tearsheet_time == "17:00"
+        assert config.reporting.benchmark == "QQQ"
+        assert config.reporting.retention_days == 60
+
+        path.unlink()
+
+    def test_from_toml_without_reporting_uses_defaults(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.reporting.enabled is False
+        assert config.reporting.tearsheet_time == "16:30"
+        assert config.reporting.benchmark == "SPY"
+        assert config.reporting.retention_days == 30
 
         path.unlink()
 

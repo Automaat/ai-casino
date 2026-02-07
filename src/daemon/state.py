@@ -127,6 +127,7 @@ class DaemonState(BaseModel):
     earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
     last_peer_analysis: datetime | None = None
     peer_analysis_history: list[PeerAnalysisRecord] = Field(default_factory=list)
+    last_tearsheet: datetime | None = None
     last_risk_report: datetime | None = None
     risk_report_history: list[RiskReportRecord] = Field(default_factory=list)
 
@@ -408,6 +409,17 @@ class DaemonState(BaseModel):
 
         if len(self.peer_analysis_history) > 10:
             self.peer_analysis_history = self.peer_analysis_history[-10:]
+
+    def record_tearsheet(self, symbol: str, html_path: str) -> None:
+        """Record a tearsheet generation run.
+
+        Args:
+            symbol: Stock ticker symbol
+            html_path: Path to generated HTML tearsheet
+        """
+        now = datetime.now(UTC)
+        self.last_tearsheet = now
+        logger.info(f"Recorded tearsheet generation for {symbol} at {html_path}")
 
     def record_risk_report(self, report: RiskReportRecord) -> None:
         """Record a portfolio risk report.

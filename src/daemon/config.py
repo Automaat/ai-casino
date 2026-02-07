@@ -168,6 +168,41 @@ class PeerAnalysisConfig(BaseModel):
         return self
 
 
+class ReportingConfig(BaseModel):
+    """Configuration for automated performance reporting."""
+
+    enabled: bool = False
+    tearsheet_time: str = "16:30"
+    benchmark: str = "SPY"
+    retention_days: int = 30
+
+    @model_validator(mode="after")
+    def validate_tearsheet_time(self) -> "ReportingConfig":
+        """Validate tearsheet_time is in HH:MM format within 16:00-20:00 and retention_days >= 1."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.tearsheet_time)
+        if not match:
+            msg = f"tearsheet_time must be in HH:MM format (00:00-23:59), got {self.tearsheet_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"tearsheet_time must be between 16:00-20:00, got {self.tearsheet_time}"
+            raise ValueError(msg)
+
+        if self.retention_days < 1:
+            msg = "retention_days must be >= 1 when reporting enabled"
+            raise ValueError(msg)
+
+        return self
+
+
 class RiskLimitsConfig(BaseModel):
     """Configuration for portfolio-level VaR risk limits."""
 
@@ -232,6 +267,7 @@ class DaemonConfig(BaseModel):
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
     peer_analysis: PeerAnalysisConfig = Field(default_factory=PeerAnalysisConfig)
+    reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
 
     @classmethod
@@ -259,6 +295,7 @@ class DaemonConfig(BaseModel):
         sector_rotation_data = daemon_data.pop("sector_rotation", {})
         earnings_calendar_data = daemon_data.pop("earnings_calendar", {})
         peer_analysis_data = daemon_data.pop("peer_analysis", {})
+        reporting_data = daemon_data.pop("reporting", {})
         risk_limits_data = daemon_data.pop("risk_limits", {})
 
         return cls(
@@ -273,6 +310,7 @@ class DaemonConfig(BaseModel):
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
             earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
             peer_analysis=PeerAnalysisConfig(**peer_analysis_data),
+            reporting=ReportingConfig(**reporting_data),
             risk_limits=RiskLimitsConfig(**risk_limits_data),
         )
 
