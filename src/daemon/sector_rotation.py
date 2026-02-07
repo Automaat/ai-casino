@@ -57,9 +57,7 @@ class DaemonSectorRotation:
 
             # Lookup in SECTOR_MAPPING (Wikipedia/yfinance → Sector enum)
             sector_enum = SECTOR_MAPPING.get(sector_lower)
-            sector_key = (
-                sector_enum.name if sector_enum else candidate.sector.upper().replace(" ", "_")
-            )
+            sector_key = sector_enum.name if sector_enum else candidate.sector.upper().replace(" ", "_")
 
             base_score = candidate.score
 
