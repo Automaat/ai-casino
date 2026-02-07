@@ -466,7 +466,9 @@ class TestHealthCheckIntegration:
 
             await runner._maybe_run_health_check()
 
-            mock_checker_cls.assert_called_once_with(sample_config, runner.state)
+            mock_checker_cls.assert_called_once_with(
+                sample_config, runner.state, notification_service=runner.notification_service
+            )
             mock_checker.run.assert_awaited_once()
             assert runner.state.last_health_check is not None
 

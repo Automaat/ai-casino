@@ -7,6 +7,7 @@ import signal
 import time as time_mod
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from rich.console import Console
@@ -14,6 +15,9 @@ from rich.console import Console
 from src.agents.game_plan import GamePlan, GamePlanAgent
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
+
+if TYPE_CHECKING:
+    from src.agents.risk import PortfolioRiskReport
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
@@ -36,7 +40,7 @@ console = Console()
 class DaemonRunner:
     """Main daemon runner for autonomous trading."""
 
-    def __init__(self, config: DaemonConfig) -> None:
+    def __init__(self, config: DaemonConfig) -> None:  # noqa: PLR0915
         """Initialize daemon runner.
 
         Args:
@@ -144,6 +148,14 @@ class DaemonRunner:
             self._position_manager = PositionManager(self.broker, config.position_management)
             logger.info("Position management enabled")
 
+        # Notification service
+        self.notification_service = None
+        if config.notifications.enabled:
+            from src.daemon.notifications import NotificationService
+
+            self.notification_service = NotificationService(config.notifications)
+            logger.info("Notification service enabled")
+
         logger.info(f"DaemonRunner initialized with {config}")
 
     def _init_prefetcher(self) -> DataPrefetcher | None:
@@ -230,6 +242,7 @@ class DaemonRunner:
                 portfolio_var_calculator=portfolio_var_calculator,
                 portfolio_var_config=portfolio_var_config,
                 pre_trade_backtest_config=self.config.pre_trade_backtesting,
+                notification_service=self.notification_service,
             )
             logger.info("Trading workflow initialized")
 
@@ -355,6 +368,10 @@ class DaemonRunner:
                 game_plan_context=game_plan_context,
             )
 
+            # Send notification if enabled
+            if self.notification_service:
+                await self._maybe_notify_signal(result)
+
             self.state.record_analysis(
                 symbol=symbol,
                 signal=result.decision.action.value,
@@ -418,6 +435,70 @@ class DaemonRunner:
         if "SELL" in recommendation:
             return "SELL"
         return "NEUTRAL"
+
+    async def _maybe_notify_signal(self, result: TradingWorkflowResult) -> None:
+        """Send signal notification if conditions met.
+
+        Args:
+            result: Trading workflow result
+        """
+        if not self.notification_service:
+            return
+
+        if result.decision.action.value == "HOLD":
+            return
+
+        if result.decision.confidence < self.config.notifications.min_confidence:
+            return
+
+        from src.daemon.config import NotificationTrigger
+        from src.daemon.notifications import NotificationMessage
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.SIGNAL,
+            title=f"{result.decision.action.value} Signal: {result.symbol}",
+            body=" | ".join(result.decision.reasoning),
+            metadata={
+                "symbol": result.symbol,
+                "signal": result.decision.action.value,
+                "confidence": result.decision.confidence,
+                "price": result.risk.current_price,
+                "risk_level": result.risk.validation.risk_level,
+                "rsi": result.technical.rsi if result.technical.rsi is not None else "N/A",
+                "macd": result.technical.macd_hist if result.technical.macd_hist is not None else "N/A",
+                "reasoning": " | ".join(result.decision.reasoning),
+                "session": result.trading_session.value,
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        await self.notification_service.notify(NotificationTrigger.SIGNAL, message)
+
+    async def _notify_var_breach(self, report: "PortfolioRiskReport") -> None:
+        """Send VaR breach notification.
+
+        Args:
+            report: Portfolio risk report
+        """
+        from src.daemon.config import NotificationTrigger
+        from src.daemon.notifications import NotificationMessage
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.PORTFOLIO_VAR_BREACH,
+            title="Portfolio VaR Limit Breached",
+            body=f"VaR95: {report.var_95:.1%} | CVaR99: {report.cvar_99:.1%}",
+            metadata={
+                "symbol": "PORTFOLIO",
+                "var_95": report.var_95,
+                "cvar_99": report.cvar_99,
+                "var_breached": report.var_limit_breached,
+                "cvar_breached": report.cvar_limit_breached,
+                "num_positions": report.num_positions,
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        await self.notification_service.notify(NotificationTrigger.PORTFOLIO_VAR_BREACH, message)
 
     def _format_sector_context(self, record: SectorRotationRecord) -> str:
         """Format sector rotation record as text for trader prompt.
@@ -1582,7 +1663,7 @@ class DaemonRunner:
         try:
             from src.daemon.health import HealthChecker
 
-            checker = HealthChecker(self.config, self.state)
+            checker = HealthChecker(self.config, self.state, notification_service=self.notification_service)
             report = await checker.run()
 
             self.state.last_health_check = datetime.now(tz=self.scheduler.timezone)
@@ -1657,6 +1738,11 @@ class DaemonRunner:
             console.print(f"[dim]VaR95={report.var_95:.4f}, CVaR99={report.cvar_99:.4f}[/dim]")
             console.print(f"[dim]Report saved: {report_path}[/dim]\n")
             logger.info(f"Risk report generated: {report.risk_status}")
+
+            # Send notification if VaR limits breached
+            if (report.var_limit_breached or report.cvar_limit_breached) and self.notification_service:
+                task = asyncio.create_task(self._notify_var_breach(report))
+                _ = task  # Suppress RUF006
 
         except Exception as e:
             error_msg = f"Risk report generation failed: {e}"

@@ -7,6 +7,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
@@ -14,6 +15,9 @@ from pydantic import BaseModel
 
 from src.daemon.config import DaemonConfig
 from src.daemon.state import DaemonState
+
+if TYPE_CHECKING:
+    from src.daemon.notifications import NotificationService
 
 
 class ServiceStatus(StrEnum):
@@ -57,15 +61,22 @@ class HealthReport(BaseModel):
 class HealthChecker:
     """Runs API health checks and state cleanup."""
 
-    def __init__(self, config: DaemonConfig, state: DaemonState) -> None:
+    def __init__(
+        self,
+        config: DaemonConfig,
+        state: DaemonState,
+        notification_service: "NotificationService | None" = None,
+    ) -> None:
         """Initialize health checker.
 
         Args:
             config: Daemon configuration
             state: Current daemon state
+            notification_service: Optional notification service for health alerts
         """
         self.config = config
         self.state = state
+        self.notification_service = notification_service
         self._health_dir = Path(config.health.health_dir).expanduser()
         self._archive_dir = Path(config.health.archive_dir).expanduser()
 
@@ -124,6 +135,11 @@ class HealthChecker:
             self._prune_old_reports()
         except Exception as e:
             logger.error(f"Failed to prune old reports: {e}")
+
+        # Send notification if health failures detected
+        failed_services = [c for c in checks if c.status == ServiceStatus.UNHEALTHY]
+        if failed_services and self.notification_service:
+            await self._notify_health_failures(failed_services)
 
         return report
 
@@ -492,6 +508,31 @@ class HealthChecker:
                     logger.debug(f"Pruned old health report: {report_file.name}")
             except ValueError:
                 continue
+
+    async def _notify_health_failures(self, failed: list[ServiceCheckResult]) -> None:
+        """Send health failure notification.
+
+        Args:
+            failed: List of failed service checks
+        """
+        from src.daemon.config import NotificationTrigger
+        from src.daemon.notifications import NotificationMessage
+
+        services = ", ".join([f.service for f in failed])
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.HEALTH_FAILURE,
+            title="API Health Check Failed",
+            body=f"Services down: {services}",
+            metadata={
+                "symbol": "SYSTEM",
+                "failed_services": [f.service for f in failed],
+                "error_messages": [f.message for f in failed],
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        await self.notification_service.notify(NotificationTrigger.HEALTH_FAILURE, message)
 
     def __repr__(self) -> str:
         """Return string representation."""
