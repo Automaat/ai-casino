@@ -73,6 +73,7 @@ class TraderAgent:
         sector_context: str | None = None,
         earnings_context: str | None = None,
         peer_analysis_context: str | None = None,
+        game_plan_context: str | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -90,6 +91,7 @@ class TraderAgent:
             sector_context: Formatted sector rotation context (optional)
             earnings_context: Formatted earnings calendar context (optional)
             peer_analysis_context: Formatted peer benchmarking context (optional)
+            game_plan_context: Formatted game plan context (optional)
 
         Returns:
             TradingDecision with action and reasoning
@@ -110,6 +112,7 @@ class TraderAgent:
         sector_rotation_section = self._build_sector_rotation_section(sector_context)
         earnings_section = self._build_earnings_section(earnings_context)
         peer_analysis_section = self._build_peer_analysis_section(peer_analysis_context)
+        game_plan_section = self._build_game_plan_section(game_plan_context)
 
         prompt = self._prompts.load(
             "user_base",
@@ -142,6 +145,7 @@ class TraderAgent:
             sector_rotation_section=sector_rotation_section,
             earnings_section=earnings_section,
             peer_analysis_section=peer_analysis_section,
+            game_plan_section=game_plan_section,
         )
 
         system_prompt = self._prompts.load("system")
@@ -279,6 +283,20 @@ class TraderAgent:
             lagging_sectors=lagging,
             sector_details="\n".join(details_lines),
         )
+
+    def _build_game_plan_section(self, game_plan_context: str | None) -> str:
+        """Build game plan section for prompt.
+
+        Args:
+            game_plan_context: Formatted game plan context (optional)
+
+        Returns:
+            Formatted section string (empty if None)
+        """
+        if not game_plan_context:
+            return ""
+
+        return self._prompts.load("section_game_plan", game_plan_details=game_plan_context)
 
     def _build_peer_analysis_section(self, peer_analysis_context: str | None) -> str:
         """Build peer benchmarking section for prompt.
