@@ -169,7 +169,8 @@ def validate_paper_trading(
     """Validate paper trading readiness for live promotion."""
     from src.cli.validate_paper_trading import validate_paper_trading as validate_impl
 
-    return validate_impl(config)
+    exit_code = validate_impl(config)
+    raise typer.Exit(code=exit_code)
 
 
 def main() -> None:

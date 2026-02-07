@@ -334,6 +334,7 @@ class TestSimulateExitsAsync:
             exit_price=146.0,
             pnl=closed_trades[0].pnl,
             pnl_percent=closed_trades[0].pnl_percent,
+            closed_at=closed_trades[0].closed_at,
         )
 
     @pytest.mark.asyncio

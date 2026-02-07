@@ -123,13 +123,20 @@ class PaperTradingValidator:
         return report
 
     def _calculate_paper_metrics(self) -> PerformanceMetrics:
-        """Calculate metrics for paper trades only.
+        """Calculate metrics for paper trades only, scoped to start date.
 
         Returns:
             PerformanceMetrics for paper trading period
         """
-        # Filter to paper trades only
-        paper_trades = [t for t in self.metrics_tracker.trades if t.is_paper_trade]
+        # Filter to paper trades scoped by start date
+        start_date = self.state.paper_trading_start_date
+        paper_trades = []
+        for t in self.metrics_tracker.trades:
+            if not t.is_paper_trade:
+                continue
+            if start_date is not None and t.timestamp < start_date:
+                continue
+            paper_trades.append(t)
 
         if not paper_trades:
             return PerformanceMetrics(
@@ -168,7 +175,15 @@ class PaperTradingValidator:
         Returns:
             PerformanceMetrics for simulated live trading
         """
-        paper_trades = [t for t in self.metrics_tracker.trades if t.is_paper_trade and t.is_closed()]
+        # Filter to paper trades scoped by start date
+        start_date = self.state.paper_trading_start_date
+        paper_trades = []
+        for t in self.metrics_tracker.trades:
+            if not t.is_paper_trade or not t.is_closed():
+                continue
+            if start_date is not None and t.timestamp < start_date:
+                continue
+            paper_trades.append(t)
 
         # Apply fees and slippage to each trade
         adjusted_trades = []
@@ -238,9 +253,15 @@ class PaperTradingValidator:
 
     def _check_min_trades(self) -> ValidationCriterion:
         """Check minimum number of executed trades."""
-        paper_trades = [
-            t for t in self.metrics_tracker.trades if t.is_paper_trade and t.status in ("OPEN", "CLOSED")
-        ]
+        # Filter to paper trades scoped by start date
+        start_date = self.state.paper_trading_start_date
+        paper_trades = []
+        for t in self.metrics_tracker.trades:
+            if not t.is_paper_trade or t.status not in ("OPEN", "CLOSED"):
+                continue
+            if start_date is not None and t.timestamp < start_date:
+                continue
+            paper_trades.append(t)
         trade_count = len(paper_trades)
 
         return ValidationCriterion(

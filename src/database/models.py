@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String, text
+from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -37,6 +37,8 @@ class TradeORM(Base):
     pnl_percent: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
     strategy_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     broker_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_paper_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    closed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
@@ -47,6 +49,8 @@ class TradeORM(Base):
         Index("idx_trades_symbol", "symbol"),
         Index("idx_trades_created_at", "created_at"),
         Index("idx_trades_status", "status"),
+        Index("idx_trades_is_paper_trade", "is_paper_trade"),
+        Index("idx_trades_closed_at", "closed_at"),
     )
 
     def __repr__(self) -> str:

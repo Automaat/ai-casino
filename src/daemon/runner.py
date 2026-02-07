@@ -31,7 +31,7 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.metrics.sector_rotation import SectorRotationAnalysis
-from src.metrics.tracker import MetricsTracker
+from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.models.llm import LLMClient
 from src.models.sentiment import get_finbert_sentiment
 from src.optimization.param_store import OptimizedParamStore
@@ -92,6 +92,7 @@ class DaemonRunner:
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
         self._workflow: TradingWorkflow | None = None
+        self._metrics_tracker: BaseMetricsTracker | None = None
         self.param_store: OptimizedParamStore | None = None
         self._daemon_optimizer = None
         if config.optimization.enabled:
@@ -108,8 +109,14 @@ class DaemonRunner:
             api_key, secret_key, base_url = AlpacaBroker.get_credentials(config.trading_mode.value)
 
             if not api_key or not secret_key:
-                mode = config.trading_mode.value
-                msg = f"auto_trade with {mode} mode requires ALPACA_{mode.upper()}_API_KEY/SECRET_KEY"
+                if config.trading_mode == TradingMode.LIVE:
+                    msg = "auto_trade with live mode requires ALPACA_API_KEY/ALPACA_SECRET_KEY"
+                else:
+                    msg = (
+                        "auto_trade with paper mode requires "
+                        "ALPACA_PAPER_API_KEY/ALPACA_PAPER_SECRET_KEY "
+                        "or ALPACA_API_KEY/ALPACA_SECRET_KEY as a fallback"
+                    )
                 raise ValueError(msg)
 
             is_paper = config.trading_mode.value == "paper"
@@ -140,10 +147,25 @@ class DaemonRunner:
                 if not force_live:
                     from src.daemon.paper_trading_validator import PaperTradingValidator
 
+                    # Initialize tracker early for validation
+                    if self._metrics_tracker is None:
+                        trade_repository = None
+                        if os.getenv("DATABASE_URL"):
+                            try:
+                                from src.database.repositories.trade import TradeRepository
+                                from src.database.session import get_session_factory
+
+                                session_factory = get_session_factory()
+                                trade_repository = TradeRepository(session_factory())
+                            except Exception as e:
+                                logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+
+                        self._metrics_tracker = create_metrics_tracker(trade_repository)
+
                     validator = PaperTradingValidator(
                         config=config.paper_trading,
                         state=self.state,
-                        metrics_tracker=MetricsTracker(),
+                        metrics_tracker=self._metrics_tracker,
                     )
 
                     try:
@@ -262,6 +284,21 @@ class DaemonRunner:
             finbert = get_finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
+            # Initialize metrics tracker (DB or JSONL based on DATABASE_URL)
+            if self._metrics_tracker is None:
+                trade_repository = None
+                if os.getenv("DATABASE_URL"):
+                    try:
+                        from src.database.repositories.trade import TradeRepository
+                        from src.database.session import get_session_factory
+
+                        session_factory = get_session_factory()
+                        trade_repository = TradeRepository(session_factory())
+                    except Exception as e:
+                        logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+
+                self._metrics_tracker = create_metrics_tracker(trade_repository)
+
             # Portfolio VaR calculator (if risk limits enabled)
             portfolio_var_calculator = None
             portfolio_var_config = None
@@ -288,7 +325,7 @@ class DaemonRunner:
                 finbert,
                 fundamental_fetcher,
                 broker=self.broker,
-                metrics_tracker=None,
+                metrics_tracker=self._metrics_tracker,
                 use_meta_agent=True,
                 param_store=self.param_store,
                 historical_cache=self._historical_cache,
@@ -923,7 +960,7 @@ class DaemonRunner:
             validator = PaperTradingValidator(
                 config=self.config.paper_trading,
                 state=self.state,
-                metrics_tracker=MetricsTracker(),
+                metrics_tracker=self._metrics_tracker,
             )
             report = validator.assess_readiness()
 

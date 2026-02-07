@@ -167,20 +167,30 @@ def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None
     """Test auto_trade=true raises ValueError when keys missing."""
     sample_config.auto_trade = True
 
-    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="auto_trade=true requires"):
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="auto_trade with"):
         DaemonRunner(sample_config)
 
 
+@patch("src.daemon.runner.AlpacaBroker.get_credentials")
 @patch("src.daemon.runner.AlpacaBroker")
-def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
+def test_auto_trade_inits_broker(
+    mock_broker_class: Mock, mock_get_credentials: Mock, sample_config: DaemonConfig
+) -> None:
     """Test auto_trade=true initializes broker when keys present."""
     sample_config.auto_trade = True
+    mock_get_credentials.return_value = ("test_key", "test_secret", "https://paper-api.alpaca.markets")
 
     with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
         runner = DaemonRunner(sample_config)
 
         assert runner.broker is not None
-        mock_broker_class.assert_called_once_with(paper=True, historical_cache=ANY)
+        mock_broker_class.assert_called_once_with(
+            api_key="test_key",
+            secret_key="test_secret",
+            base_url="https://paper-api.alpaca.markets",
+            paper=True,
+            historical_cache=ANY,
+        )
 
 
 @pytest.mark.asyncio
@@ -281,6 +291,7 @@ async def test_analyze_symbol_records_executed_trade(
         confidence=0.85,
         executed=True,
         trading_session="REGULAR",
+        is_paper_trade=True,
     )
 
 
@@ -315,6 +326,7 @@ async def test_analyze_symbol_records_not_executed(
         confidence=0.6,
         executed=False,
         trading_session="REGULAR",
+        is_paper_trade=True,
     )
 
 

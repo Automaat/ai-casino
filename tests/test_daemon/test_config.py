@@ -9,6 +9,7 @@ from src.daemon.config import (
     DaemonConfig,
     EarningsCalendarConfig,
     HealthConfig,
+    PaperTradingConfig,
     PeerAnalysisConfig,
     PortfolioRebalancingConfig,
     ReportingConfig,
@@ -17,6 +18,7 @@ from src.daemon.config import (
     ScreeningConfig,
     SectorRotationConfig,
     StateConfig,
+    TradingMode,
 )
 
 
@@ -870,3 +872,41 @@ lookback_days = 120
         assert config.rebalancing.lookback_days == 120
 
         path.unlink()
+
+
+class TestPaperTradingConfig:
+    def test_paper_trading_config_defaults(self):
+        config = PaperTradingConfig()
+        assert config.min_duration_days == 30
+        assert config.min_trades == 20
+        assert config.min_sharpe == 0.5
+        assert config.max_drawdown_percent == 15.0
+        assert config.min_win_rate == 0.45
+
+    def test_trading_mode_parsing(self):
+        config = DaemonConfig(trading_mode=TradingMode.PAPER)
+        assert config.trading_mode == TradingMode.PAPER
+
+        config = DaemonConfig(trading_mode=TradingMode.LIVE)
+        assert config.trading_mode == TradingMode.LIVE
+
+    def test_trading_mode_from_toml(self):
+        toml_content = """
+[daemon]
+trading_mode = "paper"
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+        assert config.trading_mode == TradingMode.PAPER
+
+        path.unlink()
+
+    def test_daemon_config_has_paper_trading(self):
+        config = DaemonConfig()
+        assert isinstance(config.paper_trading, PaperTradingConfig)
+        assert config.paper_trading.min_duration_days == 30

@@ -35,6 +35,7 @@ class TradeRecord(BaseModel):
     pnl_percent: float | None
     strategy_name: str | None = None
     is_paper_trade: bool = True
+    closed_at: datetime | None = None
 
     def is_open(self) -> bool:
         """Check if trade is open."""
@@ -56,6 +57,7 @@ class TradeRecord(BaseModel):
         """
         self.exit_price = exit_price
         self.status = "CLOSED"
+        self.closed_at = datetime.now(UTC)
 
         if self.action == Signal.BUY:
             self.pnl = (exit_price - self.entry_price) * self.shares
@@ -608,6 +610,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
                         exit_price=trade.exit_price,
                         pnl=trade.pnl,
                         pnl_percent=trade.pnl_percent,
+                        closed_at=trade.closed_at,
                     )
 
         self._invalidate_cache()
