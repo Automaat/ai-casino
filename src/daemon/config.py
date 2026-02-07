@@ -1,6 +1,7 @@
 """Configuration for the trading daemon."""
 
 import tomllib
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
@@ -419,6 +420,41 @@ class MonteCarloConfig(BaseModel):
         return self
 
 
+class NotificationTrigger(StrEnum):
+    """Trigger types for notifications."""
+
+    SIGNAL = "signal"
+    RISK_REJECTION = "risk_rejection"
+    PORTFOLIO_VAR_BREACH = "portfolio_var_breach"
+    HEALTH_FAILURE = "health_failure"
+
+
+class TelegramNotificationConfig(BaseModel):
+    """Telegram notification channel configuration."""
+
+    bot_token: str | None = None
+    chat_id: str | None = None
+
+
+class NotificationsConfig(BaseModel):
+    """Notification system configuration."""
+
+    enabled: bool = False
+    channels: list[str] = Field(default_factory=lambda: ["telegram"])
+    min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    notify_on: list[NotificationTrigger] = Field(
+        default_factory=lambda: [
+            NotificationTrigger.SIGNAL,
+            NotificationTrigger.RISK_REJECTION,
+            NotificationTrigger.PORTFOLIO_VAR_BREACH,
+            NotificationTrigger.HEALTH_FAILURE,
+        ]
+    )
+    rate_limit_enabled: bool = True
+    rate_limit_per_symbol_minutes: int = 60
+    telegram: TelegramNotificationConfig = Field(default_factory=TelegramNotificationConfig)
+
+
 class EarningsCalendarConfig(BaseModel):
     """Configuration for earnings calendar preparation."""
 
@@ -530,6 +566,7 @@ class DaemonConfig(BaseModel):
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
     monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
@@ -569,10 +606,14 @@ class DaemonConfig(BaseModel):
         game_plan_data = daemon_data.pop("game_plan", {})
         position_management_data = daemon_data.pop("position_management", {})
         monte_carlo_data = daemon_data.pop("monte_carlo", {})
+        notifications_data = daemon_data.pop("notifications", {})
         news_watcher_data = daemon_data.pop("news_watcher", {})
         social_watcher_data = daemon_data.pop("social_watcher", {})
         filings_watcher_data = daemon_data.pop("filings_watcher", {})
         anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {})
+
+        # Extract nested telegram config from notifications
+        telegram_data = notifications_data.pop("telegram", {})
 
         return cls(
             **daemon_data,
@@ -595,6 +636,9 @@ class DaemonConfig(BaseModel):
             game_plan=GamePlanConfig(**game_plan_data),
             position_management=PositionManagementConfig(**position_management_data),
             monte_carlo=MonteCarloConfig(**monte_carlo_data),
+            notifications=NotificationsConfig(
+                **notifications_data, telegram=TelegramNotificationConfig(**telegram_data)
+            ),
             news_watcher=NewsWatcherConfig(**news_watcher_data),
             social_watcher=SocialWatcherConfig(**social_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
