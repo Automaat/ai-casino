@@ -141,6 +141,33 @@ class SectorRotationConfig(BaseModel):
         return self
 
 
+class PeerAnalysisConfig(BaseModel):
+    """Configuration for weekly deep peer benchmarking analysis."""
+
+    enabled: bool = False
+    run_time: str = "17:30"
+    run_days: list[str] = Field(default_factory=lambda: ["sun"])
+    max_peers: int = 10
+    output_dir: str = "~/.ai-casino/peer-analysis"
+    rate_limit_sleep: float = 13.0
+
+    @model_validator(mode="after")
+    def validate_run_time(self) -> "PeerAnalysisConfig":
+        """Validate run_time is in HH:MM format."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.run_time)
+        if not match:
+            msg = f"run_time must be in HH:MM format (00:00-23:59), got {self.run_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class EarningsCalendarConfig(BaseModel):
     """Configuration for earnings calendar preparation."""
 
@@ -191,6 +218,7 @@ class DaemonConfig(BaseModel):
     prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
+    peer_analysis: PeerAnalysisConfig = Field(default_factory=PeerAnalysisConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -216,6 +244,7 @@ class DaemonConfig(BaseModel):
         prefetch_data = daemon_data.pop("prefetch", {})
         sector_rotation_data = daemon_data.pop("sector_rotation", {})
         earnings_calendar_data = daemon_data.pop("earnings_calendar", {})
+        peer_analysis_data = daemon_data.pop("peer_analysis", {})
 
         return cls(
             **daemon_data,
@@ -228,6 +257,7 @@ class DaemonConfig(BaseModel):
             prefetch=PrefetchConfig(**prefetch_data),
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
             earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
+            peer_analysis=PeerAnalysisConfig(**peer_analysis_data),
         )
 
     def __repr__(self) -> str:

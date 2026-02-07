@@ -182,6 +182,59 @@ class TestDaemonState:
             assert loaded.last_earnings_fetch is not None
             assert loaded.earnings_calendar_history[0].events[0].symbol == "AAPL"
 
+    def test_record_peer_analysis(self):
+        state = DaemonState()
+
+        state.record_peer_analysis(
+            symbols_analyzed=["AAPL", "MSFT"],
+            rankings={"AAPL": 2, "MSFT": 1},
+            swap_recommendations=["AAPL ranks #2, consider MSFT (#1)"],
+            total_peers=5,
+            total_duration_seconds=120.0,
+        )
+
+        assert len(state.peer_analysis_history) == 1
+        assert state.last_peer_analysis is not None
+        record = state.peer_analysis_history[0]
+        assert record.symbols_analyzed == ["AAPL", "MSFT"]
+        assert record.rankings["AAPL"] == 2
+        assert len(record.swap_recommendations) == 1
+        assert record.total_peers == 5
+
+    def test_peer_analysis_pruning(self):
+        state = DaemonState()
+
+        for i in range(15):
+            state.record_peer_analysis(
+                symbols_analyzed=[f"SYM{i}"],
+                rankings={f"SYM{i}": 1},
+                swap_recommendations=[],
+                total_peers=5,
+                total_duration_seconds=10.0,
+            )
+
+        assert len(state.peer_analysis_history) == 10
+
+    def test_peer_analysis_save_load(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = f"{tmpdir}/state.json"
+
+            state = DaemonState()
+            state.record_peer_analysis(
+                symbols_analyzed=["AAPL"],
+                rankings={"AAPL": 1},
+                swap_recommendations=[],
+                total_peers=3,
+                total_duration_seconds=60.0,
+            )
+            state.save(path)
+
+            loaded = DaemonState.load(path)
+
+            assert len(loaded.peer_analysis_history) == 1
+            assert loaded.last_peer_analysis is not None
+            assert loaded.peer_analysis_history[0].symbols_analyzed == ["AAPL"]
+
     def test_repr(self):
         state = DaemonState()
         state.record_analysis("AAPL", "BUY", 0.85, executed=True)

@@ -63,6 +63,17 @@ class SectorRotationRecord(BaseModel):
     flagged_positions: list[str]
 
 
+class PeerAnalysisRecord(BaseModel):
+    """Record of a deep peer benchmarking analysis run."""
+
+    timestamp: datetime
+    symbols_analyzed: list[str]
+    rankings: dict[str, int]
+    swap_recommendations: list[str]
+    total_peers: int
+    total_duration_seconds: float
+
+
 class EarningsEventRecord(BaseModel):
     """Record of a single earnings event."""
 
@@ -101,6 +112,8 @@ class DaemonState(BaseModel):
     sector_rotation_history: list[SectorRotationRecord] = Field(default_factory=list)
     last_earnings_fetch: datetime | None = None
     earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
+    last_peer_analysis: datetime | None = None
+    peer_analysis_history: list[PeerAnalysisRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -346,6 +359,40 @@ class DaemonState(BaseModel):
 
         if len(self.earnings_calendar_history) > 10:
             self.earnings_calendar_history = self.earnings_calendar_history[-10:]
+
+    def record_peer_analysis(
+        self,
+        symbols_analyzed: list[str],
+        rankings: dict[str, int],
+        swap_recommendations: list[str],
+        total_peers: int,
+        total_duration_seconds: float,
+    ) -> None:
+        """Record a deep peer benchmarking analysis run.
+
+        Args:
+            symbols_analyzed: Symbols that were analyzed
+            rankings: Symbol to rank mapping
+            swap_recommendations: Generated swap recommendations
+            total_peers: Total number of peers analyzed
+            total_duration_seconds: Total analysis duration
+        """
+        now = datetime.now(UTC)
+
+        self.peer_analysis_history.append(
+            PeerAnalysisRecord(
+                timestamp=now,
+                symbols_analyzed=symbols_analyzed,
+                rankings=rankings,
+                swap_recommendations=swap_recommendations,
+                total_peers=total_peers,
+                total_duration_seconds=total_duration_seconds,
+            )
+        )
+        self.last_peer_analysis = now
+
+        if len(self.peer_analysis_history) > 10:
+            self.peer_analysis_history = self.peer_analysis_history[-10:]
 
     def __repr__(self) -> str:
         """Return string representation."""

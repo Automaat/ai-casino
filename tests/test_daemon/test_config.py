@@ -9,6 +9,7 @@ from src.daemon.config import (
     DaemonConfig,
     EarningsCalendarConfig,
     HealthConfig,
+    PeerAnalysisConfig,
     ScheduleConfig,
     ScreeningConfig,
     SectorRotationConfig,
@@ -472,5 +473,91 @@ watchlist = ["AAPL"]
 
         assert config.earnings_calendar.enabled is False
         assert config.earnings_calendar.fetch_time == "16:45"
+
+        path.unlink()
+
+
+class TestPeerAnalysisConfig:
+    def test_defaults(self):
+        config = PeerAnalysisConfig()
+
+        assert config.enabled is False
+        assert config.run_time == "17:30"
+        assert config.run_days == ["sun"]
+        assert config.max_peers == 10
+        assert config.output_dir == "~/.ai-casino/peer-analysis"
+        assert config.rate_limit_sleep == 13.0
+
+    def test_custom(self):
+        config = PeerAnalysisConfig(
+            enabled=True,
+            run_time="18:00",
+            run_days=["sat", "sun"],
+            max_peers=15,
+            rate_limit_sleep=15.0,
+        )
+
+        assert config.enabled is True
+        assert config.run_time == "18:00"
+        assert config.run_days == ["sat", "sun"]
+        assert config.max_peers == 15
+
+    def test_validate_run_time_valid(self):
+        config = PeerAnalysisConfig(enabled=True, run_time="17:30")
+        assert config.run_time == "17:30"
+
+    def test_validate_run_time_invalid_format(self):
+        with pytest.raises(ValueError, match="HH:MM format"):
+            PeerAnalysisConfig(enabled=True, run_time="bad")
+
+    def test_validate_run_time_skipped_when_disabled(self):
+        config = PeerAnalysisConfig(enabled=False, run_time="99:99")
+        assert config.run_time == "99:99"
+
+    def test_daemon_config_has_peer_analysis(self):
+        config = DaemonConfig()
+        assert isinstance(config.peer_analysis, PeerAnalysisConfig)
+        assert config.peer_analysis.enabled is False
+
+    def test_from_toml_with_peer_analysis(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.peer_analysis]
+enabled = true
+run_time = "18:00"
+run_days = ["sat", "sun"]
+max_peers = 15
+rate_limit_sleep = 15.0
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.peer_analysis.enabled is True
+        assert config.peer_analysis.run_time == "18:00"
+        assert config.peer_analysis.run_days == ["sat", "sun"]
+        assert config.peer_analysis.max_peers == 15
+
+        path.unlink()
+
+    def test_from_toml_without_peer_analysis_uses_defaults(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.peer_analysis.enabled is False
+        assert config.peer_analysis.run_time == "17:30"
 
         path.unlink()

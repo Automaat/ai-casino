@@ -80,6 +80,7 @@ class TradingState(TypedDict):
     strategy_selection: StrategySelection | None
     sector_rotation_context: str | None
     earnings_context: str | None
+    peer_analysis_context: str | None
     warnings: list[str]
 
 
@@ -212,8 +213,7 @@ class TradingWorkflow:
         symbol: str,
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
-        sector_context: str | None = None,
-        earnings_context: str | None = None,
+        **context_kwargs: str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
@@ -221,8 +221,8 @@ class TradingWorkflow:
             symbol: Stock ticker symbol
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
-            sector_context: Formatted sector rotation context for trader prompt
-            earnings_context: Formatted earnings calendar context for trader prompt
+            **context_kwargs: Optional context keys: sector_context, earnings_context,
+                peer_analysis_context
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
@@ -239,8 +239,9 @@ class TradingWorkflow:
 
         try:
             extra_context = {
-                "sector_rotation_context": sector_context,
-                "earnings_context": earnings_context,
+                "sector_rotation_context": context_kwargs.get("sector_context"),
+                "earnings_context": context_kwargs.get("earnings_context"),
+                "peer_analysis_context": context_kwargs.get("peer_analysis_context"),
             }
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
@@ -319,6 +320,7 @@ class TradingWorkflow:
         state = await self._fetch_data(symbol, period_days)
         state["sector_rotation_context"] = ctx.get("sector_rotation_context")
         state["earnings_context"] = ctx.get("earnings_context")
+        state["peer_analysis_context"] = ctx.get("peer_analysis_context")
         self._record_stage(collector, "fetch_data", start)
 
         start = time.perf_counter()
@@ -397,6 +399,7 @@ class TradingWorkflow:
             strategy_used=strategy_name,
             warnings=state.get("warnings", []),
             earnings_context=state.get("earnings_context"),
+            peer_analysis_context=state.get("peer_analysis_context"),
             execution_metrics=execution_metrics,
         )
 
@@ -649,6 +652,7 @@ class TradingWorkflow:
             strategy_selection=None,
             sector_rotation_context=None,
             earnings_context=None,
+            peer_analysis_context=None,
             warnings=[],
         )
 
@@ -694,6 +698,7 @@ class TradingWorkflow:
             position_qty=position_qty,
             sector_context=state.get("sector_rotation_context"),
             earnings_context=state.get("earnings_context"),
+            peer_analysis_context=state.get("peer_analysis_context"),
         )
 
         state["final_decision"] = decision

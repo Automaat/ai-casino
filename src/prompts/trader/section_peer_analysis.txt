@@ -1,0 +1,5 @@
+PEER BENCHMARKING:
+Sector: {sector}
+Rank: #{rank} of {peer_count} peers
+{metrics_summary}
+{swap_recommendation}

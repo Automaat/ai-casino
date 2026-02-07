@@ -58,6 +58,9 @@ class DaemonRunner:
             earnings_fetch_time=config.earnings_calendar.fetch_time,
             earnings_fetch_days=config.earnings_calendar.fetch_days,
             enable_earnings_calendar=config.earnings_calendar.enabled,
+            peer_analysis_time=config.peer_analysis.run_time,
+            peer_analysis_days=config.peer_analysis.run_days,
+            enable_peer_analysis=config.peer_analysis.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -228,12 +231,21 @@ class DaemonRunner:
                 except Exception as e:
                     logger.warning(f"Failed to build earnings context: {e}")
 
+            # Build peer analysis context if available
+            peer_context: str | None = None
+            if self.config.peer_analysis.enabled:
+                try:
+                    peer_context = self._build_peer_context(symbol)
+                except Exception as e:
+                    logger.warning(f"Failed to build peer context: {e}")
+
             result = await workflow.analyze(
                 symbol,
                 period_days=90,
                 trading_session=session,
                 sector_context=sector_context,
                 earnings_context=earnings_context,
+                peer_analysis_context=peer_context,
             )
 
             self.state.record_analysis(
@@ -867,6 +879,95 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
+    def _run_peer_analysis(self) -> None:
+        """Run weekly deep peer benchmarking analysis."""
+        from src.daemon.peer_analysis import DeepPeerAnalyzer
+        from src.data.universe import StockUniverseFetcher
+
+        # Dedup check
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_peer_analysis:
+            last_date = self.state.last_peer_analysis.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Peer analysis already completed today")
+                return
+
+        logger.info("Starting deep peer benchmarking analysis")
+        console.print(f"\n[bold cyan]Peer Benchmarking Analysis ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
+            universe_fetcher = StockUniverseFetcher()
+            analyzer = DeepPeerAnalyzer(
+                fundamental_fetcher=fundamental_fetcher,
+                universe_fetcher=universe_fetcher,
+                output_dir=self.config.peer_analysis.output_dir,
+                max_peers=self.config.peer_analysis.max_peers,
+                rate_limit_sleep=self.config.peer_analysis.rate_limit_sleep,
+                historical_cache=self._historical_cache,
+            )
+
+            watchlist = self._get_merged_watchlist()
+            console.print(f"[dim]Analyzing {len(watchlist)} positions against peers...[/dim]")
+
+            result = analyzer.analyze_positions(watchlist)
+
+            # Build state record
+            rankings = {a.symbol: a.rank for a in result.analyses}
+            swaps = [a.swap_recommendation for a in result.analyses if a.swap_recommendation]
+
+            self.state.record_peer_analysis(
+                symbols_analyzed=[a.symbol for a in result.analyses],
+                rankings=rankings,
+                swap_recommendations=swaps,
+                total_peers=result.total_peers_analyzed,
+                total_duration_seconds=result.total_duration_seconds,
+            )
+            self.state.save(self.config.state.state_file)
+
+            # Console output
+            for analysis in result.analyses:
+                rank_color = "green" if analysis.rank <= 3 else "yellow" if analysis.rank <= 5 else "red"
+                console.print(
+                    f"  [bold]{analysis.symbol}[/bold]: "
+                    f"[{rank_color}]#{analysis.rank}[/{rank_color}] of {analysis.peer_count} "
+                    f"in {analysis.sector}"
+                )
+            if swaps:
+                console.print(f"[bold yellow]Swap recommendations: {len(swaps)}[/bold yellow]")
+                for swap in swaps:
+                    console.print(f"  {swap}")
+
+            console.print(
+                f"\n[dim]Peer analysis complete: {len(result.analyses)} positions, "
+                f"{result.total_peers_analyzed} peers ({result.total_duration_seconds:.0f}s)[/dim]\n"
+            )
+            logger.info("Deep peer benchmarking analysis completed")
+
+        except Exception as e:
+            error_msg = f"Peer benchmarking analysis failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _build_peer_context(self, symbol: str) -> str | None:
+        """Build peer analysis context string from persisted data.
+
+        Args:
+            symbol: Stock ticker to build context for
+
+        Returns:
+            Formatted peer analysis context or None
+        """
+        try:
+            from src.daemon.peer_analysis import DeepPeerAnalyzer
+
+            analyzer = DeepPeerAnalyzer(output_dir=self.config.peer_analysis.output_dir)
+            return analyzer.format_context(symbol)
+        except Exception as e:
+            logger.warning(f"Failed to build peer context for {symbol}: {e}")
+            return None
+
     def _log_screening_results(self, results: list) -> None:
         """Log screening results to console.
 
@@ -934,6 +1035,10 @@ class DaemonRunner:
         # Check if it's time for sector rotation (before screening)
         if self.scheduler.is_sector_rotation_time():
             self._run_sector_rotation()
+
+        # Check if it's time for peer benchmarking analysis
+        if self.scheduler.is_peer_analysis_time():
+            self._run_peer_analysis()
 
         # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():

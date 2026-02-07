@@ -527,3 +527,74 @@ class TestEarningsFetchTime:
             mock_dt.now.return_value = mock_time
 
             assert scheduler.is_earnings_fetch_time() is False
+
+
+class TestPeerAnalysisTime:
+    def test_match_configured_time(self):
+        """Test peer analysis time matches configured time on Sunday."""
+        scheduler = MarketScheduler(
+            enable_peer_analysis=True,
+            peer_analysis_time="17:30",
+            peer_analysis_days=["sun"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # Sunday at 17:30
+        mock_time = datetime(2024, 1, 14, 17, 30, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_peer_analysis_time() is True
+
+    def test_tolerance(self):
+        """Test ±1 minute tolerance."""
+        scheduler = MarketScheduler(
+            enable_peer_analysis=True,
+            peer_analysis_time="17:30",
+            peer_analysis_days=["sun"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # 17:31 = within tolerance
+        mock_time = datetime(2024, 1, 14, 17, 31, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_peer_analysis_time() is True
+
+        # 17:32 = outside tolerance
+        mock_time = datetime(2024, 1, 14, 17, 32, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_peer_analysis_time() is False
+
+    def test_wrong_day(self):
+        """Test day filtering (default is sun only)."""
+        scheduler = MarketScheduler(
+            enable_peer_analysis=True,
+            peer_analysis_time="17:30",
+            peer_analysis_days=["sun"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # Monday at 17:30 = not in allowed days
+        mock_time = datetime(2024, 1, 15, 17, 30, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_peer_analysis_time() is False
+
+    def test_disabled(self):
+        """Test peer analysis disabled."""
+        scheduler = MarketScheduler(
+            enable_peer_analysis=False,
+            peer_analysis_time="17:30",
+        )
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 14, 17, 30, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_peer_analysis_time() is False

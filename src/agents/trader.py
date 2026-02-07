@@ -72,6 +72,7 @@ class TraderAgent:
         position_qty: float | None = None,
         sector_context: str | None = None,
         earnings_context: str | None = None,
+        peer_analysis_context: str | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -88,6 +89,7 @@ class TraderAgent:
             position_qty: Number of shares owned (if any)
             sector_context: Formatted sector rotation context (optional)
             earnings_context: Formatted earnings calendar context (optional)
+            peer_analysis_context: Formatted peer benchmarking context (optional)
 
         Returns:
             TradingDecision with action and reasoning
@@ -107,6 +109,7 @@ class TraderAgent:
         comparative_section = self._build_comparative_section(comparative)
         sector_rotation_section = self._build_sector_rotation_section(sector_context)
         earnings_section = self._build_earnings_section(earnings_context)
+        peer_analysis_section = self._build_peer_analysis_section(peer_analysis_context)
 
         prompt = self._prompts.load(
             "user_base",
@@ -138,6 +141,7 @@ class TraderAgent:
             comparative_section=comparative_section,
             sector_rotation_section=sector_rotation_section,
             earnings_section=earnings_section,
+            peer_analysis_section=peer_analysis_section,
         )
 
         system_prompt = self._prompts.load("system")
@@ -274,6 +278,47 @@ class TraderAgent:
             leading_sectors=leading,
             lagging_sectors=lagging,
             sector_details="\n".join(details_lines),
+        )
+
+    def _build_peer_analysis_section(self, peer_analysis_context: str | None) -> str:
+        """Build peer benchmarking section for prompt.
+
+        Args:
+            peer_analysis_context: Formatted peer analysis context (optional)
+
+        Returns:
+            Formatted section string (empty if None)
+        """
+        if not peer_analysis_context:
+            return ""
+
+        lines = peer_analysis_context.strip().split("\n")
+        sector = ""
+        rank = ""
+        peer_count = ""
+        metrics_lines = []
+        swap = ""
+        for line in lines:
+            if line.startswith("Sector:"):
+                sector = line.replace("Sector: ", "")
+            elif line.startswith("Rank:"):
+                # Parse "Rank: #3 of 10 peers"
+                rank_part = line.replace("Rank: ", "")
+                parts = rank_part.split(" of ")
+                rank = parts[0].lstrip("#")
+                peer_count = parts[1].replace(" peers", "") if len(parts) > 1 else ""
+            elif line.strip().startswith(("1.", "2.", "3.", "4.", "5.")):
+                metrics_lines.append(line)
+            elif line.strip():
+                swap = line
+
+        return self._prompts.load(
+            "section_peer_analysis",
+            sector=sector,
+            rank=rank,
+            peer_count=peer_count,
+            metrics_summary="\n".join(metrics_lines),
+            swap_recommendation=swap,
         )
 
     def _build_earnings_section(self, earnings_context: str | None) -> str:

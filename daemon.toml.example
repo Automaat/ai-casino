@@ -65,6 +65,21 @@ reduce_position_t1 = false
 # Position reduction factor (0.5 = halve position size)
 position_reduction_factor = 0.5
 
+[daemon.peer_analysis]
+# Weekly deep peer benchmarking (compare positions vs sector peers)
+# Requires ALPHA_VANTAGE_API_KEY env var
+enabled = false
+# Time to run analysis (HH:MM, in schedule timezone)
+run_time = "17:30"
+# Days to run (weekly is sufficient, Sunday avoids market hours)
+run_days = ["sun"]
+# Maximum peers to compare per position
+max_peers = 10
+# Output directory for analysis results
+output_dir = "~/.ai-casino/peer-analysis"
+# Seconds between API calls (Alpha Vantage rate limit)
+rate_limit_sleep = 13.0
+
 [daemon.prefetch]
 # After-hours data prefetching (warm cache for morning)
 # Requires ALPHA_VANTAGE_API_KEY env var
