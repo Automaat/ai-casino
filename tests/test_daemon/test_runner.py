@@ -744,7 +744,7 @@ async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_server_lifecycle(sample_config: DaemonConfig, tmp_path: Path) -> None:
+async def test_api_server_lifecycle(sample_config: DaemonConfig) -> None:
     """Test API server starts and stops with daemon."""
     sample_config.api.enabled = True
     sample_config.api.port = 18484
@@ -759,8 +759,17 @@ async def test_api_server_lifecycle(sample_config: DaemonConfig, tmp_path: Path)
     with patch.object(runner, "_run_cycle", new=mock_cycle):
         run_task = asyncio.create_task(runner.run())
 
-        # Wait for startup
-        await asyncio.sleep(0.5)
+        # Poll for API server readiness with timeout
+        async def wait_for_api_ready() -> None:
+            """Wait for API server to start with timeout."""
+            for _ in range(100):  # 100 * 0.05s = 5s timeout
+                if runner._api_server is not None and runner._api_task is not None:
+                    return
+                await asyncio.sleep(0.05)
+            msg = "API server did not start within 5 seconds"
+            raise TimeoutError(msg)
+
+        await wait_for_api_ready()
 
         # Verify API server started
         assert runner._api_server is not None

@@ -5,7 +5,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from loguru import logger
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ScheduleConfig(BaseModel):
@@ -147,7 +148,23 @@ class ApiConfig(BaseModel):
 
     enabled: bool = False
     host: str = "127.0.0.1"
-    port: int = 8484
+    port: int = Field(
+        default=8484,
+        ge=1,
+        le=65535,
+        description="TCP port for embedded API server (1-65535)",
+    )
+
+    @field_validator("host")
+    @classmethod
+    def warn_non_localhost(cls, v: str) -> str:
+        """Warn if API binds to non-localhost (security risk)."""
+        if v not in ("127.0.0.1", "localhost", "::1"):
+            logger.warning(
+                f"API host '{v}' is not localhost - daemon exposed to network without auth. "
+                "Only use for development in trusted environments."
+            )
+        return v
 
 
 class SectorRotationConfig(BaseModel):

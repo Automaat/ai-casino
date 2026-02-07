@@ -13,7 +13,7 @@ from src.daemon.state import DaemonState, DegradationRecord
 
 
 @pytest.fixture
-def mock_runner(tmp_path) -> Mock:
+def mock_runner() -> Mock:
     """Create mock DaemonRunner with config and state."""
     config = DaemonConfig(
         watchlist=["AAPL", "TSLA"],

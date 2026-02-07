@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import uvicorn
 from loguru import logger
 from rich.console import Console
 
@@ -19,8 +20,6 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 
 if TYPE_CHECKING:
-    import uvicorn
-
     from src.agents.risk import PortfolioRiskReport
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
@@ -43,14 +42,6 @@ from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 console = Console()
-
-try:
-    import uvicorn
-
-    UVICORN_AVAILABLE = True
-except ImportError:
-    UVICORN_AVAILABLE = False
-    logger.warning("uvicorn not installed, API server disabled")
 
 
 class DaemonRunner:
@@ -2326,10 +2317,6 @@ class DaemonRunner:
 
     def _start_api_server(self) -> None:
         """Start embedded API server as background task."""
-        if not UVICORN_AVAILABLE:
-            logger.warning("Cannot start API server, uvicorn not installed")
-            return
-
         try:
             from src.daemon.api import create_api_app
 
