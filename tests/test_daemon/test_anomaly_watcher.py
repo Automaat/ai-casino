@@ -395,7 +395,9 @@ async def test_zero_open_price_skipped(anomaly_watcher, mock_market_fetcher):
     with patch.object(anomaly_watcher, "_init_components"):
         anomaly_watcher._market_fetcher = mock_market_fetcher
 
-        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=0.0, close_price=100.0)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
+            open_price=0.0, close_price=100.0
+        )
 
         events = await anomaly_watcher._fetch_events()
 
