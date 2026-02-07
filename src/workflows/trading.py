@@ -291,9 +291,10 @@ class TradingWorkflow:
                 "peer_analysis_context": context_kwargs.get("peer_analysis_context"),
                 "game_plan_context": context_kwargs.get("game_plan_context"),
                 "position_context": position_context,
+                "enable_multi_timeframe": enable_multi_timeframe,
             }
             return await self._analyze_instrumented(
-                symbol, period_days, trading_session, collector, extra_context, enable_multi_timeframe
+                symbol, period_days, trading_session, collector, extra_context
             )
         finally:
             if collector_token is not None:
@@ -447,8 +448,7 @@ class TradingWorkflow:
         period_days: int,
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
-        extra_context: dict[str, str | None] | None = None,
-        enable_multi_timeframe: bool = False,
+        extra_context: dict[str, str | bool | None] | None = None,
     ) -> TradingWorkflowResult:
         """Run analysis pipeline with optional metrics instrumentation.
 
@@ -457,10 +457,11 @@ class TradingWorkflow:
             period_days: Days of historical data
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             collector: Optional metrics collector
-            extra_context: Optional dict with sector_rotation_context, earnings_context
-            enable_multi_timeframe: Enable multi-timeframe analysis
+            extra_context: Optional dict with sector_rotation_context, earnings_context,
+                enable_multi_timeframe
         """
         ctx = extra_context or {}
+        enable_multi_timeframe = bool(ctx.get("enable_multi_timeframe", False))
         start = time.perf_counter()
         state = await self._fetch_data(symbol, period_days, enable_multi_timeframe)
         state["sector_rotation_context"] = ctx.get("sector_rotation_context")
