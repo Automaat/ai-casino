@@ -38,6 +38,7 @@ Confidence: {bearish_confidence}
 {peer_analysis_section}
 {backtest_section}
 {game_plan_section}
+{position_context_section}
 🎯 MAKE YOUR CALL on {symbol}:
 1. Action: BUY, SELL, or HOLD (these map to: BUY 🚀, SELL 📉, HOLD 💎; respect valid actions above)
 2. Confidence: 0.0-1.0
