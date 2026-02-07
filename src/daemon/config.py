@@ -305,6 +305,16 @@ class SignalTrackingConfig(BaseModel):
         return self
 
 
+class PreTradeBacktestingConfig(BaseModel):
+    """Configuration for pre-trade backtesting validation."""
+
+    enabled: bool = False
+    lookback_days: int = Field(default=180, ge=30, le=365)
+    min_sharpe_threshold: float = Field(default=0.5, ge=-1.0, le=3.0)
+    max_drawdown_threshold: float = Field(default=0.25, ge=0.05, le=0.50)
+    confidence_penalty_multiplier: float = Field(default=0.7, ge=0.1, le=1.0)
+
+
 class GamePlanConfig(BaseModel):
     """Configuration for game plan generation."""
 
@@ -393,6 +403,7 @@ class DaemonConfig(BaseModel):
     risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
     rebalancing: PortfolioRebalancingConfig = Field(default_factory=PortfolioRebalancingConfig)
     signal_tracking: SignalTrackingConfig = Field(default_factory=SignalTrackingConfig)
+    pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
 
     @classmethod
@@ -425,6 +436,7 @@ class DaemonConfig(BaseModel):
         risk_limits_data = daemon_data.pop("risk_limits", {})
         rebalancing_data = daemon_data.pop("rebalancing", {})
         signal_tracking_data = daemon_data.pop("signal_tracking", {})
+        pre_trade_backtesting_data = daemon_data.pop("pre_trade_backtesting", {})
         game_plan_data = daemon_data.pop("game_plan", {})
 
         return cls(
@@ -444,6 +456,7 @@ class DaemonConfig(BaseModel):
             risk_limits=RiskLimitsConfig(**risk_limits_data),
             rebalancing=PortfolioRebalancingConfig(**rebalancing_data),
             signal_tracking=SignalTrackingConfig(**signal_tracking_data),
+            pre_trade_backtesting=PreTradeBacktestingConfig(**pre_trade_backtesting_data),
             game_plan=GamePlanConfig(**game_plan_data),
         )
 

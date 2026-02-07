@@ -34,6 +34,7 @@ class TrendFollowingStrategy:
         sma_slow: int = 200,
         adx_period: int = 14,
         adx_threshold: float = 25.0,
+        adx_threshold_weak: float | None = None,
     ) -> None:
         """Initialize trend following strategy.
 
@@ -41,14 +42,21 @@ class TrendFollowingStrategy:
             sma_fast: Fast SMA period (default 50)
             sma_slow: Slow SMA period (default 200)
             adx_period: ADX calculation period (default 14)
-            adx_threshold: ADX threshold for strong trend (>25 = strong)
+            adx_threshold: ADX threshold for strong trend entries (>25 = strong)
+            adx_threshold_weak: ADX threshold for exits (default: adx_threshold - 5)
         """
         self.sma_fast = sma_fast
         self.sma_slow = sma_slow
         self.adx_period = adx_period
         self.adx_threshold = adx_threshold
+        self.adx_threshold_weak = (
+            adx_threshold_weak if adx_threshold_weak is not None else adx_threshold - 5.0
+        )
 
-        logger.info(f"Initialized TrendFollowingStrategy: SMA=({sma_fast},{sma_slow}), ADX={adx_period}")
+        logger.info(
+            f"Initialized TrendFollowingStrategy: SMA=({sma_fast},{sma_slow}), "
+            f"ADX={adx_period} (strong>={adx_threshold}, weak>={self.adx_threshold_weak})"
+        )
 
     def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         """Calculate SMA and ADX indicators.
@@ -188,5 +196,6 @@ class TrendFollowingStrategy:
         """String representation."""
         return (
             f"TrendFollowingStrategy(sma_fast={self.sma_fast}, sma_slow={self.sma_slow}, "
-            f"adx_period={self.adx_period}, adx_threshold={self.adx_threshold})"
+            f"adx_period={self.adx_period}, adx_threshold={self.adx_threshold}, "
+            f"adx_threshold_weak={self.adx_threshold_weak})"
         )

@@ -4,10 +4,14 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from src.workflows.types import BacktestValidation
 
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
@@ -183,6 +187,7 @@ class RiskManagementAgent:
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
         target_portfolio_weight: float | None = None,
+        backtest_validation: "BacktestValidation | None" = None,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
 
@@ -196,6 +201,7 @@ class RiskManagementAgent:
             broker_positions: Optional broker positions for VaR calculation
             portfolio_value: Optional portfolio value for VaR calculation
             target_portfolio_weight: Optional target portfolio weight for allocation-based sizing
+            backtest_validation: Optional pre-trade backtest validation result
 
         Returns:
             RiskAssessment with sizing, stop-loss, validation
@@ -224,6 +230,7 @@ class RiskManagementAgent:
                 decision_confidence,
                 broker_positions=broker_positions,
                 portfolio_value=portfolio_value,
+                backtest_validation=backtest_validation,
             )
 
             confidence = self._calculate_risk_confidence(validation, decision_confidence)
@@ -498,6 +505,7 @@ class RiskManagementAgent:
         decision_confidence: float,
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
+        backtest_validation: "BacktestValidation | None" = None,
     ) -> RiskValidation:
         """Validate risk constraints and generate approval.
 
@@ -509,6 +517,7 @@ class RiskManagementAgent:
             decision_confidence: Decision confidence score
             broker_positions: Optional broker positions for VaR check
             portfolio_value: Optional portfolio value for VaR check
+            backtest_validation: Optional pre-trade backtest validation result
 
         Returns:
             RiskValidation with approval status
@@ -559,6 +568,7 @@ class RiskManagementAgent:
             position_sizing.risk_percent,
             exposure_percent,
             decision_confidence,
+            backtest_validation,
         )
 
         if risk_score >= self.RISK_LEVEL_LOW_THRESHOLD:
@@ -756,6 +766,7 @@ class RiskManagementAgent:
         risk_percent: float,
         exposure_percent: float,
         confidence: float,
+        backtest_validation: "BacktestValidation | None" = None,
     ) -> float:
         """Calculate overall risk score (0.0-1.0, higher = safer).
 
@@ -763,6 +774,7 @@ class RiskManagementAgent:
             risk_percent: Position risk percentage
             exposure_percent: Total exposure percentage
             confidence: Decision confidence
+            backtest_validation: Optional backtest validation result
 
         Returns:
             Risk score (0.0-1.0)
@@ -773,7 +785,13 @@ class RiskManagementAgent:
         risk_component = max(0.0, min(1.0, risk_component))
         exposure_component = max(0.0, min(1.0, exposure_component))
 
-        score = risk_component * 0.3 + exposure_component * 0.3 + confidence * 0.4
+        backtest_penalty = 0.0
+        if backtest_validation and not backtest_validation.passed:
+            backtest_penalty = 0.3
+
+        base_score = risk_component * 0.3 + exposure_component * 0.3 + confidence * 0.4
+        score = base_score - backtest_penalty
+
         return max(0.0, min(1.0, score))
 
     def _hold_assessment(

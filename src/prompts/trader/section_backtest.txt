@@ -1,0 +1,4 @@
+📊 PRE-TRADE BACKTEST ({lookback}d): {status}
+Sharpe: {sharpe} | Max DD: {max_dd} | Return: {total_return}
+Win Rate: {win_rate} | Trades: {trades}
+Issues: {issues}

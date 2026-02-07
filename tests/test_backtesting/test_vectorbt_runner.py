@@ -7,6 +7,10 @@ import pandas as pd
 import pytest
 
 from src.backtesting.vectorbt_runner import MultiAssetBacktest, VectorBTResult, VectorBTRunner
+from src.strategies.ensemble import EnsembleStrategy
+from src.strategies.mean_reversion import MeanReversionStrategy
+from src.strategies.momentum import MomentumStrategy
+from src.strategies.trend_following import TrendFollowingStrategy
 
 
 @pytest.fixture
@@ -144,10 +148,10 @@ def test_run_portfolio_backtest(mock_fetch_data, sample_backtest_data):
     assert "MSFT" in result.correlation_matrix["AAPL"]
 
 
-def test_generate_signals(sample_backtest_data):
-    """_generate_signals returns boolean entry/exit arrays."""
+def test_generate_momentum_signals(sample_backtest_data):
+    """_generate_momentum_signals returns boolean entry/exit arrays."""
     runner = VectorBTRunner()
-    entries, exits = runner._generate_signals(sample_backtest_data)
+    entries, exits = runner._generate_momentum_signals(sample_backtest_data)
 
     assert len(entries) == 100
     assert len(exits) == 100
@@ -177,3 +181,91 @@ def test_vectorbt_result_model():
     assert result.symbol == "AAPL"
     assert len(result.equity_curve) == 3
     assert len(result.equity_dates) == 3
+
+
+@patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
+def test_run_backtest_with_momentum_strategy(mock_fetch_data, sample_backtest_data):
+    """run_backtest with MomentumStrategy uses RSI + MACD signals."""
+    mock_fetch_data.return_value = sample_backtest_data
+
+    runner = VectorBTRunner()
+    strategy = MomentumStrategy()
+    result = runner.run_backtest("AAPL", "2023-01-01", "2023-04-10", strategy=strategy)
+
+    assert isinstance(result, VectorBTResult)
+    assert result.symbol == "AAPL"
+    assert isinstance(result.total_return, float)
+    assert isinstance(result.sharpe_ratio, float)
+    assert isinstance(result.total_trades, int)
+
+
+@patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
+def test_run_backtest_with_mean_reversion_strategy(mock_fetch_data, sample_backtest_data):
+    """run_backtest with MeanReversionStrategy uses Bollinger Bands signals."""
+    mock_fetch_data.return_value = sample_backtest_data
+
+    runner = VectorBTRunner()
+    strategy = MeanReversionStrategy()
+    result = runner.run_backtest("AAPL", "2023-01-01", "2023-04-10", strategy=strategy)
+
+    assert isinstance(result, VectorBTResult)
+    assert result.symbol == "AAPL"
+    assert isinstance(result.total_return, float)
+    assert isinstance(result.sharpe_ratio, float)
+    assert isinstance(result.total_trades, int)
+
+
+@patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
+def test_run_backtest_with_trend_following_strategy(mock_fetch_data, sample_backtest_data):
+    """run_backtest with TrendFollowingStrategy uses SMA crossover + ADX signals."""
+    # Need more data for SMA 200
+    dates = pd.date_range(start="2023-01-01", periods=250, freq="D")
+    extended_data = pd.DataFrame(
+        {
+            "Open": [100.0] * 250,
+            "High": [101.0] * 250,
+            "Low": [99.0] * 250,
+            "Close": [100.0 + i * 0.1 for i in range(250)],
+            "Volume": [1000000] * 250,
+        },
+        index=dates,
+    )
+    mock_fetch_data.return_value = extended_data
+
+    runner = VectorBTRunner()
+    strategy = TrendFollowingStrategy()
+    result = runner.run_backtest("AAPL", "2023-01-01", "2023-09-07", strategy=strategy)
+
+    assert isinstance(result, VectorBTResult)
+    assert result.symbol == "AAPL"
+    assert isinstance(result.total_return, float)
+    assert isinstance(result.sharpe_ratio, float)
+    assert isinstance(result.total_trades, int)
+
+
+@patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
+def test_run_backtest_with_ensemble_strategy(mock_fetch_data, sample_backtest_data):
+    """run_backtest with EnsembleStrategy uses weighted voting of all strategies."""
+    # Need more data for SMA 200
+    dates = pd.date_range(start="2023-01-01", periods=250, freq="D")
+    extended_data = pd.DataFrame(
+        {
+            "Open": [100.0] * 250,
+            "High": [101.0] * 250,
+            "Low": [99.0] * 250,
+            "Close": [100.0 + i * 0.1 for i in range(250)],
+            "Volume": [1000000] * 250,
+        },
+        index=dates,
+    )
+    mock_fetch_data.return_value = extended_data
+
+    runner = VectorBTRunner()
+    strategy = EnsembleStrategy(weights={"momentum": 0.4, "mean_reversion": 0.3, "trend_following": 0.3})
+    result = runner.run_backtest("AAPL", "2023-01-01", "2023-09-07", strategy=strategy)
+
+    assert isinstance(result, VectorBTResult)
+    assert result.symbol == "AAPL"
+    assert isinstance(result.total_return, float)
+    assert isinstance(result.sharpe_ratio, float)
+    assert isinstance(result.total_trades, int)

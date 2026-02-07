@@ -215,6 +215,7 @@ class DaemonRunner:
                 historical_cache=self._historical_cache,
                 portfolio_var_calculator=portfolio_var_calculator,
                 portfolio_var_config=portfolio_var_config,
+                pre_trade_backtest_config=self.config.pre_trade_backtesting,
             )
             logger.info("Trading workflow initialized")
 

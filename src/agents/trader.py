@@ -1,9 +1,12 @@
 """Trader Agent for final decision making."""
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from loguru import logger
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from src.workflows.types import BacktestValidation
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
@@ -73,6 +76,7 @@ class TraderAgent:
         sector_context: str | None = None,
         earnings_context: str | None = None,
         peer_analysis_context: str | None = None,
+        backtest_validation: "BacktestValidation | None" = None,
         game_plan_context: str | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
@@ -91,6 +95,7 @@ class TraderAgent:
             sector_context: Formatted sector rotation context (optional)
             earnings_context: Formatted earnings calendar context (optional)
             peer_analysis_context: Formatted peer benchmarking context (optional)
+            backtest_validation: Pre-trade backtesting validation result (optional)
             game_plan_context: Formatted game plan context (optional)
 
         Returns:
@@ -112,6 +117,7 @@ class TraderAgent:
         sector_rotation_section = self._build_sector_rotation_section(sector_context)
         earnings_section = self._build_earnings_section(earnings_context)
         peer_analysis_section = self._build_peer_analysis_section(peer_analysis_context)
+        backtest_section = self._build_backtest_section(backtest_validation)
         game_plan_section = self._build_game_plan_section(game_plan_context)
 
         prompt = self._prompts.load(
@@ -145,6 +151,7 @@ class TraderAgent:
             sector_rotation_section=sector_rotation_section,
             earnings_section=earnings_section,
             peer_analysis_section=peer_analysis_section,
+            backtest_section=backtest_section,
             game_plan_section=game_plan_section,
         )
 
@@ -166,11 +173,17 @@ class TraderAgent:
             risk_level = self._extract_risk_level(response, confidence)
             reasoning = [response]  # Wrap fallback text in list
 
-        logger.info(f"Decision: {action.value} (confidence={confidence:.2f}, risk={risk_level})")
+        confidence_adjustment = backtest_validation.confidence_adjustment if backtest_validation else 1.0
+        adjusted_confidence = confidence * confidence_adjustment
+
+        logger.info(
+            f"Decision: {action.value} (confidence={adjusted_confidence:.2f}, "
+            f"risk={risk_level}, backtest_adjustment={confidence_adjustment:.2f})"
+        )
 
         return TradingDecision(
             action=action,
-            confidence=confidence,
+            confidence=adjusted_confidence,
             reasoning=reasoning,
             risk_level=risk_level,
             owns_position=owns_position,
@@ -352,6 +365,35 @@ class TraderAgent:
             return ""
 
         return self._prompts.load("section_earnings", earnings_details=earnings_context)
+
+    def _build_backtest_section(self, backtest_validation: "BacktestValidation | None") -> str:
+        """Build pre-trade backtest section for prompt.
+
+        Args:
+            backtest_validation: Backtest validation result (optional)
+
+        Returns:
+            Formatted section string (empty if None)
+        """
+        if not backtest_validation:
+            return ""
+
+        status = "✅ PASSED" if backtest_validation.passed else "⚠️ FAILED"
+        issues = (
+            "; ".join(backtest_validation.failure_reasons) if backtest_validation.failure_reasons else "None"
+        )
+
+        return self._prompts.load(
+            "section_backtest",
+            status=status,
+            sharpe=f"{backtest_validation.sharpe_ratio:.2f}",
+            max_dd=f"{abs(backtest_validation.max_drawdown):.1%}",
+            total_return=f"{backtest_validation.total_return:.1%}",
+            win_rate=f"{backtest_validation.win_rate:.1%}",
+            trades=backtest_validation.total_trades,
+            lookback=backtest_validation.lookback_days,
+            issues=issues,
+        )
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:
         """Extract trading action from response.
