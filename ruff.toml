@@ -81,6 +81,7 @@ ignore = [
 ]
 "src/data/*.py" = [
     "PLR2004", # magic values OK in data processing limits
+    "PLR0913", # many args OK for fetcher constructors with cache injection
     "DTZ005",  # timezone not critical for data timestamps
     "TRY300",  # else-block style OK
     "TRY301",  # raise in try OK for data validation

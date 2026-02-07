@@ -19,6 +19,8 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.cache.historical import HistoricalCache
+
 # Cache TTL in seconds
 REDDIT_CACHE_TTL = 900  # 15 minutes
 
@@ -175,6 +177,7 @@ class RedditFetcher:
         client_secret: str | None = None,
         user_agent: str | None = None,
         cache_dir: str | None = None,
+        historical_cache: HistoricalCache | None = None,
     ) -> None:
         """Initialize Reddit fetcher.
 
@@ -183,6 +186,7 @@ class RedditFetcher:
             client_secret: Reddit API client secret
             user_agent: Reddit API user agent
             cache_dir: Cache directory path
+            historical_cache: Optional permanent cache for posts
         """
         self._client_id = client_id or os.getenv("REDDIT_CLIENT_ID")
         self._client_secret = client_secret or os.getenv("REDDIT_CLIENT_SECRET")
@@ -191,6 +195,7 @@ class RedditFetcher:
         self._cache_dir = Path(cache_dir or "data/cache/reddit")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache = Cache(str(self._cache_dir))
+        self._historical_cache = historical_cache
 
         self._reddit: praw.Reddit | None = None
 
@@ -322,6 +327,10 @@ class RedditFetcher:
             )
 
             self._cache.set(cache_key, result.model_dump(), expire=REDDIT_CACHE_TTL)
+
+            if self._historical_cache and posts:
+                self._historical_cache.store_reddit_posts(symbol, posts)
+
             logger.info(f"Fetched {len(posts)} Reddit mentions for {symbol}")
             return result
 

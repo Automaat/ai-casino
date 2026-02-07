@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from src.cache.historical import HistoricalCache
 from src.metrics.execution import timed_operation
 
 load_dotenv()
@@ -45,13 +46,19 @@ class NewsFetcher:
 
     BASE_URL = "https://api.marketaux.com/v1/news/all"
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        historical_cache: HistoricalCache | None = None,
+    ) -> None:
         """Initialize news fetcher.
 
         Args:
             api_key: Marketaux API key. Defaults to env variable.
+            historical_cache: Optional permanent cache for news articles
         """
         self.api_key = api_key or os.getenv("MARKETAUX_API_KEY", "")
+        self._cache = historical_cache
         if not self.api_key:
             logger.warning("MARKETAUX_API_KEY not set - API calls may be limited")
 
@@ -104,6 +111,10 @@ class NewsFetcher:
                     )
 
                 logger.info(f"Fetched {len(articles)} articles")
+
+                if self._cache and articles:
+                    self._cache.store_news_articles(symbol, articles)
+
                 return articles
 
             except requests.exceptions.RequestException as e:

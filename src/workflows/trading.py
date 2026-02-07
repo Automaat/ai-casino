@@ -26,6 +26,7 @@ from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
 from src.agents.trump import TrumpAnalysis, TrumpAnalyst
 from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
+from src.cache.historical import HistoricalCache
 from src.data.broker import AlpacaBroker, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
 from src.data.finnhub import FinnhubFetcher
@@ -99,6 +100,7 @@ class TradingWorkflow:
         snapshot_on_trade: bool | None = None,
         snapshot_repository: "PortfolioSnapshotRepository | None" = None,
         param_store: "OptimizedParamStore | None" = None,
+        historical_cache: HistoricalCache | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -116,6 +118,7 @@ class TradingWorkflow:
             snapshot_on_trade: Capture portfolio snapshot after trades (env: PORTFOLIO_SNAPSHOT_ON_TRADE)
             snapshot_repository: Repository for portfolio snapshots (required if snapshot_on_trade)
             param_store: Optional optimized parameter store for strategy tuning
+            historical_cache: Optional permanent cache for historical data
         """
         import os
 
@@ -138,7 +141,7 @@ class TradingWorkflow:
         self.trump_fetcher: TruthSocialFetcher | None = None
         self.trump_analyst: TrumpAnalyst | None = None
         if trump_mode:
-            self.trump_fetcher = TruthSocialFetcher()
+            self.trump_fetcher = TruthSocialFetcher(historical_cache=historical_cache)
             self.trump_analyst = TrumpAnalyst(llm_client)
 
         # Meta-agent for dynamic strategy selection
@@ -158,7 +161,9 @@ class TradingWorkflow:
         self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
         self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
         self.web_researcher = WebResearchAgent(llm_client)
-        self.social_analyst = SocialSentimentAnalyst(llm_client, FinnhubFetcher(), RedditFetcher(), finbert)
+        self.social_analyst = SocialSentimentAnalyst(
+            llm_client, FinnhubFetcher(), RedditFetcher(historical_cache=historical_cache), finbert
+        )
         self.bullish_researcher = BullishResearcher(llm_client)
         self.bearish_researcher = BearishResearcher(llm_client)
         self.trader = TraderAgent(llm_client)

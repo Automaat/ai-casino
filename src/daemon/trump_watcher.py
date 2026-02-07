@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from src.agents.trump import COMPANY_TICKERS, TrumpAnalysis, TrumpAnalyst
+from src.cache.historical import HistoricalCache
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
@@ -66,6 +67,7 @@ class TrumpWatcher:
         self._last_check: datetime | None = None
 
         # Lazy init
+        self._historical_cache = HistoricalCache()
         self._fetcher: TruthSocialFetcher | None = None
         self._analyst: TrumpAnalyst | None = None
         self._workflow: TradingWorkflow | None = None
@@ -76,7 +78,7 @@ class TrumpWatcher:
     def _init_components(self) -> None:
         """Lazy initialization of components."""
         if self._fetcher is None:
-            self._fetcher = TruthSocialFetcher()
+            self._fetcher = TruthSocialFetcher(historical_cache=self._historical_cache)
 
         if self._llm is None:
             self._llm = LLMClient()
@@ -85,10 +87,12 @@ class TrumpWatcher:
             self._analyst = TrumpAnalyst(self._llm)
 
         if self._workflow is None:
-            market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-            news_fetcher = NewsFetcher()
+            market_fetcher = MarketDataFetcher(
+                use_alpha_vantage=False, historical_cache=self._historical_cache
+            )
+            news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
             finbert = get_finbert_sentiment()
-            fundamental_fetcher = FundamentalDataFetcher()
+            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
             self._workflow = TradingWorkflow(
                 self._llm,
@@ -100,6 +104,7 @@ class TrumpWatcher:
                 metrics_tracker=None,
                 use_meta_agent=True,
                 trump_mode=True,
+                historical_cache=self._historical_cache,
             )
             logger.info("TrumpWatcher workflow initialized")
 

@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from src.cache.historical import HistoricalCache
 from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
@@ -387,16 +388,18 @@ async def _analyze_stock(
     trump_str = "+trump" if trump_mode else ""
     console.print(f"\n[bold]Initializing trading system ({mode_str}{trump_str} mode)...[/bold]")
 
+    historical_cache = HistoricalCache()
+
     llm_client = LLMClient()
-    market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-    news_fetcher = NewsFetcher()
+    market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
+    news_fetcher = NewsFetcher(historical_cache=historical_cache)
     finbert = get_finbert_sentiment()
-    fundamental_fetcher = FundamentalDataFetcher()
+    fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
 
     broker = None
     if enable_trading:
         if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            broker = AlpacaBroker(paper=True)
+            broker = AlpacaBroker(paper=True, historical_cache=historical_cache)
             console.print("[bold green]Paper trading enabled[/bold green]")
         else:
             console.print("[yellow]Warning: Trading enabled but Alpaca credentials not found[/yellow]")
@@ -413,6 +416,7 @@ async def _analyze_stock(
         metrics_tracker,
         use_meta_agent=use_meta_agent,
         trump_mode=trump_mode,
+        historical_cache=historical_cache,
     )
 
     console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
