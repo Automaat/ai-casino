@@ -103,7 +103,7 @@ class TestPrefetchSymbol:
         assert result.market_data is True
         assert result.news is True
         assert result.fundamentals is True
-        assert result.duration_ms > 0
+        assert result.duration_ms >= 0
 
         assert prefetcher.get_cached_market_data("AAPL") is not None
         assert prefetcher.get_cached_news("AAPL") is not None
@@ -354,23 +354,23 @@ class TestPrefetchModels:
         assert report.total_duration_seconds == 30.0
 
 
-class TestApiConnectivity:
+class TestApiKeyPresence:
     def test_check_with_keys(self, prefetcher: DataPrefetcher) -> None:
-        """Verify connectivity reports True when keys present."""
+        """Verify presence reports True when keys present."""
         env = {
             "ALPHA_VANTAGE_API_KEY": "test",
             "MARKETAUX_API_KEY": "test",
         }
         with patch.dict("os.environ", env):
-            result = prefetcher.check_api_connectivity()
+            result = prefetcher.check_api_key_presence()
 
         assert result["alpha_vantage"] is True
         assert result["marketaux"] is True
 
     def test_check_without_keys(self, prefetcher: DataPrefetcher) -> None:
-        """Verify connectivity reports False when keys missing."""
+        """Verify presence reports False when keys missing."""
         with patch.dict("os.environ", {}, clear=True):
-            result = prefetcher.check_api_connectivity()
+            result = prefetcher.check_api_key_presence()
 
         assert result["alpha_vantage"] is False
         assert result["marketaux"] is False

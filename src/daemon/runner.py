@@ -10,6 +10,7 @@ from loguru import logger
 from rich.console import Console
 
 from src.daemon.config import DaemonConfig
+from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState
 from src.data.broker import AlpacaBroker
@@ -79,25 +80,31 @@ class DaemonRunner:
             except Exception as e:
                 logger.exception(f"Failed to initialize broker: {e}")
                 self.broker = None
-        self._prefetcher = None
+        self._prefetcher: DataPrefetcher | None = None
         logger.info(f"DaemonRunner initialized with {config}")
 
-    def _init_prefetcher(self) -> object:
-        """Initialize data prefetcher (lazy initialization)."""
+    def _init_prefetcher(self) -> DataPrefetcher | None:
+        """Initialize data prefetcher (lazy initialization).
+
+        Returns:
+            DataPrefetcher instance or None if API key missing
+        """
         if self._prefetcher is None:
-            from src.daemon.prefetch import DataPrefetcher
+            try:
+                market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
+                news_fetcher = NewsFetcher()
+                fundamental_fetcher = FundamentalDataFetcher()
 
-            market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
-            news_fetcher = NewsFetcher()
-            fundamental_fetcher = FundamentalDataFetcher()
-
-            self._prefetcher = DataPrefetcher(
-                market_fetcher=market_fetcher,
-                news_fetcher=news_fetcher,
-                fundamental_fetcher=fundamental_fetcher,
-                cache_dir=self.config.prefetch.cache_dir,
-            )
-            logger.info("DataPrefetcher initialized")
+                self._prefetcher = DataPrefetcher(
+                    market_fetcher=market_fetcher,
+                    news_fetcher=news_fetcher,
+                    fundamental_fetcher=fundamental_fetcher,
+                    cache_dir=self.config.prefetch.cache_dir,
+                )
+                logger.info("DataPrefetcher initialized")
+            except ValueError as e:
+                logger.warning(f"Failed to initialize prefetcher: {e}")
+                return None
         return self._prefetcher
 
     def _init_workflow(self) -> TradingWorkflow:
@@ -380,6 +387,10 @@ class DaemonRunner:
 
         try:
             prefetcher = self._init_prefetcher()
+            if prefetcher is None:
+                logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
+                return
+
             watchlist = self._get_merged_watchlist()
 
             console.print(f"[dim]Prefetching {len(watchlist)} symbols...[/dim]")
@@ -394,7 +405,7 @@ class DaemonRunner:
 
             # Check API connectivity if configured
             if self.config.prefetch.check_connectivity:
-                report.api_connectivity = prefetcher.check_api_connectivity()
+                report.api_connectivity = prefetcher.check_api_key_presence()
 
             # Count successes/failures
             succeeded = sum(1 for r in report.results if r.market_data or r.news or r.fundamentals)
@@ -427,18 +438,34 @@ class DaemonRunner:
         if not self.config.prefetch.enabled or not self.config.prefetch.enable_pre_market_refresh:
             return
 
+        # Dedup check
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_pre_market_refresh:
+            last_date = self.state.last_pre_market_refresh.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Pre-market refresh already completed today")
+                return
+
         logger.info("Starting pre-market data refresh")
-        console.print(f"\n[bold cyan]Pre-Market Data Refresh ({datetime.now():%H:%M})[/bold cyan]")  # noqa: DTZ005
+        console.print(f"\n[bold cyan]Pre-Market Data Refresh ({now:%H:%M})[/bold cyan]")
         console.print("-" * 50)
 
         try:
             prefetcher = self._init_prefetcher()
+            if prefetcher is None:
+                logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
+                return
+
             watchlist = self._get_merged_watchlist()
 
             console.print(f"[dim]Refreshing {len(watchlist)} symbols...[/dim]")
             report = prefetcher.prefetch_watchlist(watchlist)
 
             succeeded = sum(1 for r in report.results if r.market_data or r.news or r.fundamentals)
+
+            self.state.last_pre_market_refresh = datetime.now(self.scheduler.timezone)
+            self.state.save(self.config.state.state_file)
+
             console.print(
                 f"\n[dim]Pre-market refresh complete: {succeeded} symbols updated "
                 f"({report.total_duration_seconds:.0f}s)[/dim]\n"

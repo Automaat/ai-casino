@@ -300,7 +300,11 @@ class MarketScheduler:
         if now.weekday() >= 5:
             return False
 
-        target_hour, target_minute = map(int, self.prefetch_time.split(":"))
+        try:
+            target_hour, target_minute = map(int, self.prefetch_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Malformed prefetch_time '{self.prefetch_time}': {e}")
+            return False
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
@@ -319,7 +323,11 @@ class MarketScheduler:
         if now.weekday() >= 5:
             return False
 
-        target_hour, target_minute = map(int, self.pre_market_refresh_time.split(":"))
+        try:
+            target_hour, target_minute = map(int, self.pre_market_refresh_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Malformed pre_market_refresh_time '{self.pre_market_refresh_time}': {e}")
+            return False
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute

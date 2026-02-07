@@ -2,7 +2,7 @@
 
 import hashlib
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +106,7 @@ class DataPrefetcher:
             key = self._cache_key("market", symbol)
             cached_data = {
                 "symbol": market_data.symbol,
-                "data": market_data.data.to_json(),
+                "data": market_data.data.to_json(orient="split", date_format="iso"),
                 "last_updated": market_data.last_updated.isoformat(),
             }
             self._cache.set(key, cached_data, expire=MARKET_DATA_TTL)
@@ -114,10 +114,6 @@ class DataPrefetcher:
             logger.debug(f"Prefetched market data for {symbol}")
         except Exception as e:
             logger.warning(f"Failed to prefetch market data for {symbol}: {e}")
-
-        # Rate limit sleep before fundamentals (both use Alpha Vantage)
-        if market_ok:
-            time.sleep(AV_RATE_LIMIT_SLEEP)
 
         # News (uses Marketaux, no AV rate limit concern)
         try:
@@ -132,6 +128,9 @@ class DataPrefetcher:
             logger.debug(f"Prefetched {len(articles)} news articles for {symbol}")
         except Exception as e:
             logger.warning(f"Failed to prefetch news for {symbol}: {e}")
+
+        # Rate limit sleep before fundamentals (both market and fundamentals use Alpha Vantage)
+        time.sleep(AV_RATE_LIMIT_SLEEP)
 
         # Fundamentals (uses Alpha Vantage)
         try:
@@ -169,13 +168,9 @@ class DataPrefetcher:
             result = self.prefetch_symbol(symbol)
             results.append(result)
 
-            # Stagger between symbols for AV rate limiting
-            if i < len(symbols) - 1:
-                time.sleep(AV_RATE_LIMIT_SLEEP)
-
         total_duration = time.perf_counter() - start
         return PrefetchReport(
-            timestamp=datetime.now(),  # noqa: DTZ005
+            timestamp=datetime.now(UTC),
             results=results,
             total_duration_seconds=total_duration,
         )
@@ -196,25 +191,25 @@ class DataPrefetcher:
             logger.warning(f"Failed to warm FinBERT: {e}")
             return False
 
-    def check_api_connectivity(self) -> dict[str, bool]:
-        """Check API connectivity for data sources.
+    def check_api_key_presence(self) -> dict[str, bool]:
+        """Check if API keys are present in environment.
 
         Returns:
-            Dict mapping service name to connectivity status
+            Dict mapping service name to key presence status
         """
         import os
 
-        connectivity: dict[str, bool] = {}
+        presence: dict[str, bool] = {}
 
         # Alpha Vantage
         av_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-        connectivity["alpha_vantage"] = bool(av_key)
+        presence["alpha_vantage"] = bool(av_key)
 
         # Marketaux
         mx_key = os.getenv("MARKETAUX_API_KEY")
-        connectivity["marketaux"] = bool(mx_key)
+        presence["marketaux"] = bool(mx_key)
 
-        return connectivity
+        return presence
 
     def get_cached_market_data(self, symbol: str) -> MarketData | None:
         """Retrieve cached market data for a symbol.
@@ -233,7 +228,7 @@ class DataPrefetcher:
         try:
             from io import StringIO
 
-            df = pd.read_json(StringIO(cached["data"]))
+            df = pd.read_json(StringIO(cached["data"]), orient="split")
             return MarketData(
                 symbol=cached["symbol"],
                 data=df,

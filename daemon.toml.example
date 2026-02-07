@@ -53,7 +53,8 @@ strategies = ["momentum", "mean_reversion", "trend_following"]
 
 [daemon.prefetch]
 # After-hours data prefetching (warm cache for morning)
-enabled = true
+# Requires ALPHA_VANTAGE_API_KEY env var
+enabled = false
 # Time to prefetch after market close (HH:MM, in schedule timezone)
 prefetch_time = "16:30"
 # Refresh cache before pre-market session

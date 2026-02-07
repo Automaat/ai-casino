@@ -67,6 +67,7 @@ class DaemonState(BaseModel):
     last_optimization: datetime | None = None
     optimization_history: list[OptimizationRecord] = Field(default_factory=list)
     last_prefetch: datetime | None = None
+    last_pre_market_refresh: datetime | None = None
     prefetch_history: list[PrefetchRecord] = Field(default_factory=list)
 
     @classmethod
