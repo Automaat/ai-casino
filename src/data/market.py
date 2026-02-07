@@ -248,6 +248,48 @@ class MarketDataFetcher:
             logger.error(f"Intraday fetch failed: {e}")
             raise
 
+    def fetch_overnight_futures(self, symbols: list[str]) -> dict[str, float]:
+        """Fetch overnight futures % change.
+
+        Args:
+            symbols: Futures symbols (e.g., ["ES=F", "NQ=F"])
+
+        Returns:
+            Dict mapping symbol to % change from previous close
+
+        Raises:
+            ValueError: If no data available
+        """
+        logger.info(f"Fetching overnight futures: {symbols}")
+        results = {}
+
+        for symbol in symbols:
+            try:
+                ticker = yf.Ticker(symbol)
+                data = ticker.history(period="2d")
+
+                if data.empty or len(data) < 2:
+                    logger.warning(f"Insufficient data for {symbol}, skipping")
+                    continue
+
+                prev_close = data["Close"].iloc[-2]
+                current_price = data["Close"].iloc[-1]
+                pct_change = ((current_price - prev_close) / prev_close) * 100
+
+                results[symbol] = round(pct_change, 2)
+                logger.debug(f"{symbol}: {pct_change:+.2f}%")
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch {symbol}: {e}")
+                continue
+
+        if not results:
+            msg = "No futures data available"
+            logger.error(msg)
+            raise ValueError(msg)
+
+        return results
+
     def __repr__(self) -> str:
         """String representation."""
         source = "Alpha Vantage" if self.use_alpha_vantage else "yfinance"

@@ -49,6 +49,8 @@ class MarketScheduler:
         enable_rebalancing: bool = False,
         signal_tracking_time: str = "17:00",
         enable_signal_tracking: bool = True,
+        game_plan_time: str = "04:00",
+        enable_game_plan: bool = False,
     ) -> None:
         """Initialize market scheduler.
 
@@ -84,6 +86,8 @@ class MarketScheduler:
             enable_rebalancing: Enable portfolio rebalancing
             signal_tracking_time: Time to run signal tracking (HH:MM format)
             enable_signal_tracking: Enable signal tracking
+            game_plan_time: Time to generate game plan (HH:MM format)
+            enable_game_plan: Enable game plan generation
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -116,6 +120,8 @@ class MarketScheduler:
         self.enable_rebalancing = enable_rebalancing
         self.signal_tracking_time = signal_tracking_time
         self.enable_signal_tracking = enable_signal_tracking
+        self.game_plan_time = game_plan_time
+        self.enable_game_plan = enable_game_plan
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -578,6 +584,31 @@ class MarketScheduler:
             target_hour, target_minute = map(int, self.rebalancing_time.split(":"))
         except (ValueError, AttributeError) as e:
             logger.warning(f"Malformed rebalancing_time '{self.rebalancing_time}': {e}")
+            return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_game_plan_time(self) -> bool:
+        """Check if it's time to generate game plan (04:00 ET, weekdays only).
+
+        Returns:
+            True if within 1 minute of configured time on weekday
+        """
+        if not self.enable_game_plan:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        if now.weekday() >= 5:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.game_plan_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Malformed game_plan_time '{self.game_plan_time}': {e}")
             return False
 
         current_minutes = now.hour * 60 + now.minute

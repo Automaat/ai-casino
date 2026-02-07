@@ -11,6 +11,7 @@ from pathlib import Path
 from loguru import logger
 from rich.console import Console
 
+from src.agents.game_plan import GamePlan, GamePlanAgent
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.cache.historical import HistoricalCache
@@ -75,6 +76,8 @@ class DaemonRunner:
             enable_rebalancing=config.rebalancing.enabled,
             signal_tracking_time=config.signal_tracking.tracking_time,
             enable_signal_tracking=config.signal_tracking.enabled,
+            game_plan_time=config.game_plan.generation_time,
+            enable_game_plan=config.game_plan.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -126,6 +129,7 @@ class DaemonRunner:
             )
         self._prefetcher: DataPrefetcher | None = None
         self._target_allocations_to_apply: dict[str, float] | None = None
+        self._game_plan_agent: GamePlanAgent | None = None
         logger.info(f"DaemonRunner initialized with {config}")
 
     def _init_prefetcher(self) -> DataPrefetcher | None:
@@ -153,6 +157,20 @@ class DaemonRunner:
                 logger.warning(f"Failed to initialize prefetcher: {e}")
                 return None
         return self._prefetcher
+
+    def _init_game_plan_agent(self) -> GamePlanAgent:
+        """Initialize game plan agent (lazy).
+
+        Returns:
+            GamePlanAgent instance
+        """
+        if self._game_plan_agent is None:
+            llm_client = LLMClient()
+            market_fetcher = MarketDataFetcher(
+                use_alpha_vantage=False, historical_cache=self._historical_cache
+            )
+            self._game_plan_agent = GamePlanAgent(llm_client, market_fetcher)
+        return self._game_plan_agent
 
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
@@ -255,7 +273,7 @@ class DaemonRunner:
 
         return merged_watchlist
 
-    async def _analyze_symbol(self, symbol: str) -> TradingWorkflowResult | None:
+    async def _analyze_symbol(self, symbol: str) -> TradingWorkflowResult | None:  # noqa: C901
         """Analyze a single symbol.
 
         Args:
@@ -298,6 +316,14 @@ class DaemonRunner:
                 except Exception as e:
                     logger.warning(f"Failed to build peer context: {e}")
 
+            # Load game plan context if enabled
+            game_plan_context: str | None = None
+            if self.config.game_plan.enabled:
+                try:
+                    game_plan_context = self._load_game_plan_context()
+                except Exception as e:
+                    logger.warning(f"Failed to load game plan context: {e}")
+
             result = await workflow.analyze(
                 symbol,
                 period_days=90,
@@ -305,6 +331,7 @@ class DaemonRunner:
                 sector_context=sector_context,
                 earnings_context=earnings_context,
                 peer_analysis_context=peer_context,
+                game_plan_context=game_plan_context,
             )
 
             self.state.record_analysis(
@@ -913,6 +940,104 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
+    async def _run_game_plan(self) -> None:
+        """Generate daily game plan from overnight market action."""
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_game_plan:
+            last_date = self.state.last_game_plan.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Game plan already generated today")
+                return
+
+        logger.info("Generating daily game plan")
+        console.print(f"\n[bold cyan]Game Plan Generation ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            agent = self._init_game_plan_agent()
+            watchlist = self._get_merged_watchlist()
+
+            sector_context = self._build_sector_context()
+            earnings_context = self._build_earnings_context_for_watchlist(watchlist)
+
+            plan = await agent.generate(
+                watchlist,
+                futures_symbols=self.config.game_plan.futures_symbols,
+                sector_context=sector_context,
+                earnings_context=earnings_context,
+            )
+
+            plan_path = agent.persist(plan, self.config.game_plan.plan_dir)
+
+            self.state.record_game_plan(
+                priority_symbols=plan.priority_symbols,
+                risk_stance=plan.risk_stance,
+                sector_focus=plan.sector_focus,
+            )
+            self.state.save(self.config.state.state_file)
+
+            console.print("[bold green]✓ Game Plan Generated[/bold green]")
+            console.print(f"  Risk Stance: {plan.risk_stance}")
+            console.print(f"  Priority: {', '.join(plan.priority_symbols)}")
+            console.print(f"  Sectors: {', '.join(plan.sector_focus)}")
+            console.print(f"  Saved: {plan_path}\n")
+
+        except Exception as e:
+            error_msg = f"Game plan generation failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+            console.print(f"[red]✗ {error_msg}[/red]\n")
+
+    def _load_game_plan_context(self) -> str | None:
+        """Load today's game plan and format as context string.
+
+        Returns:
+            Formatted game plan context or None
+        """
+        plan_dir = Path(self.config.game_plan.plan_dir).expanduser()
+        today = datetime.now(self.scheduler.timezone).date()
+        plan_file = plan_dir / f"{today}.json"
+
+        if not plan_file.exists():
+            return None
+
+        try:
+            with plan_file.open() as f:
+                data = json.load(f)
+                plan = GamePlan.model_validate(data)
+
+            key_levels_str = ", ".join(f"{sym}: ${lvl:.2f}" for sym, lvl in plan.key_levels.items())
+            return (
+                f"Risk Stance: {plan.risk_stance}\n"
+                f"Priority Symbols: {', '.join(plan.priority_symbols)}\n"
+                f"Sector Focus: {', '.join(plan.sector_focus)}\n"
+                f"Key Levels: {key_levels_str}\n"
+                f"Reasoning: {plan.reasoning}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load game plan context: {e}")
+            return None
+
+    def _build_earnings_context_for_watchlist(self, watchlist: list[str]) -> str | None:
+        """Build earnings context for all watchlist symbols.
+
+        Args:
+            watchlist: List of symbols
+
+        Returns:
+            Combined earnings context or None
+        """
+        if not watchlist:
+            return None
+
+        contexts = []
+        for symbol in watchlist:
+            ctx = self._build_earnings_context(symbol)
+            if ctx:
+                contexts.append(ctx)
+
+        return "\n".join(contexts) if contexts else None
+
     def _run_sector_rotation(self) -> None:
         """Run sector rotation analysis."""
         from src.daemon.sector_rotation import DaemonSectorRotation
@@ -1476,6 +1601,10 @@ class DaemonRunner:
 
     def _run_scheduled_tasks(self) -> None:  # noqa: C901
         """Run all scheduled after-hours tasks."""
+        # Check if it's time for game plan generation (pre-market)
+        if self.scheduler.is_game_plan_time():
+            asyncio.run(self._run_game_plan())
+
         # Check if it's time for data prefetching (before screening)
         if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
             self._run_prefetch()

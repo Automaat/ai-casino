@@ -109,6 +109,15 @@ class CorrelationAuditRecord(BaseModel):
     total_duration_seconds: float
 
 
+class GamePlanRecord(BaseModel):
+    """Record of game plan execution."""
+
+    timestamp: datetime
+    priority_symbols: list[str]
+    risk_stance: str
+    sector_focus: list[str]
+
+
 class RiskReportRecord(BaseModel):
     """Record of a portfolio risk report."""
 
@@ -171,6 +180,8 @@ class DaemonState(BaseModel):
     portfolio_rebalancing_history: list[PortfolioRebalancingRecord] = Field(default_factory=list)
     active_target_allocations: dict[str, float] | None = None
     last_signal_tracking: datetime | None = None
+    last_game_plan: datetime | None = None
+    game_plan_history: list[GamePlanRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -555,6 +566,34 @@ class DaemonState(BaseModel):
 
         if len(self.risk_report_history) > 30:
             self.risk_report_history = self.risk_report_history[-30:]
+
+    def record_game_plan(
+        self,
+        priority_symbols: list[str],
+        risk_stance: str,
+        sector_focus: list[str],
+    ) -> None:
+        """Record game plan generation.
+
+        Args:
+            priority_symbols: Priority symbols for the day
+            risk_stance: Risk stance (AGGRESSIVE/DEFENSIVE/NEUTRAL)
+            sector_focus: Sector focus list
+        """
+        now = datetime.now(UTC)
+
+        self.game_plan_history.append(
+            GamePlanRecord(
+                timestamp=now,
+                priority_symbols=priority_symbols,
+                risk_stance=risk_stance,
+                sector_focus=sector_focus,
+            )
+        )
+        self.last_game_plan = now
+
+        if len(self.game_plan_history) > 30:
+            self.game_plan_history = self.game_plan_history[-30:]
 
     def __repr__(self) -> str:
         """Return string representation."""

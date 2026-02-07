@@ -1,0 +1,3 @@
+## Today's Game Plan
+{game_plan_details}
+
