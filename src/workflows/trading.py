@@ -27,7 +27,9 @@ from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.agents.trader import TraderAgent, TradingDecision
 from src.agents.trump import TrumpAnalysis, TrumpAnalyst
 from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
+from src.backtesting import VectorBTRunner
 from src.cache.historical import HistoricalCache
+from src.daemon.config import PreTradeBacktestingConfig
 from src.data.broker import AlpacaBroker, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
 from src.data.finnhub import FinnhubFetcher
@@ -51,7 +53,7 @@ from src.strategies.momentum import MomentumStrategy
 from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
-from src.workflows.types import TradingWorkflowResult
+from src.workflows.types import BacktestValidation, TradingWorkflowResult
 
 T = TypeVar("T")
 
@@ -84,6 +86,7 @@ class TradingState(TypedDict):
     peer_analysis_context: str | None
     broker_positions: dict[str, BrokerPosition] | None
     portfolio_value: float | None
+    backtest_validation: BacktestValidation | None
     warnings: list[str]
 
 
@@ -108,6 +111,7 @@ class TradingWorkflow:
         historical_cache: HistoricalCache | None = None,
         portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
+        pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -128,6 +132,7 @@ class TradingWorkflow:
             historical_cache: Optional permanent cache for historical data
             portfolio_var_calculator: Optional VaR calculator for portfolio-level risk limits
             portfolio_var_config: Optional VaR limit configuration
+            pre_trade_backtest_config: Optional pre-trade backtesting configuration
         """
         import os
 
@@ -187,6 +192,11 @@ class TradingWorkflow:
         logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
 
         self._target_allocations: dict[str, float] | None = None
+        self.pre_trade_backtest_config = pre_trade_backtest_config
+        self.vectorbt_runner: VectorBTRunner | None = None
+        if pre_trade_backtest_config and pre_trade_backtest_config.enabled:
+            self.vectorbt_runner = VectorBTRunner()
+            logger.info("VectorBTRunner initialized for pre-trade validation")
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
         """Set target portfolio allocations for position sizing.
@@ -321,6 +331,100 @@ class TradingWorkflow:
         name = "ensemble" if self.use_ensemble else "momentum"
         return self._default_strategy, name
 
+    async def _validate_strategy_with_backtest(
+        self,
+        symbol: str,
+        strategy: object,
+        strategy_name: str,
+        state: TradingState,
+        collector: ExecutionMetricsCollector | None,  # noqa: ARG002
+    ) -> TradingState:
+        """Run pre-trade backtesting validation on selected strategy.
+
+        Args:
+            symbol: Stock ticker
+            strategy: Strategy instance
+            strategy_name: Strategy name for logging
+            state: Current workflow state
+            collector: Optional metrics collector
+
+        Returns:
+            Updated state with backtest_validation field
+        """
+        if not self.pre_trade_backtest_config or not self.pre_trade_backtest_config.enabled:
+            state["backtest_validation"] = None
+            return state
+
+        if not self.vectorbt_runner:
+            logger.warning("Backtesting enabled but VectorBTRunner not initialized")
+            state["backtest_validation"] = None
+            return state
+
+        logger.info(f"Running pre-trade backtest for {symbol} ({strategy_name})")
+
+        try:
+            from datetime import UTC, datetime, timedelta
+
+            end_date = datetime.now(UTC)
+            start_date = end_date - timedelta(days=self.pre_trade_backtest_config.lookback_days)
+
+            backtest_result = await asyncio.to_thread(
+                self.vectorbt_runner.run_backtest,
+                symbol,
+                start_date,
+                end_date,
+                strategy,
+            )
+
+            failure_reasons = []
+            if backtest_result.sharpe_ratio < self.pre_trade_backtest_config.min_sharpe_threshold:
+                min_sharpe = self.pre_trade_backtest_config.min_sharpe_threshold
+                failure_reasons.append(f"Sharpe {backtest_result.sharpe_ratio:.2f} < {min_sharpe}")
+            if abs(backtest_result.max_drawdown) > self.pre_trade_backtest_config.max_drawdown_threshold:
+                failure_reasons.append(
+                    f"Max drawdown {abs(backtest_result.max_drawdown):.1%} > "
+                    f"{self.pre_trade_backtest_config.max_drawdown_threshold:.1%}"
+                )
+
+            passed = len(failure_reasons) == 0
+            confidence_adjustment = (
+                1.0 if passed else self.pre_trade_backtest_config.confidence_penalty_multiplier
+            )
+
+            validation = BacktestValidation(
+                symbol=symbol,
+                strategy_name=strategy_name,
+                passed=passed,
+                sharpe_ratio=backtest_result.sharpe_ratio,
+                max_drawdown=backtest_result.max_drawdown,
+                total_return=backtest_result.total_return,
+                win_rate=backtest_result.win_rate,
+                profit_factor=backtest_result.profit_factor,
+                total_trades=backtest_result.total_trades,
+                lookback_days=self.pre_trade_backtest_config.lookback_days,
+                failure_reasons=failure_reasons,
+                confidence_adjustment=confidence_adjustment,
+            )
+
+            state["backtest_validation"] = validation
+
+            if not passed:
+                warning = f"Backtest FAILED ({strategy_name}): {'; '.join(failure_reasons)}"
+                logger.warning(warning)
+                state["warnings"].append(warning)
+
+            logger.info(
+                f"Backtest {'PASSED' if passed else 'FAILED'}: "
+                f"Sharpe={backtest_result.sharpe_ratio:.2f}, MaxDD={abs(backtest_result.max_drawdown):.1%}"
+            )
+
+        except Exception as e:
+            logger.warning(f"Backtest validation error: {e}, continuing without validation")
+            state["backtest_validation"] = None
+            state["warnings"].append(f"Backtest error: {e}")
+
+        return state
+
     async def _analyze_instrumented(
         self,
         symbol: str,
@@ -353,6 +457,10 @@ class TradingWorkflow:
         start = time.perf_counter()
         strategy, strategy_name = await self._select_strategy(symbol, state, collector)
         self._record_stage(collector, "strategy_selection", start)
+
+        start = time.perf_counter()
+        state = await self._validate_strategy_with_backtest(symbol, strategy, strategy_name, state, collector)
+        self._record_stage(collector, "backtest_validation", start)
 
         technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
 
@@ -424,6 +532,7 @@ class TradingWorkflow:
             earnings_context=state.get("earnings_context"),
             peer_analysis_context=state.get("peer_analysis_context"),
             execution_metrics=execution_metrics,
+            backtest_validation=state.get("backtest_validation"),
         )
 
         if execution_metrics:
@@ -733,6 +842,7 @@ class TradingWorkflow:
             sector_context=state.get("sector_rotation_context"),
             earnings_context=state.get("earnings_context"),
             peer_analysis_context=state.get("peer_analysis_context"),
+            backtest_validation=state.get("backtest_validation"),
         )
 
         state["final_decision"] = decision
@@ -764,6 +874,7 @@ class TradingWorkflow:
             broker_positions=state.get("broker_positions"),
             portfolio_value=state.get("portfolio_value"),
             target_portfolio_weight=target_weight,
+            backtest_validation=state.get("backtest_validation"),
         )
 
         state["risk_assessment"] = risk_assessment

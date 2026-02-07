@@ -22,6 +22,23 @@ from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
 
 
+class BacktestValidation(BaseModel):
+    """Pre-trade backtesting validation result."""
+
+    symbol: str
+    strategy_name: str
+    passed: bool
+    sharpe_ratio: float
+    max_drawdown: float
+    total_return: float
+    win_rate: float
+    profit_factor: float
+    total_trades: int
+    lookback_days: int
+    failure_reasons: list[str]
+    confidence_adjustment: float
+
+
 class TradingWorkflowResult(BaseModel):
     """Complete trading analysis result."""
 
@@ -46,6 +63,7 @@ class TradingWorkflowResult(BaseModel):
     earnings_context: str | None = None
     peer_analysis_context: str | None = None
     execution_metrics: WorkflowExecutionMetrics | None = None
+    backtest_validation: BacktestValidation | None = None
 
     class Config:
         """Pydantic config."""

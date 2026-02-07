@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,12 @@ import pandas_ta_classic as ta  # type: ignore[import-untyped]
 import yfinance as yf
 from loguru import logger
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from src.strategies.ensemble import EnsembleStrategy
+    from src.strategies.mean_reversion import MeanReversionStrategy
+    from src.strategies.momentum import MomentumStrategy
+    from src.strategies.trend_following import TrendFollowingStrategy
 
 
 class VectorBTResult(BaseModel):
@@ -79,6 +86,9 @@ class VectorBTRunner:
         symbol: str,
         start_date: str | datetime,
         end_date: str | datetime,
+        strategy: (
+            "MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None"
+        ) = None,
     ) -> VectorBTResult:
         """Run vectorized backtest for symbol.
 
@@ -86,11 +96,15 @@ class VectorBTRunner:
             symbol: Stock ticker
             start_date: Backtest start date (YYYY-MM-DD or datetime)
             end_date: Backtest end date (YYYY-MM-DD or datetime)
+            strategy: Trading strategy (defaults to momentum if None)
 
         Returns:
             VectorBTResult with metrics and equity curve
         """
-        logger.info(f"Running vectorized backtest for {symbol} ({start_date} to {end_date})")
+        strategy_name = strategy.__class__.__name__ if strategy else "MomentumStrategy"
+        logger.info(
+            f"Running vectorized backtest for {symbol} ({start_date} to {end_date}) using {strategy_name}"
+        )
 
         if isinstance(start_date, str):
             start_date = datetime.strptime(start_date, "%Y-%m-%d")  # noqa: DTZ007
@@ -98,12 +112,12 @@ class VectorBTRunner:
             end_date = datetime.strptime(end_date, "%Y-%m-%d")  # noqa: DTZ007
 
         data = self._fetch_data(symbol, start_date, end_date)
-        entries, exits = self._generate_signals(data)
+        entries, exits = self._generate_signals_for_strategy(data, strategy)
         sim_input = _SimulationInput(data, entries, exits, symbol, start_date, end_date)
         result = self._simulate(sim_input)
 
         logger.info(
-            f"Vectorized backtest complete: {result.total_trades} trades, "
+            f"Vectorized backtest complete ({strategy_name}): {result.total_trades} trades, "
             f"{result.total_return:.2%} return, {result.sharpe_ratio:.2f} Sharpe"
         )
 
@@ -174,8 +188,41 @@ class VectorBTRunner:
         logger.info(f"Fetched {len(data)} bars for {symbol}")
         return data
 
-    def _generate_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-        """Generate entry/exit signals from RSI + MACD indicators.
+    def _generate_signals_for_strategy(
+        self,
+        data: pd.DataFrame,
+        strategy: (
+            "MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None"
+        ),
+    ) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals based on strategy type.
+
+        Args:
+            data: OHLCV dataframe
+            strategy: Trading strategy instance (defaults to momentum if None)
+
+        Returns:
+            Tuple of (entries, exits) boolean Series
+        """
+        from src.strategies.ensemble import EnsembleStrategy
+        from src.strategies.mean_reversion import MeanReversionStrategy
+        from src.strategies.momentum import MomentumStrategy
+        from src.strategies.trend_following import TrendFollowingStrategy
+
+        if strategy is None or isinstance(strategy, MomentumStrategy):
+            return self._generate_momentum_signals(data)
+        if isinstance(strategy, MeanReversionStrategy):
+            return self._generate_mean_reversion_signals(data)
+        if isinstance(strategy, TrendFollowingStrategy):
+            return self._generate_trend_following_signals(data)
+        if isinstance(strategy, EnsembleStrategy):
+            return self._generate_ensemble_signals(data, strategy)
+
+        logger.warning(f"Unknown strategy type {type(strategy)}, defaulting to momentum")
+        return self._generate_momentum_signals(data)
+
+    def _generate_momentum_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals from RSI + MACD indicators (momentum strategy).
 
         Returns:
             Tuple of (entries, exits) boolean Series
@@ -195,6 +242,105 @@ class VectorBTRunner:
 
         entries = (rsi < self.RSI_OVERSOLD) & (macd_hist > 0)
         exits = (rsi > self.RSI_OVERBOUGHT) & (macd_hist < 0)
+
+        return entries, exits
+
+    def _generate_mean_reversion_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals from Bollinger Bands (mean reversion strategy).
+
+        Returns:
+            Tuple of (entries, exits) boolean Series
+        """
+        close = data["Close"]
+
+        rsi = ta.rsi(close, length=14)
+        bb_result = ta.bbands(close, length=20, std=2)
+
+        if bb_result is not None:
+            bb_lower = bb_result["BBL_20_2.0"]
+            bb_upper = bb_result["BBU_20_2.0"]
+        else:
+            bb_lower = close * 0.98
+            bb_upper = close * 1.02
+
+        rsi = rsi.fillna(50.0)
+        bb_lower = bb_lower.fillna(close * 0.98)
+        bb_upper = bb_upper.fillna(close * 1.02)
+
+        entries = (close <= bb_lower) & (rsi < self.RSI_OVERSOLD)
+        exits = (close >= bb_upper) & (rsi > self.RSI_OVERBOUGHT)
+
+        return entries, exits
+
+    def _generate_trend_following_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals from SMA crossover + ADX (trend following strategy).
+
+        Returns:
+            Tuple of (entries, exits) boolean Series
+        """
+        close = data["Close"]
+        high = data["High"]
+        low = data["Low"]
+
+        adx_strong_trend_threshold = 25
+        adx_weak_trend_threshold = 20
+        sma_fast_length = 50
+        sma_slow_length = 200
+        adx_length = 14
+
+        sma_fast = ta.sma(close, length=sma_fast_length)
+        sma_slow = ta.sma(close, length=sma_slow_length)
+        adx = ta.adx(high, low, close, length=adx_length)
+
+        adx_val = adx["ADX_14"] if adx is not None else pd.Series(0.0, index=close.index)
+
+        sma_fast = sma_fast.fillna(close)
+        sma_slow = sma_slow.fillna(close)
+        adx_val = adx_val.fillna(0.0)
+
+        entries = (sma_fast > sma_slow) & (adx_val > adx_strong_trend_threshold)
+        exits = (sma_fast < sma_slow) | (adx_val < adx_weak_trend_threshold)
+
+        return entries, exits
+
+    def _generate_ensemble_signals(
+        self,
+        data: pd.DataFrame,
+        strategy: "EnsembleStrategy",
+    ) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals from weighted voting of all strategies.
+
+        Args:
+            data: OHLCV dataframe
+            strategy: EnsembleStrategy instance with component strategies
+
+        Returns:
+            Tuple of (entries, exits) boolean Series
+        """
+        momentum_entries, momentum_exits = self._generate_momentum_signals(data)
+        mean_rev_entries, mean_rev_exits = self._generate_mean_reversion_signals(data)
+        trend_entries, trend_exits = self._generate_trend_following_signals(data)
+
+        # Convert boolean signals to numeric (1/0) for weighted voting
+        momentum_entry_score = momentum_entries.astype(int) * strategy.momentum_weight
+        mean_rev_entry_score = mean_rev_entries.astype(int) * strategy.mean_reversion_weight
+        trend_entry_score = trend_entries.astype(int) * strategy.trend_following_weight
+
+        momentum_exit_score = momentum_exits.astype(int) * strategy.momentum_weight
+        mean_rev_exit_score = mean_rev_exits.astype(int) * strategy.mean_reversion_weight
+        trend_exit_score = trend_exits.astype(int) * strategy.trend_following_weight
+
+        # Aggregate scores: entry if majority vote (>0.5 weighted sum)
+        total_weight = (
+            strategy.momentum_weight + strategy.mean_reversion_weight + strategy.trend_following_weight
+        )
+        threshold = total_weight / 2
+
+        entry_scores = momentum_entry_score + mean_rev_entry_score + trend_entry_score
+        exit_scores = momentum_exit_score + mean_rev_exit_score + trend_exit_score
+
+        entries = entry_scores > threshold
+        exits = exit_scores > threshold
 
         return entries, exits
 
