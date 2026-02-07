@@ -15,7 +15,7 @@ from src.daemon.config import DaemonConfig
 from src.daemon.event_watcher import EventWatcher
 from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
-from src.daemon.watchers import NewsWatcher, SocialWatcher
+from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher
 
 console = Console()
 
@@ -134,6 +134,23 @@ def _init_event_watchers(
         )
         console.print("[green]✓[/green] SocialWatcher enabled")
 
+    if daemon_config.anomaly_watcher.enabled:
+        watchers.append(
+            AnomalyWatcher(
+                historical_cache=historical_cache,
+                poll_interval=daemon_config.anomaly_watcher.poll_interval_minutes * 60,
+                relevance_threshold=daemon_config.anomaly_watcher.relevance_threshold,
+                cooldown_minutes=daemon_config.anomaly_watcher.cooldown_minutes,
+                volume_spike_multiplier=daemon_config.anomaly_watcher.volume_spike_multiplier,
+                price_move_threshold_pct=daemon_config.anomaly_watcher.price_move_threshold_pct,
+                gap_threshold_pct=daemon_config.anomaly_watcher.gap_threshold_pct,
+                watchlist=daemon_config.watchlist,
+                max_symbols_per_cycle=daemon_config.anomaly_watcher.max_symbols_per_cycle,
+                max_concurrent_analyses=daemon_config.anomaly_watcher.max_concurrent_analyses,
+            )
+        )
+        console.print("[green]✓[/green] AnomalyWatcher enabled")
+
     return watchers
 
 
@@ -162,19 +179,21 @@ def events_daemon(
         daemon_config = _load_daemon_config(config)
 
         # Check only implemented watchers
-        implemented_enabled = daemon_config.news_watcher.enabled or daemon_config.social_watcher.enabled
+        implemented_enabled = (
+            daemon_config.news_watcher.enabled
+            or daemon_config.social_watcher.enabled
+            or daemon_config.anomaly_watcher.enabled
+        )
 
         # Check unimplemented watchers
-        unimplemented_enabled = daemon_config.filings_watcher.enabled or daemon_config.anomaly_watcher.enabled
+        unimplemented_enabled = daemon_config.filings_watcher.enabled
 
         if unimplemented_enabled:
             console.print("[bold red]Error:[/bold red] Unsupported event watchers enabled")
             console.print("The following watchers are not yet implemented:")
             if daemon_config.filings_watcher.enabled:
                 console.print("  - filings_watcher")
-            if daemon_config.anomaly_watcher.enabled:
-                console.print("  - anomaly_watcher")
-            console.print("\nAvailable watchers: news_watcher, social_watcher")
+            console.print("\nAvailable watchers: news_watcher, social_watcher, anomaly_watcher")
             raise typer.Exit(1)
 
         if not implemented_enabled:

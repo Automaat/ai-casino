@@ -533,7 +533,7 @@ class AnomalyWatcherConfig(BaseModel):
     volume_spike_multiplier: float = Field(default=2.0, ge=1.5, le=5.0)
     price_move_threshold_pct: float = Field(default=5.0, ge=2.0, le=20.0)
     gap_threshold_pct: float = Field(default=3.0, ge=1.0, le=10.0)
-    watchlist_only: bool = True
+    max_symbols_per_cycle: int = Field(default=5, ge=1, le=50)
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
