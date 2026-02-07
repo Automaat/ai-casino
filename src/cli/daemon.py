@@ -12,6 +12,7 @@ from rich.console import Console
 
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
+from src.daemon.event_watcher import EventWatcher
 from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
 from src.daemon.watchers import NewsWatcher, SocialWatcher
@@ -98,7 +99,9 @@ def _load_daemon_config(config: Path | None) -> DaemonConfig:
     return DaemonConfig()
 
 
-def _init_event_watchers(daemon_config: DaemonConfig, historical_cache: HistoricalCache) -> list:
+def _init_event_watchers(
+    daemon_config: DaemonConfig, historical_cache: HistoricalCache
+) -> list[EventWatcher]:
     """Initialize enabled event watchers."""
     watchers = []
 
@@ -158,15 +161,23 @@ def events_daemon(
     try:
         daemon_config = _load_daemon_config(config)
 
-        # Check if any watcher enabled
-        any_enabled = (
-            daemon_config.news_watcher.enabled
-            or daemon_config.social_watcher.enabled
-            or daemon_config.filings_watcher.enabled
-            or daemon_config.anomaly_watcher.enabled
-        )
+        # Check only implemented watchers
+        implemented_enabled = daemon_config.news_watcher.enabled or daemon_config.social_watcher.enabled
 
-        if not any_enabled:
+        # Check unimplemented watchers
+        unimplemented_enabled = daemon_config.filings_watcher.enabled or daemon_config.anomaly_watcher.enabled
+
+        if unimplemented_enabled:
+            console.print("[bold red]Error:[/bold red] Unsupported event watchers enabled")
+            console.print("The following watchers are not yet implemented:")
+            if daemon_config.filings_watcher.enabled:
+                console.print("  - filings_watcher")
+            if daemon_config.anomaly_watcher.enabled:
+                console.print("  - anomaly_watcher")
+            console.print("\nAvailable watchers: news_watcher, social_watcher")
+            raise typer.Exit(1)
+
+        if not implemented_enabled:
             console.print("[bold red]Error:[/bold red] No event watchers enabled in config")
             console.print("Enable at least one watcher in daemon.toml:")
             console.print("  [daemon.news_watcher]")

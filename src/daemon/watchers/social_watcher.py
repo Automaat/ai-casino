@@ -64,6 +64,7 @@ class SocialWatcher(EventWatcher):
         self._reddit_fetcher: RedditFetcher | None = None
         self._seen_post_ids: deque[str] = deque(maxlen=500)  # Auto-evict oldest
         self._previous_mention_counts: dict[str, int] = {}  # Symbol -> count baseline
+        self._mention_count_order: deque[str] = deque(maxlen=300)  # LRU tracking
 
         logger.info(
             f"SocialWatcher initialized (volume_spike={volume_spike_threshold:.0%}, "
@@ -75,6 +76,25 @@ class SocialWatcher(EventWatcher):
         super()._init_components()
         if self._reddit_fetcher is None:
             self._reddit_fetcher = RedditFetcher(historical_cache=self._historical_cache)
+
+    def _update_mention_baseline(self, symbol: str, count: int) -> None:
+        """Update mention count baseline with LRU eviction.
+
+        Args:
+            symbol: Stock ticker symbol
+            count: Current mention count
+        """
+        # LRU eviction if at capacity
+        if symbol not in self._previous_mention_counts and len(self._previous_mention_counts) >= 300:
+            oldest = self._mention_count_order[0]
+            self._previous_mention_counts.pop(oldest, None)
+            logger.debug(f"Evicted {oldest} from mention count tracking (LRU limit reached)")
+
+        # Update LRU order
+        if symbol in self._mention_count_order:
+            self._mention_count_order.remove(symbol)
+        self._mention_count_order.append(symbol)
+        self._previous_mention_counts[symbol] = count
 
     async def _fetch_events(self) -> list[SocialEvent]:
         """Fetch social events from Reddit (volume spikes + viral posts).
@@ -159,7 +179,7 @@ class SocialWatcher(EventWatcher):
                 )
 
             # Update baseline for next poll
-            self._previous_mention_counts[symbol] = current_count
+            self._update_mention_baseline(symbol, current_count)
 
         return events
 
