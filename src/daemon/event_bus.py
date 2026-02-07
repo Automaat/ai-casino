@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EventType(StrEnum):
@@ -27,6 +27,8 @@ class EventType(StrEnum):
 
 class DashboardEvent(BaseModel):
     """Event published to dashboard clients."""
+
+    model_config = ConfigDict(frozen=True)
 
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     event_type: EventType

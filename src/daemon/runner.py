@@ -394,7 +394,7 @@ class DaemonRunner:
 
         return merged_watchlist
 
-    async def _analyze_symbol(  # noqa: C901
+    async def _analyze_symbol(
         self,
         symbol: str,
         position_context: dict[str, object] | None = None,
@@ -413,76 +413,24 @@ class DaemonRunner:
         from src.strategies.session import TradingSession
 
         try:
-            # Publish ANALYSIS_START event
-            if self.event_bus:
-                try:
-                    from src.daemon.event_bus import DashboardEvent, EventType
-
-                    session = self.scheduler.get_trading_session() or TradingSession.REGULAR
-                    await self.event_bus.publish(
-                        DashboardEvent(
-                            event_type=EventType.ANALYSIS_START,
-                            data={
-                                "symbol": symbol,
-                                "trading_session": session.value,
-                            },
-                        )
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to publish ANALYSIS_START event: {e}")
+            session = self.scheduler.get_trading_session() or TradingSession.REGULAR
+            await self._publish_event("ANALYSIS_START", {"symbol": symbol, "trading_session": session.value})
 
             workflow = self._init_workflow()
-
-            # Determine current session (default to REGULAR if called outside market hours)
-            session = self.scheduler.get_trading_session() or TradingSession.REGULAR
-
-            # Build sector rotation context if available
-            sector_context: str | None = None
-            if self.config.sector_rotation.enabled and self.state.sector_rotation_history:
-                try:
-                    # Reuse latest sector rotation from daily run (stored in state)
-                    latest_record = self.state.sector_rotation_history[-1]
-                    sector_context = self._format_sector_context(latest_record)
-                except Exception as e:
-                    logger.warning(f"Failed to build sector context: {e}")
-
-            # Build earnings context if available
-            earnings_context: str | None = None
-            if self.config.earnings_calendar.enabled and self.state.earnings_calendar_history:
-                try:
-                    earnings_context = self._build_earnings_context(symbol)
-                except Exception as e:
-                    logger.warning(f"Failed to build earnings context: {e}")
-
-            # Build peer analysis context if available
-            peer_context: str | None = None
-            if self.config.peer_analysis.enabled:
-                try:
-                    peer_context = self._build_peer_context(symbol)
-                except Exception as e:
-                    logger.warning(f"Failed to build peer context: {e}")
-
-            # Load game plan context if enabled
-            game_plan_context: str | None = None
-            if self.config.game_plan.enabled:
-                try:
-                    game_plan_context = self._load_game_plan_context()
-                except Exception as e:
-                    logger.warning(f"Failed to load game plan context: {e}")
+            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = self._build_analysis_contexts(symbol)
 
             result = await workflow.analyze(
                 symbol,
                 period_days=90,
                 trading_session=session,
                 position_context=position_context,
-                sector_context=sector_context,
-                earnings_context=earnings_context,
-                peer_analysis_context=peer_context,
-                game_plan_context=game_plan_context,
+                sector_context=sector_ctx,
+                earnings_context=earnings_ctx,
+                peer_analysis_context=peer_ctx,
+                game_plan_context=game_plan_ctx,
                 degradation_context=degradation_context,
             )
 
-            # Send notification if enabled
             if self.notification_service:
                 await self._maybe_notify_signal(result)
 
@@ -495,7 +443,6 @@ class DaemonRunner:
                 is_paper_trade=self.config.trading_mode.value == "paper",
             )
 
-            # Record enriched signal for accuracy tracking (best-effort)
             try:
                 self._historical_cache.record_signal_outcome(
                     symbol=symbol,
@@ -513,49 +460,97 @@ class DaemonRunner:
             except Exception as e:
                 logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
 
-            # Publish ANALYSIS_COMPLETE event
-            if self.event_bus:
-                try:
-                    from src.daemon.event_bus import DashboardEvent, EventType
-
-                    await self.event_bus.publish(
-                        DashboardEvent(
-                            event_type=EventType.ANALYSIS_COMPLETE,
-                            data={
-                                "symbol": symbol,
-                                "signal": result.decision.action.value,
-                                "confidence": result.decision.confidence,
-                                "executed": result.order is not None,
-                            },
-                        )
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to publish ANALYSIS_COMPLETE event: {e}")
+            await self._publish_event(
+                "ANALYSIS_COMPLETE",
+                {
+                    "symbol": symbol,
+                    "signal": result.decision.action.value,
+                    "confidence": result.decision.confidence,
+                    "executed": result.order is not None,
+                },
+            )
 
             return result
         except Exception as e:
             error_msg = f"Failed to analyze {symbol}: {e}"
             logger.error(error_msg)
             self.state.record_error(error_msg)
-
-            # Publish ANALYSIS_ERROR event
-            if self.event_bus:
-                try:
-                    from src.daemon.event_bus import DashboardEvent, EventType
-
-                    await self.event_bus.publish(
-                        DashboardEvent(
-                            event_type=EventType.ANALYSIS_ERROR,
-                            data={
-                                "symbol": symbol,
-                                "error": str(e),
-                            },
-                        )
-                    )
-                except Exception as ex:
-                    logger.error(f"Failed to publish ANALYSIS_ERROR event: {ex}")
-
+            await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
             return None
+
+    async def _publish_event(self, event_type: str, data: dict[str, object]) -> None:
+        """Publish event to EventBus with error handling (async).
+
+        Args:
+            event_type: Event type string
+            data: Event data dictionary
+        """
+        if not self.event_bus:
+            return
+
+        try:
+            from src.daemon.event_bus import DashboardEvent, EventType
+
+            await self.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
+        except Exception as e:
+            logger.error(f"Failed to publish {event_type} event: {e}")
+
+    def _publish_event_sync(self, event_type: str, data: dict[str, object]) -> None:
+        """Publish event to EventBus with error handling (sync).
+
+        Args:
+            event_type: Event type string
+            data: Event data dictionary
+        """
+        if not self.event_bus:
+            return
+
+        try:
+            from src.daemon.event_bus import DashboardEvent, EventType
+
+            asyncio.run(self.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data)))
+        except Exception as e:
+            logger.error(f"Failed to publish {event_type} event: {e}")
+
+    def _build_analysis_contexts(self, symbol: str) -> tuple[str | None, str | None, str | None, str | None]:
+        """Build all analysis contexts (sector, earnings, peer, game_plan).
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            Tuple of (sector_context, earnings_context, peer_context, game_plan_context)
+        """
+        sector_context: str | None = None
+        if self.config.sector_rotation.enabled and self.state.sector_rotation_history:
+            try:
+                latest_record = self.state.sector_rotation_history[-1]
+                sector_context = self._format_sector_context(latest_record)
+            except Exception as e:
+                logger.warning(f"Failed to build sector context: {e}")
+
+        earnings_context: str | None = None
+        if self.config.earnings_calendar.enabled and self.state.earnings_calendar_history:
+            try:
+                earnings_context = self._build_earnings_context(symbol)
+            except Exception as e:
+                logger.warning(f"Failed to build earnings context: {e}")
+
+        peer_context: str | None = None
+        if self.config.peer_analysis.enabled:
+            try:
+                peer_context = self._build_peer_context(symbol)
+            except Exception as e:
+                logger.warning(f"Failed to build peer context: {e}")
+
+        game_plan_context: str | None = None
+        if self.config.game_plan.enabled:
+            try:
+                game_plan_context = self._load_game_plan_context()
+            except Exception as e:
+                logger.warning(f"Failed to load game plan context: {e}")
+
+        return sector_context, earnings_context, peer_context, game_plan_context
 
     def _extract_sentiment_signal(self, sentiment: SentimentAnalysis) -> str:
         """Extract signal from sentiment analysis.
@@ -1061,7 +1056,6 @@ class DaemonRunner:
         if not self._daemon_optimizer:
             return
 
-        # Check if already optimized today
         now = datetime.now(self.scheduler.timezone)
         if self.state.last_optimization:
             last_date = self.state.last_optimization.astimezone(self.scheduler.timezone).date()
@@ -1073,21 +1067,7 @@ class DaemonRunner:
         console.print(f"\n[bold cyan]Parameter Optimization ({now:%H:%M})[/bold cyan]")
         console.print("-" * 50)
 
-        # Publish SCHEDULED_TASK start event
-        if self.event_bus:
-            try:
-                from src.daemon.event_bus import DashboardEvent, EventType
-
-                asyncio.run(
-                    self.event_bus.publish(
-                        DashboardEvent(
-                            event_type=EventType.SCHEDULED_TASK,
-                            data={"task_name": "optimization", "status": "started"},
-                        )
-                    )
-                )
-            except Exception as e:
-                logger.error(f"Failed to publish SCHEDULED_TASK event: {e}")
+        self._publish_event_sync("SCHEDULED_TASK", {"task_name": "optimization", "status": "started"})
 
         try:
             import time as time_mod
@@ -1120,21 +1100,7 @@ class DaemonRunner:
             )
             logger.info(f"Parameter optimization completed in {total_time:.0f}s")
 
-            # Publish SCHEDULED_TASK complete event
-            if self.event_bus:
-                try:
-                    from src.daemon.event_bus import DashboardEvent, EventType
-
-                    asyncio.run(
-                        self.event_bus.publish(
-                            DashboardEvent(
-                                event_type=EventType.SCHEDULED_TASK,
-                                data={"task_name": "optimization", "status": "completed"},
-                            )
-                        )
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to publish SCHEDULED_TASK event: {e}")
+            self._publish_event_sync("SCHEDULED_TASK", {"task_name": "optimization", "status": "completed"})
 
         except Exception as e:
             error_msg = f"Parameter optimization failed: {e}"
@@ -1542,7 +1508,6 @@ class DaemonRunner:
         """Run sector rotation analysis."""
         from src.daemon.sector_rotation import DaemonSectorRotation
 
-        # Check if already ran today
         now = datetime.now(self.scheduler.timezone)
         if self.state.last_sector_rotation:
             last_date = self.state.last_sector_rotation.astimezone(self.scheduler.timezone).date()
@@ -1554,27 +1519,12 @@ class DaemonRunner:
         console.print(f"\n[bold cyan]Sector Rotation Analysis ({now:%H:%M})[/bold cyan]")
         console.print("-" * 50)
 
-        # Publish SCHEDULED_TASK start event
-        if self.event_bus:
-            try:
-                from src.daemon.event_bus import DashboardEvent, EventType
-
-                asyncio.run(
-                    self.event_bus.publish(
-                        DashboardEvent(
-                            event_type=EventType.SCHEDULED_TASK,
-                            data={"task_name": "sector_rotation", "status": "started"},
-                        )
-                    )
-                )
-            except Exception as e:
-                logger.error(f"Failed to publish SCHEDULED_TASK event: {e}")
+        self._publish_event_sync("SCHEDULED_TASK", {"task_name": "sector_rotation", "status": "started"})
 
         try:
             daemon_rotation = DaemonSectorRotation()
             analysis = daemon_rotation.run()
 
-            # Flag positions in weak sectors
             flagged: list[str] = []
             if self.broker:
                 try:
@@ -1584,7 +1534,6 @@ class DaemonRunner:
                 except Exception as e:
                     logger.warning(f"Failed to flag positions: {e}")
 
-            # Record in state
             sector_strengths = {s.sector: s.relative_strength for s in analysis.sectors}
             sector_momenta = {s.sector: s.momentum.value for s in analysis.sectors}
 
@@ -1597,7 +1546,6 @@ class DaemonRunner:
             )
             self.state.save(self.config.state.state_file)
 
-            # Console output
             console.print(f"[dim]Leading: {', '.join(analysis.leading_sectors)}[/dim]")
             console.print(f"[dim]Lagging: {', '.join(analysis.lagging_sectors)}[/dim]")
             if flagged:
@@ -1607,21 +1555,9 @@ class DaemonRunner:
             )
             logger.info("Sector rotation analysis completed")
 
-            # Publish SCHEDULED_TASK complete event
-            if self.event_bus:
-                try:
-                    from src.daemon.event_bus import DashboardEvent, EventType
-
-                    asyncio.run(
-                        self.event_bus.publish(
-                            DashboardEvent(
-                                event_type=EventType.SCHEDULED_TASK,
-                                data={"task_name": "sector_rotation", "status": "completed"},
-                            )
-                        )
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to publish SCHEDULED_TASK event: {e}")
+            self._publish_event_sync(
+                "SCHEDULED_TASK", {"task_name": "sector_rotation", "status": "completed"}
+            )
 
         except Exception as e:
             error_msg = f"Sector rotation failed: {e}"
@@ -2300,22 +2236,10 @@ class DaemonRunner:
         logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
         console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now():%H:%M:%S})")  # noqa: DTZ005
 
-        # Publish CYCLE_START event
-        if self.event_bus:
-            try:
-                from src.daemon.event_bus import DashboardEvent, EventType
-
-                await self.event_bus.publish(
-                    DashboardEvent(
-                        event_type=EventType.CYCLE_START,
-                        data={
-                            "watchlist_size": len(watchlist),
-                            "degradation_tier": str(degradation_context.tier),
-                        },
-                    )
-                )
-            except Exception as e:
-                logger.error(f"Failed to publish CYCLE_START event: {e}")
+        await self._publish_event(
+            "CYCLE_START",
+            {"watchlist_size": len(watchlist), "degradation_tier": str(degradation_context.tier)},
+        )
 
         cycle_start_time = time_mod.time()
         results = await self._analyze_watchlist(watchlist, degradation_context)
@@ -2323,24 +2247,15 @@ class DaemonRunner:
 
         self._log_results(results)
 
-        # Publish CYCLE_COMPLETE event
-        if self.event_bus:
-            try:
-                from src.daemon.event_bus import DashboardEvent, EventType
-
-                error_count = sum(1 for r in results if r.get("error"))
-                await self.event_bus.publish(
-                    DashboardEvent(
-                        event_type=EventType.CYCLE_COMPLETE,
-                        data={
-                            "results_count": len(results),
-                            "errors_count": error_count,
-                            "duration_seconds": round(cycle_duration, 2),
-                        },
-                    )
-                )
-            except Exception as e:
-                logger.error(f"Failed to publish CYCLE_COMPLETE event: {e}")
+        error_count = sum(1 for r in results if r.get("error"))
+        await self._publish_event(
+            "CYCLE_COMPLETE",
+            {
+                "results_count": len(results),
+                "errors_count": error_count,
+                "duration_seconds": round(cycle_duration, 2),
+            },
+        )
 
         # Check journal regardless of market_hours_only setting
         await self._maybe_run_journal()
