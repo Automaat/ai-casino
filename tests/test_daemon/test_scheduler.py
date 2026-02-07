@@ -458,3 +458,72 @@ class TestSectorRotationTime:
             mock_dt.now.return_value = mock_time
 
             assert scheduler.is_sector_rotation_time() is False
+
+
+class TestEarningsFetchTime:
+    def test_match_configured_time(self):
+        """Test earnings fetch time matches configured time."""
+        scheduler = MarketScheduler(
+            enable_earnings_calendar=True,
+            earnings_fetch_time="16:45",
+            earnings_fetch_days=["mon", "tue", "wed", "thu", "fri"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 16, 45, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_earnings_fetch_time() is True
+
+    def test_tolerance(self):
+        """Test ±1 minute tolerance."""
+        scheduler = MarketScheduler(
+            enable_earnings_calendar=True,
+            earnings_fetch_time="16:45",
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # 16:46 = within tolerance
+        mock_time = datetime(2024, 1, 15, 16, 46, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_earnings_fetch_time() is True
+
+        # 16:47 = outside tolerance
+        mock_time = datetime(2024, 1, 15, 16, 47, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_earnings_fetch_time() is False
+
+    def test_wrong_day(self):
+        """Test day filtering (default is mon only)."""
+        scheduler = MarketScheduler(
+            enable_earnings_calendar=True,
+            earnings_fetch_time="16:45",
+            earnings_fetch_days=["mon"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # Tuesday at 16:45 = not in allowed days
+        mock_time = datetime(2024, 1, 16, 16, 45, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_earnings_fetch_time() is False
+
+    def test_disabled(self):
+        """Test earnings calendar disabled."""
+        scheduler = MarketScheduler(
+            enable_earnings_calendar=False,
+            earnings_fetch_time="16:45",
+        )
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 16, 45, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_earnings_fetch_time() is False

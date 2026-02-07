@@ -63,6 +63,23 @@ class SectorRotationRecord(BaseModel):
     flagged_positions: list[str]
 
 
+class EarningsEventRecord(BaseModel):
+    """Record of a single earnings event."""
+
+    symbol: str
+    earnings_date: str
+    estimate_eps: float | None = None
+
+
+class EarningsCalendarRecord(BaseModel):
+    """Record of an earnings calendar fetch run."""
+
+    timestamp: datetime
+    events: list[EarningsEventRecord]
+    symbols_fetched: int
+    symbols_failed: int
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -82,6 +99,8 @@ class DaemonState(BaseModel):
     prefetch_history: list[PrefetchRecord] = Field(default_factory=list)
     last_sector_rotation: datetime | None = None
     sector_rotation_history: list[SectorRotationRecord] = Field(default_factory=list)
+    last_earnings_fetch: datetime | None = None
+    earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -299,6 +318,34 @@ class DaemonState(BaseModel):
 
         if len(self.sector_rotation_history) > 30:
             self.sector_rotation_history = self.sector_rotation_history[-30:]
+
+    def record_earnings_fetch(
+        self,
+        events: list[EarningsEventRecord],
+        symbols_fetched: int,
+        symbols_failed: int,
+    ) -> None:
+        """Record an earnings calendar fetch run.
+
+        Args:
+            events: Earnings event records
+            symbols_fetched: Number of symbols with earnings data
+            symbols_failed: Number of symbols that failed to fetch
+        """
+        now = datetime.now(UTC)
+
+        self.earnings_calendar_history.append(
+            EarningsCalendarRecord(
+                timestamp=now,
+                events=events,
+                symbols_fetched=symbols_fetched,
+                symbols_failed=symbols_failed,
+            )
+        )
+        self.last_earnings_fetch = now
+
+        if len(self.earnings_calendar_history) > 10:
+            self.earnings_calendar_history = self.earnings_calendar_history[-10:]
 
     def __repr__(self) -> str:
         """Return string representation."""

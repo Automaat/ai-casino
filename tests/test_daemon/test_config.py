@@ -7,6 +7,7 @@ import pytest
 
 from src.daemon.config import (
     DaemonConfig,
+    EarningsCalendarConfig,
     HealthConfig,
     ScheduleConfig,
     ScreeningConfig,
@@ -375,5 +376,101 @@ watchlist = ["AAPL"]
 
         assert config.sector_rotation.enabled is False
         assert config.sector_rotation.run_time == "16:15"
+
+        path.unlink()
+
+
+class TestEarningsCalendarConfig:
+    def test_defaults(self):
+        config = EarningsCalendarConfig()
+
+        assert config.enabled is False
+        assert config.fetch_time == "16:45"
+        assert config.fetch_days == ["mon"]
+        assert config.lookahead_days == 3
+        assert config.reduce_position_t1 is False
+        assert config.position_reduction_factor == 0.5
+
+    def test_custom(self):
+        config = EarningsCalendarConfig(
+            enabled=True,
+            fetch_time="17:30",
+            fetch_days=["mon", "thu"],
+            lookahead_days=5,
+            reduce_position_t1=True,
+            position_reduction_factor=0.3,
+        )
+
+        assert config.enabled is True
+        assert config.fetch_time == "17:30"
+        assert config.fetch_days == ["mon", "thu"]
+        assert config.lookahead_days == 5
+        assert config.reduce_position_t1 is True
+        assert config.position_reduction_factor == 0.3
+
+    def test_validate_fetch_time_valid(self):
+        config = EarningsCalendarConfig(enabled=True, fetch_time="18:00")
+        assert config.fetch_time == "18:00"
+
+    def test_validate_fetch_time_invalid_format(self):
+        with pytest.raises(ValueError, match="HH:MM format"):
+            EarningsCalendarConfig(enabled=True, fetch_time="bad")
+
+    def test_validate_fetch_time_out_of_range(self):
+        with pytest.raises(ValueError, match="16:00-20:00"):
+            EarningsCalendarConfig(enabled=True, fetch_time="21:00")
+
+    def test_validate_fetch_time_skipped_when_disabled(self):
+        config = EarningsCalendarConfig(enabled=False, fetch_time="99:99")
+        assert config.fetch_time == "99:99"
+
+    def test_daemon_config_has_earnings_calendar(self):
+        config = DaemonConfig()
+        assert isinstance(config.earnings_calendar, EarningsCalendarConfig)
+        assert config.earnings_calendar.enabled is False
+
+    def test_from_toml_with_earnings_calendar(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.earnings_calendar]
+enabled = true
+fetch_time = "17:00"
+fetch_days = ["mon", "thu"]
+lookahead_days = 5
+reduce_position_t1 = true
+position_reduction_factor = 0.3
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.earnings_calendar.enabled is True
+        assert config.earnings_calendar.fetch_time == "17:00"
+        assert config.earnings_calendar.fetch_days == ["mon", "thu"]
+        assert config.earnings_calendar.lookahead_days == 5
+        assert config.earnings_calendar.reduce_position_t1 is True
+        assert config.earnings_calendar.position_reduction_factor == 0.3
+
+        path.unlink()
+
+    def test_from_toml_without_earnings_calendar_uses_defaults(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.earnings_calendar.enabled is False
+        assert config.earnings_calendar.fetch_time == "16:45"
 
         path.unlink()

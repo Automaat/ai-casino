@@ -13,7 +13,7 @@ from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
-from src.daemon.state import DaemonState, SectorRotationRecord
+from src.daemon.state import DaemonState, EarningsEventRecord, SectorRotationRecord
 from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
@@ -55,6 +55,9 @@ class DaemonRunner:
             sector_rotation_time=config.sector_rotation.run_time,
             sector_rotation_days=config.sector_rotation.run_days,
             enable_sector_rotation=config.sector_rotation.enabled,
+            earnings_fetch_time=config.earnings_calendar.fetch_time,
+            earnings_fetch_days=config.earnings_calendar.fetch_days,
+            enable_earnings_calendar=config.earnings_calendar.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -217,8 +220,20 @@ class DaemonRunner:
                 except Exception as e:
                     logger.warning(f"Failed to build sector context: {e}")
 
+            # Build earnings context if available
+            earnings_context: str | None = None
+            if self.config.earnings_calendar.enabled and self.state.earnings_calendar_history:
+                try:
+                    earnings_context = self._build_earnings_context(symbol)
+                except Exception as e:
+                    logger.warning(f"Failed to build earnings context: {e}")
+
             result = await workflow.analyze(
-                symbol, period_days=90, trading_session=session, sector_context=sector_context
+                symbol,
+                period_days=90,
+                trading_session=session,
+                sector_context=sector_context,
+                earnings_context=earnings_context,
             )
 
             self.state.record_analysis(
@@ -728,6 +743,130 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
+    def _build_earnings_context(self, symbol: str) -> str | None:
+        """Build earnings context string from latest calendar state.
+
+        Args:
+            symbol: Stock ticker to build context for
+
+        Returns:
+            Formatted earnings context or None
+        """
+        if not self.state.earnings_calendar_history:
+            return None
+
+        from datetime import date
+
+        from src.daemon.earnings import DaemonEarningsCalendar
+        from src.data.earnings import EarningsEvent
+
+        latest = self.state.earnings_calendar_history[-1]
+        events = [
+            EarningsEvent(
+                symbol=e.symbol,
+                earnings_date=date.fromisoformat(e.earnings_date),
+                estimate_eps=e.estimate_eps,
+            )
+            for e in latest.events
+        ]
+
+        daemon_earnings = DaemonEarningsCalendar()
+        upcoming = daemon_earnings.get_upcoming(
+            events, days_ahead=self.config.earnings_calendar.lookahead_days
+        )
+        if not upcoming:
+            return None
+
+        # Filter to current symbol + overall context
+        symbol_events = [e for e in upcoming if e.symbol == symbol]
+        other_events = [e for e in upcoming if e.symbol != symbol]
+
+        lines: list[str] = []
+        if symbol_events:
+            lines.append(daemon_earnings.format_context(symbol_events))
+        if other_events:
+            lines.append(f"Other watchlist earnings upcoming: {', '.join(e.symbol for e in other_events)}")
+
+        return "\n".join(lines) if lines else None
+
+    def _run_earnings_fetch(self) -> None:
+        """Run earnings calendar fetch for watchlist symbols."""
+        from src.daemon.earnings import DaemonEarningsCalendar
+
+        # Weekly dedup: check if already fetched this week on a configured day
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_earnings_fetch:
+            last_date = self.state.last_earnings_fetch.astimezone(self.scheduler.timezone).date()
+            # Skip if already fetched today
+            if last_date == now.date():
+                logger.debug("Earnings calendar already fetched today")
+                return
+
+        # Check calendar-aware weekly schedule
+        if not self.scheduler.is_earnings_calendar_time(self.config.earnings_calendar.time):
+            logger.debug("Not earnings calendar time, skipping")
+            return
+
+        logger.info("Starting earnings calendar fetch")
+        console.print(f"\n[bold cyan]Earnings Calendar Fetch ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            daemon_earnings = DaemonEarningsCalendar()
+            watchlist = self._get_merged_watchlist()
+
+            console.print(f"[dim]Fetching earnings for {len(watchlist)} symbols...[/dim]")
+            calendar = daemon_earnings.fetch(watchlist)
+
+            # Build event records
+            event_records = [
+                EarningsEventRecord(
+                    symbol=e.symbol,
+                    earnings_date=e.earnings_date.isoformat(),
+                    estimate_eps=e.estimate_eps,
+                )
+                for e in calendar.events
+            ]
+
+            symbols_with_earnings = len(calendar.events)
+            symbols_without_earnings = max(0, len(watchlist) - symbols_with_earnings)
+            if symbols_without_earnings:
+                logger.info(
+                    "Earnings calendar: %d symbols with earnings data, %d symbols with no earnings data",
+                    symbols_with_earnings,
+                    symbols_without_earnings,
+                )
+
+            # NOTE: Missing earnings data is normal, not a failure
+            self.state.record_earnings_fetch(
+                events=event_records,
+                symbols_fetched=symbols_with_earnings,
+                symbols_failed=0,  # Only track known fetch failures
+            )
+            self.state.save(self.config.state.state_file)
+
+            # Show upcoming earnings
+            upcoming = daemon_earnings.get_upcoming(
+                calendar.events, days_ahead=self.config.earnings_calendar.lookahead_days
+            )
+            if upcoming:
+                console.print("[bold yellow]Upcoming earnings:[/bold yellow]")
+                for event in upcoming:
+                    days_until = (event.earnings_date - now.date()).days
+                    console.print(f"  {event.symbol}: {event.earnings_date} ({days_until}d away)")
+            else:
+                console.print("[dim]No upcoming earnings within lookahead window[/dim]")
+
+            console.print(
+                f"\n[dim]Earnings fetch complete: {len(calendar.events)} symbols with earnings data[/dim]\n"
+            )
+            logger.info(f"Earnings calendar fetch completed: {len(calendar.events)} events")
+
+        except Exception as e:
+            error_msg = f"Earnings calendar fetch failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
     def _log_screening_results(self, results: list) -> None:
         """Log screening results to console.
 
@@ -787,6 +926,10 @@ class DaemonRunner:
         # Check if it's time for pre-market data refresh
         if self.config.prefetch.enabled and self.scheduler.is_pre_market_refresh_time():
             self._run_pre_market_refresh()
+
+        # Check if it's time for earnings calendar fetch
+        if self.scheduler.is_earnings_fetch_time():
+            self._run_earnings_fetch()
 
         # Check if it's time for sector rotation (before screening)
         if self.scheduler.is_sector_rotation_time():
