@@ -2,7 +2,7 @@
 
 import tempfile
 
-from src.daemon.state import DaemonState
+from src.daemon.state import DaemonState, EarningsEventRecord
 
 
 class TestDaemonState:
@@ -136,6 +136,51 @@ class TestDaemonState:
             assert len(loaded.sector_rotation_history) == 1
             assert loaded.last_sector_rotation is not None
             assert loaded.sector_rotation_history[0].leading_sectors == ["TECHNOLOGY"]
+
+    def test_record_earnings_fetch(self):
+        state = DaemonState()
+
+        events = [
+            EarningsEventRecord(symbol="AAPL", earnings_date="2024-07-25", estimate_eps=1.35),
+            EarningsEventRecord(symbol="MSFT", earnings_date="2024-07-30"),
+        ]
+        state.record_earnings_fetch(events=events, symbols_fetched=2, symbols_failed=1)
+
+        assert len(state.earnings_calendar_history) == 1
+        assert state.last_earnings_fetch is not None
+        record = state.earnings_calendar_history[0]
+        assert record.symbols_fetched == 2
+        assert record.symbols_failed == 1
+        assert len(record.events) == 2
+        assert record.events[0].symbol == "AAPL"
+        assert record.events[0].estimate_eps == 1.35
+
+    def test_earnings_history_pruning(self):
+        state = DaemonState()
+
+        for i in range(15):
+            state.record_earnings_fetch(
+                events=[EarningsEventRecord(symbol=f"SYM{i}", earnings_date="2024-07-25")],
+                symbols_fetched=1,
+                symbols_failed=0,
+            )
+
+        assert len(state.earnings_calendar_history) == 10
+
+    def test_earnings_save_load(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = f"{tmpdir}/state.json"
+
+            state = DaemonState()
+            events = [EarningsEventRecord(symbol="AAPL", earnings_date="2024-07-25")]
+            state.record_earnings_fetch(events=events, symbols_fetched=1, symbols_failed=0)
+            state.save(path)
+
+            loaded = DaemonState.load(path)
+
+            assert len(loaded.earnings_calendar_history) == 1
+            assert loaded.last_earnings_fetch is not None
+            assert loaded.earnings_calendar_history[0].events[0].symbol == "AAPL"
 
     def test_repr(self):
         state = DaemonState()

@@ -43,6 +43,7 @@ class TradingWorkflowResult(BaseModel):
     regime: RegimeAnalysis | None = None
     strategy_used: str | None = None
     warnings: list[str] = []
+    earnings_context: str | None = None
     execution_metrics: WorkflowExecutionMetrics | None = None
 
     class Config:

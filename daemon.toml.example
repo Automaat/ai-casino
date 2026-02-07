@@ -51,6 +51,20 @@ refresh_days = 30
 # Strategies to optimize per symbol
 strategies = ["momentum", "mean_reversion", "trend_following"]
 
+[daemon.earnings_calendar]
+# Earnings calendar preparation (flag upcoming earnings, adjust risk)
+enabled = false
+# Time to fetch earnings calendar (HH:MM, in schedule timezone)
+fetch_time = "16:45"
+# Days to fetch (weekly refresh is sufficient)
+fetch_days = ["mon"]
+# Days ahead to flag upcoming earnings
+lookahead_days = 3
+# Reduce position size T-1 day before earnings
+reduce_position_t1 = false
+# Position reduction factor (0.5 = halve position size)
+position_reduction_factor = 0.5
+
 [daemon.prefetch]
 # After-hours data prefetching (warm cache for morning)
 # Requires ALPHA_VANTAGE_API_KEY env var

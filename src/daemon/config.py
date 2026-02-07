@@ -141,6 +141,39 @@ class SectorRotationConfig(BaseModel):
         return self
 
 
+class EarningsCalendarConfig(BaseModel):
+    """Configuration for earnings calendar preparation."""
+
+    enabled: bool = False
+    fetch_time: str = "16:45"
+    fetch_days: list[str] = Field(default_factory=lambda: ["mon"])
+    lookahead_days: int = Field(default=3, ge=1, le=14)
+    reduce_position_t1: bool = False
+    position_reduction_factor: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_fetch_time(self) -> "EarningsCalendarConfig":
+        """Validate fetch_time is in HH:MM format within 16:00-20:00."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.fetch_time)
+        if not match:
+            msg = f"fetch_time must be in HH:MM format (00:00-23:59), got {self.fetch_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"fetch_time must be between 16:00-20:00, got {self.fetch_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
 
@@ -157,6 +190,7 @@ class DaemonConfig(BaseModel):
     screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
     prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
+    earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> "DaemonConfig":
@@ -181,6 +215,7 @@ class DaemonConfig(BaseModel):
         screening_data = daemon_data.pop("screening", {})
         prefetch_data = daemon_data.pop("prefetch", {})
         sector_rotation_data = daemon_data.pop("sector_rotation", {})
+        earnings_calendar_data = daemon_data.pop("earnings_calendar", {})
 
         return cls(
             **daemon_data,
@@ -192,6 +227,7 @@ class DaemonConfig(BaseModel):
             screening=ScreeningConfig(**screening_data),
             prefetch=PrefetchConfig(**prefetch_data),
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
+            earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
         )
 
     def __repr__(self) -> str:

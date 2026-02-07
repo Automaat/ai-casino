@@ -33,6 +33,9 @@ class MarketScheduler:
         sector_rotation_time: str = "16:15",
         sector_rotation_days: list[str] | None = None,
         enable_sector_rotation: bool = False,
+        earnings_fetch_time: str = "16:45",
+        earnings_fetch_days: list[str] | None = None,
+        enable_earnings_calendar: bool = False,
     ) -> None:
         """Initialize market scheduler.
 
@@ -52,6 +55,9 @@ class MarketScheduler:
             sector_rotation_time: Time to run sector rotation analysis (HH:MM format)
             sector_rotation_days: Days to run sector rotation (e.g., ["mon", ..., "fri"])
             enable_sector_rotation: Enable sector rotation analysis
+            earnings_fetch_time: Time to fetch earnings calendar (HH:MM format)
+            earnings_fetch_days: Days to fetch earnings (e.g., ["mon"])
+            enable_earnings_calendar: Enable earnings calendar fetching
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -68,6 +74,9 @@ class MarketScheduler:
         self.sector_rotation_time = sector_rotation_time
         self.sector_rotation_days = sector_rotation_days or ["mon", "tue", "wed", "thu", "fri"]
         self.enable_sector_rotation = enable_sector_rotation
+        self.earnings_fetch_time = earnings_fetch_time
+        self.earnings_fetch_days = earnings_fetch_days or ["mon"]
+        self.enable_earnings_calendar = enable_earnings_calendar
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -360,6 +369,29 @@ class MarketScheduler:
             return False
 
         target_hour, target_minute = map(int, self.sector_rotation_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_earnings_fetch_time(self) -> bool:
+        """Check if current time matches earnings calendar fetch schedule.
+
+        Returns:
+            True if within 1 minute of configured time on configured day
+        """
+        if not self.enable_earnings_calendar:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.earnings_fetch_days:
+            return False
+
+        target_hour, target_minute = map(int, self.earnings_fetch_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
