@@ -322,18 +322,20 @@ class VectorBTRunner:
         trend_entries, trend_exits = self._generate_trend_following_signals(data)
 
         # Convert boolean signals to numeric (1/0) for weighted voting
-        momentum_entry_score = momentum_entries.astype(int) * strategy.momentum_weight
-        mean_rev_entry_score = mean_rev_entries.astype(int) * strategy.mean_reversion_weight
-        trend_entry_score = trend_entries.astype(int) * strategy.trend_following_weight
+        momentum_weight = strategy.weights["momentum"]
+        mean_rev_weight = strategy.weights["mean_reversion"]
+        trend_weight = strategy.weights["trend_following"]
 
-        momentum_exit_score = momentum_exits.astype(int) * strategy.momentum_weight
-        mean_rev_exit_score = mean_rev_exits.astype(int) * strategy.mean_reversion_weight
-        trend_exit_score = trend_exits.astype(int) * strategy.trend_following_weight
+        momentum_entry_score = momentum_entries.astype(int) * momentum_weight
+        mean_rev_entry_score = mean_rev_entries.astype(int) * mean_rev_weight
+        trend_entry_score = trend_entries.astype(int) * trend_weight
+
+        momentum_exit_score = momentum_exits.astype(int) * momentum_weight
+        mean_rev_exit_score = mean_rev_exits.astype(int) * mean_rev_weight
+        trend_exit_score = trend_exits.astype(int) * trend_weight
 
         # Aggregate scores: entry if majority vote (>0.5 weighted sum)
-        total_weight = (
-            strategy.momentum_weight + strategy.mean_reversion_weight + strategy.trend_following_weight
-        )
+        total_weight = momentum_weight + mean_rev_weight + trend_weight
         threshold = total_weight / 2
 
         entry_scores = momentum_entry_score + mean_rev_entry_score + trend_entry_score

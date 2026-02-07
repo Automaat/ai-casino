@@ -1,6 +1,7 @@
 """Tests for trading workflow."""
 
-from unittest.mock import MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,6 +13,8 @@ from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
+from src.backtesting.vectorbt_runner import VectorBTResult
+from src.daemon.config import PreTradeBacktestingConfig
 from src.data.market import MarketData
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.signal import Signal
@@ -451,3 +454,156 @@ async def test_workflow_raises_when_fundamental_fails_non_rate_limit(mock_workfl
 
     with pytest.raises(Exception, match="Invalid API key"):
         await workflow.analyze("AAPL", period_days=90)
+
+
+@pytest.mark.asyncio
+async def test_backtest_validation_pass(mock_workflow_dependencies):
+    """Test backtest validation passes with good metrics - confidence unchanged."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    config = PreTradeBacktestingConfig(
+        enabled=True,
+        lookback_days=180,
+        min_sharpe_threshold=0.5,
+        max_drawdown_threshold=0.25,
+        confidence_penalty_multiplier=0.7,
+    )
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        use_meta_agent=False,
+        pre_trade_backtest_config=config,
+    )
+
+    mock_backtest_result = VectorBTResult(
+        sharpe_ratio=1.2,
+        sortino_ratio=1.5,
+        max_drawdown=-0.15,
+        total_return=0.25,
+        win_rate=0.60,
+        profit_factor=2.0,
+        total_trades=30,
+        calmar_ratio=1.67,
+        equity_curve=[100000, 125000],
+        equity_dates=[datetime.now(UTC), datetime.now(UTC)],
+        symbol="AAPL",
+        start_date=datetime.now(UTC),
+        end_date=datetime.now(UTC),
+    )
+
+    with patch.object(workflow.vectorbt_runner, "run_backtest", return_value=mock_backtest_result):
+        result = await workflow.analyze("AAPL", period_days=90)
+
+    assert result.backtest_validation is not None
+    assert result.backtest_validation.passed is True
+    assert result.backtest_validation.sharpe_ratio == 1.2
+    assert result.backtest_validation.max_drawdown == -0.15
+    assert result.backtest_validation.confidence_adjustment == 1.0
+    assert len(result.backtest_validation.failure_reasons) == 0
+
+
+@pytest.mark.asyncio
+async def test_backtest_validation_fail_sharpe(mock_workflow_dependencies):
+    """Test backtest validation fails on low Sharpe - confidence penalized."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    config = PreTradeBacktestingConfig(
+        enabled=True,
+        lookback_days=180,
+        min_sharpe_threshold=0.5,
+        max_drawdown_threshold=0.25,
+        confidence_penalty_multiplier=0.7,
+    )
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        use_meta_agent=False,
+        pre_trade_backtest_config=config,
+    )
+
+    mock_backtest_result = VectorBTResult(
+        sharpe_ratio=0.2,
+        sortino_ratio=0.3,
+        max_drawdown=-0.15,
+        total_return=0.10,
+        win_rate=0.52,
+        profit_factor=1.1,
+        total_trades=20,
+        calmar_ratio=0.67,
+        equity_curve=[100000, 110000],
+        equity_dates=[datetime.now(UTC), datetime.now(UTC)],
+        symbol="AAPL",
+        start_date=datetime.now(UTC),
+        end_date=datetime.now(UTC),
+    )
+
+    with patch.object(workflow.vectorbt_runner, "run_backtest", return_value=mock_backtest_result):
+        result = await workflow.analyze("AAPL", period_days=90)
+
+    assert result.backtest_validation is not None
+    assert result.backtest_validation.passed is False
+    assert result.backtest_validation.sharpe_ratio == 0.2
+    assert result.backtest_validation.confidence_adjustment == 0.7
+    assert len(result.backtest_validation.failure_reasons) == 1
+    assert "Sharpe" in result.backtest_validation.failure_reasons[0]
+    assert any("Backtest FAILED" in w for w in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_backtest_validation_disabled(mock_workflow_dependencies):
+    """Test backtest validation disabled - no validation runs."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    config = PreTradeBacktestingConfig(enabled=False)
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        use_meta_agent=False,
+        pre_trade_backtest_config=config,
+    )
+
+    result = await workflow.analyze("AAPL", period_days=90)
+
+    assert result.backtest_validation is None
+    assert workflow.vectorbt_runner is None
+
+
+@pytest.mark.asyncio
+async def test_backtest_validation_error(mock_workflow_dependencies):
+    """Test backtest validation error handling - graceful degradation."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    config = PreTradeBacktestingConfig(
+        enabled=True,
+        lookback_days=180,
+        min_sharpe_threshold=0.5,
+        max_drawdown_threshold=0.25,
+    )
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        use_meta_agent=False,
+        pre_trade_backtest_config=config,
+    )
+
+    with patch.object(workflow.vectorbt_runner, "run_backtest", side_effect=ValueError("Insufficient data")):
+        result = await workflow.analyze("AAPL", period_days=90)
+
+    assert result.backtest_validation is None
+    assert any("Backtest error" in w for w in result.warnings)
