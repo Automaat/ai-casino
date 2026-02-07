@@ -151,7 +151,10 @@ def test_generate_signal_returns_tuple(sample_ohlcv):
 
 def test_repr():
     strategy = TrendFollowingStrategy(sma_fast=50, sma_slow=200, adx_period=14, adx_threshold=25.0)
-    expected = "TrendFollowingStrategy(sma_fast=50, sma_slow=200, adx_period=14, adx_threshold=25.0)"
+    expected = (
+        "TrendFollowingStrategy(sma_fast=50, sma_slow=200, adx_period=14, "
+        "adx_threshold=25.0, adx_threshold_weak=20.0)"
+    )
     assert repr(strategy) == expected
 
 

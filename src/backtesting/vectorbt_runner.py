@@ -210,70 +210,102 @@ class VectorBTRunner:
         from src.strategies.trend_following import TrendFollowingStrategy
 
         if strategy is None or isinstance(strategy, MomentumStrategy):
-            return self._generate_momentum_signals(data)
+            return self._generate_momentum_signals(data, strategy)
         if isinstance(strategy, MeanReversionStrategy):
-            return self._generate_mean_reversion_signals(data)
+            return self._generate_mean_reversion_signals(data, strategy)
         if isinstance(strategy, TrendFollowingStrategy):
-            return self._generate_trend_following_signals(data)
+            return self._generate_trend_following_signals(data, strategy)
         if isinstance(strategy, EnsembleStrategy):
             return self._generate_ensemble_signals(data, strategy)
 
         logger.warning(f"Unknown strategy type {type(strategy)}, defaulting to momentum")
-        return self._generate_momentum_signals(data)
+        return self._generate_momentum_signals(data, None)
 
-    def _generate_momentum_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    def _generate_momentum_signals(
+        self, data: pd.DataFrame, strategy: "MomentumStrategy | None" = None
+    ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from RSI + MACD indicators (momentum strategy).
+
+        Args:
+            data: OHLCV dataframe
+            strategy: MomentumStrategy instance (uses params if provided, else defaults)
 
         Returns:
             Tuple of (entries, exits) boolean Series
         """
         close = data["Close"]
 
-        rsi = ta.rsi(close, length=14)
-        macd_result = ta.macd(close, fast=12, slow=26, signal=9)
+        rsi_period = strategy.rsi_period if strategy else 14
+        rsi_oversold = strategy.rsi_oversold if strategy else 30.0
+        rsi_overbought = strategy.rsi_overbought if strategy else 70.0
+        macd_fast = strategy.macd_fast if strategy else 12
+        macd_slow = strategy.macd_slow if strategy else 26
+        macd_signal = strategy.macd_signal if strategy else 9
+
+        rsi = ta.rsi(close, length=rsi_period)
+        macd_result = ta.macd(close, fast=macd_fast, slow=macd_slow, signal=macd_signal)
 
         if macd_result is not None:
-            macd_hist = macd_result["MACDh_12_26_9"]
+            macd_hist = macd_result[f"MACDh_{macd_fast}_{macd_slow}_{macd_signal}"]
         else:
             macd_hist = pd.Series(0.0, index=close.index)
 
         rsi = rsi.fillna(50.0)
         macd_hist = macd_hist.fillna(0.0)
 
-        entries = (rsi < self.RSI_OVERSOLD) & (macd_hist > 0)
-        exits = (rsi > self.RSI_OVERBOUGHT) & (macd_hist < 0)
+        entries = (rsi < rsi_oversold) & (macd_hist > 0)
+        exits = (rsi > rsi_overbought) & (macd_hist < 0)
 
         return entries, exits
 
-    def _generate_mean_reversion_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-        """Generate entry/exit signals from Bollinger Bands (mean reversion strategy).
+    def _generate_mean_reversion_signals(
+        self, data: pd.DataFrame, strategy: "MeanReversionStrategy | None" = None
+    ) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals from Bollinger Bands (mean reversion).
+
+        Matches MeanReversionStrategy logic: pure BB-based, no RSI filter.
+
+        Args:
+            data: OHLCV dataframe
+            strategy: MeanReversionStrategy instance (uses params if provided, else defaults)
 
         Returns:
             Tuple of (entries, exits) boolean Series
         """
         close = data["Close"]
 
-        rsi = ta.rsi(close, length=14)
-        bb_result = ta.bbands(close, length=20, std=2)
+        bb_period = strategy.bb_period if strategy else 20
+        bb_std = strategy.bb_std if strategy else 2.0
+
+        bb_result = ta.bbands(close, length=bb_period, std=bb_std)
 
         if bb_result is not None:
-            bb_lower = bb_result["BBL_20_2.0"]
-            bb_upper = bb_result["BBU_20_2.0"]
+            std_str = f"{bb_std:.1f}"
+            bb_lower = bb_result[f"BBL_{bb_period}_{std_str}"]
+            bb_upper = bb_result[f"BBU_{bb_period}_{std_str}"]
         else:
             bb_lower = close * 0.98
             bb_upper = close * 1.02
 
-        rsi = rsi.fillna(50.0)
         bb_lower = bb_lower.fillna(close * 0.98)
         bb_upper = bb_upper.fillna(close * 1.02)
 
-        entries = (close <= bb_lower) & (rsi < self.RSI_OVERSOLD)
-        exits = (close >= bb_upper) & (rsi > self.RSI_OVERBOUGHT)
+        # Pure mean reversion: no RSI filter (aligns with MeanReversionStrategy)
+        entries = close <= bb_lower
+        exits = close >= bb_upper
 
         return entries, exits
 
-    def _generate_trend_following_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-        """Generate entry/exit signals from SMA crossover + ADX (trend following strategy).
+    def _generate_trend_following_signals(
+        self, data: pd.DataFrame, strategy: "TrendFollowingStrategy | None" = None
+    ) -> tuple[pd.Series, pd.Series]:
+        """Generate entry/exit signals from SMA crossover + ADX (trend following).
+
+        Uses strategy-configured parameters including adx_threshold_weak for exits.
+
+        Args:
+            data: OHLCV dataframe
+            strategy: TrendFollowingStrategy instance (uses params if provided, else defaults)
 
         Returns:
             Tuple of (entries, exits) boolean Series
@@ -282,24 +314,31 @@ class VectorBTRunner:
         high = data["High"]
         low = data["Low"]
 
-        adx_strong_trend_threshold = 25
-        adx_weak_trend_threshold = 20
-        sma_fast_length = 50
-        sma_slow_length = 200
-        adx_length = 14
+        sma_fast_length = strategy.sma_fast if strategy else 50
+        sma_slow_length = strategy.sma_slow if strategy else 200
+        adx_length = strategy.adx_period if strategy else 14
+        adx_strong_threshold = strategy.adx_threshold if strategy else 25.0
+
+        # Use new adx_threshold_weak parameter (defaults to adx_threshold - 5)
+        adx_weak_threshold = (
+            strategy.adx_threshold_weak
+            if strategy and hasattr(strategy, "adx_threshold_weak")
+            else adx_strong_threshold - 5.0
+        )
 
         sma_fast = ta.sma(close, length=sma_fast_length)
         sma_slow = ta.sma(close, length=sma_slow_length)
         adx = ta.adx(high, low, close, length=adx_length)
 
-        adx_val = adx["ADX_14"] if adx is not None else pd.Series(0.0, index=close.index)
+        adx_col = f"ADX_{adx_length}"
+        adx_val = adx[adx_col] if adx is not None and adx_col in adx else pd.Series(0.0, index=close.index)
 
         sma_fast = sma_fast.fillna(close)
         sma_slow = sma_slow.fillna(close)
         adx_val = adx_val.fillna(0.0)
 
-        entries = (sma_fast > sma_slow) & (adx_val > adx_strong_trend_threshold)
-        exits = (sma_fast < sma_slow) | (adx_val < adx_weak_trend_threshold)
+        entries = (sma_fast > sma_slow) & (adx_val > adx_strong_threshold)
+        exits = (sma_fast < sma_slow) | (adx_val < adx_weak_threshold)
 
         return entries, exits
 
