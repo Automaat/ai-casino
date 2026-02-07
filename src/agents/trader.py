@@ -6,6 +6,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from src.daemon.degradation import DegradationContext
     from src.workflows.types import BacktestValidation
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
@@ -79,6 +80,7 @@ class TraderAgent:
         backtest_validation: "BacktestValidation | None" = None,
         game_plan_context: str | None = None,
         position_context: dict[str, object] | None = None,
+        degradation_context: "DegradationContext | None" = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -99,6 +101,7 @@ class TraderAgent:
             backtest_validation: Pre-trade backtesting validation result (optional)
             game_plan_context: Formatted game plan context (optional)
             position_context: Position context (entry price, P&L, days held) (optional)
+            degradation_context: Degradation context (optional)
 
         Returns:
             TradingDecision with action and reasoning
@@ -177,12 +180,31 @@ class TraderAgent:
             risk_level = self._extract_risk_level(response, confidence)
             reasoning = [response]  # Wrap fallback text in list
 
-        confidence_adjustment = backtest_validation.confidence_adjustment if backtest_validation else 1.0
-        adjusted_confidence = confidence * confidence_adjustment
+        # Apply confidence adjustments (backtest + degradation)
+        backtest_adjustment = backtest_validation.confidence_adjustment if backtest_validation else 1.0
+        adjusted_confidence = confidence * backtest_adjustment
+
+        # Apply degradation penalty if present
+        if degradation_context and degradation_context.confidence_adjustment < 1.0:
+            base_confidence = adjusted_confidence
+            adjusted_confidence = base_confidence * degradation_context.confidence_adjustment
+
+            degradation_penalty_pct = (1 - degradation_context.confidence_adjustment) * 100
+            degradation_warning = (
+                f"DEGRADED MODE ({degradation_context.tier}): "
+                f"{len(degradation_context.unavailable_services)} APIs unavailable, "
+                f"confidence reduced by {degradation_penalty_pct:.0f}%"
+            )
+            reasoning = [*reasoning, degradation_warning]
+
+            logger.info(
+                f"Degradation penalty applied: {base_confidence:.2f} → {adjusted_confidence:.2f} "
+                f"(tier: {degradation_context.tier})"
+            )
 
         logger.info(
             f"Decision: {action.value} (confidence={adjusted_confidence:.2f}, "
-            f"risk={risk_level}, backtest_adjustment={confidence_adjustment:.2f})"
+            f"risk={risk_level}, backtest_adjustment={backtest_adjustment:.2f})"
         )
 
         return TradingDecision(

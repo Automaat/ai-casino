@@ -12,6 +12,7 @@ from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
 if TYPE_CHECKING:
+    from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
 
 
@@ -176,6 +177,16 @@ class EarningsCalendarRecord(BaseModel):
     symbols_failed: int
 
 
+class DegradationRecord(BaseModel):
+    """Record of degradation event."""
+
+    timestamp: datetime
+    tier: str
+    unavailable_services: list[str]
+    confidence_adjustment: float
+    halt_reason: str | None = None
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -213,6 +224,8 @@ class DaemonState(BaseModel):
     active_positions: dict[str, dict] = Field(default_factory=dict)
     position_management_history: list[dict] = Field(default_factory=list)
     monte_carlo_tests: list[MonteCarloRecord] = Field(default_factory=list)
+    degradation_history: list[DegradationRecord] = Field(default_factory=list)
+    last_degradation: datetime | None = None
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -301,6 +314,28 @@ class DaemonState(BaseModel):
 
         if len(self.errors) > 100:
             self.errors = self.errors[-50:]
+
+    def record_degradation(self, context: "DegradationContext") -> None:
+        """Record degradation event.
+
+        Args:
+            context: Degradation context
+        """
+        now = datetime.now(UTC)
+        self.degradation_history.append(
+            DegradationRecord(
+                timestamp=now,
+                tier=context.tier.value,
+                unavailable_services=context.unavailable_services,
+                confidence_adjustment=context.confidence_adjustment,
+                halt_reason=context.halt_reason,
+            )
+        )
+        self.last_degradation = now
+
+        # Keep last 100 records
+        if len(self.degradation_history) > 100:
+            self.degradation_history = self.degradation_history[-100:]
 
     def record_after_hours_screening(
         self,

@@ -64,6 +64,8 @@ class TradingWorkflowResult(BaseModel):
     peer_analysis_context: str | None = None
     execution_metrics: WorkflowExecutionMetrics | None = None
     backtest_validation: BacktestValidation | None = None
+    degradation_tier: str | None = None
+    degradation_confidence_penalty: float | None = None
 
     class Config:
         """Pydantic config."""
