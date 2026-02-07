@@ -5,12 +5,11 @@ Base pattern generalized from TrumpWatcher:
 - Lazy initialization of heavy components (LLM, workflow)
 - Deduplication via state tracking
 - In-memory cooldown to prevent analysis storms
-- Graceful shutdown (SIGINT/SIGTERM handlers)
+- Graceful shutdown (signal handlers managed by CLI orchestrator)
 - Async throughout with concurrent analysis
 """
 
 import asyncio
-import signal
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 
@@ -148,7 +147,7 @@ class EventWatcher(ABC):
         logger.info(f"Analyzing {len(symbols)} symbols: {symbols}")
 
         results: dict[str, TradingWorkflowResult] = {}
-        semaphore = asyncio.Semaphore(2)  # Limit concurrent analyses
+        semaphore = asyncio.Semaphore(self.max_concurrent_analyses)
 
         async def analyze_one(symbol: str) -> tuple[str, TradingWorkflowResult | None]:
             async with semaphore:
@@ -252,8 +251,8 @@ class EventWatcher(ABC):
         symbols_list = sorted(symbols_to_analyze)[: self.max_concurrent_analyses]
         analyses = await self._analyze_stocks(symbols_list)
 
-        # 6. Set cooldowns for analyzed symbols
-        for symbol in symbols_list:
+        # 6. Set cooldowns only for successfully analyzed symbols
+        for symbol in analyses:
             self._set_cooldown(symbol)
 
         # 7. Emit signal (use first relevant event as primary)
@@ -266,15 +265,8 @@ class EventWatcher(ABC):
         self._emit_signal(signal)
 
     async def run(self) -> None:
-        """Run watcher daemon with graceful shutdown."""
+        """Run watcher daemon (signal handlers managed by CLI orchestrator)."""
         self.running = True
-
-        def shutdown_handler(sig: int, _frame: object) -> None:
-            logger.info(f"Received signal {sig}, shutting down...")
-            self.running = False
-
-        signal.signal(signal.SIGINT, shutdown_handler)
-        signal.signal(signal.SIGTERM, shutdown_handler)
 
         console.print()
         console.print(f"[bold green]{self.__class__.__name__} Started[/bold green]")

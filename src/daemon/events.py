@@ -47,7 +47,7 @@ class BaseEvent(Protocol):
 class NewsEvent(BaseModel):
     """News article event."""
 
-    event_id: str = Field(description="Article URL hash")
+    event_id: str = Field(description="Article URL")
     event_type: Literal["news"] = "news"
     timestamp: datetime
     source: str = Field(description="marketaux or duckduckgo")
@@ -95,7 +95,7 @@ class SocialEvent(BaseModel):
         return (
             f"SOCIAL VOLUME SPIKE:\n"
             f"Symbol: {self.symbol}\n"
-            f"Mentions: {self.mention_count} (+{self.mention_delta_pct:.1f}%)\n"
+            f"Mentions: {self.mention_count} (+{self.mention_delta_pct or 0.0:.1f}%)\n"
             f"Source: {self.source}"
         )
 
@@ -103,7 +103,7 @@ class SocialEvent(BaseModel):
         """String representation."""
         if self.viral_post:
             return f"SocialEvent(viral_post={self.viral_post.title[:30]}...)"
-        return f"SocialEvent(symbol={self.symbol}, delta={self.mention_delta_pct:.1f}%)"
+        return f"SocialEvent(symbol={self.symbol}, delta={self.mention_delta_pct or 0.0:.1f}%)"
 
 
 class FilingEntry(BaseModel):

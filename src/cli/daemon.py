@@ -40,7 +40,7 @@ def daemon(
         if config is not None:
             if not config.exists():
                 console.print(f"[bold red]Error:[/bold red] Config file not found: {config}")
-                raise typer.Exit(1)  # noqa: TRY301
+                raise typer.Exit(1)
             daemon_config = DaemonConfig.from_toml(config)
         else:
             daemon_config = DaemonConfig()
@@ -114,7 +114,7 @@ def events_daemon(
         if config is not None:
             if not config.exists():
                 console.print(f"[bold red]Error:[/bold red] Config file not found: {config}")
-                raise typer.Exit(1)  # noqa: TRY301
+                raise typer.Exit(1)
             daemon_config = DaemonConfig.from_toml(config)
         else:
             daemon_config = DaemonConfig()
@@ -146,6 +146,7 @@ def events_daemon(
                     relevance_threshold=daemon_config.news_watcher.relevance_threshold,
                     cooldown_minutes=daemon_config.news_watcher.cooldown_minutes,
                     breaking_threshold_minutes=daemon_config.news_watcher.breaking_threshold_minutes,
+                    max_concurrent_analyses=daemon_config.news_watcher.max_concurrent_analyses,
                 )
             )
             console.print("[green]✓[/green] NewsWatcher enabled")
@@ -153,7 +154,17 @@ def events_daemon(
         # TODO: Add other watchers (social, filings, anomaly) when implemented
 
         async def run_all() -> None:
-            """Run all enabled watchers concurrently."""
+            """Run all enabled watchers with graceful shutdown."""
+            import signal
+
+            def shutdown_handler(sig: int, _frame: object) -> None:
+                logger.info(f"Received signal {sig}, shutting down watchers...")
+                for w in watchers:
+                    w.running = False
+
+            signal.signal(signal.SIGINT, shutdown_handler)
+            signal.signal(signal.SIGTERM, shutdown_handler)
+
             tasks = [w.run() for w in watchers]
             await asyncio.gather(*tasks)
 

@@ -4,6 +4,7 @@ Polls Marketaux API every 5 minutes, filters by breaking keywords and recency,
 deduplicates via URL tracking, and triggers LLM triage + analysis for relevant events.
 """
 
+from collections import deque
 from datetime import UTC, datetime
 from typing import ClassVar
 
@@ -53,13 +54,14 @@ class NewsWatcher(EventWatcher):
         }
     )
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         historical_cache: HistoricalCache,
         poll_interval: int = 300,
         relevance_threshold: float = 0.7,
         cooldown_minutes: int = 15,
         breaking_threshold_minutes: int = 15,
+        max_concurrent_analyses: int = 2,
     ) -> None:
         """Initialize news watcher.
 
@@ -69,17 +71,18 @@ class NewsWatcher(EventWatcher):
             relevance_threshold: Minimum relevance score to trigger analysis
             cooldown_minutes: Minutes to wait before re-analyzing same symbol
             breaking_threshold_minutes: Max age for breaking news (minutes)
+            max_concurrent_analyses: Maximum symbols to analyze per cycle
         """
         super().__init__(
             poll_interval,
             relevance_threshold,
             cooldown_minutes,
-            max_concurrent_analyses=2,  # Fixed value for news watcher
+            max_concurrent_analyses=max_concurrent_analyses,
             historical_cache=historical_cache,
         )
         self.breaking_threshold_minutes = breaking_threshold_minutes
         self._news_fetcher: NewsFetcher | None = None
-        self._seen_urls: set[str] = set()  # Rolling window
+        self._seen_urls: deque[str] = deque(maxlen=100)  # Rolling window auto-evicts oldest
 
         logger.info(
             f"NewsWatcher initialized (breaking_threshold={breaking_threshold_minutes}m, "
@@ -132,12 +135,8 @@ class NewsWatcher(EventWatcher):
                         article=article,
                     )
                 )
-                self._seen_urls.add(article.url)
+                self._seen_urls.append(article.url)  # Auto-evicts oldest when maxlen reached
                 logger.info(f"Breaking news detected: {article.title[:60]}... (age: {age_minutes:.1f}m)")
-
-        # Keep rolling window of 100 URLs
-        if len(self._seen_urls) > 100:
-            self._seen_urls = set(list(self._seen_urls)[-100:])
 
         return breaking
 

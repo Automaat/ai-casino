@@ -124,12 +124,12 @@ async def test_fetch_events_deduplication(news_watcher):
 
 @pytest.mark.asyncio
 async def test_fetch_events_rolling_window(news_watcher):
-    """Test that seen_urls maintains rolling window of 100."""
+    """Test that seen_urls maintains rolling window of 100 via deque maxlen."""
     now = datetime.now(UTC)
 
-    # Add 110 URLs to seen_urls
+    # Add 110 URLs to seen_urls (deque auto-evicts oldest)
     for i in range(110):
-        news_watcher._seen_urls.add(f"https://example.com/{i}")
+        news_watcher._seen_urls.append(f"https://example.com/{i}")
 
     article = NewsArticle(
         title="Breaking: New announcement",
@@ -145,7 +145,7 @@ async def test_fetch_events_rolling_window(news_watcher):
 
         await news_watcher._fetch_events()
 
-    # Should keep rolling window of 100
+    # Deque with maxlen=100 auto-limits to 100 entries
     assert len(news_watcher._seen_urls) == 100
 
 
