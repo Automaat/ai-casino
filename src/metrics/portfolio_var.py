@@ -64,7 +64,9 @@ class PortfolioVaRCalculator:
             logger.warning("No positions or zero portfolio value, returning insufficient data result")
             return self._empty_result(lookback_days)
 
-        weighted_returns = self._compute_weighted_returns(positions, portfolio_value, lookback_days)
+        weighted_returns, num_included = self._compute_weighted_returns(
+            positions, portfolio_value, lookback_days
+        )
 
         if len(weighted_returns) < self.MIN_DATA_POINTS:
             logger.warning(
@@ -72,7 +74,7 @@ class PortfolioVaRCalculator:
             )
             return self._empty_result(lookback_days)
 
-        return self._compute_metrics(weighted_returns, len(positions), lookback_days)
+        return self._compute_metrics(weighted_returns, num_included, lookback_days)
 
     def calculate_with_hypothetical(
         self,
@@ -124,7 +126,7 @@ class PortfolioVaRCalculator:
         positions: dict[str, BrokerPosition],
         portfolio_value: float,
         lookback_days: int,
-    ) -> list[float]:
+    ) -> tuple[list[float], int]:
         """Compute portfolio daily returns weighted by position size.
 
         Args:
@@ -133,7 +135,7 @@ class PortfolioVaRCalculator:
             lookback_days: Lookback period
 
         Returns:
-            List of daily portfolio returns
+            Tuple of (daily portfolio returns, number of positions actually included)
         """
         symbol_returns: dict[str, pd.Series] = {}
         weights: dict[str, float] = {}
@@ -155,29 +157,28 @@ class PortfolioVaRCalculator:
                 logger.warning(f"Failed to fetch data for {symbol}: {e}, excluding from VaR")
 
         if not symbol_returns:
-            return []
+            return [], 0
 
-        # Redistribute weights to sum to 1.0
+        # Calculate stock weights (no normalization - preserve cash effect)
         total_weight = sum(weights.values())
         if total_weight <= 0:
-            return []
-
-        normalized_weights = {s: w / total_weight for s, w in weights.items()}
+            return [], 0
 
         # Align all return series to common dates
         returns_df = pd.DataFrame(symbol_returns)
         returns_df = returns_df.dropna()
 
         if len(returns_df) < self.MIN_DATA_POINTS:
-            return []
+            return [], 0
 
-        # Compute weighted portfolio returns
+        # Compute weighted portfolio returns (stock weights + cash @ 0% return)
         portfolio_returns = pd.Series(0.0, index=returns_df.index)
-        for symbol, weight in normalized_weights.items():
+        for symbol, weight in weights.items():
             if symbol in returns_df.columns:
                 portfolio_returns += returns_df[symbol] * weight
+        # Cash contributes: cash_weight * 0.0 (implicit, documented here)
 
-        return portfolio_returns.tolist()
+        return portfolio_returns.tolist(), len(symbol_returns)
 
     def _compute_metrics(
         self,

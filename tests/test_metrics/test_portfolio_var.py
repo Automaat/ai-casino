@@ -146,7 +146,7 @@ class TestPortfolioVaRCalculator:
 
         # Should still work with AAPL data only
         assert result.sufficient_data is True
-        assert result.num_positions == 2  # counts all positions even if one excluded
+        assert result.num_positions == 1  # counts only positions with successful data fetch
 
     def test_zero_portfolio_value(self, calculator):
         positions = {"AAPL": _make_position("AAPL", 0.0)}

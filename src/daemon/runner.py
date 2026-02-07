@@ -1137,8 +1137,9 @@ class DaemonRunner:
         if self.config.optimization.enabled and self.scheduler.is_optimization_time():
             self._run_optimization()
 
-        # Daily risk report (after-hours, before journal)
-        self._run_daily_risk_report()
+        # Daily risk report (after-hours only, before journal)
+        if not self.scheduler.is_market_open():
+            self._run_daily_risk_report()
 
         if self.config.market_hours_only and not self.scheduler.is_market_open():
             await self._maybe_run_journal()
