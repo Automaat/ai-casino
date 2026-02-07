@@ -78,6 +78,7 @@ class CorrelationAuditor:
         self.lookback_days = lookback_days
         self.output_dir = Path(output_dir).expanduser()
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self._returns_cache: dict[str, pd.Series] = {}
         self._ticker_cache: dict[str, yf.Ticker] = {}
 
         logger.info(
@@ -119,7 +120,12 @@ class CorrelationAuditor:
 
         # Fetch aligned returns
         logger.info(f"Fetching returns for {len(symbols)} positions over {self.lookback_days} days")
+        self._returns_cache.clear()  # Clear cache at start of audit
         returns_df = self._fetch_position_returns(symbols, warnings)
+
+        # Populate cache with portfolio returns for substitution calculations
+        for symbol in returns_df.columns:
+            self._returns_cache[symbol] = returns_df[symbol]
 
         if returns_df.empty:
             warnings.append("No return data available")
@@ -155,8 +161,9 @@ class CorrelationAuditor:
                 if sym_a < sym_b:  # Avoid duplicates
                     correlations.append(corr)
 
-        max_corr = max(correlations) if correlations else 0.0
-        avg_corr = sum(correlations) / len(correlations) if correlations else 0.0
+        finite_correlations = [c for c in correlations if pd.notna(c)]
+        max_corr = max(finite_correlations) if finite_correlations else 0.0
+        avg_corr = sum(finite_correlations) / len(finite_correlations) if finite_correlations else 0.0
 
         # Generate substitution suggestions
         substitutions = self._generate_substitutions(
@@ -240,12 +247,12 @@ class CorrelationAuditor:
                 market_data = self.market_fetcher.fetch_daily(symbol, period_days=self.lookback_days)
                 df = market_data.data
 
-                if df.empty or "close" not in df.columns:
-                    warnings.append(f"No close data for {symbol}")
+                if df.empty or "Close" not in df.columns:
+                    warnings.append(f"No Close data for {symbol}")
                     continue
 
                 # Calculate daily returns
-                returns = df["close"].pct_change().dropna()
+                returns = df["Close"].pct_change().dropna()
                 returns_data[symbol] = returns
 
             except Exception as e:
@@ -470,6 +477,31 @@ class CorrelationAuditor:
 
         return [], []
 
+    def _get_cached_returns(self, symbol: str) -> pd.Series | None:
+        """Get cached returns or fetch and cache if not available.
+
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            Daily returns series or None if fetch fails
+        """
+        if symbol in self._returns_cache:
+            return self._returns_cache[symbol]
+
+        try:
+            market_data = self.market_fetcher.fetch_daily(symbol, period_days=self.lookback_days)
+            if market_data.data.empty:
+                return None
+
+            returns = market_data.data["Close"].pct_change().dropna()
+            self._returns_cache[symbol] = returns
+            return returns
+
+        except Exception as e:
+            logger.debug(f"Failed to fetch returns for {symbol}: {e}")
+            return None
+
     def _calculate_avg_correlation_with_portfolio(
         self, candidate: str, portfolio_symbols: list[str]
     ) -> float:
@@ -483,21 +515,18 @@ class CorrelationAuditor:
             Average correlation with portfolio
         """
         try:
-            # Fetch candidate returns
-            market_data = self.market_fetcher.fetch_daily(candidate, period_days=self.lookback_days)
-            if market_data.data.empty:
+            # Fetch candidate returns (uses cache)
+            candidate_returns = self._get_cached_returns(candidate)
+            if candidate_returns is None:
                 return 1.0  # Assume high correlation if no data
-
-            candidate_returns = market_data.data["close"].pct_change().dropna()
 
             correlations = []
             for symbol in portfolio_symbols:
                 try:
-                    portfolio_data = self.market_fetcher.fetch_daily(symbol, period_days=self.lookback_days)
-                    if portfolio_data.data.empty:
+                    # Use cached portfolio returns
+                    portfolio_returns = self._get_cached_returns(symbol)
+                    if portfolio_returns is None:
                         continue
-
-                    portfolio_returns = portfolio_data.data["close"].pct_change().dropna()
 
                     # Align and calculate correlation
                     aligned = pd.DataFrame({"candidate": candidate_returns, "portfolio": portfolio_returns})
@@ -505,7 +534,10 @@ class CorrelationAuditor:
 
                     if len(aligned) >= MIN_DATA_POINTS:
                         corr = aligned["candidate"].corr(aligned["portfolio"])
-                        correlations.append(abs(corr))
+                        if pd.notna(corr):
+                            correlations.append(abs(corr))
+                        else:
+                            correlations.append(1.0)  # Treat undefined as high correlation
 
                 except Exception as e:
                     logger.debug(f"Failed to calculate correlation {candidate}-{symbol}: {e}")

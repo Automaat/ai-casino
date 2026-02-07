@@ -32,7 +32,7 @@ def mock_market_fetcher():
         else:
             prices = [base_price + (i % 10) for i in range(100)]
 
-        df = pd.DataFrame({"close": prices}, index=dates)
+        df = pd.DataFrame({"Close": prices}, index=dates)
         return MarketData(symbol=symbol, data=df, last_updated=datetime.now(UTC))
 
     fetcher.fetch_daily.side_effect = fetch_daily

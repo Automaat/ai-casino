@@ -1192,13 +1192,15 @@ class DaemonRunner:
             if len(positions) < 2:
                 logger.info(f"Insufficient positions ({len(positions)}), need ≥2")
                 console.print("[dim]Insufficient positions[/dim]\n")
+                self.state.last_correlation_audit = now
                 return
 
             screening_results = None
             if self.state.screening_history:
                 screening_results = self.state.screening_history[-1].candidates
 
-            market_fetcher = self.workflow.market_fetcher
+            workflow = self._init_workflow()
+            market_fetcher = workflow.market_fetcher
             auditor = CorrelationAuditor(
                 market_fetcher=market_fetcher,
                 correlation_threshold=self.config.correlation_audit.correlation_threshold,
