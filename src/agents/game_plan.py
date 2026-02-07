@@ -1,7 +1,7 @@
 """Game plan agent for next-day trading strategy."""
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
 from typing import Literal
 
@@ -60,6 +60,7 @@ class GamePlanAgent:
         futures_symbols: list[str] | None = None,
         sector_context: str | None = None,
         earnings_context: str | None = None,
+        timezone: tzinfo = UTC,
     ) -> GamePlan:
         """Generate daily game plan.
 
@@ -68,6 +69,7 @@ class GamePlanAgent:
             futures_symbols: Futures to track (defaults to ES=F, NQ=F)
             sector_context: Optional sector rotation context
             earnings_context: Optional earnings calendar context
+            timezone: Timezone for date calculation (defaults to UTC)
 
         Returns:
             GamePlan with priorities, risk stance, sector focus
@@ -87,7 +89,7 @@ class GamePlanAgent:
 
         prompt = self._prompts.load(
             "user",
-            date=datetime.now(UTC).date().isoformat(),
+            date=datetime.now(timezone).date().isoformat(),
             futures_context=self._format_futures(futures_context),
             premarket_movers=premarket_movers,
             watchlist_symbols=", ".join(watchlist),
@@ -117,7 +119,7 @@ class GamePlanAgent:
             confidence = 0.5
 
         return GamePlan(
-            date=datetime.now(UTC).date(),
+            date=datetime.now(timezone).date(),
             priority_symbols=priority_symbols,
             risk_stance=risk_stance,
             sector_focus=sector_focus,
@@ -155,8 +157,11 @@ class GamePlanAgent:
         try:
             import yfinance as yf
 
+            # Limit to first 15 symbols to prevent slow/flaky yfinance loops
+            # TODO: Implement batching/caching for larger watchlists
+            limited_watchlist = watchlist[:15]
             movers = []
-            for symbol in watchlist:
+            for symbol in limited_watchlist:
                 try:
                     ticker = yf.Ticker(symbol)
                     data = ticker.history(period="2d")

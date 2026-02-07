@@ -965,6 +965,7 @@ class DaemonRunner:
                 futures_symbols=self.config.game_plan.futures_symbols,
                 sector_context=sector_context,
                 earnings_context=earnings_context,
+                timezone=self.scheduler.timezone,
             )
 
             plan_path = agent.persist(plan, self.config.game_plan.plan_dir)

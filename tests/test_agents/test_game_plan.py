@@ -1,7 +1,7 @@
 """Tests for game plan agent."""
 
 from datetime import UTC, date, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -49,8 +49,11 @@ def mock_market_fetcher():
 
 
 @pytest.mark.asyncio
-async def test_game_plan_agent_generate(mock_llm_client, mock_market_fetcher):
+@patch("yfinance.Ticker")
+async def test_game_plan_agent_generate(mock_yf_ticker, mock_llm_client, mock_market_fetcher):
     """Test game plan generation."""
+    import pandas as pd
+
     mock_llm_client.astructured.return_value = GamePlanLLMResponse(
         priority_symbols=["AAPL", "TSLA"],
         risk_stance="NEUTRAL",
@@ -59,6 +62,11 @@ async def test_game_plan_agent_generate(mock_llm_client, mock_market_fetcher):
         reasoning="Tech strength overnight",
         confidence=0.8,
     )
+
+    mock_ticker = MagicMock()
+    mock_history_df = pd.DataFrame({"Close": [100.0, 102.0]})
+    mock_ticker.history.return_value = mock_history_df
+    mock_yf_ticker.return_value = mock_ticker
 
     agent = GamePlanAgent(mock_llm_client, mock_market_fetcher)
     plan = await agent.generate(["AAPL", "TSLA", "GOOGL"])
@@ -71,10 +79,20 @@ async def test_game_plan_agent_generate(mock_llm_client, mock_market_fetcher):
 
 
 @pytest.mark.asyncio
-async def test_game_plan_agent_structured_output_fallback(mock_llm_client, mock_market_fetcher):
+@patch("yfinance.Ticker")
+async def test_game_plan_agent_structured_output_fallback(
+    mock_yf_ticker, mock_llm_client, mock_market_fetcher
+):
     """Test fallback when structured output fails."""
+    import pandas as pd
+
     mock_llm_client.astructured.side_effect = StructuredOutputError("Schema mismatch")
     mock_llm_client.acomplete.return_value = "Market neutral, focus on tech"
+
+    mock_ticker = MagicMock()
+    mock_history_df = pd.DataFrame({"Close": [100.0, 102.0]})
+    mock_ticker.history.return_value = mock_history_df
+    mock_yf_ticker.return_value = mock_ticker
 
     agent = GamePlanAgent(mock_llm_client, mock_market_fetcher)
     plan = await agent.generate(["AAPL", "TSLA"])
