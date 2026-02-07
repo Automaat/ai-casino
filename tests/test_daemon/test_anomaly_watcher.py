@@ -1,7 +1,7 @@
 """Tests for anomaly watcher."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -87,140 +87,145 @@ def create_daily_data(
 @pytest.mark.asyncio
 async def test_volume_spike_detection(anomaly_watcher, mock_market_fetcher):
     """Test volume spike detection (2-poll sequence: baseline → spike)."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Poll 1: Establish baseline (normal volume, no spike)
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
-        volume=600000.0
-    )  # 1.2x, below threshold
-    mock_market_fetcher.fetch_daily.return_value = create_daily_data(
-        close_prices=[100.0] * 30, volumes=[500000.0] * 30
-    )
+        # Poll 1: Establish baseline (normal volume, no spike)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
+            volume=600000.0
+        )  # 1.2x, below threshold
+        mock_market_fetcher.fetch_daily.return_value = create_daily_data(
+            close_prices=[100.0] * 30, volumes=[500000.0] * 30
+        )
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) == 0  # No spike yet, just baseline
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) == 0  # No spike yet, just baseline
 
-    # Verify baseline established for both symbols
-    assert "AAPL" in anomaly_watcher._volume_baselines
-    assert "TSLA" in anomaly_watcher._volume_baselines
-    assert anomaly_watcher._volume_baselines["AAPL"] == 500000.0
+        # Verify baseline established for both symbols
+        assert "AAPL" in anomaly_watcher._volume_baselines
+        assert "TSLA" in anomaly_watcher._volume_baselines
+        assert anomaly_watcher._volume_baselines["AAPL"] == 500000.0
 
-    # Poll 2: Volume spike (2x baseline)
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(volume=1000000.0)
+        # Poll 2: Volume spike (2x baseline)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(volume=1000000.0)
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) >= 1  # At least one spike detected
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) >= 1  # At least one spike detected
 
-    # Check first event
-    event = events[0]
-    assert isinstance(event, AnomalyEvent)
-    assert "volume_spike" in event.anomaly_types
-    assert event.volume_spike_data is not None
-    assert event.volume_spike_data.spike_multiplier == 2.0
+        # Check first event
+        event = events[0]
+        assert isinstance(event, AnomalyEvent)
+        assert "volume_spike" in event.anomaly_types
+        assert event.volume_spike_data is not None
+        assert event.volume_spike_data.spike_multiplier == 2.0
 
 
 @pytest.mark.asyncio
 async def test_price_move_detection(anomaly_watcher, mock_market_fetcher):
     """Test large intraday price move detection (>5%)."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # 6% intraday move
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
-        open_price=100.0, close_price=106.0, high=107.0, low=99.0
-    )
+        # 6% intraday move
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
+            open_price=100.0, close_price=106.0, high=107.0, low=99.0
+        )
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) >= 1  # May return 2 events due to round-robin
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) >= 1  # May return 2 events due to round-robin
 
-    # Check first event
-    event = events[0]
-    assert "price_move" in event.anomaly_types
-    assert event.price_move_data is not None
-    assert event.price_move_data.change_pct == pytest.approx(6.0, abs=0.01)
-    assert event.price_move_data.open_price == 100.0
-    assert event.price_move_data.current_price == 106.0
+        # Check first event
+        event = events[0]
+        assert "price_move" in event.anomaly_types
+        assert event.price_move_data is not None
+        assert event.price_move_data.change_pct == pytest.approx(6.0, abs=0.01)
+        assert event.price_move_data.open_price == 100.0
+        assert event.price_move_data.current_price == 106.0
 
 
 @pytest.mark.asyncio
 async def test_gap_up_detection(anomaly_watcher, mock_market_fetcher):
     """Test gap up detection (>3% from prev close)."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Gap up: prev close 100, open 105 (5% gap)
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=105.0)
-    mock_market_fetcher.fetch_daily.return_value = create_daily_data(
-        close_prices=[100.0, 102.0],
-        volumes=[500000.0, 500000.0],  # [-2] = 100.0 (prev close)
-    )
+        # Gap up: prev close 100, open 105 (5% gap)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=105.0)
+        mock_market_fetcher.fetch_daily.return_value = create_daily_data(
+            close_prices=[100.0, 102.0],
+            volumes=[500000.0, 500000.0],  # [-2] = 100.0 (prev close)
+        )
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) >= 1  # May return 2 events (AAPL + TSLA) due to round-robin
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) >= 1  # May return 2 events (AAPL + TSLA) due to round-robin
 
-    # Check first event
-    event = events[0]
-    assert "gap" in event.anomaly_types
-    assert event.gap_data is not None
-    assert event.gap_data.gap_pct == pytest.approx(5.0, abs=0.01)
-    assert event.gap_data.gap_direction == "up"
-    assert event.gap_data.previous_close == 100.0
-    assert event.gap_data.open_price == 105.0
+        # Check first event
+        event = events[0]
+        assert "gap" in event.anomaly_types
+        assert event.gap_data is not None
+        assert event.gap_data.gap_pct == pytest.approx(5.0, abs=0.01)
+        assert event.gap_data.gap_direction == "up"
+        assert event.gap_data.previous_close == 100.0
+        assert event.gap_data.open_price == 105.0
 
 
 @pytest.mark.asyncio
 async def test_gap_down_detection(anomaly_watcher, mock_market_fetcher):
     """Test gap down detection (>3% from prev close)."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Gap down: prev close 100, open 95 (-5% gap)
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=95.0)
-    mock_market_fetcher.fetch_daily.return_value = create_daily_data(
-        close_prices=[100.0, 102.0],
-        volumes=[500000.0, 500000.0],  # [-2] = 100.0 (prev close)
-    )
+        # Gap down: prev close 100, open 95 (-5% gap)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=95.0)
+        mock_market_fetcher.fetch_daily.return_value = create_daily_data(
+            close_prices=[100.0, 102.0],
+            volumes=[500000.0, 500000.0],  # [-2] = 100.0 (prev close)
+        )
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) >= 1  # May return 2 events due to round-robin
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) >= 1  # May return 2 events due to round-robin
 
-    # Check first event
-    event = events[0]
-    assert "gap" in event.anomaly_types
-    assert event.gap_data is not None
-    assert event.gap_data.gap_pct == pytest.approx(-5.0, abs=0.01)
-    assert event.gap_data.gap_direction == "down"
+        # Check first event
+        event = events[0]
+        assert "gap" in event.anomaly_types
+        assert event.gap_data is not None
+        assert event.gap_data.gap_pct == pytest.approx(-5.0, abs=0.01)
+        assert event.gap_data.gap_direction == "down"
 
 
 @pytest.mark.asyncio
 async def test_multiple_anomalies_single_event(anomaly_watcher, mock_market_fetcher):
     """Test multiple anomaly types detected in single event."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Establish volume baseline for both symbols
-    anomaly_watcher._volume_baselines["AAPL"] = 500000.0
-    anomaly_watcher._volume_baselines["TSLA"] = 500000.0
-    anomaly_watcher._previous_close_cache["AAPL"] = 100.0
-    anomaly_watcher._previous_close_cache["TSLA"] = 100.0
+        # Establish volume baseline for both symbols
+        anomaly_watcher._volume_baselines["AAPL"] = 500000.0
+        anomaly_watcher._volume_baselines["TSLA"] = 500000.0
+        anomaly_watcher._previous_close_cache["AAPL"] = 100.0
+        anomaly_watcher._previous_close_cache["TSLA"] = 100.0
 
-    # Volume spike (2x) + price move (6%) + gap (5%)
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
-        open_price=105.0,  # 5% gap from 100
-        close_price=111.3,  # 6% move from 105
-        high=112.0,
-        low=104.0,
-        volume=1000000.0,  # 2x baseline
-    )
+        # Volume spike (2x) + price move (6%) + gap (5%)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(
+            open_price=105.0,  # 5% gap from 100
+            close_price=111.3,  # 6% move from 105
+            high=112.0,
+            low=104.0,
+            volume=1000000.0,  # 2x baseline
+        )
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) >= 1  # May return 2 events due to round-robin
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) >= 1  # May return 2 events due to round-robin
 
-    # Check first event has all 3 anomaly types
-    event = events[0]
-    assert len(event.anomaly_types) == 3
-    assert "volume_spike" in event.anomaly_types
-    assert "price_move" in event.anomaly_types
-    assert "gap" in event.anomaly_types
-    assert event.volume_spike_data is not None
-    assert event.price_move_data is not None
-    assert event.gap_data is not None
+        # Check first event has all 3 anomaly types
+        event = events[0]
+        assert len(event.anomaly_types) == 3
+        assert "volume_spike" in event.anomaly_types
+        assert "price_move" in event.anomaly_types
+        assert "gap" in event.anomaly_types
+        assert event.volume_spike_data is not None
+        assert event.price_move_data is not None
+        assert event.gap_data is not None
 
 
 @pytest.mark.asyncio
@@ -264,39 +269,41 @@ async def test_round_robin_wrap_around(anomaly_watcher, mock_market_fetcher):
 @pytest.mark.asyncio
 async def test_baseline_establishment(anomaly_watcher, mock_market_fetcher):
     """Test volume baseline establishment from daily data."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Return 30 days of data with avg volume 500k
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data()
-    mock_market_fetcher.fetch_daily.return_value = create_daily_data(
-        close_prices=[100.0] * 30, volumes=[500000.0] * 30
-    )
+        # Return 30 days of data with avg volume 500k
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data()
+        mock_market_fetcher.fetch_daily.return_value = create_daily_data(
+            close_prices=[100.0] * 30, volumes=[500000.0] * 30
+        )
 
-    await anomaly_watcher._fetch_events()
+        await anomaly_watcher._fetch_events()
 
-    # Verify baseline established
-    assert "AAPL" in anomaly_watcher._volume_baselines
-    assert anomaly_watcher._volume_baselines["AAPL"] == 500000.0
+        # Verify baseline established
+        assert "AAPL" in anomaly_watcher._volume_baselines
+        assert anomaly_watcher._volume_baselines["AAPL"] == 500000.0
 
 
 @pytest.mark.asyncio
 async def test_previous_close_cache_refresh(anomaly_watcher, mock_market_fetcher):
     """Test previous close cache clears on new day."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Set cache with old date
-    old_date = datetime.now(UTC) - timedelta(days=2)
-    anomaly_watcher._last_cache_refresh_date = old_date
-    anomaly_watcher._previous_close_cache["AAPL"] = 100.0
+        # Set cache with old date
+        old_date = datetime.now(UTC) - timedelta(days=2)
+        anomaly_watcher._last_cache_refresh_date = old_date
+        anomaly_watcher._previous_close_cache["AAPL"] = 100.0
 
-    # Mock fetch to avoid errors
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data()
+        # Mock fetch to avoid errors
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data()
 
-    # Run cycle (should clear cache)
-    await anomaly_watcher._fetch_events()
+        # Run cycle (should clear cache)
+        await anomaly_watcher._fetch_events()
 
-    # Verify cache cleared
-    assert len(anomaly_watcher._previous_close_cache) == 0
+        # Verify cache cleared
+        assert len(anomaly_watcher._previous_close_cache) == 0
 
 
 @pytest.mark.asyncio
@@ -321,91 +328,97 @@ async def test_lru_eviction(anomaly_watcher, mock_market_fetcher):
 @pytest.mark.asyncio
 async def test_empty_watchlist(anomaly_watcher, mock_market_fetcher):
     """Test empty watchlist returns no events."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
-    anomaly_watcher.watchlist = []
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
+        anomaly_watcher.watchlist = []
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) == 0
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) == 0
 
 
 @pytest.mark.asyncio
 async def test_empty_intraday_data(anomaly_watcher, mock_market_fetcher):
     """Test handling of empty intraday data."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    # Return empty dataframe
-    empty_data = MarketData(symbol="AAPL", data=pd.DataFrame(), last_updated=datetime.now(UTC))
-    mock_market_fetcher.fetch_intraday.return_value = empty_data
+        # Return empty dataframe
+        empty_data = MarketData(symbol="AAPL", data=pd.DataFrame(), last_updated=datetime.now(UTC))
+        mock_market_fetcher.fetch_intraday.return_value = empty_data
 
-    events = await anomaly_watcher._fetch_events()
-    assert len(events) == 0
+        events = await anomaly_watcher._fetch_events()
+        assert len(events) == 0
 
 
 @pytest.mark.asyncio
 async def test_api_failure_continues(anomaly_watcher, mock_market_fetcher):
     """Test API failure for one symbol doesn't stop processing."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
-    anomaly_watcher._volume_baselines["TSLA"] = 500000.0
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
+        anomaly_watcher._volume_baselines["TSLA"] = 500000.0
 
-    # AAPL fails, TSLA succeeds with volume spike
-    def mock_fetch(symbol, interval):
-        if symbol == "AAPL":
-            msg = "API error"
-            raise ValueError(msg)
-        return create_intraday_data(volume=1000000.0)  # 2x spike
+        # AAPL fails, TSLA succeeds with volume spike
+        def mock_fetch(symbol, interval):
+            if symbol == "AAPL":
+                msg = "API error"
+                raise ValueError(msg)
+            return create_intraday_data(volume=1000000.0)  # 2x spike
 
-    mock_market_fetcher.fetch_intraday.side_effect = mock_fetch
+        mock_market_fetcher.fetch_intraday.side_effect = mock_fetch
 
-    events = await anomaly_watcher._fetch_events()
+        events = await anomaly_watcher._fetch_events()
 
-    # Should get TSLA event despite AAPL failure
-    assert len(events) == 1
-    assert events[0].symbol == "TSLA"
+        # Should get TSLA event despite AAPL failure
+        assert len(events) == 1
+        assert events[0].symbol == "TSLA"
 
 
 @pytest.mark.asyncio
 async def test_zero_volume_baseline_skipped(anomaly_watcher, mock_market_fetcher):
     """Test zero volume baseline doesn't cause division errors."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
-    anomaly_watcher._volume_baselines["AAPL"] = 0.0
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
+        anomaly_watcher._volume_baselines["AAPL"] = 0.0
 
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(volume=1000000.0)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(volume=1000000.0)
 
-    events = await anomaly_watcher._fetch_events()
+        events = await anomaly_watcher._fetch_events()
 
-    # Should not detect volume spike (baseline is 0)
-    for event in events:
-        assert "volume_spike" not in event.anomaly_types
+        # Should not detect volume spike (baseline is 0)
+        for event in events:
+            assert "volume_spike" not in event.anomaly_types
 
 
 @pytest.mark.asyncio
 async def test_zero_open_price_skipped(anomaly_watcher, mock_market_fetcher):
     """Test zero open price doesn't cause division errors."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
 
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=0.0, close_price=100.0)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=0.0, close_price=100.0)
 
-    events = await anomaly_watcher._fetch_events()
+        events = await anomaly_watcher._fetch_events()
 
-    # Should not detect price move or gap (open is 0)
-    for event in events:
-        assert "price_move" not in event.anomaly_types
-        assert "gap" not in event.anomaly_types
+        # Should not detect price move or gap (open is 0)
+        for event in events:
+            assert "price_move" not in event.anomaly_types
+            assert "gap" not in event.anomaly_types
 
 
 @pytest.mark.asyncio
 async def test_zero_previous_close_skipped(anomaly_watcher, mock_market_fetcher):
     """Test zero previous close doesn't cause division errors."""
-    anomaly_watcher._market_fetcher = mock_market_fetcher
-    anomaly_watcher._previous_close_cache["AAPL"] = 0.0
+    with patch.object(anomaly_watcher, "_init_components"):
+        anomaly_watcher._market_fetcher = mock_market_fetcher
+        anomaly_watcher._previous_close_cache["AAPL"] = 0.0
 
-    mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=100.0)
+        mock_market_fetcher.fetch_intraday.return_value = create_intraday_data(open_price=100.0)
 
-    events = await anomaly_watcher._fetch_events()
+        events = await anomaly_watcher._fetch_events()
 
-    # Should not detect gap (prev close is 0)
-    for event in events:
-        assert "gap" not in event.anomaly_types
+        # Should not detect gap (prev close is 0)
+        for event in events:
+            assert "gap" not in event.anomaly_types
 
 
 def test_volume_spike_repr():
