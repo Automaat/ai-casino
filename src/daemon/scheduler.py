@@ -36,6 +36,9 @@ class MarketScheduler:
         earnings_fetch_time: str = "16:45",
         earnings_fetch_days: list[str] | None = None,
         enable_earnings_calendar: bool = False,
+        peer_analysis_time: str = "17:30",
+        peer_analysis_days: list[str] | None = None,
+        enable_peer_analysis: bool = False,
     ) -> None:
         """Initialize market scheduler.
 
@@ -58,6 +61,9 @@ class MarketScheduler:
             earnings_fetch_time: Time to fetch earnings calendar (HH:MM format)
             earnings_fetch_days: Days to fetch earnings (e.g., ["mon"])
             enable_earnings_calendar: Enable earnings calendar fetching
+            peer_analysis_time: Time to run deep peer analysis (HH:MM format)
+            peer_analysis_days: Days to run peer analysis (e.g., ["sun"])
+            enable_peer_analysis: Enable deep peer analysis
         """
         self.start_hour, self.start_minute = map(int, start_time.split(":"))
         self.end_hour, self.end_minute = map(int, end_time.split(":"))
@@ -77,6 +83,9 @@ class MarketScheduler:
         self.earnings_fetch_time = earnings_fetch_time
         self.earnings_fetch_days = earnings_fetch_days or ["mon"]
         self.enable_earnings_calendar = enable_earnings_calendar
+        self.peer_analysis_time = peer_analysis_time
+        self.peer_analysis_days = peer_analysis_days or ["sun"]
+        self.enable_peer_analysis = enable_peer_analysis
         logger.info(
             f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
             f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
@@ -392,6 +401,29 @@ class MarketScheduler:
             return False
 
         target_hour, target_minute = map(int, self.earnings_fetch_time.split(":"))
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_peer_analysis_time(self) -> bool:
+        """Check if current time matches peer analysis schedule.
+
+        Returns:
+            True if within 1 minute of configured time on configured day
+        """
+        if not self.enable_peer_analysis:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.peer_analysis_days:
+            return False
+
+        target_hour, target_minute = map(int, self.peer_analysis_time.split(":"))
 
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
