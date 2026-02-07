@@ -1,7 +1,6 @@
 """Tests for game plan agent."""
 
 from datetime import UTC, date, datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
