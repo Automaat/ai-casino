@@ -12,6 +12,11 @@ from src.daemon.runner import DaemonRunner
 from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 
+# Test credentials - not real secrets
+TEST_API_KEY = "test_key"
+TEST_SECRET_KEY = "test_secret"
+TEST_BASE_URL = "https://paper-api.alpaca.markets"
+
 
 @pytest.fixture
 def sample_config(tmp_path: Path) -> DaemonConfig:
@@ -178,16 +183,16 @@ def test_auto_trade_inits_broker(
 ) -> None:
     """Test auto_trade=true initializes broker when keys present."""
     sample_config.auto_trade = True
-    mock_get_credentials.return_value = ("test_key", "test_secret", "https://paper-api.alpaca.markets")
+    mock_get_credentials.return_value = (TEST_API_KEY, TEST_SECRET_KEY, TEST_BASE_URL)
 
-    with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
+    with patch.dict(os.environ, {"ALPACA_API_KEY": TEST_API_KEY, "ALPACA_SECRET_KEY": TEST_SECRET_KEY}):
         runner = DaemonRunner(sample_config)
 
         assert runner.broker is not None
         mock_broker_class.assert_called_once_with(
-            api_key="test_key",
-            secret_key="test_secret",
-            base_url="https://paper-api.alpaca.markets",
+            api_key=TEST_API_KEY,
+            secret_key=TEST_SECRET_KEY,
+            base_url=TEST_BASE_URL,
             paper=True,
             historical_cache=ANY,
         )

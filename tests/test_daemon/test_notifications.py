@@ -83,7 +83,7 @@ class TestNotificationService:
             enabled=True,
             rate_limit_enabled=True,
             rate_limit_per_symbol_minutes=60,
-            telegram=TelegramNotificationConfig(bot_token="test", chat_id="test"),  # noqa: S106
+            telegram=TelegramNotificationConfig(bot_token="test", chat_id="test"),
         )
         service = NotificationService(config)
 
@@ -110,7 +110,7 @@ class TestTelegramChannel:
         """Channel configured when bot_token and chat_id present."""
         from src.daemon.notification_channels import TelegramChannel
 
-        config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")  # noqa: S106
+        config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")
         channel = TelegramChannel(config)
         assert channel.is_configured() is True
 
@@ -127,7 +127,7 @@ class TestTelegramChannel:
         """Telegram send succeeds with valid response."""
         from src.daemon.notification_channels import TelegramChannel
 
-        config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")  # noqa: S106
+        config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")
         channel = TelegramChannel(config)
 
         message = NotificationMessage(
