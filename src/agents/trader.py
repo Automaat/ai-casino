@@ -305,7 +305,7 @@ class TraderAgent:
                 # Parse "Rank: #3 of 10 peers"
                 rank_part = line.replace("Rank: ", "")
                 parts = rank_part.split(" of ")
-                rank = parts[0]
+                rank = parts[0].lstrip("#")
                 peer_count = parts[1].replace(" peers", "") if len(parts) > 1 else ""
             elif line.strip().startswith(("1.", "2.", "3.", "4.", "5.")):
                 metrics_lines.append(line)

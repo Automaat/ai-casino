@@ -77,8 +77,8 @@ class DeepPeerAnalyzer:
 
     def __init__(  # noqa: PLR0913
         self,
-        fundamental_fetcher: FundamentalDataFetcher,
-        universe_fetcher: StockUniverseFetcher,
+        fundamental_fetcher: FundamentalDataFetcher | None = None,
+        universe_fetcher: StockUniverseFetcher | None = None,
         output_dir: str = "~/.ai-casino/peer-analysis",
         max_peers: int = 10,
         rate_limit_sleep: float = 13.0,
@@ -87,8 +87,8 @@ class DeepPeerAnalyzer:
         """Initialize deep peer analyzer.
 
         Args:
-            fundamental_fetcher: Alpha Vantage fundamental data fetcher
-            universe_fetcher: Stock universe fetcher for peer identification
+            fundamental_fetcher: Alpha Vantage fundamental data fetcher (required for analyze_positions)
+            universe_fetcher: Stock universe fetcher (required for analyze_positions)
             output_dir: Directory to persist analysis results
             max_peers: Maximum peers to compare per position
             rate_limit_sleep: Seconds between API calls (AV rate limit)
@@ -100,6 +100,7 @@ class DeepPeerAnalyzer:
         self._max_peers = max_peers
         self._rate_limit_sleep = rate_limit_sleep
         self._cache = historical_cache
+        self._ticker_cache: dict[str, yf.Ticker] = {}
         logger.info(f"Initialized DeepPeerAnalyzer (max_peers={max_peers})")
 
     def analyze_positions(self, symbols: list[str]) -> DeepPeerAnalysisResult:
@@ -111,6 +112,10 @@ class DeepPeerAnalyzer:
         Returns:
             DeepPeerAnalysisResult with all analyses
         """
+        if self._fundamental is None or self._universe is None:
+            msg = "analyze_positions requires fundamental_fetcher and universe_fetcher"
+            raise ValueError(msg)
+
         start = time_mod.time()
         analyses: list[PeerAnalysisResult] = []
         total_peers = 0
@@ -163,6 +168,19 @@ class DeepPeerAnalyzer:
 
         return self._rank_peers(symbol, sector, all_metrics)
 
+    def _get_cached_ticker(self, symbol: str) -> yf.Ticker:
+        """Get yf.Ticker with session-level caching.
+
+        Args:
+            symbol: Stock ticker
+
+        Returns:
+            Cached yf.Ticker instance
+        """
+        if symbol not in self._ticker_cache:
+            self._ticker_cache[symbol] = yf.Ticker(symbol)
+        return self._ticker_cache[symbol]
+
     def _get_sector(self, symbol: str) -> str:
         """Get sector for a symbol via yfinance.
 
@@ -173,7 +191,7 @@ class DeepPeerAnalyzer:
             Sector name string
         """
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = self._get_cached_ticker(symbol)
             info = ticker.info
             sector = info.get("sector", "")
             if not sector:
@@ -204,7 +222,7 @@ class DeepPeerAnalyzer:
         # Cap at max_peers closest by market cap
         # Get position market cap for proximity sorting
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = self._get_cached_ticker(symbol)
             position_mcap = ticker.info.get("marketCap", 0) or 0
         except Exception:
             position_mcap = 0
@@ -216,7 +234,7 @@ class DeepPeerAnalyzer:
         peers_with_mcap: list[tuple[str, float]] = []
         for stock in same_sector:
             try:
-                t = yf.Ticker(stock.symbol)
+                t = self._get_cached_ticker(stock.symbol)
                 mcap = t.info.get("marketCap", 0) or 0
                 peers_with_mcap.append((stock.symbol, abs(mcap - position_mcap)))
             except Exception:
@@ -329,12 +347,12 @@ class DeepPeerAnalyzer:
         sorted_peers = sorted(peers, key=lambda p: p.composite_score, reverse=True)
         rank = next(
             (i + 1 for i, p in enumerate(sorted_peers) if p.symbol == position_symbol),
-            len(sorted_peers),
+            0,
         )
 
         top_alternative: str | None = None
         swap_recommendation: str | None = None
-        if sorted_peers and sorted_peers[0].symbol != position_symbol:
+        if rank > 0 and sorted_peers and sorted_peers[0].symbol != position_symbol:
             top_alternative = sorted_peers[0].symbol
             swap_recommendation = (
                 f"{position_symbol} ranks #{rank} of {len(sorted_peers)} "
@@ -415,8 +433,10 @@ class DeepPeerAnalyzer:
 
         metrics_lines = []
         for i, peer in enumerate(analysis.peers[:5], 1):
-            pe_str = f"PE={peer.pe_ratio:.1f}" if peer.pe_ratio else "PE=N/A"
-            margin_str = f"margin={peer.profit_margin:.1%}" if peer.profit_margin else "margin=N/A"
+            pe_str = f"PE={peer.pe_ratio:.1f}" if peer.pe_ratio is not None else "PE=N/A"
+            margin_str = (
+                f"margin={peer.profit_margin:.1%}" if peer.profit_margin is not None else "margin=N/A"
+            )
             line = f"  {i}. {peer.symbol}: score={peer.composite_score:.3f} {pe_str} {margin_str}"
             metrics_lines.append(line)
 

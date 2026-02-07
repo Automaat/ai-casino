@@ -961,15 +961,8 @@ class DaemonRunner:
         """
         try:
             from src.daemon.peer_analysis import DeepPeerAnalyzer
-            from src.data.universe import StockUniverseFetcher
 
-            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
-            universe_fetcher = StockUniverseFetcher()
-            analyzer = DeepPeerAnalyzer(
-                fundamental_fetcher=fundamental_fetcher,
-                universe_fetcher=universe_fetcher,
-                output_dir=self.config.peer_analysis.output_dir,
-            )
+            analyzer = DeepPeerAnalyzer(output_dir=self.config.peer_analysis.output_dir)
             return analyzer.format_context(symbol)
         except Exception as e:
             logger.warning(f"Failed to build peer context for {symbol}: {e}")
