@@ -78,6 +78,8 @@ class DaemonRunner:
             enable_signal_tracking=config.signal_tracking.enabled,
             game_plan_time=config.game_plan.generation_time,
             enable_game_plan=config.game_plan.enabled,
+            monte_carlo_time=config.monte_carlo.schedule_time,
+            monte_carlo_days=config.monte_carlo.schedule_days,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -1692,7 +1694,43 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
-    def _run_scheduled_tasks(self) -> None:  # noqa: C901
+    def _run_monte_carlo_stress_testing(self) -> None:
+        """Execute Monte Carlo portfolio stress testing (weekly/daily task)."""
+        logger.info("[MONTE CARLO] Starting stress test")
+
+        # Deduplication (check last run within 6 hours)
+        if self.state.monte_carlo_tests:
+            last_run = self.state.monte_carlo_tests[-1].timestamp
+            now = datetime.now(UTC)
+            if (now - last_run).total_seconds() < 6 * 3600:
+                logger.info("[MONTE CARLO] Already ran recently, skipping")
+                return
+
+        try:
+            from src.daemon.stress_testing import DaemonStressTester
+
+            executor = DaemonStressTester(
+                broker_client=self.broker,
+                market_fetcher=self.market_fetcher,
+                config=self.config.monte_carlo,
+            )
+            record = executor.execute()
+
+            self.state.record_monte_carlo_test(record, self.config.monte_carlo.max_history_records)
+            self.state.save(self.config.state.state_file)
+
+            if record.exceeds_risk_tolerance:
+                logger.warning(f"[MONTE CARLO] ALERT: {record.alert_message}")
+            else:
+                logger.info(
+                    f"[MONTE CARLO] Test passed - P(loss>10%)={record.prob_loss_gt_10pct:.1%}, "
+                    f"VaR95={record.var_95:.1%}"
+                )
+        except Exception as e:
+            logger.error(f"[MONTE CARLO] Stress test failed: {e}")
+            self.state.record_error(f"Monte Carlo stress test error: {e}")
+
+    def _run_scheduled_tasks(self) -> None:  # noqa: C901, PLR0912
         """Run all scheduled after-hours tasks."""
         # Check if it's time for game plan generation (pre-market)
         if self.scheduler.is_game_plan_time():
@@ -1725,6 +1763,10 @@ class DaemonRunner:
         # Check if it's time for correlation audit
         if self.scheduler.is_correlation_audit_time():
             self._run_correlation_audit()
+
+        # Check if it's time for Monte Carlo stress testing
+        if self.config.monte_carlo.enabled and self.scheduler.is_monte_carlo_time():
+            self._run_monte_carlo_stress_testing()
 
         # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():

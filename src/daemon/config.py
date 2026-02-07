@@ -367,6 +367,58 @@ class PositionManagementConfig(BaseModel):
     conviction_scale_out_percent: float = Field(default=0.5, ge=0.1, le=1.0)
 
 
+class MonteCarloConfig(BaseModel):
+    """Monte Carlo stress testing configuration."""
+
+    enabled: bool = False
+    schedule_time: str = "17:00"
+    schedule_days: list[str] = Field(default_factory=lambda: ["sun"])
+
+    # Simulation parameters
+    num_simulations: int = Field(default=5000, ge=100, le=10000)
+    horizon_days: int = Field(default=252, ge=1, le=504)
+    simulation_method: str = "PARAMETRIC"
+    min_historical_days: int = Field(default=90, ge=30)
+    random_seed: int | None = None
+
+    # Risk thresholds
+    loss_threshold: float = Field(default=0.10, ge=0.0, le=1.0)
+    max_acceptable_prob: float = Field(default=0.15, ge=0.0, le=1.0)
+
+    # Position sizing integration (opt-in)
+    adjust_position_sizing: bool = False
+
+    # History retention
+    max_history_records: int = Field(default=52, ge=1, le=520)
+
+    @model_validator(mode="after")
+    def validate_schedule_time(self) -> "MonteCarloConfig":
+        """Validate schedule_time is within 16:00-20:00 for after-hours or any time for weekends."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.schedule_time)
+        if not match:
+            msg = f"schedule_time must be HH:MM format, got {self.schedule_time}"
+            raise ValueError(msg)
+
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+
+        # Allow any time for weekend runs, restrict to 16:00-20:00 for weekdays
+        weekday_days = ["mon", "tue", "wed", "thu", "fri"]
+        is_weekday_only = any(d.lower() in weekday_days for d in self.schedule_days)
+
+        if is_weekday_only and not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"Weekday schedule_time must be 16:00-20:00, got {self.schedule_time}"
+            raise ValueError(msg)
+
+        return self
+
+
 class EarningsCalendarConfig(BaseModel):
     """Configuration for earnings calendar preparation."""
 
@@ -477,6 +529,7 @@ class DaemonConfig(BaseModel):
     pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
+    monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
@@ -515,6 +568,7 @@ class DaemonConfig(BaseModel):
         pre_trade_backtesting_data = daemon_data.pop("pre_trade_backtesting", {})
         game_plan_data = daemon_data.pop("game_plan", {})
         position_management_data = daemon_data.pop("position_management", {})
+        monte_carlo_data = daemon_data.pop("monte_carlo", {})
         news_watcher_data = daemon_data.pop("news_watcher", {})
         social_watcher_data = daemon_data.pop("social_watcher", {})
         filings_watcher_data = daemon_data.pop("filings_watcher", {})
@@ -540,6 +594,7 @@ class DaemonConfig(BaseModel):
             pre_trade_backtesting=PreTradeBacktestingConfig(**pre_trade_backtesting_data),
             game_plan=GamePlanConfig(**game_plan_data),
             position_management=PositionManagementConfig(**position_management_data),
+            monte_carlo=MonteCarloConfig(**monte_carlo_data),
             news_watcher=NewsWatcherConfig(**news_watcher_data),
             social_watcher=SocialWatcherConfig(**social_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
