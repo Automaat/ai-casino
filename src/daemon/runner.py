@@ -62,6 +62,8 @@ class DaemonRunner:
             peer_analysis_time=config.peer_analysis.run_time,
             peer_analysis_days=config.peer_analysis.run_days,
             enable_peer_analysis=config.peer_analysis.enabled,
+            tearsheet_time=config.reporting.tearsheet_time,
+            enable_reporting=config.reporting.enabled,
             rebalancing_time=config.rebalancing.run_time,
             rebalancing_days=config.rebalancing.run_days,
             enable_rebalancing=config.rebalancing.enabled,
