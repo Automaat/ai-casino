@@ -3,8 +3,9 @@
 from datetime import UTC, datetime
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
+from src.daemon.config import PositionManagementConfig
 from src.data.broker import AlpacaBroker
 from src.workflows.types import TradingWorkflowResult
 
@@ -44,26 +45,6 @@ class PositionManagementAction(BaseModel):
     order_id: str | None = None
 
 
-class PositionManagementConfig(BaseModel):
-    """Configuration for position management."""
-
-    enabled: bool = False
-    trailing_stop_enabled: bool = True
-    trailing_stop_percent: float = Field(default=3.0, ge=0.5, le=10.0)
-    partial_profit_enabled: bool = True
-    profit_target_1_percent: float = Field(default=5.0, ge=1.0, le=20.0)
-    profit_target_1_sell_pct: float = Field(default=0.5, ge=0.1, le=1.0)
-    profit_target_2_percent: float = Field(default=10.0, ge=5.0, le=50.0)
-    profit_target_2_sell_pct: float = Field(default=1.0, ge=0.1, le=1.0)
-    time_exit_enabled: bool = True
-    max_holding_days: int = Field(default=30, ge=1, le=180)
-    breakeven_enabled: bool = True
-    breakeven_activation_percent: float = Field(default=5.0, ge=1.0, le=20.0)
-    conviction_scaling_enabled: bool = True
-    conviction_decrease_threshold: float = Field(default=0.15, ge=0.05, le=0.5)
-    conviction_scale_out_percent: float = Field(default=0.5, ge=0.1, le=1.0)
-
-
 class PositionManager:
     """Manage position lifecycle (trailing stops, profit-taking, time exits, conviction scaling)."""
 
@@ -81,20 +62,21 @@ class PositionManager:
     def sync_with_broker(
         self,
         state_positions: dict[str, PositionRecord],
-    ) -> tuple[list[PositionRecord], list[str]]:
+    ) -> tuple[list[PositionRecord], list[PositionRecord], list[str]]:
         """Sync state positions with broker positions.
 
         Args:
             state_positions: Current positions in daemon state
 
         Returns:
-            Tuple of (new_positions, closed_symbols)
+            Tuple of (new_positions, updated_positions, closed_symbols)
         """
         logger.info("Syncing positions with broker")
         broker_info = self.broker.get_account_info()
         broker_positions = broker_info.positions
 
         new_positions: list[PositionRecord] = []
+        updated_positions: list[PositionRecord] = []
         closed_symbols: list[str] = []
 
         # Find new positions
@@ -110,6 +92,7 @@ class PositionManager:
                     logger.info(f"Position qty changed: {symbol} {existing.current_qty} → {broker_pos.qty}")
                     existing.current_qty = broker_pos.qty
                     existing.last_updated = datetime.now(UTC)
+                    updated_positions.append(existing)
 
         # Find closed positions
         for symbol in state_positions:
@@ -117,7 +100,7 @@ class PositionManager:
                 logger.info(f"Position closed: {symbol}")
                 closed_symbols.append(symbol)
 
-        return new_positions, closed_symbols
+        return new_positions, updated_positions, closed_symbols
 
     def _create_position_from_broker(self, symbol: str, broker_pos: object) -> PositionRecord:
         """Create PositionRecord from broker position.
@@ -133,6 +116,9 @@ class PositionManager:
         profit_targets = self._calculate_profit_targets(entry_price)
         initial_stop = self._calculate_initial_stop_loss(entry_price)
 
+        # TODO: Load actual entry metadata from persistent store when available
+        # For now, defaults used: timestamp=now(), confidence=0.75
+        # See follow-up issue for entry metadata persistence feature
         return PositionRecord(
             symbol=symbol,
             entry_timestamp=datetime.now(UTC),
@@ -220,9 +206,13 @@ class PositionManager:
 
         # Execute actions that need order submission
         for action in actions:
-            if action.action_type == "TRAILING_STOP":
-                self._update_stop_loss(position, action.new_stop_loss)
-                action.executed = True
+            if action.action_type in ("TRAILING_STOP", "BREAKEVEN"):
+                order_id = self._update_stop_loss(position, action.new_stop_loss)
+                if order_id:
+                    action.executed = True
+                    action.order_id = order_id
+                else:
+                    action.executed = False
             elif action.action_type in ("PARTIAL_PROFIT", "TIME_EXIT", "CONVICTION_SCALE"):
                 try:
                     order = self.broker.submit_order(
@@ -262,6 +252,8 @@ class PositionManager:
         if not targets_hit:
             return actions
 
+        remaining_qty = position.current_qty
+
         for target in targets_hit:
             # Determine sell percentage based on target index
             target_idx = position.profit_targets.index(target)
@@ -271,7 +263,7 @@ class PositionManager:
                 else self.config.profit_target_2_sell_pct
             )
 
-            qty_to_sell = position.current_qty * sell_pct
+            qty_to_sell = remaining_qty * sell_pct
             if qty_to_sell < 1:
                 continue
 
@@ -287,6 +279,7 @@ class PositionManager:
                 executed=False,
             )
             actions.append(action)
+            remaining_qty -= qty_to_sell
 
             # Remove hit target
             position.profit_targets.remove(target)
@@ -441,12 +434,15 @@ class PositionManager:
             executed=False,
         )
 
-    def _update_stop_loss(self, position: PositionRecord, new_stop_loss: float) -> None:
+    def _update_stop_loss(self, position: PositionRecord, new_stop_loss: float) -> str | None:
         """Update stop-loss order (cancel old, submit new).
 
         Args:
             position: Position to update
             new_stop_loss: New stop-loss price
+
+        Returns:
+            Order ID if successful, None if failed
         """
         # Cancel old stop-loss order if exists
         if position.stop_loss_order_id:
@@ -460,7 +456,7 @@ class PositionManager:
         broker_info = self.broker.get_account_info()
         if position.symbol not in broker_info.positions:
             logger.warning(f"Position closed during stop update: {position.symbol}")
-            return
+            return None
 
         # Submit new stop-loss order
         try:
@@ -474,8 +470,10 @@ class PositionManager:
             position.current_stop_loss = new_stop_loss
             position.last_updated = datetime.now(UTC)
             logger.info(f"Updated stop-loss: {position.symbol} → ${new_stop_loss:.2f}")
+            return order.order_id
         except Exception as e:
             logger.error(f"Failed to submit new stop-loss: {e}")
+            return None
 
     def __repr__(self) -> str:
         """Return string representation."""

@@ -503,11 +503,13 @@ class DaemonRunner:
         # Sync positions with broker (if position management enabled)
         if self._position_manager:
             try:
-                new_positions, closed_symbols = self._position_manager.sync_with_broker(
+                new_positions, updated_positions, closed_symbols = self._position_manager.sync_with_broker(
                     {sym: self.state.get_position(sym) for sym in self.state.active_positions}
                 )
                 for pos in new_positions:
                     self.state.add_position(pos)
+                for pos in updated_positions:
+                    self.state.update_position(pos)
                 for symbol in closed_symbols:
                     self.state.remove_position(symbol)
             except Exception as e:
@@ -528,6 +530,15 @@ class DaemonRunner:
         else:
             self._target_allocations_to_apply = None
 
+        # Prefetch broker positions once for all symbols
+        broker_positions = None
+        if self._position_manager and self.broker:
+            try:
+                broker_info = self.broker.get_account_info()
+                broker_positions = broker_info.positions
+            except Exception as e:
+                logger.warning(f"Failed to prefetch account info: {e}")
+
         results: list[TradingWorkflowResult] = []
         semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
 
@@ -537,15 +548,14 @@ class DaemonRunner:
             if symbol in self.state.active_positions:
                 pos = self.state.get_position(symbol)
                 if pos:
-                    # Get current price (try to fetch from broker, fallback to 0)
+                    # Get current price from prefetched broker positions
                     current_price = 0.0
-                    try:
-                        if self.broker:
-                            broker_info = self.broker.get_account_info()
-                            if symbol in broker_info.positions:
-                                current_price = broker_info.positions[symbol].current_price
-                    except Exception as e:
-                        logger.warning(f"Failed to get current price for {symbol}: {e}")
+                    if broker_positions and symbol in broker_positions:
+                        broker_pos = broker_positions[symbol]
+                        qty = broker_pos.qty
+                        market_value = broker_pos.market_value
+                        if qty > 0:
+                            current_price = market_value / qty
 
                     unrealized_pnl_pct = 0.0
                     if current_price > 0 and pos.entry_price > 0:
@@ -587,6 +597,7 @@ class DaemonRunner:
                                 result.risk.current_price,
                                 result,
                             )
+                            self.state.update_position(pos)
                             for action in actions:
                                 self.state.record_position_action(action)
                                 logger.info(

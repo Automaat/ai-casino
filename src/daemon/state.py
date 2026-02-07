@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
-if False:
+if TYPE_CHECKING:
     from src.daemon.positions import PositionManagementAction, PositionRecord
 
 
