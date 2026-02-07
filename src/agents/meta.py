@@ -98,7 +98,7 @@ class MetaAgent:
         if stored is None:
             return {}
 
-        logger.info(f"Using optimized params for {symbol}/{strategy_name}: {stored.params}")
+        logger.debug(f"Using optimized params for {symbol}/{strategy_name}: {stored.params}")
         return dict(stored.params)
 
     def _create_strategy(self, strategy_name: str, symbol: str | None = None) -> StrategyType:

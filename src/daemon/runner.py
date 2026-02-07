@@ -283,7 +283,7 @@ class DaemonRunner:
         # Check if already optimized today
         now = datetime.now(self.scheduler.timezone)
         if self.state.last_optimization:
-            last_date = self.state.last_optimization.date()
+            last_date = self.state.last_optimization.astimezone(self.scheduler.timezone).date()
             if last_date == now.date():
                 logger.debug("Optimization already completed today")
                 return
@@ -298,7 +298,7 @@ class DaemonRunner:
             start_time = time_mod.time()
             watchlist = self._get_merged_watchlist()
 
-            optimized, skipped = self._daemon_optimizer.optimize_watchlist(
+            optimized, skipped, failed = self._daemon_optimizer.optimize_watchlist(
                 watchlist=watchlist,
                 strategies=self.config.optimization.strategies,
                 refresh_days=self.config.optimization.refresh_days,
@@ -312,6 +312,10 @@ class DaemonRunner:
                 total_time_seconds=total_time,
             )
             self.state.save(self.config.state.state_file)
+
+            if failed:
+                for symbol, strategies_str in failed:
+                    logger.warning(f"Failed to optimize {symbol}: {strategies_str}")
 
             console.print(
                 f"\n[dim]Optimization complete: {len(optimized)} symbols optimized, "
@@ -332,7 +336,7 @@ class DaemonRunner:
         # Check if already screened today
         now = datetime.now(self.scheduler.timezone)
         if self.state.last_after_hours_screening:
-            last_date = self.state.last_after_hours_screening.date()
+            last_date = self.state.last_after_hours_screening.astimezone(self.scheduler.timezone).date()
             if last_date == now.date():
                 logger.debug("After-hours screening already completed today")
                 return

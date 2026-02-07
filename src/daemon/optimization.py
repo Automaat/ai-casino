@@ -77,21 +77,20 @@ class DaemonOptimizer:
             logger.error(f"Optimization failed for {symbol}/{strategy_name}: {e}")
             return None
 
-        # Validate trade count via backtest with best params
+        # Validate trade count via metrics
         try:
-            strategy_type = StrategyType(strategy_name)
-            strategy_class = self._optimizer._create_strategy_class(strategy_type, result.best_params)  # noqa: SLF001
-            validation_result = self._optimizer.runner.run_backtest(
-                symbol=symbol, start_date=start_str, end_date=end_str, strategy_class=strategy_class
-            )
-            validation_trades = validation_result.total_trades
+            # Validate strategy name is valid (case-insensitive)
+            _ = StrategyType(strategy_name.lower())
+            metrics = result.best_metrics or {}
+            validation_trades = int(metrics.get("total_trades", 0))
         except Exception as e:
-            logger.warning(f"Validation backtest failed for {symbol}/{strategy_name}: {e}")
+            logger.warning(f"Validation metrics inspection failed for {symbol}/{strategy_name}: {e}")
             validation_trades = 0
 
         if validation_trades < self._min_trades:
             logger.warning(
-                f"Skipping {symbol}/{strategy_name}: {validation_trades} trades < {self._min_trades} minimum"
+                f"Optimization for {symbol}/{strategy_name} produced insufficient trades "
+                f"({validation_trades} < {self._min_trades}), discarding"
             )
             return None
 
@@ -118,7 +117,7 @@ class DaemonOptimizer:
         watchlist: list[str],
         strategies: list[str] | None = None,
         refresh_days: int = 30,
-    ) -> tuple[list[str], list[str]]:
+    ) -> tuple[list[str], list[str], list[tuple[str, str]]]:
         """Optimize all strategies for all symbols in watchlist.
 
         Args:
@@ -127,11 +126,12 @@ class DaemonOptimizer:
             refresh_days: Skip symbols with params newer than this
 
         Returns:
-            Tuple of (optimized_symbols, skipped_symbols)
+            Tuple of (optimized_symbols, skipped_symbols, failed_symbols_with_reasons)
         """
         strategies = strategies or DEFAULT_STRATEGIES
         optimized: list[str] = []
         skipped: list[str] = []
+        failed: list[tuple[str, str]] = []
 
         total = len(watchlist) * len(strategies)
         completed = 0
@@ -139,6 +139,7 @@ class DaemonOptimizer:
         for symbol in watchlist:
             symbol_optimized = False
             symbol_skipped = True
+            failed_strategies: list[str] = []
 
             for strategy_name in strategies:
                 completed += 1
@@ -153,14 +154,20 @@ class DaemonOptimizer:
                 result = self.optimize_symbol(symbol, strategy_name)
                 if result is not None:
                     symbol_optimized = True
+                else:
+                    failed_strategies.append(strategy_name)
 
             if symbol_optimized:
                 optimized.append(symbol)
             elif symbol_skipped:
                 skipped.append(symbol)
+            elif failed_strategies:
+                failed.append((symbol, ", ".join(failed_strategies)))
 
-        logger.info(f"Optimization complete: {len(optimized)} optimized, {len(skipped)} skipped")
-        return optimized, skipped
+        logger.info(
+            f"Optimization complete: {len(optimized)} optimized, {len(skipped)} skipped, {len(failed)} failed"
+        )
+        return optimized, skipped, failed
 
     def __repr__(self) -> str:
         """Return string representation."""
