@@ -990,6 +990,68 @@ class DaemonRunner:
             logger.warning(f"Failed to build peer context for {symbol}: {e}")
             return None
 
+    def _run_tearsheet_generation(self) -> None:
+        """Generate performance tearsheet from analysis history."""
+        if not self._tearsheet_generator:
+            return
+
+        # Check if already generated today
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_tearsheet:
+            last_date = self.state.last_tearsheet.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Tearsheet already generated today")
+                return
+
+        logger.info("Starting tearsheet generation")
+        console.print(f"\n[bold cyan]Performance Tearsheet Generation ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            today = now.date()
+            today_analyses = [
+                r
+                for r in self.state.analyses
+                if r.timestamp.astimezone(self.scheduler.timezone).date() == today
+            ]
+
+            if not today_analyses:
+                logger.info("No analyses today, skipping tearsheet")
+                return
+
+            console.print(f"[dim]Generating tearsheet from {len(today_analyses)} analyses...[/dim]")
+
+            tearsheet = self._tearsheet_generator.generate_portfolio_tearsheet(
+                analyses=today_analyses,
+                benchmark_symbol=self.config.reporting.benchmark,
+            )
+
+            if tearsheet:
+                self._tearsheet_generator.cleanup_old_tearsheets(
+                    retention_days=self.config.reporting.retention_days
+                )
+
+                self.state.record_tearsheet(
+                    symbol="PORTFOLIO",
+                    html_path=tearsheet.html_report_path,
+                )
+                self.state.save(self.config.state.state_file)
+
+                console.print(f"[bold cyan]Tearsheet saved:[/bold cyan] {tearsheet.html_report_path}")
+                if tearsheet.sharpe_ratio is not None:
+                    console.print(f"[bold cyan]Sharpe Ratio:[/bold cyan] {tearsheet.sharpe_ratio:.2f}")
+                if tearsheet.cagr is not None:
+                    console.print(f"[bold cyan]CAGR:[/bold cyan] {tearsheet.cagr:.2%}")
+            else:
+                logger.info("Insufficient data for tearsheet generation")
+
+            console.print("\n[dim]Tearsheet generation complete[/dim]\n")
+
+        except Exception as e:
+            error_msg = f"Tearsheet generation failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
     def _log_screening_results(self, results: list) -> None:
         """Log screening results to console.
 

@@ -93,27 +93,6 @@ def sample_trade_records() -> list[TradeRecord]:
 
 
 @pytest.fixture
-def mock_broker():
-    """Create mock Alpaca broker."""
-    broker = MagicMock()
-    account_info = MagicMock()
-
-    # Create mock closed position
-    closed_pos = MagicMock()
-    closed_pos.symbol = "AAPL"
-    closed_pos.qty = 100
-    closed_pos.avg_entry_price = 150.0
-    closed_pos.current_price = 155.0
-    closed_pos.unrealized_pl = 500.0
-    closed_pos.unrealized_plpc = 0.0333
-    closed_pos.entry_time = datetime(2024, 1, 15, 10, 0, tzinfo=UTC)
-
-    account_info.closed_positions = [closed_pos]
-    broker.get_account_info.return_value = account_info
-    return broker
-
-
-@pytest.fixture
 def mock_market_fetcher():
     """Create mock market data fetcher."""
     fetcher = MagicMock()
@@ -136,19 +115,17 @@ def test_generator_initialization():
     assert generator.reporter is not None
 
 
-def test_generator_initialization_with_broker(mock_broker, mock_market_fetcher):
-    """Test generator initializes with broker and market fetcher."""
+def test_generator_initialization_with_market_fetcher(mock_market_fetcher):
+    """Test generator initializes with market fetcher."""
     generator = DaemonTearsheetGenerator(
-        broker=mock_broker,
         market_fetcher=mock_market_fetcher,
     )
-    assert generator.broker is mock_broker
     assert generator.market_fetcher is mock_market_fetcher
 
 
-def test_simulate_trades_from_analyses(sample_analyses):
-    """Test simulating trades from analysis records."""
-    generator = DaemonTearsheetGenerator()
+def test_simulate_trades_from_analyses(sample_analyses, mock_market_fetcher):
+    """Test simulating trades from analysis records with real prices."""
+    generator = DaemonTearsheetGenerator(market_fetcher=mock_market_fetcher)
     trades = generator._simulate_trades_from_analyses(sample_analyses)
 
     # Should create 1 closed trade from AAPL BUY->SELL
@@ -157,6 +134,8 @@ def test_simulate_trades_from_analyses(sample_analyses):
     assert trades[0].action == Signal.BUY
     assert trades[0].status == "CLOSED"
     assert trades[0].pnl is not None
+    # Verify real prices fetched (not hardcoded 100/105)
+    assert trades[0].entry_price != 100.0 or trades[0].exit_price != 105.0
 
 
 def test_simulate_trades_empty_analyses():
@@ -201,7 +180,7 @@ def test_fetch_benchmark_returns_empty_trades(mock_market_fetcher):
 
 
 @patch("src.daemon.tearsheet.QuantStatsReporter.generate_tearsheet")
-def test_generate_portfolio_tearsheet(mock_generate, sample_analyses, mock_broker, mock_market_fetcher):
+def test_generate_portfolio_tearsheet(mock_generate, sample_analyses, mock_market_fetcher):
     """Test generating portfolio tearsheet."""
     mock_tearsheet = TearSheet(
         symbol="PORTFOLIO",
@@ -226,7 +205,7 @@ def test_generate_portfolio_tearsheet(mock_generate, sample_analyses, mock_broke
     )
     mock_generate.return_value = mock_tearsheet
 
-    generator = DaemonTearsheetGenerator(broker=mock_broker, market_fetcher=mock_market_fetcher)
+    generator = DaemonTearsheetGenerator(market_fetcher=mock_market_fetcher)
     tearsheet = generator.generate_portfolio_tearsheet(sample_analyses, benchmark_symbol="SPY")
 
     assert tearsheet is not None
@@ -237,13 +216,7 @@ def test_generate_portfolio_tearsheet(mock_generate, sample_analyses, mock_broke
 @patch("src.daemon.tearsheet.QuantStatsReporter.generate_tearsheet")
 def test_generate_portfolio_tearsheet_no_trades(mock_generate):
     """Test generating tearsheet with no closed trades."""
-    # Create broker with no closed positions
-    broker = MagicMock()
-    account_info = MagicMock()
-    account_info.closed_positions = []
-    broker.get_account_info.return_value = account_info
-
-    generator = DaemonTearsheetGenerator(broker=broker)
+    generator = DaemonTearsheetGenerator()
     tearsheet = generator.generate_portfolio_tearsheet([], benchmark_symbol="SPY")
 
     assert tearsheet is None

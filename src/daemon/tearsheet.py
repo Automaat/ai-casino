@@ -82,7 +82,10 @@ class DaemonTearsheetGenerator:
         """
         if self.broker:
             logger.info("Fetching closed trades from Alpaca broker")
-            return self._fetch_broker_trades()
+            broker_trades = self._fetch_broker_trades()
+            if broker_trades:
+                return broker_trades
+            logger.info("No broker trades, falling back to simulation")
 
         logger.info("Simulating trades from analysis records (no broker available)")
         return self._simulate_trades_from_analyses(analyses)
@@ -90,63 +93,36 @@ class DaemonTearsheetGenerator:
     def _fetch_broker_trades(self) -> list[TradeRecord]:
         """Fetch closed trades from Alpaca broker.
 
+        The current AlpacaBroker implementation does not expose closed trades.
+        Returns empty list; tearsheets rely on simulation instead.
+
         Returns:
-            List of closed TradeRecord objects
+            Empty list (broker-based closed trades not supported)
         """
-        try:
-            account_info = self.broker.get_account_info()
-            closed_positions = [p for p in account_info.closed_positions if p.unrealized_pl is not None]
-
-            if not closed_positions:
-                logger.warning("No closed positions found in broker")
-                return []
-
-            trades: list[TradeRecord] = []
-            for pos in closed_positions:
-                if pos.avg_entry_price is None or pos.current_price is None:
-                    continue
-
-                trade = TradeRecord(
-                    timestamp=pos.entry_time or datetime.now(UTC),
-                    symbol=pos.symbol,
-                    action=Signal.BUY if pos.qty > 0 else Signal.SELL,
-                    entry_price=pos.avg_entry_price,
-                    exit_price=pos.current_price,
-                    shares=abs(pos.qty),
-                    stop_loss_price=0.0,
-                    confidence=0.0,
-                    risk_level="UNKNOWN",
-                    status="CLOSED",
-                    pnl=pos.unrealized_pl,
-                    pnl_percent=pos.unrealized_plpc * 100 if pos.unrealized_plpc else None,
-                    strategy_name="daemon",
-                )
-                trades.append(trade)
-
-            logger.info(f"Fetched {len(trades)} closed trades from broker")
-            return trades
-        except Exception as e:
-            logger.warning(f"Failed to fetch broker trades: {e}, falling back to simulation")
-            return []
+        if self.broker:
+            logger.info(
+                "Broker configured, but closed-trade fetching not supported; "
+                "will simulate trades from analysis records instead"
+            )
+        return []
 
     def _simulate_trades_from_analyses(self, analyses: list[AnalysisRecord]) -> list[TradeRecord]:
-        """Simulate trades from analysis records.
+        """Simulate trades from analysis records using real market data.
 
-        Creates synthetic closed trades from BUY/SELL signals.
-        Pairs consecutive BUY->SELL or SELL->BUY for same symbol.
+        Fetches actual entry/exit prices from market data at analysis timestamps
+        to produce accurate PnL metrics.
 
         Args:
             analyses: List of analysis records
 
         Returns:
-            List of simulated closed TradeRecord objects
+            List of simulated closed TradeRecord objects with real prices
         """
         if not analyses:
             return []
 
         closed_trades: list[TradeRecord] = []
         open_positions: dict[str, AnalysisRecord] = {}
-
         executed_analyses = [a for a in analyses if a.executed_trade]
 
         for analysis in executed_analyses:
@@ -166,13 +142,24 @@ class DaemonTearsheetGenerator:
                 if (entry_signal == "BUY" and signal == "SELL") or (
                     entry_signal == "SELL" and signal == "BUY"
                 ):
-                    entry_price = 100.0
-                    exit_price = 105.0 if entry_signal == "BUY" else 95.0
+                    # Fetch real prices from market data
+                    entry_price = self._get_price_at_timestamp(symbol, entry_analysis.timestamp)
+                    exit_price = self._get_price_at_timestamp(symbol, analysis.timestamp)
 
+                    if entry_price is None or exit_price is None:
+                        logger.warning(
+                            f"Cannot fetch prices for {symbol}, skipping trade "
+                            f"({entry_analysis.timestamp} -> {analysis.timestamp})"
+                        )
+                        del open_positions[symbol]
+                        continue
+
+                    # Calculate real PnL
+                    shares = 100  # Standard lot size
                     pnl = (
-                        (exit_price - entry_price) * 100
+                        (exit_price - entry_price) * shares
                         if entry_signal == "BUY"
-                        else (entry_price - exit_price) * 100
+                        else (entry_price - exit_price) * shares
                     )
                     pnl_percent = (
                         ((exit_price - entry_price) / entry_price) * 100
@@ -186,7 +173,7 @@ class DaemonTearsheetGenerator:
                         action=Signal.BUY if entry_signal == "BUY" else Signal.SELL,
                         entry_price=entry_price,
                         exit_price=exit_price,
-                        shares=100,
+                        shares=shares,
                         stop_loss_price=0.0,
                         confidence=entry_analysis.confidence,
                         risk_level="MEDIUM",
@@ -199,9 +186,57 @@ class DaemonTearsheetGenerator:
                     del open_positions[symbol]
 
         logger.info(
-            f"Simulated {len(closed_trades)} closed trades from {len(executed_analyses)} executed analyses"
+            f"Simulated {len(closed_trades)} closed trades with real prices "
+            f"from {len(executed_analyses)} executed analyses"
         )
         return closed_trades
+
+    def _get_price_at_timestamp(self, symbol: str, timestamp: datetime) -> float | None:
+        """Get closing price for symbol at given timestamp.
+
+        Args:
+            symbol: Stock ticker symbol
+            timestamp: Timestamp to fetch price for
+
+        Returns:
+            Closing price or None if unavailable
+        """
+        if not self.market_fetcher:
+            logger.warning("No market fetcher available, cannot fetch real prices")
+            return None
+
+        try:
+            # Fetch 5 days around timestamp to handle weekends/holidays
+            period_days = 5
+            market_data = self.market_fetcher.fetch_daily(symbol, period_days=period_days)
+
+            if market_data.data.empty:
+                logger.warning(f"No market data for {symbol}")
+                return None
+
+            # Find closest date to timestamp
+            target_date = timestamp.date()
+            df = market_data.data.copy()
+
+            # Try exact date match
+            if target_date in df.index:
+                return float(df.loc[target_date, "close"])
+
+            # Fall back to nearest date (handles weekends/holidays)
+            import numpy as np
+
+            target_timestamp = pd.Timestamp(target_date)
+            time_diffs = (df.index - target_timestamp).total_seconds()
+            df["date_diff"] = np.abs(time_diffs)
+            nearest_idx = df["date_diff"].idxmin()
+            price = float(df.loc[nearest_idx, "close"])
+
+            logger.debug(f"Fetched {symbol} price {price} for {target_date} (nearest: {nearest_idx.date()})")
+            return price
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch price for {symbol} at {timestamp}: {e}")
+            return None
 
     def _fetch_benchmark_returns(self, benchmark_symbol: str, trades: list[TradeRecord]) -> pd.Series | None:
         """Fetch benchmark returns for comparison.
@@ -218,7 +253,7 @@ class DaemonTearsheetGenerator:
 
         try:
             start_date = min(t.timestamp for t in trades)
-            end_date = max((t.exit_price and t.timestamp) or datetime.now(UTC) for t in trades)
+            end_date = max(t.timestamp for t in trades)
             days = (end_date - start_date).days + 1
 
             logger.info(f"Fetching {benchmark_symbol} benchmark data ({days} days)")
