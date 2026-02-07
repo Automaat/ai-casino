@@ -52,6 +52,17 @@ class PrefetchRecord(BaseModel):
     total_duration_seconds: float
 
 
+class SectorRotationRecord(BaseModel):
+    """Record of a sector rotation analysis run."""
+
+    timestamp: datetime
+    leading_sectors: list[str]
+    lagging_sectors: list[str]
+    sector_strengths: dict[str, float]
+    sector_momenta: dict[str, str]
+    flagged_positions: list[str]
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -69,6 +80,8 @@ class DaemonState(BaseModel):
     last_prefetch: datetime | None = None
     last_pre_market_refresh: datetime | None = None
     prefetch_history: list[PrefetchRecord] = Field(default_factory=list)
+    last_sector_rotation: datetime | None = None
+    sector_rotation_history: list[SectorRotationRecord] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -252,6 +265,40 @@ class DaemonState(BaseModel):
 
         if len(self.prefetch_history) > 30:
             self.prefetch_history = self.prefetch_history[-30:]
+
+    def record_sector_rotation(
+        self,
+        leading_sectors: list[str],
+        lagging_sectors: list[str],
+        sector_strengths: dict[str, float],
+        sector_momenta: dict[str, str],
+        flagged_positions: list[str] | None = None,
+    ) -> None:
+        """Record a sector rotation analysis run.
+
+        Args:
+            leading_sectors: Top 3 sectors by relative strength
+            lagging_sectors: Bottom 3 sectors by relative strength
+            sector_strengths: Composite strength by sector name
+            sector_momenta: Momentum classification by sector name
+            flagged_positions: Symbols flagged in weak sectors
+        """
+        now = datetime.now(UTC)
+
+        self.sector_rotation_history.append(
+            SectorRotationRecord(
+                timestamp=now,
+                leading_sectors=leading_sectors,
+                lagging_sectors=lagging_sectors,
+                sector_strengths=sector_strengths,
+                sector_momenta=sector_momenta,
+                flagged_positions=flagged_positions or [],
+            )
+        )
+        self.last_sector_rotation = now
+
+        if len(self.sector_rotation_history) > 30:
+            self.sector_rotation_history = self.sector_rotation_history[-30:]
 
     def __repr__(self) -> str:
         """Return string representation."""

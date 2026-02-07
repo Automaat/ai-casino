@@ -1,0 +1,4 @@
+SECTOR ROTATION:
+Leading Sectors: {leading_sectors}
+Lagging Sectors: {lagging_sectors}
+{sector_details}

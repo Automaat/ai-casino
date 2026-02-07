@@ -12,11 +12,12 @@ from rich.console import Console
 from src.daemon.config import DaemonConfig
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
-from src.daemon.state import DaemonState
+from src.daemon.state import DaemonState, SectorRotationRecord
 from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.models.llm import LLMClient
 from src.models.sentiment import get_finbert_sentiment
 from src.optimization.param_store import OptimizedParamStore
@@ -49,6 +50,9 @@ class DaemonRunner:
             health_check_time=config.health.run_time,
             prefetch_time=config.prefetch.prefetch_time,
             pre_market_refresh_time=config.prefetch.pre_market_refresh_time,
+            sector_rotation_time=config.sector_rotation.run_time,
+            sector_rotation_days=config.sector_rotation.run_days,
+            enable_sector_rotation=config.sector_rotation.enabled,
         )
         self.state = DaemonState.load(config.state.state_file)
         self.running = False
@@ -196,7 +200,19 @@ class DaemonRunner:
             # Determine current session (default to REGULAR if called outside market hours)
             session = self.scheduler.get_trading_session() or TradingSession.REGULAR
 
-            result = await workflow.analyze(symbol, period_days=90, trading_session=session)
+            # Build sector rotation context if available
+            sector_context: str | None = None
+            if self.config.sector_rotation.enabled and self.state.sector_rotation_history:
+                try:
+                    # Reuse latest sector rotation from daily run (stored in state)
+                    latest_record = self.state.sector_rotation_history[-1]
+                    sector_context = self._format_sector_context(latest_record)
+                except Exception as e:
+                    logger.warning(f"Failed to build sector context: {e}")
+
+            result = await workflow.analyze(
+                symbol, period_days=90, trading_session=session, sector_context=sector_context
+            )
 
             self.state.record_analysis(
                 symbol=symbol,
@@ -212,6 +228,80 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
             return None
+
+    def _format_sector_context(self, record: SectorRotationRecord) -> str:
+        """Format sector rotation record as text for trader prompt.
+
+        Args:
+            record: Sector rotation state record
+
+        Returns:
+            Formatted context string
+        """
+        lines = [
+            f"Leading Sectors: {', '.join(record.leading_sectors)}",
+            f"Lagging Sectors: {', '.join(record.lagging_sectors)}",
+            "",
+        ]
+
+        # Sort by strength descending
+        sorted_sectors = sorted(record.sector_strengths.items(), key=lambda x: x[1], reverse=True)
+
+        for rank, (sector, strength) in enumerate(sorted_sectors, 1):
+            momentum = record.sector_momenta.get(sector, "NEUTRAL")
+            lines.append(f"  {rank}. {sector}: strength={strength:+.2f} [{momentum}]")
+
+        return "\n".join(lines)
+
+    def _reconstruct_rotation_analysis(self, record: SectorRotationRecord) -> SectorRotationAnalysis:
+        """Reconstruct SectorRotationAnalysis from state record.
+
+        Args:
+            record: Sector rotation state record
+
+        Returns:
+            Full SectorRotationAnalysis pydantic model
+        """
+        from src.data.comparative import Sector
+        from src.metrics.sector_rotation import Momentum, SectorStrength
+
+        # Reconstruct SectorStrength list from record data
+        sectors = []
+        sorted_sectors = sorted(record.sector_strengths.items(), key=lambda x: x[1], reverse=True)
+
+        for rank, (sector_name, strength) in enumerate(sorted_sectors, 1):
+            momentum_str = record.sector_momenta.get(sector_name, "NEUTRAL")
+
+            # Find ETF for sector (map back from Sector enum)
+            try:
+                sector_enum = Sector[sector_name]
+                etf = sector_enum.value
+            except KeyError:
+                logger.warning(f"Unknown sector {sector_name}, skipping")
+                continue
+
+            sectors.append(
+                SectorStrength(
+                    sector=sector_name,
+                    etf=etf,
+                    return_1w=0.0,  # Not stored in record
+                    return_1m=0.0,
+                    return_3m=0.0,
+                    relative_strength=strength,
+                    momentum=Momentum(momentum_str),
+                    rank=rank,
+                )
+            )
+
+        return SectorRotationAnalysis(
+            sectors=sectors,
+            leading_sectors=record.leading_sectors,
+            lagging_sectors=record.lagging_sectors,
+            spy_return_1w=0.0,  # Not stored, not needed for weighting
+            spy_return_1m=0.0,
+            spy_return_3m=0.0,
+            timestamp=record.timestamp,
+        )
 
     async def _analyze_watchlist(self, watchlist: list[str]) -> list[TradingWorkflowResult]:
         """Analyze all symbols in watchlist.
@@ -521,13 +611,33 @@ class DaemonRunner:
                 top_n=self.config.screening.top_n,
             )
 
+            # Apply sector rotation weighting if available
+            results_to_save = output.results
+            if self.config.sector_rotation.enabled and self.state.sector_rotation_history:
+                try:
+                    from src.daemon.sector_rotation import DaemonSectorRotation
+
+                    # Reconstruct analysis from latest state record
+                    latest_record = self.state.sector_rotation_history[-1]
+                    rotation_analysis = self._reconstruct_rotation_analysis(latest_record)
+
+                    daemon_rotation = DaemonSectorRotation()
+                    results_to_save = daemon_rotation.weight_candidates(
+                        output.results,
+                        rotation_analysis,
+                        self.config.sector_rotation.boost_factor,
+                    )
+                    logger.info("Applied sector rotation weighting to screening candidates")
+                except Exception as e:
+                    logger.warning(f"Failed to apply sector weighting: {e}")
+
             # Log top 5 to console
-            self._log_screening_results(output.results[:5])
+            self._log_screening_results(results_to_save[:5])
 
             # Save to watchlist file
             exporter = ScreeningExporter()
             exporter.save_to_watchlist(
-                results=output.results[: self.config.screening.top_n],
+                results=results_to_save[: self.config.screening.top_n],
                 criteria=criteria,
                 watchlist_name=self.config.screening.watchlist_name,
             )
@@ -536,7 +646,7 @@ class DaemonRunner:
             self.state.record_after_hours_screening(
                 criteria=criteria.value,
                 universe=self.config.screening.universe,
-                candidates=output.results,
+                candidates=results_to_save,
                 top_n=self.config.screening.top_n,
                 screened_at=output.screened_at,
             )
@@ -550,6 +660,64 @@ class DaemonRunner:
 
         except Exception as e:
             error_msg = f"After-hours screening failed: {e}"
+            logger.error(error_msg)
+            self.state.record_error(error_msg)
+
+    def _run_sector_rotation(self) -> None:
+        """Run sector rotation analysis."""
+        from src.daemon.sector_rotation import DaemonSectorRotation
+
+        # Check if already ran today
+        now = datetime.now(self.scheduler.timezone)
+        if self.state.last_sector_rotation:
+            last_date = self.state.last_sector_rotation.astimezone(self.scheduler.timezone).date()
+            if last_date == now.date():
+                logger.debug("Sector rotation already completed today")
+                return
+
+        logger.info("Starting sector rotation analysis")
+        console.print(f"\n[bold cyan]Sector Rotation Analysis ({now:%H:%M})[/bold cyan]")
+        console.print("-" * 50)
+
+        try:
+            daemon_rotation = DaemonSectorRotation()
+            analysis = daemon_rotation.run()
+
+            # Flag positions in weak sectors
+            flagged: list[str] = []
+            if self.broker:
+                try:
+                    account_info = self.broker.get_account_info()
+                    position_symbols = list(account_info.positions.keys())
+                    flagged = daemon_rotation.flag_weak_positions(position_symbols, analysis)
+                except Exception as e:
+                    logger.warning(f"Failed to flag positions: {e}")
+
+            # Record in state
+            sector_strengths = {s.sector: s.relative_strength for s in analysis.sectors}
+            sector_momenta = {s.sector: s.momentum.value for s in analysis.sectors}
+
+            self.state.record_sector_rotation(
+                leading_sectors=analysis.leading_sectors,
+                lagging_sectors=analysis.lagging_sectors,
+                sector_strengths=sector_strengths,
+                sector_momenta=sector_momenta,
+                flagged_positions=flagged,
+            )
+            self.state.save(self.config.state.state_file)
+
+            # Console output
+            console.print(f"[dim]Leading: {', '.join(analysis.leading_sectors)}[/dim]")
+            console.print(f"[dim]Lagging: {', '.join(analysis.lagging_sectors)}[/dim]")
+            if flagged:
+                console.print(f"[bold yellow]Flagged positions: {', '.join(flagged)}[/bold yellow]")
+            console.print(
+                f"\n[dim]Sector rotation complete: {len(analysis.sectors)} sectors analyzed[/dim]\n"
+            )
+            logger.info("Sector rotation analysis completed")
+
+        except Exception as e:
+            error_msg = f"Sector rotation failed: {e}"
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
@@ -612,6 +780,10 @@ class DaemonRunner:
         # Check if it's time for pre-market data refresh
         if self.config.prefetch.enabled and self.scheduler.is_pre_market_refresh_time():
             self._run_pre_market_refresh()
+
+        # Check if it's time for sector rotation (before screening)
+        if self.scheduler.is_sector_rotation_time():
+            self._run_sector_rotation()
 
         # Check if it's time for screening (before regular analysis)
         if self.scheduler.is_after_hours_screening_time():

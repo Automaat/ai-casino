@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from src.daemon.config import DaemonConfig, HealthConfig, ScheduleConfig, ScreeningConfig, StateConfig
+from src.daemon.config import (
+    DaemonConfig,
+    HealthConfig,
+    ScheduleConfig,
+    ScreeningConfig,
+    SectorRotationConfig,
+    StateConfig,
+)
 
 
 class TestDaemonConfig:
@@ -282,5 +289,91 @@ watchlist = ["AAPL"]
 
         assert config.health.enabled is True
         assert config.health.run_time == "17:00"
+
+        path.unlink()
+
+
+class TestSectorRotationConfig:
+    def test_defaults(self):
+        config = SectorRotationConfig()
+
+        assert config.enabled is False
+        assert config.run_time == "16:15"
+        assert config.run_days == ["mon", "tue", "wed", "thu", "fri"]
+        assert config.boost_factor == 0.15
+
+    def test_custom(self):
+        config = SectorRotationConfig(
+            enabled=True,
+            run_time="16:30",
+            run_days=["mon", "wed", "fri"],
+            boost_factor=0.20,
+        )
+
+        assert config.enabled is True
+        assert config.run_time == "16:30"
+        assert config.run_days == ["mon", "wed", "fri"]
+        assert config.boost_factor == 0.20
+
+    def test_validate_run_time_valid(self):
+        config = SectorRotationConfig(enabled=True, run_time="17:00")
+        assert config.run_time == "17:00"
+
+    def test_validate_run_time_invalid_format(self):
+        with pytest.raises(ValueError, match="HH:MM format"):
+            SectorRotationConfig(enabled=True, run_time="bad")
+
+    def test_validate_run_time_out_of_range(self):
+        with pytest.raises(ValueError, match="16:00-20:00"):
+            SectorRotationConfig(enabled=True, run_time="21:00")
+
+    def test_validate_run_time_skipped_when_disabled(self):
+        config = SectorRotationConfig(enabled=False, run_time="99:99")
+        assert config.run_time == "99:99"
+
+    def test_daemon_config_has_sector_rotation(self):
+        config = DaemonConfig()
+        assert isinstance(config.sector_rotation, SectorRotationConfig)
+        assert config.sector_rotation.enabled is False
+
+    def test_from_toml_with_sector_rotation(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.sector_rotation]
+enabled = true
+run_time = "16:30"
+run_days = ["mon", "wed", "fri"]
+boost_factor = 0.20
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.sector_rotation.enabled is True
+        assert config.sector_rotation.run_time == "16:30"
+        assert config.sector_rotation.run_days == ["mon", "wed", "fri"]
+        assert config.sector_rotation.boost_factor == 0.20
+
+        path.unlink()
+
+    def test_from_toml_without_sector_rotation_uses_defaults(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.sector_rotation.enabled is False
+        assert config.sector_rotation.run_time == "16:15"
 
         path.unlink()

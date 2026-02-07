@@ -388,3 +388,73 @@ class TestHealthCheckTime:
             assert scheduler.is_health_check_time("17") is False
             assert scheduler.is_health_check_time("17:xx") is False
             assert scheduler.is_health_check_time("") is False
+
+
+class TestSectorRotationTime:
+    def test_match_configured_time(self):
+        """Test sector rotation time matches configured time."""
+        scheduler = MarketScheduler(
+            enable_sector_rotation=True,
+            sector_rotation_time="16:15",
+            sector_rotation_days=["mon", "tue", "wed", "thu", "fri"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # Monday at 16:15 = match
+        mock_time = datetime(2024, 1, 15, 16, 15, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_sector_rotation_time() is True
+
+    def test_tolerance(self):
+        """Test ±1 minute tolerance."""
+        scheduler = MarketScheduler(
+            enable_sector_rotation=True,
+            sector_rotation_time="16:15",
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # 16:16 = within tolerance
+        mock_time = datetime(2024, 1, 15, 16, 16, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_sector_rotation_time() is True
+
+        # 16:17 = outside tolerance
+        mock_time = datetime(2024, 1, 15, 16, 17, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_sector_rotation_time() is False
+
+    def test_day_filter(self):
+        """Test day filtering."""
+        scheduler = MarketScheduler(
+            enable_sector_rotation=True,
+            sector_rotation_time="16:15",
+            sector_rotation_days=["mon", "wed"],
+        )
+        tz = ZoneInfo("America/New_York")
+
+        # Tuesday at 16:15 = not in allowed days
+        mock_time = datetime(2024, 1, 16, 16, 15, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_sector_rotation_time() is False
+
+    def test_disabled(self):
+        """Test sector rotation disabled."""
+        scheduler = MarketScheduler(
+            enable_sector_rotation=False,
+            sector_rotation_time="16:15",
+        )
+        tz = ZoneInfo("America/New_York")
+
+        mock_time = datetime(2024, 1, 15, 16, 15, 0, tzinfo=tz)
+        with patch("src.daemon.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            assert scheduler.is_sector_rotation_time() is False

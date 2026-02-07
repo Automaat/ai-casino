@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.daemon.config import DaemonConfig, ScreeningConfig
+from src.daemon.config import DaemonConfig, ScreeningConfig, SectorRotationConfig
 from src.daemon.runner import DaemonRunner
 from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
@@ -486,3 +486,119 @@ class TestHealthCheckIntegration:
             await runner._maybe_run_health_check()
 
             assert any("Health check failed" in e for e in runner.state.errors)
+
+
+class TestSectorRotationIntegration:
+    @pytest.mark.asyncio
+    async def test_sector_rotation_in_cycle(
+        self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test sector rotation triggered in run cycle."""
+        sample_config.sector_rotation = SectorRotationConfig(enabled=True, run_time="16:15")
+        runner = DaemonRunner(sample_config)
+
+        rotation_called = False
+
+        def mock_run_rotation() -> None:
+            nonlocal rotation_called
+            rotation_called = True
+
+        monkeypatch.setattr(runner.scheduler, "is_sector_rotation_time", lambda: True)
+        monkeypatch.setattr(runner.scheduler, "is_after_hours_screening_time", lambda: False)
+        monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
+        monkeypatch.setattr(runner, "_run_sector_rotation", mock_run_rotation)
+        monkeypatch.setattr(runner, "_analyze_watchlist", AsyncMock(return_value=[]))
+        monkeypatch.setattr(runner, "_log_results", Mock())
+
+        await runner._run_cycle()
+
+        assert rotation_called
+
+    @pytest.mark.asyncio
+    async def test_sector_rotation_skipped_when_disabled(
+        self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test sector rotation not triggered when disabled."""
+        runner = DaemonRunner(sample_config)
+
+        rotation_called = False
+
+        def mock_run_rotation() -> None:
+            nonlocal rotation_called
+            rotation_called = True
+
+        monkeypatch.setattr(runner.scheduler, "is_sector_rotation_time", lambda: False)
+        monkeypatch.setattr(runner.scheduler, "is_after_hours_screening_time", lambda: False)
+        monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
+        monkeypatch.setattr(runner, "_run_sector_rotation", mock_run_rotation)
+        monkeypatch.setattr(runner, "_analyze_watchlist", AsyncMock(return_value=[]))
+        monkeypatch.setattr(runner, "_log_results", Mock())
+
+        await runner._run_cycle()
+
+        assert not rotation_called
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_run_sector_rotation_records_state(self, sample_config: DaemonConfig) -> None:
+        """Test _run_sector_rotation records analysis in state."""
+        from datetime import UTC, datetime
+
+        from src.metrics.sector_rotation import Momentum, SectorRotationAnalysis, SectorStrength
+
+        sample_config.sector_rotation = SectorRotationConfig(enabled=True)
+        runner = DaemonRunner(sample_config)
+        runner.broker = None
+
+        mock_analysis = SectorRotationAnalysis(
+            sectors=[
+                SectorStrength(
+                    sector="TECHNOLOGY",
+                    etf="XLK",
+                    return_1w=2.0,
+                    return_1m=3.0,
+                    return_3m=4.0,
+                    relative_strength=3.2,
+                    momentum=Momentum.ACCELERATING,
+                    rank=1,
+                ),
+            ],
+            leading_sectors=["TECHNOLOGY"],
+            lagging_sectors=["ENERGY"],
+            spy_return_1w=1.0,
+            spy_return_1m=2.0,
+            spy_return_3m=3.0,
+            timestamp=datetime.now(UTC),
+        )
+
+        mock_daemon_rotation = Mock()
+        mock_daemon_rotation.run.return_value = mock_analysis
+
+        with patch("src.daemon.sector_rotation.DaemonSectorRotation", return_value=mock_daemon_rotation):
+            runner._run_sector_rotation()
+
+        assert runner.state.last_sector_rotation is not None
+        assert len(runner.state.sector_rotation_history) == 1
+        assert runner.state.sector_rotation_history[0].leading_sectors == ["TECHNOLOGY"]
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_run_sector_rotation_dedup(self, sample_config: DaemonConfig) -> None:
+        """Test sector rotation deduplication (skip if already ran today)."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        sample_config.sector_rotation = SectorRotationConfig(enabled=True)
+        runner = DaemonRunner(sample_config)
+        tz = ZoneInfo("America/New_York")
+        runner.state.last_sector_rotation = datetime.now(tz)
+
+        rotation_ran = False
+
+        def mock_analyze() -> None:
+            nonlocal rotation_ran
+            rotation_ran = True
+
+        with patch("src.daemon.sector_rotation.DaemonSectorRotation") as mock_cls:
+            mock_cls.return_value.run = mock_analyze
+            runner._run_sector_rotation()
+
+        assert not rotation_ran

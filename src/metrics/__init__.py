@@ -18,6 +18,7 @@ from src.metrics.performance import (
     calculate_win_rate,
 )
 from src.metrics.risk import DrawdownMetrics, RiskMetrics, RiskMetricsCalculator, VaRMetrics
+from src.metrics.sector_rotation import SectorRotationAnalysis, SectorRotationAnalyzer, SectorStrength
 from src.metrics.tracker import MetricsTracker, PerformanceMetrics, TradeRecord
 
 __all__ = [
@@ -29,6 +30,9 @@ __all__ = [
     "PerformanceMetrics",
     "RiskMetrics",
     "RiskMetricsCalculator",
+    "SectorRotationAnalysis",
+    "SectorRotationAnalyzer",
+    "SectorStrength",
     "SubOperationMetric",
     "TradeRecord",
     "VaRMetrics",
