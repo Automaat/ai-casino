@@ -8,6 +8,8 @@ from src.metrics.signal_accuracy import SignalAccuracyCalculator
 
 console = Console()
 
+ALLOWED_WINDOWS = {"7d", "30d", "90d", "all"}
+
 
 def signal_accuracy(window: str = "30d") -> None:
     """Display signal accuracy metrics.
@@ -15,6 +17,11 @@ def signal_accuracy(window: str = "30d") -> None:
     Args:
         window: Time window (7d/30d/90d/all)
     """
+    if window not in ALLOWED_WINDOWS:
+        console.print(f"[red]Invalid window '{window}'[/red]")
+        console.print(f"Allowed values: {', '.join(sorted(ALLOWED_WINDOWS))}")
+        return
+
     cache = HistoricalCache()
     calculator = SignalAccuracyCalculator(cache)
     metrics = calculator.calculate(window)

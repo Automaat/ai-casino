@@ -311,20 +311,23 @@ class DaemonRunner:
                 trading_session=result.trading_session.value,
             )
 
-            # Record enriched signal for accuracy tracking
-            self._historical_cache.record_signal_outcome(
-                symbol=symbol,
-                timestamp=datetime.now(UTC),
-                signal=result.decision.action.value,
-                confidence=result.decision.confidence,
-                price_at_signal=result.risk.current_price,
-                strategy_used=result.strategy_used,
-                regime=result.regime.regime.value if result.regime else None,
-                trading_session=result.trading_session.value,
-                technical_signal=result.technical.signal.value,
-                sentiment_signal=self._extract_sentiment_signal(result.sentiment),
-                news_signal=self._extract_news_signal(result.news),
-            )
+            # Record enriched signal for accuracy tracking (best-effort)
+            try:
+                self._historical_cache.record_signal_outcome(
+                    symbol=symbol,
+                    timestamp=datetime.now(UTC),
+                    signal=result.decision.action.value,
+                    confidence=result.decision.confidence,
+                    price_at_signal=result.risk.current_price,
+                    strategy_used=result.strategy_used,
+                    regime=result.regime.regime.value if result.regime else None,
+                    trading_session=result.trading_session.value,
+                    technical_signal=result.technical.signal.value,
+                    sentiment_signal=self._extract_sentiment_signal(result.sentiment),
+                    news_signal=self._extract_news_signal(result.news),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
 
             return result
         except Exception as e:
@@ -1381,7 +1384,7 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
-    def _run_scheduled_tasks(self) -> None:
+    def _run_scheduled_tasks(self) -> None:  # noqa: C901
         """Run all scheduled after-hours tasks."""
         # Check if it's time for data prefetching (before screening)
         if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():

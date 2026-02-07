@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
+from pandas.tseries.offsets import BDay
 
 # 90-day TTL for fundamentals
 FUNDAMENTALS_TTL_DAYS = 90
@@ -518,7 +519,7 @@ class HistoricalCache:
         field = f"price_at_{horizon}"
         cutoff_days = {"1d": 1, "5d": 5, "20d": 20}[horizon]
 
-        cutoff_date = (datetime.now(UTC) - timedelta(days=cutoff_days)).isoformat()
+        cutoff_date = (datetime.now(UTC) - BDay(cutoff_days)).isoformat()
 
         with self._lock:
             rows = self._conn.execute(
