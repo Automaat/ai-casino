@@ -400,3 +400,89 @@ def test_get_merged_watchlist_empty_screening_history(sample_config: DaemonConfi
 
     assert watchlist == ["TSLA", "MSFT"]
     assert len(watchlist) == 2
+
+
+class TestHealthCheckIntegration:
+    @pytest.mark.asyncio
+    async def test_health_check_disabled(self, sample_config: DaemonConfig) -> None:
+        """Test health check skipped when disabled."""
+        sample_config.health.enabled = False
+        runner = DaemonRunner(sample_config)
+
+        with patch("src.daemon.health.HealthChecker") as mock_checker:
+            await runner._maybe_run_health_check()
+            mock_checker.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_health_check_wrong_time(
+        self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test health check skipped when not at scheduled time."""
+        runner = DaemonRunner(sample_config)
+        monkeypatch.setattr(runner.scheduler, "is_health_check_time", lambda _t: False)
+
+        with patch("src.daemon.health.HealthChecker") as mock_checker:
+            await runner._maybe_run_health_check()
+            mock_checker.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_health_check_dedup(
+        self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test health check skipped if already ran today."""
+        from zoneinfo import ZoneInfo
+
+        runner = DaemonRunner(sample_config)
+        tz = ZoneInfo("America/New_York")
+        runner.state.last_health_check = datetime.now(tz)
+        monkeypatch.setattr(runner.scheduler, "is_health_check_time", lambda _t: True)
+
+        with patch("src.daemon.health.HealthChecker") as mock_checker:
+            await runner._maybe_run_health_check()
+            mock_checker.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_health_check_runs(
+        self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test health check runs when conditions met."""
+        from src.daemon.health import HealthReport, ServiceStatus
+
+        runner = DaemonRunner(sample_config)
+        monkeypatch.setattr(runner.scheduler, "is_health_check_time", lambda _t: True)
+
+        mock_report = HealthReport(
+            timestamp=datetime(2024, 1, 15),
+            overall_status=ServiceStatus.HEALTHY,
+            service_checks=[],
+            cleanup_results=[],
+            total_duration_ms=100,
+        )
+
+        with patch("src.daemon.health.HealthChecker") as mock_checker_cls:
+            mock_checker = AsyncMock()
+            mock_checker.run.return_value = mock_report
+            mock_checker_cls.return_value = mock_checker
+
+            await runner._maybe_run_health_check()
+
+            mock_checker_cls.assert_called_once_with(sample_config, runner.state)
+            mock_checker.run.assert_awaited_once()
+            assert runner.state.last_health_check is not None
+
+    @pytest.mark.asyncio
+    async def test_health_check_error_doesnt_crash(
+        self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test health check failure doesn't crash daemon."""
+        runner = DaemonRunner(sample_config)
+        monkeypatch.setattr(runner.scheduler, "is_health_check_time", lambda _t: True)
+
+        with patch("src.daemon.health.HealthChecker") as mock_checker_cls:
+            mock_checker = AsyncMock()
+            mock_checker.run.side_effect = RuntimeError("boom")
+            mock_checker_cls.return_value = mock_checker
+
+            await runner._maybe_run_health_check()
+
+            assert any("Health check failed" in e for e in runner.state.errors)

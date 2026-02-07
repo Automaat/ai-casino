@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.daemon.config import DaemonConfig, ScheduleConfig, ScreeningConfig, StateConfig
+from src.daemon.config import DaemonConfig, HealthConfig, ScheduleConfig, ScreeningConfig, StateConfig
 
 
 class TestDaemonConfig:
@@ -210,5 +210,77 @@ watchlist_name = "my-screen"
         assert config.screening.universe == "SP500"
         assert config.screening.top_n == 5
         assert config.screening.watchlist_name == "my-screen"
+
+        path.unlink()
+
+
+class TestHealthConfig:
+    def test_defaults(self):
+        config = HealthConfig()
+
+        assert config.enabled is True
+        assert config.run_time == "17:00"
+        assert config.archive_days == 30
+        assert config.log_max_size_mb == 5
+        assert config.health_dir == "~/.ai-casino/health"
+        assert config.archive_dir == "~/.ai-casino/archive"
+
+    def test_custom_values(self):
+        config = HealthConfig(
+            enabled=False,
+            run_time="18:00",
+            archive_days=60,
+            log_max_size_mb=10,
+        )
+
+        assert config.enabled is False
+        assert config.run_time == "18:00"
+        assert config.archive_days == 60
+        assert config.log_max_size_mb == 10
+
+    def test_daemon_config_includes_health(self):
+        config = DaemonConfig()
+        assert isinstance(config.health, HealthConfig)
+        assert config.health.enabled is True
+
+    def test_from_toml_with_health(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+
+[daemon.health]
+enabled = false
+run_time = "18:30"
+archive_days = 14
+log_max_size_mb = 2
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.health.enabled is False
+        assert config.health.run_time == "18:30"
+        assert config.health.archive_days == 14
+        assert config.health.log_max_size_mb == 2
+
+        path.unlink()
+
+    def test_from_toml_without_health_uses_defaults(self):
+        toml_content = """
+[daemon]
+watchlist = ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_toml(path)
+
+        assert config.health.enabled is True
+        assert config.health.run_time == "17:00"
 
         path.unlink()

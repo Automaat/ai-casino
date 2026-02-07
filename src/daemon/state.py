@@ -52,6 +52,7 @@ class DaemonState(BaseModel):
     total_trades: int = 0
     last_journal_date: str | None = None
     last_after_hours_screening: datetime | None = None
+    last_health_check: datetime | None = None
     screening_history: list[ScreeningRecord] = Field(default_factory=list)
     last_optimization: datetime | None = None
     optimization_history: list[OptimizationRecord] = Field(default_factory=list)
@@ -117,7 +118,7 @@ class DaemonState(BaseModel):
         self.analyses.append(
             AnalysisRecord(
                 symbol=symbol,
-                timestamp=datetime.now(),  # noqa: DTZ005
+                timestamp=datetime.now(UTC),
                 signal=signal,
                 confidence=confidence,
                 executed_trade=executed,
@@ -127,7 +128,7 @@ class DaemonState(BaseModel):
         self.total_analyses += 1
         if executed:
             self.total_trades += 1
-        self.last_run = datetime.now()  # noqa: DTZ005
+        self.last_run = datetime.now(UTC)
 
         if len(self.analyses) > 1000:
             self.analyses = self.analyses[-500:]

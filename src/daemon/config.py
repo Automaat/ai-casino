@@ -72,6 +72,17 @@ class JournalConfig(BaseModel):
     )
 
 
+class HealthConfig(BaseModel):
+    """Configuration for API health checks and state cleanup."""
+
+    enabled: bool = True
+    run_time: str = "17:00"
+    archive_days: int = 30
+    log_max_size_mb: int = 5
+    health_dir: str = "~/.ai-casino/health"
+    archive_dir: str = "~/.ai-casino/archive"
+
+
 class OptimizationConfig(BaseModel):
     """Configuration for after-hours strategy parameter optimization."""
 
@@ -96,6 +107,7 @@ class DaemonConfig(BaseModel):
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     state: StateConfig = Field(default_factory=StateConfig)
     journal: JournalConfig = Field(default_factory=JournalConfig)
+    health: HealthConfig = Field(default_factory=HealthConfig)
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
 
@@ -117,6 +129,7 @@ class DaemonConfig(BaseModel):
         schedule_data = daemon_data.pop("schedule", {})
         state_data = daemon_data.pop("state", {})
         journal_data = daemon_data.pop("journal", {})
+        health_data = daemon_data.pop("health", {})
         optimization_data = daemon_data.pop("optimization", {})
         screening_data = daemon_data.pop("screening", {})
 
@@ -125,6 +138,7 @@ class DaemonConfig(BaseModel):
             schedule=ScheduleConfig(**schedule_data),
             state=StateConfig(**state_data),
             journal=JournalConfig(**journal_data),
+            health=HealthConfig(**health_data),
             optimization=OptimizationConfig(**optimization_data),
             screening=ScreeningConfig(**screening_data),
         )
