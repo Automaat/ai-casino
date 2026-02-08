@@ -69,7 +69,7 @@ class WebResearchAgent:
         """
         self.llm = llm_client
         self.search_tool = search_tool or WebSearchTool()
-        self.prompts = PromptLoader("web_researcher")
+        self._prompts = PromptLoader("web_researcher")
         logger.info(f"Initialized WebResearchAgent (tools_enabled={llm_client.supports_tools})")
 
     async def research(
@@ -152,7 +152,7 @@ class WebResearchAgent:
             WebResearchResult
         """
         prompt = self._build_tool_prompt(symbol, category)
-        system = self.prompts.load("system")
+        system = self._prompts.load("system")
         tools = [self.search_tool.get_tool_definition()]
 
         def tool_executor(name: str, args: dict) -> str:
@@ -219,11 +219,11 @@ class WebResearchAgent:
 
         search_results = self.search_tool.execute(query, search_type=search_type, max_results=5)
 
-        prompt = self.prompts.load(
+        prompt = self._prompts.load(
             "user_template", symbol=symbol, category=category.value, search_results=search_results
         )
 
-        system = self.prompts.load("system_template")
+        system = self._prompts.load("system_template")
         response = await self.llm.acomplete(prompt, system=system, temperature=0.3)
 
         return self._parse_research_response(category, response, sources_count=5)
@@ -245,7 +245,7 @@ class WebResearchAgent:
             ResearchCategory.COMPETITOR_ANALYSIS: "tool_competitor_analysis",
         }
 
-        return self.prompts.load(prompt_map[category], symbol=symbol)
+        return self._prompts.load(prompt_map[category], symbol=symbol)
 
     def _parse_research_response(
         self,

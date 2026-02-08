@@ -61,7 +61,7 @@ class ComparativeAnalyst:
         """
         self.llm = llm_client
         self.fetcher = fetcher
-        self.prompt_loader = PromptLoader("comparative")
+        self._prompts = PromptLoader("comparative")
         logger.info("Initialized ComparativeAnalyst")
 
     async def analyze(self, symbol: str) -> ComparativeAnalysis:
@@ -80,7 +80,7 @@ class ComparativeAnalyst:
             metrics = self._calculate_relative_metrics(data)
             valuation = self._assess_relative_valuation(data, metrics)
 
-            system = self.prompt_loader.load("system")
+            system = self._prompts.load("system")
             user_prompt = self._build_analysis_prompt(symbol, data, metrics, valuation)
 
             interpretation = await self.llm.acomplete(user_prompt, system=system, temperature=0.5)
@@ -228,7 +228,7 @@ class ComparativeAnalyst:
             sign = "+" if metrics["perf_vs_market_ytd"] >= 0 else ""
             performance_parts.append(f"vs Market YTD: {sign}{metrics['perf_vs_market_ytd']:.1f}%")
 
-        return self.prompt_loader.load(
+        return self._prompts.load(
             "user",
             symbol=symbol,
             sector_etf=data.sector_etf,

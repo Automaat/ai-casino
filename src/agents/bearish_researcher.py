@@ -55,7 +55,7 @@ class BearishResearcher:
             llm_client: LLM client for generating bear thesis
         """
         self.llm = llm_client
-        self.prompts = PromptLoader("bearish_researcher")
+        self._prompts = PromptLoader("bearish_researcher")
         logger.info("Initialized BearishResearcher")
 
     async def analyze(
@@ -88,8 +88,8 @@ class BearishResearcher:
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
 
-        system_prompt = self.prompts.load("system")
-        user_prompt = self.prompts.load("user", **prompt_vars)
+        system_prompt = self._prompts.load("system")
+        user_prompt = self._prompts.load("user", **prompt_vars)
 
         try:
             llm_response = await self.llm.astructured(

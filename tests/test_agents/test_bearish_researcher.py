@@ -168,7 +168,7 @@ class TestBearishResearcher:
             sample_news_analysis,
             sample_fundamental_analysis,
         )
-        prompt = bearish_researcher.prompts.load("user", **prompt_vars)
+        prompt = bearish_researcher._prompts.load("user", **prompt_vars)
 
         assert "AAPL" in prompt
         assert "TECHNICAL:" in prompt
@@ -505,7 +505,7 @@ class TestBearishResearcher:
             sample_news_analysis,
             None,
         )
-        prompt = bearish_researcher.prompts.load("user", **prompt_vars)
+        prompt = bearish_researcher._prompts.load("user", **prompt_vars)
 
         assert "N/A (API rate limited)" in prompt
 
