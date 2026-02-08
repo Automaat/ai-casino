@@ -148,7 +148,7 @@ class DaemonStressTester:
                         f"{symbol}: Only {len(returns)} return days available "
                         f"(minimum {self.config.min_historical_days})"
                     )
-                    raise ValueError(msg)  # noqa: TRY301
+                    raise ValueError(msg)
 
                 returns_dict[symbol] = returns
 

@@ -309,7 +309,11 @@ If no specific stocks are affected, return "NONE".
             affected = await self._identify_affected_stocks(new_posts)
 
             # Analyze trump posts (analyst guaranteed initialized by _identify_affected_stocks)
-            trump_analysis = await self._analyst.analyze(new_posts)  # type: ignore[union-attr]
+            analyst = self._analyst
+            if analyst is None:
+                msg = "TrumpAnalyst not initialized after _identify_affected_stocks"
+                raise RuntimeError(msg)
+            trump_analysis = await analyst.analyze(new_posts)
 
             if not affected:
                 console.print("[dim]New post detected but no affected stocks identified[/dim]")

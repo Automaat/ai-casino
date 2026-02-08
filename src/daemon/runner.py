@@ -157,7 +157,7 @@ class DaemonRunner:
                         failed = [c.name for c in report.criteria if not c.passed]
                         logger.error(f"Paper trading validation failed: {', '.join(failed)}")
                         msg = "Cannot start live trading - use --force-live to bypass"
-                        raise ValueError(msg)  # noqa: TRY301
+                        raise ValueError(msg)
 
                     logger.info("Paper trading validation passed")
                 except Exception as e:

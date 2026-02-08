@@ -99,6 +99,7 @@ ignore = [
 ]
 "src/daemon/*.py" = [
     "PLR2004", # magic values OK for time calculations and limits
+    "TRY301",  # raise in try OK for runtime guards
 ]
 "src/tui/*.py" = [
     "PLR2004", # magic values OK for time calculations
