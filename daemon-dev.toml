@@ -1,0 +1,12 @@
+# Development daemon configuration with API enabled
+[daemon]
+watchlist = ["AAPL", "TSLA", "GOOGL", "MSFT"]
+interval_minutes = 30
+market_hours_only = true
+auto_trade = false
+max_concurrent_analyses = 3
+
+[daemon.api]
+enabled = true
+host = "127.0.0.1"
+port = 8484

@@ -82,7 +82,7 @@ def dashboard(
         console.print()
 
         try:
-            app.run_server(host=config.host, port=config.port, debug=debug)
+            app.run(host=config.host, port=config.port, debug=debug)
         finally:
             app.api_client.close()
 
