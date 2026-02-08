@@ -1,22 +1,19 @@
 """Bearish researcher agent for constructing pessimistic investment thesis."""
 
-import re
 from typing import TYPE_CHECKING
 
-from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.agents.comparative import ComparativeAnalysis
+from src.agents.base_researcher import BaseResearcher, ResearchDirection
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
-from src.models.providers.base import StructuredOutputError
-from src.prompts import PromptLoader
 from src.strategies.signal import Signal
 
 if TYPE_CHECKING:
+    from src.agents.comparative import ComparativeAnalysis
     from src.agents.trump import TrumpAnalysis
 
 
@@ -45,7 +42,7 @@ class BearishResearchAnalysis(BaseModel):
         )
 
 
-class BearishResearcher:
+class BearishResearcher(BaseResearcher):
     """Bearish researcher agent - synthesizes pessimistic case from all analyses."""
 
     def __init__(self, llm_client: LLMClient) -> None:
@@ -54,9 +51,12 @@ class BearishResearcher:
         Args:
             llm_client: LLM client for generating bear thesis
         """
-        self.llm = llm_client
-        self._prompts = PromptLoader("bearish_researcher")
-        logger.info("Initialized BearishResearcher")
+        super().__init__(llm_client, ResearchDirection.BEARISH, "bearish_researcher")
+
+    @property
+    def llm_response_model(self) -> type[BaseModel]:
+        """LLM response model type."""
+        return BearishLLMResponse
 
     async def analyze(
         self,
@@ -65,172 +65,41 @@ class BearishResearcher:
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
-        comparative: ComparativeAnalysis | None = None,
+        comparative: "ComparativeAnalysis | None" = None,
         trump_analysis: "TrumpAnalysis | None" = None,
     ) -> BearishResearchAnalysis:
         """Construct bearish thesis from all analyses.
 
-        Args:
-            symbol: Stock ticker symbol
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result
-            fundamental: Fundamental analysis result (None if unavailable due to API rate limit)
-            comparative: Comparative analysis result (optional)
-            trump_analysis: Trump social media analysis (optional)
-
         Returns:
-            BearishResearchAnalysis with thesis, weaknesses, downside, and confidence
+            BearishResearchAnalysis with thesis, weaknesses, target, confidence
         """
-        logger.info(f"Constructing bear thesis for {symbol}")
-
-        prompt_vars = self._build_prompt_vars(
+        return await super().analyze(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
 
-        system_prompt = self._prompts.load("system")
-        user_prompt = self._prompts.load("user", **prompt_vars)
+    def _build_analysis(
+        self, thesis: str, key_points: list[str], target: float | None, confidence: float
+    ) -> BearishResearchAnalysis:
+        """Build bearish analysis result.
 
-        try:
-            llm_response = await self.llm.astructured(
-                user_prompt, BearishLLMResponse, system=system_prompt, temperature=0.5
-            )
-            thesis = llm_response.thesis
-            key_weaknesses = llm_response.key_weaknesses
-            target_downside = llm_response.target_downside
-        except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
-            response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.5)
-            thesis = self._extract_thesis(response)
-            key_weaknesses = self._extract_key_weaknesses(response)
-            target_downside = self._extract_target_downside(response)
+        Args:
+            thesis: Bear thesis text
+            key_points: Key weaknesses
+            target: Target downside percentage
+            confidence: Confidence score
 
-        confidence = self._calculate_confidence(technical, sentiment, news, fundamental)
-
-        logger.info(
-            f"Bear thesis for {symbol}: {len(key_weaknesses)} weaknesses, "
-            f"downside={target_downside}, confidence={confidence:.2f}"
-        )
-
+        Returns:
+            BearishResearchAnalysis instance
+        """
         return BearishResearchAnalysis(
             thesis=thesis,
-            key_weaknesses=key_weaknesses,
-            target_downside=target_downside,
+            key_weaknesses=key_points,
+            target_downside=target,
             confidence=confidence,
         )
 
-    def _build_prompt_vars(
-        self,
-        symbol: str,
-        technical: TechnicalAnalysis,
-        sentiment: SentimentAnalysis,
-        news: NewsAnalysis,
-        fundamental: FundamentalAnalysis | None,
-        comparative: ComparativeAnalysis | None = None,
-        trump_analysis: "TrumpAnalysis | None" = None,
-    ) -> dict[str, str]:
-        """Build prompt variables from all analyses.
-
-        Args:
-            symbol: Stock ticker symbol
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result
-            fundamental: Fundamental analysis result
-            comparative: Comparative analysis result (optional)
-            trump_analysis: Trump social media analysis (optional)
-
-        Returns:
-            Dictionary of prompt variables
-        """
-        # Technical section
-        rsi_str = f"{technical.rsi:.1f}" if technical.rsi is not None else "N/A"
-        macd_str = f"{technical.macd_hist:.3f}" if technical.macd_hist is not None else "N/A"
-        tech_str = (
-            f"{technical.signal.value} (RSI {rsi_str}, "
-            f"MACD {macd_str}, confidence {technical.confidence:.2f})"
-        )
-
-        # Sentiment section
-        sent_str = (
-            f"{sentiment.overall_sentiment} "
-            f"(score {sentiment.sentiment_score:.2f}, {sentiment.article_count} articles)"
-        )
-
-        # News section
-        news_themes = ", ".join(news.key_themes) if news.key_themes else "None"
-        news_str = f"{news_themes}, impact: {news.impact_assessment}"
-
-        # Fundamental section
-        if fundamental:
-            pe_str = f"{fundamental.pe_ratio:.1f}" if fundamental.pe_ratio is not None else "N/A"
-            eps_str = f"{fundamental.eps:.2f}" if fundamental.eps is not None else "N/A"
-            growth_str = (
-                f"{fundamental.revenue_growth_yoy:.1%}"
-                if fundamental.revenue_growth_yoy is not None
-                else "N/A"
-            )
-            debt_str = (
-                f"{fundamental.debt_to_equity:.2f}" if fundamental.debt_to_equity is not None else "N/A"
-            )
-            fund_str = (
-                f"{fundamental.valuation} (P/E {pe_str}, EPS {eps_str}, growth {growth_str}, D/E {debt_str})"
-            )
-        else:
-            fund_str = "N/A (API rate limited)"
-
-        # Comparative section
-        comp_str = "N/A"
-        if comparative:
-            pe_vs_sector = f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector else "N/A"
-            perf_vs_sector = (
-                f"{comparative.perf_vs_sector_3m:+.1f}%" if comparative.perf_vs_sector_3m else "N/A"
-            )
-            comp_str = (
-                f"{comparative.relative_valuation.value} "
-                f"(P/E vs sector: {pe_vs_sector}, 3M perf vs sector: {perf_vs_sector})"
-            )
-
-        # Trump analysis section
-        trump_str = "N/A"
-        if trump_analysis:
-            trump_str = (
-                f"{trump_analysis.signal.value} "
-                f"(sentiment: {trump_analysis.sentiment}, "
-                f"confidence: {trump_analysis.confidence:.2f}, "
-                f"market_relevant: {trump_analysis.market_relevant})"
-            )
-
-        return {
-            "symbol": symbol,
-            "tech_str": tech_str,
-            "sent_str": sent_str,
-            "news_str": news_str,
-            "fund_str": fund_str,
-            "comp_str": comp_str,
-            "trump_str": trump_str,
-        }
-
-    def _extract_thesis(self, response: str) -> str:
-        """Extract bear thesis from LLM response.
-
-        Args:
-            response: LLM response text
-
-        Returns:
-            Extracted thesis text
-        """
-        # Look for THESIS: section
-        match = re.search(r"THESIS:\s*(.+?)(?=WEAKNESSES:|$)", response, re.DOTALL | re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-
-        # Fallback: use first 3-4 sentences
-        sentences = response.split(".")[:4]
-        return ".".join(sentences).strip() + "."
-
     def _extract_key_weaknesses(self, response: str) -> list[str]:
-        """Extract key weaknesses from LLM response.
+        """Extract key weaknesses from LLM response (wrapper for backward compatibility).
 
         Args:
             response: LLM response text
@@ -238,20 +107,10 @@ class BearishResearcher:
         Returns:
             List of weakness bullet points
         """
-        # Look for WEAKNESSES: section
-        match = re.search(r"WEAKNESSES:\s*(.+?)(?=DOWNSIDE:|$)", response, re.DOTALL | re.IGNORECASE)
-        if not match:
-            # Fallback: look for bullet points anywhere
-            bullets = re.findall(r"[-•]\s*(.+)", response)
-            return [b.strip() for b in bullets[:5]] if bullets else []
-
-        weaknesses_text = match.group(1).strip()
-        bullets = re.findall(r"[-•]\s*(.+)", weaknesses_text)
-
-        return [b.strip() for b in bullets[:5]] if bullets else []
+        return self._extract_key_points(response)
 
     def _extract_target_downside(self, response: str) -> float | None:
-        """Extract target downside percentage from LLM response.
+        """Extract target downside from LLM response (wrapper for backward compatibility).
 
         Args:
             response: LLM response text
@@ -259,23 +118,7 @@ class BearishResearcher:
         Returns:
             Downside percentage as float or None if not available
         """
-        # Look for DOWNSIDE: section
-        match = re.search(r"DOWNSIDE:\s*(.+)", response, re.IGNORECASE)
-        if not match:
-            return None
-
-        downside_text = match.group(1).strip()
-
-        # Check for N/A or similar
-        if re.search(r"n/?a|not\s+available|uncertain|unknown", downside_text, re.IGNORECASE):
-            return None
-
-        # Extract percentage number
-        num_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", downside_text)
-        if num_match:
-            return float(num_match.group(1))
-
-        return None
+        return self._extract_target(response)
 
     def _calculate_confidence(
         self,
@@ -322,7 +165,3 @@ class BearishResearcher:
 
         # Clamp to [0.0, 1.0]
         return max(0.0, min(1.0, confidence))
-
-    def __repr__(self) -> str:
-        """String representation."""
-        return f"BearishResearcher(llm={self.llm.provider}/{self.llm.model})"

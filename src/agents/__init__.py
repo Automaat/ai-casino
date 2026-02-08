@@ -1,5 +1,6 @@
 """Agent exports."""
 
+from src.agents.base_researcher import BaseResearcher, ResearchDirection
 from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
 from src.agents.journal import DailyJournal, TradeJournalAgent
@@ -11,6 +12,7 @@ from src.agents.trader import TraderAgent, TradingDecision
 
 __all__ = [
     "AccountInfo",
+    "BaseResearcher",
     "ComparativeAnalysis",
     "ComparativeAnalyst",
     "DailyJournal",
@@ -18,6 +20,7 @@ __all__ = [
     "FundamentalAnalyst",
     "NewsAnalysis",
     "NewsAnalyst",
+    "ResearchDirection",
     "RiskAssessment",
     "RiskManagementAgent",
     "SentimentAnalysis",
