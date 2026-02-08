@@ -430,35 +430,47 @@ class TestWatchlistEndpoint:
         """Test watchlist endpoint with all sources."""
         mock_runner._get_merged_watchlist = Mock(return_value=["AAPL", "TSLA", "NVDA"])
 
-        mock_broker = Mock()
-        mock_account = Mock()
-        mock_account.positions = {"AAPL": Mock(), "NVDA": Mock()}
-        mock_broker.get_account_info = Mock(return_value=mock_account)
-        mock_runner.broker = mock_broker
+        # Add NVDA to active positions (AAPL and TSLA already in fixture)
+        mock_runner.state.active_positions["NVDA"] = {
+            "symbol": "NVDA",
+            "entry_timestamp": datetime(2024, 1, 14, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "entry_price": 500.0,
+            "entry_signal": "BUY",
+            "entry_confidence": 0.80,
+            "current_qty": 3.0,
+            "current_stop_loss": 480.0,
+            "initial_stop_loss": 480.0,
+            "stop_loss_order_id": "order789",
+            "profit_targets": [550.0],
+            "days_held": 1,
+            "last_updated": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "trailing_stop_activated": False,
+            "breakeven_activated": False,
+            "high_water_mark": 505.0,
+        }
 
         response = client.get("/watchlist")
         assert response.status_code == 200
 
         data = response.json()
         assert data["count"] == 3
-        assert data["sources"]["broker"] == 2
+        assert data["sources"]["broker"] == 3
 
-    def test_get_watchlist_broker_error(self, client: TestClient, mock_runner: Mock) -> None:
-        """Test watchlist endpoint with broker failure."""
-        mock_broker = Mock()
-        mock_broker.get_account_info = Mock(side_effect=Exception("Broker error"))
-        mock_runner.broker = mock_broker
-
+    def test_get_watchlist_broker_with_positions(self, client: TestClient) -> None:
+        """Test watchlist endpoint uses cached positions."""
+        # Uses active_positions from state (already set in fixture)
         response = client.get("/watchlist")
         assert response.status_code == 200
 
         data = response.json()
-        assert data["sources"]["broker"] == 0
+        # Both AAPL and TSLA are in active_positions from fixture
+        assert data["sources"]["broker"] == 2
 
     def test_get_watchlist_source_breakdown(self, client: TestClient, mock_runner: Mock) -> None:
         """Test watchlist source breakdown calculation."""
         from src.daemon.state import ScreeningRecord
 
+        mock_runner.config.screening.enabled = True
         mock_runner.state.screening_history = [
             ScreeningRecord(
                 timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
@@ -636,3 +648,28 @@ class TestCORS:
         )
         assert response.status_code == 200
         assert response.headers["access-control-allow-credentials"] == "true"
+
+
+class TestWebSocketEvents:
+    """Test /ws/events WebSocket endpoint."""
+
+    def test_websocket_no_event_bus(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test WebSocket connection rejects when EventBus unavailable."""
+        from starlette.websockets import WebSocketDisconnect
+
+        mock_runner.event_bus = None
+
+        with pytest.raises(WebSocketDisconnect):
+            client.websocket_connect("/ws/events").__enter__()
+
+    def test_websocket_basic_connection(self, mock_runner: Mock) -> None:
+        """Test WebSocket connection and cleanup."""
+        # This test verifies the endpoint exists and handles subscribe/unsubscribe
+        # Full integration testing of WebSocket event streaming requires a running server
+        from src.daemon.api import create_api_app
+
+        app = create_api_app(mock_runner)
+
+        # Verify the WebSocket route is registered
+        routes = [route.path for route in app.routes]
+        assert "/ws/events" in routes

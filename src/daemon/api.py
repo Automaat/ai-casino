@@ -1,5 +1,6 @@
 """Embedded FastAPI server for daemon monitoring."""
 
+import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -208,7 +209,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     async def get_analyses(limit: int = 50, symbol: str | None = None) -> AnalysesResponse:
         """Get analysis history."""
         runner: DaemonRunner = app.state.runner
-        limit = min(limit, 500)
+        limit = max(0, min(limit, 500))
 
         analyses = list(reversed(runner.state.analyses))
 
@@ -266,16 +267,14 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         config_count = len([s for s in runner.config.watchlist if s in symbols])
 
         broker_count = 0
-        if runner.broker:
-            try:
-                account_info = runner.broker.get_account_info()
-                broker_symbols = set(account_info.positions.keys())
-                broker_count = len([s for s in broker_symbols if s in symbols])
-            except Exception as e:
-                logger.warning(f"Broker unavailable for watchlist: {e}")
+        try:
+            broker_symbols = set(runner.state.active_positions.keys())
+            broker_count = len([s for s in broker_symbols if s in symbols])
+        except Exception as e:
+            logger.warning(f"Unable to derive broker symbols for watchlist: {e}")
 
         screening_count = 0
-        if runner.state.screening_history:
+        if runner.config.screening.enabled and runner.state.screening_history:
             latest = runner.state.screening_history[-1]
             screening_count = len([s for s in latest.top_symbols if s in symbols])
 
@@ -340,7 +339,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         if not runner.event_bus:
             return EventResponse(events=[], returned_count=0)
 
-        limit = min(limit, 500)
+        limit = max(0, min(limit, 500))
 
         events = runner.event_bus.get_history(limit=limit)
 
@@ -364,10 +363,17 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
 
         try:
             while True:
-                event = await queue.get()
-
-                event_dict = event.model_dump(mode="json")
-                await websocket.send_json(event_dict)
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    event_dict = event.model_dump(mode="json")
+                    await websocket.send_json(event_dict)
+                except TimeoutError:
+                    # Ping client to detect disconnect
+                    try:
+                        await websocket.send_json({"type": "ping"})
+                    except Exception:
+                        logger.info("Client disconnected during ping")
+                        break
 
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected: {websocket.client}")
