@@ -59,33 +59,30 @@ class AlpacaBroker:
     """Alpaca broker client for paper trading."""
 
     @staticmethod
-    def get_credentials(trading_mode: str) -> tuple[str | None, str | None, str]:
+    def get_credentials(trading_mode: str) -> tuple[str | None, str | None]:
         """Get credentials based on trading mode.
 
         Args:
             trading_mode: Trading mode ("paper" or "live")
 
         Returns:
-            Tuple of (api_key, secret_key, base_url)
+            Tuple of (api_key, secret_key)
         """
         if trading_mode == "paper":
             return (
                 os.getenv("ALPACA_PAPER_API_KEY") or os.getenv("ALPACA_API_KEY"),
                 os.getenv("ALPACA_PAPER_SECRET_KEY") or os.getenv("ALPACA_SECRET_KEY"),
-                "https://paper-api.alpaca.markets",
             )
         # live
         return (
             os.getenv("ALPACA_API_KEY"),
             os.getenv("ALPACA_SECRET_KEY"),
-            "https://api.alpaca.markets",
         )
 
     def __init__(
         self,
         api_key: str | None = None,
         secret_key: str | None = None,
-        base_url: str | None = None,
         paper: bool = True,
         historical_cache: HistoricalCache | None = None,
     ) -> None:
@@ -94,13 +91,11 @@ class AlpacaBroker:
         Args:
             api_key: Alpaca API key (from env if not provided)
             secret_key: Alpaca secret key (from env if not provided)
-            base_url: Alpaca base URL (from env if not provided)
             paper: Whether to use paper trading (default True)
             historical_cache: Optional permanent cache for order fills
         """
         self.api_key = api_key or os.getenv("ALPACA_API_KEY")
         self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY")
-        self.base_url = base_url or os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
         self.paper = paper
         self._cache = historical_cache
 
@@ -112,7 +107,6 @@ class AlpacaBroker:
             api_key=self.api_key,
             secret_key=self.secret_key,
             paper=self.paper,
-            base_url=self.base_url,
         )
         logger.info(f"Initialized AlpacaBroker (paper={self.paper})")
 

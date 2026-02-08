@@ -93,3 +93,19 @@ run = "docker ps --filter name=ai-casino-db --format '{{.Status}}' | grep -q Up 
 [tasks."db:shell"]
 description = "Open psql shell"
 run = "docker exec -it ai-casino-db psql -U postgres -d ai_casino"
+
+[tasks.prod]
+description = "Run production daemon with Docker Compose"
+run = "docker compose up --build"
+
+[tasks."prod:down"]
+description = "Stop production daemon"
+run = "docker compose down"
+
+[tasks."prod:logs"]
+description = "View production daemon logs"
+run = "docker compose logs -f"
+
+[tasks."prod:restart"]
+description = "Restart production daemon"
+run = "docker compose restart"
