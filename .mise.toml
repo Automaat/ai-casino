@@ -28,6 +28,10 @@ run = "uv run pytest --cov=src --cov-report=term-missing"
 description = "Run all checks (format, lint, test)"
 depends = ["format:check", "lint", "test"]
 
+[tasks.audit]
+description = "Run pip-audit to check for CVEs"
+run = "uv run pip-audit"
+
 [tasks."ollama:start"]
 description = "Start Ollama server in background"
 run = "ollama serve > /dev/null 2>&1 &"
