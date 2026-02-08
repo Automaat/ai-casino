@@ -1,10 +1,12 @@
 """CLI command for generating QuantStats tearsheets."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-import pandas as pd
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
@@ -12,6 +14,11 @@ from rich.table import Table
 from src.data.market import MarketDataFetcher
 from src.metrics.quantstats_reporter import QuantStatsReporter
 from src.metrics.tracker import create_metrics_tracker
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from src.metrics.tracker import TearSheet
 
 console = Console()
 
@@ -168,7 +175,7 @@ async def _fetch_benchmark_returns(benchmark: str, period_days: int) -> pd.Serie
     return returns
 
 
-def _add_performance_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noqa: F821
+def _add_performance_metrics(table: Table, tearsheet: TearSheet) -> None:
     """Add performance metrics to table."""
     table.add_row("[bold]Performance[/bold]", "")
     if tearsheet.cagr is not None:
@@ -181,7 +188,7 @@ def _add_performance_metrics(table: Table, tearsheet: "TearSheet") -> None:  # n
         table.add_row("Calmar Ratio", f"{tearsheet.calmar_ratio:.2f}")
 
 
-def _add_risk_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noqa: F821
+def _add_risk_metrics(table: Table, tearsheet: TearSheet) -> None:
     """Add risk metrics to table."""
     table.add_row("[bold]Risk[/bold]", "")
     if tearsheet.max_drawdown is not None:
@@ -192,7 +199,7 @@ def _add_risk_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noqa: F8
         table.add_row("Annual Volatility", f"{tearsheet.volatility_annual * 100:.2f}%")
 
 
-def _add_winloss_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noqa: F821
+def _add_winloss_metrics(table: Table, tearsheet: TearSheet) -> None:
     """Add win/loss metrics to table."""
     table.add_row("[bold]Win/Loss[/bold]", "")
     if tearsheet.win_rate is not None:
@@ -209,7 +216,7 @@ def _add_winloss_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noqa:
         table.add_row("Worst Day", f"{tearsheet.worst_day * 100:.2f}%")
 
 
-def _add_benchmark_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noqa: F821
+def _add_benchmark_metrics(table: Table, tearsheet: TearSheet) -> None:
     """Add benchmark metrics to table."""
     if not tearsheet.benchmark_symbol:
         return
@@ -225,7 +232,7 @@ def _add_benchmark_metrics(table: Table, tearsheet: "TearSheet") -> None:  # noq
         table.add_row("Beta", f"{tearsheet.beta:.2f}")
 
 
-def _print_summary(tearsheet: "TearSheet") -> None:  # noqa: F821
+def _print_summary(tearsheet: TearSheet) -> None:
     """Print tearsheet summary.
 
     Args:
@@ -255,7 +262,7 @@ def _print_summary(tearsheet: "TearSheet") -> None:  # noqa: F821
     console.print(table)
 
 
-async def _save_to_database(tearsheet: "TearSheet") -> None:  # noqa: F821
+async def _save_to_database(tearsheet: TearSheet) -> None:
     """Save tearsheet to database.
 
     Args:
