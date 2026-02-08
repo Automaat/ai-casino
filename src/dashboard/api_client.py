@@ -13,13 +13,16 @@ from tenacity import (
 from src.daemon.api import (
     AnalysesResponse,
     ConfigResponse,
+    CorrelationMatrixResponse,
     DegradationResponse,
     EventResponse,
     GamePlanResponse,
     HealthResponse,
     PositionsResponse,
     RebalanceResponse,
+    RiskHistoryResponse,
     RiskReportResponse,
+    SectorRotationResponse,
     SnapshotsResponse,
     StateSummaryResponse,
     WatchlistResponse,
@@ -164,6 +167,41 @@ class DaemonAPIClient:
         response.raise_for_status()
         data = response.json()
         return RiskReportResponse.model_validate(data) if data else None
+
+    @HTTP_RETRY
+    def get_risk_history(self) -> RiskHistoryResponse:
+        """Get historical risk reports.
+
+        Returns:
+            RiskHistoryResponse with list of historical reports
+        """
+        response = self._client.get(f"{self.api_url}/risk/history")
+        response.raise_for_status()
+        return RiskHistoryResponse.model_validate(response.json())
+
+    @HTTP_RETRY
+    def get_sector_rotation(self) -> SectorRotationResponse | None:
+        """Get latest sector rotation analysis.
+
+        Returns:
+            SectorRotationResponse or None if no data available
+        """
+        response = self._client.get(f"{self.api_url}/sector-rotation/latest")
+        response.raise_for_status()
+        data = response.json()
+        return SectorRotationResponse.model_validate(data) if data else None
+
+    @HTTP_RETRY
+    def get_correlation_matrix(self) -> CorrelationMatrixResponse | None:
+        """Get latest correlation matrix.
+
+        Returns:
+            CorrelationMatrixResponse or None if no data available
+        """
+        response = self._client.get(f"{self.api_url}/correlation/latest")
+        response.raise_for_status()
+        data = response.json()
+        return CorrelationMatrixResponse.model_validate(data) if data else None
 
     @HTTP_RETRY
     def get_degradation(self) -> DegradationResponse:
