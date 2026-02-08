@@ -2366,12 +2366,12 @@ class DaemonRunner:
         """Create runner from config file.
 
         Args:
-            path: Path to TOML config file
+            path: Path to YAML config file
 
         Returns:
             DaemonRunner instance
         """
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
         return cls(config)
 
     def __repr__(self) -> str:

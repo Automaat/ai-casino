@@ -57,29 +57,27 @@ class TestDaemonConfig:
 
         assert config.state_file == "~/.ai-casino/daemon-state.json"
 
-    def test_from_toml(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL", "NVDA"]
-interval_minutes = 15
-market_hours_only = false
-auto_trade = true
-max_concurrent_analyses = 5
-
-[daemon.schedule]
-start_time = "08:00"
-end_time = "17:00"
-timezone = "America/Chicago"
-
-[daemon.state]
-state_file = "/tmp/test-state.json"
+    def test_from_yaml(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL", "NVDA"]
+  interval_minutes: 15
+  market_hours_only: false
+  auto_trade: true
+  max_concurrent_analyses: 5
+  schedule:
+    start_time: "08:00"
+    end_time: "17:00"
+    timezone: "America/Chicago"
+  state:
+    state_file: "/tmp/test-state.json"
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.watchlist == ["AAPL", "NVDA"]
         assert config.interval_minutes == 15
@@ -98,22 +96,21 @@ state_file = "/tmp/test-state.json"
         config = ScheduleConfig(enable_pre_market=True)
         assert config.enable_pre_market is True
 
-    def test_from_toml_with_pre_market(self):
-        """Test loading pre-market config from TOML."""
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-interval_minutes = 30
-
-[daemon.schedule]
-enable_pre_market = true
+    def test_from_yaml_with_pre_market(self):
+        """Test loading pre-market config from YAML."""
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  interval_minutes: 30
+  schedule:
+    enable_pre_market: true
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
         assert config.schedule.enable_pre_market is True
 
         path.unlink()
@@ -198,25 +195,24 @@ class TestScreeningConfig:
         assert isinstance(config.screening, ScreeningConfig)
         assert config.screening.enabled is False
 
-    def test_from_toml_with_screening(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.screening]
-enabled = true
-screen_time = "17:00"
-criteria = "breakout"
-universe = "SP500"
-top_n = 5
-watchlist_name = "my-screen"
+    def test_from_yaml_with_screening(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  screening:
+    enabled: true
+    screen_time: "17:00"
+    criteria: "breakout"
+    universe: "SP500"
+    top_n: 5
+    watchlist_name: "my-screen"
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.screening.enabled is True
         assert config.screening.screen_time == "17:00"
@@ -257,23 +253,22 @@ class TestHealthConfig:
         assert isinstance(config.health, HealthConfig)
         assert config.health.enabled is True
 
-    def test_from_toml_with_health(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.health]
-enabled = false
-run_time = "18:30"
-archive_days = 14
-log_max_size_mb = 2
+    def test_from_yaml_with_health(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  health:
+    enabled: false
+    run_time: "18:30"
+    archive_days: 14
+    log_max_size_mb: 2
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.health.enabled is False
         assert config.health.run_time == "18:30"
@@ -282,17 +277,17 @@ log_max_size_mb = 2
 
         path.unlink()
 
-    def test_from_toml_without_health_uses_defaults(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
+    def test_from_yaml_without_health_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.health.enabled is True
         assert config.health.run_time == "17:00"
@@ -343,23 +338,22 @@ class TestSectorRotationConfig:
         assert isinstance(config.sector_rotation, SectorRotationConfig)
         assert config.sector_rotation.enabled is False
 
-    def test_from_toml_with_sector_rotation(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.sector_rotation]
-enabled = true
-run_time = "16:30"
-run_days = ["mon", "wed", "fri"]
-boost_factor = 0.20
+    def test_from_yaml_with_sector_rotation(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  sector_rotation:
+    enabled: true
+    run_time: "16:30"
+    run_days: ["mon", "wed", "fri"]
+    boost_factor: 0.20
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.sector_rotation.enabled is True
         assert config.sector_rotation.run_time == "16:30"
@@ -368,17 +362,17 @@ boost_factor = 0.20
 
         path.unlink()
 
-    def test_from_toml_without_sector_rotation_uses_defaults(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
+    def test_from_yaml_without_sector_rotation_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.sector_rotation.enabled is False
         assert config.sector_rotation.run_time == "16:15"
@@ -435,25 +429,24 @@ class TestEarningsCalendarConfig:
         assert isinstance(config.earnings_calendar, EarningsCalendarConfig)
         assert config.earnings_calendar.enabled is False
 
-    def test_from_toml_with_earnings_calendar(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.earnings_calendar]
-enabled = true
-fetch_time = "17:00"
-fetch_days = ["mon", "thu"]
-lookahead_days = 5
-reduce_position_t1 = true
-position_reduction_factor = 0.3
+    def test_from_yaml_with_earnings_calendar(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  earnings_calendar:
+    enabled: true
+    fetch_time: "17:00"
+    fetch_days: ["mon", "thu"]
+    lookahead_days: 5
+    reduce_position_t1: true
+    position_reduction_factor: 0.3
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.earnings_calendar.enabled is True
         assert config.earnings_calendar.fetch_time == "17:00"
@@ -464,17 +457,17 @@ position_reduction_factor = 0.3
 
         path.unlink()
 
-    def test_from_toml_without_earnings_calendar_uses_defaults(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
+    def test_from_yaml_without_earnings_calendar_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.earnings_calendar.enabled is False
         assert config.earnings_calendar.fetch_time == "16:45"
@@ -524,24 +517,23 @@ class TestPeerAnalysisConfig:
         assert isinstance(config.peer_analysis, PeerAnalysisConfig)
         assert config.peer_analysis.enabled is False
 
-    def test_from_toml_with_peer_analysis(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.peer_analysis]
-enabled = true
-run_time = "18:00"
-run_days = ["sat", "sun"]
-max_peers = 15
-rate_limit_sleep = 15.0
+    def test_from_yaml_with_peer_analysis(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  peer_analysis:
+    enabled: true
+    run_time: "18:00"
+    run_days: ["sat", "sun"]
+    max_peers: 15
+    rate_limit_sleep: 15.0
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.peer_analysis.enabled is True
         assert config.peer_analysis.run_time == "18:00"
@@ -550,17 +542,17 @@ rate_limit_sleep = 15.0
 
         path.unlink()
 
-    def test_from_toml_without_peer_analysis_uses_defaults(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
+    def test_from_yaml_without_peer_analysis_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.peer_analysis.enabled is False
         assert config.peer_analysis.run_time == "17:30"
@@ -622,23 +614,22 @@ class TestReportingConfig:
         assert isinstance(config.reporting, ReportingConfig)
         assert config.reporting.enabled is False
 
-    def test_from_toml_with_reporting(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.reporting]
-enabled = true
-tearsheet_time = "17:00"
-benchmark = "QQQ"
-retention_days = 60
+    def test_from_yaml_with_reporting(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  reporting:
+    enabled: true
+    tearsheet_time: "17:00"
+    benchmark: "QQQ"
+    retention_days: 60
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.reporting.enabled is True
         assert config.reporting.tearsheet_time == "17:00"
@@ -647,17 +638,17 @@ retention_days = 60
 
         path.unlink()
 
-    def test_from_toml_without_reporting_uses_defaults(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
+    def test_from_yaml_without_reporting_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.reporting.enabled is False
         assert config.reporting.tearsheet_time == "16:30"
@@ -718,24 +709,23 @@ class TestRiskLimitsConfig:
         assert isinstance(config.risk_limits, RiskLimitsConfig)
         assert config.risk_limits.enabled is False
 
-    def test_from_toml_with_risk_limits(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.risk_limits]
-enabled = true
-max_var_95 = 0.05
-max_cvar_99 = 0.08
-lookback_days = 120
-adaptive_stop_loss = false
+    def test_from_yaml_with_risk_limits(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  risk_limits:
+    enabled: true
+    max_var_95: 0.05
+    max_cvar_99: 0.08
+    lookback_days: 120
+    adaptive_stop_loss: false
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.risk_limits.enabled is True
         assert config.risk_limits.max_var_95 == 0.05
@@ -745,17 +735,17 @@ adaptive_stop_loss = false
 
         path.unlink()
 
-    def test_from_toml_without_risk_limits_uses_defaults(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
+    def test_from_yaml_without_risk_limits_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.risk_limits.enabled is False
         assert config.risk_limits.max_var_95 == 0.03
@@ -844,25 +834,24 @@ class TestPortfolioRebalancingConfig:
         assert isinstance(config.rebalancing, PortfolioRebalancingConfig)
         assert config.rebalancing.enabled is False
 
-    def test_from_toml_with_rebalancing(self):
-        toml_content = """
-[daemon]
-watchlist = ["AAPL"]
-
-[daemon.rebalancing]
-enabled = true
-method = "hrp"
-run_time = "17:30"
-run_days = ["mon", "wed", "fri"]
-rebalance_threshold = 0.02
-lookback_days = 120
+    def test_from_yaml_with_rebalancing(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  rebalancing:
+    enabled: true
+    method: "hrp"
+    run_time: "17:30"
+    run_days: ["mon", "wed", "fri"]
+    rebalance_threshold: 0.02
+    lookback_days: 120
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
 
         assert config.rebalancing.enabled is True
         assert config.rebalancing.method == "hrp"
@@ -890,18 +879,18 @@ class TestPaperTradingConfig:
         config = DaemonConfig(trading_mode=TradingMode.LIVE)
         assert config.trading_mode == TradingMode.LIVE
 
-    def test_trading_mode_from_toml(self):
-        toml_content = """
-[daemon]
-trading_mode = "paper"
-watchlist = ["AAPL"]
+    def test_trading_mode_from_yaml(self):
+        yaml_content = """
+daemon:
+  trading_mode: "paper"
+  watchlist: ["AAPL"]
 """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(toml_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
             f.flush()
             path = Path(f.name)
 
-        config = DaemonConfig.from_toml(path)
+        config = DaemonConfig.from_yaml(path)
         assert config.trading_mode == TradingMode.PAPER
 
         path.unlink()

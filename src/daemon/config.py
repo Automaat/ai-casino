@@ -1,10 +1,10 @@
 """Configuration for the trading daemon."""
 
-import tomllib
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -619,17 +619,17 @@ class DaemonConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
 
     @classmethod
-    def from_toml(cls, path: Path) -> "DaemonConfig":
-        """Load configuration from TOML file.
+    def from_yaml(cls, path: Path) -> "DaemonConfig":
+        """Load configuration from YAML file.
 
         Args:
-            path: Path to TOML config file
+            path: Path to YAML config file
 
         Returns:
             DaemonConfig instance
         """
-        with path.open("rb") as f:
-            data = tomllib.load(f)
+        with path.open("r") as f:
+            data = yaml.safe_load(f)
 
         daemon_data = data.get("daemon", {})
 

@@ -569,9 +569,9 @@ Type freely to chat about markets or ask questions."""
         from src.daemon.state import DaemonState
 
         # Load daemon state
-        config_path = Path("~/.ai-casino/daemon.toml").expanduser()
+        config_path = Path("~/.ai-casino/daemon.yaml").expanduser()
         if config_path.exists():
-            config = DaemonConfig.from_toml(config_path)
+            config = DaemonConfig.from_yaml(config_path)
             state_file = config.state.state_file
         else:
             state_file = "~/.ai-casino/daemon-state.json"
@@ -588,7 +588,7 @@ Type freely to chat about markets or ask questions."""
         if not state.screening_history:
             return CommandResult(
                 success=True,
-                message="No screening candidates yet. Enable after-hours screening in daemon.toml.",
+                message="No screening candidates yet. Enable after-hours screening in daemon.yaml.",
             )
 
         latest = state.screening_history[-1]

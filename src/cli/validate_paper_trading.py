@@ -86,7 +86,7 @@ def _display_recommendations(report: ReadinessReport) -> None:
     console.print()
 
 
-def validate_paper_trading(config_path: str = "daemon.toml") -> int:
+def validate_paper_trading(config_path: str = "daemon.yaml") -> int:
     """Validate paper trading readiness and display detailed report.
 
     Args:
@@ -97,7 +97,7 @@ def validate_paper_trading(config_path: str = "daemon.toml") -> int:
     """
     try:
         # Load config and state
-        config = DaemonConfig.from_toml(Path(config_path))
+        config = DaemonConfig.from_yaml(Path(config_path))
         state = DaemonState.load(config.state.state_file)
 
         # Initialize tracker and validator
@@ -150,7 +150,7 @@ def validate_paper_trading(config_path: str = "daemon.toml") -> int:
 
 @app.command()
 def main(
-    config: str = typer.Option("daemon.toml", "--config", "-c", help="Path to daemon config file"),
+    config: str = typer.Option("daemon.yaml", "--config", "-c", help="Path to daemon config file"),
 ) -> None:
     """Validate paper trading readiness for live promotion."""
     exit_code = validate_paper_trading(config)

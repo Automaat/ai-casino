@@ -419,9 +419,10 @@ def calculate_indicators(self, df: pd.DataFrame) -> IndicatorData:
 - `PRE_MARKET`: 4:00 AM - 9:30 AM ET (optional, config-enabled)
 
 **Daemon config:**
-```toml
-[daemon.schedule]
-enable_pre_market = true  # Default: false
+```yaml
+daemon:
+  schedule:
+    enable_pre_market: true  # Default: false
 ```
 
 **Behavior:**

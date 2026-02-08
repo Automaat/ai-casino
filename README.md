@@ -141,10 +141,10 @@ Paper trading mode allows safe strategy testing without risking real capital:
 export ALPACA_PAPER_API_KEY=<key>
 export ALPACA_PAPER_SECRET_KEY=<secret>
 
-# In daemon.toml
-[daemon]
-trading_mode = "paper"  # Default
-auto_trade = true
+# In daemon.yaml
+daemon:
+  trading_mode: "paper"  # Default
+  auto_trade: true
 ```
 
 ### Live Trading Promotion
@@ -153,7 +153,7 @@ auto_trade = true
 
 1. **Validate Readiness**
    ```bash
-   ai-casino validate-paper-trading --config daemon.toml
+   ai-casino validate-paper-trading --config daemon.yaml
    ```
 
    Checks:
@@ -169,31 +169,32 @@ auto_trade = true
    export ALPACA_API_KEY=<key>
    export ALPACA_SECRET_KEY=<secret>
 
-   # In daemon.toml
-   [daemon]
-   trading_mode = "live"
+   # In daemon.yaml
+   daemon:
+     trading_mode: "live"
    ```
 
 3. **Start Daemon**
    ```bash
    # Requires validation to pass
-   ai-casino daemon --config daemon.toml
+   ai-casino daemon --config daemon.yaml
 
    # Or bypass validation (advanced users only)
-   ai-casino daemon --config daemon.toml --force-live
+   ai-casino daemon --config daemon.yaml --force-live
    ```
 
 ### Validation Criteria
 
-Configure paper trading requirements in `daemon.toml`:
+Configure paper trading requirements in `daemon.yaml`:
 
-```toml
-[daemon.paper_trading]
-min_duration_days = 30        # Minimum paper trading period
-min_trades = 20               # Minimum executed trades
-min_sharpe = 0.5              # Minimum Sharpe ratio
-max_drawdown_percent = 15.0   # Maximum drawdown allowed
-min_win_rate = 0.45           # Minimum win rate (45%)
+```yaml
+daemon:
+  paper_trading:
+    min_duration_days: 30        # Minimum paper trading period
+    min_trades: 20               # Minimum executed trades
+    min_sharpe: 0.5              # Minimum Sharpe ratio
+    max_drawdown_percent: 15.0   # Maximum drawdown allowed
+    min_win_rate: 0.45           # Minimum win rate (45%)
 ```
 
 ### Automated Notifications

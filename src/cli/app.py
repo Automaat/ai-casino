@@ -176,7 +176,7 @@ def signal_accuracy(
 
 @app.command(name="validate-paper-trading")
 def validate_paper_trading(
-    config: Annotated[str, typer.Option("--config", "-c", help="Path to daemon config file")] = "daemon.toml",
+    config: Annotated[str, typer.Option("--config", "-c", help="Path to daemon config file")] = "daemon.yaml",
 ) -> None:
     """Validate paper trading readiness for live promotion."""
     from src.cli.validate_paper_trading import validate_paper_trading as validate_impl
