@@ -38,6 +38,10 @@ daemon:
     start_time: "09:30"
     end_time: "16:00"
     timezone: "America/New_York"
+    # Enable pre-market trading (04:00-09:30 ET)
+    enable_pre_market: false
+    # Enable after-hours screening (handled by screening config)
+    enable_after_hours: false
 
   state:
     # State persistence file
@@ -47,7 +51,38 @@ daemon:
     # After-hours trade journal
     enabled: true
     journal_dir: "~/.ai-casino/journal"
+    # Minutes after market close to start journal window
     run_offset_minutes: 15
+
+  health:
+    # API health checks and state cleanup
+    enabled: true
+    # Time to run health check (HH:MM, 16:00-20:00)
+    run_time: "17:00"
+    # Archive state files older than this (days)
+    archive_days: 30
+    # Log file size limit before rotation (MB)
+    log_max_size_mb: 5
+    # Health check reports directory
+    health_dir: "~/.ai-casino/health"
+    # Archive directory for old state files
+    archive_dir: "~/.ai-casino/archive"
+
+  screening:
+    # After-hours watchlist screening (discover new symbols)
+    enabled: false
+    # Time to run screening (HH:MM, 16:00-20:00)
+    screen_time: "16:30"
+    # Days to run screening
+    screen_days: ["mon", "tue", "wed", "thu", "fri"]
+    # Screening criteria: momentum, value, or breakout
+    criteria: "momentum"
+    # Universe to screen: SP500, NASDAQ100, or COMBINED
+    universe: "COMBINED"
+    # Number of top symbols to add to watchlist
+    top_n: 10
+    # Watchlist name for screened symbols
+    watchlist_name: "daemon-screening"
 
   optimization:
     # After-hours strategy parameter optimization
@@ -111,6 +146,196 @@ daemon:
     # Check API connectivity during prefetch
     check_connectivity: true
 
+  sector_rotation:
+    # Sector rotation analysis (adjust weights based on sector momentum)
+    enabled: false
+    # Time to run analysis (HH:MM, 16:00-20:00)
+    run_time: "16:15"
+    # Days to run analysis
+    run_days: ["mon", "tue", "wed", "thu", "fri"]
+    # Sector weight boost factor (0.0-1.0)
+    boost_factor: 0.15
+
+  correlation_audit:
+    # Weekly portfolio correlation audit (flag over-correlated positions)
+    enabled: false
+    # Time to run audit (HH:MM)
+    run_time: "17:45"
+    # Days to run audit (weekly is sufficient)
+    run_days: ["sun"]
+    # Correlation threshold for flagging (0.5-0.95)
+    correlation_threshold: 0.8
+    # Historical lookback period (days, 30-180)
+    lookback_days: 90
+    # Output directory for audit reports
+    output_dir: "~/.ai-casino/correlation-audits"
+
+  reporting:
+    # Automated performance reporting (tearsheets)
+    enabled: false
+    # Time to generate tearsheet (HH:MM, 16:00-20:00)
+    tearsheet_time: "16:30"
+    # Benchmark symbol for comparison
+    benchmark: "SPY"
+    # Number of days to retain old reports
+    retention_days: 30
+
+  risk_limits:
+    # Portfolio-level VaR risk limits
+    enabled: false
+    # Maximum 95% VaR threshold (0.001-0.20)
+    max_var_95: 0.03
+    # Maximum 99% CVaR threshold (0.001-0.30)
+    max_cvar_99: 0.05
+    # Historical lookback period (days, 20-365)
+    lookback_days: 90
+    # Enable adaptive stop-loss based on CDaR
+    adaptive_stop_loss: true
+    # CDaR threshold for stop-loss trigger (0.01-0.50)
+    cdar_stop_threshold: 0.10
+    # Minimum ATR multiplier for stops (0.5-2.0)
+    atr_multiplier_min: 1.0
+    # Risk reports directory
+    report_dir: "~/.ai-casino/risk-reports"
+
+  rebalancing:
+    # Portfolio rebalancing (optimize weights)
+    enabled: false
+    # Optimization method: max_sharpe, min_volatility, or hrp
+    method: "max_sharpe"
+    # Time to run rebalancing (HH:MM, 16:00-20:00)
+    run_time: "16:45"
+    # Days to run rebalancing
+    run_days: ["mon"]
+    # Minimum weight delta to trigger rebalance (0.001-0.20)
+    rebalance_threshold: 0.01
+    # Historical lookback period (days, 30-365)
+    lookback_days: 90
+
+  signal_tracking:
+    # Signal accuracy tracking (log signals and outcomes)
+    enabled: true
+    # Time to evaluate signal outcomes (HH:MM, 16:00-20:00)
+    tracking_time: "17:00"
+
+  pre_trade_backtesting:
+    # Pre-trade backtesting validation (backtest before executing)
+    enabled: false
+    # Historical lookback period (days, 30-365)
+    lookback_days: 180
+    # Minimum Sharpe ratio threshold (-1.0 to 3.0)
+    min_sharpe_threshold: 0.5
+    # Maximum drawdown threshold (0.05-0.50)
+    max_drawdown_threshold: 0.25
+    # Confidence penalty multiplier for failed backtests (0.1-1.0)
+    confidence_penalty_multiplier: 0.7
+
+  game_plan:
+    # Pre-market game plan generation (market overview + strategy)
+    enabled: false
+    # Time to generate plan (HH:MM, 04:00-09:30 pre-market window)
+    generation_time: "04:00"
+    # Output directory for game plans
+    plan_dir: "~/.ai-casino/game-plans"
+    # Futures symbols to analyze for market sentiment
+    futures_symbols: ["ES=F", "NQ=F"]
+    # Hours of overnight news to analyze
+    lookback_hours: 16
+
+  position_management:
+    # Advanced position management (trailing stops, profit targets)
+    # Requires auto_trade=true
+    enabled: false
+    # Trailing stop loss
+    trailing_stop_enabled: true
+    trailing_stop_percent: 3.0
+    # Partial profit taking
+    partial_profit_enabled: true
+    profit_target_1_percent: 5.0
+    profit_target_1_sell_pct: 0.5
+    profit_target_2_percent: 10.0
+    profit_target_2_sell_pct: 1.0
+    # Time-based exit
+    time_exit_enabled: true
+    max_holding_days: 30
+    # Breakeven stop activation
+    breakeven_enabled: true
+    breakeven_activation_percent: 5.0
+    # Conviction-based scaling
+    conviction_scaling_enabled: true
+    conviction_decrease_threshold: 0.15
+    conviction_scale_out_percent: 0.5
+
+  news_watcher:
+    # Breaking news watcher (trigger re-analysis on major news)
+    enabled: false
+    # Polling interval (minutes, 1-60)
+    poll_interval_minutes: 5
+    # Breaking news threshold (minutes since publication, 5-120)
+    breaking_threshold_minutes: 15
+    # Relevance score threshold (0.0-1.0)
+    relevance_threshold: 0.7
+    # Cooldown between re-analyses (minutes, 1-120)
+    cooldown_minutes: 15
+    # Maximum concurrent re-analyses
+    max_concurrent_analyses: 2
+
+  social_watcher:
+    # Social media watcher (monitor Reddit for viral posts)
+    enabled: false
+    # Polling interval (minutes, 5-60)
+    poll_interval_minutes: 15
+    # Volume spike threshold (multiplier, 0.1-2.0)
+    volume_spike_threshold: 0.5
+    # Viral score threshold (upvotes * upvote_ratio, 100-10000)
+    viral_score_threshold: 1000
+    # Viral upvote ratio threshold (0.5-1.0)
+    viral_upvote_ratio: 0.8
+    # Subreddits to monitor
+    subreddits: ["wallstreetbets", "stocks"]
+    # Relevance score threshold (0.0-1.0)
+    relevance_threshold: 0.7
+    # Cooldown between re-analyses (minutes, 1-120)
+    cooldown_minutes: 15
+    # Maximum concurrent re-analyses
+    max_concurrent_analyses: 2
+
+  filings_watcher:
+    # SEC filings watcher (monitor 8-K, 4, 13D filings)
+    enabled: false
+    # Polling interval (minutes, 5-60)
+    poll_interval_minutes: 10
+    # Filing types to monitor
+    filing_types: ["8-K", "4", "13D"]
+    # CIK-to-ticker mapping file
+    cik_ticker_mapping_file: "~/.ai-casino/cik_ticker_map.json"
+    # Relevance score threshold (0.0-1.0)
+    relevance_threshold: 0.7
+    # Cooldown between re-analyses (minutes, 1-120)
+    cooldown_minutes: 15
+    # Maximum concurrent re-analyses
+    max_concurrent_analyses: 2
+
+  anomaly_watcher:
+    # Market anomaly watcher (detect unusual volume/price moves)
+    enabled: false
+    # Polling interval (minutes, 5-60)
+    poll_interval_minutes: 15
+    # Volume spike multiplier threshold (1.5-5.0)
+    volume_spike_multiplier: 2.0
+    # Price move threshold (percent, 2.0-20.0)
+    price_move_threshold_pct: 5.0
+    # Gap threshold (percent, 1.0-10.0)
+    gap_threshold_pct: 3.0
+    # Maximum symbols to analyze per cycle
+    max_symbols_per_cycle: 5
+    # Relevance score threshold (0.0-1.0)
+    relevance_threshold: 0.7
+    # Cooldown between re-analyses (minutes, 1-120)
+    cooldown_minutes: 15
+    # Maximum concurrent re-analyses
+    max_concurrent_analyses: 2
+
   monte_carlo:
     # Monte Carlo stress testing
     enabled: false
@@ -151,6 +376,14 @@ daemon:
       # bot_token: "your_bot_token_here"
       # Telegram chat ID (or set TELEGRAM_CHAT_ID env var)
       # chat_id: "your_chat_id_here"
+
+  api:
+    # Embedded API server for daemon state/control
+    enabled: false
+    # Host to bind to (WARNING: use 127.0.0.1 for security)
+    host: "127.0.0.1"
+    # TCP port (1-65535)
+    port: 8484
 
   # LLM Provider Configuration (optional, falls back to environment variables)
   llm:
