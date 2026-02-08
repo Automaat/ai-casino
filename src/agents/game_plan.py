@@ -157,8 +157,7 @@ class GamePlanAgent:
         try:
             import yfinance as yf
 
-            # Limit to first 15 symbols to prevent slow/flaky yfinance loops
-            # TODO: Implement batching/caching for larger watchlists
+            # Limit to first 15 symbols to prevent slow/flaky yfinance loops (#270)
             limited_watchlist = watchlist[:15]
             movers = []
             for symbol in limited_watchlist:
