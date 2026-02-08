@@ -534,8 +534,8 @@ class RiskManagementAgent:
         constraints_met = {}
 
         # Broker API failure check (highest priority)
+        constraints_met["broker_available"] = not broker_api_failed
         if broker_api_failed:
-            constraints_met["broker_available"] = False
             warnings.append(
                 "Broker API unavailable - cannot verify account balance or positions. "
                 "Trade execution blocked to prevent incorrect sizing."

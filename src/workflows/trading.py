@@ -34,7 +34,7 @@ from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
 from src.backtesting import VectorBTRunner
 from src.cache.historical import HistoricalCache
 from src.daemon.config import PreTradeBacktestingConfig
-from src.data.broker import AlpacaBroker, BrokerAPIError, BrokerPosition, OrderStatus
+from src.data.broker import AlpacaBroker, BrokerAccountInfo, BrokerAPIError, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeDataFetcher
 from src.data.finnhub import FinnhubFetcher
 from src.data.fundamental import FundamentalDataFetcher
@@ -101,7 +101,7 @@ class TradingState(TypedDict):
     backtest_validation: BacktestValidation | None
     degradation_context: "DegradationContext | None"
     warnings: list[str]
-    broker_api_failed: bool | None
+    broker_api_failed: bool
 
 
 class WorkflowExtraContext(TypedDict, total=False):
@@ -892,6 +892,7 @@ class TradingWorkflow:
             portfolio_value=None,
             backtest_validation=None,
             warnings=[],
+            broker_api_failed=False,
         )
 
     def _fetch_account_info(self, state: TradingState) -> TradingState:
@@ -904,11 +905,11 @@ class TradingWorkflow:
             Updated state with account info and broker positions
         """
         logger.info("Fetching account info")
-        account_info, broker_available = self._get_account_info()
+        account_info, broker_info, account_info_valid = self._get_account_info()
         state["account_info"] = account_info
 
         # Track broker availability for risk assessment
-        if not broker_available:
+        if not account_info_valid:
             warning = (
                 "Broker API unavailable - using mock account data. "
                 "Trade execution will be blocked to prevent incorrect position sizing."
@@ -916,14 +917,10 @@ class TradingWorkflow:
             state["warnings"].append(warning)
             state["broker_api_failed"] = True
 
-        # Fetch additional broker info for VaR
-        if self.broker and broker_available:
-            try:
-                broker_info = self.broker.get_account_info()
-                state["broker_positions"] = broker_info.positions
-                state["portfolio_value"] = broker_info.portfolio_value
-            except BrokerAPIError:
-                logger.warning("Failed to fetch broker positions for VaR, continuing without")
+        # Set VaR fields from broker_info (if available)
+        if broker_info:
+            state["broker_positions"] = broker_info.positions
+            state["portfolio_value"] = broker_info.portfolio_value
 
         return state
 
@@ -1000,41 +997,53 @@ class TradingWorkflow:
         state["risk_assessment"] = risk_assessment
         return state
 
-    def _get_account_info(self) -> tuple[AccountInfo, bool]:
+    def _get_account_info(self) -> tuple[AccountInfo, BrokerAccountInfo | None, bool]:
         """Get account information.
 
         Returns:
-            Tuple of (AccountInfo, broker_available: bool)
+            Tuple of (AccountInfo, BrokerAccountInfo | None, account_info_valid: bool)
         """
         # Safe case: intentional paper trading
         if not self.broker:
-            return AccountInfo(
-                balance=100000.0,
-                available_cash=100000.0,
-                positions={},
-                total_exposure=0.0,
-            ), True  # No broker = safe mock mode
+            return (
+                AccountInfo(
+                    balance=100000.0,
+                    available_cash=100000.0,
+                    positions={},
+                    total_exposure=0.0,
+                ),
+                None,
+                True,
+            )  # No broker = safe mock mode
 
         # Dangerous case: broker configured but API fails
         try:
             broker_info = self.broker.get_account_info()
-            return AccountInfo(
-                balance=broker_info.balance,
-                available_cash=broker_info.available_cash,
-                positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
-                total_exposure=broker_info.total_exposure,
-            ), True
+            return (
+                AccountInfo(
+                    balance=broker_info.balance,
+                    available_cash=broker_info.available_cash,
+                    positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
+                    total_exposure=broker_info.total_exposure,
+                ),
+                broker_info,
+                True,
+            )
         except BrokerAPIError:
             logger.critical(
                 "BROKER API FAILURE: Account info unavailable but auto_trade configured. "
                 "This would cause incorrect position sizing. Trade execution disabled for this symbol."
             )
-            return AccountInfo(
-                balance=100000.0,  # Mock data - DO NOT USE FOR REAL TRADES
-                available_cash=100000.0,
-                positions={},
-                total_exposure=0.0,
-            ), False  # Signal broker failure
+            return (
+                AccountInfo(
+                    balance=100000.0,  # Mock data - DO NOT USE FOR REAL TRADES
+                    available_cash=100000.0,
+                    positions={},
+                    total_exposure=0.0,
+                ),
+                None,
+                False,
+            )  # Signal broker failure
 
     def _execute_trade(self, state: TradingState) -> TradingState:
         """Execute trade via broker.
