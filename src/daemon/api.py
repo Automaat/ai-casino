@@ -116,6 +116,18 @@ class DegradationResponse(BaseModel):
     halt_reason: str | None
 
 
+class GamePlanResponse(BaseModel):
+    """Game plan endpoint response."""
+
+    date: str
+    priority_symbols: list[str]
+    risk_stance: str
+    sector_focus: list[str]
+    reasoning: str
+    confidence: float
+    generated_at: str
+
+
 class EventResponse(BaseModel):
     """Events endpoint response."""
 
@@ -330,6 +342,42 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
             confidence_adjustment=latest.confidence_adjustment,
             halt_reason=latest.halt_reason,
         )
+
+    @app.get("/game-plan", response_model=GamePlanResponse | None)
+    async def get_game_plan() -> GamePlanResponse | None:
+        """Get latest game plan (if enabled and generated)."""
+        import json
+        from pathlib import Path
+
+        runner: DaemonRunner = app.state.runner
+
+        if not runner.config.game_plan.enabled or not runner.state.game_plan_history:
+            return None
+
+        latest = runner.state.game_plan_history[-1]
+        plan_dir = Path(runner.config.game_plan.plan_dir).expanduser()
+        plan_file = plan_dir / f"{latest.timestamp.date()}.json"
+
+        if not plan_file.exists():
+            logger.warning(f"Game plan file not found: {plan_file}")
+            return None
+
+        try:
+            with plan_file.open() as f:
+                plan_data = json.load(f)
+
+            return GamePlanResponse(
+                date=plan_data["date"],
+                priority_symbols=plan_data["priority_symbols"],
+                risk_stance=plan_data["risk_stance"],
+                sector_focus=plan_data["sector_focus"],
+                reasoning=plan_data["reasoning"],
+                confidence=plan_data["confidence"],
+                generated_at=plan_data["generated_at"],
+            )
+        except Exception as e:
+            logger.error(f"Failed to load game plan: {e}")
+            return None
 
     @app.get("/events", response_model=EventResponse)
     async def get_events(limit: int = 100) -> EventResponse:

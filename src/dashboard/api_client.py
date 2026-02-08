@@ -15,6 +15,7 @@ from src.daemon.api import (
     ConfigResponse,
     DegradationResponse,
     EventResponse,
+    GamePlanResponse,
     HealthResponse,
     PositionsResponse,
     RiskReportResponse,
@@ -186,6 +187,18 @@ class DaemonAPIClient:
         response = self._client.get(f"{self.api_url}/events", params={"limit": limit})
         response.raise_for_status()
         return EventResponse.model_validate(response.json())
+
+    @HTTP_RETRY
+    def get_game_plan(self) -> GamePlanResponse | None:
+        """Get latest game plan.
+
+        Returns:
+            GamePlanResponse or None if game plan not available
+        """
+        response = self._client.get(f"{self.api_url}/game-plan")
+        response.raise_for_status()
+        data = response.json()
+        return GamePlanResponse.model_validate(data) if data else None
 
     def close(self) -> None:
         """Close HTTP client."""

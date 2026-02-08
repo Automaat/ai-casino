@@ -130,6 +130,9 @@ def mock_daemon_api_client(monkeypatch):
         returned_count=1,
     )
 
+    # Game Plan
+    mock_client.get_game_plan.return_value = None
+
     # Patch DaemonAPIClient
     def mock_api_client_init(api_url):
         return mock_client
