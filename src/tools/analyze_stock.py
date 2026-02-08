@@ -143,16 +143,19 @@ class AnalyzeStockTool(BaseTool):
             f"- Interpretation: {result.technical.interpretation}",
             "",
             "## Sentiment Analysis",
-            f"- Sentiment: {result.sentiment.sentiment}",
-            f"- Score: {result.sentiment.score:.2f}",
-            f"- Confidence: {result.sentiment.confidence:.0%}",
+            f"- Sentiment: {result.sentiment.overall_sentiment}",
+            f"- Score: {result.sentiment.sentiment_score:.2f}",
+            f"- Positive: {result.sentiment.positive_ratio:.0%} | "
+            f"Negative: {result.sentiment.negative_ratio:.0%} | "
+            f"Neutral: {result.sentiment.neutral_ratio:.0%}",
             "",
             "## News Analysis",
-            f"- Overall Sentiment: {result.news.overall_sentiment}",
             f"- Key Themes: {', '.join(result.news.key_themes)}",
+            f"- Impact: {result.news.impact_assessment}",
+            f"- Recommendation: {result.news.recommendation}",
             "",
             "## Decision Rationale",
-            result.decision.rationale,
+            "\n".join(f"- {r}" for r in result.decision.reasoning),
         ]
 
         if result.warnings:

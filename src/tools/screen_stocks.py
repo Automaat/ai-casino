@@ -2,10 +2,15 @@
 
 import asyncio
 import concurrent.futures
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from src.tools.base import BaseTool
+
+if TYPE_CHECKING:
+    from src.screening.analyzer import ScreeningAnalysis
+    from src.screening.screener import ScreeningOutput
 
 
 class ScreenStocksTool(BaseTool):
@@ -131,7 +136,7 @@ class ScreenStocksTool(BaseTool):
 
         return self._format_output(output, analysis)
 
-    def _format_output(self, output: object, analysis: object) -> str:
+    def _format_output(self, output: "ScreeningOutput", analysis: "ScreeningAnalysis") -> str:
         """Format screening output as markdown.
 
         Args:

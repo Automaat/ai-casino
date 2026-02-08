@@ -21,17 +21,20 @@ def mock_workflow_result():
     result.symbol = "AAPL"
     result.decision.action = Signal.BUY
     result.decision.confidence = 0.85
-    result.decision.rationale = "Strong technical and sentiment signals."
+    result.decision.reasoning = ["Strong technical signals", "Positive sentiment"]
     result.risk.validation.risk_level = "LOW"
     result.technical.signal = Signal.BUY
     result.technical.rsi = 45.5
     result.technical.macd_hist = 0.25
     result.technical.interpretation = "Bullish momentum"
-    result.sentiment.sentiment = "positive"
-    result.sentiment.score = 0.72
-    result.sentiment.confidence = 0.88
-    result.news.overall_sentiment = "positive"
+    result.sentiment.overall_sentiment = "positive"
+    result.sentiment.sentiment_score = 0.72
+    result.sentiment.positive_ratio = 0.65
+    result.sentiment.negative_ratio = 0.15
+    result.sentiment.neutral_ratio = 0.20
     result.news.key_themes = ["earnings beat", "product launch"]
+    result.news.impact_assessment = "Strong positive impact expected"
+    result.news.recommendation = "Consider buying on positive momentum"
     result.warnings = []
     return result
 
@@ -150,6 +153,19 @@ class TestAnalyzeStockTool:
         assert "## Sentiment Analysis" in result
         assert "## News Analysis" in result
         assert "## Decision Rationale" in result
+
+        # Sentiment ratios
+        assert "65%" in result  # positive_ratio
+        assert "15%" in result  # negative_ratio
+        assert "20%" in result  # neutral_ratio
+
+        # News fields
+        assert "Strong positive impact expected" in result  # impact_assessment
+        assert "Consider buying on positive momentum" in result  # recommendation
+
+        # Decision reasoning bullets
+        assert "Strong technical signals" in result  # reasoning[0]
+        assert "Positive sentiment" in result  # reasoning[1]
 
     def test_format_result_with_warnings(self, tool, mock_workflow_result):
         """Test formatted result includes warnings."""
