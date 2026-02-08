@@ -60,6 +60,18 @@ tests/               # Full mirror of src structure
 3. Create plan, get approval
 4. Work incrementally
 
+### Configuration Changes
+
+**When adding new daemon config:**
+1. Add config model to `src/daemon/config.py`
+2. Add field to `DaemonConfig` with `Field(default_factory=...)`
+3. Update `DaemonConfig.from_yaml()` to extract and pass the data
+4. **MANDATORY: Update `docs/daemon.yaml.example`** with comprehensive documentation
+   - Add section with all fields commented out
+   - Include inline comments explaining each field
+   - Document valid ranges, defaults, and examples
+   - Keep example file comprehensive - users rely on it for discovery
+
 ### Pre-Commit (MANDATORY)
 
 ```bash
@@ -465,12 +477,16 @@ mise ollama:status      # Check if Ollama running
 source .venv/bin/activate
 ```
 
-### Configuration (.env)
+### Configuration
 
-Required: `ALPHA_VANTAGE_API_KEY`
-Optional: `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`
-LLM: `LLM_PROVIDER` (ollama|anthropic|openai), `LLM_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_MAX_CONCURRENT` (1-20, default 5)
-Logging: `LOG_LEVEL` (DEBUG|INFO|WARNING|ERROR)
+**Daemon config:** `docs/daemon.yaml.example` - comprehensive example with all config sections
+**Env vars (.env):**
+- Required: `ALPHA_VANTAGE_API_KEY`
+- Optional: `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`
+- LLM: `LLM_PROVIDER` (ollama|anthropic|openai), `LLM_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_MAX_CONCURRENT` (1-20, default 5)
+- Logging: `LOG_LEVEL` (DEBUG|INFO|WARNING|ERROR)
+
+**Note:** Daemon config values take priority over env vars. See `docs/daemon.yaml.example` for all options.
 
 ### TUI Logs
 
