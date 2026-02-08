@@ -453,8 +453,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         """Get merged watchlist."""
         runner: DaemonRunner = app.state.runner
 
-        # Acceptable coupling for API layer - private method access
-        symbols = runner._get_merged_watchlist()  # noqa: SLF001
+        symbols = runner.get_merged_watchlist()
 
         config_count = len([s for s in runner.config.watchlist if s in symbols])
 

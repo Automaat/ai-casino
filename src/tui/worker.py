@@ -147,7 +147,7 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
     """Patch workflow methods to report progress."""
     from src.tui.log_capture import clear_active_step
 
-    original_run_analyses = workflow._run_analyses  # noqa: SLF001
+    original_run_analyses = workflow.run_analyses
 
     async def patched_run_analyses(
         state: dict,
@@ -159,9 +159,9 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
         clear_active_step()  # Clear after analyses complete
         return result
 
-    workflow._run_analyses = patched_run_analyses  # noqa: SLF001
+    workflow.run_analyses = patched_run_analyses
 
-    original_make_decision = workflow._make_decision  # noqa: SLF001
+    original_make_decision = workflow.make_decision
 
     async def patched_make_decision(state: dict) -> dict:
         _update_progress("decision", "Synthesizing trading decision...", progress_callback)
@@ -169,7 +169,7 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
         clear_active_step()  # Clear after decision complete
         return result
 
-    workflow._make_decision = patched_make_decision  # noqa: SLF001
+    workflow.make_decision = patched_make_decision
 
 
 def _setup_isolated_event_loop() -> asyncio.AbstractEventLoop:

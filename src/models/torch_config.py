@@ -4,8 +4,12 @@ import contextlib
 import os
 import threading
 
-_torch_configured = False
-_torch_lock = threading.Lock()
+
+class _TorchConfig:
+    """Singleton for torch configuration state."""
+
+    configured = False
+    lock = threading.Lock()
 
 
 def configure_torch_env() -> None:
@@ -19,10 +23,8 @@ def configure_torch_env() -> None:
 
 def configure_torch_runtime() -> None:
     """Configure torch AFTER import (call when analysis starts)."""
-    global _torch_configured  # noqa: PLW0603
-
-    with _torch_lock:
-        if _torch_configured:
+    with _TorchConfig.lock:
+        if _TorchConfig.configured:
             return
 
         import torch
@@ -35,4 +37,4 @@ def configure_torch_runtime() -> None:
         if hasattr(torch, "set_num_interop_threads"):
             torch.set_num_interop_threads(1)
 
-        _torch_configured = True
+        _TorchConfig.configured = True

@@ -516,11 +516,11 @@ class TradingWorkflow:
         technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
 
         start = time.perf_counter()
-        state = await self._run_analyses(state, technical_analyst, collector)
+        state = await self.run_analyses(state, technical_analyst, collector)
         self._record_stage(collector, "analyses", start)
 
         start = time.perf_counter()
-        state = await self._timed_agent_call("trader", self._make_decision(state), collector)
+        state = await self._timed_agent_call("trader", self.make_decision(state), collector)
         self._record_stage(collector, "decision", start)
 
         start = time.perf_counter()
@@ -656,7 +656,7 @@ class TradingWorkflow:
             collector.record_agent_timing(agent_name, (time.perf_counter() - start) * 1000)
             current_agent.reset(token)
 
-    async def _run_analyses(
+    async def run_analyses(
         self,
         state: TradingState,
         technical_analyst: TechnicalAnalyst,
@@ -924,7 +924,7 @@ class TradingWorkflow:
 
         return state
 
-    async def _make_decision(self, state: TradingState) -> TradingState:
+    async def make_decision(self, state: TradingState) -> TradingState:
         """Make final trading decision.
 
         Args:

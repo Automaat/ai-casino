@@ -236,7 +236,7 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
         "order_status": None,
     }
 
-    result_state = await workflow._make_decision(state)
+    result_state = await workflow.make_decision(state)
 
     assert result_state["final_decision"] is not None
     assert isinstance(result_state["final_decision"], TradingDecision)
@@ -403,7 +403,7 @@ async def test_account_info_passed_to_trader(
         "order_status": None,
     }
 
-    result_state = await workflow._make_decision(state)
+    result_state = await workflow.make_decision(state)
 
     assert result_state["final_decision"].owns_position is True
     assert result_state["final_decision"].position_qty == 100.0

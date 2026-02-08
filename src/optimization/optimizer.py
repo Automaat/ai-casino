@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 import optuna
 from loguru import logger
@@ -267,8 +267,8 @@ class OptunaOptimizer:
         start_time = time.time()
 
         if self.validator:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")  # noqa: DTZ007
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")  # noqa: DTZ007
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
             study.optimize(
                 lambda trial: self._objective_with_validation(trial, ctx, start_dt, end_dt),

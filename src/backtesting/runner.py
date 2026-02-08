@@ -1,6 +1,6 @@
 """Backtesting runner and result models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pandas as pd
 import yfinance as yf
@@ -68,9 +68,9 @@ class BacktestRunner:
         logger.info(f"Running backtest for {symbol} ({start_date} to {end_date})")
 
         if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")  # noqa: DTZ007
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
         if isinstance(end_date, str):
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")  # noqa: DTZ007
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
         data = self._fetch_data(symbol, start_date, end_date)
 
@@ -125,6 +125,20 @@ class BacktestRunner:
         logger.info(f"Fetched {len(data)} bars for {symbol}")
         return data
 
+    def _get_trades_from_stats(self, stats) -> list:  # noqa: ANN001
+        """Extract trades from backtesting library stats object.
+
+        The backtesting library stores trades in a private _trades attribute.
+        This helper encapsulates that access in one place.
+
+        Args:
+            stats: Backtest stats object from backtesting library
+
+        Returns:
+            List of trade objects, empty list if none available
+        """
+        return getattr(stats, "_trades", []) or []
+
     def _convert_trades(self, stats, symbol: str) -> list[TradeRecord]:  # noqa: ANN001
         """Convert backtesting.py trades to TradeRecord format.
 
@@ -136,11 +150,12 @@ class BacktestRunner:
             List of TradeRecord instances
         """
         records: list[TradeRecord] = []
+        trades = self._get_trades_from_stats(stats)
 
-        if not hasattr(stats, "_trades") or not stats._trades:  # noqa: SLF001
+        if not trades:
             return records
 
-        for trade in stats._trades:  # noqa: SLF001
+        for trade in trades:
             action = Signal.BUY if trade.Size > 0 else Signal.SELL
             shares = abs(trade.Size)
 
