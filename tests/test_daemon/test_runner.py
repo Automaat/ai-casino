@@ -234,21 +234,40 @@ async def test_analyze_watchlist_uses_merged(
     sample_config: DaemonConfig, mock_broker: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Test _analyze_watchlist uses merged watchlist."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
 
-    # Mock _analyze_symbol to track which symbols are analyzed
+    # Mock the orchestrator's orchestrate method
     analyzed_symbols: list[str] = []
 
-    async def mock_analyze(
-        symbol: str, position_context: dict | None = None, degradation_context: object = None
-    ) -> None:
-        analyzed_symbols.append(symbol)
+    async def mock_orchestrate(watchlist, target_allocations=None, degradation_context=None):
+        from src.daemon.analysis_orchestrator import AnalysisOrchestrationResult
+        from datetime import datetime, UTC
 
-    monkeypatch.setattr(runner, "_analyze_symbol", mock_analyze)
+        analyzed_symbols.extend(watchlist)
+        return AnalysisOrchestrationResult(
+            timestamp=datetime.now(UTC),
+            total_symbols=len(watchlist),
+            successful=len(watchlist),
+            failed=0,
+            position_actions=0,
+            results=[],
+            failed_symbols=[],
+            duration_seconds=0.0,
+            position_sync_performed=False,
+        )
 
     # Get merged watchlist and pass it to _analyze_watchlist
     merged = runner._get_merged_watchlist()
+
+    # Mock orchestrator
+    from unittest.mock import Mock as MockClass
+    mock_orchestrator = MockClass()
+    mock_orchestrator.orchestrate = mock_orchestrate
+    monkeypatch.setattr(runner, "_init_analysis_orchestrator", lambda: mock_orchestrator)
+
     await runner._analyze_watchlist(merged)
 
     # Should analyze merged watchlist: TSLA, MSFT from config + AAPL, NVDA from positions

@@ -560,6 +560,14 @@ class EarningsCalendarConfig(BaseModel):
         return self
 
 
+class AnalysisOrchestratorConfig(BaseModel):
+    """Configuration for analysis orchestration."""
+
+    max_concurrent_analyses: int = Field(default=3, ge=1, le=10)
+    target_allocation_ttl_days: int = Field(default=7, ge=1, le=30)
+    enable_position_sync: bool = True
+
+
 class NewsWatcherConfig(BaseModel):
     """Configuration for news watcher."""
 
@@ -641,6 +649,7 @@ class DaemonConfig(BaseModel):
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
     monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
+    analysis_orchestration: AnalysisOrchestratorConfig = Field(default_factory=AnalysisOrchestratorConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
@@ -685,6 +694,7 @@ class DaemonConfig(BaseModel):
         position_management_data = daemon_data.pop("position_management", {}) or {}
         monte_carlo_data = daemon_data.pop("monte_carlo", {}) or {}
         notifications_data = daemon_data.pop("notifications", {}) or {}
+        analysis_orchestration_data = daemon_data.pop("analysis_orchestration", {}) or {}
         news_watcher_data = daemon_data.pop("news_watcher", {}) or {}
         social_watcher_data = daemon_data.pop("social_watcher", {}) or {}
         filings_watcher_data = daemon_data.pop("filings_watcher", {}) or {}
@@ -721,6 +731,7 @@ class DaemonConfig(BaseModel):
             notifications=NotificationsConfig(
                 **notifications_data, telegram=TelegramNotificationConfig(**telegram_data)
             ),
+            analysis_orchestration=AnalysisOrchestratorConfig(**analysis_orchestration_data),
             news_watcher=NewsWatcherConfig(**news_watcher_data),
             social_watcher=SocialWatcherConfig(**social_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),

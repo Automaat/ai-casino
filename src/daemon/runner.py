@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.health import HealthReport
 from src.cache.historical import HistoricalCache
+from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
@@ -260,6 +261,9 @@ class DaemonRunner:
             self.notification_service = NotificationService(config.notifications)
             logger.info("Notification service enabled")
 
+        # Analysis orchestrator (initialized after workflow is ready)
+        self._analysis_orchestrator: AnalysisOrchestrator | None = None
+
         # API server components
         self._api_server: uvicorn.Server | None = None
         self._api_task: asyncio.Task | None = None
@@ -360,6 +364,30 @@ class DaemonRunner:
             )
             self._game_plan_agent = GamePlanAgent(llm_client, market_fetcher)
         return self._game_plan_agent
+
+    def _init_analysis_orchestrator(self) -> AnalysisOrchestrator:
+        """Initialize analysis orchestrator (lazy).
+
+        Returns:
+            AnalysisOrchestrator instance
+        """
+        if self._analysis_orchestrator is None:
+            workflow = self._init_workflow()
+            self._analysis_orchestrator = AnalysisOrchestrator(
+                workflow=workflow,
+                state=self.state,
+                scheduler=self.scheduler,
+                config=self.config.analysis_orchestration,
+                trading_mode=self.config.trading_mode.value,
+                broker=self.broker,
+                position_manager=self._position_manager,
+                event_bus=self.event_bus,
+                historical_cache=self._historical_cache,
+                notification_service=self.notification_service,
+                context_builder=self,
+            )
+            logger.info("Analysis orchestrator initialized")
+        return self._analysis_orchestrator
 
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
@@ -911,12 +939,12 @@ class DaemonRunner:
             timestamp=record.timestamp,
         )
 
-    async def _analyze_watchlist(  # noqa: C901, PLR0912, PLR0915
+    async def _analyze_watchlist(
         self,
         watchlist: list[str],
         degradation_context: "DegradationContext | None" = None,
     ) -> list[TradingWorkflowResult]:
-        """Analyze all symbols in watchlist.
+        """Analyze all symbols in watchlist (delegates to orchestrator).
 
         Args:
             watchlist: List of symbols to analyze
@@ -925,113 +953,25 @@ class DaemonRunner:
         Returns:
             List of analysis results
         """
-        # Sync positions with broker (if position management enabled)
-        if self._position_manager:
-            try:
-                new_positions, updated_positions, closed_symbols = self._position_manager.sync_with_broker(
-                    {sym: self.state.get_position(sym) for sym in self.state.active_positions}
-                )
-                for pos in new_positions:
-                    self.state.add_position(pos)
-                for pos in updated_positions:
-                    self.state.update_position(pos)
-                for symbol in closed_symbols:
-                    self.state.remove_position(symbol)
-            except Exception as e:
-                logger.error(f"Failed to sync positions: {e}")
-
-        # Set target allocations from last rebalancing (if recent)
-        # This will be picked up by _init_workflow in _analyze_symbol
+        # Build target allocations from last rebalancing (if recent)
+        target_allocations = None
         if self.state.active_target_allocations and self.state.last_portfolio_rebalancing:
-            from datetime import UTC
-
             days_old = (datetime.now(UTC) - self.state.last_portfolio_rebalancing).days
-            if days_old < 7:
-                # Store allocations to apply in _init_workflow
-                self._target_allocations_to_apply = self.state.active_target_allocations
+            if days_old < self.config.analysis_orchestration.target_allocation_ttl_days:
+                target_allocations = self.state.active_target_allocations
                 logger.info(f"Using target allocations from {days_old} days ago")
-            else:
-                self._target_allocations_to_apply = None
-        else:
-            self._target_allocations_to_apply = None
 
-        # Prefetch broker positions once for all symbols
-        broker_positions = None
-        if self._position_manager and self.broker:
-            try:
-                broker_info = self.broker.get_account_info()
-                broker_positions = broker_info.positions
-            except Exception as e:
-                logger.warning(f"Failed to prefetch account info: {e}")
+        # Delegate to orchestrator
+        orchestrator = self._init_analysis_orchestrator()
+        result = await orchestrator.orchestrate(watchlist, target_allocations, degradation_context)
 
-        results: list[TradingWorkflowResult] = []
-        semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
+        logger.info(
+            f"Orchestration complete: {result.successful}/{result.total_symbols} successful, "
+            f"{result.failed} failed, {result.position_actions} position actions, "
+            f"{result.duration_seconds:.2f}s"
+        )
 
-        async def analyze_with_limit(symbol: str) -> TradingWorkflowResult | None:
-            # Build position context if holding
-            position_context = None
-            if symbol in self.state.active_positions:
-                pos = self.state.get_position(symbol)
-                if pos:
-                    # Get current price from prefetched broker positions
-                    current_price = 0.0
-                    if broker_positions and symbol in broker_positions:
-                        broker_pos = broker_positions[symbol]
-                        qty = broker_pos.qty
-                        market_value = broker_pos.market_value
-                        if qty > 0:
-                            current_price = market_value / qty
-
-                    unrealized_pnl_pct = 0.0
-                    if current_price > 0 and pos.entry_price > 0:
-                        unrealized_pnl_pct = ((current_price - pos.entry_price) / pos.entry_price) * 100
-
-                    position_context = {
-                        "has_position": True,
-                        "symbol": symbol,
-                        "entry_price": pos.entry_price,
-                        "entry_confidence": pos.entry_confidence,
-                        "unrealized_pnl_percent": unrealized_pnl_pct,
-                        "days_held": pos.days_held,
-                        "current_qty": pos.current_qty,
-                    }
-
-            async with semaphore:
-                return await self._analyze_symbol(symbol, position_context, degradation_context)
-
-        tasks = [analyze_with_limit(s) for s in watchlist]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for i, result in enumerate(raw_results):
-            if isinstance(result, Exception):
-                symbol = watchlist[i]
-                logger.error(f"Analysis failed for {symbol}: {result}")
-                self.state.record_error(f"{symbol}: {result}")
-            elif result is not None:
-                results.append(result)
-
-        # Apply position management rules (if enabled)
-        if self._position_manager:
-            for result in results:
-                if result.symbol in self.state.active_positions:
-                    try:
-                        pos = self.state.get_position(result.symbol)
-                        if pos:
-                            actions = self._position_manager.review_position(
-                                pos,
-                                result.risk.current_price,
-                                result,
-                            )
-                            self.state.update_position(pos)
-                            for action in actions:
-                                self.state.record_position_action(action)
-                                logger.info(
-                                    f"Position action: {action.action_type} {action.symbol} - {action.reason}"
-                                )
-                    except Exception as e:
-                        logger.error(f"Failed to review position {result.symbol}: {e}")
-
-        return results
+        return result.results
 
     def _log_results(self, results: list[TradingWorkflowResult]) -> None:
         """Log analysis results to console.
