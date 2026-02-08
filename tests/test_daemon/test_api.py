@@ -744,3 +744,151 @@ class TestGamePlanEndpoint:
         assert data["priority_symbols"] == ["AAPL", "TSLA"]
         assert data["risk_stance"] == "BALANCED"
         assert data["confidence"] == 0.85
+
+
+class TestRiskHistoryEndpoint:
+    """Tests for /risk/history endpoint."""
+
+    def test_get_risk_history_with_reports(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test risk history endpoint returns multiple reports."""
+        reports = [
+            RiskReportRecord(
+                timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                var_95=1000.0,
+                var_99=1500.0,
+                cvar_95=1200.0,
+                cvar_99=1800.0,
+                cdar_95=0.05,
+                max_drawdown=0.08,
+                risk_status="HEALTHY",
+            ),
+            RiskReportRecord(
+                timestamp=datetime(2024, 1, 15, 11, 0, 0, tzinfo=UTC),
+                var_95=1100.0,
+                var_99=1600.0,
+                cvar_95=1300.0,
+                cvar_99=1900.0,
+                cdar_95=0.06,
+                max_drawdown=0.09,
+                risk_status="WARNING",
+            ),
+        ]
+        mock_runner.state.risk_report_history = reports
+
+        response = client.get("/risk/history")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 2
+        assert len(data["reports"]) == 2
+        assert data["reports"][0]["var_95"] == 1000.0
+        assert data["reports"][0]["risk_status"] == "HEALTHY"
+        assert data["reports"][1]["var_95"] == 1100.0
+        assert data["reports"][1]["risk_status"] == "WARNING"
+
+    def test_get_risk_history_empty(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test risk history endpoint with no reports."""
+        mock_runner.state.risk_report_history = []
+
+        response = client.get("/risk/history")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 0
+        assert data["reports"] == []
+
+
+class TestSectorRotationEndpoint:
+    """Tests for /sector-rotation/latest endpoint."""
+
+    def test_get_sector_rotation_with_data(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test sector rotation endpoint returns analysis."""
+        from src.daemon.state import SectorRotationRecord
+
+        rotation = SectorRotationRecord(
+            timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+            leading_sectors=["Technology", "Healthcare"],
+            lagging_sectors=["Energy", "Utilities"],
+            sector_strengths={"Technology": 15.5, "Healthcare": 10.2, "Energy": -5.3},
+            sector_momenta={"Technology": "STRONG", "Healthcare": "MODERATE", "Energy": "WEAK"},
+            flagged_positions=["XLE"],
+        )
+        mock_runner.state.sector_rotation_history = [rotation]
+
+        response = client.get("/sector-rotation/latest")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["leading_sectors"] == ["Technology", "Healthcare"]
+        assert data["lagging_sectors"] == ["Energy", "Utilities"]
+        assert data["sector_strengths"]["Technology"] == 15.5
+        assert data["flagged_positions"] == ["XLE"]
+
+    def test_get_sector_rotation_none(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test sector rotation endpoint with no data."""
+        mock_runner.state.sector_rotation_history = []
+
+        response = client.get("/sector-rotation/latest")
+        assert response.status_code == 200
+        assert response.json() is None
+
+
+class TestCorrelationEndpoint:
+    """Tests for /correlation/latest endpoint."""
+
+    def test_get_correlation_with_audit(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test correlation endpoint returns audit."""
+        from src.metrics.correlation import CorrelationAuditResult, CorrelationPair
+
+        audit = CorrelationAuditResult(
+            audit_date=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+            num_positions=3,
+            correlation_matrix={"AAPL": {"AAPL": 1.0, "TSLA": 0.65}, "TSLA": {"AAPL": 0.65, "TSLA": 1.0}},
+            highly_correlated_pairs=[
+                CorrelationPair(
+                    symbol_a="AAPL",
+                    symbol_b="TSLA",
+                    correlation=0.65,
+                    sector_a="Technology",
+                    sector_b="Technology",
+                    same_sector=True,
+                )
+            ],
+            max_correlation=0.65,
+            avg_correlation=0.325,
+            diversification_ratio=1.5,
+            substitution_suggestions=[],
+            warnings=[],
+            lookback_days=90,
+        )
+
+        mock_auditor = Mock()
+        mock_auditor.load_latest = Mock(return_value=audit)
+
+        def mock_correlation_auditor(*args, **kwargs):
+            return mock_auditor
+
+        monkeypatch.setattr("src.metrics.correlation.CorrelationAuditor", mock_correlation_auditor)
+
+        response = client.get("/correlation/latest")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["num_positions"] == 3
+        assert data["max_correlation"] == 0.65
+        assert data["avg_correlation"] == 0.325
+        assert data["symbols"] == ["AAPL", "TSLA"]
+        assert data["correlation_matrix"]["AAPL"]["TSLA"] == 0.65
+
+    def test_get_correlation_none(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test correlation endpoint with no audit."""
+        mock_auditor = Mock()
+        mock_auditor.load_latest = Mock(return_value=None)
+
+        def mock_correlation_auditor(*args, **kwargs):
+            return mock_auditor
+
+        monkeypatch.setattr("src.metrics.correlation.CorrelationAuditor", mock_correlation_auditor)
+
+        response = client.get("/correlation/latest")
+        assert response.status_code == 200
+        assert response.json() is None

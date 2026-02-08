@@ -1054,9 +1054,9 @@ def _build_sector_heatmap(rotation: SectorRotationResponse) -> dcc.Graph:
             x=["Relative Strength"],
             y=sectors,
             colorscale="RdYlGn",
-            text=[[f"{s:.2%}<br>{m}"] for s, m in zip(strengths, momenta, strict=True)],
+            text=[[f"{s:.2f}%<br>{m}"] for s, m in zip(strengths, momenta, strict=True)],
             texttemplate="%{text}",
-            hovertemplate="Sector: %{y}<br>Strength: %{z:.2%}<extra></extra>",
+            hovertemplate="Sector: %{y}<br>Strength: %{z:.2f}%<extra></extra>",
         )
     )
 
@@ -1131,9 +1131,12 @@ def _render_risk_tab(client: DaemonAPIClient) -> list:
     )
 
     # Risk status card
-    risk_color = (
-        "success" if risk.risk_status == "LOW" else "warning" if risk.risk_status == "MEDIUM" else "danger"
-    )
+    status_to_color = {
+        "HEALTHY": "success",
+        "WARNING": "warning",
+        "BREACH": "danger",
+    }
+    risk_color = status_to_color.get(risk.risk_status, "secondary")
     status_card = dbc.Card(
         [
             dbc.CardBody(

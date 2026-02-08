@@ -525,10 +525,14 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/correlation/latest", response_model=CorrelationMatrixResponse | None)
     async def get_correlation_matrix() -> CorrelationMatrixResponse | None:
         """Get latest correlation matrix."""
-        from src.data.market import MarketDataFetcher
         from src.metrics.correlation import CorrelationAuditor
 
-        auditor = CorrelationAuditor(MarketDataFetcher())
+        # Use runner's configured output_dir for consistency with daemon
+        # market_data_fetcher=None because load_latest() only reads from disk
+        auditor = CorrelationAuditor(
+            market_data_fetcher=None,
+            output_dir=runner.config.correlation_audit.output_dir,
+        )
         audit_result = auditor.load_latest()
 
         if not audit_result:
