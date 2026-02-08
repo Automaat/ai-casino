@@ -1,8 +1,8 @@
 # AI Casino
 
-Multi-agent stock trading system using technical analysis, sentiment analysis, and news analysis to generate trading decisions. Built with LangGraph for agent orchestration and LiteLLM for flexible LLM provider switching.
+Multi-agent stock trading system using technical analysis, sentiment analysis, and news analysis to generate trading decisions. Built with LangGraph for agent orchestration and custom provider abstraction for flexible LLM switching.
 
-**Tech Stack:** Python 3.12, LangGraph, LiteLLM, pandas-ta, transformers (FinBERT), yfinance
+**Tech Stack:** Python 3.12, LangGraph, pandas-ta, transformers (FinBERT), yfinance, Anthropic SDK, OpenAI SDK
 
 **Purpose:** Agentic AI system combining multiple analysis methods (technical indicators, sentiment, news) to make informed trading decisions (BUY/SELL/HOLD) with confidence scoring and risk assessment.
 
@@ -25,7 +25,8 @@ src/
 │   ├── market.py      # Alpha Vantage + yfinance
 │   └── news.py        # Marketaux API
 ├── models/          # ML models and LLM wrappers
-│   ├── llm.py         # LiteLLM client (Ollama/Claude/GPT abstraction)
+│   ├── llm.py         # LLM client facade (provider abstraction)
+│   ├── providers/     # Provider implementations (Anthropic, OpenAI, Ollama)
 │   └── sentiment.py   # FinBERT wrapper for sentiment analysis
 ├── strategies/      # Trading strategies
 │   └── momentum.py    # RSI + MACD momentum strategy
@@ -46,7 +47,8 @@ tests/               # Full mirror of src structure
 
 - **agents/** - Specialized agents for analysis (TechnicalAnalyst, SentimentAnalyst, NewsAnalyst, TraderAgent)
 - **workflows/trading.py** - Sequential pipeline: fetch data → technical → sentiment → news → final decision
-- **models/llm.py** - LiteLLM abstraction for provider switching (Ollama dev → Claude/GPT prod)
+- **models/llm.py** - LLM client facade with custom provider abstraction (Ollama dev → Claude/GPT prod)
+- **models/providers/** - Provider implementations using native SDKs (AnthropicProvider, OpenAIProvider, OllamaProvider)
 - **strategies/momentum.py** - RSI + MACD momentum strategy using pandas-ta
 
 ---
@@ -262,24 +264,41 @@ class TechnicalAnalyst:
         logger.info("Initialized TechnicalAnalyst")
 ```
 
-### LLM Abstraction (LiteLLM)
+### LLM Abstraction (Custom Provider Pattern)
 
-**Always use LiteLLM - case-by-case for provider-specific features:**
+**Architecture:** Custom provider abstraction using native SDKs (Anthropic, OpenAI) and direct HTTP for Ollama.
+
+**Provider implementations:**
+- `BaseLLMProvider`: Abstract interface defining `acomplete()`, `astream()`, `astructured()`, `acomplete_with_tools()`
+- `AnthropicProvider`: Uses `AsyncAnthropic` from `anthropic` package
+- `OpenAIProvider`: Uses OpenAI SDK with native client
+- `OllamaProvider`: Direct HTTP client for local inference
+
+**LLMClient facade:**
 
 ```python
 class LLMClient:
     def __init__(self, provider: str | None = None, model: str | None = None) -> None:
         self.provider = provider or os.getenv("LLM_PROVIDER", "ollama")
         self.model = model or os.getenv("LLM_MODEL", "qwen3:14b")
-        self._model_id = f"{self.provider}/{self.model}"  # ollama/qwen3:14b
+        self._provider: BaseLLMProvider = self._create_provider()  # Factory pattern
 
-    def complete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
-        messages = [{"role": "system", "content": system}] if system else []
-        messages.append({"role": "user", "content": prompt})
-        return completion(model=self._model_id, messages=messages, temperature=temperature).choices[0].message.content
+    def _create_provider(self) -> BaseLLMProvider:
+        if self.provider == "ollama":
+            return OllamaProvider(model=self.model, base_url=self.base_url)
+        if self.provider == "anthropic":
+            return AnthropicProvider(model=self.model, api_key=self._api_key)
+        if self.provider == "openai":
+            return OpenAIProvider(model=self.model, api_key=self._api_key)
+
+    async def acomplete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
+        messages = self._build_messages(prompt, system)
+        async with _get_semaphore():  # Concurrency control
+            return await self._provider.acomplete(messages, temperature)
 ```
 
 **Providers:** Dev: Ollama qwen3:14b, Prod: Claude sonnet-4, Alt: OpenAI gpt-4o
+**Features:** Structured output (Pydantic), tool calling, streaming, retry logic, concurrency limits
 
 ### Agent Pattern
 
@@ -526,7 +545,7 @@ Chat history: `~/.ai-casino/chat-history.json` (last 100 messages)
 - **Alpha Vantage:** Market data (ALPHA_VANTAGE_API_KEY required, 5 req/min free)
 - **Marketaux:** News (MARKETAUX_API_KEY optional, 100 req/day)
 - **Ollama:** Local LLM (http://localhost:11434, qwen3:14b recommended, `mise ollama:start`)
-- **LiteLLM:** Unified API (Ollama/Anthropic/OpenAI via env vars)
+- **Anthropic/OpenAI SDKs:** Cloud LLM providers via native SDK clients (ANTHROPIC_API_KEY/OPENAI_API_KEY)
 
 ---
 
