@@ -231,6 +231,7 @@ class DaemonState(BaseModel):
     monte_carlo_tests: list[MonteCarloRecord] = Field(default_factory=list)
     degradation_history: list[DegradationRecord] = Field(default_factory=list)
     last_degradation: datetime | None = None
+    market_events: list[dict] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":

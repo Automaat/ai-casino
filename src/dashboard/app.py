@@ -22,6 +22,12 @@ from src.daemon.api import (
 from src.dashboard.api_client import DaemonAPIClient
 from src.dashboard.config import DashboardConfig
 
+# Constants for events tab
+_CONSECUTIVE_SIGNALS_THRESHOLD = 5
+_HIGH_DRAWDOWN_THRESHOLD = 0.10
+_STALENESS_THRESHOLD_MINUTES = 30
+_DETAILS_MAX_LENGTH = 150
+
 
 def create_dash_app(config: DashboardConfig) -> Dash:
     """Create Dash app with layout and callbacks.
@@ -1223,26 +1229,272 @@ def _render_risk_tab(client: DaemonAPIClient) -> list:
     ]
 
 
-def _render_events_tab(client: DaemonAPIClient) -> list:
-    """Render Events tab (event log).
+def _categorize_event(event: dict) -> str:
+    """Categorize event for filtering.
+
+    Args:
+        event: Event dict
+
+    Returns:
+        Category string
+    """
+    event_type = event.get("event_type", "").upper()
+
+    # Market events
+    if event_type in ["NEWS", "SOCIAL", "ANOMALY", "FILING"]:
+        return event_type
+
+    # System events
+    if "ERROR" in event_type:
+        return "ERROR"
+    if event_type in ["CYCLE_START", "CYCLE_COMPLETE", "HEALTH_CHECK", "SCHEDULED_TASK", "STATE_UPDATE"]:
+        return "SYSTEM"
+    if event_type in ["ANALYSIS_START", "ANALYSIS_COMPLETE", "TRADE_EXECUTED"]:
+        return "ANALYSIS"
+    if event_type == "DEGRADATION":
+        return "ERROR"
+
+    return "SYSTEM"
+
+
+def _event_severity(event: dict) -> tuple[str, str, str]:
+    """Get (badge_color, icon, severity_label).
+
+    Args:
+        event: Event dict
+
+    Returns:
+        Tuple of (color, icon, severity_label)
+    """
+    category = _categorize_event(event)
+    event_type = event.get("event_type", "").upper()
+
+    if category == "ERROR" or "ERROR" in event_type:
+        return "#ef4444", "🔴", "ERROR"
+    if category in ["NEWS", "SOCIAL", "ANOMALY"]:
+        return "#3b82f6", "🔵", "INFO"
+    if category == "ANALYSIS" and "TRADE" in event_type:
+        return "#22c55e", "🟢", "TRADE"
+    return "#6b7280", "⚪", "SYSTEM"
+
+
+def _build_degradation_timeline(records: list[dict]) -> dcc.Graph | dbc.Alert:
+    """Build degradation timeline visualization.
+
+    Args:
+        records: Degradation history records
+
+    Returns:
+        Graph or alert if no data
+    """
+    if not records:
+        return dbc.Alert("No degradation history", color="info", className="mb-3")
+
+    tier_order = ["FULL", "DEGRADED", "MINIMAL", "HALTED"]
+    tier_colors = {"FULL": "#22c55e", "DEGRADED": "#fbbf24", "MINIMAL": "#f97316", "HALTED": "#ef4444"}
+
+    timestamps = [datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00")) for r in records]
+    tiers = [r["tier"] for r in records]
+    services = [", ".join(r["unavailable_services"]) or "All healthy" for r in records]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=timestamps,
+            y=tiers,
+            mode="lines+markers",
+            marker={"color": [tier_colors.get(t, "#6b7280") for t in tiers], "size": 10},
+            line={"color": "#6b7280", "width": 2},
+            hovertemplate="<b>%{y}</b><br>%{x}<br>%{customdata}<extra></extra>",
+            customdata=services,
+        )
+    )
+
+    fig.update_layout(
+        title="API Degradation Timeline",
+        yaxis={"categoryorder": "array", "categoryarray": tier_order, "title": "Tier"},
+        xaxis={"title": "Time"},
+        height=300,
+        showlegend=False,
+    )
+
+    return dcc.Graph(figure=fig)
+
+
+def _check_degradation_warning(client: DaemonAPIClient) -> dict | None:
+    """Check for API degradation warning."""
+    try:
+        degradation = client.get_degradation()
+        if degradation.tier == "HALTED":
+            return {
+                "severity": "danger",
+                "icon": "🔴",
+                "message": f"HALTED: {degradation.halt_reason}",
+                "details": f"Unavailable: {', '.join(degradation.unavailable_services)}",
+            }
+        if degradation.tier in ["DEGRADED", "MINIMAL"]:
+            return {
+                "severity": "warning",
+                "icon": "🟡",
+                "message": f"{degradation.tier} mode active",
+                "details": f"Confidence adjustment: {degradation.confidence_adjustment:.0%}",
+            }
+    except Exception as e:
+        logger.debug(f"Degradation check failed: {e}")
+    return None
+
+
+def _check_consecutive_losses(client: DaemonAPIClient) -> dict | None:
+    """Check for consecutive non-BUY signals."""
+    try:
+        analyses_resp = client.get_analyses(limit=_CONSECUTIVE_SIGNALS_THRESHOLD)
+        if not analyses_resp or not analyses_resp.analyses:
+            return None
+
+        recent_signals = [a.signal for a in analyses_resp.analyses[:_CONSECUTIVE_SIGNALS_THRESHOLD]]
+        if all(s in ["SELL", "HOLD"] for s in recent_signals):
+            return {
+                "severity": "warning",
+                "icon": "🟡",
+                "message": f"Consecutive non-BUY signals: {len(recent_signals)}",
+                "details": "Portfolio may be risk-averse or markets bearish",
+            }
+    except Exception as e:
+        logger.debug(f"Consecutive losses check failed: {e}")
+    return None
+
+
+def _check_high_drawdown(client: DaemonAPIClient) -> dict | None:
+    """Check for high portfolio drawdown."""
+    try:
+        risk = client.get_risk()
+        if risk and hasattr(risk, "max_drawdown") and abs(risk.max_drawdown) > _HIGH_DRAWDOWN_THRESHOLD:
+            return {
+                "severity": "danger",
+                "icon": "🔴",
+                "message": f"High drawdown: {abs(risk.max_drawdown):.1%}",
+                "details": f"Risk status: {risk.risk_status}",
+            }
+    except Exception as e:
+        logger.debug(f"Drawdown check failed: {e}")
+    return None
+
+
+def _generate_warnings(client: DaemonAPIClient) -> list[dict]:
+    """Generate warnings from multiple sources.
 
     Args:
         client: API client
 
     Returns:
-        Tab content
+        List of warning dicts with severity, icon, message, details
     """
-    events_resp = client.get_events(limit=100)
+    warnings = []
 
-    if events_resp.returned_count == 0:
-        return [dbc.Alert("No events yet", color="info")]
+    for check_fn in [
+        _check_degradation_warning,
+        _check_consecutive_losses,
+        _check_high_drawdown,
+    ]:
+        warning = check_fn(client)
+        if warning:
+            warnings.append(warning)
 
+    return warnings
+
+
+def _render_warnings_banner(warnings: list[dict]) -> html.Div:
+    """Render warnings banner.
+
+    Args:
+        warnings: List of warning dicts
+
+    Returns:
+        Div containing warnings or empty div
+    """
+    if not warnings:
+        return html.Div()
+
+    alerts = [
+        dbc.Alert(
+            [
+                html.Strong(f"{w['icon']} {w['message']}"),
+                html.Br(),
+                html.Small(w["details"]),
+            ],
+            color=w["severity"],
+            className="mb-2",
+        )
+        for w in warnings
+    ]
+
+    return html.Div(
+        [
+            html.H5("⚠️ Active Warnings", className="mb-3"),
+            html.Div(alerts),
+            html.Hr(),
+        ]
+    )
+
+
+def _render_error_log(errors: list[str]) -> html.Div:
+    """Render error log section.
+
+    Args:
+        errors: List of error strings
+
+    Returns:
+        Div containing error log or empty div
+    """
+    if not errors:
+        return html.Div()
+
+    error_rows = []
+    for err in errors[-20:]:
+        # Parse "2024-01-15 10:23:45: Error message" or use raw
+        parts = err.split(": ", 1)
+        expected_parts = 2
+        timestamp = parts[0] if len(parts) == expected_parts else "Unknown"
+        message = parts[1] if len(parts) == expected_parts else err
+
+        error_rows.append(
+            html.Tr(
+                [
+                    html.Td(timestamp, className="font-monospace small"),
+                    html.Td(message, style={"color": "#ef4444"}),
+                ]
+            )
+        )
+
+    return html.Div(
+        [
+            html.H5("Error Log", className="mt-4 mb-3"),
+            dbc.Table(
+                [
+                    html.Thead(html.Tr([html.Th("Timestamp"), html.Th("Error Message")])),
+                    html.Tbody(error_rows),
+                ],
+                bordered=True,
+                hover=True,
+                size="sm",
+                striped=True,
+            ),
+        ]
+    )
+
+
+def _build_event_table(all_events: list[dict]) -> dbc.Table:
+    """Build event table from events list.
+
+    Args:
+        all_events: List of event dicts
+
+    Returns:
+        Bootstrap table component
+    """
     table_rows = []
-    for event in events_resp.events:
-        event_type = event.get("event_type", "unknown")
-        timestamp = event.get("timestamp")
-        details = event.get("details", {})
-
+    for event in all_events[:100]:  # Limit display to 100
+        timestamp = event.get("timestamp") or event.get("signal_timestamp")
         if timestamp:
             try:
                 ts_obj = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
@@ -1252,29 +1504,164 @@ def _render_events_tab(client: DaemonAPIClient) -> list:
         else:
             timestamp_str = "Unknown"
 
-        details_str = str(details) if details else "-"
-        max_len = 100
-        if len(details_str) > max_len:
-            details_str = details_str[: max_len - 3] + "..."
+        event_type = event.get("event_type") or (event.get("event", {}).get("event_type", "unknown"))
+        category = _categorize_event(event)
+        color, icon, _severity = _event_severity(event)
+
+        # Extract details
+        if event.get("source") == "market":
+            # Market event (EventSignal)
+            summary = event.get("summary", "-")
+            if len(summary) > _DETAILS_MAX_LENGTH:
+                details_str = summary[:_DETAILS_MAX_LENGTH] + "..."
+            else:
+                details_str = summary
+        else:
+            # System event
+            data = event.get("data", {})
+            details_str = str(data) if data else "-"
+            if len(details_str) > _DETAILS_MAX_LENGTH:
+                details_str = details_str[: _DETAILS_MAX_LENGTH - 3] + "..."
 
         table_rows.append(
             html.Tr(
                 [
-                    html.Td(timestamp_str),
-                    html.Td(event_type),
-                    html.Td(details_str, className="font-monospace small"),
+                    html.Td(timestamp_str, className="font-monospace small"),
+                    html.Td(
+                        [
+                            html.Span(icon, style={"margin-right": "5px"}),
+                            html.Span(
+                                event_type.replace("_", " "),
+                                style={"color": color, "font-weight": "bold"},
+                            ),
+                        ]
+                    ),
+                    html.Td(category, className="small"),
+                    html.Td(details_str, className="small"),
                 ]
             )
         )
 
-    table = dbc.Table(
+    return dbc.Table(
         [
-            html.Thead(html.Tr([html.Th("Timestamp"), html.Th("Type"), html.Th("Details")])),
+            html.Thead(
+                html.Tr(
+                    [
+                        html.Th("Timestamp"),
+                        html.Th("Type"),
+                        html.Th("Category"),
+                        html.Th("Details"),
+                    ]
+                )
+            ),
             html.Tbody(table_rows),
         ],
         bordered=True,
         hover=True,
         striped=True,
+        size="sm",
     )
 
-    return [html.H4(f"Recent Events ({events_resp.returned_count})"), table]
+
+def _render_events_tab(client: DaemonAPIClient) -> list:
+    """Render Events tab with filters, timeline, warnings, event log, error log.
+
+    Args:
+        client: API client
+
+    Returns:
+        Tab content
+    """
+    try:
+        # Fetch all data
+        system_events = client.get_events(limit=100).events
+        market_events_resp = client.get_market_events(limit=100)
+        market_events = market_events_resp.events
+        degradation_history = client.get_degradation_history(limit=50)
+
+        # Merge events and sort by timestamp
+        all_events = []
+
+        for e in system_events:
+            e["source"] = "system"
+            all_events.append(e)
+
+        for e in market_events:
+            e["source"] = "market"
+            all_events.append(e)
+
+        all_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        if not all_events:
+            return [dbc.Alert("No events yet", color="info")]
+
+        # Generate warnings
+        warnings = _generate_warnings(client)
+        warnings_banner = _render_warnings_banner(warnings)
+
+        # Build degradation timeline
+        degradation_records = degradation_history.records
+        timeline = _build_degradation_timeline(degradation_records)
+
+        # Build filter controls
+        unique_categories = sorted({_categorize_event(e) for e in all_events})
+
+        # TODO: Wire filter callbacks to filter all_events by type/date range
+        filters = dbc.Card(
+            dbc.CardBody(
+                [
+                    html.H5("Filters", className="mb-3"),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    html.Label("Event Types"),
+                                    dcc.Checklist(
+                                        id="events-filter-type",
+                                        options=[
+                                            {"label": f" {cat}", "value": cat} for cat in unique_categories
+                                        ],
+                                        value=[
+                                            c
+                                            for c in unique_categories
+                                            if c in ["ANALYSIS", "NEWS", "SOCIAL", "ANOMALY", "ERROR"]
+                                        ],
+                                        inline=True,
+                                    ),
+                                ],
+                                width=8,
+                            ),
+                            dbc.Col(
+                                [
+                                    html.Label("Date Range"),
+                                    dcc.DatePickerRange(
+                                        id="events-filter-date",
+                                        start_date=(datetime.now(UTC) - timedelta(days=7)).date(),
+                                        end_date=datetime.now(UTC).date(),
+                                        display_format="YYYY-MM-DD",
+                                    ),
+                                ],
+                                width=4,
+                            ),
+                        ]
+                    ),
+                ]
+            ),
+            className="mb-4",
+        )
+
+        # Build event table
+        table = _build_event_table(all_events)
+
+        return [
+            html.H4("Events & Monitoring"),
+            warnings_banner,
+            timeline,
+            filters,
+            html.H5(f"Event Log ({len(all_events)} events)", className="mt-4 mb-3"),
+            table,
+        ]
+
+    except Exception as e:
+        logger.error(f"Events tab render failed: {e}")
+        return [dbc.Alert(f"Failed to load events: {e!s}", color="danger")]

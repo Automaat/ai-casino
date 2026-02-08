@@ -11,6 +11,7 @@ Base pattern generalized from TrumpWatcher:
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -37,13 +38,14 @@ class EventWatcher(ABC):
     Base class handles triage, cooldown, analysis orchestration, and signaling.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         poll_interval: int,
         relevance_threshold: float,
         cooldown_minutes: int,
         max_concurrent_analyses: int,
         historical_cache: HistoricalCache,
+        signal_callback: Callable[[EventSignal], None] | None = None,
     ) -> None:
         """Initialize event watcher.
 
@@ -53,12 +55,14 @@ class EventWatcher(ABC):
             cooldown_minutes: Minutes to wait before re-analyzing same symbol
             max_concurrent_analyses: Maximum symbols to analyze per cycle
             historical_cache: Shared cache for market/news data
+            signal_callback: Optional callback to persist signals (e.g., to state)
         """
         self.poll_interval = poll_interval
         self.relevance_threshold = relevance_threshold
         self.cooldown_minutes = cooldown_minutes
         self.max_concurrent_analyses = max_concurrent_analyses
         self.running = False
+        self._signal_callback = signal_callback
 
         # State tracking (in-memory)
         self._last_check: datetime | None = None
@@ -168,7 +172,7 @@ class EventWatcher(ABC):
         return results
 
     def _emit_signal(self, signal: EventSignal) -> None:
-        """Emit trading signal to console.
+        """Emit trading signal to console and persist via callback.
 
         Args:
             signal: Event signal with triage and analysis results
@@ -202,6 +206,13 @@ class EventWatcher(ABC):
 
         console.print("[bold cyan]═══════════════════════════════[/bold cyan]")
         console.print()
+
+        # Persist signal via callback if provided
+        if self._signal_callback:
+            try:
+                self._signal_callback(signal)
+            except Exception as e:
+                logger.error(f"Signal callback failed: {e}")
 
     async def _run_cycle(self) -> None:
         """Main poll cycle (template method)."""
