@@ -127,10 +127,10 @@ class TestCancellationCallback:
     """Tests for cancellation callback propagation."""
 
     async def test_execute_analyze_passes_is_cancelled(self, monkeypatch):
-        """is_cancelled callback is passed to run_analysis_in_process."""
+        """is_cancelled callback is passed to _run_analysis_async."""
         import asyncio
 
-        from src.tui import worker
+        from src.tui import commands
 
         captured_is_cancelled = None
 
@@ -164,7 +164,7 @@ class TestCancellationCallback:
                 "news": {"key_themes": [], "impact_assessment": "", "recommendation": ""},
             }
 
-        monkeypatch.setattr(worker, "run_analysis_in_process", mock_run_analysis)
+        monkeypatch.setattr(commands, "_run_analysis_async", mock_run_analysis)
 
         handler = CommandHandler()
 
@@ -179,14 +179,14 @@ class TestCancellationCallback:
         """is_cancelled=True raises CancelledError."""
         import asyncio
 
-        from src.tui import worker
+        from src.tui import commands
 
         async def mock_run_analysis(symbol, period_days=90, progress_callback=None, is_cancelled=None):
             if is_cancelled and is_cancelled():
                 raise asyncio.CancelledError
             pytest.fail("Should have been cancelled")
 
-        monkeypatch.setattr(worker, "run_analysis_in_process", mock_run_analysis)
+        monkeypatch.setattr(commands, "_run_analysis_async", mock_run_analysis)
 
         handler = CommandHandler()
 
