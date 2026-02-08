@@ -384,15 +384,17 @@ class AnalysisOrchestrator:
         from src.daemon.notifications import NotificationMessage, NotificationTrigger
 
         try:
+            conf = result.decision.confidence
+            risk = result.risk.validation.risk_level
             message = NotificationMessage(
                 trigger=NotificationTrigger.SIGNAL,
                 title=f"{result.symbol} {result.decision.action.value}",
-                body=f"Confidence: {result.decision.confidence:.2f}, Risk: {result.risk.validation.risk_level}",
+                body=f"Confidence: {conf:.2f}, Risk: {risk}",
                 metadata={
                     "symbol": result.symbol,
                     "signal": result.decision.action.value,
-                    "confidence": result.decision.confidence,
-                    "risk_level": result.risk.validation.risk_level,
+                    "confidence": conf,
+                    "risk_level": risk,
                 },
                 timestamp=datetime.now(UTC),
             )

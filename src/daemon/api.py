@@ -556,8 +556,8 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
 
             allocations.append(
                 RebalanceAllocation(
-                    symbol=symbol,
-                    target_weight=target_weight,
+                    symbol=allocation.symbol,
+                    target_weight=allocation.weight,
                     current_weight=current_weight,
                     delta=delta,
                     action=action,

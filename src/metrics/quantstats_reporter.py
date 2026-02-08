@@ -4,7 +4,6 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import quantstats as qs
 from loguru import logger
@@ -164,9 +163,7 @@ class QuantStatsReporter:
         benchmark_variance = aligned_benchmark.var()
         return float(covariance / benchmark_variance) if benchmark_variance != 0 else 0.0
 
-    def _calculate_alpha(
-        self, returns: pd.Series, benchmark_returns: pd.Series, beta: float
-    ) -> float:
+    def _calculate_alpha(self, returns: pd.Series, benchmark_returns: pd.Series, beta: float) -> float:
         """Calculate alpha (excess return vs benchmark).
 
         Args:
@@ -182,7 +179,9 @@ class QuantStatsReporter:
             return 0.0
         portfolio_mean = aligned_returns.mean()
         benchmark_mean = aligned_benchmark.mean()
-        alpha = portfolio_mean - (self.risk_free_rate / 252 + beta * (benchmark_mean - self.risk_free_rate / 252))
+        alpha = portfolio_mean - (
+            self.risk_free_rate / 252 + beta * (benchmark_mean - self.risk_free_rate / 252)
+        )
         return float(alpha * 252)
 
     def _calculate_max_dd_duration(self, dd_series: pd.Series) -> int | None:

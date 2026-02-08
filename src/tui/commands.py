@@ -660,7 +660,9 @@ Type freely to chat about markets or ask questions."""
             data={"count": len(latest.candidates)},
         )
 
-    def _handle_candidates_add(self, symbols: list[str], state: "DaemonState", _state_file: str) -> CommandResult:
+    def _handle_candidates_add(
+        self, symbols: list[str], state: DaemonState, _state_file: str
+    ) -> CommandResult:
         """Add candidates to watchlist.
 
         Args:
