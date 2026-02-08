@@ -673,3 +673,74 @@ class TestWebSocketEvents:
         # Verify the WebSocket route is registered
         routes = [route.path for route in app.routes]
         assert "/ws/events" in routes
+
+
+class TestGamePlanEndpoint:
+    """Tests for /game-plan endpoint."""
+
+    def test_get_game_plan_disabled(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test game plan endpoint when disabled."""
+        from src.daemon.config import GamePlanConfig
+
+        mock_runner.config.game_plan = GamePlanConfig(enabled=False)
+
+        response = client.get("/game-plan")
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_get_game_plan_missing_file(self, client: TestClient, mock_runner: Mock, tmp_path) -> None:
+        """Test game plan endpoint when file missing."""
+        from src.daemon.config import GamePlanConfig
+        from src.daemon.state import GamePlanRecord
+
+        mock_runner.config.game_plan = GamePlanConfig(enabled=True, plan_dir=str(tmp_path))
+        mock_runner.state.game_plan_history = [
+            GamePlanRecord(
+                timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                priority_symbols=["AAPL"],
+                risk_stance="BALANCED",
+                sector_focus=["tech"],
+            )
+        ]
+
+        response = client.get("/game-plan")
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_get_game_plan_valid(self, client: TestClient, mock_runner: Mock, tmp_path) -> None:
+        """Test game plan endpoint with valid file."""
+        import json
+
+        from src.daemon.config import GamePlanConfig
+        from src.daemon.state import GamePlanRecord
+
+        plan_file = tmp_path / "2024-01-15.json"
+        plan_data = {
+            "date": "2024-01-15",
+            "priority_symbols": ["AAPL", "TSLA"],
+            "risk_stance": "BALANCED",
+            "sector_focus": ["tech"],
+            "reasoning": "Test reasoning",
+            "confidence": 0.85,
+            "generated_at": "2024-01-15T10:00:00+00:00",
+        }
+        plan_file.write_text(json.dumps(plan_data))
+
+        mock_runner.config.game_plan = GamePlanConfig(enabled=True, plan_dir=str(tmp_path))
+        mock_runner.state.game_plan_history = [
+            GamePlanRecord(
+                timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                priority_symbols=["AAPL", "TSLA"],
+                risk_stance="BALANCED",
+                sector_focus=["tech"],
+            )
+        ]
+
+        response = client.get("/game-plan")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["date"] == "2024-01-15"
+        assert data["priority_symbols"] == ["AAPL", "TSLA"]
+        assert data["risk_stance"] == "BALANCED"
+        assert data["confidence"] == 0.85

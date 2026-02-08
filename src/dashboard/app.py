@@ -227,12 +227,12 @@ def _build_status_cards(
 
 def _build_degradation_badge(degradation: DegradationResponse) -> html.Div:
     """Build degradation tier badge."""
-    tier_colors = {"FULL": "success", "PARTIAL": "warning", "MINIMAL": "danger", "HALT": "dark"}
+    tier_colors = {"FULL": "success", "DEGRADED": "warning", "MINIMAL": "danger", "HALTED": "dark"}
     color = tier_colors.get(degradation.tier, "secondary")
 
     if degradation.tier == "FULL":
         description = "All systems operational"
-    elif degradation.tier == "HALT":
+    elif degradation.tier == "HALTED":
         description = f"Trading halted: {degradation.halt_reason}"
     else:
         unavailable = ", ".join(degradation.unavailable_services)
@@ -401,8 +401,10 @@ def _build_analyses_chart(client: DaemonAPIClient) -> dbc.Alert | dcc.Graph:
         hour_buckets[hour_key] += 1
 
     all_hours = []
-    current = cutoff.replace(minute=0, second=0, microsecond=0)
-    while current <= now:
+    end_hour = now.replace(minute=0, second=0, microsecond=0)
+    start_hour = end_hour - timedelta(hours=23)
+    current = start_hour
+    while current <= end_hour:
         all_hours.append(current)
         current += timedelta(hours=1)
 
