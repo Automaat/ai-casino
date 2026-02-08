@@ -57,6 +57,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
         self._session.add(orm)
         await self._session.commit()
         logger.info(f"Created trade: {orm.id} ({entity.symbol} {entity.action.value})")
+        entity.id = str(orm.id)
         return entity
 
     async def get_by_id(self, entity_id: str) -> TradeRecord | None:

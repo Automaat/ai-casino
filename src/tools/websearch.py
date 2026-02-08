@@ -54,7 +54,7 @@ class WebSearchTool(BaseTool):
                             "description": "Type of search: 'general' for broad info, 'news' for recent news",
                         },
                     },
-                    "required": ["query", "search_type"],
+                    "required": ["query"],
                 },
             },
         }
