@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -14,6 +15,71 @@ if TYPE_CHECKING:
 
 ProgressCallback = Callable[[str, str, str], None]
 CancelledCallback = Callable[[], bool]
+
+
+async def _run_analysis_async(
+    symbol: str,
+    period_days: int = 90,
+    progress_callback: ProgressCallback | None = None,
+    is_cancelled: CancelledCallback | None = None,
+) -> dict:
+    """Run analysis using callback-based API with async/await interface.
+
+    Args:
+        symbol: Stock symbol
+        period_days: Number of days of data to fetch
+        progress_callback: Progress callback
+        is_cancelled: Cancellation check callback
+
+    Returns:
+        Analysis result dict
+
+    Raises:
+        asyncio.CancelledError: If analysis was cancelled
+        RuntimeError: If analysis failed
+    """
+    from src.tui.worker import start_analysis
+
+    result_holder: dict = {}
+    error_holder: list[str] = []
+    done_event = asyncio.Event()
+
+    def on_result(result: dict) -> None:
+        result_holder["data"] = result
+        done_event.set()
+
+    def on_error(error: str) -> None:
+        error_holder.append(error)
+        done_event.set()
+
+    def progress_with_cancel_check(step_id: str, status: str, detail: str) -> None:
+        if progress_callback:
+            progress_callback(step_id, status, detail)
+
+    start_analysis(
+        symbol=symbol,
+        period_days=period_days,
+        progress_callback=progress_with_cancel_check,
+        result_callback=on_result,
+        error_callback=on_error,
+    )
+
+    # Wait for completion with cancellation checks
+    while not done_event.is_set():
+        if is_cancelled and is_cancelled():
+            from src.tui.worker import cancel_analysis
+
+            cancel_analysis(symbol)
+            msg = "Analysis cancelled by user"
+            raise asyncio.CancelledError(msg)
+        await asyncio.sleep(0.1)
+
+    if error_holder:
+        if "cancelled" in error_holder[0].lower():
+            raise asyncio.CancelledError(error_holder[0])
+        raise RuntimeError(error_holder[0])
+
+    return result_holder["data"]
 
 
 @dataclass
@@ -169,9 +235,7 @@ Type freely to chat about markets or ask questions."""
 
         symbol = args[0].upper()
 
-        from src.tui.worker import run_analysis_in_process
-
-        result_dict = await run_analysis_in_process(
+        result_dict = await _run_analysis_async(
             symbol, period_days=90, progress_callback=progress_callback, is_cancelled=is_cancelled
         )
         from src.workflows.types import TradingWorkflowResult
@@ -196,9 +260,8 @@ Type freely to chat about markets or ask questions."""
             return CommandResult(success=False, message="Usage: /technical SYMBOL")
 
         symbol = args[0].upper()
-        from src.tui.worker import run_analysis_in_process
 
-        result_dict = await run_analysis_in_process(
+        result_dict = await _run_analysis_async(
             symbol,
             period_days=90,
             progress_callback=progress_callback,
@@ -225,9 +288,8 @@ Type freely to chat about markets or ask questions."""
             return CommandResult(success=False, message="Usage: /sentiment SYMBOL")
 
         symbol = args[0].upper()
-        from src.tui.worker import run_analysis_in_process
 
-        result_dict = await run_analysis_in_process(
+        result_dict = await _run_analysis_async(
             symbol,
             period_days=90,
             progress_callback=progress_callback,
@@ -254,9 +316,8 @@ Type freely to chat about markets or ask questions."""
             return CommandResult(success=False, message="Usage: /news SYMBOL")
 
         symbol = args[0].upper()
-        from src.tui.worker import run_analysis_in_process
 
-        result_dict = await run_analysis_in_process(
+        result_dict = await _run_analysis_async(
             symbol,
             period_days=90,
             progress_callback=progress_callback,

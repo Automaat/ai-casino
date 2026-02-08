@@ -360,68 +360,6 @@ def is_analysis_running(symbol: str) -> bool:
     return job is not None and job.thread.is_alive()
 
 
-# --- Legacy API (for backwards compatibility) ---
-
-
-async def run_analysis_in_process(
-    symbol: str,
-    period_days: int = 90,
-    progress_callback: ProgressCallback | None = None,
-    is_cancelled: Callable[[], bool] | None = None,
-) -> dict:
-    """Run analysis in isolated thread (legacy async API).
-
-    DEPRECATED: Use start_analysis() for fire-and-forget pattern.
-    """
-    result_holder: dict = {}
-    error_holder: list[str] = []
-    done_event = threading.Event()
-    cancelled_event = threading.Event()
-
-    def on_result(result: dict) -> None:
-        result_holder["data"] = result
-        done_event.set()
-
-    def on_error(error: str) -> None:
-        error_holder.append(error)
-        done_event.set()
-
-    def progress_with_cancel_check(step_id: str, status: str, detail: str) -> None:
-        if is_cancelled and is_cancelled():
-            cancelled_event.set()
-        if progress_callback:
-            progress_callback(step_id, status, detail)
-
-    params = AnalysisParams(
-        symbol=_validate_symbol(symbol),
-        period_days=period_days,
-        progress_callback=progress_with_cancel_check,
-        result_callback=on_result,
-        error_callback=on_error,
-        cancelled_event=cancelled_event,
-    )
-
-    thread = threading.Thread(
-        target=_analysis_thread_target,
-        args=(params,),
-        name=f"analysis-{params.symbol}",
-        daemon=True,
-    )
-    thread.start()
-
-    while not done_event.is_set():
-        await asyncio.sleep(0.1)
-        if is_cancelled and is_cancelled():
-            cancelled_event.set()
-
-    if error_holder:
-        if "cancelled" in error_holder[0].lower():
-            raise asyncio.CancelledError(error_holder[0])
-        raise RuntimeError(error_holder[0])
-
-    return result_holder["data"]
-
-
 async def _run_screening_async(params: ScreeningParams) -> dict:
     """Internal async function that runs in isolated thread's event loop."""
     from src.tui.log_capture import clear_active_step
