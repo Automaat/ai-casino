@@ -1606,7 +1606,7 @@ def _render_events_tab(client: DaemonAPIClient) -> list:
         # Build filter controls
         unique_categories = sorted({_categorize_event(e) for e in all_events})
 
-        # TODO: Wire filter callbacks to filter all_events by type/date range
+        # Filter callbacks not wired yet (#271)
         filters = dbc.Card(
             dbc.CardBody(
                 [

@@ -116,9 +116,7 @@ class PositionManager:
         profit_targets = self._calculate_profit_targets(entry_price)
         initial_stop = self._calculate_initial_stop_loss(entry_price)
 
-        # TODO: Load actual entry metadata from persistent store when available
-        # For now, defaults used: timestamp=now(), confidence=0.75
-        # See follow-up issue for entry metadata persistence feature
+        # Using defaults: timestamp=now(), confidence=0.75 (#272)
         return PositionRecord(
             symbol=symbol,
             entry_timestamp=datetime.now(UTC),

@@ -84,7 +84,6 @@ def create_daily_data(
     return MarketData(symbol="TEST", data=df, last_updated=now)
 
 
-@pytest.mark.asyncio
 async def test_volume_spike_detection(anomaly_watcher, mock_market_fetcher):
     """Test volume spike detection (2-poll sequence: baseline → spike)."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -120,7 +119,6 @@ async def test_volume_spike_detection(anomaly_watcher, mock_market_fetcher):
         assert event.volume_spike_data.spike_multiplier == 2.0
 
 
-@pytest.mark.asyncio
 async def test_price_move_detection(anomaly_watcher, mock_market_fetcher):
     """Test large intraday price move detection (>5%)."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -143,7 +141,6 @@ async def test_price_move_detection(anomaly_watcher, mock_market_fetcher):
         assert event.price_move_data.current_price == 106.0
 
 
-@pytest.mark.asyncio
 async def test_gap_up_detection(anomaly_watcher, mock_market_fetcher):
     """Test gap up detection (>3% from prev close)."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -169,7 +166,6 @@ async def test_gap_up_detection(anomaly_watcher, mock_market_fetcher):
         assert event.gap_data.open_price == 105.0
 
 
-@pytest.mark.asyncio
 async def test_gap_down_detection(anomaly_watcher, mock_market_fetcher):
     """Test gap down detection (>3% from prev close)."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -193,7 +189,6 @@ async def test_gap_down_detection(anomaly_watcher, mock_market_fetcher):
         assert event.gap_data.gap_direction == "down"
 
 
-@pytest.mark.asyncio
 async def test_multiple_anomalies_single_event(anomaly_watcher, mock_market_fetcher):
     """Test multiple anomaly types detected in single event."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -228,7 +223,6 @@ async def test_multiple_anomalies_single_event(anomaly_watcher, mock_market_fetc
         assert event.gap_data is not None
 
 
-@pytest.mark.asyncio
 async def test_round_robin_rotation(anomaly_watcher, mock_market_fetcher):
     """Test round-robin watchlist rotation."""
     anomaly_watcher._market_fetcher = mock_market_fetcher
@@ -252,7 +246,6 @@ async def test_round_robin_rotation(anomaly_watcher, mock_market_fetcher):
     assert anomaly_watcher._rotation_offset == 1
 
 
-@pytest.mark.asyncio
 async def test_round_robin_wrap_around(anomaly_watcher, mock_market_fetcher):
     """Test round-robin wraps around watchlist."""
     anomaly_watcher._market_fetcher = mock_market_fetcher
@@ -266,7 +259,6 @@ async def test_round_robin_wrap_around(anomaly_watcher, mock_market_fetcher):
     assert anomaly_watcher._rotation_offset == 1
 
 
-@pytest.mark.asyncio
 async def test_baseline_establishment(anomaly_watcher, mock_market_fetcher):
     """Test volume baseline establishment from daily data."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -285,7 +277,6 @@ async def test_baseline_establishment(anomaly_watcher, mock_market_fetcher):
         assert anomaly_watcher._volume_baselines["AAPL"] == 500000.0
 
 
-@pytest.mark.asyncio
 async def test_previous_close_cache_refresh(anomaly_watcher, mock_market_fetcher):
     """Test previous close cache clears on new day."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -306,7 +297,6 @@ async def test_previous_close_cache_refresh(anomaly_watcher, mock_market_fetcher
         assert len(anomaly_watcher._previous_close_cache) == 0
 
 
-@pytest.mark.asyncio
 async def test_lru_eviction(anomaly_watcher, mock_market_fetcher):
     """Test LRU eviction at 301st symbol."""
     anomaly_watcher._market_fetcher = mock_market_fetcher
@@ -325,7 +315,6 @@ async def test_lru_eviction(anomaly_watcher, mock_market_fetcher):
     assert "SYM300" in anomaly_watcher._volume_baselines
 
 
-@pytest.mark.asyncio
 async def test_empty_watchlist(anomaly_watcher, mock_market_fetcher):
     """Test empty watchlist returns no events."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -336,7 +325,6 @@ async def test_empty_watchlist(anomaly_watcher, mock_market_fetcher):
         assert len(events) == 0
 
 
-@pytest.mark.asyncio
 async def test_empty_intraday_data(anomaly_watcher, mock_market_fetcher):
     """Test handling of empty intraday data."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -350,7 +338,6 @@ async def test_empty_intraday_data(anomaly_watcher, mock_market_fetcher):
         assert len(events) == 0
 
 
-@pytest.mark.asyncio
 async def test_api_failure_continues(anomaly_watcher, mock_market_fetcher):
     """Test API failure for one symbol doesn't stop processing."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -373,7 +360,6 @@ async def test_api_failure_continues(anomaly_watcher, mock_market_fetcher):
         assert events[0].symbol == "TSLA"
 
 
-@pytest.mark.asyncio
 async def test_zero_volume_baseline_skipped(anomaly_watcher, mock_market_fetcher):
     """Test zero volume baseline doesn't cause division errors."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -389,7 +375,6 @@ async def test_zero_volume_baseline_skipped(anomaly_watcher, mock_market_fetcher
             assert "volume_spike" not in event.anomaly_types
 
 
-@pytest.mark.asyncio
 async def test_zero_open_price_skipped(anomaly_watcher, mock_market_fetcher):
     """Test zero open price doesn't cause division errors."""
     with patch.object(anomaly_watcher, "_init_components"):
@@ -407,7 +392,6 @@ async def test_zero_open_price_skipped(anomaly_watcher, mock_market_fetcher):
             assert "gap" not in event.anomaly_types
 
 
-@pytest.mark.asyncio
 async def test_zero_previous_close_skipped(anomaly_watcher, mock_market_fetcher):
     """Test zero previous close doesn't cause division errors."""
     with patch.object(anomaly_watcher, "_init_components"):

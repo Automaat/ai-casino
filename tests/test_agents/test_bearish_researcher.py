@@ -98,7 +98,6 @@ class TestBearishResearcher:
         assert researcher.llm == mock_llm_client
         assert repr(researcher) == "BearishResearcher(llm=ollama/qwen3:14b)"
 
-    @pytest.mark.asyncio
     async def test_analyze_returns_bearish_research_analysis(
         self,
         bearish_researcher,
@@ -125,7 +124,6 @@ class TestBearishResearcher:
         assert result.target_downside == 25.0
         assert 0.0 <= result.confidence <= 1.0
 
-    @pytest.mark.asyncio
     async def test_analyze_calls_llm(
         self,
         bearish_researcher,
@@ -429,7 +427,6 @@ class TestBearishResearcher:
 
         assert downside is None
 
-    @pytest.mark.asyncio
     async def test_analyze_with_missing_fundamental_data(
         self,
         bearish_researcher,

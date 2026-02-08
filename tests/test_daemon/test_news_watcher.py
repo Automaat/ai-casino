@@ -47,7 +47,6 @@ def test_breaking_keywords_defined(news_watcher):
     assert len(NewsWatcher.BREAKING_KEYWORDS) > 10
 
 
-@pytest.mark.asyncio
 async def test_fetch_events_breaking_news(news_watcher):
     """Test fetching breaking news events."""
     now = datetime.now(UTC)
@@ -96,7 +95,6 @@ async def test_fetch_events_breaking_news(news_watcher):
     assert events[0].source == "marketaux"
 
 
-@pytest.mark.asyncio
 async def test_fetch_events_deduplication(news_watcher):
     """Test URL deduplication in fetch_events."""
     now = datetime.now(UTC)
@@ -122,7 +120,6 @@ async def test_fetch_events_deduplication(news_watcher):
         assert len(events2) == 0  # Deduplicated
 
 
-@pytest.mark.asyncio
 async def test_fetch_events_rolling_window(news_watcher):
     """Test that seen_urls maintains rolling window of 100 via deque maxlen."""
     now = datetime.now(UTC)
@@ -149,7 +146,6 @@ async def test_fetch_events_rolling_window(news_watcher):
     assert len(news_watcher._seen_urls) == 100
 
 
-@pytest.mark.asyncio
 async def test_fetch_events_no_breaking_news(news_watcher):
     """Test when no breaking news is found."""
     with patch.object(news_watcher, "_init_components"):

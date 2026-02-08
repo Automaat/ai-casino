@@ -15,7 +15,6 @@ class TestFundamentalAnalyst:
         assert analyst.llm == mock_llm_client
         assert analyst.fetcher == mock_fundamental_fetcher
 
-    @pytest.mark.asyncio
     async def test_analyze_returns_fundamental_analysis(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze returns FundamentalAnalysis with correct types."""
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
@@ -33,7 +32,6 @@ class TestFundamentalAnalyst:
         assert isinstance(result.interpretation, str)
         assert 0.0 <= result.confidence <= 1.0
 
-    @pytest.mark.asyncio
     async def test_analyze_calls_fetcher_and_llm(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze calls fetcher and LLM."""
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
@@ -256,7 +254,6 @@ class TestFundamentalAnalyst:
         assert "28.5" in prompt
         assert "$" not in prompt  # No price
 
-    @pytest.mark.asyncio
     async def test_analyze_without_current_price(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze without providing current price."""
         analyst = FundamentalAnalyst(mock_llm_client, mock_fundamental_fetcher)
@@ -266,7 +263,6 @@ class TestFundamentalAnalyst:
         assert isinstance(result, FundamentalAnalysis)
         assert result.confidence > 0.0
 
-    @pytest.mark.asyncio
     async def test_analyze_edge_case_negative_earnings(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze with negative earnings."""
         mock_fundamental_fetcher.fetch_overview.return_value = {
@@ -283,7 +279,6 @@ class TestFundamentalAnalyst:
         assert result.eps is not None
         assert result.eps < 0
 
-    @pytest.mark.asyncio
     async def test_analyze_raises_on_fetcher_error(self, mock_llm_client, mock_fundamental_fetcher):
         """Test analyze raises exception when fetcher fails."""
         mock_fundamental_fetcher.fetch_overview.side_effect = ValueError("API error")

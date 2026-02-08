@@ -109,7 +109,6 @@ def mock_llm_client_structured():
     return mock
 
 
-@pytest.mark.asyncio
 async def test_analyze_full_data(
     mock_llm_client_structured, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert
 ):
@@ -131,7 +130,6 @@ async def test_analyze_full_data(
     assert 0.0 <= result.confidence <= 1.0
 
 
-@pytest.mark.asyncio
 async def test_analyze_missing_finnhub(mock_llm_client_structured, mock_reddit_fetcher, mock_finbert):
     """Test analysis when Finnhub fails."""
     analyst = SocialSentimentAnalyst(
@@ -153,7 +151,6 @@ async def test_analyze_missing_finnhub(mock_llm_client_structured, mock_reddit_f
     assert 0.0 <= result.confidence <= 1.0
 
 
-@pytest.mark.asyncio
 async def test_analyze_no_reddit_mentions(mock_llm_client_structured, mock_finnhub_fetcher, mock_finbert):
     """Test analysis with zero Reddit posts."""
     mock_reddit = MagicMock()
@@ -176,7 +173,6 @@ async def test_analyze_no_reddit_mentions(mock_llm_client_structured, mock_finnh
     assert result.reddit_sentiment is None
 
 
-@pytest.mark.asyncio
 async def test_analyze_all_sources_failed(mock_llm_client_structured, mock_finbert):
     """Test analysis when all APIs fail."""
     analyst = SocialSentimentAnalyst(mock_llm_client_structured, MagicMock(), MagicMock(), mock_finbert)
@@ -358,7 +354,6 @@ def test_compute_confidence_low():
     assert confidence <= 0.5
 
 
-@pytest.mark.asyncio
 async def test_compute_reddit_sentiment_weighted():
     """Test Reddit sentiment weighting."""
     analyst = SocialSentimentAnalyst(MagicMock(), MagicMock(), MagicMock(), MagicMock())
@@ -408,7 +403,6 @@ async def test_compute_reddit_sentiment_weighted():
     assert -1.0 <= sentiment <= 1.0
 
 
-@pytest.mark.asyncio
 async def test_structured_output_fallback(mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert):
     """Test fallback when structured output fails."""
     mock_llm = MagicMock()

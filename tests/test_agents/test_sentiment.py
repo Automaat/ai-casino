@@ -1,7 +1,5 @@
 """Tests for sentiment analyst agent."""
 
-import pytest
-
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 
 
@@ -11,7 +9,6 @@ def test_sentiment_analyst_init(mock_finbert):
     assert analyst.finbert == mock_finbert
 
 
-@pytest.mark.asyncio
 async def test_sentiment_analyst_analyze(mock_finbert, sample_news_articles):
     analyst = SentimentAnalyst(mock_finbert)
 
@@ -25,7 +22,6 @@ async def test_sentiment_analyst_analyze(mock_finbert, sample_news_articles):
     mock_finbert.analyze_batch.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_sentiment_analyst_analyze_empty_articles(mock_finbert):
     analyst = SentimentAnalyst(mock_finbert)
 

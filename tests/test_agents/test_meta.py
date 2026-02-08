@@ -80,7 +80,6 @@ class TestMetaAgent:
 
         assert agent.metrics_tracker == mock_tracker
 
-    @pytest.mark.asyncio
     async def test_select_strategy_trending_market(
         self, mock_llm_client, mock_regime_detector, sample_ohlcv_trending_up, sample_regime_analysis
     ) -> None:
@@ -97,7 +96,6 @@ class TestMetaAgent:
         assert result.ensemble_weights is None
         assert result.confidence == sample_regime_analysis.confidence
 
-    @pytest.mark.asyncio
     async def test_select_strategy_ranging_market(
         self, mock_llm_client, mock_regime_detector, sample_ohlcv_ranging
     ) -> None:
@@ -119,7 +117,6 @@ class TestMetaAgent:
         assert isinstance(result.strategy_instance, MeanReversionStrategy)
         assert result.regime == MarketRegime.RANGING
 
-    @pytest.mark.asyncio
     async def test_select_strategy_volatile_market(
         self, mock_llm_client, mock_regime_detector, sample_ohlcv_volatile
     ) -> None:
@@ -141,7 +138,6 @@ class TestMetaAgent:
         assert isinstance(result.strategy_instance, MomentumStrategy)
         assert result.regime == MarketRegime.HIGH_VOLATILITY
 
-    @pytest.mark.asyncio
     async def test_ensemble_fallback_on_low_confidence(
         self, mock_llm_client, mock_regime_detector, sample_ohlcv_data, low_confidence_regime_analysis
     ) -> None:
@@ -157,7 +153,6 @@ class TestMetaAgent:
         assert sum(result.ensemble_weights.values()) == pytest.approx(1.0, abs=0.01)
         assert result.confidence == low_confidence_regime_analysis.confidence
 
-    @pytest.mark.asyncio
     async def test_ensemble_weights_boost_regime_strategy(
         self, mock_llm_client, mock_regime_detector, sample_ohlcv_data
     ) -> None:
@@ -179,7 +174,6 @@ class TestMetaAgent:
         # trend_following should have highest weight (boosted)
         assert result.ensemble_weights["trend_following"] > DEFAULT_WEIGHTS["trend_following"]
 
-    @pytest.mark.asyncio
     async def test_performance_based_weight_adjustment(
         self, mock_llm_client, mock_regime_detector, sample_ohlcv_data
     ) -> None:

@@ -88,7 +88,6 @@ def test_trading_workflow_init_meta_agent(mock_workflow_dependencies):
     assert repr(workflow) == "TradingWorkflow(agents=9, mode=meta-agent)"
 
 
-@pytest.mark.asyncio
 async def test_trading_workflow_analyze(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
@@ -114,7 +113,6 @@ async def test_trading_workflow_analyze(mock_workflow_dependencies):
     news_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=10)
 
 
-@pytest.mark.asyncio
 async def test_trading_workflow_analyze_with_meta_agent(mock_workflow_dependencies):
     """Test full analyze flow with meta-agent enabled."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -139,7 +137,6 @@ async def test_trading_workflow_analyze_with_meta_agent(mock_workflow_dependenci
     assert isinstance(result.risk, RiskAssessment)
 
 
-@pytest.mark.asyncio
 async def test_fetch_data(mock_workflow_dependencies):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
@@ -155,7 +152,6 @@ async def test_fetch_data(mock_workflow_dependencies):
     assert len(state["news_articles"]) > 0
 
 
-@pytest.mark.asyncio
 async def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_data):
     _, _, llm_client, _, _ = mock_workflow_dependencies
 
@@ -170,7 +166,6 @@ async def test_run_technical_analysis(mock_workflow_dependencies, sample_ohlcv_d
     assert isinstance(result, TechnicalAnalysis)
 
 
-@pytest.mark.asyncio
 async def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_articles):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
@@ -184,7 +179,6 @@ async def test_run_sentiment_analysis(mock_workflow_dependencies, sample_news_ar
     assert isinstance(result, SentimentAnalysis)
 
 
-@pytest.mark.asyncio
 async def test_make_decision(mock_workflow_dependencies, sample_bullish_research, sample_bearish_research):
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
 
@@ -349,7 +343,6 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
     mock_broker.submit_order.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_account_info_passed_to_trader(
     mock_workflow_dependencies, sample_bullish_research, sample_bearish_research
 ):
@@ -416,7 +409,6 @@ async def test_account_info_passed_to_trader(
     assert result_state["final_decision"].position_qty == 100.0
 
 
-@pytest.mark.asyncio
 async def test_workflow_continues_when_fundamental_rate_limited(mock_workflow_dependencies):
     """Test workflow continues with fundamental=None and captures warning when rate limited."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -441,7 +433,6 @@ async def test_workflow_continues_when_fundamental_rate_limited(mock_workflow_de
     assert any("rate limit" in w.lower() for w in result.warnings)
 
 
-@pytest.mark.asyncio
 async def test_workflow_raises_when_fundamental_fails_non_rate_limit(mock_workflow_dependencies):
     """Test workflow re-raises non-rate-limit errors from fundamental analysis."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -457,7 +448,6 @@ async def test_workflow_raises_when_fundamental_fails_non_rate_limit(mock_workfl
         await workflow.analyze("AAPL", period_days=90)
 
 
-@pytest.mark.asyncio
 async def test_backtest_validation_pass(mock_workflow_dependencies):
     """Test backtest validation passes with good metrics - confidence unchanged."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -507,7 +497,6 @@ async def test_backtest_validation_pass(mock_workflow_dependencies):
     assert len(result.backtest_validation.failure_reasons) == 0
 
 
-@pytest.mark.asyncio
 async def test_backtest_validation_fail_sharpe(mock_workflow_dependencies):
     """Test backtest validation fails on low Sharpe - confidence penalized."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -558,7 +547,6 @@ async def test_backtest_validation_fail_sharpe(mock_workflow_dependencies):
     assert any("Backtest FAILED" in w for w in result.warnings)
 
 
-@pytest.mark.asyncio
 async def test_backtest_validation_disabled(mock_workflow_dependencies):
     """Test backtest validation disabled - no validation runs."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -581,7 +569,6 @@ async def test_backtest_validation_disabled(mock_workflow_dependencies):
     assert workflow.vectorbt_runner is None
 
 
-@pytest.mark.asyncio
 async def test_backtest_validation_error(mock_workflow_dependencies):
     """Test backtest validation error handling - graceful degradation."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -610,7 +597,6 @@ async def test_backtest_validation_error(mock_workflow_dependencies):
     assert any("Backtest error" in w for w in result.warnings)
 
 
-@pytest.mark.asyncio
 async def test_broker_api_failure_blocks_trade(mock_workflow_dependencies):
     """Broker API failure prevents trade execution."""
     from src.data.broker import BrokerAPIError
@@ -649,7 +635,6 @@ async def test_broker_api_failure_blocks_trade(mock_workflow_dependencies):
     assert any("Broker API unavailable" in w for w in result.warnings)
 
 
-@pytest.mark.asyncio
 async def test_paper_trading_unaffected(mock_workflow_dependencies):
     """Paper trading (broker=None) still uses mock data."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
@@ -670,7 +655,6 @@ async def test_paper_trading_unaffected(mock_workflow_dependencies):
     assert not any("Broker API" in w for w in result.warnings)
 
 
-@pytest.mark.asyncio
 async def test_order_submission_failure_handled(mock_workflow_dependencies):
     """Order submission failures handled gracefully."""
     from src.data.broker import BrokerAccountInfo, BrokerAPIError

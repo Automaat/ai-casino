@@ -3,8 +3,6 @@
 from datetime import date, datetime
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.agents.journal import DailyJournal, SignalOutcome, TradeJournalAgent
 from src.daemon.state import AnalysisRecord
 
@@ -50,7 +48,6 @@ class TestTradeJournalAgent:
         assert "TradeJournalAgent" in repr_str
         assert "ollama" in repr_str
 
-    @pytest.mark.asyncio
     async def test_generate_empty_records(self, mock_llm_client):
         agent = TradeJournalAgent(mock_llm_client, MagicMock())
         journal = await agent.generate(date(2024, 1, 15), [])
@@ -59,7 +56,6 @@ class TestTradeJournalAgent:
         assert journal.outcomes == []
         assert journal.overall_assessment == "No signals to evaluate"
 
-    @pytest.mark.asyncio
     async def test_generate_journal(self, mock_llm_client, sample_analysis_records, mock_market_fetcher):
         agent = TradeJournalAgent(mock_llm_client, mock_market_fetcher)
         journal = await agent.generate(date(2024, 1, 15), sample_analysis_records)
@@ -73,7 +69,6 @@ class TestTradeJournalAgent:
             assert outcome.price_open > 0
             assert outcome.price_close > 0
 
-    @pytest.mark.asyncio
     async def test_generate_deduplicates_symbols(self, mock_llm_client, mock_market_fetcher):
         """Latest signal per symbol is used when duplicates exist."""
         records = [

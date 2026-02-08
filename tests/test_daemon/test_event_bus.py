@@ -2,12 +2,9 @@
 
 import asyncio
 
-import pytest
-
 from src.daemon.event_bus import DashboardEvent, EventBus, EventType
 
 
-@pytest.mark.asyncio
 async def test_eventbus_subscribe_unsubscribe():
     """Test subscriber lifecycle and count tracking."""
     bus = EventBus(history_size=50, queue_size=10)
@@ -33,7 +30,6 @@ async def test_eventbus_subscribe_unsubscribe():
     assert bus.get_subscriber_count() == 0
 
 
-@pytest.mark.asyncio
 async def test_eventbus_publish_fanout():
     """Test event reaches all subscribers."""
     bus = EventBus(history_size=50, queue_size=10)
@@ -67,7 +63,6 @@ async def test_eventbus_publish_fanout():
     await bus.unsubscribe(sub3_id)
 
 
-@pytest.mark.asyncio
 async def test_eventbus_queue_full_drops():
     """Test drop behavior when subscriber queue is full."""
     bus = EventBus(history_size=50, queue_size=5)
@@ -94,7 +89,6 @@ async def test_eventbus_queue_full_drops():
     await bus.unsubscribe(sub_id)
 
 
-@pytest.mark.asyncio
 async def test_eventbus_history():
     """Test history deque maxlen retention."""
     bus = EventBus(history_size=10, queue_size=10)
@@ -110,7 +104,6 @@ async def test_eventbus_history():
     assert history[9].data == {"iteration": 5}
 
 
-@pytest.mark.asyncio
 async def test_eventbus_history_limit():
     """Test get_history with limit parameter."""
     bus = EventBus(history_size=50, queue_size=10)
@@ -134,7 +127,6 @@ async def test_eventbus_history_limit():
     assert len(history_0) == 0
 
 
-@pytest.mark.asyncio
 async def test_eventbus_concurrent_subscribers():
     """Test multiple concurrent subscribers receiving events."""
     bus = EventBus(history_size=50, queue_size=20)
@@ -166,7 +158,6 @@ async def test_eventbus_concurrent_subscribers():
     assert bus.get_subscriber_count() == 0
 
 
-@pytest.mark.asyncio
 async def test_eventbus_different_event_types():
     """Test publishing different event types."""
     bus = EventBus(history_size=50, queue_size=10)
@@ -195,7 +186,6 @@ async def test_eventbus_different_event_types():
     await bus.unsubscribe(sub_id)
 
 
-@pytest.mark.asyncio
 async def test_eventbus_publish_exception_handling():
     """Test that publish() never raises exceptions."""
     bus = EventBus(history_size=50, queue_size=10)
@@ -209,7 +199,6 @@ async def test_eventbus_publish_exception_handling():
     assert history[0].event_type == EventType.STATE_UPDATE
 
 
-@pytest.mark.asyncio
 async def test_eventbus_empty_history():
     """Test empty history returns empty list."""
     bus = EventBus(history_size=50, queue_size=10)
@@ -221,7 +210,6 @@ async def test_eventbus_empty_history():
     assert history_limited == []
 
 
-@pytest.mark.asyncio
 async def test_eventbus_repr():
     """Test string representation."""
     bus = EventBus(history_size=100, queue_size=20)

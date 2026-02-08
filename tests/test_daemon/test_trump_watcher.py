@@ -49,7 +49,6 @@ def test_sector_stocks_mapping():
     assert "COIN" in TrumpWatcher.SECTOR_STOCKS["crypto"]
 
 
-@pytest.mark.asyncio
 async def test_check_new_posts(sample_trump_posts):
     watcher = TrumpWatcher()
 
@@ -68,7 +67,6 @@ async def test_check_new_posts(sample_trump_posts):
         assert watcher._last_post_id == sample_trump_posts[0].id
 
 
-@pytest.mark.asyncio
 async def test_identify_affected_stocks(sample_trump_posts):
     watcher = TrumpWatcher()
 
@@ -82,7 +80,6 @@ async def test_identify_affected_stocks(sample_trump_posts):
         assert "TSLA" in affected or "AAPL" in affected
 
 
-@pytest.mark.asyncio
 async def test_llm_identify_stocks():
     watcher = TrumpWatcher()
 
@@ -108,7 +105,6 @@ async def test_llm_identify_stocks():
     assert "BA" in tickers
 
 
-@pytest.mark.asyncio
 async def test_llm_identify_stocks_none():
     watcher = TrumpWatcher()
 

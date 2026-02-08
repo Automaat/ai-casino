@@ -184,7 +184,6 @@ class TestConfidenceCalculation:
 class TestAnalyze:
     """Test full analyze method."""
 
-    @pytest.mark.asyncio
     async def test_analyze_returns_comparative_analysis(self, comparative_analyst, mock_comparative_fetcher):
         """Analyze returns ComparativeAnalysis model."""
         result = await comparative_analyst.analyze("AAPL")
@@ -194,14 +193,12 @@ class TestAnalyze:
         assert 0.0 <= result.confidence <= 1.0
         mock_comparative_fetcher.fetch_comparative_data.assert_called_once_with("AAPL")
 
-    @pytest.mark.asyncio
     async def test_analyze_calls_llm(self, comparative_analyst, mock_llm_client):
         """Analyze calls LLM for interpretation."""
         await comparative_analyst.analyze("AAPL")
 
         mock_llm_client.acomplete.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_analyze_includes_sector_etf(self, comparative_analyst):
         """Result includes sector ETF ticker."""
         result = await comparative_analyst.analyze("AAPL")

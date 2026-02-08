@@ -26,7 +26,6 @@ class TestOpenAIProviderStructured:
             mock.return_value = client
             yield client
 
-    @pytest.mark.asyncio
     async def test_astructured_returns_validated_model(self, mock_openai_client, monkeypatch):
         """Test OpenAI astructured returns validated Pydantic model."""
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -51,7 +50,6 @@ class TestOpenAIProviderStructured:
         assert result.answer == "42"
         assert result.confidence == 0.95
 
-    @pytest.mark.asyncio
     async def test_astructured_raises_on_validation_error(self, mock_openai_client, monkeypatch):
         """Test OpenAI astructured raises StructuredOutputError on validation failure."""
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -183,7 +181,6 @@ class TestOpenAISchemaProcessing:
         assert result["additionalProperties"] is False
         assert result["properties"]["child"]["additionalProperties"] is False
 
-    @pytest.mark.asyncio
     async def test_astructured_does_not_mutate_cached_schema(self, provider):
         """Test deep copy prevents mutation of cached schema."""
 
@@ -224,7 +221,6 @@ class TestAnthropicProviderStructured:
             mock.return_value = client
             yield client
 
-    @pytest.mark.asyncio
     async def test_astructured_returns_validated_model(self, mock_anthropic_client, monkeypatch):
         """Test Anthropic astructured returns validated Pydantic model via tool use."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -249,7 +245,6 @@ class TestAnthropicProviderStructured:
         assert result.answer == "test answer"
         assert result.confidence == 0.8
 
-    @pytest.mark.asyncio
     async def test_astructured_raises_when_no_tool_block(self, mock_anthropic_client, monkeypatch):
         """Test Anthropic astructured raises error when no tool_use block."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -294,7 +289,6 @@ class TestOllamaProviderStructured:
             mock.return_value = client
             yield client
 
-    @pytest.mark.asyncio
     async def test_astructured_returns_validated_model(self, mock_httpx_client):
         """Test Ollama astructured returns validated Pydantic model."""
         from src.models.providers.ollama import OllamaProvider
@@ -314,7 +308,6 @@ class TestOllamaProviderStructured:
         assert result.answer == "test"
         assert result.confidence == 0.75
 
-    @pytest.mark.asyncio
     async def test_astructured_retries_on_validation_error(self, mock_httpx_client):
         """Test Ollama astructured retries once on validation failure."""
         from src.models.providers.ollama import OllamaProvider
@@ -340,7 +333,6 @@ class TestOllamaProviderStructured:
         assert result.confidence == 0.8
         assert mock_httpx_client.post.call_count == 2
 
-    @pytest.mark.asyncio
     async def test_astructured_raises_after_retries_exhausted(self, mock_httpx_client):
         """Test Ollama astructured raises StructuredOutputError after retries."""
         from src.models.providers.ollama import OllamaProvider

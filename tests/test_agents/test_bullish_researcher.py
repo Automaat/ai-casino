@@ -98,7 +98,6 @@ class TestBullishResearcher:
         assert researcher.llm == mock_llm_client
         assert repr(researcher) == "BullishResearcher(llm=ollama/qwen3:14b)"
 
-    @pytest.mark.asyncio
     async def test_analyze_returns_bullish_research_analysis(
         self,
         bullish_researcher,
@@ -125,7 +124,6 @@ class TestBullishResearcher:
         assert result.target_upside == 25.0
         assert 0.0 <= result.confidence <= 1.0
 
-    @pytest.mark.asyncio
     async def test_analyze_calls_llm(
         self,
         bullish_researcher,
@@ -423,7 +421,6 @@ class TestBullishResearcher:
 
         assert upside is None
 
-    @pytest.mark.asyncio
     async def test_analyze_with_missing_fundamental_data(
         self,
         bullish_researcher,

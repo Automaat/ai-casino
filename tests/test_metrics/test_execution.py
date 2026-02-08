@@ -267,7 +267,6 @@ class TestTimedOperation:
 class TestContextVarPropagation:
     """Tests for ContextVar async propagation."""
 
-    @pytest.mark.asyncio
     async def test_agent_context_propagates(self):
         """Test current_agent ContextVar works correctly in async context."""
         collector = ExecutionMetricsCollector("AAPL", "anthropic", "claude-sonnet-4-20250514")
@@ -294,7 +293,6 @@ class TestContextVarPropagation:
         assert "technical" in agent_names
         assert "news" in agent_names
 
-    @pytest.mark.asyncio
     async def test_collector_contextvar_propagates(self):
         """Test current_collector ContextVar works correctly."""
         collector = ExecutionMetricsCollector("AAPL", "anthropic", "claude-sonnet-4-20250514")
@@ -313,7 +311,6 @@ class TestContextVarPropagation:
 class TestProviderUsageCapture:
     """Tests that providers capture _last_usage."""
 
-    @pytest.mark.asyncio
     async def test_anthropic_captures_usage(self, monkeypatch):
         from unittest.mock import AsyncMock, patch
 
@@ -338,7 +335,6 @@ class TestProviderUsageCapture:
             assert provider.last_usage.input_tokens == 100
             assert provider.last_usage.output_tokens == 50
 
-    @pytest.mark.asyncio
     async def test_openai_captures_usage(self, monkeypatch):
         from unittest.mock import AsyncMock, patch
 
@@ -363,7 +359,6 @@ class TestProviderUsageCapture:
             assert provider.last_usage.input_tokens == 200
             assert provider.last_usage.output_tokens == 80
 
-    @pytest.mark.asyncio
     async def test_ollama_captures_usage(self):
         from unittest.mock import patch
 

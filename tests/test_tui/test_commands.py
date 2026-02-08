@@ -48,7 +48,6 @@ class TestCommandHandler:
         assert cmd == "test"
         assert args == ["arg1", "arg2", "arg3"]
 
-    @pytest.mark.asyncio
     async def test_execute_unknown_command(self):
         handler = CommandHandler()
 
@@ -57,7 +56,6 @@ class TestCommandHandler:
         assert result.success is False
         assert "Unknown command" in result.message
 
-    @pytest.mark.asyncio
     async def test_execute_help(self):
         handler = CommandHandler()
 
@@ -67,7 +65,6 @@ class TestCommandHandler:
         assert "Available Commands" in result.message
         assert "/analyze" in result.message
 
-    @pytest.mark.asyncio
     async def test_execute_analyze_no_symbol(self):
         handler = CommandHandler()
 
@@ -76,7 +73,6 @@ class TestCommandHandler:
         assert result.success is False
         assert "Usage" in result.message
 
-    @pytest.mark.asyncio
     async def test_execute_technical_no_symbol(self):
         handler = CommandHandler()
 
@@ -85,7 +81,6 @@ class TestCommandHandler:
         assert result.success is False
         assert "Usage" in result.message
 
-    @pytest.mark.asyncio
     async def test_execute_sentiment_no_symbol(self):
         handler = CommandHandler()
 
@@ -94,7 +89,6 @@ class TestCommandHandler:
         assert result.success is False
         assert "Usage" in result.message
 
-    @pytest.mark.asyncio
     async def test_execute_news_no_symbol(self):
         handler = CommandHandler()
 
@@ -132,7 +126,6 @@ class TestCommandResult:
 class TestCancellationCallback:
     """Tests for cancellation callback propagation."""
 
-    @pytest.mark.asyncio
     async def test_execute_analyze_passes_is_cancelled(self, monkeypatch):
         """is_cancelled callback is passed to run_analysis_in_process."""
         import asyncio
@@ -182,7 +175,6 @@ class TestCancellationCallback:
 
         assert captured_is_cancelled is is_cancelled_fn
 
-    @pytest.mark.asyncio
     async def test_execute_analyze_cancellation_raises(self, monkeypatch):
         """is_cancelled=True raises CancelledError."""
         import asyncio
@@ -208,7 +200,6 @@ class TestCancellationCallback:
 class TestPersonalityCommands:
     """Tests for personality switching commands."""
 
-    @pytest.mark.asyncio
     async def test_execute_trump(self):
         """Test /trump command switches to Trump mode."""
         handler = CommandHandler()
@@ -229,7 +220,6 @@ class TestPersonalityCommands:
         assert "TRUMP MODE" in result.message
         assert app.personality == "trump"
 
-    @pytest.mark.asyncio
     async def test_execute_casino(self):
         """Test /casino command switches to AI Casino mode."""
         handler = CommandHandler()

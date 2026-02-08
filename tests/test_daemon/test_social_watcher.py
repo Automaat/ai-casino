@@ -97,7 +97,6 @@ def test_initialization(historical_cache):
     assert len(watcher._previous_mention_counts) == 0
 
 
-@pytest.mark.asyncio
 async def test_volume_spike_detection(social_watcher, mock_reddit_fetcher):
     """Test volume spike event detection."""
     # Setup: First poll establishes baseline
@@ -133,7 +132,6 @@ async def test_volume_spike_detection(social_watcher, mock_reddit_fetcher):
     assert events[0].viral_post is None
 
 
-@pytest.mark.asyncio
 async def test_first_poll_no_baseline(social_watcher, mock_reddit_fetcher):
     """Test first poll does not generate volume spike events."""
     ticker = TrendingTicker(
@@ -150,7 +148,6 @@ async def test_first_poll_no_baseline(social_watcher, mock_reddit_fetcher):
     assert social_watcher._previous_mention_counts["TSLA"] == 50
 
 
-@pytest.mark.asyncio
 async def test_viral_post_detection(social_watcher, mock_reddit_fetcher):
     """Test viral post event detection."""
     viral_post = create_reddit_post(
@@ -182,7 +179,6 @@ async def test_viral_post_detection(social_watcher, mock_reddit_fetcher):
     assert events[0].mention_delta_pct is None
 
 
-@pytest.mark.asyncio
 async def test_viral_post_age_filtering(social_watcher, mock_reddit_fetcher):
     """Test posts older than 1hr are excluded."""
     old_post = create_reddit_post(
@@ -207,7 +203,6 @@ async def test_viral_post_age_filtering(social_watcher, mock_reddit_fetcher):
     assert len(events) == 0  # Old post filtered out
 
 
-@pytest.mark.asyncio
 async def test_viral_post_score_filtering(social_watcher, mock_reddit_fetcher):
     """Test posts below score threshold are excluded."""
     low_score_post = create_reddit_post(
@@ -232,7 +227,6 @@ async def test_viral_post_score_filtering(social_watcher, mock_reddit_fetcher):
     assert len(events) == 0  # Low score post filtered out
 
 
-@pytest.mark.asyncio
 async def test_viral_post_ratio_filtering(social_watcher, mock_reddit_fetcher):
     """Test posts below upvote ratio threshold are excluded."""
     low_ratio_post = create_reddit_post(
@@ -257,7 +251,6 @@ async def test_viral_post_ratio_filtering(social_watcher, mock_reddit_fetcher):
     assert len(events) == 0  # Low ratio post filtered out
 
 
-@pytest.mark.asyncio
 async def test_viral_post_deduplication(social_watcher, mock_reddit_fetcher):
     """Test duplicate post IDs are filtered out."""
     viral_post = create_reddit_post(
@@ -288,7 +281,6 @@ async def test_viral_post_deduplication(social_watcher, mock_reddit_fetcher):
     assert len(events) == 0
 
 
-@pytest.mark.asyncio
 async def test_multiple_events_same_poll(social_watcher, mock_reddit_fetcher):
     """Test multiple events (volume + viral) in same poll."""
     # Establish baseline first
@@ -336,7 +328,6 @@ async def test_multiple_events_same_poll(social_watcher, mock_reddit_fetcher):
     assert viral_event.viral_post.id == "multi123"
 
 
-@pytest.mark.asyncio
 async def test_zero_previous_count_handling(social_watcher, mock_reddit_fetcher):
     """Test handling of zero previous count (no div/0 error)."""
     # Manually set previous count to 0
@@ -356,7 +347,6 @@ async def test_zero_previous_count_handling(social_watcher, mock_reddit_fetcher)
     assert social_watcher._previous_mention_counts["FAKE"] == 10
 
 
-@pytest.mark.asyncio
 async def test_negative_delta_handling(social_watcher, mock_reddit_fetcher):
     """Test negative delta (mentions decreased) does not trigger event."""
     # Establish baseline
@@ -384,7 +374,6 @@ async def test_negative_delta_handling(social_watcher, mock_reddit_fetcher):
     assert len(events) == 0  # No event for negative delta
 
 
-@pytest.mark.asyncio
 async def test_repr(social_watcher):
     """Test string representation."""
     repr_str = repr(social_watcher)

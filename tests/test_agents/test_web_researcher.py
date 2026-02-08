@@ -101,7 +101,6 @@ def agent_with_tools(mock_llm_client_with_tools, mock_search_tool):
 class TestWebResearchAgent:
     """Tests for WebResearchAgent."""
 
-    @pytest.mark.asyncio
     async def test_research_no_tools(self, agent_no_tools, mock_llm_client_no_tools):
         """Test research with template-based queries (Ollama)."""
         result = await agent_no_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
@@ -112,7 +111,6 @@ class TestWebResearchAgent:
         assert result.results[0].category == ResearchCategory.LATEST_NEWS
         mock_llm_client_no_tools.acomplete.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_research_with_tools(self, agent_with_tools, mock_llm_client_with_tools):
         """Test research with tool calling (Claude/OpenAI)."""
         result = await agent_with_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
@@ -122,7 +120,6 @@ class TestWebResearchAgent:
         assert len(result.results) == 1
         mock_llm_client_with_tools.acomplete_with_tools.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_research_with_tools_respects_max_calls(self, agent_with_tools, mock_llm_client_with_tools):
         """Test research with tool calling respects max_tool_calls=3."""
         await agent_with_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
@@ -131,7 +128,6 @@ class TestWebResearchAgent:
         call_args = mock_llm_client_with_tools.acomplete_with_tools.call_args
         assert call_args.kwargs["max_tool_calls"] == 3
 
-    @pytest.mark.asyncio
     async def test_research_all_categories(self, agent_no_tools):
         """Test research with all categories."""
         result = await agent_no_tools.research("AAPL")
@@ -140,7 +136,6 @@ class TestWebResearchAgent:
         categories = {r.category for r in result.results}
         assert categories == set(ResearchCategory)
 
-    @pytest.mark.asyncio
     async def test_research_result_parsing(self, agent_no_tools):
         """Test parsing of research results."""
         result = await agent_no_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
@@ -151,7 +146,6 @@ class TestWebResearchAgent:
         assert research_result.sentiment_indication in ["Bullish", "Bearish", "Neutral"]
         assert 0.0 <= research_result.confidence <= 1.0
 
-    @pytest.mark.asyncio
     async def test_overall_sentiment_aggregation(self, agent_no_tools, mock_llm_client_no_tools):
         """Test sentiment aggregation across categories."""
         mock_llm_client_no_tools.acomplete = AsyncMock(
@@ -174,7 +168,6 @@ SENTIMENT: Bullish"""
 
         assert result.overall_sentiment == "Bullish"
 
-    @pytest.mark.asyncio
     async def test_neutral_sentiment_on_mixed(self, agent_no_tools, mock_llm_client_no_tools):
         """Test neutral sentiment when mixed."""
         responses = [

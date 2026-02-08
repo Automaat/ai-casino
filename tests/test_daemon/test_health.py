@@ -53,7 +53,6 @@ class TestServiceStatus:
 
 
 class TestCheckAlphaVantage:
-    @pytest.mark.asyncio
     async def test_skipped_no_key(self, checker: HealthChecker):
         with patch.dict(os.environ, {}, clear=True):
             result = await checker._check_alpha_vantage()
@@ -61,7 +60,6 @@ class TestCheckAlphaVantage:
         assert result.status == ServiceStatus.SKIPPED
         assert result.service == "alpha_vantage"
 
-    @pytest.mark.asyncio
     async def test_healthy(self, checker: HealthChecker):
         mock_ts_instance = Mock()
         mock_ts_instance.get_daily.return_value = (Mock(), Mock())
@@ -75,7 +73,6 @@ class TestCheckAlphaVantage:
         assert result.status == ServiceStatus.HEALTHY
         assert result.duration_ms > 0
 
-    @pytest.mark.asyncio
     async def test_unhealthy(self, checker: HealthChecker):
         mock_ts_instance = Mock()
         mock_ts_instance.get_daily.side_effect = ConnectionError("timeout")
@@ -91,7 +88,6 @@ class TestCheckAlphaVantage:
 
 
 class TestCheckMarketaux:
-    @pytest.mark.asyncio
     async def test_skipped_no_key(self, checker: HealthChecker):
         with patch.dict(os.environ, {}, clear=True):
             result = await checker._check_marketaux()
@@ -99,7 +95,6 @@ class TestCheckMarketaux:
         assert result.status == ServiceStatus.SKIPPED
         assert result.service == "marketaux"
 
-    @pytest.mark.asyncio
     async def test_healthy(self, checker: HealthChecker):
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
@@ -115,7 +110,6 @@ class TestCheckMarketaux:
 
         assert result.status == ServiceStatus.HEALTHY
 
-    @pytest.mark.asyncio
     async def test_unhealthy(self, checker: HealthChecker):
         with (
             patch.dict(os.environ, {"MARKETAUX_API_KEY": "test"}),
@@ -130,7 +124,6 @@ class TestCheckMarketaux:
 
 
 class TestCheckAlpaca:
-    @pytest.mark.asyncio
     async def test_skipped_no_keys(self, checker: HealthChecker):
         with patch.dict(os.environ, {}, clear=True):
             result = await checker._check_alpaca()
@@ -138,7 +131,6 @@ class TestCheckAlpaca:
         assert result.status == ServiceStatus.SKIPPED
         assert result.service == "alpaca"
 
-    @pytest.mark.asyncio
     async def test_healthy(self, checker: HealthChecker):
         mock_client_instance = Mock()
         mock_client_instance.get_account.return_value = Mock()
@@ -151,7 +143,6 @@ class TestCheckAlpaca:
 
         assert result.status == ServiceStatus.HEALTHY
 
-    @pytest.mark.asyncio
     async def test_unhealthy(self, checker: HealthChecker):
         mock_client_instance = Mock()
         mock_client_instance.get_account.side_effect = Exception("invalid creds")
@@ -166,7 +157,6 @@ class TestCheckAlpaca:
 
 
 class TestCheckLLM:
-    @pytest.mark.asyncio
     async def test_ollama_healthy(self, checker: HealthChecker):
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
@@ -183,7 +173,6 @@ class TestCheckLLM:
         assert result.status == ServiceStatus.HEALTHY
         assert result.service == "llm_ollama"
 
-    @pytest.mark.asyncio
     async def test_ollama_unhealthy(self, checker: HealthChecker):
         with (
             patch.dict(os.environ, {"LLM_PROVIDER": "ollama"}),
@@ -196,7 +185,6 @@ class TestCheckLLM:
 
         assert result.status == ServiceStatus.UNHEALTHY
 
-    @pytest.mark.asyncio
     async def test_anthropic_healthy(self, checker: HealthChecker):
         mock_llm = AsyncMock()
         mock_llm.acomplete = AsyncMock(return_value="OK")
@@ -213,7 +201,6 @@ class TestCheckLLM:
 
 
 class TestCheckFinnhub:
-    @pytest.mark.asyncio
     async def test_skipped_no_key(self, checker: HealthChecker):
         with patch.dict(os.environ, {}, clear=True):
             result = await checker._check_finnhub()
@@ -221,7 +208,6 @@ class TestCheckFinnhub:
         assert result.status == ServiceStatus.SKIPPED
         assert result.service == "finnhub"
 
-    @pytest.mark.asyncio
     async def test_healthy(self, checker: HealthChecker):
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
@@ -237,7 +223,6 @@ class TestCheckFinnhub:
 
         assert result.status == ServiceStatus.HEALTHY
 
-    @pytest.mark.asyncio
     async def test_unhealthy(self, checker: HealthChecker):
         with (
             patch.dict(os.environ, {"FINNHUB_API_KEY": "test"}),
@@ -364,7 +349,6 @@ class TestVerifyStateIntegrity:
 
 
 class TestFullRun:
-    @pytest.mark.asyncio
     async def test_run_all_skipped(self, checker: HealthChecker):
         """All services skipped when no API keys configured."""
         mock_response = AsyncMock()
@@ -385,7 +369,6 @@ class TestFullRun:
         assert len(report.cleanup_results) == 4
         assert report.total_duration_ms >= 0
 
-    @pytest.mark.asyncio
     async def test_run_persists_report(self, checker: HealthChecker):
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
@@ -406,7 +389,6 @@ class TestFullRun:
         loaded = json.loads(report_files[0].read_text())
         assert loaded["overall_status"] == "HEALTHY"
 
-    @pytest.mark.asyncio
     async def test_run_with_unhealthy_service(self, checker: HealthChecker):
         """Overall status UNHEALTHY when any service is unhealthy."""
         mock_response = AsyncMock()
