@@ -58,7 +58,7 @@ def dashboard(
             console.print()
             console.print("Make sure the daemon is running:")
             console.print("  [cyan]mise daemon --config daemon.yaml[/cyan]")
-            console.print("  (copy daemon.yaml.example to daemon.yaml)")
+            console.print("  (copy docs/daemon.yaml.example to daemon.yaml)")
             console.print()
             console.print("Options:")
             console.print("  1. Start the daemon")
