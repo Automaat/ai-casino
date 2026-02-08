@@ -75,7 +75,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                 return _render_events_tab(app.api_client)
             return [html.Div("Invalid tab")]
         except Exception as e:
-            logger.error(f"Tab render failed: {e}")
+            logger.exception("Tab render failed")
             return [
                 dbc.Alert(
                     [
@@ -83,7 +83,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                         html.P(f"Failed to fetch data from daemon API: {e}"),
                         html.Hr(),
                         html.P("Make sure the daemon is running:", className="mb-0"),
-                        html.Code("mise daemon --config config.toml"),
+                        html.Code("mise daemon --config daemon.toml"),
                     ],
                     color="danger",
                 )

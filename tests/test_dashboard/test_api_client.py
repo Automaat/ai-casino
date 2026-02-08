@@ -283,13 +283,15 @@ def test_get_events() -> None:
 
 
 def test_retry_logic() -> None:
-    """Test HTTP_RETRY decorator retries on failure."""
+    """Test HTTP_RETRY decorator retries on failure (no delays)."""
+    import time
+
     client = DaemonAPIClient("http://localhost:8001")
 
     mock_response = MagicMock()
     mock_response.raise_for_status.side_effect = [
-        httpx.HTTPError("Timeout"),
-        httpx.HTTPError("Timeout"),
+        httpx.ConnectError("Connection refused"),
+        httpx.ConnectError("Connection refused"),
         None,
     ]
     mock_response.json.return_value = {
@@ -299,7 +301,10 @@ def test_retry_logic() -> None:
         "last_run": None,
     }
 
-    with patch.object(client._client, "get", return_value=mock_response):
+    with (
+        patch.object(time, "sleep", return_value=None),
+        patch.object(client._client, "get", return_value=mock_response),
+    ):
         health = client.get_health()
 
         assert isinstance(health, HealthResponse)

@@ -3,6 +3,7 @@
 import os
 import sys
 
+import typer
 from loguru import logger
 from rich.console import Console
 
@@ -56,7 +57,8 @@ def dashboard(
             console.print("[bold yellow]Warning:[/bold yellow] Daemon API is not reachable")
             console.print()
             console.print("Make sure the daemon is running:")
-            console.print("  [cyan]mise daemon --config config.toml[/cyan]")
+            console.print("  [cyan]mise daemon --config daemon.toml[/cyan]")
+            console.print("  (copy daemon.toml.example to daemon.toml)")
             console.print()
             console.print("Options:")
             console.print("  1. Start the daemon")
@@ -67,7 +69,7 @@ def dashboard(
             choice = console.input("[bold]Continue? (y/N): [/bold]")
             if choice.lower() not in ["y", "yes"]:
                 console.print("[yellow]Aborted[/yellow]")
-                raise SystemExit(0)
+                raise typer.Exit(0)
 
         client.close()
 
@@ -79,11 +81,14 @@ def dashboard(
         console.print("[dim]Press Ctrl+C to stop[/dim]")
         console.print()
 
-        app.run_server(host=config.host, port=config.port, debug=debug)
+        try:
+            app.run_server(host=config.host, port=config.port, debug=debug)
+        finally:
+            app.api_client.close()
 
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Dashboard stopped[/bold yellow]")
     except Exception as e:
         console.print(f"\n[bold red]Dashboard error:[/bold red] {e}")
         logger.exception("Dashboard failed")
-        raise SystemExit(1) from e
+        raise typer.Exit(1) from e

@@ -4,8 +4,8 @@ import httpx
 from loguru import logger
 from tenacity import (
     retry,
+    retry_if_exception,
     retry_if_exception_type,
-    retry_if_not_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
@@ -22,10 +22,26 @@ from src.daemon.api import (
     WatchlistResponse,
 )
 
+_HTTP_SERVER_ERROR_MIN = 500
+
+
+def _is_server_error(exception: Exception) -> bool:
+    """Check if exception is 5xx HTTP error."""
+    return (
+        isinstance(exception, httpx.HTTPStatusError)
+        and exception.response.status_code >= _HTTP_SERVER_ERROR_MIN
+    )
+
+
 HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(Exception) & retry_if_not_exception_type(ValueError),
+    wait=wait_exponential(multiplier=1, min=1, max=5),
+    retry=(
+        retry_if_exception_type(httpx.ConnectError)
+        | retry_if_exception_type(httpx.TimeoutException)
+        | retry_if_exception_type(httpx.ReadTimeout)
+        | retry_if_exception(_is_server_error)
+    ),
     reraise=True,
     before_sleep=lambda retry_state: logger.warning(
         f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"
