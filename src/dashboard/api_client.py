@@ -46,6 +46,7 @@ HTTP_RETRY = retry(
         retry_if_exception_type(httpx.ConnectError)
         | retry_if_exception_type(httpx.TimeoutException)
         | retry_if_exception_type(httpx.ReadTimeout)
+        | retry_if_exception_type(httpx.ReadError)
         | retry_if_exception(_is_server_error)
     ),
     reraise=True,
