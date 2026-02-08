@@ -1,5 +1,7 @@
 """Main daemon runner for autonomous trading."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import json
@@ -24,6 +26,7 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.health import HealthReport
+    from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.metrics.correlation import CorrelationAuditResult
 from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
@@ -50,7 +53,7 @@ console = Console()
 class DaemonRunner:
     """Main daemon runner for autonomous trading."""
 
-    def __init__(self, config: DaemonConfig, event_bus: "EventBus | None" = None) -> None:  # noqa: PLR0915, C901, PLR0912
+    def __init__(self, config: DaemonConfig, event_bus: EventBus | None = None) -> None:  # noqa: PLR0915, C901, PLR0912
         """Initialize daemon runner.
 
         Args:
@@ -207,6 +210,21 @@ class DaemonRunner:
 
             self.notification_service = NotificationService(config.notifications)
             logger.info("Notification service enabled")
+
+        # Tearsheet generator (for performance reporting)
+        self._tearsheet_generator: DaemonTearsheetGenerator | None = None
+        if config.reporting.enabled:
+            # Import at runtime (also in TYPE_CHECKING for type hints)
+            from src.daemon.tearsheet import DaemonTearsheetGenerator
+
+            self._tearsheet_generator: DaemonTearsheetGenerator = DaemonTearsheetGenerator(
+                broker=self.broker,
+                market_fetcher=None,  # Will be set later if needed
+            )
+            logger.info("Tearsheet generator enabled")
+
+        # Market data fetcher (shared instance for various features)
+        self.market_fetcher: object | None = None
 
         # Analysis orchestrator (initialized after workflow is ready)
         self._analysis_orchestrator: AnalysisOrchestrator | None = None
@@ -435,7 +453,7 @@ class DaemonRunner:
         self,
         symbol: str,
         position_context: dict[str, object] | None = None,
-        degradation_context: "DegradationContext | None" = None,
+        degradation_context: DegradationContext | None = None,
     ) -> TradingWorkflowResult | None:
         """Analyze a single symbol.
 
@@ -663,7 +681,7 @@ class DaemonRunner:
 
         await self.notification_service.notify(NotificationTrigger.SIGNAL, message)
 
-    async def _notify_var_breach(self, report: "PortfolioRiskReport") -> None:
+    async def _notify_var_breach(self, report: PortfolioRiskReport) -> None:
         """Send VaR breach notification.
 
         Args:
@@ -687,9 +705,10 @@ class DaemonRunner:
             timestamp=datetime.now(UTC),
         )
 
-        await self.notification_service.notify(NotificationTrigger.PORTFOLIO_VAR_BREACH, message)
+        if self.notification_service:
+            await self.notification_service.notify(NotificationTrigger.PORTFOLIO_VAR_BREACH, message)
 
-    def _evaluate_degradation(self) -> "DegradationContext":
+    def _evaluate_degradation(self) -> DegradationContext:
         """Load latest health report and evaluate degradation tier.
 
         Returns:
@@ -701,7 +720,7 @@ class DaemonRunner:
         health_report = self._load_latest_health_report()
         return policy.evaluate_degradation(health_report)
 
-    def _load_latest_health_report(self) -> "HealthReport | None":
+    def _load_latest_health_report(self) -> HealthReport | None:
         """Load most recent health report from disk.
 
         Returns:
@@ -724,7 +743,7 @@ class DaemonRunner:
             logger.warning(f"Failed to load health report: {e}")
             return None
 
-    async def _notify_degradation(self, context: "DegradationContext") -> None:
+    async def _notify_degradation(self, context: DegradationContext) -> None:
         """Send degradation notification.
 
         Args:
@@ -755,7 +774,8 @@ class DaemonRunner:
             timestamp=datetime.now(UTC),
         )
 
-        await self.notification_service.notify(NotificationTrigger.HEALTH_FAILURE, message)
+        if self.notification_service:
+            await self.notification_service.notify(NotificationTrigger.HEALTH_FAILURE, message)
 
         # Publish DEGRADATION event
         if self.event_bus:
@@ -798,6 +818,22 @@ class DaemonRunner:
             lines.append(f"  {rank}. {sector}: strength={strength:+.2f} [{momentum}]")
 
         return "\n".join(lines)
+
+    def _build_sector_context(self) -> str | None:
+        """Build sector rotation context from latest record.
+
+        Returns:
+            Formatted sector context string or None if not available
+        """
+        if not self.config.sector_rotation.enabled or not self.state.sector_rotation_history:
+            return None
+
+        try:
+            latest_record = self.state.sector_rotation_history[-1]
+            return self._format_sector_context(latest_record)
+        except Exception as e:
+            logger.warning(f"Failed to build sector context: {e}")
+            return None
 
     def _reconstruct_rotation_analysis(self, record: SectorRotationRecord) -> SectorRotationAnalysis:
         """Reconstruct SectorRotationAnalysis from state record.
@@ -852,7 +888,7 @@ class DaemonRunner:
     async def _analyze_watchlist(
         self,
         watchlist: list[str],
-        degradation_context: "DegradationContext | None" = None,
+        degradation_context: DegradationContext | None = None,
     ) -> list[TradingWorkflowResult]:
         """Analyze all symbols in watchlist (delegates to orchestrator).
 
@@ -1583,8 +1619,8 @@ class DaemonRunner:
                 return
 
         # Check calendar-aware weekly schedule
-        if not self.scheduler.is_earnings_calendar_time(self.config.earnings_calendar.time):
-            logger.debug("Not earnings calendar time, skipping")
+        if not self.scheduler.is_earnings_fetch_time():
+            logger.debug("Not earnings fetch time, skipping")
             return
 
         logger.info("Starting earnings calendar fetch")
@@ -1730,7 +1766,7 @@ class DaemonRunner:
         last_date = self.state.last_correlation_audit.astimezone(self.scheduler.timezone).date()
         return last_date == now.date()
 
-    def _print_correlation_audit_results(self, result: "CorrelationAuditResult", duration: float) -> None:
+    def _print_correlation_audit_results(self, result: CorrelationAuditResult, duration: float) -> None:
         """Print correlation audit results to console."""
         console.print(f"[dim]Positions: {result.num_positions}[/dim]")
         console.print(f"[dim]Diversification ratio: {result.diversification_ratio:.3f}[/dim]")
@@ -2092,7 +2128,7 @@ class DaemonRunner:
                 logger.warning(f"[MONTE CARLO] ALERT: {record.alert_message}")
             else:
                 logger.info(
-                    f"[MONTE CARLO] Test passed - P(loss>10%)={record.prob_loss_gt_10pct:.1%}, "
+                    f"[MONTE CARLO] Test passed - P(loss>threshold)={record.prob_loss_gt_threshold:.1%}, "
                     f"VaR95={record.var_95:.1%}"
                 )
         except Exception as e:
@@ -2163,7 +2199,8 @@ class DaemonRunner:
 
         self._log_results(results)
 
-        error_count = sum(1 for r in results if r.get("error"))
+        # Count results with warnings as potential errors
+        error_count = sum(1 for r in results if r.warnings)
         await self._publish_event(
             "CYCLE_COMPLETE",
             {
@@ -2267,7 +2304,7 @@ class DaemonRunner:
                 logger.error(f"Error stopping API server: {e}")
 
     @classmethod
-    def from_config_file(cls, path: Path) -> "DaemonRunner":
+    def from_config_file(cls, path: Path) -> DaemonRunner:
         """Create runner from config file.
 
         Args:

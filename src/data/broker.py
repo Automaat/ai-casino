@@ -6,6 +6,7 @@ paper trades and fetching account information.
 
 import os
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
@@ -14,6 +15,9 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.cache.historical import HistoricalCache
+
+if TYPE_CHECKING:
+    from alpaca.trading.models import Clock, Order, Position, TradeAccount
 
 
 class BrokerAPIError(Exception):
@@ -117,29 +121,33 @@ class AlpacaBroker:
             BrokerAccountInfo with balance, cash, positions, and exposure
         """
         try:
-            account = self.client.get_account()
-            positions_raw = self.client.get_all_positions()
+            account: TradeAccount = self.client.get_account()  # type: ignore[assignment]
+            positions_raw: list[Position] = self.client.get_all_positions()  # type: ignore[assignment]
 
             positions = {}
             total_exposure = 0.0
 
             for pos in positions_raw:
+                market_value = float(pos.market_value) if pos.market_value else 0.0
+                unrealized_pl = float(pos.unrealized_pl) if pos.unrealized_pl else 0.0
+                unrealized_plpc = float(pos.unrealized_plpc) if pos.unrealized_plpc else 0.0
+
                 positions[pos.symbol] = BrokerPosition(
                     symbol=pos.symbol,
                     qty=float(pos.qty),
-                    market_value=float(pos.market_value),
+                    market_value=market_value,
                     avg_entry_price=float(pos.avg_entry_price),
-                    unrealized_pnl=float(pos.unrealized_pnl),
-                    unrealized_pnl_percent=float(pos.unrealized_plpc),
+                    unrealized_pnl=unrealized_pl,
+                    unrealized_pnl_percent=unrealized_plpc,
                 )
-                total_exposure += float(pos.market_value)
+                total_exposure += market_value
 
             return BrokerAccountInfo(
-                balance=float(account.equity),
-                available_cash=float(account.buying_power),
+                balance=float(account.equity) if account.equity else 0.0,
+                available_cash=float(account.buying_power) if account.buying_power else 0.0,
                 positions=positions,
                 total_exposure=total_exposure,
-                portfolio_value=float(account.portfolio_value),
+                portfolio_value=float(account.portfolio_value) if account.portfolio_value else 0.0,
             )
         except Exception as e:
             msg = f"Failed to fetch account info: {e}"
@@ -185,16 +193,16 @@ class AlpacaBroker:
                 order_data.order_class = OrderClass.OTO
                 order_data.stop_loss = StopLossRequest(stop_price=stop_loss_price)
 
-            order = self.client.submit_order(order_data=order_data)
+            order: Order = self.client.submit_order(order_data=order_data)  # type: ignore[assignment]
 
             logger.info(f"Submitted order: {side.upper()} {qty} {symbol}")
 
             order_status = OrderStatus(
                 order_id=str(order.id),
-                symbol=order.symbol,
-                qty=float(order.qty),
+                symbol=order.symbol or "",
+                qty=float(order.qty or 0),
                 filled_qty=float(order.filled_qty or 0),
-                side=order.side.value,
+                side=order.side.value if order.side else "unknown",
                 status=order.status.value,
                 submitted_at=order.submitted_at,
                 filled_at=order.filled_at,
@@ -220,14 +228,14 @@ class AlpacaBroker:
             OrderStatus with current order details
         """
         try:
-            order = self.client.get_order_by_id(order_id=order_id)
+            order: Order = self.client.get_order_by_id(order_id=order_id)  # type: ignore[assignment]
 
             return OrderStatus(
                 order_id=str(order.id),
-                symbol=order.symbol,
-                qty=float(order.qty),
+                symbol=order.symbol or "",
+                qty=float(order.qty or 0),
                 filled_qty=float(order.filled_qty or 0),
-                side=order.side.value,
+                side=order.side.value if order.side else "unknown",
                 status=order.status.value,
                 submitted_at=order.submitted_at,
                 filled_at=order.filled_at,
@@ -257,7 +265,7 @@ class AlpacaBroker:
             True if market is open for trading
         """
         try:
-            clock = self.client.get_clock()
+            clock: Clock = self.client.get_clock()  # type: ignore[assignment]
             return clock.is_open
         except Exception as e:
             logger.warning(f"Failed to check market status: {e}")

@@ -5,10 +5,14 @@ import sqlite3
 import threading
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
 from pandas.tseries.offsets import BDay
+
+if TYPE_CHECKING:
+    from src.data.broker import OrderStatus
 
 # 90-day TTL for fundamentals
 FUNDAMENTALS_TTL_DAYS = 90
@@ -426,7 +430,7 @@ class HistoricalCache:
             self._conn.commit()
         logger.debug(f"Stored fundamentals for {symbol}")
 
-    def store_order_fill(self, order: object) -> None:
+    def store_order_fill(self, order: "OrderStatus") -> None:
         """Store an order fill (INSERT OR IGNORE).
 
         Args:

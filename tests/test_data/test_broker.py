@@ -20,9 +20,9 @@ def mock_trading_client():
 def mock_account():
     """Mock account object."""
     account = Mock()
-    account.equity = 100000.0
-    account.buying_power = 50000.0
-    account.portfolio_value = 100000.0
+    account.equity = "100000.0"
+    account.buying_power = "50000.0"
+    account.portfolio_value = "100000.0"
     return account
 
 
@@ -31,19 +31,19 @@ def mock_positions():
     """Mock positions list."""
     pos1 = Mock()
     pos1.symbol = "AAPL"
-    pos1.qty = 10
-    pos1.market_value = 1500.0
-    pos1.avg_entry_price = 150.0
-    pos1.unrealized_pnl = 50.0
-    pos1.unrealized_plpc = 0.033
+    pos1.qty = "10"
+    pos1.market_value = "1500.0"
+    pos1.avg_entry_price = "150.0"
+    pos1.unrealized_pl = "50.0"
+    pos1.unrealized_plpc = "0.033"
 
     pos2 = Mock()
     pos2.symbol = "TSLA"
-    pos2.qty = 5
-    pos2.market_value = 1000.0
-    pos2.avg_entry_price = 200.0
-    pos2.unrealized_pnl = -50.0
-    pos2.unrealized_plpc = -0.05
+    pos2.qty = "5"
+    pos2.market_value = "1000.0"
+    pos2.avg_entry_price = "200.0"
+    pos2.unrealized_pl = "-50.0"
+    pos2.unrealized_plpc = "-0.05"
 
     return [pos1, pos2]
 

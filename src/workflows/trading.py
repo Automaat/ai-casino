@@ -529,7 +529,9 @@ class TradingWorkflow:
 
         # Notify if trade rejected by risk gate
         if (
-            not state["risk_assessment"].validation.approved
+            state["risk_assessment"]
+            and state["final_decision"]
+            and not state["risk_assessment"].validation.approved
             and state["final_decision"].action != Signal.HOLD
             and self.notification_service
         ):
@@ -537,15 +539,19 @@ class TradingWorkflow:
 
         if (
             self.broker
+            and state["risk_assessment"]
+            and state["final_decision"]
             and state["risk_assessment"].validation.approved
             and state["final_decision"].action != Signal.HOLD
         ):
             state = self._execute_trade(state)
 
+        final_decision = state["final_decision"]
+        risk_assessment = state["risk_assessment"]
         logger.info(
-            f"Workflow complete: {state['final_decision'].action.value} "
-            f"(confidence={state['final_decision'].confidence:.2f}, "
-            f"risk_approved={state['risk_assessment'].validation.approved})"
+            f"Workflow complete: {final_decision.action.value if final_decision else 'NONE'} "
+            f"(confidence={final_decision.confidence if final_decision else 0.0:.2f}, "
+            f"risk_approved={risk_assessment.validation.approved if risk_assessment else False})"
         )
 
         return await self._build_and_persist_result(symbol, state, strategy_name, trading_session, collector)
@@ -626,6 +632,8 @@ class TradingWorkflow:
         if (
             self.snapshot_on_trade
             and self.snapshot_repository
+            and state["risk_assessment"]
+            and state["final_decision"]
             and state["risk_assessment"].validation.approved
             and state["final_decision"].action != Signal.HOLD
         ):
@@ -935,7 +943,8 @@ class TradingWorkflow:
         """
         logger.info("Making final trading decision")
 
-        positions = state["account_info"].positions
+        account_info = state["account_info"]
+        positions = account_info.positions if account_info else {}
         symbol = state["symbol"]
         owns_position = symbol in positions
         position_qty = positions.get(symbol)
@@ -973,6 +982,10 @@ class TradingWorkflow:
             Updated state with risk assessment
         """
         logger.info("Assessing risk for trading decision")
+
+        if not state["final_decision"]:
+            msg = "Cannot assess risk without final decision"
+            raise ValueError(msg)
 
         current_price = float(state["market_data"]["Close"].iloc[-1])
 
@@ -1055,29 +1068,39 @@ class TradingWorkflow:
             Updated state with order status
         """
         risk = state["risk_assessment"]
-        action = state["final_decision"].action
+        final_decision = state["final_decision"]
+
+        if not final_decision or not risk or not self.broker:
+            msg = "Cannot execute trade without decision, risk assessment, and broker"
+            raise ValueError(msg)
+
+        action = final_decision.action
 
         order: OrderStatus | None = None
         try:
+            stop_loss_price = risk.stop_loss.stop_loss_price if risk.stop_loss else None
             order = self.broker.submit_order(
                 symbol=state["symbol"],
-                qty=int(risk.position_sizing.recommended_shares),
+                qty=int(risk.position_sizing.recommended_shares) if risk.position_sizing else 0,
                 side=action.value.lower(),
-                stop_loss_price=risk.stop_loss.stop_loss_price,
+                stop_loss_price=stop_loss_price,
             )
+            stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price else "None"
             logger.info(
                 f"Executed {action.value}: {state['symbol']} "
-                f"x{order.qty} (stop-loss={risk.stop_loss.stop_loss_price:.2f})"
+                f"x{order.qty} (stop-loss={stop_loss_str})"
             )
         except BrokerAPIError as e:
             logger.critical(
                 f"BROKER API FAILURE during order submission for {state['symbol']} "
                 f"with action {action.value}: {e}"
             )
-            state["warnings"].append(f"Order submission failed: {e}")
+            if "warnings" in state:
+                state["warnings"].append(f"Order submission failed: {e}")
         except Exception as e:
             logger.error(f"Unexpected error submitting order for {state['symbol']}: {e}")
-            state["warnings"].append(f"Order submission error: {e}")
+            if "warnings" in state:
+                state["warnings"].append(f"Order submission error: {e}")
 
         state["order_status"] = order
         return state
@@ -1126,6 +1149,9 @@ class TradingWorkflow:
         risk = state["risk_assessment"]
         decision = state["final_decision"]
 
+        if not risk or not decision:
+            return  # Nothing to notify if missing data
+
         message = NotificationMessage(
             trigger=NotificationTrigger.RISK_REJECTION,
             title=f"Trade Blocked: {symbol}",
@@ -1141,7 +1167,8 @@ class TradingWorkflow:
             timestamp=datetime.now(UTC),
         )
 
-        await self.notification_service.notify(NotificationTrigger.RISK_REJECTION, message)
+        if self.notification_service:
+            await self.notification_service.notify(NotificationTrigger.RISK_REJECTION, message)
 
     def __repr__(self) -> str:
         """String representation."""
