@@ -189,10 +189,9 @@ def test_dash_app_has_tabs() -> None:
 
 def test_overview_tab_renders(mock_daemon_api_client) -> None:
     """Test overview tab renders without error."""
-    # Manually call render function
-    from src.dashboard.app import _render_overview_tab
+    from src.dashboard.tabs import overview
 
-    content = _render_overview_tab(mock_daemon_api_client)
+    content = overview.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
@@ -203,10 +202,9 @@ def test_overview_tab_renders(mock_daemon_api_client) -> None:
 
 def test_portfolio_tab_renders(mock_daemon_api_client) -> None:
     """Test portfolio tab renders without error."""
-    # Manually call render function
-    from src.dashboard.app import _render_portfolio_tab
+    from src.dashboard.tabs import portfolio
 
-    content = _render_portfolio_tab(mock_daemon_api_client)
+    content = portfolio.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
@@ -215,10 +213,9 @@ def test_portfolio_tab_renders(mock_daemon_api_client) -> None:
 
 def test_signals_tab_renders(mock_daemon_api_client) -> None:
     """Test signals tab renders without error."""
-    # Manually call render function
-    from src.dashboard.app import _render_signals_tab
+    from src.dashboard.tabs import signals
 
-    content = _render_signals_tab(mock_daemon_api_client)
+    content = signals.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
@@ -227,10 +224,9 @@ def test_signals_tab_renders(mock_daemon_api_client) -> None:
 
 def test_risk_tab_renders(mock_daemon_api_client) -> None:
     """Test risk tab renders without error."""
-    # Manually call render function
-    from src.dashboard.app import _render_risk_tab
+    from src.dashboard.tabs import risk
 
-    content = _render_risk_tab(mock_daemon_api_client)
+    content = risk.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
@@ -239,10 +235,13 @@ def test_risk_tab_renders(mock_daemon_api_client) -> None:
 
 def test_events_tab_renders(mock_daemon_api_client) -> None:
     """Test events tab renders without error."""
-    # Manually call render function
-    from src.dashboard.app import _render_events_tab
+    from src.dashboard.tabs import events
 
-    content = _render_events_tab(mock_daemon_api_client)
+    # Add missing mocks for events tab
+    mock_daemon_api_client.get_market_events.return_value = EventResponse(events=[], returned_count=0)
+    mock_daemon_api_client.get_degradation_history.return_value = MagicMock(records=[])
+
+    content = events.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
@@ -253,10 +252,9 @@ def test_portfolio_tab_empty_positions(mock_daemon_api_client) -> None:
     """Test portfolio tab with no positions."""
     mock_daemon_api_client.get_positions.return_value = PositionsResponse(positions=[], count=0)
 
-    # Manually call render function
-    from src.dashboard.app import _render_portfolio_tab
+    from src.dashboard.tabs import portfolio
 
-    content = _render_portfolio_tab(mock_daemon_api_client)
+    content = portfolio.render(mock_daemon_api_client)
 
     assert content is not None
     # Should show "No active positions" alert
@@ -269,10 +267,9 @@ def test_signals_tab_empty_analyses(mock_daemon_api_client) -> None:
         analyses=[], total_count=0, returned_count=0
     )
 
-    # Manually call render function
-    from src.dashboard.app import _render_signals_tab
+    from src.dashboard.tabs import signals
 
-    content = _render_signals_tab(mock_daemon_api_client)
+    content = signals.render(mock_daemon_api_client)
 
     assert content is not None
     # Should show "No analyses yet" alert
@@ -283,10 +280,9 @@ def test_risk_tab_no_report(mock_daemon_api_client) -> None:
     """Test risk tab with no risk report."""
     mock_daemon_api_client.get_risk.return_value = None
 
-    # Manually call render function
-    from src.dashboard.app import _render_risk_tab
+    from src.dashboard.tabs import risk
 
-    content = _render_risk_tab(mock_daemon_api_client)
+    content = risk.render(mock_daemon_api_client)
 
     assert content is not None
     # Should show "No risk report available" alert
@@ -296,12 +292,13 @@ def test_risk_tab_no_report(mock_daemon_api_client) -> None:
 def test_events_tab_empty_events(mock_daemon_api_client) -> None:
     """Test events tab with no events."""
     mock_daemon_api_client.get_events.return_value = EventResponse(events=[], returned_count=0)
+    mock_daemon_api_client.get_market_events.return_value = EventResponse(events=[], returned_count=0)
+    mock_daemon_api_client.get_degradation_history.return_value = MagicMock(records=[])
 
-    # Manually call render function
-    from src.dashboard.app import _render_events_tab
+    from src.dashboard.tabs import events
 
-    content = _render_events_tab(mock_daemon_api_client)
+    content = events.render(mock_daemon_api_client)
 
     assert content is not None
-    # Should show "No events yet" alert
-    assert len(content) == 1
+    # Should show "No events yet" alert (updated - now returns filter controls too)
+    assert len(content) >= 1
