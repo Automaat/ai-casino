@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Development
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Config and data
+daemon.yaml
+daemon-dev.yaml
+daemon-production.yaml
+.env
+*.log
+
+# Cache
+.cache/
+*.cache
+data/cache/
+
+# Misc
+.DS_Store
+Thumbs.db

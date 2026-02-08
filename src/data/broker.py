@@ -112,7 +112,6 @@ class AlpacaBroker:
             api_key=self.api_key,
             secret_key=self.secret_key,
             paper=self.paper,
-            base_url=self.base_url,
         )
         logger.info(f"Initialized AlpacaBroker (paper={self.paper})")
 

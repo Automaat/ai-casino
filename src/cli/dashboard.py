@@ -56,20 +56,27 @@ def dashboard(
         if not client.is_healthy():
             console.print("[bold yellow]Warning:[/bold yellow] Daemon API is not reachable")
             console.print()
-            console.print("Make sure the daemon is running:")
-            console.print("  [cyan]mise daemon --config daemon.yaml[/cyan]")
-            console.print("  (copy docs/daemon.yaml.example to daemon.yaml)")
-            console.print()
-            console.print("Options:")
-            console.print("  1. Start the daemon")
-            console.print("  2. Check daemon configuration")
-            console.print("  3. Proceed anyway (dashboard will show errors)")
-            console.print()
 
-            choice = console.input("[bold]Continue? (y/N): [/bold]")
-            if choice.lower() not in ["y", "yes"]:
-                console.print("[yellow]Aborted[/yellow]")
-                raise typer.Exit(0)
+            # Skip interactive prompt if not in TTY (Docker, CI, etc.)
+            if not sys.stdin.isatty():
+                console.print("Running in non-interactive mode, proceeding anyway...")
+                console.print("Dashboard will show errors until daemon is healthy")
+                console.print()
+            else:
+                console.print("Make sure the daemon is running:")
+                console.print("  [cyan]mise daemon --config daemon.yaml[/cyan]")
+                console.print("  (copy docs/daemon.yaml.example to daemon.yaml)")
+                console.print()
+                console.print("Options:")
+                console.print("  1. Start the daemon")
+                console.print("  2. Check daemon configuration")
+                console.print("  3. Proceed anyway (dashboard will show errors)")
+                console.print()
+
+                choice = console.input("[bold]Continue? (y/N): [/bold]")
+                if choice.lower() not in ["y", "yes"]:
+                    console.print("[yellow]Aborted[/yellow]")
+                    raise typer.Exit(0)
 
         client.close()
 
