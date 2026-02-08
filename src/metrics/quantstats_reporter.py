@@ -11,6 +11,9 @@ from loguru import logger
 from src.metrics.performance import build_daily_equity_curve, equity_curve_to_returns
 from src.metrics.tracker import TearSheet, TradeRecord
 
+# Minimum data points required for statistical calculations
+MIN_REQUIRED_RETURNS = 2
+
 
 class QuantStatsReporter:
     """Generate QuantStats performance tearsheets."""
@@ -157,7 +160,7 @@ class QuantStatsReporter:
             Beta value
         """
         aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
-        if len(aligned_returns) < 2:
+        if len(aligned_returns) < MIN_REQUIRED_RETURNS:
             return 0.0
         covariance = aligned_returns.cov(aligned_benchmark)
         benchmark_variance = aligned_benchmark.var()
@@ -175,7 +178,7 @@ class QuantStatsReporter:
             Annualized alpha
         """
         aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
-        if len(aligned_returns) < 2:
+        if len(aligned_returns) < MIN_REQUIRED_RETURNS:
             return 0.0
         portfolio_mean = aligned_returns.mean()
         benchmark_mean = aligned_benchmark.mean()

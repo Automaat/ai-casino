@@ -78,6 +78,7 @@ class TestOptimizedParamStore:
             store.save(updated)
 
             loaded = store.get("AAPL", "momentum")
+            assert loaded is not None
             assert loaded.params["rsi_period"] == 21
 
     def test_persistence_across_instances(self):

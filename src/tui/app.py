@@ -536,7 +536,8 @@ class TradingChatApp(App):
     def _show_quit_bar(self) -> None:
         """Show quit confirmation bar with auto-hide timer."""
         quit_bar = self.query_one("#quit-bar")
-        quit_bar.update("Press Ctrl+C again to quit")
+        if hasattr(quit_bar, "update"):
+            quit_bar.update("Press Ctrl+C again to quit")
         quit_bar.display = True
         self.set_timer(1.0, self._hide_quit_bar)
 

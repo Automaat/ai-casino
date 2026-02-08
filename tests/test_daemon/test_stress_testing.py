@@ -33,25 +33,33 @@ def monte_carlo_config():
 @pytest.fixture
 def mock_broker(mocker):
     """Mock broker with sample positions."""
+    from src.data.broker import BrokerAccountInfo
+
     broker = mocker.Mock()
-    broker.get_positions.return_value = [
-        BrokerPosition(
-            symbol="AAPL",
-            qty=10,
-            market_value=1500.0,
-            avg_entry_price=140.0,
-            unrealized_pnl=100.0,
-            unrealized_pnl_percent=0.067,
-        ),
-        BrokerPosition(
-            symbol="MSFT",
-            qty=5,
-            market_value=1000.0,
-            avg_entry_price=190.0,
-            unrealized_pnl=50.0,
-            unrealized_pnl_percent=0.053,
-        ),
-    ]
+    broker.get_account_info.return_value = BrokerAccountInfo(
+        balance=10000.0,
+        available_cash=5000.0,
+        positions={
+            "AAPL": BrokerPosition(
+                symbol="AAPL",
+                qty=10,
+                market_value=1500.0,
+                avg_entry_price=140.0,
+                unrealized_pnl=100.0,
+                unrealized_pnl_percent=0.067,
+            ),
+            "MSFT": BrokerPosition(
+                symbol="MSFT",
+                qty=5,
+                market_value=1000.0,
+                avg_entry_price=190.0,
+                unrealized_pnl=50.0,
+                unrealized_pnl_percent=0.053,
+            ),
+        },
+        total_exposure=2500.0,
+        portfolio_value=10000.0,
+    )
     return broker
 
 
@@ -101,7 +109,15 @@ def test_executor_end_to_end(mock_broker, mock_market_fetcher, monte_carlo_confi
 
 def test_executor_handles_no_positions(mock_broker, mock_market_fetcher, monte_carlo_config):
     """Test error when portfolio is empty."""
-    mock_broker.get_positions.return_value = []
+    from src.data.broker import BrokerAccountInfo
+
+    mock_broker.get_account_info.return_value = BrokerAccountInfo(
+        balance=10000.0,
+        available_cash=10000.0,
+        positions={},
+        total_exposure=0.0,
+        portfolio_value=10000.0,
+    )
 
     executor = DaemonStressTester(mock_broker, mock_market_fetcher, monte_carlo_config)
     with pytest.raises(ValueError, match="No positions in portfolio"):

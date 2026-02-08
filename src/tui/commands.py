@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.daemon.state import DaemonState
+    from src.daemon.state import DaemonState, ScreeningRecord
     from src.screening.exporter import ScreeningExporter, Watchlist
     from src.workflows.types import TradingWorkflowResult
 
@@ -708,7 +708,7 @@ Type freely to chat about markets or ask questions."""
             message=f"No matching candidates found for: {', '.join(symbols)}",
         )
 
-    def _handle_candidates_clear(self, state: object, state_file: str) -> CommandResult:
+    def _handle_candidates_clear(self, state: DaemonState, state_file: str) -> CommandResult:
         """Clear old screening candidates."""
         cleared = len(state.screening_history)
         state.screening_history = []
@@ -721,7 +721,7 @@ Type freely to chat about markets or ask questions."""
             data={"cleared": cleared},
         )
 
-    def _format_candidates(self, record: object) -> str:
+    def _format_candidates(self, record: ScreeningRecord | dict) -> str:
         """Format screening candidates for display.
 
         Args:

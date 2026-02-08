@@ -91,7 +91,8 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
         assert runner.state.degradation_history
         assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
         halt_reason = runner.state.degradation_history[-1].halt_reason
-        assert halt_reason and "market data" in halt_reason.lower()
+        assert halt_reason is not None
+        assert "market data" in halt_reason.lower()
 
 
 async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_dir):
@@ -128,7 +129,8 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
         assert runner.state.degradation_history
         assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
         halt_reason = runner.state.degradation_history[-1].halt_reason
-        assert halt_reason and "llm" in halt_reason.lower()
+        assert halt_reason is not None
+        assert "llm" in halt_reason.lower()
 
 
 async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp_health_dir):

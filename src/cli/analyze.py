@@ -77,6 +77,8 @@ def _print_momentum_technical(result: TradingWorkflowResult) -> None:
 def _print_ensemble_technical(result: TradingWorkflowResult) -> None:
     """Print ensemble strategy technical analysis."""
     ensemble = result.technical.ensemble_result
+    if not ensemble:
+        return
 
     tech_table = Table(title="Technical Analysis (Ensemble)", show_header=True)
     tech_table.add_column("Metric", style="cyan")
