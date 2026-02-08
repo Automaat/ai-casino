@@ -16,6 +16,10 @@ from pydantic import BaseModel
 from src.cache.historical import HistoricalCache
 
 
+class BrokerAPIError(Exception):
+    """Broker API communication failure."""
+
+
 class BrokerPosition(BaseModel):
     """Broker position information."""
 
@@ -144,8 +148,9 @@ class AlpacaBroker:
                 portfolio_value=float(account.portfolio_value),
             )
         except Exception as e:
-            logger.error(f"Failed to fetch account info: {e}")
-            raise
+            msg = f"Failed to fetch account info: {e}"
+            logger.error(msg)
+            raise BrokerAPIError(msg) from e
 
     def submit_order(
         self, symbol: str, qty: int, side: str, stop_loss_price: float | None = None
@@ -161,20 +166,20 @@ class AlpacaBroker:
         Returns:
             OrderStatus with order details
         """
+        if qty <= 0:
+            msg = f"Order quantity must be positive, got {qty}"
+            raise ValueError(msg)
+
+        normalized_side = side.lower()
+        if normalized_side == "buy":
+            order_side = OrderSide.BUY
+        elif normalized_side == "sell":
+            order_side = OrderSide.SELL
+        else:
+            msg = f"Invalid order side: {side!r}. Expected 'buy' or 'sell'."
+            raise ValueError(msg)
+
         try:
-            if qty <= 0:
-                msg = f"Order quantity must be positive, got {qty}"
-                raise ValueError(msg)
-
-            normalized_side = side.lower()
-            if normalized_side == "buy":
-                order_side = OrderSide.BUY
-            elif normalized_side == "sell":
-                order_side = OrderSide.SELL
-            else:
-                msg = f"Invalid order side: {side!r}. Expected 'buy' or 'sell'."
-                raise ValueError(msg)
-
             order_data = MarketOrderRequest(
                 symbol=symbol,
                 qty=qty,
@@ -207,8 +212,9 @@ class AlpacaBroker:
 
             return order_status
         except Exception as e:
-            logger.error(f"Failed to submit order: {e}")
-            raise
+            msg = f"Failed to submit order: {e}"
+            logger.error(msg)
+            raise BrokerAPIError(msg) from e
 
     def get_order_status(self, order_id: str) -> OrderStatus:
         """Get status of an existing order.
