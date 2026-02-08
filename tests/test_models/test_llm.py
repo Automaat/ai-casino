@@ -64,7 +64,7 @@ def test_llm_client_init_anthropic(mock_anthropic_provider, monkeypatch):
 
     assert client.provider == "anthropic"
     assert client.model == "claude-sonnet-4-20250514"
-    mock_anthropic_provider[0].assert_called_once_with(model="claude-sonnet-4-20250514")
+    mock_anthropic_provider[0].assert_called_once_with(model="claude-sonnet-4-20250514", api_key=None)
 
 
 def test_llm_client_init_openai(mock_openai_provider, monkeypatch):
@@ -77,7 +77,7 @@ def test_llm_client_init_openai(mock_openai_provider, monkeypatch):
 
     assert client.provider == "openai"
     assert client.model == "gpt-4o"
-    mock_openai_provider[0].assert_called_once_with(model="gpt-4o", base_url=None)
+    mock_openai_provider[0].assert_called_once_with(model="gpt-4o", api_key=None, base_url=None)
 
 
 def test_llm_client_init_openai_custom_api_base(mock_openai_provider, monkeypatch):
@@ -91,7 +91,7 @@ def test_llm_client_init_openai_custom_api_base(mock_openai_provider, monkeypatc
     assert client.provider == "openai"
     assert client.model == "hf:moonshotai/Kimi-K2.5"
     mock_openai_provider[0].assert_called_once_with(
-        model="hf:moonshotai/Kimi-K2.5", base_url="https://api.synthetic.new/openai/v1"
+        model="hf:moonshotai/Kimi-K2.5", api_key=None, base_url="https://api.synthetic.new/openai/v1"
     )
 
 

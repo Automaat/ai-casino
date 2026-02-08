@@ -68,23 +68,25 @@ class MarketDataFetcher:
     def __init__(
         self,
         use_alpha_vantage: bool = True,
+        api_key: str | None = None,
         historical_cache: HistoricalCache | None = None,
     ) -> None:
         """Initialize market data fetcher.
 
         Args:
             use_alpha_vantage: Use Alpha Vantage (True) or yfinance (False)
+            api_key: Alpha Vantage API key (optional, falls back to env var)
             historical_cache: Optional permanent cache for OHLCV data
         """
         self.use_alpha_vantage = use_alpha_vantage
         self._cache = historical_cache
 
         if use_alpha_vantage:
-            api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-            if not api_key:
-                msg = "ALPHA_VANTAGE_API_KEY not set in environment"
+            resolved_key = api_key or os.getenv("ALPHA_VANTAGE_API_KEY")
+            if not resolved_key:
+                msg = "ALPHA_VANTAGE_API_KEY not set in environment or config"
                 raise ValueError(msg)
-            self.ts = TimeSeries(key=api_key, output_format="pandas")
+            self.ts = TimeSeries(key=resolved_key, output_format="pandas")
             logger.info("Initialized Alpha Vantage client")
         else:
             logger.info("Using yfinance for market data")

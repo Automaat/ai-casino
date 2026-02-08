@@ -151,3 +151,32 @@ daemon:
       # bot_token: "your_bot_token_here"
       # Telegram chat ID (or set TELEGRAM_CHAT_ID env var)
       # chat_id: "your_chat_id_here"
+
+  # LLM Provider Configuration (optional, falls back to environment variables)
+  llm:
+    # provider: "ollama"      # Falls back to LLM_PROVIDER (ollama, anthropic, openai)
+    # model: "qwen3:14b"      # Falls back to LLM_MODEL
+
+  # API Keys Configuration (optional, falls back to environment variables)
+  # Config keys take priority over env vars when both are present
+  api_keys:
+    # Data providers
+    # alpha_vantage_api_key: "YOUR_KEY_HERE"  # Falls back to ALPHA_VANTAGE_API_KEY
+    # marketaux_api_key: "YOUR_KEY_HERE"      # Falls back to MARKETAUX_API_KEY
+    # finnhub_api_key: "YOUR_KEY_HERE"        # Falls back to FINNHUB_API_KEY
+
+    # Broker credentials (paper and live)
+    # alpaca_api_key: "YOUR_KEY_HERE"         # Falls back to ALPACA_API_KEY
+    # alpaca_secret_key: "YOUR_SECRET_HERE"   # Falls back to ALPACA_SECRET_KEY
+    # alpaca_paper_api_key: "YOUR_PAPER_KEY_HERE"      # Falls back to ALPACA_PAPER_API_KEY (optional override)
+    # alpaca_paper_secret_key: "YOUR_PAPER_SECRET_HERE"  # Falls back to ALPACA_PAPER_SECRET_KEY (optional override)
+
+    # Social media
+    # reddit_client_id: "YOUR_CLIENT_ID"      # Falls back to REDDIT_CLIENT_ID
+    # reddit_client_secret: "YOUR_CLIENT_SECRET"  # Falls back to REDDIT_CLIENT_SECRET
+    # reddit_user_agent: "ai-casino/1.0"      # Falls back to REDDIT_USER_AGENT
+
+    # LLM providers (choose one based on LLM_PROVIDER setting)
+    # anthropic_api_key: "YOUR_ANTHROPIC_KEY"  # Falls back to ANTHROPIC_API_KEY
+    # openai_api_key: "YOUR_OPENAI_KEY"       # Falls back to OPENAI_API_KEY
+    # openai_api_base: "https://api.openai.com/v1"  # Falls back to OPENAI_API_BASE (optional custom endpoint)

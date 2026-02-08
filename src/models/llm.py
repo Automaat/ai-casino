@@ -121,6 +121,8 @@ class LLMClient:
         provider: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        api_key: str | None = None,
+        openai_base_url: str | None = None,
     ) -> None:
         """Initialize LLM client.
 
@@ -128,10 +130,14 @@ class LLMClient:
             provider: LLM provider (ollama, anthropic, openai). Defaults to env.
             model: Model name. Defaults to env.
             base_url: Base URL for Ollama. Defaults to env.
+            api_key: API key for provider (optional, falls back to env var)
+            openai_base_url: Custom base URL for OpenAI (optional)
         """
         self.provider = provider or os.getenv("LLM_PROVIDER", "ollama")
         self.model = model or os.getenv("LLM_MODEL", "qwen3:14b")
         self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self._api_key = api_key
+        self._openai_base_url = openai_base_url
 
         self._provider: BaseLLMProvider = self._create_provider()
         self._metrics_collector: ExecutionMetricsCollector | None = None
@@ -150,11 +156,12 @@ class LLMClient:
         if self.provider == "ollama":
             return OllamaProvider(model=self.model, base_url=self.base_url)
         if self.provider == "anthropic":
-            return AnthropicProvider(model=self.model)
+            return AnthropicProvider(model=self.model, api_key=self._api_key)
         if self.provider == "openai":
             return OpenAIProvider(
                 model=self.model,
-                base_url=os.getenv("OPENAI_API_BASE"),
+                api_key=self._api_key,
+                base_url=self._openai_base_url or os.getenv("OPENAI_API_BASE"),
             )
         msg = f"Unsupported provider: {self.provider}"
         raise ValueError(msg)

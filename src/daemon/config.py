@@ -167,6 +167,35 @@ class ApiConfig(BaseModel):
         return v
 
 
+class LLMConfig(BaseModel):
+    """LLM provider configuration."""
+
+    provider: str | None = None
+    model: str | None = None
+
+
+class ApiKeysConfig(BaseModel):
+    """API keys configuration.
+
+    All fields are optional and fall back to environment variables.
+    Config values take priority when both config and env vars are set.
+    """
+
+    alpha_vantage_api_key: str | None = None
+    marketaux_api_key: str | None = None
+    finnhub_api_key: str | None = None
+    alpaca_api_key: str | None = None
+    alpaca_secret_key: str | None = None
+    alpaca_paper_api_key: str | None = None
+    alpaca_paper_secret_key: str | None = None
+    reddit_client_id: str | None = None
+    reddit_client_secret: str | None = None
+    reddit_user_agent: str | None = None
+    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
+    openai_api_base: str | None = None
+
+
 class SectorRotationConfig(BaseModel):
     """Configuration for sector rotation analysis."""
 
@@ -617,6 +646,8 @@ class DaemonConfig(BaseModel):
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    api_keys: ApiKeysConfig = Field(default_factory=ApiKeysConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> "DaemonConfig":
@@ -659,6 +690,8 @@ class DaemonConfig(BaseModel):
         filings_watcher_data = daemon_data.pop("filings_watcher", {})
         anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {})
         api_data = daemon_data.pop("api", {})
+        llm_data = daemon_data.pop("llm", {})
+        api_keys_data = daemon_data.pop("api_keys", {})
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {})
@@ -693,6 +726,8 @@ class DaemonConfig(BaseModel):
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
             anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
             api=ApiConfig(**api_data),
+            llm=LLMConfig(**llm_data),
+            api_keys=ApiKeysConfig(**api_keys_data),
         )
 
     def __repr__(self) -> str:
