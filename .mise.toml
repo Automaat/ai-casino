@@ -41,9 +41,9 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run analysis with meta-agent (dynamic strategy selection)"
-usage = 'arg "<symbol>" help="Stock ticker" default="AAPL"'
-run = "uv run python -m src.main analyze ${usage_symbol?}"
+description = "Run autonomous trading daemon"
+usage = 'option "-c --config" help="Config file path"'
+run = "uv run python -m src.main daemon ${usage_config:+--config \"$usage_config\"}"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
 [tasks."dev:momentum"]
