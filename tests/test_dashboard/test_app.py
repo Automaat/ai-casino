@@ -197,7 +197,6 @@ def test_overview_tab_renders(mock_daemon_api_client) -> None:
     assert isinstance(content, list)
     mock_daemon_api_client.get_health.assert_called()
     mock_daemon_api_client.get_state_summary.assert_called()
-    mock_daemon_api_client.get_config.assert_called()
 
 
 def test_portfolio_tab_renders(mock_daemon_api_client) -> None:

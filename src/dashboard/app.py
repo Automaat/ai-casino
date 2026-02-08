@@ -6,6 +6,7 @@ from loguru import logger
 
 from src.dashboard.api_client import DaemonAPIClient
 from src.dashboard.config import DashboardConfig
+from src.dashboard.tabs import config as config_tab
 from src.dashboard.tabs import events, overview, portfolio, risk, signals
 
 
@@ -38,6 +39,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                     dbc.Tab(label="Signals", tab_id="signals"),
                     dbc.Tab(label="Risk", tab_id="risk"),
                     dbc.Tab(label="Events", tab_id="events"),
+                    dbc.Tab(label="Config", tab_id="config"),
                 ],
             ),
             html.Div(id="tab-content", className="mt-4"),
@@ -72,6 +74,8 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                 return risk.render(app.api_client)
             if active_tab == "events":
                 return events.render(app.api_client)
+            if active_tab == "config":
+                return config_tab.render(app.api_client)
             return [html.Div("Invalid tab")]
         except Exception as e:
             logger.exception("Tab render failed")
@@ -96,5 +100,6 @@ def create_dash_app(config: DashboardConfig) -> Dash:
     signals.register_callbacks(app)
     risk.register_callbacks(app)
     events.register_callbacks(app)
+    config_tab.register_callbacks(app)
 
     return app

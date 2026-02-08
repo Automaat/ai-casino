@@ -17,6 +17,7 @@ from src.daemon.api import (
     DegradationHistoryResponse,
     DegradationResponse,
     EventResponse,
+    FullConfigResponse,
     GamePlanResponse,
     HealthResponse,
     MarketEventsResponse,
@@ -117,6 +118,17 @@ class DaemonAPIClient:
         response = self._client.get(f"{self.api_url}/config")
         response.raise_for_status()
         return ConfigResponse.model_validate(response.json())
+
+    @HTTP_RETRY
+    def get_full_config(self) -> FullConfigResponse:
+        """Get full daemon configuration with masked sensitive fields.
+
+        Returns:
+            FullConfigResponse
+        """
+        response = self._client.get(f"{self.api_url}/config/full")
+        response.raise_for_status()
+        return FullConfigResponse.model_validate(response.json())
 
     @HTTP_RETRY
     def get_analyses(self, limit: int = 50, symbol: str | None = None) -> AnalysesResponse:
