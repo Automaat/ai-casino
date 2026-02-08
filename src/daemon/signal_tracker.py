@@ -145,16 +145,28 @@ class SignalOutcomeTracker:
             # Query historical order fills for symbols with signals
             symbols = {s["symbol"] for s in signals}
 
-            for _symbol in symbols:
-                # Check if position was closed for this symbol
-                # This is simplified - full implementation would match signal timestamps
-                # to specific trade sequences in order_fills table
-                pass
+            # TODO: Match signal timestamps to specific trade sequences in order_fills table
+            # to detect early exits and populate exit_prices dict
+            self._raise_not_implemented(len(symbols))
 
+        except NotImplementedError:
+            raise
         except Exception as e:
             logger.warning(f"Failed to check early exits: {e}")
 
         return exit_prices
+
+    def _raise_not_implemented(self, symbol_count: int) -> None:
+        """Raise NotImplementedError for early exit detection.
+
+        Args:
+            symbol_count: Number of symbols being processed
+        """
+        msg = (
+            "Early exit detection not implemented - requires matching signals "
+            f"to closed positions in order_fills for {symbol_count} symbols"
+        )
+        raise NotImplementedError(msg)
 
     def __repr__(self) -> str:
         """Return string representation."""
