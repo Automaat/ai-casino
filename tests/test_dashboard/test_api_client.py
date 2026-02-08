@@ -11,7 +11,9 @@ from src.daemon.api import (
     EventResponse,
     HealthResponse,
     PositionsResponse,
+    RebalanceResponse,
     RiskReportResponse,
+    SnapshotsResponse,
     StateSummaryResponse,
     WatchlistResponse,
 )
@@ -328,3 +330,73 @@ def test_repr() -> None:
 
     assert "DaemonAPIClient" in repr_str
     assert "http://localhost:8001" in repr_str
+
+
+def test_get_snapshots() -> None:
+    """Test get_snapshots endpoint."""
+    client = DaemonAPIClient("http://localhost:8001")
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "snapshots": [
+            {
+                "timestamp": "2025-01-01T12:00:00",
+                "portfolio_value": 10000.0,
+                "balance": 5000.0,
+                "total_exposure": 5000.0,
+            }
+        ],
+        "count": 1,
+    }
+
+    with patch.object(client._client, "get", return_value=mock_response):
+        snapshots = client.get_snapshots(days=30)
+
+        assert isinstance(snapshots, SnapshotsResponse)
+        assert snapshots.count == 1
+        assert len(snapshots.snapshots) == 1
+
+
+def test_get_rebalance() -> None:
+    """Test get_rebalance endpoint."""
+    client = DaemonAPIClient("http://localhost:8001")
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "timestamp": "2025-01-01T12:00:00",
+        "method": "equal_weight",
+        "allocations": [
+            {
+                "symbol": "AAPL",
+                "target_weight": 0.5,
+                "current_weight": 0.4,
+                "delta": -0.1,
+                "action": "INCREASE",
+            }
+        ],
+        "expected_return": 0.15,
+        "expected_volatility": 0.20,
+        "sharpe_ratio": 0.75,
+    }
+
+    with patch.object(client._client, "get", return_value=mock_response):
+        rebalance = client.get_rebalance()
+
+        assert isinstance(rebalance, RebalanceResponse)
+        assert len(rebalance.allocations) == 1
+
+
+def test_get_rebalance_null() -> None:
+    """Test get_rebalance endpoint with null response."""
+    client = DaemonAPIClient("http://localhost:8001")
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = None
+
+    with patch.object(client._client, "get", return_value=mock_response):
+        rebalance = client.get_rebalance()
+
+        assert rebalance is None

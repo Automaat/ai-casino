@@ -501,7 +501,10 @@ def _build_summary_cards(positions: list) -> list:
             dbc.CardBody(
                 [
                     html.H5("Total P&L"),
-                    html.H3(f"${total_pnl:+,.2f}", style={"color": "green" if total_pnl > 0 else "red"}),
+                    html.H3(
+                        f"${total_pnl:+,.2f}",
+                        style={"color": "green" if total_pnl > 0 else ("red" if total_pnl < 0 else "gray")},
+                    ),
                 ]
             )
         ),
@@ -509,7 +512,10 @@ def _build_summary_cards(positions: list) -> list:
             dbc.CardBody(
                 [
                     html.H5("P&L %"),
-                    html.H3(f"{pnl_pct:+.2f}%", style={"color": "green" if pnl_pct > 0 else "red"}),
+                    html.H3(
+                        f"{pnl_pct:+.2f}%",
+                        style={"color": "green" if pnl_pct > 0 else ("red" if pnl_pct < 0 else "gray")},
+                    ),
                 ]
             )
         ),

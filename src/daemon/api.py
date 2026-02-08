@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -284,7 +284,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         broker_positions = {}
         if runner.broker:
             try:
-                account_info = runner.broker.get_account_info()
+                account_info = await asyncio.to_thread(runner.broker.get_account_info)
                 broker_positions = account_info.positions
             except Exception as e:
                 logger.warning(f"Failed to fetch broker positions: {e}")
@@ -329,6 +329,9 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         from src.database.connection import get_session
         from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
+        # Clamp days to prevent abuse
+        days = max(1, min(days, 365))
+
         start = datetime.now(UTC) - timedelta(days=days)
         end = datetime.now(UTC)
 
@@ -350,7 +353,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                 return SnapshotsResponse(snapshots=snapshot_records, count=len(snapshot_records))
         except Exception as e:
             logger.error(f"Failed to fetch snapshots: {e}")
-            return SnapshotsResponse(snapshots=[], count=0)
+            raise HTTPException(status_code=500, detail="Failed to fetch portfolio snapshots") from e
 
     @app.get("/portfolio/rebalance", response_model=RebalanceResponse | None)
     async def get_rebalance() -> RebalanceResponse | None:
@@ -366,7 +369,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         total_portfolio_value = 0.0
         if runner.broker:
             try:
-                account_info = runner.broker.get_account_info()
+                account_info = await asyncio.to_thread(runner.broker.get_account_info)
                 broker_positions = account_info.positions
                 total_portfolio_value = account_info.portfolio_value
             except Exception as e:
