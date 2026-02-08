@@ -273,3 +273,41 @@ def test_run_backtest_with_ensemble_strategy(mock_fetch_data, sample_backtest_da
     assert isinstance(result.total_return, float)
     assert isinstance(result.sharpe_ratio, float)
     assert isinstance(result.total_trades, int)
+
+
+@patch("pandas_ta_classic.rsi")
+@patch("pandas_ta_classic.macd")
+def test_generate_momentum_signals_rsi_none_fallback(mock_macd, mock_rsi, sample_backtest_data):
+    """_generate_momentum_signals handles RSI None fallback without error."""
+    close_index = sample_backtest_data["Close"].index
+    mock_rsi.return_value = None
+    mock_macd.return_value = pd.DataFrame({"MACDh_12_26_9": pd.Series([0.0] * 100, index=close_index)})
+
+    runner = VectorBTRunner()
+    entries, exits = runner._generate_momentum_signals(sample_backtest_data)
+
+    assert isinstance(entries, pd.Series)
+    assert isinstance(exits, pd.Series)
+    assert len(entries) == len(sample_backtest_data)
+    assert len(exits) == len(sample_backtest_data)
+    assert entries.dtype == bool
+    assert exits.dtype == bool
+
+
+@patch("pandas_ta_classic.sma")
+@patch("pandas_ta_classic.adx")
+def test_generate_trend_following_signals_sma_none_fallback(mock_adx, mock_sma, sample_backtest_data):
+    """_generate_trend_following_signals handles SMA None fallback without error."""
+    close_index = sample_backtest_data["Close"].index
+    mock_sma.return_value = None
+    mock_adx.return_value = pd.DataFrame({"ADX_14": pd.Series([0.0] * 100, index=close_index)})
+
+    runner = VectorBTRunner()
+    entries, exits = runner._generate_trend_following_signals(sample_backtest_data)
+
+    assert isinstance(entries, pd.Series)
+    assert isinstance(exits, pd.Series)
+    assert len(entries) == len(sample_backtest_data)
+    assert len(exits) == len(sample_backtest_data)
+    assert entries.dtype == bool
+    assert exits.dtype == bool

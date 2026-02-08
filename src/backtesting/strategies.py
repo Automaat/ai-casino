@@ -30,7 +30,10 @@ class MomentumBacktestStrategy(Strategy):
         close_series = pd.Series(self.data.Close, name="Close")
 
         rsi_result = ta.rsi(close_series, length=self.rsi_period)
-        self.rsi = self.I(lambda: rsi_result.values)
+        if rsi_result is not None:
+            self.rsi = self.I(lambda: rsi_result.values)
+        else:
+            self.rsi = self.I(lambda: pd.Series([50.0] * len(close_series)).values)
 
         macd = ta.macd(close_series, fast=self.macd_fast, slow=self.macd_slow, signal=self.macd_signal)
         if macd is not None:
@@ -77,8 +80,14 @@ class TrendFollowingBacktestStrategy(Strategy):
 
         sma_fast_result = ta.sma(close_series, length=self.sma_fast)
         sma_slow_result = ta.sma(close_series, length=self.sma_slow)
-        self.sma_fast_line = self.I(lambda: sma_fast_result.values)
-        self.sma_slow_line = self.I(lambda: sma_slow_result.values)
+        if sma_fast_result is not None:
+            self.sma_fast_line = self.I(lambda: sma_fast_result.values)
+        else:
+            self.sma_fast_line = self.I(lambda: close_series.values)
+        if sma_slow_result is not None:
+            self.sma_slow_line = self.I(lambda: sma_slow_result.values)
+        else:
+            self.sma_slow_line = self.I(lambda: close_series.values)
 
         adx_result = ta.adx(high_series, low_series, close_series, length=self.adx_period)
         if adx_result is not None:
@@ -198,7 +207,10 @@ class EnsembleBacktestStrategy(Strategy):
     def _init_momentum_indicators(self, close_series: pd.Series) -> None:
         """Initialize RSI and MACD indicators."""
         rsi_result = ta.rsi(close_series, length=self.rsi_period)
-        self.rsi = self.I(lambda: rsi_result.values)
+        if rsi_result is not None:
+            self.rsi = self.I(lambda: rsi_result.values)
+        else:
+            self.rsi = self.I(lambda: pd.Series([50.0] * len(close_series)).values)
 
         macd = ta.macd(close_series, fast=self.macd_fast, slow=self.macd_slow, signal=self.macd_signal)
         if macd is not None:
@@ -214,8 +226,14 @@ class EnsembleBacktestStrategy(Strategy):
         """Initialize SMA and ADX indicators."""
         sma_fast_result = ta.sma(close_series, length=self.sma_fast)
         sma_slow_result = ta.sma(close_series, length=self.sma_slow)
-        self.sma_fast_line = self.I(lambda: sma_fast_result.values)
-        self.sma_slow_line = self.I(lambda: sma_slow_result.values)
+        if sma_fast_result is not None:
+            self.sma_fast_line = self.I(lambda: sma_fast_result.values)
+        else:
+            self.sma_fast_line = self.I(lambda: close_series.values)
+        if sma_slow_result is not None:
+            self.sma_slow_line = self.I(lambda: sma_slow_result.values)
+        else:
+            self.sma_slow_line = self.I(lambda: close_series.values)
 
         adx_result = ta.adx(high_series, low_series, close_series, length=self.adx_period)
         if adx_result is not None:
