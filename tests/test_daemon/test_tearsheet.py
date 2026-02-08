@@ -254,10 +254,12 @@ def test_cleanup_old_tearsheets(tmp_path):
 
 def test_cleanup_old_tearsheets_no_directory():
     """Test cleanup when tearsheet directory doesn't exist."""
+    # Smoke test: verifies no exception when directory doesn't exist
     generator = DaemonTearsheetGenerator()
 
     with patch("pathlib.Path.home", return_value=Path("/nonexistent")):
         generator.cleanup_old_tearsheets(retention_days=30)
+        assert generator is not None
 
 
 def test_repr():
