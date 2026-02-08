@@ -54,22 +54,24 @@ class WebSearchTool(BaseTool):
                             "description": "Type of search: 'general' for broad info, 'news' for recent news",
                         },
                     },
-                    "required": ["query", "search_type"],
+                    "required": ["query"],
                 },
             },
         }
 
-    def execute(self, query: str, search_type: str = "general", max_results: int = 5) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute web search and return formatted results.
 
         Args:
-            query: Search query
-            search_type: "general" or "news"
-            max_results: Maximum results to return
+            **kwargs: Tool arguments (query: str, search_type: str = "general", max_results: int = 5)
 
         Returns:
             Formatted string with search results
         """
+        query = str(kwargs["query"])
+        search_type = str(kwargs.get("search_type", "general"))
+        max_results = int(kwargs.get("max_results", 5))
+
         logger.info(f"Executing web search: query='{query}', type={search_type}")
 
         search_type_enum = SearchType.NEWS if search_type == "news" else SearchType.GENERAL

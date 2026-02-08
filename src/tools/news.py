@@ -47,16 +47,18 @@ class GetNewsTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str, limit: int = 5) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Fetch news for a stock.
 
         Args:
-            symbol: Stock ticker symbol
-            limit: Maximum number of articles
+            **kwargs: Tool arguments (symbol: str, limit: int = 5)
 
         Returns:
             Formatted news summary
         """
+        symbol = str(kwargs["symbol"])
+        limit = int(kwargs.get("limit", 5))
+
         logger.info(f"Fetching news for {symbol} (limit={limit})")
 
         try:

@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
-from src.daemon.events import NewsEvent
+from src.daemon.events import BaseEvent, NewsEvent
 from src.data.news import NewsFetcher
 
 
@@ -95,7 +95,7 @@ class NewsWatcher(EventWatcher):
         if self._news_fetcher is None:
             self._news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
 
-    async def _fetch_events(self) -> list[NewsEvent]:
+    async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch breaking news from Marketaux.
 
         Returns:

@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
-from src.daemon.events import AnomalyEvent, Gap, PriceMove, VolumeSpike
+from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
 
 
@@ -292,7 +292,7 @@ class AnomalyWatcher(EventWatcher):
 
         return None
 
-    async def _fetch_events(self) -> list[AnomalyEvent]:
+    async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
         self._init_components()
         self._refresh_previous_close_if_needed()

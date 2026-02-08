@@ -76,7 +76,7 @@ class TestWebSearchTool:
 
     def test_execute_general_search(self, tool, mock_fetcher):
         """Test executing general search."""
-        result = tool.execute("AAPL stock", search_type="general", max_results=5)
+        result = tool.execute(query="AAPL stock", search_type="general", max_results=5)
 
         mock_fetcher.search.assert_called_once_with("AAPL stock", max_results=5)
         assert "Search results for 'AAPL stock'" in result
@@ -85,7 +85,7 @@ class TestWebSearchTool:
 
     def test_execute_news_search(self, tool, mock_fetcher):
         """Test executing news search."""
-        result = tool.execute("AAPL news", search_type="news", max_results=5)
+        result = tool.execute(query="AAPL news", search_type="news", max_results=5)
 
         mock_fetcher.search_news.assert_called_once_with("AAPL news", max_results=5)
         assert "news" in result
@@ -101,7 +101,7 @@ class TestWebSearchTool:
             fetched_at=datetime.now(),
         )
 
-        result = tool.execute("nonexistent query", search_type="general")
+        result = tool.execute(query="nonexistent query", search_type="general")
 
         assert "No results found" in result
 
@@ -121,7 +121,7 @@ class TestWebSearchTool:
             fetched_at=datetime.now(),
         )
 
-        result = tool.execute("test", search_type="general")
+        result = tool.execute(query="test", search_type="general")
 
         assert "..." in result
         assert len(result) < len(long_body) + 200

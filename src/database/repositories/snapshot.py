@@ -38,11 +38,11 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
         super().__init__(session)
         logger.debug("Initialized PortfolioSnapshotRepository")
 
-    async def create(self, snapshot: PortfolioSnapshot) -> PortfolioSnapshot:
+    async def create(self, entity: PortfolioSnapshot) -> PortfolioSnapshot:
         """Create new portfolio snapshot.
 
         Args:
-            snapshot: PortfolioSnapshot to persist
+            entity: PortfolioSnapshot to persist
 
         Returns:
             Created PortfolioSnapshot with ID
@@ -50,31 +50,31 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
         snapshot_id = uuid.uuid4()
         orm = PortfolioSnapshotORM(
             id=snapshot_id,
-            timestamp=snapshot.timestamp,
-            balance=Decimal(str(snapshot.balance)),
-            available_cash=Decimal(str(snapshot.available_cash)),
-            total_exposure=Decimal(str(snapshot.total_exposure)),
-            portfolio_value=Decimal(str(snapshot.portfolio_value)),
-            positions=snapshot.positions,
-            trigger=snapshot.trigger,
+            timestamp=entity.timestamp,
+            balance=Decimal(str(entity.balance)),
+            available_cash=Decimal(str(entity.available_cash)),
+            total_exposure=Decimal(str(entity.total_exposure)),
+            portfolio_value=Decimal(str(entity.portfolio_value)),
+            positions=entity.positions,
+            trigger=entity.trigger,
         )
         self._session.add(orm)
         await self._session.commit()
         logger.info(f"Created portfolio snapshot: {snapshot_id}")
-        snapshot.id = str(snapshot_id)
-        return snapshot
+        entity.id = str(snapshot_id)
+        return entity
 
-    async def get_by_id(self, snapshot_id: str) -> PortfolioSnapshot | None:
+    async def get_by_id(self, entity_id: str) -> PortfolioSnapshot | None:
         """Get snapshot by ID.
 
         Args:
-            snapshot_id: Snapshot UUID string
+            entity_id: Snapshot UUID string
 
         Returns:
             PortfolioSnapshot if found, None otherwise
         """
         result = await self._session.execute(
-            select(PortfolioSnapshotORM).where(PortfolioSnapshotORM.id == uuid.UUID(snapshot_id))
+            select(PortfolioSnapshotORM).where(PortfolioSnapshotORM.id == uuid.UUID(entity_id))
         )
         orm = result.scalar_one_or_none()
         return self._to_snapshot(orm) if orm else None

@@ -95,7 +95,7 @@ class TestGenerateTearsheetTool:
             mock_reporter.generate_tearsheet.return_value = mock_tearsheet
             mock_reporter_cls.return_value = mock_reporter
 
-            result = tool.execute("AAPL")
+            result = tool.execute(symbol="AAPL")
 
             assert "AAPL" in result
             assert "1.34" in result  # sharpe
@@ -107,7 +107,7 @@ class TestGenerateTearsheetTool:
         mock_tracker.trades = []
 
         with patch("src.metrics.tracker.create_metrics_tracker", return_value=mock_tracker):
-            result = tool.execute("AAPL")
+            result = tool.execute(symbol="AAPL")
 
             assert "No closed trades found" in result
 
@@ -117,7 +117,7 @@ class TestGenerateTearsheetTool:
             "src.metrics.tracker.create_metrics_tracker",
             side_effect=Exception("DB error"),
         ):
-            result = tool.execute("AAPL")
+            result = tool.execute(symbol="AAPL")
 
             assert "Tearsheet generation failed" in result
             assert "DB error" in result

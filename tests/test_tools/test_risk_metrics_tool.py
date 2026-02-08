@@ -85,7 +85,7 @@ class TestGetRiskMetricsTool:
             mock_calc.calculate_all.return_value = mock_risk_metrics
             mock_calc_cls.return_value = mock_calc
 
-            result = tool.execute("AAPL", days=90)
+            result = tool.execute(symbol="AAPL", days=90)
 
             assert "AAPL" in result
             assert "0.0234" in result  # VaR 95
@@ -107,7 +107,7 @@ class TestGetRiskMetricsTool:
             mock_calc.calculate_all.return_value = mock_risk_metrics
             mock_calc_cls.return_value = mock_calc
 
-            tool.execute("aapl")
+            tool.execute(symbol="aapl")
 
             mock_fetcher.fetch_daily.assert_called_once_with("AAPL", period_days=90)
 
@@ -118,7 +118,7 @@ class TestGetRiskMetricsTool:
             mock_fetcher.fetch_daily.side_effect = Exception("No data")
             mock_fetcher_cls.return_value = mock_fetcher
 
-            result = tool.execute("INVALID")
+            result = tool.execute(symbol="INVALID")
 
             assert "Risk metrics calculation failed" in result
             assert "No data" in result

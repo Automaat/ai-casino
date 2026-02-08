@@ -75,7 +75,7 @@ class TestAnalyzeStockTool:
             mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
             mock_workflow_cls.return_value = mock_workflow
 
-            result = tool.execute("AAPL", period_days=90)
+            result = tool.execute(symbol="AAPL", period_days=90)
 
             assert "AAPL" in result
             assert "BUY" in result
@@ -96,7 +96,7 @@ class TestAnalyzeStockTool:
             mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
             mock_workflow_cls.return_value = mock_workflow
 
-            tool.execute("AAPL")
+            tool.execute(symbol="AAPL")
 
             mock_workflow.analyze.assert_called_once_with("AAPL", 90)
 
@@ -114,7 +114,7 @@ class TestAnalyzeStockTool:
             mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
             mock_workflow_cls.return_value = mock_workflow
 
-            tool.execute("aapl", period_days=90)
+            tool.execute(symbol="aapl", period_days=90)
 
             mock_workflow.analyze.assert_called_once_with("AAPL", 90)
 
@@ -132,7 +132,7 @@ class TestAnalyzeStockTool:
             mock_workflow.analyze = AsyncMock(side_effect=Exception("Workflow error"))
             mock_workflow_cls.return_value = mock_workflow
 
-            result = tool.execute("INVALID")
+            result = tool.execute(symbol="INVALID")
 
             assert "Analysis failed" in result
             assert "Workflow error" in result

@@ -70,19 +70,12 @@ class OptimizePortfolioTool(BaseTool):
             },
         }
 
-    def execute(
-        self,
-        symbol: str,
-        start_date: str,
-        end_date: str,
-        strategy: str = "momentum",
-        n_trials: int = 50,
-    ) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Run portfolio optimization.
 
         Args:
-            symbol: Stock ticker symbol
-            start_date: Start date (YYYY-MM-DD)
+            **kwargs: Tool arguments (symbol: str, start_date: str, end_date: str,
+                     strategy: str = "momentum", n_trials: int = 50)
             end_date: End date (YYYY-MM-DD)
             strategy: Strategy name
             n_trials: Number of trials
@@ -90,7 +83,12 @@ class OptimizePortfolioTool(BaseTool):
         Returns:
             Formatted optimization results
         """
-        symbol = symbol.upper()
+        symbol = str(kwargs["symbol"]).upper()
+        start_date = str(kwargs["start_date"])
+        end_date = str(kwargs["end_date"])
+        strategy = str(kwargs.get("strategy", "momentum"))
+        n_trials = int(kwargs.get("n_trials", 50))
+
         logger.info(
             f"Optimizing {strategy} strategy for {symbol} ({start_date} to {end_date}, {n_trials} trials)"
         )

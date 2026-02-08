@@ -50,16 +50,18 @@ class GetMarketDataTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str, days: int = 30) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Fetch market data for a stock.
 
         Args:
-            symbol: Stock ticker symbol
-            days: Days of historical data
+            **kwargs: Tool arguments (symbol: str, days: int = 30)
 
         Returns:
             Formatted market data summary
         """
+        symbol = str(kwargs["symbol"])
+        days = int(kwargs.get("days", 30))
+
         logger.info(f"Fetching market data for {symbol} ({days} days)")
 
         try:

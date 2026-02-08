@@ -58,15 +58,16 @@ class TrumpAnalysisTool(BaseTool):
             },
         }
 
-    def execute(self, days: int = 3) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Analyze Trump's recent posts.
 
         Args:
-            days: Number of days to look back (max 7)
+            **kwargs: Tool arguments (days: int = 3)
 
         Returns:
             Formatted analysis result
         """
+        days = int(kwargs.get("days", 3))
         days = min(max(days, 1), 7)  # Clamp to 1-7 days
         hours = days * 24
 

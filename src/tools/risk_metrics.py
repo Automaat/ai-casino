@@ -51,17 +51,18 @@ class GetRiskMetricsTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str, days: int = 90) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Calculate risk metrics for a stock.
 
         Args:
-            symbol: Stock ticker symbol
-            days: Days of historical data
+            **kwargs: Tool arguments (symbol: str, days: int = 90)
 
         Returns:
             Formatted risk metrics summary
         """
-        symbol = symbol.upper()
+        symbol = str(kwargs["symbol"]).upper()
+        days = int(kwargs.get("days", 90))
+
         logger.info(f"Calculating risk metrics for {symbol} ({days} days)")
 
         try:

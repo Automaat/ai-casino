@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from src.metrics.execution import LLMUsageStats
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 
 class StructuredOutputError(Exception):
@@ -56,7 +56,7 @@ class BaseLLMProvider(ABC):
         """
 
     @abstractmethod
-    async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
+    def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
         """Stream completion tokens.
 
         Args:
