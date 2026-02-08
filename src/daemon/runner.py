@@ -127,8 +127,10 @@ class DaemonRunner:
                 )
                 base_url = "https://paper-api.alpaca.markets"
             else:
-                api_key = self._resolve_api_key(config.api_keys.alpaca_api_key, "ALPACA_API_KEY")
-                secret_key = self._resolve_api_key(config.api_keys.alpaca_secret_key, "ALPACA_SECRET_KEY")
+                api_key = self._resolve_config_or_env(config.api_keys.alpaca_api_key, "ALPACA_API_KEY")
+                secret_key = self._resolve_config_or_env(
+                    config.api_keys.alpaca_secret_key, "ALPACA_SECRET_KEY"
+                )
                 base_url = "https://api.alpaca.markets"
 
             if not api_key or not secret_key:
@@ -220,7 +222,7 @@ class DaemonRunner:
 
             market_fetcher = MarketDataFetcher(
                 use_alpha_vantage=False,
-                api_key=self._resolve_api_key(
+                api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                 ),
                 historical_cache=self._historical_cache,
@@ -264,17 +266,42 @@ class DaemonRunner:
 
         logger.info(f"DaemonRunner initialized with {config}")
 
-    def _resolve_api_key(self, config_key: str | None, env_var: str) -> str | None:
-        """Resolve API key from config or env var.
+    def _resolve_config_or_env(self, config_value: str | None, env_var: str) -> str | None:
+        """Resolve config value from daemon config or env var.
+
+        Config takes priority over environment variable.
 
         Args:
-            config_key: API key from config (priority)
+            config_value: Value from daemon config (priority)
             env_var: Environment variable name (fallback)
 
         Returns:
-            Resolved API key or None
+            Resolved config value or None
         """
-        return config_key or os.getenv(env_var)
+        return config_value or os.getenv(env_var)
+
+    def _create_llm_client(self) -> LLMClient:
+        """Create LLM client with config/env resolution.
+
+        Returns:
+            Configured LLMClient instance
+        """
+        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+        if provider == "anthropic":
+            api_key = self._resolve_config_or_env(self.config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
+        elif provider == "openai":
+            api_key = self._resolve_config_or_env(self.config.api_keys.openai_api_key, "OPENAI_API_KEY")
+        else:
+            api_key = None
+
+        return LLMClient(
+            provider=self.config.llm.provider,
+            model=self.config.llm.model,
+            api_key=api_key,
+            openai_base_url=self._resolve_config_or_env(
+                self.config.api_keys.openai_api_base, "OPENAI_API_BASE"
+            ),
+        )
 
     def _init_prefetcher(self) -> DataPrefetcher | None:
         """Initialize data prefetcher (lazy initialization).
@@ -286,19 +313,19 @@ class DaemonRunner:
             try:
                 market_fetcher = MarketDataFetcher(
                     use_alpha_vantage=False,
-                    api_key=self._resolve_api_key(
+                    api_key=self._resolve_config_or_env(
                         self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                     ),
                     historical_cache=self._historical_cache,
                 )
                 news_fetcher = NewsFetcher(
-                    api_key=self._resolve_api_key(
+                    api_key=self._resolve_config_or_env(
                         self.config.api_keys.marketaux_api_key, "MARKETAUX_API_KEY"
                     ),
                     historical_cache=self._historical_cache,
                 )
                 fundamental_fetcher = FundamentalDataFetcher(
-                    api_key=self._resolve_api_key(
+                    api_key=self._resolve_config_or_env(
                         self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                     ),
                     historical_cache=self._historical_cache,
@@ -323,25 +350,10 @@ class DaemonRunner:
             GamePlanAgent instance
         """
         if self._game_plan_agent is None:
-            provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
-            if provider == "anthropic":
-                api_key = self._resolve_api_key(self.config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
-            elif provider == "openai":
-                api_key = self._resolve_api_key(self.config.api_keys.openai_api_key, "OPENAI_API_KEY")
-            else:
-                api_key = None
-
-            llm_client = LLMClient(
-                provider=self.config.llm.provider,
-                model=self.config.llm.model,
-                api_key=api_key,
-                openai_base_url=self._resolve_api_key(
-                    self.config.api_keys.openai_api_base, "OPENAI_API_BASE"
-                ),
-            )
+            llm_client = self._create_llm_client()
             market_fetcher = MarketDataFetcher(
                 use_alpha_vantage=False,
-                api_key=self._resolve_api_key(
+                api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                 ),
                 historical_cache=self._historical_cache,
@@ -352,36 +364,23 @@ class DaemonRunner:
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
         if self._workflow is None:
-            provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
-            if provider == "anthropic":
-                api_key = self._resolve_api_key(self.config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
-            elif provider == "openai":
-                api_key = self._resolve_api_key(self.config.api_keys.openai_api_key, "OPENAI_API_KEY")
-            else:
-                api_key = None
-
-            llm_client = LLMClient(
-                provider=self.config.llm.provider,
-                model=self.config.llm.model,
-                api_key=api_key,
-                openai_base_url=self._resolve_api_key(
-                    self.config.api_keys.openai_api_base, "OPENAI_API_BASE"
-                ),
-            )
+            llm_client = self._create_llm_client()
             market_fetcher = MarketDataFetcher(
                 use_alpha_vantage=False,
-                api_key=self._resolve_api_key(
+                api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                 ),
                 historical_cache=self._historical_cache,
             )
             news_fetcher = NewsFetcher(
-                api_key=self._resolve_api_key(self.config.api_keys.marketaux_api_key, "MARKETAUX_API_KEY"),
+                api_key=self._resolve_config_or_env(
+                    self.config.api_keys.marketaux_api_key, "MARKETAUX_API_KEY"
+                ),
                 historical_cache=self._historical_cache,
             )
             finbert = get_finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(
-                api_key=self._resolve_api_key(
+                api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                 ),
                 historical_cache=self._historical_cache,
@@ -1090,7 +1089,7 @@ class DaemonRunner:
             workflow = self._init_workflow()
             market_fetcher = MarketDataFetcher(
                 use_alpha_vantage=False,
-                api_key=self._resolve_api_key(
+                api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                 ),
             )
@@ -1817,7 +1816,7 @@ class DaemonRunner:
 
         try:
             fundamental_fetcher = FundamentalDataFetcher(
-                api_key=self._resolve_api_key(
+                api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
                 ),
                 historical_cache=self._historical_cache,

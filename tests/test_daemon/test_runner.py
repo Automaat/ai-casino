@@ -8,7 +8,7 @@ from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 
-from src.daemon.config import DaemonConfig, ScreeningConfig, SectorRotationConfig
+from src.daemon.config import ApiKeysConfig, DaemonConfig, ScreeningConfig, SectorRotationConfig
 from src.daemon.runner import DaemonRunner
 from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
@@ -136,6 +136,36 @@ def test_get_merged_watchlist_empty_positions(sample_config: DaemonConfig, mock_
 
     assert set(watchlist) == {"TSLA", "MSFT"}
     assert len(watchlist) == 2
+
+
+def test_resolve_config_or_env_prefers_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Config api_keys take priority over env vars."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
+    config = DaemonConfig(
+        watchlist=["AAPL"],
+        api_keys=ApiKeysConfig(alpha_vantage_api_key="config_key"),
+    )
+    runner = DaemonRunner(config)
+    result = runner._resolve_config_or_env(config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY")
+    assert result == "config_key"
+
+
+def test_resolve_config_or_env_falls_back_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Env var used when config api_key is None."""
+    monkeypatch.setenv("MARKETAUX_API_KEY", "env_key")
+    config = DaemonConfig(watchlist=["AAPL"])
+    runner = DaemonRunner(config)
+    result = runner._resolve_config_or_env(None, "MARKETAUX_API_KEY")
+    assert result == "env_key"
+
+
+def test_resolve_config_or_env_returns_none_when_both_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Returns None when both config and env are missing."""
+    monkeypatch.delenv("MARKETAUX_API_KEY", raising=False)
+    config = DaemonConfig(watchlist=["AAPL"])
+    runner = DaemonRunner(config)
+    result = runner._resolve_config_or_env(None, "MARKETAUX_API_KEY")
+    assert result is None
 
 
 @patch("src.daemon.runner.AlpacaBroker")
