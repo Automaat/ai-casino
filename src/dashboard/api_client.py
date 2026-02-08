@@ -18,7 +18,9 @@ from src.daemon.api import (
     GamePlanResponse,
     HealthResponse,
     PositionsResponse,
+    RebalanceResponse,
     RiskReportResponse,
+    SnapshotsResponse,
     StateSummaryResponse,
     WatchlistResponse,
 )
@@ -199,6 +201,32 @@ class DaemonAPIClient:
         response.raise_for_status()
         data = response.json()
         return GamePlanResponse.model_validate(data) if data else None
+
+    @HTTP_RETRY
+    def get_snapshots(self, days: int = 30) -> SnapshotsResponse:
+        """Get portfolio snapshots history.
+
+        Args:
+            days: Number of days to look back
+
+        Returns:
+            SnapshotsResponse
+        """
+        response = self._client.get(f"{self.api_url}/portfolio/snapshots", params={"days": days})
+        response.raise_for_status()
+        return SnapshotsResponse.model_validate(response.json())
+
+    @HTTP_RETRY
+    def get_rebalance(self) -> RebalanceResponse | None:
+        """Get latest portfolio rebalance data.
+
+        Returns:
+            RebalanceResponse or None if no rebalancing data
+        """
+        response = self._client.get(f"{self.api_url}/portfolio/rebalance")
+        response.raise_for_status()
+        data = response.json()
+        return RebalanceResponse.model_validate(data) if data else None
 
     def close(self) -> None:
         """Close HTTP client."""

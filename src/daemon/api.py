@@ -1,10 +1,10 @@
 """Embedded FastAPI server for daemon monitoring."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -77,6 +77,7 @@ class PositionResponse(BaseModel):
     trailing_stop_activated: bool
     breakeven_activated: bool
     profit_targets: list[float]
+    current_price: float
 
 
 class PositionsResponse(BaseModel):
@@ -92,6 +93,43 @@ class WatchlistResponse(BaseModel):
     symbols: list[str]
     count: int
     sources: dict[str, int] = Field(description="Breakdown: config/broker/screening")
+
+
+class SnapshotRecord(BaseModel):
+    """Portfolio snapshot record."""
+
+    timestamp: datetime
+    portfolio_value: float
+    balance: float
+    total_exposure: float
+
+
+class SnapshotsResponse(BaseModel):
+    """Snapshots endpoint response."""
+
+    snapshots: list[SnapshotRecord]
+    count: int
+
+
+class RebalanceAllocation(BaseModel):
+    """Rebalance allocation record."""
+
+    symbol: str
+    target_weight: float
+    current_weight: float
+    delta: float
+    action: str
+
+
+class RebalanceResponse(BaseModel):
+    """Rebalance endpoint response."""
+
+    timestamp: datetime
+    method: str
+    allocations: list[RebalanceAllocation]
+    expected_return: float
+    expected_volatility: float
+    sharpe_ratio: float
 
 
 class RiskReportResponse(BaseModel):
@@ -243,10 +281,26 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
 
         from src.daemon.positions import PositionRecord
 
+        broker_positions = {}
+        if runner.broker:
+            try:
+                account_info = await asyncio.to_thread(runner.broker.get_account_info)
+                broker_positions = account_info.positions
+            except Exception as e:
+                logger.warning(f"Failed to fetch broker positions: {e}")
+
         positions = []
         for symbol, pos_dict in runner.state.active_positions.items():
             try:
                 pos = PositionRecord.model_validate(pos_dict)
+
+                current_price = pos.entry_price
+                if symbol in broker_positions:
+                    broker_pos = broker_positions[symbol]
+                    current_price = (
+                        broker_pos.market_value / broker_pos.qty if broker_pos.qty > 0 else pos.entry_price
+                    )
+
                 positions.append(
                     PositionResponse(
                         symbol=pos.symbol,
@@ -260,6 +314,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                         trailing_stop_activated=pos.trailing_stop_activated,
                         breakeven_activated=pos.breakeven_activated,
                         profit_targets=pos.profit_targets,
+                        current_price=current_price,
                     )
                 )
             except Exception as e:
@@ -267,6 +322,86 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                 continue
 
         return PositionsResponse(positions=positions, count=len(positions))
+
+    @app.get("/portfolio/snapshots", response_model=SnapshotsResponse)
+    async def get_snapshots(days: int = 30) -> SnapshotsResponse:
+        """Get portfolio snapshots history."""
+        from src.database.connection import get_session
+        from src.database.repositories.snapshot import PortfolioSnapshotRepository
+
+        # Clamp days to prevent abuse
+        days = max(1, min(days, 365))
+
+        start = datetime.now(UTC) - timedelta(days=days)
+        end = datetime.now(UTC)
+
+        try:
+            async with get_session() as session:
+                repo = PortfolioSnapshotRepository(session)
+                snapshots = await repo.get_by_date_range(start, end)
+
+                snapshot_records = [
+                    SnapshotRecord(
+                        timestamp=s.timestamp,
+                        portfolio_value=s.portfolio_value,
+                        balance=s.balance,
+                        total_exposure=s.total_exposure,
+                    )
+                    for s in snapshots
+                ]
+
+                return SnapshotsResponse(snapshots=snapshot_records, count=len(snapshot_records))
+        except Exception as e:
+            logger.error(f"Failed to fetch snapshots: {e}")
+            raise HTTPException(status_code=500, detail="Failed to fetch portfolio snapshots") from e
+
+    @app.get("/portfolio/rebalance", response_model=RebalanceResponse | None)
+    async def get_rebalance() -> RebalanceResponse | None:
+        """Get latest portfolio rebalance data."""
+        runner: DaemonRunner = app.state.runner
+
+        if not runner.state.portfolio_rebalancing_history:
+            return None
+
+        latest = runner.state.portfolio_rebalancing_history[-1]
+
+        broker_positions = {}
+        total_portfolio_value = 0.0
+        if runner.broker:
+            try:
+                account_info = await asyncio.to_thread(runner.broker.get_account_info)
+                broker_positions = account_info.positions
+                total_portfolio_value = account_info.portfolio_value
+            except Exception as e:
+                logger.warning(f"Failed to fetch broker positions for rebalance: {e}")
+
+        allocations = []
+        for symbol, target_weight in latest.target_weights.items():
+            current_weight = 0.0
+            if symbol in broker_positions and total_portfolio_value > 0:
+                current_weight = broker_positions[symbol].market_value / total_portfolio_value
+
+            delta = current_weight - target_weight
+            action = "REDUCE" if delta > 0 else "INCREASE" if delta < 0 else "HOLD"
+
+            allocations.append(
+                RebalanceAllocation(
+                    symbol=symbol,
+                    target_weight=target_weight,
+                    current_weight=current_weight,
+                    delta=delta,
+                    action=action,
+                )
+            )
+
+        return RebalanceResponse(
+            timestamp=latest.timestamp,
+            method=latest.method,
+            allocations=allocations,
+            expected_return=latest.expected_return,
+            expected_volatility=latest.expected_volatility,
+            sharpe_ratio=latest.sharpe_ratio,
+        )
 
     @app.get("/watchlist", response_model=WatchlistResponse)
     async def get_watchlist() -> WatchlistResponse:
