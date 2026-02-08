@@ -232,8 +232,8 @@ def _build_config_accordion(config: FullConfigResponse) -> dbc.Accordion:
             )
         )
 
-    # First category (Trading) open by default
-    return dbc.Accordion(accordion_items, start_collapsed=False, always_open=True, active_item="category-0")
+    # First category (Trading) open by default (list since always_open=True)
+    return dbc.Accordion(accordion_items, always_open=True, active_item=["category-0"])
 
 
 def _build_section_card(section_name: str, section_data: dict, enabled: bool) -> dbc.Card:
