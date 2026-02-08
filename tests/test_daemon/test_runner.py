@@ -88,7 +88,6 @@ def test_get_merged_watchlist_with_positions(sample_config: DaemonConfig, mock_b
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
     runner._broker_manager.broker = mock_broker
-    runner._broker_manager.broker = mock_broker
 
     watchlist = runner._get_merged_watchlist()
 
@@ -102,7 +101,6 @@ def test_get_merged_watchlist_deduplication(sample_config: DaemonConfig, mock_br
     sample_config.watchlist = ["AAPL", "TSLA"]
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
-    runner._broker_manager.broker = mock_broker
     runner._broker_manager.broker = mock_broker
 
     watchlist = runner._get_merged_watchlist()

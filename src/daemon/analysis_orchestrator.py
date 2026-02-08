@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
+from src.daemon.config import AnalysisOrchestratorConfig
+from src.daemon.event_bus import DashboardEvent, EventType
 
 if TYPE_CHECKING:
     from src.cache.historical import HistoricalCache
@@ -20,14 +23,6 @@ if TYPE_CHECKING:
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.workflows.types import TradingWorkflowResult
-
-
-class AnalysisOrchestratorConfig(BaseModel):
-    """Configuration for analysis orchestration."""
-
-    max_concurrent_analyses: int = Field(default=3, ge=1, le=10)
-    target_allocation_ttl_days: int = Field(default=7, ge=1, le=30)
-    enable_position_sync: bool = True
 
 
 class AnalysisOrchestrationResult(BaseModel):
@@ -256,18 +251,24 @@ class AnalysisOrchestrator:
                     self._context_builder._build_analysis_contexts(symbol)  # noqa: SLF001
                 )
 
-            result = await self.workflow.analyze(
-                symbol,
-                period_days=90,
-                trading_session=session,
-                position_context=position_context,
-                sector_context=sector_ctx,
-                earnings_context=earnings_ctx,
-                peer_analysis_context=peer_ctx,
-                game_plan_context=game_plan_ctx,
-                degradation_context=degradation_context,
-                target_allocations=target_allocations,
-            )
+            if target_allocations is not None:
+                self.workflow.set_target_allocations(target_allocations)
+
+            try:
+                result = await self.workflow.analyze(
+                    symbol,
+                    period_days=90,
+                    trading_session=session,
+                    position_context=position_context,
+                    sector_context=sector_ctx,
+                    earnings_context=earnings_ctx,
+                    peer_analysis_context=peer_ctx,
+                    game_plan_context=game_plan_ctx,
+                    degradation_context=degradation_context,
+                )
+            finally:
+                if target_allocations is not None:
+                    self.workflow.set_target_allocations(None)
 
             if self.notification_service:
                 await self._maybe_notify_signal(result)
@@ -332,7 +333,7 @@ class AnalysisOrchestrator:
         """
         if self.event_bus:
             try:
-                await self.event_bus.publish(event_type, data)
+                await self.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
             except Exception as e:
                 logger.warning(f"Event publish failed: {e}")
 

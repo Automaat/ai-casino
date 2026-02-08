@@ -222,7 +222,7 @@ async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_sch
 
 @pytest.mark.asyncio
 async def test_orchestrator_target_allocations(mock_workflow, mock_state, mock_scheduler):
-    """Test orchestrator passes target allocations to workflow."""
+    """Test orchestrator sets target allocations via workflow method."""
     config = AnalysisOrchestratorConfig()
     orchestrator = AnalysisOrchestrator(
         workflow=mock_workflow,
@@ -249,9 +249,11 @@ async def test_orchestrator_target_allocations(mock_workflow, mock_state, mock_s
     mock_result.strategy_used = "momentum"
 
     mock_workflow.analyze.return_value = mock_result
+    mock_workflow.set_target_allocations = Mock()
 
     await orchestrator.orchestrate(["AAPL"], target_allocations=target_allocations)
 
-    # Verify workflow.analyze was called with target_allocations
-    call_kwargs = mock_workflow.analyze.call_args[1]
-    assert call_kwargs["target_allocations"] == target_allocations
+    # Verify set_target_allocations was called before analyze
+    assert mock_workflow.set_target_allocations.call_count == 2
+    mock_workflow.set_target_allocations.assert_any_call(target_allocations)
+    mock_workflow.set_target_allocations.assert_any_call(None)
