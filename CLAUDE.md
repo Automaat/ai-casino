@@ -76,6 +76,7 @@ tests/               # Full mirror of src structure
 
 ```bash
 mise check  # Must pass: format, lint, test
+mise audit  # Check for CVEs (optional locally, enforced in CI)
 ```
 
 Never skip/disable on failure - fix properly, re-run until clean.
@@ -467,6 +468,7 @@ mise format:check       # Check formatting (CI mode)
 mise lint               # Run ruff linter
 mise test               # Run pytest
 mise test:cov           # Run with coverage report
+mise audit              # Check dependencies for known CVEs (pip-audit)
 
 # Ollama management (for local LLM dev)
 mise ollama:start       # Start Ollama server in background
