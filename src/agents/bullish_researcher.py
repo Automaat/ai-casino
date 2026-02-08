@@ -1,5 +1,7 @@
 """Bullish researcher agent for constructing optimistic investment thesis."""
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
 
 from src.agents.base_researcher import BaseResearcher, ResearchDirection
@@ -9,6 +11,10 @@ from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
 from src.strategies.signal import Signal
+
+if TYPE_CHECKING:
+    from src.agents.comparative import ComparativeAnalysis
+    from src.agents.trump import TrumpAnalysis
 
 
 class BullishLLMResponse(BaseModel):
@@ -52,10 +58,24 @@ class BullishResearcher(BaseResearcher):
         """LLM response model type."""
         return BullishLLMResponse
 
-    @property
-    def analysis_model(self) -> type[BaseModel]:
-        """Analysis result model type."""
-        return BullishResearchAnalysis
+    async def analyze(
+        self,
+        symbol: str,
+        technical: TechnicalAnalysis,
+        sentiment: SentimentAnalysis,
+        news: NewsAnalysis,
+        fundamental: FundamentalAnalysis | None,
+        comparative: "ComparativeAnalysis | None" = None,
+        trump_analysis: "TrumpAnalysis | None" = None,
+    ) -> BullishResearchAnalysis:
+        """Construct bullish thesis from all analyses.
+
+        Returns:
+            BullishResearchAnalysis with thesis, strengths, target, confidence
+        """
+        return await super().analyze(
+            symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
+        )
 
     def _build_analysis(
         self, thesis: str, key_points: list[str], target: float | None, confidence: float

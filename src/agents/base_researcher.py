@@ -65,12 +65,6 @@ class BaseResearcher(ABC):
         """LLM response model type - must be implemented by subclass."""
         ...
 
-    @property
-    @abstractmethod
-    def analysis_model(self) -> type[BaseModel]:
-        """Analysis result model type - must be implemented by subclass."""
-        ...
-
     async def analyze(
         self,
         symbol: str,
@@ -232,9 +226,13 @@ class BaseResearcher(ABC):
         # Comparative section
         comp_str = "N/A"
         if comparative:
-            pe_vs_sector = f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector else "N/A"
+            pe_vs_sector = (
+                f"{comparative.pe_vs_sector:.2f}x" if comparative.pe_vs_sector is not None else "N/A"
+            )
             perf_vs_sector = (
-                f"{comparative.perf_vs_sector_3m:+.1f}%" if comparative.perf_vs_sector_3m else "N/A"
+                f"{comparative.perf_vs_sector_3m:+.1f}%"
+                if comparative.perf_vs_sector_3m is not None
+                else "N/A"
             )
             comp_str = (
                 f"{comparative.relative_valuation.value} "
