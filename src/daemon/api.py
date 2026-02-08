@@ -156,6 +156,20 @@ class DegradationResponse(BaseModel):
     halt_reason: str | None
 
 
+class MarketEventsResponse(BaseModel):
+    """Market events endpoint response."""
+
+    events: list[dict]
+    returned_count: int
+
+
+class DegradationHistoryResponse(BaseModel):
+    """Degradation history endpoint response."""
+
+    records: list[dict]
+    count: int
+
+
 class GamePlanResponse(BaseModel):
     """Game plan endpoint response."""
 
@@ -621,6 +635,29 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         events_dict = [e.model_dump(mode="json") for e in events]
 
         return EventResponse(events=events_dict, returned_count=len(events_dict))
+
+    @app.get("/events/market", response_model=MarketEventsResponse)
+    async def get_market_events(limit: int = 100) -> MarketEventsResponse:
+        """Get market event signals (news, social, anomaly)."""
+        runner: DaemonRunner = app.state.runner
+        limit = max(0, min(limit, 500))
+
+        events = runner.state.market_events[-limit:] if runner.state.market_events else []
+
+        return MarketEventsResponse(events=events, returned_count=len(events))
+
+    @app.get("/events/degradation-history", response_model=DegradationHistoryResponse)
+    async def get_degradation_history(limit: int = 50) -> DegradationHistoryResponse:
+        """Get degradation history for timeline."""
+        runner: DaemonRunner = app.state.runner
+        limit = max(0, min(limit, 200))
+
+        history = runner.state.degradation_history[-limit:] if runner.state.degradation_history else []
+
+        return DegradationHistoryResponse(
+            records=[r.model_dump(mode="json") for r in history],
+            count=len(history),
+        )
 
     @app.websocket("/ws/events")
     async def websocket_events(websocket: WebSocket) -> None:

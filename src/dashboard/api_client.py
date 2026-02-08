@@ -229,6 +229,34 @@ class DaemonAPIClient:
         return EventResponse.model_validate(response.json())
 
     @HTTP_RETRY
+    def get_market_events(self, limit: int = 100) -> dict:
+        """Get market events.
+
+        Args:
+            limit: Max number of events to return
+
+        Returns:
+            Dict with events and returned_count
+        """
+        response = self._client.get(f"{self.api_url}/events/market", params={"limit": limit})
+        response.raise_for_status()
+        return response.json()
+
+    @HTTP_RETRY
+    def get_degradation_history(self, limit: int = 50) -> dict:
+        """Get degradation history.
+
+        Args:
+            limit: Max number of records to return
+
+        Returns:
+            Dict with records and count
+        """
+        response = self._client.get(f"{self.api_url}/events/degradation-history", params={"limit": limit})
+        response.raise_for_status()
+        return response.json()
+
+    @HTTP_RETRY
     def get_game_plan(self) -> GamePlanResponse | None:
         """Get latest game plan.
 
