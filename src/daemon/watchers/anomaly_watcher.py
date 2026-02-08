@@ -225,11 +225,76 @@ class AnomalyWatcher(EventWatcher):
             )
         return None
 
-    async def _fetch_events(self) -> list[AnomalyEvent]:  # noqa: C901
+    async def _process_symbol_for_anomalies(self, symbol: str) -> AnomalyEvent | None:
+        """Process single symbol and detect anomalies.
+
+        Args:
+            symbol: Symbol to process
+
+        Returns:
+            AnomalyEvent if anomalies detected, None otherwise
+        """
+        # Fetch intraday data
+        try:
+            intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
+        except Exception as e:
+            logger.warning(f"Failed to fetch intraday for {symbol}: {e}")
+            return None
+
+        if intraday.data.empty:
+            logger.debug(f"No intraday data for {symbol}")
+            return None
+
+        # Aggregate current trading day bars
+        latest_ts = intraday.data.index[-1]
+        current_date = latest_ts.date()
+        day_bars = intraday.data[intraday.data.index.date == current_date]
+
+        if day_bars.empty:
+            day_bars = intraday.data.iloc[[-1]]
+
+        # Extract day-level aggregated metrics
+        open_price = float(day_bars["Open"].iloc[0])
+        current_price = float(day_bars["Close"].iloc[-1])
+        high = float(day_bars["High"].max())
+        low = float(day_bars["Low"].min())
+        current_volume = float(day_bars["Volume"].sum())
+
+        # Run anomaly detections
+        anomaly_types = []
+        volume_spike_data = await self._detect_volume_spike(symbol, current_volume)
+        if volume_spike_data:
+            anomaly_types.append("volume_spike")
+
+        price_move_data = self._detect_price_move(symbol, open_price, current_price, high, low)
+        if price_move_data:
+            anomaly_types.append("price_move")
+
+        gap_data = await self._detect_gap(symbol, open_price)
+        if gap_data:
+            anomaly_types.append("gap")
+
+        # Create event if anomalies detected
+        if anomaly_types:
+            event_id = f"{symbol}-{datetime.now(UTC).isoformat()}"
+            logger.info(f"Anomaly detected: {symbol} ({'+'.join(anomaly_types)})")
+            return AnomalyEvent(
+                event_id=event_id,
+                event_type="anomaly",
+                timestamp=datetime.now(UTC),
+                source="market_data",
+                symbol=symbol,
+                anomaly_types=anomaly_types,
+                volume_spike_data=volume_spike_data,
+                price_move_data=price_move_data,
+                gap_data=gap_data,
+            )
+
+        return None
+
+    async def _fetch_events(self) -> list[AnomalyEvent]:
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
         self._init_components()
-
-        # Refresh previous close cache if needed (new day)
         self._refresh_previous_close_if_needed()
 
         if not self.watchlist:
@@ -241,68 +306,11 @@ class AnomalyWatcher(EventWatcher):
             return []
 
         events: list[AnomalyEvent] = []
-
         for symbol in symbols_to_check:
             try:
-                # Fetch intraday data
-                try:
-                    intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch intraday for {symbol}: {e}")
-                    continue
-
-                if intraday.data.empty:
-                    logger.debug(f"No intraday data for {symbol}")
-                    continue
-
-                # Aggregate current trading day bars
-                latest_ts = intraday.data.index[-1]
-                current_date = latest_ts.date()
-                day_bars = intraday.data[intraday.data.index.date == current_date]
-
-                if day_bars.empty:
-                    # Fallback to single bar if date filtering fails
-                    day_bars = intraday.data.iloc[[-1]]
-
-                # Extract day-level aggregated metrics
-                open_price = float(day_bars["Open"].iloc[0])  # Market open
-                current_price = float(day_bars["Close"].iloc[-1])  # Latest close
-                high = float(day_bars["High"].max())  # Session high
-                low = float(day_bars["Low"].min())  # Session low
-                current_volume = float(day_bars["Volume"].sum())  # Total volume
-
-                # Run anomaly detections
-                anomaly_types = []
-                volume_spike_data = await self._detect_volume_spike(symbol, current_volume)
-                if volume_spike_data:
-                    anomaly_types.append("volume_spike")
-
-                price_move_data = self._detect_price_move(symbol, open_price, current_price, high, low)
-                if price_move_data:
-                    anomaly_types.append("price_move")
-
-                gap_data = await self._detect_gap(symbol, open_price)
-                if gap_data:
-                    anomaly_types.append("gap")
-
-                # Create event if anomalies detected
-                if anomaly_types:
-                    event_id = f"{symbol}-{datetime.now(UTC).isoformat()}"
-                    events.append(
-                        AnomalyEvent(
-                            event_id=event_id,
-                            event_type="anomaly",
-                            timestamp=datetime.now(UTC),
-                            source="market_data",
-                            symbol=symbol,
-                            anomaly_types=anomaly_types,
-                            volume_spike_data=volume_spike_data,
-                            price_move_data=price_move_data,
-                            gap_data=gap_data,
-                        )
-                    )
-                    logger.info(f"Anomaly detected: {symbol} ({'+'.join(anomaly_types)})")
-
+                event = await self._process_symbol_for_anomalies(symbol)
+                if event:
+                    events.append(event)
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {e}")
                 continue

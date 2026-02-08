@@ -1,7 +1,7 @@
 """Vectorized backtesting runner using numpy/pandas for fast portfolio simulation."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -107,9 +107,9 @@ class VectorBTRunner:
         )
 
         if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, "%Y-%m-%d")  # noqa: DTZ007
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
         if isinstance(end_date, str):
-            end_date = datetime.strptime(end_date, "%Y-%m-%d")  # noqa: DTZ007
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
         data = self._fetch_data(symbol, start_date, end_date)
         entries, exits = self._generate_signals_for_strategy(data, strategy)

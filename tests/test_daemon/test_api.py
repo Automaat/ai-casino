@@ -162,7 +162,7 @@ def mock_runner(
     runner.state = state
     runner.running = True
     runner.broker = None
-    runner._get_merged_watchlist = Mock(return_value=["AAPL", "TSLA"])
+    runner.get_merged_watchlist = Mock(return_value=["AAPL", "TSLA"])
 
     mock_event_bus = Mock()
     mock_event_bus.get_history = Mock(return_value=sample_events)
@@ -428,7 +428,7 @@ class TestWatchlistEndpoint:
 
     def test_get_watchlist_merged(self, client: TestClient, mock_runner: Mock) -> None:
         """Test watchlist endpoint with all sources."""
-        mock_runner._get_merged_watchlist = Mock(return_value=["AAPL", "TSLA", "NVDA"])
+        mock_runner.get_merged_watchlist = Mock(return_value=["AAPL", "TSLA", "NVDA"])
 
         # Add NVDA to active positions (AAPL and TSLA already in fixture)
         mock_runner.state.active_positions["NVDA"] = {

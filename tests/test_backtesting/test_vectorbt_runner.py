@@ -1,6 +1,6 @@
 """Tests for vectorized backtesting runner."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -71,7 +71,7 @@ def test_fetch_data(mock_ticker, sample_backtest_data):
     mock_ticker.return_value = mock_ticker_instance
 
     runner = VectorBTRunner()
-    data = runner._fetch_data("AAPL", datetime(2023, 1, 1), datetime(2023, 4, 10))
+    data = runner._fetch_data("AAPL", datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 4, 10, tzinfo=UTC))
 
     assert len(data) == 100
     assert list(data.columns) == ["Open", "High", "Low", "Close", "Volume"]
@@ -88,7 +88,7 @@ def test_fetch_data_empty(mock_ticker):
     runner = VectorBTRunner()
 
     with pytest.raises(ValueError, match="No data available"):
-        runner._fetch_data("INVALID", datetime(2023, 1, 1), datetime(2023, 4, 10))
+        runner._fetch_data("INVALID", datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 4, 10, tzinfo=UTC))
 
 
 @patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
@@ -114,8 +114,8 @@ def test_run_backtest(mock_fetch_data, sample_backtest_data):
     assert isinstance(result.equity_dates, list)
     assert len(result.equity_dates) == 100
     assert all(isinstance(d, datetime) for d in result.equity_dates)
-    assert result.start_date == datetime(2023, 1, 1)
-    assert result.end_date == datetime(2023, 4, 10)
+    assert result.start_date == datetime(2023, 1, 1, tzinfo=UTC)
+    assert result.end_date == datetime(2023, 4, 10, tzinfo=UTC)
 
 
 @patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
@@ -124,10 +124,10 @@ def test_run_backtest_with_datetime(mock_fetch_data, sample_backtest_data):
     mock_fetch_data.return_value = sample_backtest_data
 
     runner = VectorBTRunner()
-    result = runner.run_backtest("AAPL", datetime(2023, 1, 1), datetime(2023, 4, 10))
+    result = runner.run_backtest("AAPL", datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 4, 10, tzinfo=UTC))
 
-    assert result.start_date == datetime(2023, 1, 1)
-    assert result.end_date == datetime(2023, 4, 10)
+    assert result.start_date == datetime(2023, 1, 1, tzinfo=UTC)
+    assert result.end_date == datetime(2023, 4, 10, tzinfo=UTC)
 
 
 @patch("src.backtesting.vectorbt_runner.VectorBTRunner._fetch_data")
@@ -171,10 +171,14 @@ def test_vectorbt_result_model():
         profit_factor=2.0,
         total_trades=10,
         equity_curve=[100000.0, 100500.0, 101000.0],
-        equity_dates=[datetime(2023, 1, 1), datetime(2023, 1, 2), datetime(2023, 1, 3)],
+        equity_dates=[
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 1, 2, tzinfo=UTC),
+            datetime(2023, 1, 3, tzinfo=UTC),
+        ],
         symbol="AAPL",
-        start_date=datetime(2023, 1, 1),
-        end_date=datetime(2023, 4, 10),
+        start_date=datetime(2023, 1, 1, tzinfo=UTC),
+        end_date=datetime(2023, 4, 10, tzinfo=UTC),
     )
 
     assert result.total_return == 0.15

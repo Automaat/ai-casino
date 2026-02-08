@@ -9,22 +9,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import DatabaseEngine
 
-_db_engine_instance: DatabaseEngine | None = None
-_db_engine_lock = threading.Lock()
+
+class _DatabaseEngineHolder:
+    """Singleton holder for DatabaseEngine instance."""
+
+    instance: DatabaseEngine | None = None
+    lock = threading.Lock()
 
 
 def get_db_engine() -> DatabaseEngine:
     """Get or create singleton DatabaseEngine."""
-    global _db_engine_instance  # noqa: PLW0603
+    if _DatabaseEngineHolder.instance is not None:
+        return _DatabaseEngineHolder.instance
 
-    if _db_engine_instance is not None:
-        return _db_engine_instance
-
-    with _db_engine_lock:
-        if _db_engine_instance is not None:
-            return _db_engine_instance
-        _db_engine_instance = DatabaseEngine()
-        return _db_engine_instance
+    with _DatabaseEngineHolder.lock:
+        if _DatabaseEngineHolder.instance is not None:
+            return _DatabaseEngineHolder.instance
+        _DatabaseEngineHolder.instance = DatabaseEngine()
+        return _DatabaseEngineHolder.instance
 
 
 @asynccontextmanager

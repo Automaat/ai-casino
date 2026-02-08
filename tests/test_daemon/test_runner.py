@@ -76,7 +76,7 @@ def test_get_merged_watchlist_no_broker(sample_config: DaemonConfig) -> None:
     runner = DaemonRunner(sample_config)
     runner.broker = None
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert set(watchlist) == {"TSLA", "MSFT"}
     assert len(watchlist) == 2
@@ -88,7 +88,7 @@ def test_get_merged_watchlist_with_positions(sample_config: DaemonConfig, mock_b
     runner.broker = mock_broker
     runner._broker_manager.broker = mock_broker
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert set(watchlist) == {"TSLA", "MSFT", "AAPL", "NVDA"}
     assert len(watchlist) == 4
@@ -102,7 +102,7 @@ def test_get_merged_watchlist_deduplication(sample_config: DaemonConfig, mock_br
     runner.broker = mock_broker
     runner._broker_manager.broker = mock_broker
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert set(watchlist) == {"AAPL", "TSLA", "NVDA"}
     assert len(watchlist) == 3
@@ -116,7 +116,7 @@ def test_get_merged_watchlist_broker_failure(sample_config: DaemonConfig, mock_b
     runner._broker_manager.broker = mock_broker
     mock_broker.get_account_info.side_effect = RuntimeError("API unavailable")
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert set(watchlist) == {"TSLA", "MSFT"}
     assert len(watchlist) == 2
@@ -135,7 +135,7 @@ def test_get_merged_watchlist_empty_positions(sample_config: DaemonConfig, mock_
         portfolio_value=50000.0,
     )
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert set(watchlist) == {"TSLA", "MSFT"}
     assert len(watchlist) == 2
@@ -259,7 +259,7 @@ async def test_analyze_watchlist_uses_merged(
         )
 
     # Get merged watchlist and pass it to _analyze_watchlist
-    merged = runner._get_merged_watchlist()
+    merged = runner.get_merged_watchlist()
 
     # Mock orchestrator
     from unittest.mock import Mock as MockClass
@@ -410,7 +410,7 @@ def test_get_merged_watchlist_with_screening(sample_config: DaemonConfig) -> Non
         ),
     ]
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert watchlist == ["TSLA", "MSFT", "NVDA", "AMD", "PLTR"]
     assert len(watchlist) == 5
@@ -433,7 +433,7 @@ def test_get_merged_watchlist_screening_disabled(sample_config: DaemonConfig) ->
         ),
     ]
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert watchlist == ["TSLA", "MSFT"]
     assert len(watchlist) == 2
@@ -457,7 +457,7 @@ def test_get_merged_watchlist_all_three_sources(sample_config: DaemonConfig, moc
         ),
     ]
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     # TSLA, MSFT (config) + AAPL, NVDA (positions) + PLTR (screening, only new)
     assert set(watchlist) == {"TSLA", "MSFT", "AAPL", "NVDA", "PLTR"}
@@ -474,7 +474,7 @@ def test_get_merged_watchlist_empty_screening_history(sample_config: DaemonConfi
 
     assert runner.state.screening_history == []
 
-    watchlist = runner._get_merged_watchlist()
+    watchlist = runner.get_merged_watchlist()
 
     assert watchlist == ["TSLA", "MSFT"]
     assert len(watchlist) == 2

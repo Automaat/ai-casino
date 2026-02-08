@@ -84,7 +84,80 @@ class AnalysisOrchestrator:
         self._context_builder = context_builder
         logger.info("AnalysisOrchestrator initialized")
 
-    async def orchestrate(  # noqa: C901, PLR0912, PLR0915
+    def _sync_positions_with_broker(self) -> bool:
+        """Sync positions with broker and update state.
+
+        Returns:
+            True if sync was performed successfully, False otherwise
+        """
+        if not (self.config.enable_position_sync and self.position_manager):
+            return False
+
+        try:
+            new_positions, updated_positions, closed_symbols = self.position_manager.sync_with_broker(
+                {sym: self.state.get_position(sym) for sym in self.state.active_positions}
+            )
+            for pos in new_positions:
+                self.state.add_position(pos)
+            for pos in updated_positions:
+                self.state.update_position(pos)
+            for symbol in closed_symbols:
+                self.state.remove_position(symbol)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to sync positions: {e}")
+            return False
+
+    def _prefetch_broker_positions(self) -> dict | None:
+        """Prefetch broker positions for analysis context.
+
+        Returns:
+            Dict of broker positions or None if unavailable
+        """
+        if not (self.position_manager and self.broker):
+            return None
+
+        try:
+            broker_info = self.broker.get_account_info()
+            return broker_info.positions
+        except Exception as e:
+            logger.warning(f"Failed to prefetch account info: {e}")
+            return None
+
+    def _apply_position_management(self, results: list["TradingWorkflowResult"]) -> int:
+        """Apply position management rules to results.
+
+        Args:
+            results: Analysis results to process
+
+        Returns:
+            Number of position actions executed
+        """
+        if not self.position_manager:
+            return 0
+
+        position_actions = 0
+        for result in results:
+            if result.symbol in self.state.active_positions:
+                try:
+                    pos = self.state.get_position(result.symbol)
+                    if pos:
+                        actions = self.position_manager.review_position(
+                            pos, result.risk.current_price, result
+                        )
+                        self.state.update_position(pos)
+                        for action in actions:
+                            self.state.record_position_action(action)
+                            position_actions += 1
+                            logger.info(
+                                f"Position action: {action.action_type} {action.symbol} - {action.reason}"
+                            )
+                except Exception as e:
+                    logger.error(f"Failed to review position {result.symbol}: {e}")
+
+        return position_actions
+
+    async def orchestrate(
         self,
         watchlist: list[str],
         target_allocations: dict[str, float] | None = None,
@@ -101,32 +174,12 @@ class AnalysisOrchestrator:
             AnalysisOrchestrationResult with stats and results
         """
         start_time = datetime.now(UTC)
-        position_sync_performed = False
 
         # Step 1: Sync positions with broker (if enabled)
-        if self.config.enable_position_sync and self.position_manager:
-            try:
-                new_positions, updated_positions, closed_symbols = self.position_manager.sync_with_broker(
-                    {sym: self.state.get_position(sym) for sym in self.state.active_positions}
-                )
-                for pos in new_positions:
-                    self.state.add_position(pos)
-                for pos in updated_positions:
-                    self.state.update_position(pos)
-                for symbol in closed_symbols:
-                    self.state.remove_position(symbol)
-                position_sync_performed = True
-            except Exception as e:
-                logger.error(f"Failed to sync positions: {e}")
+        position_sync_performed = self._sync_positions_with_broker()
 
         # Step 2: Prefetch broker positions once
-        broker_positions = None
-        if self.position_manager and self.broker:
-            try:
-                broker_info = self.broker.get_account_info()
-                broker_positions = broker_info.positions
-            except Exception as e:
-                logger.warning(f"Failed to prefetch account info: {e}")
+        broker_positions = self._prefetch_broker_positions()
 
         # Step 3: Concurrent analysis with semaphore
         results: list[TradingWorkflowResult] = []
@@ -184,27 +237,7 @@ class AnalysisOrchestrator:
                 results.append(result)
 
         # Step 5: Apply position management rules
-        position_actions = 0
-        if self.position_manager:
-            for result in results:
-                if result.symbol in self.state.active_positions:
-                    try:
-                        pos = self.state.get_position(result.symbol)
-                        if pos:
-                            actions = self.position_manager.review_position(
-                                pos,
-                                result.risk.current_price,
-                                result,
-                            )
-                            self.state.update_position(pos)
-                            for action in actions:
-                                self.state.record_position_action(action)
-                                position_actions += 1
-                                logger.info(
-                                    f"Position action: {action.action_type} {action.symbol} - {action.reason}"
-                                )
-                    except Exception as e:
-                        logger.error(f"Failed to review position {result.symbol}: {e}")
+        position_actions = self._apply_position_management(results)
 
         # Step 6: Build result
         duration = (datetime.now(UTC) - start_time).total_seconds()
@@ -246,9 +279,9 @@ class AnalysisOrchestrator:
 
             # Build contexts via delegated method
             sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = None, None, None, None
-            if self._context_builder and hasattr(self._context_builder, "_build_analysis_contexts"):
+            if self._context_builder and hasattr(self._context_builder, "build_analysis_contexts"):
                 sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = (
-                    self._context_builder._build_analysis_contexts(symbol)  # noqa: SLF001
+                    self._context_builder.build_analysis_contexts(symbol)
                 )
 
             if target_allocations is not None:

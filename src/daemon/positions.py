@@ -156,7 +156,39 @@ class PositionManager:
         """
         return entry_price * (1 - self.config.trailing_stop_percent / 100)
 
-    def review_position(  # noqa: C901, PLR0912
+    def _execute_stop_loss_action(self, position: PositionRecord, action: PositionManagementAction) -> None:
+        """Execute stop-loss update action."""
+        order_id = self._update_stop_loss(position, action.new_stop_loss)
+        if order_id:
+            action.executed = True
+            action.order_id = order_id
+        else:
+            action.executed = False
+
+    def _execute_sell_action(self, position: PositionRecord, action: PositionManagementAction) -> None:
+        """Execute sell order action."""
+        try:
+            order = self.broker.submit_order(
+                symbol=position.symbol,
+                qty=int(action.qty_sold),
+                side="sell",
+            )
+            action.executed = True
+            action.order_id = order.order_id
+            logger.info(f"Executed {action.action_type}: {position.symbol} x{action.qty_sold}")
+        except Exception as e:
+            logger.error(f"Failed to execute {action.action_type} for {position.symbol}: {e}")
+            action.executed = False
+
+    def _execute_actions(self, position: PositionRecord, actions: list[PositionManagementAction]) -> None:
+        """Execute position management actions."""
+        for action in actions:
+            if action.action_type in ("TRAILING_STOP", "BREAKEVEN"):
+                self._execute_stop_loss_action(position, action)
+            elif action.action_type in ("PARTIAL_PROFIT", "TIME_EXIT", "CONVICTION_SCALE"):
+                self._execute_sell_action(position, action)
+
+    def review_position(
         self,
         position: PositionRecord,
         current_price: float,
@@ -202,29 +234,7 @@ class PositionManager:
             if action:
                 actions.append(action)
 
-        # Execute actions that need order submission
-        for action in actions:
-            if action.action_type in ("TRAILING_STOP", "BREAKEVEN"):
-                order_id = self._update_stop_loss(position, action.new_stop_loss)
-                if order_id:
-                    action.executed = True
-                    action.order_id = order_id
-                else:
-                    action.executed = False
-            elif action.action_type in ("PARTIAL_PROFIT", "TIME_EXIT", "CONVICTION_SCALE"):
-                try:
-                    order = self.broker.submit_order(
-                        symbol=position.symbol,
-                        qty=int(action.qty_sold),
-                        side="sell",
-                    )
-                    action.executed = True
-                    action.order_id = order.order_id
-                    logger.info(f"Executed {action.action_type}: {position.symbol} x{action.qty_sold}")
-                except Exception as e:
-                    logger.error(f"Failed to execute {action.action_type} for {position.symbol}: {e}")
-                    action.executed = False
-
+        self._execute_actions(position, actions)
         return actions
 
     def _check_profit_targets(

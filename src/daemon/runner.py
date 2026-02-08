@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.health import HealthReport
+    from src.metrics.correlation import CorrelationAuditResult
 from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 from src.daemon.broker_manager import BrokerManager
@@ -421,7 +422,7 @@ class DaemonRunner:
 
         return self._workflow
 
-    def _get_merged_watchlist(self) -> list[str]:
+    def get_merged_watchlist(self) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates.
 
         Returns:
@@ -453,7 +454,7 @@ class DaemonRunner:
             await self._publish_event("ANALYSIS_START", {"symbol": symbol, "trading_session": session.value})
 
             workflow = self._init_workflow()
-            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = self._build_analysis_contexts(symbol)
+            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = self.build_analysis_contexts(symbol)
 
             result = await workflow.analyze(
                 symbol,
@@ -553,7 +554,7 @@ class DaemonRunner:
         except Exception as e:
             logger.error(f"Failed to publish {event_type} event: {e}")
 
-    def _build_analysis_contexts(self, symbol: str) -> tuple[str | None, str | None, str | None, str | None]:
+    def build_analysis_contexts(self, symbol: str) -> tuple[str | None, str | None, str | None, str | None]:
         """Build all analysis contexts (sector, earnings, peer, game_plan).
 
         Args:
@@ -890,7 +891,7 @@ class DaemonRunner:
         """
         from src.strategies.session import TradingSession
 
-        console.print(f"\n[bold cyan]Analysis Results ({datetime.now():%Y-%m-%d %H:%M})[/bold cyan]")  # noqa: DTZ005
+        console.print(f"\n[bold cyan]Analysis Results ({datetime.now(tz=UTC):%Y-%m-%d %H:%M})[/bold cyan]")
         console.print("-" * 50)
 
         for result in results:
@@ -1031,7 +1032,7 @@ class DaemonRunner:
             import time as time_mod
 
             start_time = time_mod.time()
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
 
             optimized, skipped, failed = self._daemon_optimizer.optimize_watchlist(
                 watchlist=watchlist,
@@ -1083,7 +1084,7 @@ class DaemonRunner:
         console.print("-" * 50)
 
         try:
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
             method = self.config.rebalancing.method
             auto_execute = self.config.auto_trade
 
@@ -1181,7 +1182,7 @@ class DaemonRunner:
                 logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
                 return
 
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
 
             console.print(f"[dim]Prefetching {len(watchlist)} symbols...[/dim]")
             report = prefetcher.prefetch_watchlist(watchlist)
@@ -1246,7 +1247,7 @@ class DaemonRunner:
                 logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
                 return
 
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
 
             console.print(f"[dim]Refreshing {len(watchlist)} symbols...[/dim]")
             report = prefetcher.prefetch_watchlist(watchlist)
@@ -1378,7 +1379,7 @@ class DaemonRunner:
 
         try:
             agent = self._init_game_plan_agent()
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
 
             sector_context = self._build_sector_context()
             earnings_context = self._build_earnings_context_for_watchlist(watchlist)
@@ -1592,7 +1593,7 @@ class DaemonRunner:
 
         try:
             daemon_earnings = DaemonEarningsCalendar()
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
 
             console.print(f"[dim]Fetching earnings for {len(watchlist)} symbols...[/dim]")
             calendar = daemon_earnings.fetch(watchlist)
@@ -1680,7 +1681,7 @@ class DaemonRunner:
                 historical_cache=self._historical_cache,
             )
 
-            watchlist = self._get_merged_watchlist()
+            watchlist = self.get_merged_watchlist()
             console.print(f"[dim]Analyzing {len(watchlist)} positions against peers...[/dim]")
 
             result = analyzer.analyze_positions(watchlist)
@@ -1722,16 +1723,45 @@ class DaemonRunner:
             logger.error(error_msg)
             self.state.record_error(error_msg)
 
-    def _run_correlation_audit(self) -> None:  # noqa: C901
+    def _should_skip_correlation_audit(self, now: datetime) -> bool:
+        """Check if correlation audit should be skipped (already ran today)."""
+        if not self.state.last_correlation_audit:
+            return False
+        last_date = self.state.last_correlation_audit.astimezone(self.scheduler.timezone).date()
+        return last_date == now.date()
+
+    def _print_correlation_audit_results(self, result: "CorrelationAuditResult", duration: float) -> None:
+        """Print correlation audit results to console."""
+        console.print(f"[dim]Positions: {result.num_positions}[/dim]")
+        console.print(f"[dim]Diversification ratio: {result.diversification_ratio:.3f}[/dim]")
+
+        if result.highly_correlated_pairs:
+            count = len(result.highly_correlated_pairs)
+            console.print(f"\n[bold yellow]Correlated Pairs ({count}):[/bold yellow]")
+            for pair in result.highly_correlated_pairs[:5]:
+                console.print(f"  {pair.symbol_a} ↔ {pair.symbol_b}: {pair.correlation:.3f}")
+
+        if result.substitution_suggestions:
+            count = len(result.substitution_suggestions)
+            console.print(f"\n[bold yellow]Substitutions ({count}):[/bold yellow]")
+            for suggestion in result.substitution_suggestions[:3]:
+                alts = ", ".join(suggestion.alternatives)
+                console.print(f"  Replace {suggestion.symbol_to_replace}: {suggestion.reason}")
+                console.print(f"    → {alts}")
+
+        if result.warnings:
+            console.print(f"\n[dim]Warnings: {', '.join(result.warnings)}[/dim]")
+
+        console.print(f"\n[dim]Complete in {duration:.1f}s[/dim]\n")
+
+    def _run_correlation_audit(self) -> None:
         """Run portfolio correlation audit."""
         from src.metrics.correlation import CorrelationAuditor
 
         now = datetime.now(self.scheduler.timezone)
-        if self.state.last_correlation_audit:
-            last_date = self.state.last_correlation_audit.astimezone(self.scheduler.timezone).date()
-            if last_date == now.date():
-                logger.debug("Correlation audit already run today")
-                return
+        if self._should_skip_correlation_audit(now):
+            logger.debug("Correlation audit already run today")
+            return
 
         logger.info("Starting portfolio correlation audit")
         console.print(f"\n[bold cyan]Portfolio Correlation Audit ({now:%H:%M})[/bold cyan]")
@@ -1751,14 +1781,13 @@ class DaemonRunner:
                 self.state.last_correlation_audit = now
                 return
 
-            screening_results = None
-            if self.state.screening_history:
-                screening_results = self.state.screening_history[-1].candidates
+            screening_results = (
+                self.state.screening_history[-1].candidates if self.state.screening_history else None
+            )
 
             workflow = self._init_workflow()
-            market_fetcher = workflow.market_fetcher
             auditor = CorrelationAuditor(
-                market_fetcher=market_fetcher,
+                market_fetcher=workflow.market_fetcher,
                 correlation_threshold=self.config.correlation_audit.correlation_threshold,
                 lookback_days=self.config.correlation_audit.lookback_days,
                 output_dir=self.config.correlation_audit.output_dir,
@@ -1779,29 +1808,7 @@ class DaemonRunner:
             )
             self.state.save(self.config.state.state_file)
 
-            console.print(f"[dim]Positions: {result.num_positions}[/dim]")
-            console.print(f"[dim]Diversification ratio: {result.diversification_ratio:.3f}[/dim]")
-
-            if result.highly_correlated_pairs:
-                console.print(
-                    f"\n[bold yellow]Correlated Pairs ({len(result.highly_correlated_pairs)}):[/bold yellow]"
-                )
-                for pair in result.highly_correlated_pairs[:5]:
-                    console.print(f"  {pair.symbol_a} ↔ {pair.symbol_b}: {pair.correlation:.3f}")
-
-            if result.substitution_suggestions:
-                console.print(
-                    f"\n[bold yellow]Substitutions ({len(result.substitution_suggestions)}):[/bold yellow]"
-                )
-                for suggestion in result.substitution_suggestions[:3]:
-                    alts = ", ".join(suggestion.alternatives)
-                    console.print(f"  Replace {suggestion.symbol_to_replace}: {suggestion.reason}")
-                    console.print(f"    → {alts}")
-
-            if result.warnings:
-                console.print(f"\n[dim]Warnings: {', '.join(result.warnings)}[/dim]")
-
-            console.print(f"\n[dim]Complete in {duration:.1f}s[/dim]\n")
+            self._print_correlation_audit_results(result, duration)
 
         except Exception as e:
             error_msg = f"Correlation audit failed: {e}"
@@ -1913,7 +1920,7 @@ class DaemonRunner:
             return
 
         logger.info("Starting API health checks")
-        console.print(f"\n[bold cyan]Running Health Checks ({datetime.now():%H:%M})[/bold cyan]")  # noqa: DTZ005
+        console.print(f"\n[bold cyan]Running Health Checks ({datetime.now(tz=UTC):%H:%M})[/bold cyan]")
 
         try:
             from src.daemon.health import HealthChecker
@@ -1955,7 +1962,7 @@ class DaemonRunner:
             self.state.record_error(f"Health check failed: {e}")
             self.state.save(self.config.state.state_file)
 
-    def _run_daily_risk_report(self) -> None:
+    def run_daily_risk_report(self) -> None:
         """Generate and persist daily portfolio risk report."""
         if not self.config.risk_limits.enabled or not self.broker:
             return
@@ -2141,9 +2148,9 @@ class DaemonRunner:
                 logger.info(f"Market closed, waiting {wait_time // 60} minutes until open")
                 return min(wait_time, 60)
 
-        watchlist = self._get_merged_watchlist()
+        watchlist = self.get_merged_watchlist()
         logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
-        console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now():%H:%M:%S})")  # noqa: DTZ005
+        console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now(tz=UTC):%H:%M:%S})")
 
         await self._publish_event(
             "CYCLE_START",

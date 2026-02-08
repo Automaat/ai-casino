@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import typer
 from loguru import logger
@@ -140,8 +140,8 @@ def backtest(
         level=os.getenv("LOG_LEVEL", "INFO"),
     )
 
-    end_date = end or datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005
-    start_date = start or (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")  # noqa: DTZ005
+    end_date = end or datetime.now(tz=UTC).strftime("%Y-%m-%d")
+    start_date = start or (datetime.now(tz=UTC) - timedelta(days=365)).strftime("%Y-%m-%d")
 
     if engine not in ("vectorbt", "backtesting"):
         console.print(f"[bold red]Unknown engine:[/bold red] {engine}. Use 'vectorbt' or 'backtesting'.")

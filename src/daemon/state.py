@@ -324,7 +324,7 @@ class DaemonState(BaseModel):
         Args:
             error: Error message
         """
-        timestamp = datetime.now().isoformat()  # noqa: DTZ005
+        timestamp = datetime.now(tz=UTC).isoformat()
         self.errors.append(f"{timestamp}: {error}")
 
         if len(self.errors) > 100:

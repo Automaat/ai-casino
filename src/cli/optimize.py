@@ -3,7 +3,7 @@
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import typer
@@ -126,8 +126,8 @@ def optimize(
         level=os.getenv("LOG_LEVEL", "INFO"),
     )
 
-    end_date = end or datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005
-    start_date = start or (datetime.now() - timedelta(days=365 * 2)).strftime("%Y-%m-%d")  # noqa: DTZ005
+    end_date = end or datetime.now(tz=UTC).strftime("%Y-%m-%d")
+    start_date = start or (datetime.now(tz=UTC) - timedelta(days=365 * 2)).strftime("%Y-%m-%d")
 
     config = OptimizeConfig(
         symbol=symbol.upper(),

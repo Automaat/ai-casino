@@ -1,6 +1,6 @@
 """Event types for TUI communication."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ from src.tui.commands import CommandResult
 
 
 def _now() -> datetime:
-    return datetime.now()  # noqa: DTZ005
+    return datetime.now(tz=UTC)
 
 
 class EventType(StrEnum):
