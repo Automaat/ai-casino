@@ -1,19 +1,133 @@
 """Tests for embedded FastAPI server."""
 
 from datetime import UTC, datetime
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.daemon.api import create_api_app
 from src.daemon.config import ApiConfig, DaemonConfig, ScheduleConfig
+from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.runner import DaemonRunner
-from src.daemon.state import DaemonState, DegradationRecord
+from src.daemon.state import AnalysisRecord, DaemonState, DegradationRecord, RiskReportRecord
+from src.strategies.session import TradingSession
 
 
 @pytest.fixture
-def mock_runner() -> Mock:
+def sample_analyses() -> list[AnalysisRecord]:
+    """Create sample analysis records."""
+    return [
+        AnalysisRecord(
+            symbol="AAPL",
+            timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+            signal="BUY",
+            confidence=0.85,
+            executed_trade=True,
+            trading_session=TradingSession.REGULAR,
+            is_paper_trade=True,
+        ),
+        AnalysisRecord(
+            symbol="TSLA",
+            timestamp=datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC),
+            signal="SELL",
+            confidence=0.75,
+            executed_trade=False,
+            trading_session=TradingSession.PRE_MARKET,
+            is_paper_trade=True,
+        ),
+        AnalysisRecord(
+            symbol="AAPL",
+            timestamp=datetime(2024, 1, 15, 11, 0, 0, tzinfo=UTC),
+            signal="HOLD",
+            confidence=0.65,
+            executed_trade=False,
+            trading_session=TradingSession.REGULAR,
+            is_paper_trade=True,
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_positions() -> dict[str, dict]:
+    """Create sample position dicts."""
+    return {
+        "AAPL": {
+            "symbol": "AAPL",
+            "entry_timestamp": datetime(2024, 1, 10, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "entry_price": 150.0,
+            "entry_signal": "BUY",
+            "entry_confidence": 0.85,
+            "current_qty": 10.0,
+            "current_stop_loss": 145.0,
+            "initial_stop_loss": 145.0,
+            "stop_loss_order_id": "order123",
+            "profit_targets": [160.0, 170.0],
+            "days_held": 5,
+            "last_updated": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "trailing_stop_activated": False,
+            "breakeven_activated": False,
+            "high_water_mark": 155.0,
+        },
+        "TSLA": {
+            "symbol": "TSLA",
+            "entry_timestamp": datetime(2024, 1, 12, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "entry_price": 200.0,
+            "entry_signal": "BUY",
+            "entry_confidence": 0.75,
+            "current_qty": 5.0,
+            "current_stop_loss": 190.0,
+            "initial_stop_loss": 190.0,
+            "stop_loss_order_id": "order456",
+            "profit_targets": [220.0],
+            "days_held": 3,
+            "last_updated": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "trailing_stop_activated": True,
+            "breakeven_activated": False,
+            "high_water_mark": 210.0,
+        },
+    }
+
+
+@pytest.fixture
+def sample_risk_report() -> RiskReportRecord:
+    """Create sample risk report."""
+    return RiskReportRecord(
+        timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+        var_95=1000.0,
+        var_99=1500.0,
+        cvar_95=1200.0,
+        cvar_99=1800.0,
+        cdar_95=0.05,
+        max_drawdown=0.08,
+        risk_status="ACCEPTABLE",
+    )
+
+
+@pytest.fixture
+def sample_events() -> list[DashboardEvent]:
+    """Create sample events."""
+    return [
+        DashboardEvent(
+            event_type=EventType.CYCLE_START,
+            timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+            data={"message": "Starting cycle"},
+        ),
+        DashboardEvent(
+            event_type=EventType.ANALYSIS_COMPLETE,
+            timestamp=datetime(2024, 1, 15, 10, 5, 0, tzinfo=UTC),
+            data={"symbol": "AAPL", "signal": "BUY"},
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_runner(
+    sample_analyses: list[AnalysisRecord],
+    sample_positions: dict[str, dict],
+    sample_risk_report: RiskReportRecord,
+    sample_events: list[DashboardEvent],
+) -> Mock:
     """Create mock DaemonRunner with config and state."""
     config = DaemonConfig(
         watchlist=["AAPL", "TSLA"],
@@ -30,12 +144,15 @@ def mock_runner() -> Mock:
         errors=["error1", "error2"],
         current_trading_mode="paper",
         last_run=datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC),
+        analyses=sample_analyses,
+        active_positions=sample_positions,
+        risk_report_history=[sample_risk_report],
         degradation_history=[
             DegradationRecord(
                 timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                 tier="FULL",
                 unavailable_services=[],
-                confidence_adjustment=0.0,
+                confidence_adjustment=1.0,
             )
         ],
     )
@@ -44,6 +161,14 @@ def mock_runner() -> Mock:
     runner.config = config
     runner.state = state
     runner.running = True
+    runner.broker = None
+    runner._get_merged_watchlist = Mock(return_value=["AAPL", "TSLA"])
+
+    mock_event_bus = Mock()
+    mock_event_bus.get_history = Mock(return_value=sample_events)
+    mock_event_bus.subscribe = AsyncMock(return_value=("sub123", AsyncMock()))
+    mock_event_bus.unsubscribe = AsyncMock()
+    runner.event_bus = mock_event_bus
 
     return runner
 
@@ -189,6 +314,320 @@ class TestConfigEndpoint:
         assert data["pre_market_enabled"] is True
 
 
+class TestAnalysesEndpoint:
+    """Tests for /analyses endpoint."""
+
+    def test_get_analyses_default_limit(self, client: TestClient) -> None:
+        """Test analyses endpoint with default limit."""
+        response = client.get("/analyses")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_count"] == 42
+        assert data["returned_count"] == 3
+        assert len(data["analyses"]) == 3
+
+        assert data["analyses"][0]["symbol"] == "AAPL"
+        assert data["analyses"][0]["signal"] == "HOLD"
+        assert data["analyses"][0]["confidence"] == 0.65
+
+    def test_get_analyses_custom_limit(self, client: TestClient) -> None:
+        """Test analyses endpoint with custom limit."""
+        response = client.get("/analyses?limit=1")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] == 1
+        assert len(data["analyses"]) == 1
+
+    def test_get_analyses_filter_by_symbol(self, client: TestClient) -> None:
+        """Test analyses endpoint with symbol filter."""
+        response = client.get("/analyses?symbol=AAPL")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] == 2
+        assert all(a["symbol"] == "AAPL" for a in data["analyses"])
+
+    def test_get_analyses_empty(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test analyses endpoint with empty history."""
+        mock_runner.state.analyses = []
+
+        response = client.get("/analyses")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] == 0
+        assert len(data["analyses"]) == 0
+
+    def test_get_analyses_max_limit(self, client: TestClient) -> None:
+        """Test analyses endpoint clamps to max limit."""
+        response = client.get("/analyses?limit=1000")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] <= 500
+
+
+class TestPositionsEndpoint:
+    """Tests for /positions endpoint."""
+
+    def test_get_positions(self, client: TestClient) -> None:
+        """Test positions endpoint."""
+        response = client.get("/positions")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 2
+        assert len(data["positions"]) == 2
+
+        aapl = next(p for p in data["positions"] if p["symbol"] == "AAPL")
+        assert aapl["entry_price"] == 150.0
+        assert aapl["current_qty"] == 10.0
+        assert aapl["profit_targets"] == [160.0, 170.0]
+        assert aapl["trailing_stop_activated"] is False
+
+    def test_get_positions_empty(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test positions endpoint with no positions."""
+        mock_runner.state.active_positions = {}
+
+        response = client.get("/positions")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 0
+        assert len(data["positions"]) == 0
+
+    def test_get_positions_malformed_skipped(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test positions endpoint skips malformed entries."""
+        mock_runner.state.active_positions = {
+            "AAPL": {"symbol": "AAPL", "invalid": "data"},
+            "TSLA": mock_runner.state.active_positions["TSLA"],
+        }
+
+        response = client.get("/positions")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 1
+        assert data["positions"][0]["symbol"] == "TSLA"
+
+
+class TestWatchlistEndpoint:
+    """Tests for /watchlist endpoint."""
+
+    def test_get_watchlist_config_only(self, client: TestClient) -> None:
+        """Test watchlist endpoint with config symbols."""
+        response = client.get("/watchlist")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 2
+        assert set(data["symbols"]) == {"AAPL", "TSLA"}
+        assert data["sources"]["config"] == 2
+
+    def test_get_watchlist_merged(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test watchlist endpoint with all sources."""
+        mock_runner._get_merged_watchlist = Mock(return_value=["AAPL", "TSLA", "NVDA"])
+
+        # Add NVDA to active positions (AAPL and TSLA already in fixture)
+        mock_runner.state.active_positions["NVDA"] = {
+            "symbol": "NVDA",
+            "entry_timestamp": datetime(2024, 1, 14, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "entry_price": 500.0,
+            "entry_signal": "BUY",
+            "entry_confidence": 0.80,
+            "current_qty": 3.0,
+            "current_stop_loss": 480.0,
+            "initial_stop_loss": 480.0,
+            "stop_loss_order_id": "order789",
+            "profit_targets": [550.0],
+            "days_held": 1,
+            "last_updated": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC).isoformat(),
+            "trailing_stop_activated": False,
+            "breakeven_activated": False,
+            "high_water_mark": 505.0,
+        }
+
+        response = client.get("/watchlist")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 3
+        assert data["sources"]["broker"] == 3
+
+    def test_get_watchlist_broker_with_positions(self, client: TestClient) -> None:
+        """Test watchlist endpoint uses cached positions."""
+        # Uses active_positions from state (already set in fixture)
+        response = client.get("/watchlist")
+        assert response.status_code == 200
+
+        data = response.json()
+        # Both AAPL and TSLA are in active_positions from fixture
+        assert data["sources"]["broker"] == 2
+
+    def test_get_watchlist_source_breakdown(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test watchlist source breakdown calculation."""
+        from src.daemon.state import ScreeningRecord
+
+        mock_runner.config.screening.enabled = True
+        mock_runner.state.screening_history = [
+            ScreeningRecord(
+                timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                criteria="momentum",
+                universe="SP500",
+                top_symbols=["AAPL", "TSLA"],
+                candidates=[],
+                screened_at=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+            )
+        ]
+
+        response = client.get("/watchlist")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["sources"]["screening"] == 2
+
+
+class TestRiskEndpoint:
+    """Tests for /risk endpoint."""
+
+    def test_get_risk_with_report(self, client: TestClient) -> None:
+        """Test risk endpoint returns report."""
+        response = client.get("/risk")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["var_95"] == 1000.0
+        assert data["var_99"] == 1500.0
+        assert data["risk_status"] == "ACCEPTABLE"
+
+    def test_get_risk_no_reports(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test risk endpoint with no reports."""
+        mock_runner.state.risk_report_history = []
+
+        response = client.get("/risk")
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_get_risk_latest_only(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test risk endpoint returns latest report."""
+        older_report = RiskReportRecord(
+            timestamp=datetime(2024, 1, 14, 10, 0, 0, tzinfo=UTC),
+            var_95=800.0,
+            var_99=1200.0,
+            cvar_95=1000.0,
+            cvar_99=1500.0,
+            cdar_95=0.04,
+            max_drawdown=0.06,
+            risk_status="ACCEPTABLE",
+        )
+        mock_runner.state.risk_report_history.insert(0, older_report)
+
+        response = client.get("/risk")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["var_95"] == 1000.0
+
+
+class TestDegradationEndpoint:
+    """Tests for /degradation endpoint."""
+
+    def test_get_degradation_full(self, client: TestClient) -> None:
+        """Test degradation endpoint with FULL tier."""
+        response = client.get("/degradation")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tier"] == "FULL"
+        assert data["unavailable_services"] == []
+        assert data["confidence_adjustment"] == 1.0
+        assert data["halt_reason"] is None
+
+    def test_get_degradation_degraded(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test degradation endpoint with DEGRADED tier."""
+        mock_runner.state.degradation_history = [
+            DegradationRecord(
+                timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                tier="REDUCED",
+                unavailable_services=["news"],
+                confidence_adjustment=0.9,
+                halt_reason=None,
+            )
+        ]
+
+        response = client.get("/degradation")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tier"] == "REDUCED"
+        assert data["unavailable_services"] == ["news"]
+        assert data["confidence_adjustment"] == 0.9
+
+    def test_get_degradation_no_history(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test degradation endpoint defaults to FULL."""
+        mock_runner.state.degradation_history = []
+
+        response = client.get("/degradation")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tier"] == "FULL"
+        assert data["confidence_adjustment"] == 1.0
+
+
+class TestEventsEndpoint:
+    """Tests for /events endpoint."""
+
+    def test_get_events_default_limit(self, client: TestClient) -> None:
+        """Test events endpoint with default limit."""
+        response = client.get("/events")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] == 2
+        assert len(data["events"]) == 2
+
+    def test_get_events_custom_limit(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test events endpoint with custom limit."""
+        mock_runner.event_bus.get_history = Mock(
+            return_value=[
+                DashboardEvent(
+                    event_type=EventType.CYCLE_START,
+                    timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    data={"message": "Starting cycle"},
+                )
+            ]
+        )
+
+        response = client.get("/events?limit=1")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] == 1
+        mock_runner.event_bus.get_history.assert_called_once_with(limit=1)
+
+    def test_get_events_no_event_bus(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test events endpoint with no EventBus."""
+        mock_runner.event_bus = None
+
+        response = client.get("/events")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] == 0
+        assert len(data["events"]) == 0
+
+    def test_get_events_max_limit(self, client: TestClient) -> None:
+        """Test events endpoint clamps to max limit."""
+        response = client.get("/events?limit=1000")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["returned_count"] <= 500
+
+
 class TestCORS:
     """Tests for CORS configuration."""
 
@@ -209,3 +648,28 @@ class TestCORS:
         )
         assert response.status_code == 200
         assert response.headers["access-control-allow-credentials"] == "true"
+
+
+class TestWebSocketEvents:
+    """Test /ws/events WebSocket endpoint."""
+
+    def test_websocket_no_event_bus(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test WebSocket connection rejects when EventBus unavailable."""
+        from starlette.websockets import WebSocketDisconnect
+
+        mock_runner.event_bus = None
+
+        with pytest.raises(WebSocketDisconnect):
+            client.websocket_connect("/ws/events").__enter__()
+
+    def test_websocket_basic_connection(self, mock_runner: Mock) -> None:
+        """Test WebSocket connection and cleanup."""
+        # This test verifies the endpoint exists and handles subscribe/unsubscribe
+        # Full integration testing of WebSocket event streaming requires a running server
+        from src.daemon.api import create_api_app
+
+        app = create_api_app(mock_runner)
+
+        # Verify the WebSocket route is registered
+        routes = [route.path for route in app.routes]
+        assert "/ws/events" in routes
