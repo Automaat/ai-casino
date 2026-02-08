@@ -1,12 +1,14 @@
 """Tests for analysis orchestrator."""
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.daemon.analysis_orchestrator import AnalysisOrchestrationResult, AnalysisOrchestrator, AnalysisOrchestratorConfig
-from src.daemon.positions import PositionRecord
+from src.daemon.analysis_orchestrator import (
+    AnalysisOrchestrationResult,
+    AnalysisOrchestrator,
+    AnalysisOrchestratorConfig,
+)
 from src.daemon.state import DaemonState
 from src.strategies.session import TradingSession
 from src.workflows.types import TradingDecision, TradingWorkflowResult
@@ -23,8 +25,7 @@ def mock_workflow():
 @pytest.fixture
 def mock_state(tmp_path):
     """Create mock daemon state."""
-    state = DaemonState.load(str(tmp_path / "state.json"))
-    return state
+    return DaemonState.load(str(tmp_path / "state.json"))
 
 
 @pytest.fixture
@@ -191,7 +192,8 @@ async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_sch
     # Mock workflow to fail for one symbol
     async def mock_analyze(symbol, *args, **kwargs):
         if symbol == "FAIL":
-            raise ValueError("Intentional failure")
+            msg = "Intentional failure"
+            raise ValueError(msg)
 
         result = Mock(spec=TradingWorkflowResult)
         result.symbol = symbol

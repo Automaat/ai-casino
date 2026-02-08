@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from src.daemon.health import HealthReport
 from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
+from src.daemon.broker_manager import BrokerManager
 from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
@@ -58,6 +59,8 @@ class DaemonRunner:
         self.config = config
         self.event_bus = event_bus
         self._historical_cache = HistoricalCache()
+        self.state = DaemonState.load(config.state.state_file)
+        self._broker_manager = BrokerManager(config, self.state)
         self.scheduler = MarketScheduler(
             start_time=config.schedule.start_time,
             end_time=config.schedule.end_time,
@@ -95,7 +98,6 @@ class DaemonRunner:
             monte_carlo_time=config.monte_carlo.schedule_time,
             monte_carlo_days=config.monte_carlo.schedule_days,
         )
-        self.state = DaemonState.load(config.state.state_file)
         self.running = False
         self._workflow: TradingWorkflow | None = None
         self._metrics_tracker: BaseMetricsTracker | None = None
@@ -153,6 +155,7 @@ class DaemonRunner:
                 paper=is_paper,
                 historical_cache=self._historical_cache,
             )
+            self._broker_manager.broker = self.broker
             logger.info(f"Alpaca broker initialized (mode={config.trading_mode.value})")
 
             # Initialize paper trading start date
@@ -212,6 +215,7 @@ class DaemonRunner:
         elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
             try:
                 self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
+                self._broker_manager.broker = self.broker
                 logger.info("Alpaca broker initialized for watchlist merging")
             except Exception as e:
                 logger.exception(f"Failed to initialize broker: {e}")
@@ -477,49 +481,9 @@ class DaemonRunner:
 
         Returns:
             Deduplicated list combining config watchlist, broker positions,
-            and latest screening candidates. Config order is preserved,
-            broker positions are appended in alphabetical order, and screening
-            candidates are appended in the order of ``latest.top_symbols``
-            (typically ordered by screening score/rank).
+            and latest screening candidates.
         """
-        # Source 1: config watchlist (preserve order)
-        merged_watchlist: list[str] = []
-        seen: set[str] = set()
-
-        for symbol in self.config.watchlist:
-            if symbol not in seen:
-                merged_watchlist.append(symbol)
-                seen.add(symbol)
-
-        # Source 2: broker positions
-        if self.broker:
-            try:
-                account_info = self.broker.get_account_info()
-                position_symbols = set(account_info.positions.keys())
-
-                if position_symbols:
-                    added = position_symbols - seen
-                    if added:
-                        logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
-                        merged_watchlist.extend(sorted(added))
-                        seen.update(added)
-                else:
-                    logger.debug("No positions to merge")
-            except Exception as e:
-                logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
-        else:
-            logger.debug("No broker configured, skipping position merge")
-
-        # Source 3: latest screening candidates (ordered by score)
-        if self.config.screening.enabled and self.state.screening_history:
-            latest = self.state.screening_history[-1]
-            new_symbols = [s for s in latest.top_symbols if s not in seen]
-            if new_symbols:
-                logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
-                merged_watchlist.extend(new_symbols)
-                seen.update(new_symbols)
-
-        return merged_watchlist
+        return self._broker_manager.get_merged_watchlist()
 
     async def _analyze_symbol(
         self,

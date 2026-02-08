@@ -87,6 +87,8 @@ def test_get_merged_watchlist_with_positions(sample_config: DaemonConfig, mock_b
     """Test watchlist merge with broker positions."""
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
 
     watchlist = runner._get_merged_watchlist()
 
@@ -100,6 +102,8 @@ def test_get_merged_watchlist_deduplication(sample_config: DaemonConfig, mock_br
     sample_config.watchlist = ["AAPL", "TSLA"]
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
 
     watchlist = runner._get_merged_watchlist()
 
@@ -112,6 +116,7 @@ def test_get_merged_watchlist_broker_failure(sample_config: DaemonConfig, mock_b
     """Test watchlist fallback on broker API error."""
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
     mock_broker.get_account_info.side_effect = RuntimeError("API unavailable")
 
     watchlist = runner._get_merged_watchlist()
@@ -124,6 +129,7 @@ def test_get_merged_watchlist_empty_positions(sample_config: DaemonConfig, mock_
     """Test watchlist when broker has no positions."""
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
     mock_broker.get_account_info.return_value = BrokerAccountInfo(
         balance=50000.0,
         available_cash=50000.0,
@@ -238,13 +244,15 @@ async def test_analyze_watchlist_uses_merged(
 
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
 
     # Mock the orchestrator's orchestrate method
     analyzed_symbols: list[str] = []
 
     async def mock_orchestrate(watchlist, target_allocations=None, degradation_context=None):
+        from datetime import UTC, datetime
+
         from src.daemon.analysis_orchestrator import AnalysisOrchestrationResult
-        from datetime import datetime, UTC
 
         analyzed_symbols.extend(watchlist)
         return AnalysisOrchestrationResult(
@@ -264,6 +272,7 @@ async def test_analyze_watchlist_uses_merged(
 
     # Mock orchestrator
     from unittest.mock import Mock as MockClass
+
     mock_orchestrator = MockClass()
     mock_orchestrator.orchestrate = mock_orchestrate
     monkeypatch.setattr(runner, "_init_analysis_orchestrator", lambda: mock_orchestrator)
@@ -282,6 +291,7 @@ async def test_run_cycle_uses_merged_watchlist(
     """Test _run_cycle logs correct merged watchlist count."""
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
 
     # Mock dependencies
     monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
@@ -446,6 +456,7 @@ def test_get_merged_watchlist_all_three_sources(sample_config: DaemonConfig, moc
     sample_config.screening = ScreeningConfig(enabled=True)
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
+    runner._broker_manager.broker = mock_broker
 
     runner.state.screening_history = [
         ScreeningRecord(
