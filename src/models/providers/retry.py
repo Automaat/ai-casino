@@ -2,8 +2,8 @@
 
 import asyncio
 import functools
-from collections.abc import Awaitable, Callable
-from typing import ParamSpec, TypeVar
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, ParamSpec, TypeVar
 
 import httpx
 from loguru import logger
@@ -23,7 +23,7 @@ def retry(
         httpx.PoolTimeout,
         httpx.HTTPStatusError,
     ),
-) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+) -> Callable[[Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T]]]:
     """Decorator for retrying async functions on transient errors.
 
     Args:
@@ -32,7 +32,7 @@ def retry(
         exceptions: Exception types to retry on
     """
 
-    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+    def decorator(func: Callable[P, Coroutine[Any, Any, T]]) -> Callable[P, Coroutine[Any, Any, T]]:
         @functools.wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             last_error: Exception | None = None

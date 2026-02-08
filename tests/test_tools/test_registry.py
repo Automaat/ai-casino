@@ -35,8 +35,9 @@ class MockTool(BaseTool):
             },
         }
 
-    def execute(self, arg1: str = "default") -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute tool."""
+        arg1 = str(kwargs.get("arg1", "default"))
         return f"mock result: {arg1}"
 
 

@@ -1,5 +1,8 @@
 """Screen stocks tool for agentic stock discovery."""
 
+import asyncio
+import concurrent.futures
+
 from loguru import logger
 
 from src.tools.base import BaseTool
@@ -67,50 +70,66 @@ class ScreenStocksTool(BaseTool):
             },
         }
 
-    async def execute(
-        self,
-        criteria: str,
-        universe: str = "COMBINED",
-        top_n: int = 10,
-    ) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute stock screening.
 
         Args:
-            criteria: Screening criteria (momentum, value, breakout)
-            universe: Stock universe (SP500, NASDAQ100, COMBINED)
-            top_n: Number of top results
+            **kwargs: Tool arguments (criteria: str, universe: str = "COMBINED", top_n: int = 10)
 
         Returns:
             Formatted screening results with analysis
         """
+        criteria = str(kwargs["criteria"])
+        universe = str(kwargs.get("universe", "COMBINED"))
+        top_n = int(kwargs.get("top_n", 10))
+
         logger.info(f"Screening {universe} for {criteria} (top {top_n})")
 
+        def run_in_thread() -> str:
+            return asyncio.run(self._run_screening(criteria, universe, top_n))
+
         try:
-            from src.data.universe import StockUniverseFetcher
-            from src.models.llm import LLMClient
-            from src.screening.analyzer import ScreeningAnalyzer
-            from src.screening.screener import ScreeningCriteria, StockScreener
-
-            universe_fetcher = StockUniverseFetcher()
-            screener = StockScreener(universe_fetcher=universe_fetcher)
-            llm = LLMClient()
-            analyzer = ScreeningAnalyzer(llm_client=llm)
-
-            screening_criteria = ScreeningCriteria(criteria)
-            output = screener.screen(criteria=screening_criteria, universe=universe, top_n=top_n)
-
-            if not output.results:
-                return (
-                    f"No stocks matched {criteria} criteria in {universe}. "
-                    f"Screened {output.total_screened} stocks."
-                )
-
-            analysis = await analyzer.analyze(output)
-
-            return self._format_output(output, analysis)
+            # Run in thread to avoid nested event loop issues
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_in_thread)
+                return future.result()
         except Exception as e:
             logger.error(f"Screening failed: {e}")
             return f"Screening failed: {e}"
+
+    async def _run_screening(self, criteria: str, universe: str, top_n: int) -> str:
+        """Run screening workflow asynchronously.
+
+        Args:
+            criteria: Screening criteria
+            universe: Stock universe
+            top_n: Number of top results
+
+        Returns:
+            Formatted screening results
+        """
+        from src.data.universe import StockUniverseFetcher
+        from src.models.llm import LLMClient
+        from src.screening.analyzer import ScreeningAnalyzer
+        from src.screening.screener import ScreeningCriteria, StockScreener
+
+        universe_fetcher = StockUniverseFetcher()
+        screener = StockScreener(universe_fetcher=universe_fetcher)
+        llm = LLMClient()
+        analyzer = ScreeningAnalyzer(llm_client=llm)
+
+        screening_criteria = ScreeningCriteria(criteria)
+        output = screener.screen(criteria=screening_criteria, universe=universe, top_n=top_n)
+
+        if not output.results:
+            return (
+                f"No stocks matched {criteria} criteria in {universe}. "
+                f"Screened {output.total_screened} stocks."
+            )
+
+        analysis = await analyzer.analyze(output)
+
+        return self._format_output(output, analysis)
 
     def _format_output(self, output: object, analysis: object) -> str:
         """Format screening output as markdown.

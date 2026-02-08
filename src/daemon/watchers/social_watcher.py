@@ -96,7 +96,7 @@ class SocialWatcher(EventWatcher):
         self._mention_count_order.append(symbol)
         self._previous_mention_counts[symbol] = count
 
-    async def _fetch_events(self) -> list[SocialEvent]:
+    async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch social events from Reddit (volume spikes + viral posts).
 
         Returns:

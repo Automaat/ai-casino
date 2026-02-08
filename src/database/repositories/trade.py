@@ -26,49 +26,49 @@ class TradeRepository(BaseRepository[TradeRecord]):
         super().__init__(session)
         logger.debug("Initialized TradeRepository")
 
-    async def create(self, trade: TradeRecord) -> TradeRecord:
+    async def create(self, entity: TradeRecord) -> TradeRecord:
         """Create new trade record.
 
         Args:
-            trade: TradeRecord to persist
+            entity: TradeRecord to persist
 
         Returns:
             Created TradeRecord with ID
         """
         orm = TradeORM(
             id=uuid.uuid4(),
-            timestamp=trade.timestamp,
-            symbol=trade.symbol,
-            action=trade.action.value,
-            entry_price=Decimal(str(trade.entry_price)),
-            exit_price=Decimal(str(trade.exit_price)) if trade.exit_price else None,
-            shares=trade.shares,
-            stop_loss_price=Decimal(str(trade.stop_loss_price)),
-            confidence=Decimal(str(trade.confidence)),
-            risk_level=trade.risk_level,
-            status=trade.status,
-            pnl=Decimal(str(trade.pnl)) if trade.pnl else None,
-            pnl_percent=Decimal(str(trade.pnl_percent)) if trade.pnl_percent else None,
-            strategy_name=trade.strategy_name,
-            is_paper_trade=trade.is_paper_trade,
-            closed_at=trade.closed_at,
+            timestamp=entity.timestamp,
+            symbol=entity.symbol,
+            action=entity.action.value,
+            entry_price=Decimal(str(entity.entry_price)),
+            exit_price=Decimal(str(entity.exit_price)) if entity.exit_price else None,
+            shares=entity.shares,
+            stop_loss_price=Decimal(str(entity.stop_loss_price)),
+            confidence=Decimal(str(entity.confidence)),
+            risk_level=entity.risk_level,
+            status=entity.status,
+            pnl=Decimal(str(entity.pnl)) if entity.pnl else None,
+            pnl_percent=Decimal(str(entity.pnl_percent)) if entity.pnl_percent else None,
+            strategy_name=entity.strategy_name,
+            is_paper_trade=entity.is_paper_trade,
+            closed_at=entity.closed_at,
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
         await self._session.commit()
-        logger.info(f"Created trade: {orm.id} ({trade.symbol} {trade.action.value})")
-        return trade
+        logger.info(f"Created trade: {orm.id} ({entity.symbol} {entity.action.value})")
+        return entity
 
-    async def get_by_id(self, trade_id: str) -> TradeRecord | None:
+    async def get_by_id(self, entity_id: str) -> TradeRecord | None:
         """Get trade by ID.
 
         Args:
-            trade_id: Trade UUID string
+            entity_id: Trade UUID string
 
         Returns:
             TradeRecord if found, None otherwise
         """
-        result = await self._session.execute(select(TradeORM).where(TradeORM.id == uuid.UUID(trade_id)))
+        result = await self._session.execute(select(TradeORM).where(TradeORM.id == uuid.UUID(entity_id)))
         orm = result.scalar_one_or_none()
         return self._to_record(orm) if orm else None
 

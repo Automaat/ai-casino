@@ -60,18 +60,19 @@ class GenerateTearsheetTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str, period: str = "1y", benchmark: str = "SPY") -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Generate performance tearsheet.
 
         Args:
-            symbol: Stock ticker symbol
-            period: Time period
-            benchmark: Benchmark symbol
+            **kwargs: Tool arguments (symbol: str, period: str = "1y", benchmark: str = "SPY")
 
         Returns:
             Formatted tearsheet summary
         """
-        symbol = symbol.upper()
+        symbol = str(kwargs["symbol"]).upper()
+        period = str(kwargs.get("period", "1y"))
+        benchmark = str(kwargs.get("benchmark", "SPY"))
+
         logger.info(f"Generating tearsheet for {symbol} (period={period}, benchmark={benchmark})")
 
         def run_in_thread() -> str:

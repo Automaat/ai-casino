@@ -64,7 +64,7 @@ class TestGetSocialSentimentTool:
             mock_instance.analyze = AsyncMock(return_value=mock_analysis)
             mock_analyst_cls.return_value = mock_instance
 
-            result = tool.execute("AAPL")
+            result = tool.execute(symbol="AAPL")
 
             assert "AAPL" in result
             assert "BULLISH" in result
@@ -86,7 +86,7 @@ class TestGetSocialSentimentTool:
             mock_instance.analyze = AsyncMock(return_value=mock_analysis)
             mock_analyst_cls.return_value = mock_instance
 
-            tool.execute("aapl")
+            tool.execute(symbol="aapl")
 
             mock_instance.analyze.assert_called_once_with("AAPL")
 
@@ -95,7 +95,7 @@ class TestGetSocialSentimentTool:
         with (
             patch("src.models.llm.LLMClient", side_effect=Exception("API error")),
         ):
-            result = tool.execute("INVALID")
+            result = tool.execute(symbol="INVALID")
 
             assert "Social sentiment analysis failed" in result
             assert "API error" in result

@@ -67,7 +67,7 @@ class TestGetNewsTool:
             mock_instance.fetch_company_news.return_value = sample_articles
             mock_fetcher_cls.return_value = mock_instance
 
-            result = tool.execute("AAPL", limit=5)
+            result = tool.execute(symbol="AAPL", limit=5)
 
             assert "AAPL" in result
             assert "Apple Announces New Product" in result
@@ -81,7 +81,7 @@ class TestGetNewsTool:
             mock_instance.fetch_company_news.return_value = sample_articles
             mock_fetcher_cls.return_value = mock_instance
 
-            tool.execute("AAPL")
+            tool.execute(symbol="AAPL")
 
             mock_instance.fetch_company_news.assert_called_once_with("AAPL", limit=5)
 
@@ -92,7 +92,7 @@ class TestGetNewsTool:
             mock_instance.fetch_company_news.return_value = sample_articles
             mock_fetcher_cls.return_value = mock_instance
 
-            tool.execute("aapl", limit=5)
+            tool.execute(symbol="aapl", limit=5)
 
             mock_instance.fetch_company_news.assert_called_once_with("AAPL", limit=5)
 
@@ -103,7 +103,7 @@ class TestGetNewsTool:
             mock_instance.fetch_company_news.return_value = []
             mock_fetcher_cls.return_value = mock_instance
 
-            result = tool.execute("AAPL")
+            result = tool.execute(symbol="AAPL")
 
             assert "No recent news found" in result
 
@@ -114,7 +114,7 @@ class TestGetNewsTool:
             mock_instance.fetch_company_news.side_effect = Exception("API error")
             mock_fetcher_cls.return_value = mock_instance
 
-            result = tool.execute("INVALID")
+            result = tool.execute(symbol="INVALID")
 
             assert "Failed to fetch news" in result
             assert "API error" in result

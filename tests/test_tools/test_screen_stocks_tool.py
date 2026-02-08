@@ -154,11 +154,11 @@ class TestScreenStocksTool:
         assert "1 symbols failed" in result
 
     @patch("src.data.universe.StockUniverseFetcher")
-    async def test_execute_error_handling(self, mock_fetcher, screen_stocks_tool):
+    def test_execute_error_handling(self, mock_fetcher, screen_stocks_tool):
         """Test error handling in execute."""
         mock_fetcher.side_effect = RuntimeError("Test error")
 
-        result = await screen_stocks_tool.execute("momentum", "SP500", 10)
+        result = screen_stocks_tool.execute(criteria="momentum", universe="SP500", top_n=10)
 
         assert "Screening failed" in result
         assert "Test error" in result

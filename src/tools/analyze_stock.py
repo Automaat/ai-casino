@@ -59,16 +59,18 @@ class AnalyzeStockTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str, period_days: int = 90) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute full trading analysis.
 
         Args:
-            symbol: Stock ticker symbol
-            period_days: Days of historical data
+            **kwargs: Tool arguments (symbol: str, period_days: int = 90)
 
         Returns:
             Formatted analysis summary
         """
+        symbol = str(kwargs["symbol"])
+        period_days = int(kwargs.get("period_days", 90))
+
         logger.info(f"Running full analysis for {symbol} ({period_days} days)")
 
         def run_in_thread() -> str:

@@ -63,7 +63,7 @@ class TestRunBacktestTool:
             mock_runner.run_backtest.return_value = mock_backtest_result
             mock_runner_cls.return_value = mock_runner
 
-            result = tool.execute("AAPL", "2023-01-01", "2024-01-01")
+            result = tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01")
 
             assert "AAPL" in result
             assert "25.34%" in result  # total return
@@ -78,7 +78,7 @@ class TestRunBacktestTool:
             mock_runner.run_backtest.return_value = mock_backtest_result
             mock_runner_cls.return_value = mock_runner
 
-            tool.execute("aapl", "2023-01-01", "2024-01-01")
+            tool.execute(symbol="aapl", start_date="2023-01-01", end_date="2024-01-01")
 
             mock_runner.run_backtest.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01")
 
@@ -89,7 +89,7 @@ class TestRunBacktestTool:
             mock_runner.run_backtest.return_value = mock_backtest_result
             mock_runner_cls.return_value = mock_runner
 
-            tool.execute("AAPL", "2023-01-01", "2024-01-01", cash=50000)
+            tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", cash=50000)
 
             mock_runner_cls.assert_called_once_with(cash=50000.0)
 
@@ -100,7 +100,7 @@ class TestRunBacktestTool:
             mock_runner.run_backtest.side_effect = Exception("No data available")
             mock_runner_cls.return_value = mock_runner
 
-            result = tool.execute("INVALID", "2023-01-01", "2024-01-01")
+            result = tool.execute(symbol="INVALID", start_date="2023-01-01", end_date="2024-01-01")
 
             assert "Backtest failed" in result
             assert "No data available" in result

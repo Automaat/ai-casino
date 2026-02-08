@@ -68,7 +68,7 @@ class TestOptimizePortfolioTool:
             mock_optimizer.optimize.return_value = mock_optimization_result
             mock_optimizer_cls.return_value = mock_optimizer
 
-            result = tool.execute("AAPL", "2023-01-01", "2024-01-01")
+            result = tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01")
 
             assert "AAPL" in result
             assert "momentum" in result
@@ -84,7 +84,7 @@ class TestOptimizePortfolioTool:
             mock_optimizer.optimize.return_value = mock_optimization_result
             mock_optimizer_cls.return_value = mock_optimizer
 
-            tool.execute("aapl", "2023-01-01", "2024-01-01")
+            tool.execute(symbol="aapl", start_date="2023-01-01", end_date="2024-01-01")
 
             mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "momentum")
 
@@ -95,7 +95,7 @@ class TestOptimizePortfolioTool:
             mock_optimizer.optimize.return_value = mock_optimization_result
             mock_optimizer_cls.return_value = mock_optimizer
 
-            tool.execute("AAPL", "2023-01-01", "2024-01-01", strategy="trend_following")
+            tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following")
 
             mock_optimizer.optimize.assert_called_once_with(
                 "AAPL", "2023-01-01", "2024-01-01", "trend_following"
@@ -108,7 +108,7 @@ class TestOptimizePortfolioTool:
             mock_optimizer.optimize.return_value = mock_optimization_result
             mock_optimizer_cls.return_value = mock_optimizer
 
-            tool.execute("AAPL", "2023-01-01", "2024-01-01", n_trials=100)
+            tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", n_trials=100)
 
             mock_optimizer_cls.assert_called_once_with(n_trials=100)
 
@@ -119,7 +119,7 @@ class TestOptimizePortfolioTool:
             mock_optimizer.optimize.side_effect = Exception("Optimization failed")
             mock_optimizer_cls.return_value = mock_optimizer
 
-            result = tool.execute("INVALID", "2023-01-01", "2024-01-01")
+            result = tool.execute(symbol="INVALID", start_date="2023-01-01", end_date="2024-01-01")
 
             assert "Optimization failed" in result
 

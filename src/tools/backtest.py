@@ -64,19 +64,20 @@ class RunBacktestTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str, start_date: str, end_date: str, cash: int = 100000) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Run backtest for a stock.
 
         Args:
-            symbol: Stock ticker symbol
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
-            cash: Initial cash balance
+            **kwargs: Tool arguments (symbol: str, start_date: str, end_date: str, cash: int = 100000)
 
         Returns:
             Formatted backtest results
         """
-        symbol = symbol.upper()
+        symbol = str(kwargs["symbol"]).upper()
+        start_date = str(kwargs["start_date"])
+        end_date = str(kwargs["end_date"])
+        cash = int(kwargs.get("cash", 100000))
+
         logger.info(f"Running backtest for {symbol} ({start_date} to {end_date}, cash=${cash:,})")
 
         try:

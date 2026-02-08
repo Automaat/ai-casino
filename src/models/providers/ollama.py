@@ -102,7 +102,6 @@ class OllamaProvider(BaseLLMProvider):
                         tokens.append(content)
         return tokens
 
-    @retry(max_attempts=3, delay=1.0)
     async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
         """Stream completion tokens."""
         # Run sync streaming in thread, then yield tokens

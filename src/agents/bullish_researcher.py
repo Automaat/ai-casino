@@ -124,7 +124,7 @@ class BullishResearcher(BaseResearcher):
         self,
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
-        _news: NewsAnalysis,
+        news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
     ) -> float:
         """Calculate confidence in bull case.
@@ -132,7 +132,7 @@ class BullishResearcher(BaseResearcher):
         Args:
             technical: Technical analysis result
             sentiment: Sentiment analysis result
-            _news: News analysis result (unused, for API consistency)
+            news: News analysis result (unused, for API consistency)
             fundamental: Fundamental analysis result
 
         Returns:

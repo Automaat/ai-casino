@@ -292,7 +292,7 @@ class AnomalyWatcher(EventWatcher):
 
         return None
 
-    async def _fetch_events(self) -> list[AnomalyEvent]:
+    async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
         self._init_components()
         self._refresh_previous_close_if_needed()

@@ -520,7 +520,7 @@ class TradingChatApp(App):
         """Keep focus on input after any click."""
         self.query_one(AutocompleteInput).focus()
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         """Handle Ctrl+C - require double-press to quit."""
         if self._quit_pending:
             self.exit()

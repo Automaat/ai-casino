@@ -72,7 +72,6 @@ class OpenAIProvider(BaseLLMProvider):
         logger.debug(f"OpenAI response length: {len(content)} chars")
         return content
 
-    @retry(max_attempts=3, delay=1.0)
     async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
         """Stream completion tokens."""
         stream = await self._client.chat.completions.create(

@@ -70,7 +70,7 @@ class TestGetMarketDataTool:
             mock_instance.fetch_daily.return_value = sample_market_data
             mock_fetcher_cls.return_value = mock_instance
 
-            result = tool.execute("AAPL", days=30)
+            result = tool.execute(symbol="AAPL", days=30)
 
             assert "AAPL" in result
             assert "Current Price:" in result
@@ -84,7 +84,7 @@ class TestGetMarketDataTool:
             mock_instance.fetch_daily.return_value = sample_market_data
             mock_fetcher_cls.return_value = mock_instance
 
-            tool.execute("AAPL")
+            tool.execute(symbol="AAPL")
 
             mock_instance.fetch_daily.assert_called_once_with("AAPL", 30)
 
@@ -95,7 +95,7 @@ class TestGetMarketDataTool:
             mock_instance.fetch_daily.return_value = sample_market_data
             mock_fetcher_cls.return_value = mock_instance
 
-            tool.execute("aapl", days=30)
+            tool.execute(symbol="aapl", days=30)
 
             mock_instance.fetch_daily.assert_called_once_with("AAPL", 30)
 
@@ -106,7 +106,7 @@ class TestGetMarketDataTool:
             mock_instance.fetch_daily.side_effect = Exception("API error")
             mock_fetcher_cls.return_value = mock_instance
 
-            result = tool.execute("INVALID")
+            result = tool.execute(symbol="INVALID")
 
             assert "Failed to fetch market data" in result
             assert "API error" in result

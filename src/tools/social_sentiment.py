@@ -48,15 +48,17 @@ class GetSocialSentimentTool(BaseTool):
             },
         }
 
-    def execute(self, symbol: str) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Analyze social sentiment for a stock.
 
         Args:
-            symbol: Stock ticker symbol
+            **kwargs: Tool arguments (symbol: str)
 
         Returns:
             Formatted social sentiment summary
         """
+        symbol = str(kwargs["symbol"])
+
         logger.info(f"Analyzing social sentiment for {symbol}")
 
         def run_in_thread() -> str:
