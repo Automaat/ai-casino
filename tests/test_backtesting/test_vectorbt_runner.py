@@ -171,7 +171,7 @@ def test_vectorbt_result_model():
         profit_factor=2.0,
         total_trades=10,
         equity_curve=[100000.0, 100500.0, 101000.0],
-        equity_dates=[datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 1, 2), datetime(2023, 1, 3)],
+        equity_dates=[datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 1, 2, tzinfo=UTC), datetime(2023, 1, 3, tzinfo=UTC)],
         symbol="AAPL",
         start_date=datetime(2023, 1, 1, tzinfo=UTC),
         end_date=datetime(2023, 4, 10, tzinfo=UTC),
