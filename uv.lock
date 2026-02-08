@@ -95,7 +95,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = "==3.15.1" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "python-dotenv", specifier = "==1.2.1" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "pyyaml", specifier = "==6.0.3" },
     { name = "quantstats", specifier = "==0.0.81" },
     { name = "requests", specifier = "==2.32.5" },
     { name = "rich", specifier = "==14.3.2" },
