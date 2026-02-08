@@ -53,6 +53,8 @@ class AnalysisRecordResponse(BaseModel):
     executed_trade: bool
     trading_session: str
     is_paper_trade: bool
+    rsi: float | None = None
+    macd_hist: float | None = None
 
 
 class AnalysesResponse(BaseModel):

@@ -280,6 +280,9 @@ async def test_analyze_symbol_records_executed_trade(
     mock_result.decision.confidence = 0.85
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.order = mock_order
+    mock_result.technical = Mock()
+    mock_result.technical.rsi = 45.0
+    mock_result.technical.macd_hist = 0.5
 
     mock_workflow = AsyncMock()
     mock_workflow.analyze.return_value = mock_result
@@ -298,6 +301,8 @@ async def test_analyze_symbol_records_executed_trade(
         executed=True,
         trading_session="REGULAR",
         is_paper_trade=True,
+        rsi=45.0,
+        macd_hist=0.5,
     )
 
 
@@ -315,6 +320,9 @@ async def test_analyze_symbol_records_not_executed(
     mock_result.decision.confidence = 0.6
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.order = None
+    mock_result.technical = Mock()
+    mock_result.technical.rsi = 55.0
+    mock_result.technical.macd_hist = -0.2
 
     mock_workflow = AsyncMock()
     mock_workflow.analyze.return_value = mock_result
@@ -333,6 +341,8 @@ async def test_analyze_symbol_records_not_executed(
         executed=False,
         trading_session="REGULAR",
         is_paper_trade=True,
+        rsi=55.0,
+        macd_hist=-0.2,
     )
 
 
@@ -676,6 +686,8 @@ async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, eve
         mock_result.strategy_used = "momentum"
         mock_result.regime = None
         mock_result.technical.signal = Signal.BUY
+        mock_result.technical.rsi = 35.0
+        mock_result.technical.macd_hist = 0.8
         mock_workflow.analyze = AsyncMock(return_value=mock_result)
         mock_init_workflow.return_value = mock_workflow
 

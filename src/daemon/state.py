@@ -26,6 +26,8 @@ class AnalysisRecord(BaseModel):
     executed_trade: bool = False
     trading_session: TradingSession = TradingSession.REGULAR
     is_paper_trade: bool = True
+    rsi: float | None = None
+    macd_hist: float | None = None
 
 
 class ScreeningRecord(BaseModel):
@@ -279,6 +281,8 @@ class DaemonState(BaseModel):
         executed: bool = False,
         trading_session: TradingSession = TradingSession.REGULAR,
         is_paper_trade: bool = True,
+        rsi: float | None = None,
+        macd_hist: float | None = None,
     ) -> None:
         """Record an analysis result.
 
@@ -289,6 +293,8 @@ class DaemonState(BaseModel):
             executed: Whether trade was executed
             trading_session: Trading session type (REGULAR/PRE_MARKET)
             is_paper_trade: Whether trade was paper or live
+            rsi: RSI indicator value
+            macd_hist: MACD histogram value
         """
         self.analyses.append(
             AnalysisRecord(
@@ -299,6 +305,8 @@ class DaemonState(BaseModel):
                 executed_trade=executed,
                 trading_session=trading_session,
                 is_paper_trade=is_paper_trade,
+                rsi=rsi,
+                macd_hist=macd_hist,
             )
         )
         self.total_analyses += 1

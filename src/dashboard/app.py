@@ -637,8 +637,153 @@ def _render_portfolio_tab(client: DaemonAPIClient) -> list:
     ]
 
 
+def _build_confidence_histogram(analyses: list) -> dbc.Alert | dcc.Graph:
+    """Build confidence distribution histogram.
+
+    Args:
+        analyses: List of AnalysisRecordResponse
+
+    Returns:
+        Graph or alert if no data
+    """
+    if not analyses:
+        return dbc.Alert("No data available", color="info")
+
+    confidences = [a.confidence for a in analyses]
+
+    fig = go.Figure(data=[go.Histogram(x=confidences, nbinsx=20, marker_color="#22c55e")])
+    fig.update_layout(
+        title="Confidence Distribution",
+        xaxis_title="Confidence",
+        yaxis_title="Count",
+        height=300,
+        margin={"l": 40, "r": 40, "t": 40, "b": 40},
+    )
+
+    return dcc.Graph(figure=fig)
+
+
+def _build_signal_breakdown_chart(analyses: list) -> dbc.Alert | dcc.Graph:
+    """Build signal breakdown stacked bar per symbol.
+
+    Args:
+        analyses: List of AnalysisRecordResponse
+
+    Returns:
+        Graph or alert if no data
+    """
+    if not analyses:
+        return dbc.Alert("No data available", color="info")
+
+    symbol_signals: dict[str, dict[str, int]] = {}
+    for a in analyses:
+        if a.symbol not in symbol_signals:
+            symbol_signals[a.symbol] = {"BUY": 0, "SELL": 0, "HOLD": 0}
+        symbol_signals[a.symbol][a.signal] += 1
+
+    symbols = sorted(symbol_signals.keys())
+    buy_counts = [symbol_signals[s]["BUY"] for s in symbols]
+    sell_counts = [symbol_signals[s]["SELL"] for s in symbols]
+    hold_counts = [symbol_signals[s]["HOLD"] for s in symbols]
+
+    fig = go.Figure(
+        data=[
+            go.Bar(name="BUY", x=symbols, y=buy_counts, marker_color="#22c55e"),
+            go.Bar(name="SELL", x=symbols, y=sell_counts, marker_color="#ef4444"),
+            go.Bar(name="HOLD", x=symbols, y=hold_counts, marker_color="#6b7280"),
+        ]
+    )
+    fig.update_layout(
+        title="Signal Breakdown by Symbol",
+        barmode="stack",
+        xaxis_title="Symbol",
+        yaxis_title="Count",
+        height=300,
+        margin={"l": 40, "r": 40, "t": 40, "b": 40},
+    )
+
+    return dcc.Graph(figure=fig)
+
+
+def _build_rsi_gauge(analyses: list) -> dbc.Alert | dcc.Graph:
+    """Build RSI gauge with colored ranges.
+
+    Args:
+        analyses: List of AnalysisRecordResponse
+
+    Returns:
+        Graph or alert if no data
+    """
+    rsi_values = [a.rsi for a in analyses if a.rsi is not None]
+
+    if not rsi_values:
+        return dbc.Alert("No RSI data available", color="info")
+
+    latest_rsi = rsi_values[0]
+
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=latest_rsi,
+            domain={"x": [0, 1], "y": [0, 1]},
+            title={"text": "Latest RSI"},
+            gauge={
+                "axis": {"range": [0, 100]},
+                "bar": {"color": "darkblue"},
+                "steps": [
+                    {"range": [0, 30], "color": "#22c55e"},
+                    {"range": [30, 70], "color": "#fbbf24"},
+                    {"range": [70, 100], "color": "#ef4444"},
+                ],
+                "threshold": {
+                    "line": {"color": "black", "width": 4},
+                    "thickness": 0.75,
+                    "value": latest_rsi,
+                },
+            },
+        )
+    )
+    fig.update_layout(height=250, margin={"l": 20, "r": 20, "t": 40, "b": 20})
+
+    return dcc.Graph(figure=fig)
+
+
+def _build_macd_histogram(analyses: list) -> dbc.Alert | dcc.Graph:
+    """Build MACD histogram with green/red bars.
+
+    Args:
+        analyses: List of AnalysisRecordResponse
+
+    Returns:
+        Graph or alert if no data
+    """
+    macd_data = [(a.timestamp, a.macd_hist) for a in analyses if a.macd_hist is not None]
+
+    if not macd_data:
+        return dbc.Alert("No MACD data available", color="info")
+
+    macd_data = macd_data[:20]
+    macd_data.reverse()
+
+    timestamps = [d[0].strftime("%m/%d %H:%M") for d in macd_data]
+    values = [d[1] for d in macd_data]
+    colors = ["#22c55e" if v > 0 else "#ef4444" for v in values]
+
+    fig = go.Figure(data=[go.Bar(x=timestamps, y=values, marker_color=colors)])
+    fig.update_layout(
+        title="MACD Histogram (Last 20)",
+        xaxis_title="Time",
+        yaxis_title="MACD Histogram",
+        height=300,
+        margin={"l": 40, "r": 40, "t": 40, "b": 80},
+        xaxis_tickangle=-45,
+    )
+
+    return dcc.Graph(figure=fig)
+
+
 def _render_signals_tab(client: DaemonAPIClient) -> list:
-    """Render Signals tab (recent analyses).
+    """Render Signals tab (recent analyses with filters and indicators).
 
     Args:
         client: API client
@@ -646,19 +791,99 @@ def _render_signals_tab(client: DaemonAPIClient) -> list:
     Returns:
         Tab content
     """
-    analyses_resp = client.get_analyses(limit=50)
+    analyses_resp = client.get_analyses(limit=200)
 
     if analyses_resp.returned_count == 0:
         return [dbc.Alert("No analyses yet", color="info")]
 
+    unique_symbols = sorted({a.symbol for a in analyses_resp.analyses})
+
+    filter_controls = dbc.Card(
+        dbc.CardBody(
+            [
+                html.H5("Filters"),
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                html.Label("Symbols"),
+                                dcc.Dropdown(
+                                    id="signals-filter-symbol",
+                                    options=[{"label": s, "value": s} for s in unique_symbols],
+                                    value=[],
+                                    multi=True,
+                                    placeholder="All symbols",
+                                ),
+                            ],
+                            width=4,
+                        ),
+                        dbc.Col(
+                            [
+                                html.Label("Signal Type"),
+                                dcc.Checklist(
+                                    id="signals-filter-signal-type",
+                                    options=[
+                                        {"label": " BUY", "value": "BUY"},
+                                        {"label": " SELL", "value": "SELL"},
+                                        {"label": " HOLD", "value": "HOLD"},
+                                    ],
+                                    value=["BUY", "SELL", "HOLD"],
+                                    inline=True,
+                                ),
+                            ],
+                            width=4,
+                        ),
+                        dbc.Col(
+                            [
+                                html.Label("Date Range"),
+                                dcc.DatePickerRange(
+                                    id="signals-filter-date-range",
+                                    start_date=(datetime.now(UTC) - timedelta(days=7)).date(),
+                                    end_date=datetime.now(UTC).date(),
+                                    display_format="YYYY-MM-DD",
+                                ),
+                            ],
+                            width=4,
+                        ),
+                    ]
+                ),
+            ]
+        ),
+        className="mb-4",
+    )
+
+    analyses = analyses_resp.analyses
+
+    visualizations = [
+        html.H4("Technical Indicators & Signal Distribution"),
+        html.Hr(),
+        dbc.Row(
+            [
+                dbc.Col(_build_confidence_histogram(analyses), width=6),
+                dbc.Col(_build_signal_breakdown_chart(analyses), width=6),
+            ]
+        ),
+        html.Hr(),
+        dbc.Row(
+            [
+                dbc.Col(_build_rsi_gauge(analyses), width=6),
+                dbc.Col(_build_macd_histogram(analyses), width=6),
+            ]
+        ),
+        html.Hr(),
+    ]
+
     table_rows = []
-    for analysis in analyses_resp.analyses:
+    for analysis in analyses[:50]:
         signal_color = (
             "success" if analysis.signal == "BUY" else "danger" if analysis.signal == "SELL" else "secondary"
         )
         session_badge = ""
         if analysis.trading_session == "PRE_MARKET":
             session_badge = html.Span(" (PRE-MARKET)", className="badge bg-info ms-2")
+
+        rsi_str = f"{analysis.rsi:.1f}" if analysis.rsi is not None else "-"
+        macd_str = f"{analysis.macd_hist:.3f}" if analysis.macd_hist is not None else "-"
 
         table_rows.append(
             html.Tr(
@@ -672,6 +897,8 @@ def _render_signals_tab(client: DaemonAPIClient) -> list:
                     html.Td(analysis.symbol),
                     html.Td(html.Span(analysis.signal, className=f"badge bg-{signal_color}")),
                     html.Td(f"{analysis.confidence:.2f}"),
+                    html.Td(rsi_str),
+                    html.Td(macd_str),
                     html.Td("✓" if analysis.executed_trade else "✗"),
                     html.Td("📄" if analysis.is_paper_trade else "💵"),
                 ]
@@ -687,6 +914,8 @@ def _render_signals_tab(client: DaemonAPIClient) -> list:
                         html.Th("Symbol"),
                         html.Th("Signal"),
                         html.Th("Confidence"),
+                        html.Th("RSI"),
+                        html.Th("MACD Hist"),
                         html.Th("Executed"),
                         html.Th("Mode"),
                     ]
@@ -699,7 +928,13 @@ def _render_signals_tab(client: DaemonAPIClient) -> list:
         striped=True,
     )
 
-    return [html.H4(f"Recent Analyses ({analyses_resp.returned_count}/{analyses_resp.total_count})"), table]
+    return [
+        html.H4(f"Signal History ({analyses_resp.returned_count}/{analyses_resp.total_count})"),
+        filter_controls,
+        *visualizations,
+        html.H5("Recent Signals (Last 50)"),
+        table,
+    ]
 
 
 def _render_risk_tab(client: DaemonAPIClient) -> list:

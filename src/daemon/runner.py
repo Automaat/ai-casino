@@ -440,6 +440,9 @@ class DaemonRunner:
             if self.notification_service:
                 await self._maybe_notify_signal(result)
 
+            rsi = result.technical.rsi if result.technical else None
+            macd_hist = result.technical.macd_hist if result.technical else None
+
             self.state.record_analysis(
                 symbol=symbol,
                 signal=result.decision.action.value,
@@ -447,6 +450,8 @@ class DaemonRunner:
                 executed=result.order is not None,
                 trading_session=result.trading_session.value,
                 is_paper_trade=self.config.trading_mode.value == "paper",
+                rsi=rsi,
+                macd_hist=macd_hist,
             )
 
             try:
