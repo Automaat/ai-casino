@@ -175,6 +175,35 @@ class EventResponse(BaseModel):
     returned_count: int
 
 
+class RiskHistoryResponse(BaseModel):
+    """Risk report history."""
+
+    reports: list[RiskReportResponse]
+    count: int
+
+
+class SectorRotationResponse(BaseModel):
+    """Sector rotation analysis."""
+
+    timestamp: datetime
+    leading_sectors: list[str]
+    lagging_sectors: list[str]
+    sector_strengths: dict[str, float]
+    sector_momenta: dict[str, str]
+    flagged_positions: list[str]
+
+
+class CorrelationMatrixResponse(BaseModel):
+    """Correlation matrix."""
+
+    timestamp: datetime
+    num_positions: int
+    correlation_matrix: dict[str, dict[str, float]]
+    symbols: list[str]
+    max_correlation: float
+    avg_correlation: float
+
+
 def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     """Create FastAPI app with runner reference.
 
@@ -456,6 +485,67 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
             cdar_95=latest.cdar_95,
             max_drawdown=latest.max_drawdown,
             risk_status=latest.risk_status,
+        )
+
+    @app.get("/risk/history", response_model=RiskHistoryResponse)
+    async def get_risk_history() -> RiskHistoryResponse:
+        """Get historical risk reports."""
+        runner: DaemonRunner = app.state.runner
+        reports = [
+            RiskReportResponse(
+                timestamp=r.timestamp,
+                var_95=r.var_95,
+                var_99=r.var_99,
+                cvar_95=r.cvar_95,
+                cvar_99=r.cvar_99,
+                cdar_95=r.cdar_95,
+                max_drawdown=r.max_drawdown,
+                risk_status=r.risk_status,
+            )
+            for r in runner.state.risk_report_history
+        ]
+        return RiskHistoryResponse(reports=reports, count=len(reports))
+
+    @app.get("/sector-rotation/latest", response_model=SectorRotationResponse | None)
+    async def get_sector_rotation() -> SectorRotationResponse | None:
+        """Get latest sector rotation analysis."""
+        runner: DaemonRunner = app.state.runner
+        if not runner.state.sector_rotation_history:
+            return None
+        latest = runner.state.sector_rotation_history[-1]
+        return SectorRotationResponse(
+            timestamp=latest.timestamp,
+            leading_sectors=latest.leading_sectors,
+            lagging_sectors=latest.lagging_sectors,
+            sector_strengths=latest.sector_strengths,
+            sector_momenta=latest.sector_momenta,
+            flagged_positions=latest.flagged_positions,
+        )
+
+    @app.get("/correlation/latest", response_model=CorrelationMatrixResponse | None)
+    async def get_correlation_matrix() -> CorrelationMatrixResponse | None:
+        """Get latest correlation matrix."""
+        from src.metrics.correlation import CorrelationAuditor
+
+        # Use runner's configured output_dir for consistency with daemon
+        # market_data_fetcher=None because load_latest() only reads from disk
+        auditor = CorrelationAuditor(
+            market_data_fetcher=None,
+            output_dir=runner.config.correlation_audit.output_dir,
+        )
+        audit_result = auditor.load_latest()
+
+        if not audit_result:
+            return None
+
+        symbols = sorted(audit_result.correlation_matrix.keys())
+        return CorrelationMatrixResponse(
+            timestamp=audit_result.audit_date,
+            num_positions=audit_result.num_positions,
+            correlation_matrix=audit_result.correlation_matrix,
+            symbols=symbols,
+            max_correlation=audit_result.max_correlation,
+            avg_correlation=audit_result.avg_correlation,
         )
 
     @app.get("/degradation", response_model=DegradationResponse)
