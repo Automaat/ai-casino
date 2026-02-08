@@ -62,13 +62,11 @@ class BrokerManager:
                     or self.config.api_keys.alpaca_secret_key
                     or os.getenv("ALPACA_SECRET_KEY")
                 )
-                base_url = "https://paper-api.alpaca.markets"
             else:
                 api_key = self._resolve_config_or_env(self.config.api_keys.alpaca_api_key, "ALPACA_API_KEY")
                 secret_key = self._resolve_config_or_env(
                     self.config.api_keys.alpaca_secret_key, "ALPACA_SECRET_KEY"
                 )
-                base_url = "https://api.alpaca.markets"
 
             if not api_key or not secret_key:
                 if self.config.trading_mode == TradingMode.LIVE:
@@ -85,7 +83,6 @@ class BrokerManager:
             self.broker = AlpacaBroker(
                 api_key=api_key,
                 secret_key=secret_key,
-                base_url=base_url,
                 paper=is_paper,
                 historical_cache=self._historical_cache,
             )

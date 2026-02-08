@@ -17,6 +17,12 @@ services:
       - "8484:8484"
     networks:
       - ai-casino-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8484/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   dashboard:
     build: .
@@ -28,7 +34,8 @@ services:
     ports:
       - "8050:8050"
     depends_on:
-      - daemon
+      daemon:
+        condition: service_healthy
     networks:
       - ai-casino-net
 
