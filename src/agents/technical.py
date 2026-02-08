@@ -286,7 +286,7 @@ class TechnicalAnalyst:
         if isinstance(indicators, EnsembleResult):
             rsi, macd_hist = None, None
             for sr in indicators.strategy_results:
-                if sr.name == "momentum":
+                if sr.name == "momentum" and isinstance(sr.indicators, MomentumIndicators):
                     rsi = sr.indicators.rsi
                     macd_hist = sr.indicators.macd_hist
                     break

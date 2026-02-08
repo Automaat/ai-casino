@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
+    from src.daemon.state import DaemonState
     from src.screening.exporter import ScreeningExporter, Watchlist
     from src.workflows.types import TradingWorkflowResult
 
@@ -659,7 +660,7 @@ Type freely to chat about markets or ask questions."""
             data={"count": len(latest.candidates)},
         )
 
-    def _handle_candidates_add(self, symbols: list[str], state: object, _state_file: str) -> CommandResult:
+    def _handle_candidates_add(self, symbols: list[str], state: "DaemonState", _state_file: str) -> CommandResult:
         """Add candidates to watchlist.
 
         Args:

@@ -250,11 +250,11 @@ class TradingChatApp(App):
         if text.lower() in ("yes", "y"):
             result = self._tool_registry.execute(pending["name"], pending["args"])
             result_preview = result[:100] + "..." if len(result) > 100 else result
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete(result_preview)
             chat.add_assistant_message(f"Tool result:\n\n{result}")
         else:
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete("Skipped")
             chat.add_assistant_message("Tool execution skipped.")
 
@@ -361,7 +361,7 @@ class TradingChatApp(App):
 
         if event.result.success:
             chat.complete_progress()
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete("Complete")
 
             # Show specialized result or full workflow result
@@ -374,7 +374,7 @@ class TradingChatApp(App):
                 chat.add_assistant_message(event.result.message)
         else:
             chat.complete_progress()
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete("Failed")
             chat.add_assistant_message(event.result.message)
 
@@ -395,6 +395,8 @@ class TradingChatApp(App):
 
     async def _handle_streaming_chat(self, text: str) -> None:
         """Handle chat with streaming (Ollama fallback)."""
+        if not self._llm:
+            return
         chat = self.query_one(ChatView)
         status_bar = self.query_one(StatusBar)
 
@@ -424,6 +426,8 @@ class TradingChatApp(App):
 
     async def _handle_agentic_chat(self, text: str) -> None:
         """Handle chat with tool calling (Anthropic/OpenAI)."""
+        if not self._llm:
+            return
         chat = self.query_one(ChatView)
         status_bar = self.query_one(StatusBar)
 
@@ -504,7 +508,7 @@ class TradingChatApp(App):
         tool_widget = tool_widgets.last() if tool_widgets else None
 
         chat.complete_progress()
-        if tool_widget:
+        if tool_widget and hasattr(tool_widget, "set_complete"):
             tool_widget.set_complete("Cancelled")
         chat.add_assistant_message("Analysis cancelled.")
         self._history.append({"role": "assistant", "content": "Analysis cancelled."})

@@ -111,4 +111,6 @@ class DatabaseEngine:
 
     def __repr__(self) -> str:
         """Return string representation (hides credentials)."""
+        if self._database_url is None:
+            return "DatabaseEngine(url=None)"
         return f"DatabaseEngine(url={self._database_url.split('@')[-1]})"

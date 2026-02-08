@@ -151,6 +151,7 @@ class TestWebSearchResult:
             published_at=datetime(2024, 1, 15, 10, 0),
         )
         assert result.source == "Reuters"
+        assert result.published_at is not None
         assert result.published_at.year == 2024
 
 

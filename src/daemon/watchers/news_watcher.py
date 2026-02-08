@@ -102,6 +102,9 @@ class NewsWatcher(EventWatcher):
             List of NewsEvent objects for breaking news
         """
         self._init_components()
+        if self._news_fetcher is None:
+            msg = "Failed to initialize NewsFetcher"
+            raise RuntimeError(msg)
 
         # Fetch recent news (no symbol filter)
         articles = self._news_fetcher.fetch_market_news(limit=50)

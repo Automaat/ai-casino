@@ -104,9 +104,13 @@ class SignalOutcomeTracker:
                 return None
 
             # Find close at target date (or nearest prior trading day)
+            import pandas as pd
+
             df = market_data.data
-            df.index = df.index.tz_localize(None)  # Remove timezone for comparison
-            target_date_normalized = target_date.normalize()
+            if isinstance(df.index, pd.DatetimeIndex):
+                df.index = df.index.tz_localize(None)  # Remove timezone for comparison
+            target_ts = pd.Timestamp(target_date)
+            target_date_normalized = target_ts.normalize()
 
             # Get closest date on or before target
             valid_dates = df.index[df.index <= target_date_normalized]

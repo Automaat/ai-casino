@@ -103,7 +103,7 @@ class BaseResearcher(ABC):
             llm_response = await self.llm.astructured(
                 prompt, self.llm_response_model, system=system_prompt, temperature=0.5
             )
-            thesis = llm_response.thesis
+            thesis = getattr(llm_response, "thesis")
             key_points = getattr(llm_response, self._get_key_points_field())
             target = getattr(llm_response, self._get_target_field())
         except StructuredOutputError as e:

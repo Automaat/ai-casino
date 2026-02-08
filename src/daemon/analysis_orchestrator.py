@@ -379,18 +379,24 @@ class AnalysisOrchestrator:
         if not self.notification_service:
             return
 
-        from src.daemon.notifications import NotificationTrigger
+        from datetime import UTC, datetime
+
+        from src.daemon.notifications import NotificationMessage, NotificationTrigger
 
         try:
-            await self.notification_service.send_notification(
+            message = NotificationMessage(
                 trigger=NotificationTrigger.SIGNAL,
-                symbol=result.symbol,
-                data={
+                title=f"{result.symbol} {result.decision.action.value}",
+                body=f"Confidence: {result.decision.confidence:.2f}, Risk: {result.risk.validation.risk_level}",
+                metadata={
+                    "symbol": result.symbol,
                     "signal": result.decision.action.value,
                     "confidence": result.decision.confidence,
                     "risk_level": result.risk.validation.risk_level,
                 },
+                timestamp=datetime.now(UTC),
             )
+            await self.notification_service.notify(NotificationTrigger.SIGNAL, message)
         except Exception as e:
             logger.warning(f"Notification failed for {result.symbol}: {e}")
 

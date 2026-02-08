@@ -103,6 +103,9 @@ class SocialWatcher(EventWatcher):
             List of SocialEvent objects for detected signals
         """
         self._init_components()
+        if self._reddit_fetcher is None:
+            msg = "Failed to initialize RedditFetcher"
+            raise RuntimeError(msg)
 
         # Fetch trending tickers
         trending = self._reddit_fetcher.fetch_trending_tickers(

@@ -405,8 +405,10 @@ async def test_account_info_passed_to_trader(
 
     result_state = await workflow.make_decision(state)
 
-    assert result_state["final_decision"].owns_position is True
-    assert result_state["final_decision"].position_qty == 100.0
+    final_decision = result_state["final_decision"]
+    assert final_decision is not None
+    assert final_decision.owns_position is True
+    assert final_decision.position_qty == 100.0
 
 
 async def test_workflow_continues_when_fundamental_rate_limited(mock_workflow_dependencies):

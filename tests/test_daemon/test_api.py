@@ -671,7 +671,7 @@ class TestWebSocketEvents:
         app = create_api_app(mock_runner)
 
         # Verify the WebSocket route is registered
-        routes = [route.path for route in app.routes]
+        routes = [route.path for route in app.routes if hasattr(route, "path")]
         assert "/ws/events" in routes
 
 

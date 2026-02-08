@@ -148,15 +148,19 @@ class EventWatcher(ABC):
             Dict mapping symbol to analysis result
         """
         self._init_components()
+        if self._workflow is None:
+            msg = "Failed to initialize TradingWorkflow"
+            raise RuntimeError(msg)
         logger.info(f"Analyzing {len(symbols)} symbols: {symbols}")
 
         results: dict[str, TradingWorkflowResult] = {}
         semaphore = asyncio.Semaphore(self.max_concurrent_analyses)
+        workflow = self._workflow
 
         async def analyze_one(symbol: str) -> tuple[str, TradingWorkflowResult | None]:
             async with semaphore:
                 try:
-                    result = await self._workflow.analyze(symbol, period_days=30)
+                    result = await workflow.analyze(symbol, period_days=30)
                     return symbol, result
                 except Exception as e:
                     logger.error(f"Failed to analyze {symbol}: {e}")
@@ -217,6 +221,9 @@ class EventWatcher(ABC):
     async def _run_cycle(self) -> None:
         """Main poll cycle (template method)."""
         self._init_components()
+        if self._triage_agent is None:
+            msg = "Failed to initialize EventTriageAgent"
+            raise RuntimeError(msg)
 
         # 1. Fetch new events
         events = await self._fetch_events()

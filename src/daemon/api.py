@@ -546,12 +546,12 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                 logger.warning(f"Failed to fetch broker positions for rebalance: {e}")
 
         allocations = []
-        for symbol, target_weight in latest.target_weights.items():
+        for allocation in latest.allocations:
             current_weight = 0.0
-            if symbol in broker_positions and total_portfolio_value > 0:
-                current_weight = broker_positions[symbol].market_value / total_portfolio_value
+            if allocation.symbol in broker_positions and total_portfolio_value > 0:
+                current_weight = broker_positions[allocation.symbol].market_value / total_portfolio_value
 
-            delta = current_weight - target_weight
+            delta = current_weight - allocation.weight
             action = "REDUCE" if delta > 0 else "INCREASE" if delta < 0 else "HOLD"
 
             allocations.append(

@@ -4,6 +4,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import quantstats as qs
 from loguru import logger
@@ -42,8 +43,6 @@ class QuantStatsReporter:
         Returns:
             TearSheet with metrics and HTML report path
         """
-        qs.stats.RISK_FREE_RATE = self.risk_free_rate
-
         logger.info(f"Generating tearsheet for {symbol} ({len(trades)} trades)")
 
         equity_curve = build_daily_equity_curve(trades)
@@ -128,8 +127,8 @@ class QuantStatsReporter:
         if benchmark_returns is not None:
             benchmark_cagr = qs.stats.cagr(benchmark_returns, rf=self.risk_free_rate)
             benchmark_sharpe = qs.stats.sharpe(benchmark_returns, rf=self.risk_free_rate)
-            alpha = qs.stats.alpha(returns, benchmark_returns, rf=self.risk_free_rate)
-            beta = qs.stats.beta(returns, benchmark_returns)
+            beta = self._calculate_beta(returns, benchmark_returns)
+            alpha = self._calculate_alpha(returns, benchmark_returns, beta)
 
             metrics["benchmark_cagr"] = float(benchmark_cagr) if pd.notna(benchmark_cagr) else None
             metrics["benchmark_sharpe"] = float(benchmark_sharpe) if pd.notna(benchmark_sharpe) else None
@@ -147,6 +146,44 @@ class QuantStatsReporter:
         sharpe_str = f"{sharpe_ratio:.4f}" if isinstance(sharpe_ratio, (int, float)) else "N/A"
         logger.debug(f"Calculated metrics: CAGR={cagr_str}, Sharpe={sharpe_str}")
         return metrics
+
+    def _calculate_beta(self, returns: pd.Series, benchmark_returns: pd.Series) -> float:
+        """Calculate beta (volatility relative to benchmark).
+
+        Args:
+            returns: Portfolio returns series
+            benchmark_returns: Benchmark returns series
+
+        Returns:
+            Beta value
+        """
+        aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
+        if len(aligned_returns) < 2:
+            return 0.0
+        covariance = aligned_returns.cov(aligned_benchmark)
+        benchmark_variance = aligned_benchmark.var()
+        return float(covariance / benchmark_variance) if benchmark_variance != 0 else 0.0
+
+    def _calculate_alpha(
+        self, returns: pd.Series, benchmark_returns: pd.Series, beta: float
+    ) -> float:
+        """Calculate alpha (excess return vs benchmark).
+
+        Args:
+            returns: Portfolio returns series
+            benchmark_returns: Benchmark returns series
+            beta: Previously calculated beta value
+
+        Returns:
+            Annualized alpha
+        """
+        aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
+        if len(aligned_returns) < 2:
+            return 0.0
+        portfolio_mean = aligned_returns.mean()
+        benchmark_mean = aligned_benchmark.mean()
+        alpha = portfolio_mean - (self.risk_free_rate / 252 + beta * (benchmark_mean - self.risk_free_rate / 252))
+        return float(alpha * 252)
 
     def _calculate_max_dd_duration(self, dd_series: pd.Series) -> int | None:
         """Calculate maximum drawdown duration in days.

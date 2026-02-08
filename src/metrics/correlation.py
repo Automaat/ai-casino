@@ -244,6 +244,10 @@ class CorrelationAuditor:
         Returns:
             DataFrame with aligned returns (symbols as columns, dates as index)
         """
+        if not self.market_fetcher:
+            warnings.append("Market fetcher not available")
+            return pd.DataFrame()
+
         returns_data = {}
 
         for symbol in symbols:
