@@ -15,7 +15,6 @@ def test_technical_analyst_init(mock_llm_client):
     assert analyst.strategy == strategy
 
 
-@pytest.mark.asyncio
 async def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
     strategy = MomentumStrategy()
     analyst = TechnicalAnalyst(mock_llm_client, strategy)
@@ -29,7 +28,6 @@ async def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
     mock_llm_client.acomplete.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_technical_analyst_analyze_calls_strategy(mock_llm_client, sample_ohlcv_data):
     strategy = MomentumStrategy()
     analyst = TechnicalAnalyst(mock_llm_client, strategy)

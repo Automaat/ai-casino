@@ -154,7 +154,6 @@ class TestScreenStocksTool:
         assert "1 symbols failed" in result
 
     @patch("src.data.universe.StockUniverseFetcher")
-    @pytest.mark.asyncio
     async def test_execute_error_handling(self, mock_fetcher, screen_stocks_tool):
         """Test error handling in execute."""
         mock_fetcher.side_effect = RuntimeError("Test error")

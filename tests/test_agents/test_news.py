@@ -11,7 +11,6 @@ def test_news_analyst_init(mock_llm_client):
     assert analyst.llm == mock_llm_client
 
 
-@pytest.mark.asyncio
 async def test_news_analyst_analyze(mock_llm_client, sample_news_articles):
     analyst = NewsAnalyst(mock_llm_client)
 
@@ -24,7 +23,6 @@ async def test_news_analyst_analyze(mock_llm_client, sample_news_articles):
     mock_llm_client.acomplete.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_news_analyst_analyze_empty(mock_llm_client):
     analyst = NewsAnalyst(mock_llm_client)
 

@@ -61,7 +61,6 @@ def create_health_report(temp_health_dir, service_checks):
     return report
 
 
-@pytest.mark.asyncio
 async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, temp_health_dir):
     """Verify daemon skips cycle when market data unavailable."""
     # Create health report with Alpha Vantage down
@@ -94,7 +93,6 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
         assert "market data" in runner.state.degradation_history[-1].halt_reason.lower()
 
 
-@pytest.mark.asyncio
 async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_dir):
     """Verify daemon skips cycle when LLM unavailable."""
     # Create health report with LLM down
@@ -131,7 +129,6 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
         assert "llm" in runner.state.degradation_history[-1].halt_reason.lower()
 
 
-@pytest.mark.asyncio
 async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp_health_dir):
     """Verify daemon continues with degraded analysis when optional services down."""
     # Create health report with Marketaux down
@@ -185,7 +182,6 @@ async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp
         assert runner.state.degradation_history[-1].confidence_adjustment == 0.8
 
 
-@pytest.mark.asyncio
 async def test_notification_sent_on_degradation(daemon_config_with_health, temp_health_dir):
     """Verify notification sent when degraded."""
     # Create health report with services down
@@ -227,7 +223,6 @@ async def test_notification_sent_on_degradation(daemon_config_with_health, temp_
         assert "DEGRADED" in message.title or "degraded" in message.body.lower()
 
 
-@pytest.mark.asyncio
 async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_health_dir):
     """Verify no degradation when all services healthy."""
     # Create healthy health report
@@ -273,7 +268,6 @@ async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_h
             assert runner.state.degradation_history[-1].tier == DegradationTier.FULL.value
 
 
-@pytest.mark.asyncio
 async def test_degradation_history_limited_to_100(daemon_config_with_health, temp_health_dir):
     """Verify degradation history limited to 100 records."""
     # Pre-populate degradation history

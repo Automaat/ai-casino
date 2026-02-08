@@ -16,7 +16,6 @@ def test_trader_agent_init(mock_llm_client):
     assert agent.llm == mock_llm_client
 
 
-@pytest.mark.asyncio
 async def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
@@ -166,7 +165,6 @@ def test_repr(mock_llm_client):
     assert "ollama" in repr_str
 
 
-@pytest.mark.asyncio
 async def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
@@ -222,7 +220,6 @@ async def test_decide_owns_position_true(mock_llm_client, sample_bullish_researc
     assert result.position_qty == 100.0
 
 
-@pytest.mark.asyncio
 async def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sample_bearish_research):
     agent = TraderAgent(mock_llm_client)
 
@@ -278,7 +275,6 @@ async def test_decide_owns_position_false(mock_llm_client, sample_bullish_resear
     assert result.position_qty is None
 
 
-@pytest.mark.asyncio
 async def test_prompt_includes_portfolio_context(
     mock_llm_client, sample_bullish_research, sample_bearish_research
 ):

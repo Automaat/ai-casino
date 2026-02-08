@@ -48,7 +48,6 @@ def mock_market_fetcher():
     return fetcher
 
 
-@pytest.mark.asyncio
 @patch("yfinance.Ticker")
 async def test_game_plan_agent_generate(mock_yf_ticker, mock_llm_client, mock_market_fetcher):
     """Test game plan generation."""
@@ -78,7 +77,6 @@ async def test_game_plan_agent_generate(mock_yf_ticker, mock_llm_client, mock_ma
     mock_llm_client.astructured.assert_called_once()
 
 
-@pytest.mark.asyncio
 @patch("yfinance.Ticker")
 async def test_game_plan_agent_structured_output_fallback(
     mock_yf_ticker, mock_llm_client, mock_market_fetcher
@@ -130,7 +128,6 @@ def test_fetch_futures_context_graceful(mock_market_fetcher):
     assert result == {}
 
 
-@pytest.mark.asyncio
 async def test_empty_watchlist_uses_defaults(mock_llm_client, mock_market_fetcher):
     """Test empty watchlist uses defaults."""
     mock_llm_client.astructured.return_value = GamePlanLLMResponse(

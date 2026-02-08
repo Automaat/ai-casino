@@ -38,7 +38,6 @@ class TestNotificationRateLimiter:
 class TestNotificationService:
     """Tests for NotificationService."""
 
-    @pytest.mark.asyncio
     async def test_notify_disabled(self) -> None:
         """No notifications sent when disabled."""
         config = NotificationsConfig(enabled=False)
@@ -55,7 +54,6 @@ class TestNotificationService:
         await service.notify(NotificationTrigger.SIGNAL, message)
         assert len(service.channels) == 0
 
-    @pytest.mark.asyncio
     async def test_notify_not_in_notify_on(self) -> None:
         """No notifications sent for disabled triggers."""
         config = NotificationsConfig(
@@ -76,7 +74,6 @@ class TestNotificationService:
             await service.notify(NotificationTrigger.HEALTH_FAILURE, message)
             mock_send.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_rate_limiting_applied(self) -> None:
         """Rate limiting prevents duplicate notifications."""
         config = NotificationsConfig(
@@ -122,7 +119,6 @@ class TestTelegramChannel:
         channel = TelegramChannel(config)
         assert channel.is_configured() is False
 
-    @pytest.mark.asyncio
     async def test_send_success(self) -> None:
         """Telegram send succeeds with valid response."""
         from src.daemon.notification_channels import TelegramChannel

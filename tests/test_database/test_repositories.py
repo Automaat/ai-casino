@@ -22,7 +22,6 @@ def mock_session():
 class TestTradeRepository:
     """Tests for TradeRepository."""
 
-    @pytest.mark.asyncio
     async def test_create_trade(self, mock_session, sample_trade_record):
         """Test creating a trade record."""
         repo = TradeRepository(mock_session)
@@ -32,7 +31,6 @@ class TestTradeRepository:
         assert mock_session.commit.called
         assert result.symbol == sample_trade_record.symbol
 
-    @pytest.mark.asyncio
     async def test_get_open_trades(self, mock_session, sample_trade_record):
         """Test getting open trades."""
         from src.database.models import TradeORM
@@ -72,7 +70,6 @@ class TestTradeRepository:
 class TestPortfolioSnapshotRepository:
     """Tests for PortfolioSnapshotRepository."""
 
-    @pytest.mark.asyncio
     async def test_create_snapshot(self, mock_session):
         """Test creating a portfolio snapshot."""
         snapshot = PortfolioSnapshot(
@@ -92,7 +89,6 @@ class TestPortfolioSnapshotRepository:
         assert mock_session.commit.called
         assert result.id is not None
 
-    @pytest.mark.asyncio
     async def test_get_latest(self, mock_session):
         """Test getting latest snapshot."""
         from src.database.models import PortfolioSnapshotORM

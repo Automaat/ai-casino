@@ -297,7 +297,6 @@ class TestAcompleteWithTools:
 
         return executor
 
-    @pytest.mark.asyncio
     async def test_acomplete_with_tools_no_tool_calls(
         self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
     ):
@@ -313,7 +312,6 @@ class TestAcompleteWithTools:
 
         assert result == "No tools needed"
 
-    @pytest.mark.asyncio
     async def test_acomplete_with_tools_executes_tool(
         self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
     ):
@@ -433,7 +431,6 @@ class TestStructuredOutput:
         assert result.confidence == 0.85
         provider.astructured.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_astructured_returns_validated_model(self, mock_ollama_provider_structured, monkeypatch):
         """Test async structured output returns validated Pydantic model."""
         monkeypatch.setenv("LLM_PROVIDER", "ollama")

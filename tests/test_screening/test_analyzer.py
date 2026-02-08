@@ -109,7 +109,6 @@ class TestScreeningAnalyzer:
         """Test analyzer initialization."""
         assert "ScreeningAnalyzer" in repr(analyzer)
 
-    @pytest.mark.asyncio
     async def test_analyze(self, analyzer, sample_screening_output, mock_llm_client):
         """Test screening analysis."""
         analysis = await analyzer.analyze(sample_screening_output)
@@ -119,7 +118,6 @@ class TestScreeningAnalyzer:
         assert len(analysis.top_picks) <= 3
         mock_llm_client.acomplete.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_analyze_with_market_context(self, analyzer, sample_screening_output, mock_llm_client):
         """Test analysis with market context."""
         context = "Market is in a corrective phase after recent highs."

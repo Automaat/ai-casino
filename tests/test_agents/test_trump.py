@@ -11,7 +11,6 @@ def test_trump_analyst_init(mock_llm_client):
     assert analyst.llm == mock_llm_client
 
 
-@pytest.mark.asyncio
 async def test_trump_analyst_analyze(mock_llm_client, sample_trump_posts):
     # Mock updated to Trump's authentic voice (2024-2026 style)
     mock_llm_client.acomplete.return_value = """
@@ -32,7 +31,6 @@ async def test_trump_analyst_analyze(mock_llm_client, sample_trump_posts):
     mock_llm_client.acomplete.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_trump_analyst_analyze_empty(mock_llm_client):
     analyst = TrumpAnalyst(mock_llm_client)
     result = await analyst.analyze([])

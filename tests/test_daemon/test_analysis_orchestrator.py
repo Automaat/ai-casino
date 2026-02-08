@@ -55,7 +55,6 @@ def mock_broker():
     return broker
 
 
-@pytest.mark.asyncio
 async def test_orchestrator_basic_flow(mock_workflow, mock_state, mock_scheduler):
     """Test basic orchestration flow."""
     config = AnalysisOrchestratorConfig()
@@ -93,7 +92,6 @@ async def test_orchestrator_basic_flow(mock_workflow, mock_state, mock_scheduler
     assert result.results[0].symbol == "AAPL"
 
 
-@pytest.mark.asyncio
 async def test_orchestrator_position_sync(
     mock_workflow, mock_state, mock_scheduler, mock_position_manager, mock_broker
 ):
@@ -131,7 +129,6 @@ async def test_orchestrator_position_sync(
     mock_position_manager.sync_with_broker.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_orchestrator_concurrent_limit(mock_workflow, mock_state, mock_scheduler):
     """Test concurrent analysis respects semaphore limit."""
     config = AnalysisOrchestratorConfig(max_concurrent_analyses=2)
@@ -178,7 +175,6 @@ async def test_orchestrator_concurrent_limit(mock_workflow, mock_state, mock_sch
     assert max_concurrent <= 2
 
 
-@pytest.mark.asyncio
 async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_scheduler):
     """Test orchestrator handles analysis failures."""
     config = AnalysisOrchestratorConfig()
@@ -220,7 +216,6 @@ async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_sch
     assert "FAIL" in result.failed_symbols
 
 
-@pytest.mark.asyncio
 async def test_orchestrator_target_allocations(mock_workflow, mock_state, mock_scheduler):
     """Test orchestrator sets target allocations via workflow method."""
     config = AnalysisOrchestratorConfig()

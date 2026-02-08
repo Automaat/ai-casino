@@ -183,7 +183,6 @@ class TestDatabaseMetricsTrackerInit:
 class TestRecordDecisionAsync:
     """Tests for record_decision_async method."""
 
-    @pytest.mark.asyncio
     async def test_record_decision_async_approved(self, db_tracker, mock_workflow_result, mock_trade_repo):
         """Test recording an approved trading decision asynchronously."""
         trade = await db_tracker.record_decision_async(mock_workflow_result, strategy_name="momentum")
@@ -192,7 +191,6 @@ class TestRecordDecisionAsync:
         assert trade.action == Signal.BUY
         mock_trade_repo.create.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_record_decision_async_invalidates_cache(self, db_tracker, mock_workflow_result):
         """Test that recording a decision invalidates the cache."""
         db_tracker._trades_cache = [MagicMock()]
@@ -201,7 +199,6 @@ class TestRecordDecisionAsync:
 
         assert db_tracker._trades_cache is None
 
-    @pytest.mark.asyncio
     async def test_record_decision_async_rejected(self, db_tracker, mock_trade_repo):
         """Test recording a rejected trading decision."""
         result = TradingWorkflowResult(
@@ -302,7 +299,6 @@ class TestRecordDecisionAsync:
 class TestSimulateExitsAsync:
     """Tests for simulate_exits_async method."""
 
-    @pytest.mark.asyncio
     async def test_simulate_exits_async_stop_loss_hit(self, db_tracker, mock_trade_repo):
         """Test simulating exit when stop-loss is hit."""
         open_trade = TradeRecord(
@@ -337,7 +333,6 @@ class TestSimulateExitsAsync:
             closed_at=closed_trades[0].closed_at,
         )
 
-    @pytest.mark.asyncio
     async def test_simulate_exits_async_stop_loss_not_hit(self, db_tracker, mock_trade_repo):
         """Test simulating exits when stop-loss is not hit."""
         open_trade = TradeRecord(
@@ -363,7 +358,6 @@ class TestSimulateExitsAsync:
         assert len(closed_trades) == 0
         mock_trade_repo.update.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_simulate_exits_async_missing_price(self, db_tracker, mock_trade_repo):
         """Test simulating exits when price data is missing."""
         open_trade = TradeRecord(
@@ -388,7 +382,6 @@ class TestSimulateExitsAsync:
 
         assert len(closed_trades) == 0
 
-    @pytest.mark.asyncio
     async def test_simulate_exits_async_sell_stop_loss(self, db_tracker, mock_trade_repo):
         """Test simulating exit for SELL trade when stop-loss is hit."""
         open_trade = TradeRecord(
@@ -419,7 +412,6 @@ class TestSimulateExitsAsync:
 class TestCalculateMetricsAsync:
     """Tests for calculate_metrics_async method."""
 
-    @pytest.mark.asyncio
     async def test_calculate_metrics_async_with_trades(self, db_tracker, mock_trade_repo):
         """Test calculating metrics with closed trades."""
         closed_trades = [
@@ -466,7 +458,6 @@ class TestCalculateMetricsAsync:
         assert metrics.losing_trades == 1
         assert metrics.total_pnl == 500.0
 
-    @pytest.mark.asyncio
     async def test_calculate_metrics_async_empty(self, db_tracker, mock_trade_repo):
         """Test calculating metrics with no trades."""
         mock_trade_repo.get_by_window = AsyncMock(return_value=[])
@@ -478,7 +469,6 @@ class TestCalculateMetricsAsync:
         assert metrics.win_rate == 0.0
         assert metrics.total_pnl == 0.0
 
-    @pytest.mark.asyncio
     async def test_calculate_metrics_async_30d_window(self, db_tracker, mock_trade_repo):
         """Test calculating metrics for 30-day window."""
         recent_trade = TradeRecord(
@@ -537,7 +527,6 @@ class TestSyncWrappers:
 class TestCacheManagement:
     """Tests for cache management."""
 
-    @pytest.mark.asyncio
     async def test_get_trades_caches_result(self, db_tracker, mock_trade_repo):
         """Test that _get_trades caches the result."""
         trades = await db_tracker._get_trades()

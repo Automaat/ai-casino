@@ -38,7 +38,6 @@ def sample_news_event():
     )
 
 
-@pytest.mark.asyncio
 async def test_event_triage_agent_init(mock_llm_client):
     """Test EventTriageAgent initialization."""
     agent = EventTriageAgent(mock_llm_client)
@@ -47,7 +46,6 @@ async def test_event_triage_agent_init(mock_llm_client):
     assert agent._prompts is not None
 
 
-@pytest.mark.asyncio
 async def test_analyze_successful_triage(mock_llm_client, sample_news_event):
     """Test successful event triage."""
     llm_response = TriageLLMResponse(
@@ -75,7 +73,6 @@ async def test_analyze_successful_triage(mock_llm_client, sample_news_event):
     mock_llm_client.astructured.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_analyze_normalizes_symbols(mock_llm_client, sample_news_event):
     """Test that symbols are normalized to uppercase."""
     llm_response = TriageLLMResponse(
@@ -94,7 +91,6 @@ async def test_analyze_normalizes_symbols(mock_llm_client, sample_news_event):
     assert result.symbols == ["AAPL", "MSFT"]  # Normalized to uppercase
 
 
-@pytest.mark.asyncio
 async def test_analyze_fallback_on_structured_output_error(mock_llm_client, sample_news_event):
     """Test fallback behavior when structured output fails."""
     mock_llm_client.astructured.side_effect = StructuredOutputError("Parse failed")
@@ -110,7 +106,6 @@ async def test_analyze_fallback_on_structured_output_error(mock_llm_client, samp
     assert "Triage failed" in result.reasoning
 
 
-@pytest.mark.asyncio
 async def test_analyze_ignore_urgency(mock_llm_client, sample_news_event):
     """Test event with IGNORE urgency."""
     llm_response = TriageLLMResponse(

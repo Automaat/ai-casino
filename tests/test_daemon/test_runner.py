@@ -229,7 +229,6 @@ def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonC
         )
 
 
-@pytest.mark.asyncio
 async def test_analyze_watchlist_uses_merged(
     sample_config: DaemonConfig, mock_broker: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -278,7 +277,6 @@ async def test_analyze_watchlist_uses_merged(
     assert len(analyzed_symbols) == 4
 
 
-@pytest.mark.asyncio
 async def test_run_cycle_uses_merged_watchlist(
     sample_config: DaemonConfig, mock_broker: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -305,7 +303,6 @@ async def test_run_cycle_uses_merged_watchlist(
     assert any("4 symbols" in msg for msg in logged_messages)
 
 
-@pytest.mark.asyncio
 async def test_analyze_symbol_records_executed_trade(
     sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -359,7 +356,6 @@ async def test_analyze_symbol_records_executed_trade(
     )
 
 
-@pytest.mark.asyncio
 async def test_analyze_symbol_records_not_executed(
     sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -487,7 +483,6 @@ def test_get_merged_watchlist_empty_screening_history(sample_config: DaemonConfi
 
 
 class TestHealthCheckIntegration:
-    @pytest.mark.asyncio
     async def test_health_check_disabled(self, sample_config: DaemonConfig) -> None:
         """Test health check skipped when disabled."""
         sample_config.health.enabled = False
@@ -497,7 +492,6 @@ class TestHealthCheckIntegration:
             await runner._maybe_run_health_check()
             mock_checker.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_health_check_wrong_time(
         self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -509,7 +503,6 @@ class TestHealthCheckIntegration:
             await runner._maybe_run_health_check()
             mock_checker.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_health_check_dedup(
         self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -525,7 +518,6 @@ class TestHealthCheckIntegration:
             await runner._maybe_run_health_check()
             mock_checker.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_health_check_runs(
         self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -556,7 +548,6 @@ class TestHealthCheckIntegration:
             mock_checker.run.assert_awaited_once()
             assert runner.state.last_health_check is not None
 
-    @pytest.mark.asyncio
     async def test_health_check_error_doesnt_crash(
         self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -575,7 +566,6 @@ class TestHealthCheckIntegration:
 
 
 class TestSectorRotationIntegration:
-    @pytest.mark.asyncio
     async def test_sector_rotation_in_cycle(
         self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -600,7 +590,6 @@ class TestSectorRotationIntegration:
 
         assert rotation_called
 
-    @pytest.mark.asyncio
     async def test_sector_rotation_skipped_when_disabled(
         self, sample_config: DaemonConfig, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -690,7 +679,6 @@ class TestSectorRotationIntegration:
         assert not rotation_ran
 
 
-@pytest.mark.asyncio
 async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_bus) -> None:
     """Test runner publishes CYCLE_START and CYCLE_COMPLETE events."""
     runner = DaemonRunner(sample_config, event_bus=event_bus)
@@ -720,7 +708,6 @@ async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_
     await event_bus.unsubscribe(sub_id)
 
 
-@pytest.mark.asyncio
 async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, event_bus) -> None:
     """Test runner publishes ANALYSIS_START and ANALYSIS_COMPLETE events."""
     from src.strategies.signal import Signal
@@ -764,7 +751,6 @@ async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, eve
     await event_bus.unsubscribe(sub_id)
 
 
-@pytest.mark.asyncio
 async def test_runner_publishes_analysis_error(sample_config: DaemonConfig, event_bus) -> None:
     """Test runner publishes ANALYSIS_ERROR event on failure."""
     runner = DaemonRunner(sample_config, event_bus=event_bus)
@@ -792,7 +778,6 @@ async def test_runner_publishes_analysis_error(sample_config: DaemonConfig, even
     await event_bus.unsubscribe(sub_id)
 
 
-@pytest.mark.asyncio
 async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
     """Test runner works without event_bus (None)."""
     runner = DaemonRunner(sample_config, event_bus=None)
@@ -809,7 +794,6 @@ async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
         await runner._run_cycle()
 
 
-@pytest.mark.asyncio
 async def test_api_server_lifecycle(sample_config: DaemonConfig) -> None:
     """Test API server starts and stops with daemon."""
     sample_config.api.enabled = True
