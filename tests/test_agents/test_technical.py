@@ -1,7 +1,5 @@
 """Tests for technical analyst agent."""
 
-import pytest
-
 from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.signal import Signal

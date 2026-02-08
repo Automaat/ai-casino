@@ -1,7 +1,5 @@
 """Tests for trader agent."""
 
-import pytest
-
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis

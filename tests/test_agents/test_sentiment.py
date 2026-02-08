@@ -1,7 +1,5 @@
 """Tests for sentiment analyst agent."""
 
-import pytest
-
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
 
 

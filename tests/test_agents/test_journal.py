@@ -3,8 +3,6 @@
 from datetime import date, datetime
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.agents.journal import DailyJournal, SignalOutcome, TradeJournalAgent
 from src.daemon.state import AnalysisRecord
 

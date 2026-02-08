@@ -1,7 +1,5 @@
 """Tests for news analyst agent."""
 
-import pytest
-
 from src.agents.news import NewsAnalysis, NewsAnalyst
 
 

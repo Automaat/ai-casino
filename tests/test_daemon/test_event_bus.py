@@ -2,8 +2,6 @@
 
 import asyncio
 
-import pytest
-
 from src.daemon.event_bus import DashboardEvent, EventBus, EventType
 
 

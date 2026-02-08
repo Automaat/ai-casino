@@ -1,7 +1,5 @@
 """Tests for Trump analyst agent."""
 
-import pytest
-
 from src.agents.trump import COMPANY_TICKERS, MARKET_KEYWORDS, TrumpAnalysis, TrumpAnalyst
 from src.strategies.signal import Signal
 
