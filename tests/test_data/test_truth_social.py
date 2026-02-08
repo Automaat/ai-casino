@@ -3,8 +3,8 @@
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
+import httpx
 import pytest
-import requests
 
 from src.data.truth_social import TrumpPostData, TruthPost, TruthSocialFetcher
 
@@ -88,11 +88,16 @@ def test_fetcher_init_custom_cache():
 
 
 def test_fetch_archive(sample_archive_response):
-    with patch("src.data.truth_social.requests.get") as mock_get:
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_archive_response
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()  # Clear cache for test
@@ -100,15 +105,20 @@ def test_fetch_archive(sample_archive_response):
         data = fetcher._fetch_archive()
 
         assert len(data) == 2
-        mock_get.assert_called_once()
+        mock_client.get.assert_called_once()
 
 
 def test_fetch_recent(sample_archive_response):
-    with patch("src.data.truth_social.requests.get") as mock_get:
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_archive_response
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()
@@ -120,11 +130,16 @@ def test_fetch_recent(sample_archive_response):
 
 
 def test_fetch_since(sample_archive_response):
-    with patch("src.data.truth_social.requests.get") as mock_get:
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_archive_response
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()
@@ -139,11 +154,16 @@ def test_fetch_since(sample_archive_response):
 
 
 def test_fetch_all(sample_archive_response):
-    with patch("src.data.truth_social.requests.get") as mock_get:
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_archive_response
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()
@@ -155,11 +175,16 @@ def test_fetch_all(sample_archive_response):
 
 
 def test_get_latest_post_id(sample_archive_response):
-    with patch("src.data.truth_social.requests.get") as mock_get:
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_archive_response
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()
@@ -170,25 +195,34 @@ def test_get_latest_post_id(sample_archive_response):
 
 
 def test_http_error():
-    with patch("src.data.truth_social.requests.get") as mock_get:
-        mock_get.side_effect = requests.exceptions.RequestException("API Error")
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
+        mock_client = Mock()
+        mock_client.get.side_effect = httpx.HTTPError("API Error")
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()
 
-        with pytest.raises(requests.exceptions.RequestException):
+        with pytest.raises(httpx.HTTPError):
             fetcher._fetch_archive()
 
 
 def test_retries_on_timeout(sample_archive_response):
-    with patch("src.data.truth_social.requests.get") as mock_get:
+    with patch("src.data.truth_social.httpx.Client") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_archive_response
         mock_response.raise_for_status = Mock()
-        mock_get.side_effect = [
-            requests.exceptions.Timeout("timeout"),
+
+        mock_client = Mock()
+        mock_client.get.side_effect = [
+            httpx.TimeoutException("timeout"),
             mock_response,
         ]
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         fetcher = TruthSocialFetcher()
         fetcher._cache.clear()
@@ -196,7 +230,7 @@ def test_retries_on_timeout(sample_archive_response):
         data = fetcher._fetch_archive()
 
         assert len(data) == 2
-        assert mock_get.call_count == 2
+        assert mock_client.get.call_count == 2
 
 
 def test_repr():

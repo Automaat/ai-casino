@@ -21,7 +21,6 @@ dependencies = [
     # Market Data
     "yfinance==1.1.0",
     "alpha-vantage==3.0.0",
-    "requests==2.32.5",
     # Trading
     "alpaca-py==0.43.2",
     "backtesting==0.6.5",
@@ -45,7 +44,7 @@ dependencies = [
     "rich==14.3.2",
     "loguru==0.7.3",
     "pydantic==2.12.5",
-    "pyyaml==6.0.3",
+    "pyyaml==6.0.2",
     # API Server
     "fastapi==0.128.5",
     "uvicorn[standard]==0.40.0",

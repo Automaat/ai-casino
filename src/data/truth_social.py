@@ -4,7 +4,7 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import requests
+import httpx
 from dateutil import parser
 from diskcache import Cache
 from loguru import logger
@@ -20,9 +20,9 @@ HTTP_RETRY = retry(
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type(
         (
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.ConnectionError,
-            requests.exceptions.Timeout,
+            httpx.ReadTimeout,
+            httpx.ConnectError,
+            httpx.TimeoutException,
         )
     ),
     reraise=True,
@@ -124,13 +124,14 @@ class TruthSocialFetcher:
             return cached
 
         logger.info("Fetching Truth Social archive from CNN")
-        response = requests.get(self.CNN_ARCHIVE_URL, timeout=30)
-        response.raise_for_status()
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(self.CNN_ARCHIVE_URL)
+            response.raise_for_status()
 
-        data = response.json()
-        self._cache.set(cache_key, data, expire=CACHE_TTL)
-        logger.info(f"Fetched {len(data)} posts from archive")
-        return data
+            data = response.json()
+            self._cache.set(cache_key, data, expire=CACHE_TTL)
+            logger.info(f"Fetched {len(data)} posts from archive")
+            return data
 
     def fetch_recent(self, hours: int = 24) -> TrumpPostData:
         """Fetch recent Trump posts.
