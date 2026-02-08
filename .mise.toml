@@ -16,6 +16,10 @@ run = "ruff format src tests"
 description = "Check code formatting"
 run = "ruff format --check src tests"
 
+[tasks.typecheck]
+description = "Run type checker"
+run = "uv run pyrefly check"
+
 [tasks.test]
 description = "Run pytest"
 run = "uv run pytest -v"
