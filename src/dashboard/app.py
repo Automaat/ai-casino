@@ -1,11 +1,12 @@
 """Dash app factory with layout and callbacks."""
 
 import dash_bootstrap_components as dbc
-from dash import Dash, Input, Output, State, dcc, html
+from dash import Dash, Input, Output, State, ctx, dcc, html
 from loguru import logger
 
 from src.dashboard.api_client import DaemonAPIClient
 from src.dashboard.config import DashboardConfig
+from src.dashboard.tabs import config as config_tab
 from src.dashboard.tabs import events, overview, portfolio, risk, signals
 
 
@@ -38,6 +39,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                     dbc.Tab(label="Signals", tab_id="signals"),
                     dbc.Tab(label="Risk", tab_id="risk"),
                     dbc.Tab(label="Events", tab_id="events"),
+                    dbc.Tab(label="Config", tab_id="config"),
                 ],
             ),
             html.Div(id="tab-content", className="mt-4"),
@@ -56,11 +58,15 @@ def create_dash_app(config: DashboardConfig) -> Dash:
         Args:
             active_tab: Active tab ID
             n_intervals: Interval counter
-            current_content: Current tab content (unused)
+            current_content: Current tab content
 
         Returns:
             Tab content
         """
+        # Config tab is static - skip interval refresh to preserve accordion state
+        if active_tab == "config" and ctx.triggered_id == "interval-component":
+            return current_content
+
         try:
             if active_tab == "overview":
                 return overview.render(app.api_client)
@@ -72,6 +78,8 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                 return risk.render(app.api_client)
             if active_tab == "events":
                 return events.render(app.api_client)
+            if active_tab == "config":
+                return config_tab.render(app.api_client)
             return [html.Div("Invalid tab")]
         except Exception as e:
             logger.exception("Tab render failed")
@@ -82,7 +90,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                         html.P("Failed to load tab from the AI Casino daemon."),
                         html.P(
                             "This usually means the daemon process is not running or is not reachable. "
-                            f"Please verify the daemon is running and accessible at: {config.api_url}"
+                            f"Please verify the daemon is running and accessible at: {config_tab.api_url}"
                         ),
                         html.Small(f"Details: {e!s}"),
                     ],
@@ -96,5 +104,6 @@ def create_dash_app(config: DashboardConfig) -> Dash:
     signals.register_callbacks(app)
     risk.register_callbacks(app)
     events.register_callbacks(app)
+    config_tab.register_callbacks(app)
 
     return app

@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -218,6 +218,63 @@ class CorrelationMatrixResponse(BaseModel):
     avg_correlation: float
 
 
+class FullConfigResponse(BaseModel):
+    """Full daemon configuration with sensitive fields masked."""
+
+    watchlist: list[str]
+    interval_minutes: int
+    market_hours_only: bool
+    auto_trade: bool
+    max_concurrent_analyses: int
+    trading_mode: str
+    paper_trading: dict[str, Any]
+    schedule: dict[str, Any]
+    state: dict[str, Any]
+    journal: dict[str, Any]
+    health: dict[str, Any]
+    optimization: dict[str, Any]
+    screening: dict[str, Any]
+    prefetch: dict[str, Any]
+    sector_rotation: dict[str, Any]
+    earnings_calendar: dict[str, Any]
+    peer_analysis: dict[str, Any]
+    correlation_audit: dict[str, Any]
+    reporting: dict[str, Any]
+    risk_limits: dict[str, Any]
+    rebalancing: dict[str, Any]
+    signal_tracking: dict[str, Any]
+    pre_trade_backtesting: dict[str, Any]
+    game_plan: dict[str, Any]
+    position_management: dict[str, Any]
+    monte_carlo: dict[str, Any]
+    notifications: dict[str, Any]
+    analysis_orchestration: dict[str, Any]
+    news_watcher: dict[str, Any]
+    social_watcher: dict[str, Any]
+    filings_watcher: dict[str, Any]
+    anomaly_watcher: dict[str, Any]
+    api: dict[str, Any]
+    llm: dict[str, Any]
+    api_keys: dict[str, Any]
+
+
+def _mask_sensitive_field(value: str | None) -> str:
+    """Mask sensitive API key (show first 4 + last 4 chars when long enough).
+
+    Args:
+        value: API key or None
+
+    Returns:
+        Masked string (e.g., "sk-1234...xy89") for values with length >= 8,
+        "***" for shorter non-empty values, or "Not set" when value is falsy.
+    """
+    if not value:
+        return "Not set"
+    if len(value) < 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
 def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     """Create FastAPI app with runner reference.
 
@@ -298,6 +355,74 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
             auto_trade=runner.config.auto_trade,
             trading_mode=runner.state.current_trading_mode,
             pre_market_enabled=runner.config.schedule.enable_pre_market,
+        )
+
+    @app.get("/config/full", response_model=FullConfigResponse)
+    async def config_full() -> FullConfigResponse:
+        """Get full daemon configuration with masked sensitive fields."""
+        runner: DaemonRunner = app.state.runner
+        cfg = runner.config
+
+        # Mask API keys
+        masked_api_keys = {
+            "alpha_vantage_api_key": _mask_sensitive_field(cfg.api_keys.alpha_vantage_api_key),
+            "marketaux_api_key": _mask_sensitive_field(cfg.api_keys.marketaux_api_key),
+            "finnhub_api_key": _mask_sensitive_field(cfg.api_keys.finnhub_api_key),
+            "alpaca_api_key": _mask_sensitive_field(cfg.api_keys.alpaca_api_key),
+            "alpaca_secret_key": _mask_sensitive_field(cfg.api_keys.alpaca_secret_key),
+            "alpaca_paper_api_key": _mask_sensitive_field(cfg.api_keys.alpaca_paper_api_key),
+            "alpaca_paper_secret_key": _mask_sensitive_field(cfg.api_keys.alpaca_paper_secret_key),
+            "reddit_client_id": _mask_sensitive_field(cfg.api_keys.reddit_client_id),
+            "reddit_client_secret": _mask_sensitive_field(cfg.api_keys.reddit_client_secret),
+            "reddit_user_agent": _mask_sensitive_field(cfg.api_keys.reddit_user_agent),
+            "anthropic_api_key": _mask_sensitive_field(cfg.api_keys.anthropic_api_key),
+            "openai_api_key": _mask_sensitive_field(cfg.api_keys.openai_api_key),
+            "openai_api_base": _mask_sensitive_field(cfg.api_keys.openai_api_base),
+        }
+
+        # Mask telegram secrets
+        notifications_dict = cfg.notifications.model_dump()
+        notifications_dict["telegram"]["bot_token"] = _mask_sensitive_field(
+            cfg.notifications.telegram.bot_token
+        )
+        notifications_dict["telegram"]["chat_id"] = _mask_sensitive_field(cfg.notifications.telegram.chat_id)
+
+        return FullConfigResponse(
+            watchlist=cfg.watchlist,
+            interval_minutes=cfg.interval_minutes,
+            market_hours_only=cfg.market_hours_only,
+            auto_trade=cfg.auto_trade,
+            max_concurrent_analyses=cfg.max_concurrent_analyses,
+            trading_mode=runner.state.current_trading_mode,
+            paper_trading=cfg.paper_trading.model_dump(),
+            schedule=cfg.schedule.model_dump(),
+            state=cfg.state.model_dump(),
+            journal=cfg.journal.model_dump(),
+            health=cfg.health.model_dump(),
+            optimization=cfg.optimization.model_dump(),
+            screening=cfg.screening.model_dump(),
+            prefetch=cfg.prefetch.model_dump(),
+            sector_rotation=cfg.sector_rotation.model_dump(),
+            earnings_calendar=cfg.earnings_calendar.model_dump(),
+            peer_analysis=cfg.peer_analysis.model_dump(),
+            correlation_audit=cfg.correlation_audit.model_dump(),
+            reporting=cfg.reporting.model_dump(),
+            risk_limits=cfg.risk_limits.model_dump(),
+            rebalancing=cfg.rebalancing.model_dump(),
+            signal_tracking=cfg.signal_tracking.model_dump(),
+            pre_trade_backtesting=cfg.pre_trade_backtesting.model_dump(),
+            game_plan=cfg.game_plan.model_dump(),
+            position_management=cfg.position_management.model_dump(),
+            monte_carlo=cfg.monte_carlo.model_dump(),
+            notifications=notifications_dict,
+            analysis_orchestration=cfg.analysis_orchestration.model_dump(),
+            news_watcher=cfg.news_watcher.model_dump(),
+            social_watcher=cfg.social_watcher.model_dump(),
+            filings_watcher=cfg.filings_watcher.model_dump(),
+            anomaly_watcher=cfg.anomaly_watcher.model_dump(),
+            api=cfg.api.model_dump(),
+            llm=cfg.llm.model_dump(),
+            api_keys=masked_api_keys,
         )
 
     @app.get("/analyses", response_model=AnalysesResponse)

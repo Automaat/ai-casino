@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 from dash import Dash, dcc, html
 
 from src.daemon.api import (
-    ConfigResponse,
     DegradationResponse,
     GamePlanResponse,
     HealthResponse,
@@ -29,7 +28,6 @@ def render(client: DaemonAPIClient) -> list:
     """
     health = client.get_health()
     summary = client.get_state_summary()
-    config = client.get_config()
     degradation = client.get_degradation()
     watchlist = client.get_watchlist()
     game_plan = client.get_game_plan()
@@ -39,7 +37,6 @@ def render(client: DaemonAPIClient) -> list:
     service_health = _build_service_health_indicators(degradation)
     watchlist_section = _build_watchlist_section(watchlist)
     game_plan_section = _build_game_plan_section(game_plan) if game_plan else None
-    config_table = _build_config_table(config)
     analyses_chart = _build_analyses_chart(client)
 
     components = [
@@ -56,9 +53,6 @@ def render(client: DaemonAPIClient) -> list:
 
     components.extend(
         [
-            html.Hr(),
-            html.H4("Configuration"),
-            config_table,
             html.Hr(),
             html.H4("Analyses (Last 24 Hours)"),
             analyses_chart,
@@ -273,28 +267,6 @@ def _build_game_plan_section(game_plan: GamePlanResponse) -> html.Div:
             ),
         ],
         className="mb-3",
-    )
-
-
-def _build_config_table(config: ConfigResponse) -> dbc.Table:
-    """Build configuration table."""
-    return dbc.Table(
-        [
-            html.Thead(html.Tr([html.Th("Setting"), html.Th("Value")])),
-            html.Tbody(
-                [
-                    html.Tr([html.Td("Watchlist"), html.Td(", ".join(config.watchlist))]),
-                    html.Tr([html.Td("Interval"), html.Td(f"{config.interval_minutes} minutes")]),
-                    html.Tr([html.Td("Market Hours Only"), html.Td(str(config.market_hours_only))]),
-                    html.Tr([html.Td("Auto Trade"), html.Td(str(config.auto_trade))]),
-                    html.Tr([html.Td("Trading Mode"), html.Td(config.trading_mode.upper())]),
-                    html.Tr([html.Td("Pre-Market"), html.Td(str(config.pre_market_enabled))]),
-                ]
-            ),
-        ],
-        bordered=True,
-        hover=True,
-        striped=True,
     )
 
 
