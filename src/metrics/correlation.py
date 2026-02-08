@@ -60,7 +60,7 @@ class CorrelationAuditor:
 
     def __init__(
         self,
-        market_fetcher: MarketDataFetcher,
+        market_fetcher: MarketDataFetcher | None = None,
         correlation_threshold: float = 0.8,
         lookback_days: int = 90,
         output_dir: str = "~/.ai-casino/correlation-audits",
@@ -68,7 +68,7 @@ class CorrelationAuditor:
         """Initialize correlation auditor.
 
         Args:
-            market_fetcher: Market data fetcher
+            market_fetcher: Market data fetcher (optional for load_latest)
             correlation_threshold: Minimum correlation to flag (0.5-0.95)
             lookback_days: Historical period for correlation (30-180 days)
             output_dir: Directory for persisting audit results
@@ -100,6 +100,10 @@ class CorrelationAuditor:
         Returns:
             Correlation audit result with pairs, diversification ratio, substitutions
         """
+        if self.market_fetcher is None:
+            msg = "market_fetcher required for audit()"
+            raise ValueError(msg)
+
         warnings = []
         symbols = list(positions.keys())
 
