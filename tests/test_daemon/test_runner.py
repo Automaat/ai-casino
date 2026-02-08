@@ -16,7 +16,6 @@ from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 # Test credentials - not real secrets
 TEST_API_KEY = "test_key"
 TEST_SECRET_KEY = "test_secret"
-TEST_BASE_URL = "https://paper-api.alpaca.markets"
 
 
 @pytest.fixture
@@ -223,7 +222,6 @@ def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonC
         mock_broker_class.assert_called_once_with(
             api_key=TEST_API_KEY,
             secret_key=TEST_SECRET_KEY,
-            base_url=TEST_BASE_URL,
             paper=True,
             historical_cache=ANY,
         )
