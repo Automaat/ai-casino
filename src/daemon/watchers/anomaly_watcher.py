@@ -295,6 +295,9 @@ class AnomalyWatcher(EventWatcher):
     async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
         self._init_components()
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         self._refresh_previous_close_if_needed()
 
         if not self.watchlist:
