@@ -14,10 +14,12 @@ from src.daemon.api import (
     AnalysesResponse,
     ConfigResponse,
     CorrelationMatrixResponse,
+    DegradationHistoryResponse,
     DegradationResponse,
     EventResponse,
     GamePlanResponse,
     HealthResponse,
+    MarketEventsResponse,
     PositionsResponse,
     RebalanceResponse,
     RiskHistoryResponse,
@@ -230,32 +232,32 @@ class DaemonAPIClient:
         return EventResponse.model_validate(response.json())
 
     @HTTP_RETRY
-    def get_market_events(self, limit: int = 100) -> dict:
+    def get_market_events(self, limit: int = 100) -> MarketEventsResponse:
         """Get market events.
 
         Args:
             limit: Max number of events to return
 
         Returns:
-            Dict with events and returned_count
+            MarketEventsResponse
         """
         response = self._client.get(f"{self.api_url}/events/market", params={"limit": limit})
         response.raise_for_status()
-        return response.json()
+        return MarketEventsResponse.model_validate(response.json())
 
     @HTTP_RETRY
-    def get_degradation_history(self, limit: int = 50) -> dict:
+    def get_degradation_history(self, limit: int = 50) -> DegradationHistoryResponse:
         """Get degradation history.
 
         Args:
             limit: Max number of records to return
 
         Returns:
-            Dict with records and count
+            DegradationHistoryResponse
         """
         response = self._client.get(f"{self.api_url}/events/degradation-history", params={"limit": limit})
         response.raise_for_status()
-        return response.json()
+        return DegradationHistoryResponse.model_validate(response.json())
 
     @HTTP_RETRY
     def get_game_plan(self) -> GamePlanResponse | None:

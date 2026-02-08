@@ -642,7 +642,10 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         runner: DaemonRunner = app.state.runner
         limit = max(0, min(limit, 500))
 
-        events = runner.state.market_events[-limit:] if runner.state.market_events else []
+        if limit <= 0:
+            events = []
+        else:
+            events = runner.state.market_events[-limit:] if runner.state.market_events else []
 
         return MarketEventsResponse(events=events, returned_count=len(events))
 
@@ -652,7 +655,10 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         runner: DaemonRunner = app.state.runner
         limit = max(0, min(limit, 200))
 
-        history = runner.state.degradation_history[-limit:] if runner.state.degradation_history else []
+        if limit <= 0:
+            history = []
+        else:
+            history = runner.state.degradation_history[-limit:] if runner.state.degradation_history else []
 
         return DegradationHistoryResponse(
             records=[r.model_dump(mode="json") for r in history],

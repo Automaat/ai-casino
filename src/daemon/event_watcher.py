@@ -11,6 +11,7 @@ Base pattern generalized from TrumpWatcher:
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -44,7 +45,7 @@ class EventWatcher(ABC):
         cooldown_minutes: int,
         max_concurrent_analyses: int,
         historical_cache: HistoricalCache,
-        signal_callback: callable[[EventSignal], None] | None = None,
+        signal_callback: Callable[[EventSignal], None] | None = None,
     ) -> None:
         """Initialize event watcher.
 

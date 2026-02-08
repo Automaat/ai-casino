@@ -19,7 +19,6 @@ from src.daemon.api import (
     StateSummaryResponse,
     WatchlistResponse,
 )
-from src.daemon.scheduler import MarketScheduler
 from src.dashboard.api_client import DaemonAPIClient
 from src.dashboard.config import DashboardConfig
 
@@ -1348,16 +1347,18 @@ def _check_degradation_warning(client: DaemonAPIClient) -> dict | None:
 def _check_consecutive_losses(client: DaemonAPIClient) -> dict | None:
     """Check for consecutive non-BUY signals."""
     try:
-        state = client.get_state_summary()
-        if len(state.analyses) >= _CONSECUTIVE_SIGNALS_THRESHOLD:
-            recent_signals = [a["signal"] for a in state.analyses[:_CONSECUTIVE_SIGNALS_THRESHOLD]]
-            if all(s in ["SELL", "HOLD"] for s in recent_signals):
-                return {
-                    "severity": "warning",
-                    "icon": "🟡",
-                    "message": f"Consecutive non-BUY signals: {len(recent_signals)}",
-                    "details": "Portfolio may be risk-averse or markets bearish",
-                }
+        analyses_resp = client.get_analyses(limit=_CONSECUTIVE_SIGNALS_THRESHOLD)
+        if not analyses_resp or not analyses_resp.analyses:
+            return None
+
+        recent_signals = [a.signal for a in analyses_resp.analyses[:_CONSECUTIVE_SIGNALS_THRESHOLD]]
+        if all(s in ["SELL", "HOLD"] for s in recent_signals):
+            return {
+                "severity": "warning",
+                "icon": "🟡",
+                "message": f"Consecutive non-BUY signals: {len(recent_signals)}",
+                "details": "Portfolio may be risk-averse or markets bearish",
+            }
     except Exception as e:
         logger.debug(f"Consecutive losses check failed: {e}")
     return None
@@ -1366,8 +1367,8 @@ def _check_consecutive_losses(client: DaemonAPIClient) -> dict | None:
 def _check_high_drawdown(client: DaemonAPIClient) -> dict | None:
     """Check for high portfolio drawdown."""
     try:
-        risk = client.get_risk_report()
-        if risk and abs(risk.max_drawdown) > _HIGH_DRAWDOWN_THRESHOLD:
+        risk = client.get_risk()
+        if risk and hasattr(risk, "max_drawdown") and abs(risk.max_drawdown) > _HIGH_DRAWDOWN_THRESHOLD:
             return {
                 "severity": "danger",
                 "icon": "🔴",
@@ -1376,27 +1377,6 @@ def _check_high_drawdown(client: DaemonAPIClient) -> dict | None:
             }
     except Exception as e:
         logger.debug(f"Drawdown check failed: {e}")
-    return None
-
-
-def _check_data_staleness(client: DaemonAPIClient) -> dict | None:
-    """Check for stale data during market hours."""
-    try:
-        state = client.get_state_summary()
-        config = client.get_config()
-        scheduler = MarketScheduler(config.daemon.schedule)
-
-        if state.last_run and scheduler.is_market_open():
-            staleness = (datetime.now(UTC) - state.last_run).total_seconds() / 60
-            if staleness > _STALENESS_THRESHOLD_MINUTES:
-                return {
-                    "severity": "warning",
-                    "icon": "🟡",
-                    "message": f"Stale data: {staleness:.0f}min since last analysis",
-                    "details": f"Last run: {state.last_run.strftime('%H:%M:%S %Z')}",
-                }
-    except Exception as e:
-        logger.debug(f"Staleness check failed: {e}")
     return None
 
 
@@ -1415,7 +1395,6 @@ def _generate_warnings(client: DaemonAPIClient) -> list[dict]:
         _check_degradation_warning,
         _check_consecutive_losses,
         _check_high_drawdown,
-        _check_data_staleness,
     ]:
         warning = check_fn(client)
         if warning:
@@ -1515,7 +1494,7 @@ def _build_event_table(all_events: list[dict]) -> dbc.Table:
     """
     table_rows = []
     for event in all_events[:100]:  # Limit display to 100
-        timestamp = event.get("timestamp")
+        timestamp = event.get("timestamp") or event.get("signal_timestamp")
         if timestamp:
             try:
                 ts_obj = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
@@ -1525,7 +1504,7 @@ def _build_event_table(all_events: list[dict]) -> dbc.Table:
         else:
             timestamp_str = "Unknown"
 
-        event_type = event.get("event_type", "unknown")
+        event_type = event.get("event_type") or (event.get("event", {}).get("event_type", "unknown"))
         category = _categorize_event(event)
         color, icon, _severity = _event_severity(event)
 
@@ -1597,9 +1576,8 @@ def _render_events_tab(client: DaemonAPIClient) -> list:
         # Fetch all data
         system_events = client.get_events(limit=100).events
         market_events_resp = client.get_market_events(limit=100)
-        market_events = market_events_resp.get("events", [])
+        market_events = market_events_resp.events
         degradation_history = client.get_degradation_history(limit=50)
-        state = client.get_state_summary()
 
         # Merge events and sort by timestamp
         all_events = []
@@ -1622,12 +1600,13 @@ def _render_events_tab(client: DaemonAPIClient) -> list:
         warnings_banner = _render_warnings_banner(warnings)
 
         # Build degradation timeline
-        degradation_records = degradation_history.get("records", [])
+        degradation_records = degradation_history.records
         timeline = _build_degradation_timeline(degradation_records)
 
         # Build filter controls
         unique_categories = sorted({_categorize_event(e) for e in all_events})
 
+        # TODO: Wire filter callbacks to filter all_events by type/date range
         filters = dbc.Card(
             dbc.CardBody(
                 [
@@ -1674,10 +1653,6 @@ def _render_events_tab(client: DaemonAPIClient) -> list:
         # Build event table
         table = _build_event_table(all_events)
 
-        # Build error log
-        errors = state.errors if hasattr(state, "errors") else []
-        error_log = _render_error_log(errors)
-
         return [
             html.H4("Events & Monitoring"),
             warnings_banner,
@@ -1685,7 +1660,6 @@ def _render_events_tab(client: DaemonAPIClient) -> list:
             filters,
             html.H5(f"Event Log ({len(all_events)} events)", className="mt-4 mb-3"),
             table,
-            error_log,
         ]
 
     except Exception as e:
