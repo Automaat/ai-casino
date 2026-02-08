@@ -377,6 +377,14 @@ daemon:
       # Telegram chat ID (or set TELEGRAM_CHAT_ID env var)
       # chat_id: "your_chat_id_here"
 
+  analysis_orchestration:
+    # Maximum concurrent symbol analyses (1-10)
+    max_concurrent_analyses: 3
+    # Days to use target allocations from rebalancing (1-30)
+    target_allocation_ttl_days: 7
+    # Enable position syncing with broker before analysis
+    enable_position_sync: true
+
   api:
     # Embedded API server for daemon state/control
     enabled: false

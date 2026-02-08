@@ -25,11 +25,13 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.health import HealthReport
 from src.cache.historical import HistoricalCache
+from src.daemon.analysis_orchestrator import AnalysisOrchestrator
+from src.daemon.broker_manager import BrokerManager
 from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord, SectorRotationRecord
-from src.data.broker import AlpacaBroker
+from src.daemon.task_runner import ScheduledTaskRunner
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
@@ -57,6 +59,8 @@ class DaemonRunner:
         self.config = config
         self.event_bus = event_bus
         self._historical_cache = HistoricalCache()
+        self.state = DaemonState.load(config.state.state_file)
+        self._broker_manager = BrokerManager(config, self.state, self._historical_cache)
         self.scheduler = MarketScheduler(
             start_time=config.schedule.start_time,
             end_time=config.schedule.end_time,
@@ -94,7 +98,6 @@ class DaemonRunner:
             monte_carlo_time=config.monte_carlo.schedule_time,
             monte_carlo_days=config.monte_carlo.schedule_days,
         )
-        self.state = DaemonState.load(config.state.state_file)
         self.running = False
         self._workflow: TradingWorkflow | None = None
         self._metrics_tracker: BaseMetricsTracker | None = None
@@ -109,112 +112,56 @@ class DaemonRunner:
                 n_trials=config.optimization.n_trials,
                 min_trades=config.optimization.min_trades,
             )
-        self.broker: AlpacaBroker | None = None
-        if config.auto_trade:
-            # Resolve credentials with config priority
-            if config.trading_mode == TradingMode.PAPER:
-                api_key = (
-                    config.api_keys.alpaca_paper_api_key
-                    or os.getenv("ALPACA_PAPER_API_KEY")
-                    or config.api_keys.alpaca_api_key
-                    or os.getenv("ALPACA_API_KEY")
+        # Initialize broker via manager
+        self._broker_manager.initialize_broker()
+        self.broker = self._broker_manager.broker
+
+        # Validate live mode readiness
+        if config.auto_trade and config.trading_mode == TradingMode.LIVE:
+            logger.warning("LIVE TRADING MODE - real capital at risk")
+
+            force_live = "--force-live" in sys.argv
+
+            if not force_live:
+                from src.daemon.paper_trading_validator import PaperTradingValidator
+
+                # Initialize tracker early for validation
+                if self._metrics_tracker is None:
+                    trade_repository = None
+                    if os.getenv("DATABASE_URL"):
+                        try:
+                            from src.database.repositories.trade import TradeRepository
+                            from src.database.session import get_session_factory
+
+                            session_factory = get_session_factory()
+                            trade_repository = TradeRepository(session_factory())
+                        except Exception as e:
+                            logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+
+                    self._metrics_tracker = create_metrics_tracker(trade_repository)
+
+                validator = PaperTradingValidator(
+                    config=config.paper_trading,
+                    state=self.state,
+                    metrics_tracker=self._metrics_tracker,
                 )
-                secret_key = (
-                    config.api_keys.alpaca_paper_secret_key
-                    or os.getenv("ALPACA_PAPER_SECRET_KEY")
-                    or config.api_keys.alpaca_secret_key
-                    or os.getenv("ALPACA_SECRET_KEY")
-                )
-                base_url = "https://paper-api.alpaca.markets"
+
+                try:
+                    report = validator.assess_readiness()
+
+                    if not report.ready_for_live:
+                        failed = [c.name for c in report.criteria if not c.passed]
+                        logger.error(f"Paper trading validation failed: {', '.join(failed)}")
+                        msg = "Cannot start live trading - use --force-live to bypass"
+                        raise ValueError(msg)  # noqa: TRY301
+
+                    logger.info("Paper trading validation passed")
+                except Exception as e:
+                    logger.error(f"Validation error: {e}")
+                    raise
             else:
-                api_key = self._resolve_config_or_env(config.api_keys.alpaca_api_key, "ALPACA_API_KEY")
-                secret_key = self._resolve_config_or_env(
-                    config.api_keys.alpaca_secret_key, "ALPACA_SECRET_KEY"
-                )
-                base_url = "https://api.alpaca.markets"
+                logger.warning("--force-live flag used, skipping validation")
 
-            if not api_key or not secret_key:
-                if config.trading_mode == TradingMode.LIVE:
-                    msg = "auto_trade with live mode requires ALPACA_API_KEY/ALPACA_SECRET_KEY"
-                else:
-                    msg = (
-                        "auto_trade with paper mode requires "
-                        "ALPACA_PAPER_API_KEY/ALPACA_PAPER_SECRET_KEY "
-                        "or ALPACA_API_KEY/ALPACA_SECRET_KEY as a fallback"
-                    )
-                raise ValueError(msg)
-
-            is_paper = config.trading_mode.value == "paper"
-            self.broker = AlpacaBroker(
-                api_key=api_key,
-                secret_key=secret_key,
-                base_url=base_url,
-                paper=is_paper,
-                historical_cache=self._historical_cache,
-            )
-            logger.info(f"Alpaca broker initialized (mode={config.trading_mode.value})")
-
-            # Initialize paper trading start date
-            if config.trading_mode.value == "paper":
-                if self.state.paper_trading_start_date is None:
-                    self.state.paper_trading_start_date = datetime.now(UTC)
-                if self.state.current_trading_mode != "paper":
-                    self.state.current_trading_mode = "paper"
-                    self.state.paper_trading_start_date = datetime.now(UTC)
-                    logger.warning("Switched to paper mode, reset start date")
-
-            # Validate live mode readiness
-            if config.trading_mode == TradingMode.LIVE:
-                logger.warning("LIVE TRADING MODE - real capital at risk")
-
-                force_live = "--force-live" in sys.argv
-
-                if not force_live:
-                    from src.daemon.paper_trading_validator import PaperTradingValidator
-
-                    # Initialize tracker early for validation
-                    if self._metrics_tracker is None:
-                        trade_repository = None
-                        if os.getenv("DATABASE_URL"):
-                            try:
-                                from src.database.repositories.trade import TradeRepository
-                                from src.database.session import get_session_factory
-
-                                session_factory = get_session_factory()
-                                trade_repository = TradeRepository(session_factory())
-                            except Exception as e:
-                                logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
-
-                        self._metrics_tracker = create_metrics_tracker(trade_repository)
-
-                    validator = PaperTradingValidator(
-                        config=config.paper_trading,
-                        state=self.state,
-                        metrics_tracker=self._metrics_tracker,
-                    )
-
-                    try:
-                        report = validator.assess_readiness()
-
-                        if not report.ready_for_live:
-                            failed = [c.name for c in report.criteria if not c.passed]
-                            logger.error(f"Paper trading validation failed: {', '.join(failed)}")
-                            msg = "Cannot start live trading - use --force-live to bypass"
-                            raise ValueError(msg)  # noqa: TRY301
-
-                        logger.info("Paper trading validation passed")
-                    except Exception as e:
-                        logger.error(f"Validation error: {e}")
-                        raise
-                else:
-                    logger.warning("--force-live flag used, skipping validation")
-        elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            try:
-                self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
-                logger.info("Alpaca broker initialized for watchlist merging")
-            except Exception as e:
-                logger.exception(f"Failed to initialize broker: {e}")
-                self.broker = None
         self._daemon_rebalancer = None
         if config.rebalancing.enabled:
             from src.daemon.rebalancing import DaemonRebalancer
@@ -259,6 +206,12 @@ class DaemonRunner:
 
             self.notification_service = NotificationService(config.notifications)
             logger.info("Notification service enabled")
+
+        # Analysis orchestrator (initialized after workflow is ready)
+        self._analysis_orchestrator: AnalysisOrchestrator | None = None
+
+        # Scheduled task runner
+        self._task_runner = ScheduledTaskRunner(config, self.scheduler, daemon_runner=self)
 
         # API server components
         self._api_server: uvicorn.Server | None = None
@@ -361,6 +314,30 @@ class DaemonRunner:
             self._game_plan_agent = GamePlanAgent(llm_client, market_fetcher)
         return self._game_plan_agent
 
+    def _init_analysis_orchestrator(self) -> AnalysisOrchestrator:
+        """Initialize analysis orchestrator (lazy).
+
+        Returns:
+            AnalysisOrchestrator instance
+        """
+        if self._analysis_orchestrator is None:
+            workflow = self._init_workflow()
+            self._analysis_orchestrator = AnalysisOrchestrator(
+                workflow=workflow,
+                state=self.state,
+                scheduler=self.scheduler,
+                config=self.config.analysis_orchestration,
+                trading_mode=self.config.trading_mode.value,
+                broker=self.broker,
+                position_manager=self._position_manager,
+                event_bus=self.event_bus,
+                historical_cache=self._historical_cache,
+                notification_service=self.notification_service,
+                context_builder=self,
+            )
+            logger.info("Analysis orchestrator initialized")
+        return self._analysis_orchestrator
+
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
         if self._workflow is None:
@@ -449,49 +426,9 @@ class DaemonRunner:
 
         Returns:
             Deduplicated list combining config watchlist, broker positions,
-            and latest screening candidates. Config order is preserved,
-            broker positions are appended in alphabetical order, and screening
-            candidates are appended in the order of ``latest.top_symbols``
-            (typically ordered by screening score/rank).
+            and latest screening candidates.
         """
-        # Source 1: config watchlist (preserve order)
-        merged_watchlist: list[str] = []
-        seen: set[str] = set()
-
-        for symbol in self.config.watchlist:
-            if symbol not in seen:
-                merged_watchlist.append(symbol)
-                seen.add(symbol)
-
-        # Source 2: broker positions
-        if self.broker:
-            try:
-                account_info = self.broker.get_account_info()
-                position_symbols = set(account_info.positions.keys())
-
-                if position_symbols:
-                    added = position_symbols - seen
-                    if added:
-                        logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
-                        merged_watchlist.extend(sorted(added))
-                        seen.update(added)
-                else:
-                    logger.debug("No positions to merge")
-            except Exception as e:
-                logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
-        else:
-            logger.debug("No broker configured, skipping position merge")
-
-        # Source 3: latest screening candidates (ordered by score)
-        if self.config.screening.enabled and self.state.screening_history:
-            latest = self.state.screening_history[-1]
-            new_symbols = [s for s in latest.top_symbols if s not in seen]
-            if new_symbols:
-                logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
-                merged_watchlist.extend(new_symbols)
-                seen.update(new_symbols)
-
-        return merged_watchlist
+        return self._broker_manager.get_merged_watchlist()
 
     async def _analyze_symbol(
         self,
@@ -911,12 +848,12 @@ class DaemonRunner:
             timestamp=record.timestamp,
         )
 
-    async def _analyze_watchlist(  # noqa: C901, PLR0912, PLR0915
+    async def _analyze_watchlist(
         self,
         watchlist: list[str],
         degradation_context: "DegradationContext | None" = None,
     ) -> list[TradingWorkflowResult]:
-        """Analyze all symbols in watchlist.
+        """Analyze all symbols in watchlist (delegates to orchestrator).
 
         Args:
             watchlist: List of symbols to analyze
@@ -925,113 +862,25 @@ class DaemonRunner:
         Returns:
             List of analysis results
         """
-        # Sync positions with broker (if position management enabled)
-        if self._position_manager:
-            try:
-                new_positions, updated_positions, closed_symbols = self._position_manager.sync_with_broker(
-                    {sym: self.state.get_position(sym) for sym in self.state.active_positions}
-                )
-                for pos in new_positions:
-                    self.state.add_position(pos)
-                for pos in updated_positions:
-                    self.state.update_position(pos)
-                for symbol in closed_symbols:
-                    self.state.remove_position(symbol)
-            except Exception as e:
-                logger.error(f"Failed to sync positions: {e}")
-
-        # Set target allocations from last rebalancing (if recent)
-        # This will be picked up by _init_workflow in _analyze_symbol
+        # Build target allocations from last rebalancing (if recent)
+        target_allocations = None
         if self.state.active_target_allocations and self.state.last_portfolio_rebalancing:
-            from datetime import UTC
-
             days_old = (datetime.now(UTC) - self.state.last_portfolio_rebalancing).days
-            if days_old < 7:
-                # Store allocations to apply in _init_workflow
-                self._target_allocations_to_apply = self.state.active_target_allocations
+            if days_old < self.config.analysis_orchestration.target_allocation_ttl_days:
+                target_allocations = self.state.active_target_allocations
                 logger.info(f"Using target allocations from {days_old} days ago")
-            else:
-                self._target_allocations_to_apply = None
-        else:
-            self._target_allocations_to_apply = None
 
-        # Prefetch broker positions once for all symbols
-        broker_positions = None
-        if self._position_manager and self.broker:
-            try:
-                broker_info = self.broker.get_account_info()
-                broker_positions = broker_info.positions
-            except Exception as e:
-                logger.warning(f"Failed to prefetch account info: {e}")
+        # Delegate to orchestrator
+        orchestrator = self._init_analysis_orchestrator()
+        result = await orchestrator.orchestrate(watchlist, target_allocations, degradation_context)
 
-        results: list[TradingWorkflowResult] = []
-        semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
+        logger.info(
+            f"Orchestration complete: {result.successful}/{result.total_symbols} successful, "
+            f"{result.failed} failed, {result.position_actions} position actions, "
+            f"{result.duration_seconds:.2f}s"
+        )
 
-        async def analyze_with_limit(symbol: str) -> TradingWorkflowResult | None:
-            # Build position context if holding
-            position_context = None
-            if symbol in self.state.active_positions:
-                pos = self.state.get_position(symbol)
-                if pos:
-                    # Get current price from prefetched broker positions
-                    current_price = 0.0
-                    if broker_positions and symbol in broker_positions:
-                        broker_pos = broker_positions[symbol]
-                        qty = broker_pos.qty
-                        market_value = broker_pos.market_value
-                        if qty > 0:
-                            current_price = market_value / qty
-
-                    unrealized_pnl_pct = 0.0
-                    if current_price > 0 and pos.entry_price > 0:
-                        unrealized_pnl_pct = ((current_price - pos.entry_price) / pos.entry_price) * 100
-
-                    position_context = {
-                        "has_position": True,
-                        "symbol": symbol,
-                        "entry_price": pos.entry_price,
-                        "entry_confidence": pos.entry_confidence,
-                        "unrealized_pnl_percent": unrealized_pnl_pct,
-                        "days_held": pos.days_held,
-                        "current_qty": pos.current_qty,
-                    }
-
-            async with semaphore:
-                return await self._analyze_symbol(symbol, position_context, degradation_context)
-
-        tasks = [analyze_with_limit(s) for s in watchlist]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for i, result in enumerate(raw_results):
-            if isinstance(result, Exception):
-                symbol = watchlist[i]
-                logger.error(f"Analysis failed for {symbol}: {result}")
-                self.state.record_error(f"{symbol}: {result}")
-            elif result is not None:
-                results.append(result)
-
-        # Apply position management rules (if enabled)
-        if self._position_manager:
-            for result in results:
-                if result.symbol in self.state.active_positions:
-                    try:
-                        pos = self.state.get_position(result.symbol)
-                        if pos:
-                            actions = self._position_manager.review_position(
-                                pos,
-                                result.risk.current_price,
-                                result,
-                            )
-                            self.state.update_position(pos)
-                            for action in actions:
-                                self.state.record_position_action(action)
-                                logger.info(
-                                    f"Position action: {action.action_type} {action.symbol} - {action.reason}"
-                                )
-                    except Exception as e:
-                        logger.error(f"Failed to review position {result.symbol}: {e}")
-
-        return results
+        return result.results
 
     def _log_results(self, results: list[TradingWorkflowResult]) -> None:
         """Log analysis results to console.
@@ -2243,60 +2092,6 @@ class DaemonRunner:
             logger.error(f"[MONTE CARLO] Stress test failed: {e}")
             self.state.record_error(f"Monte Carlo stress test error: {e}")
 
-    def _run_scheduled_tasks(self) -> None:  # noqa: C901, PLR0912
-        """Run all scheduled after-hours tasks."""
-        # Check if it's time for game plan generation (pre-market)
-        if self.scheduler.is_game_plan_time():
-            asyncio.run(self._run_game_plan())
-
-        # Check if it's time for data prefetching (before screening)
-        if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
-            self._run_prefetch()
-
-        # Check if it's time for pre-market data refresh
-        if self.config.prefetch.enabled and self.scheduler.is_pre_market_refresh_time():
-            self._run_pre_market_refresh()
-
-        # Check if it's time for earnings calendar fetch
-        if self.scheduler.is_earnings_fetch_time():
-            self._run_earnings_fetch()
-
-        # Check if it's time for sector rotation (before screening)
-        if self.scheduler.is_sector_rotation_time():
-            self._run_sector_rotation()
-
-        # Check if it's time for portfolio rebalancing
-        if self.scheduler.is_portfolio_rebalancing_time():
-            self._run_portfolio_rebalancing()
-
-        # Check if it's time for peer benchmarking analysis
-        if self.scheduler.is_peer_analysis_time():
-            self._run_peer_analysis()
-
-        # Check if it's time for correlation audit
-        if self.scheduler.is_correlation_audit_time():
-            self._run_correlation_audit()
-
-        # Check if it's time for Monte Carlo stress testing
-        if self.config.monte_carlo.enabled and self.scheduler.is_monte_carlo_time():
-            self._run_monte_carlo_stress_testing()
-
-        # Check if it's time for screening (before regular analysis)
-        if self.scheduler.is_after_hours_screening_time():
-            self._run_after_hours_screening()
-
-        # Check if it's time for parameter optimization
-        if self.config.optimization.enabled and self.scheduler.is_optimization_time():
-            self._run_optimization()
-
-        # Signal outcome tracking (after market close)
-        if self.scheduler.is_signal_tracking_time():
-            self._run_signal_tracking()
-
-        # Daily risk report (after-hours only, before journal)
-        if not self.scheduler.is_market_open():
-            self._run_daily_risk_report()
-
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle.
 
@@ -2305,7 +2100,7 @@ class DaemonRunner:
         """
         from src.daemon.degradation import DegradationTier
 
-        self._run_scheduled_tasks()
+        await self._task_runner.run_scheduled_tasks()
         await self._maybe_run_health_check()
 
         # Evaluate degradation before analysis
