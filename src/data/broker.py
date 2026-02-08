@@ -134,9 +134,9 @@ class AlpacaBroker:
 
                 positions[pos.symbol] = BrokerPosition(
                     symbol=pos.symbol,
-                    qty=float(pos.qty),
+                    qty=float(pos.qty or 0),
                     market_value=market_value,
-                    avg_entry_price=float(pos.avg_entry_price),
+                    avg_entry_price=float(pos.avg_entry_price or 0.0),
                     unrealized_pnl=unrealized_pl,
                     unrealized_pnl_percent=unrealized_plpc,
                 )

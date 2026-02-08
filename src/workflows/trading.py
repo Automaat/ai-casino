@@ -1085,10 +1085,9 @@ class TradingWorkflow:
                 side=action.value.lower(),
                 stop_loss_price=stop_loss_price,
             )
-            stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price else "None"
+            stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None"
             logger.info(
-                f"Executed {action.value}: {state['symbol']} "
-                f"x{order.qty} (stop-loss={stop_loss_str})"
+                f"Executed {action.value}: {state['symbol']} x{order.qty} (stop-loss={stop_loss_str})"
             )
         except BrokerAPIError as e:
             logger.critical(

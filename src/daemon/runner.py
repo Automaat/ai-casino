@@ -224,7 +224,7 @@ class DaemonRunner:
             logger.info("Tearsheet generator enabled")
 
         # Market data fetcher (shared instance for various features)
-        self.market_fetcher: object | None = None
+        self.market_fetcher: MarketDataFetcher | None = None
 
         # Analysis orchestrator (initialized after workflow is ready)
         self._analysis_orchestrator: AnalysisOrchestrator | None = None
