@@ -12,7 +12,6 @@ from src.dashboard.api_client import DaemonAPIClient
 # Constants
 _CONSECUTIVE_SIGNALS_THRESHOLD = 5
 _HIGH_DRAWDOWN_THRESHOLD = 0.10
-_STALENESS_THRESHOLD_MINUTES = 30
 _DETAILS_MAX_LENGTH = 150
 
 
@@ -51,7 +50,7 @@ def render(client: DaemonAPIClient) -> list:
         # Serialize events for dcc.Store
         events_data = [
             {
-                "timestamp": e.get("timestamp"),
+                "timestamp": e.get("timestamp") or e.get("signal_timestamp"),
                 "event_type": e.get("event_type") or (e.get("event", {}).get("event_type", "unknown")),
                 "source": e.get("source"),
                 "data": e.get("data", {}),
@@ -69,7 +68,7 @@ def render(client: DaemonAPIClient) -> list:
         timeline = _build_degradation_timeline(degradation_records)
 
         # Build filter controls
-        unique_categories = sorted({_categorize_event(e) for e in all_events})
+        unique_categories = sorted({_categorize_event(e) for e in events_data})
 
         filters = dbc.Card(
             dbc.CardBody(

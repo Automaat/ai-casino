@@ -18,7 +18,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
     Returns:
         Dash app instance
     """
-    app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+    app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
     app.title = "AI Casino Dashboard"
 
     # Store API client in app state
@@ -79,7 +79,12 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                 dbc.Alert(
                     [
                         html.H4("Error", className="alert-heading"),
-                        html.P(f"Failed to load tab: {e!s}"),
+                        html.P("Failed to load tab from the AI Casino daemon."),
+                        html.P(
+                            "This usually means the daemon process is not running or is not reachable. "
+                            f"Please verify the daemon is running and accessible at: {config.api_url}"
+                        ),
+                        html.Small(f"Details: {e!s}"),
                     ],
                     color="danger",
                 )
