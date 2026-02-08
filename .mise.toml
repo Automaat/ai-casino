@@ -63,6 +63,11 @@ description = "Launch interactive TUI chat"
 run = "uv run python -m src.main chat"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
+[tasks.dashboard]
+description = "Launch Dash dashboard"
+usage = 'option "--api-url" help="Daemon API URL" option "-p --port" help="Port" default="8050"'
+run = "uv run python -m src.main dashboard ${usage_api_url:+--api-url \"$usage_api_url\"} ${usage_port:+--port $usage_port}"
+
 [tasks."db:start"]
 description = "Start PostgreSQL container"
 run = "docker run -d --name ai-casino-db -p 5432:5432 -e POSTGRES_DB=ai_casino -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine || docker start ai-casino-db"
