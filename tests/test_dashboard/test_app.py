@@ -14,7 +14,9 @@ from src.daemon.api import (
     HealthResponse,
     PositionResponse,
     PositionsResponse,
+    RebalanceResponse,
     RiskReportResponse,
+    SnapshotsResponse,
     StateSummaryResponse,
     WatchlistResponse,
 )
@@ -94,6 +96,7 @@ def mock_daemon_api_client(monkeypatch):
                 trailing_stop_activated=False,
                 breakeven_activated=False,
                 profit_targets=[155.0, 160.0],
+                current_price=152.5,
             )
         ],
         count=1,
@@ -132,6 +135,12 @@ def mock_daemon_api_client(monkeypatch):
 
     # Game Plan
     mock_client.get_game_plan.return_value = None
+
+    # Snapshots
+    mock_client.get_snapshots.return_value = SnapshotsResponse(snapshots=[], count=0)
+
+    # Rebalance
+    mock_client.get_rebalance.return_value = None
 
     # Patch DaemonAPIClient
     def mock_api_client_init(api_url):

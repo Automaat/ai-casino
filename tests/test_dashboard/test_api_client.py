@@ -170,6 +170,7 @@ def test_get_positions() -> None:
                 "trailing_stop_activated": False,
                 "breakeven_activated": False,
                 "profit_targets": [155.0, 160.0],
+                "current_price": 152.5,
             }
         ],
         "count": 1,
