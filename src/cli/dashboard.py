@@ -14,6 +14,37 @@ from src.dashboard.config import DashboardConfig
 console = Console()
 
 
+def _check_daemon_health(api_url: str) -> DaemonAPIClient:
+    """Check daemon health and warn if unreachable."""
+    client = DaemonAPIClient(api_url)
+    if not client.is_healthy():
+        console.print("[bold yellow]Warning:[/bold yellow] Daemon API is not reachable")
+        console.print()
+
+        # Skip interactive prompt if not in TTY (Docker, CI, etc.)
+        if not sys.stdin.isatty():
+            console.print("Running in non-interactive mode, proceeding anyway...")
+            console.print("Dashboard will show errors until daemon is healthy")
+            console.print()
+        else:
+            console.print("Make sure the daemon is running:")
+            console.print("  [cyan]mise daemon --config daemon.yaml[/cyan]")
+            console.print("  (copy docs/daemon.yaml.example to daemon.yaml)")
+            console.print()
+            console.print("Options:")
+            console.print("  1. Start the daemon")
+            console.print("  2. Check daemon configuration")
+            console.print("  3. Proceed anyway (dashboard will show errors)")
+            console.print()
+
+            choice = console.input("[bold]Continue? (y/N): [/bold]")
+            if choice.lower() not in ["y", "yes"]:
+                console.print("[yellow]Aborted[/yellow]")
+                raise typer.Exit(0)
+
+    return client
+
+
 def dashboard(
     api_url: str | None = None,
     port: int = 8050,
@@ -52,32 +83,7 @@ def dashboard(
         console.print()
 
         # Check daemon health
-        client = DaemonAPIClient(config.api_url)
-        if not client.is_healthy():
-            console.print("[bold yellow]Warning:[/bold yellow] Daemon API is not reachable")
-            console.print()
-
-            # Skip interactive prompt if not in TTY (Docker, CI, etc.)
-            if not sys.stdin.isatty():
-                console.print("Running in non-interactive mode, proceeding anyway...")
-                console.print("Dashboard will show errors until daemon is healthy")
-                console.print()
-            else:
-                console.print("Make sure the daemon is running:")
-                console.print("  [cyan]mise daemon --config daemon.yaml[/cyan]")
-                console.print("  (copy docs/daemon.yaml.example to daemon.yaml)")
-                console.print()
-                console.print("Options:")
-                console.print("  1. Start the daemon")
-                console.print("  2. Check daemon configuration")
-                console.print("  3. Proceed anyway (dashboard will show errors)")
-                console.print()
-
-                choice = console.input("[bold]Continue? (y/N): [/bold]")
-                if choice.lower() not in ["y", "yes"]:
-                    console.print("[yellow]Aborted[/yellow]")
-                    raise typer.Exit(0)
-
+        client = _check_daemon_health(config.api_url)
         client.close()
 
         # Create and run app

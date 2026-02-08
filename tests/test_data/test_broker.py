@@ -78,7 +78,6 @@ def test_broker_init_with_env_vars(mock_trading_client, monkeypatch):
         api_key="test-key",
         secret_key="test-secret",
         paper=True,
-        base_url="https://paper-api.alpaca.markets",
     )
 
 
