@@ -31,6 +31,7 @@ from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord, SectorRotationRecord
+from src.daemon.task_runner import ScheduledTaskRunner
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
@@ -208,6 +209,9 @@ class DaemonRunner:
 
         # Analysis orchestrator (initialized after workflow is ready)
         self._analysis_orchestrator: AnalysisOrchestrator | None = None
+
+        # Scheduled task runner
+        self._task_runner = ScheduledTaskRunner(config, self.scheduler, daemon_runner=self)
 
         # API server components
         self._api_server: uvicorn.Server | None = None
@@ -2088,60 +2092,6 @@ class DaemonRunner:
             logger.error(f"[MONTE CARLO] Stress test failed: {e}")
             self.state.record_error(f"Monte Carlo stress test error: {e}")
 
-    def _run_scheduled_tasks(self) -> None:  # noqa: C901, PLR0912
-        """Run all scheduled after-hours tasks."""
-        # Check if it's time for game plan generation (pre-market)
-        if self.scheduler.is_game_plan_time():
-            asyncio.run(self._run_game_plan())
-
-        # Check if it's time for data prefetching (before screening)
-        if self.config.prefetch.enabled and self.scheduler.is_prefetch_time():
-            self._run_prefetch()
-
-        # Check if it's time for pre-market data refresh
-        if self.config.prefetch.enabled and self.scheduler.is_pre_market_refresh_time():
-            self._run_pre_market_refresh()
-
-        # Check if it's time for earnings calendar fetch
-        if self.scheduler.is_earnings_fetch_time():
-            self._run_earnings_fetch()
-
-        # Check if it's time for sector rotation (before screening)
-        if self.scheduler.is_sector_rotation_time():
-            self._run_sector_rotation()
-
-        # Check if it's time for portfolio rebalancing
-        if self.scheduler.is_portfolio_rebalancing_time():
-            self._run_portfolio_rebalancing()
-
-        # Check if it's time for peer benchmarking analysis
-        if self.scheduler.is_peer_analysis_time():
-            self._run_peer_analysis()
-
-        # Check if it's time for correlation audit
-        if self.scheduler.is_correlation_audit_time():
-            self._run_correlation_audit()
-
-        # Check if it's time for Monte Carlo stress testing
-        if self.config.monte_carlo.enabled and self.scheduler.is_monte_carlo_time():
-            self._run_monte_carlo_stress_testing()
-
-        # Check if it's time for screening (before regular analysis)
-        if self.scheduler.is_after_hours_screening_time():
-            self._run_after_hours_screening()
-
-        # Check if it's time for parameter optimization
-        if self.config.optimization.enabled and self.scheduler.is_optimization_time():
-            self._run_optimization()
-
-        # Signal outcome tracking (after market close)
-        if self.scheduler.is_signal_tracking_time():
-            self._run_signal_tracking()
-
-        # Daily risk report (after-hours only, before journal)
-        if not self.scheduler.is_market_open():
-            self._run_daily_risk_report()
-
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle.
 
@@ -2150,7 +2100,7 @@ class DaemonRunner:
         """
         from src.daemon.degradation import DegradationTier
 
-        self._run_scheduled_tasks()
+        await self._task_runner.run_scheduled_tasks()
         await self._maybe_run_health_check()
 
         # Evaluate degradation before analysis

@@ -214,9 +214,7 @@ def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None
 
 
 @patch("src.daemon.broker_manager.AlpacaBroker")
-def test_auto_trade_inits_broker(
-    mock_broker_class: Mock, sample_config: DaemonConfig
-) -> None:
+def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test auto_trade=true initializes broker when keys present."""
     sample_config.auto_trade = True
 
