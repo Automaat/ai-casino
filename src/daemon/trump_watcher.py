@@ -111,6 +111,9 @@ class TrumpWatcher:
     async def _check_new_posts(self) -> list[TruthPost]:
         """Check for new posts since last check."""
         self._init_components()
+        if self._fetcher is None:
+            msg = "Failed to initialize TruthSocialFetcher"
+            raise RuntimeError(msg)
 
         if self._last_check is None:
             # First run: get posts from last hour
@@ -183,6 +186,10 @@ class TrumpWatcher:
 
     async def _llm_identify_stocks(self, posts: list[TruthPost]) -> list[str]:
         """Use LLM to identify affected stocks."""
+        if self._llm is None:
+            msg = "LLM client not initialized"
+            raise RuntimeError(msg)
+
         posts_text = "\n".join(f"- {self._sanitize_post_content(p.content)}" for p in posts[:5])
 
         prompt = f"""Based on these Truth Social posts from Donald Trump, identify up to 5 stock \
@@ -222,6 +229,10 @@ If no specific stocks are affected, return "NONE".
             trump_analysis: Trump analysis with market context
         """
         self._init_components()
+        if self._workflow is None:
+            msg = "Trading workflow not initialized"
+            raise RuntimeError(msg)
+
         logger.debug(
             f"Analyzing stocks with trump context: signal={trump_analysis.signal}, "
             f"confidence={trump_analysis.confidence:.2f}"
@@ -294,11 +305,11 @@ If no specific stocks are affected, return "NONE".
 
             logger.info(f"Found {len(new_posts)} new post(s)")
 
-            # Analyze trump posts
-            trump_analysis = await self._analyst.analyze(new_posts)
-
-            # Identify affected stocks
+            # Identify affected stocks (_identify_affected_stocks initializes components including _analyst)
             affected = await self._identify_affected_stocks(new_posts)
+
+            # Analyze trump posts (analyst guaranteed initialized by _identify_affected_stocks)
+            trump_analysis = await self._analyst.analyze(new_posts)  # type: ignore[union-attr]
 
             if not affected:
                 console.print("[dim]New post detected but no affected stocks identified[/dim]")

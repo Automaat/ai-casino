@@ -388,7 +388,7 @@ class AnalysisOrchestrator:
                 data={
                     "signal": result.decision.action.value,
                     "confidence": result.decision.confidence,
-                    "risk_level": result.risk.risk_level,
+                    "risk_level": result.risk.validation.risk_level,
                 },
             )
         except Exception as e:
@@ -405,9 +405,9 @@ class AnalysisOrchestrator:
         """
         if not sentiment:
             return None
-        if sentiment.sentiment == "positive":
+        if sentiment.overall_sentiment == "positive":
             return "BUY"
-        if sentiment.sentiment == "negative":
+        if sentiment.overall_sentiment == "negative":
             return "SELL"
         return "HOLD"
 
@@ -422,8 +422,9 @@ class AnalysisOrchestrator:
         """
         if not news:
             return None
-        if news.overall_sentiment == "bullish":
+        recommendation = news.recommendation.upper()
+        if "BUY" in recommendation:
             return "BUY"
-        if news.overall_sentiment == "bearish":
+        if "SELL" in recommendation:
             return "SELL"
         return "HOLD"
