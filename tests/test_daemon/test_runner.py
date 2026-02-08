@@ -174,7 +174,7 @@ def test_resolve_config_or_env_returns_none_when_both_missing(monkeypatch: pytes
     assert result is None
 
 
-@patch("src.daemon.runner.AlpacaBroker")
+@patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_with_credentials(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test broker initialization for watchlist merging when credentials present."""
     with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
@@ -184,7 +184,7 @@ def test_broker_init_with_credentials(mock_broker_class: Mock, sample_config: Da
         mock_broker_class.assert_called_once_with(paper=True, historical_cache=ANY)
 
 
-@patch("src.daemon.runner.AlpacaBroker")
+@patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_no_credentials(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test broker not initialized without credentials."""
     with patch.dict(os.environ, {}, clear=True):
@@ -194,7 +194,7 @@ def test_broker_init_no_credentials(mock_broker_class: Mock, sample_config: Daem
         mock_broker_class.assert_not_called()
 
 
-@patch("src.daemon.runner.AlpacaBroker")
+@patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_failure(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test daemon continues if broker init fails with auto_trade=false."""
     mock_broker_class.side_effect = ValueError("Invalid credentials")
@@ -213,14 +213,12 @@ def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None
         DaemonRunner(sample_config)
 
 
-@patch("src.daemon.runner.AlpacaBroker.get_credentials")
-@patch("src.daemon.runner.AlpacaBroker")
+@patch("src.daemon.broker_manager.AlpacaBroker")
 def test_auto_trade_inits_broker(
-    mock_broker_class: Mock, mock_get_credentials: Mock, sample_config: DaemonConfig
+    mock_broker_class: Mock, sample_config: DaemonConfig
 ) -> None:
     """Test auto_trade=true initializes broker when keys present."""
     sample_config.auto_trade = True
-    mock_get_credentials.return_value = (TEST_API_KEY, TEST_SECRET_KEY, TEST_BASE_URL)
 
     with patch.dict(os.environ, {"ALPACA_API_KEY": TEST_API_KEY, "ALPACA_SECRET_KEY": TEST_SECRET_KEY}):
         runner = DaemonRunner(sample_config)

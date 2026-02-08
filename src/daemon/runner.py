@@ -31,7 +31,6 @@ from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord, SectorRotationRecord
-from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
@@ -60,7 +59,7 @@ class DaemonRunner:
         self.event_bus = event_bus
         self._historical_cache = HistoricalCache()
         self.state = DaemonState.load(config.state.state_file)
-        self._broker_manager = BrokerManager(config, self.state)
+        self._broker_manager = BrokerManager(config, self.state, self._historical_cache)
         self.scheduler = MarketScheduler(
             start_time=config.schedule.start_time,
             end_time=config.schedule.end_time,
@@ -112,114 +111,56 @@ class DaemonRunner:
                 n_trials=config.optimization.n_trials,
                 min_trades=config.optimization.min_trades,
             )
-        self.broker: AlpacaBroker | None = None
-        if config.auto_trade:
-            # Resolve credentials with config priority
-            if config.trading_mode == TradingMode.PAPER:
-                api_key = (
-                    config.api_keys.alpaca_paper_api_key
-                    or os.getenv("ALPACA_PAPER_API_KEY")
-                    or config.api_keys.alpaca_api_key
-                    or os.getenv("ALPACA_API_KEY")
+        # Initialize broker via manager
+        self._broker_manager.initialize_broker()
+        self.broker = self._broker_manager.broker
+
+        # Validate live mode readiness
+        if config.auto_trade and config.trading_mode == TradingMode.LIVE:
+            logger.warning("LIVE TRADING MODE - real capital at risk")
+
+            force_live = "--force-live" in sys.argv
+
+            if not force_live:
+                from src.daemon.paper_trading_validator import PaperTradingValidator
+
+                # Initialize tracker early for validation
+                if self._metrics_tracker is None:
+                    trade_repository = None
+                    if os.getenv("DATABASE_URL"):
+                        try:
+                            from src.database.repositories.trade import TradeRepository
+                            from src.database.session import get_session_factory
+
+                            session_factory = get_session_factory()
+                            trade_repository = TradeRepository(session_factory())
+                        except Exception as e:
+                            logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+
+                    self._metrics_tracker = create_metrics_tracker(trade_repository)
+
+                validator = PaperTradingValidator(
+                    config=config.paper_trading,
+                    state=self.state,
+                    metrics_tracker=self._metrics_tracker,
                 )
-                secret_key = (
-                    config.api_keys.alpaca_paper_secret_key
-                    or os.getenv("ALPACA_PAPER_SECRET_KEY")
-                    or config.api_keys.alpaca_secret_key
-                    or os.getenv("ALPACA_SECRET_KEY")
-                )
-                base_url = "https://paper-api.alpaca.markets"
+
+                try:
+                    report = validator.assess_readiness()
+
+                    if not report.ready_for_live:
+                        failed = [c.name for c in report.criteria if not c.passed]
+                        logger.error(f"Paper trading validation failed: {', '.join(failed)}")
+                        msg = "Cannot start live trading - use --force-live to bypass"
+                        raise ValueError(msg)  # noqa: TRY301
+
+                    logger.info("Paper trading validation passed")
+                except Exception as e:
+                    logger.error(f"Validation error: {e}")
+                    raise
             else:
-                api_key = self._resolve_config_or_env(config.api_keys.alpaca_api_key, "ALPACA_API_KEY")
-                secret_key = self._resolve_config_or_env(
-                    config.api_keys.alpaca_secret_key, "ALPACA_SECRET_KEY"
-                )
-                base_url = "https://api.alpaca.markets"
+                logger.warning("--force-live flag used, skipping validation")
 
-            if not api_key or not secret_key:
-                if config.trading_mode == TradingMode.LIVE:
-                    msg = "auto_trade with live mode requires ALPACA_API_KEY/ALPACA_SECRET_KEY"
-                else:
-                    msg = (
-                        "auto_trade with paper mode requires "
-                        "ALPACA_PAPER_API_KEY/ALPACA_PAPER_SECRET_KEY "
-                        "or ALPACA_API_KEY/ALPACA_SECRET_KEY as a fallback"
-                    )
-                raise ValueError(msg)
-
-            is_paper = config.trading_mode.value == "paper"
-            self.broker = AlpacaBroker(
-                api_key=api_key,
-                secret_key=secret_key,
-                base_url=base_url,
-                paper=is_paper,
-                historical_cache=self._historical_cache,
-            )
-            self._broker_manager.broker = self.broker
-            logger.info(f"Alpaca broker initialized (mode={config.trading_mode.value})")
-
-            # Initialize paper trading start date
-            if config.trading_mode.value == "paper":
-                if self.state.paper_trading_start_date is None:
-                    self.state.paper_trading_start_date = datetime.now(UTC)
-                if self.state.current_trading_mode != "paper":
-                    self.state.current_trading_mode = "paper"
-                    self.state.paper_trading_start_date = datetime.now(UTC)
-                    logger.warning("Switched to paper mode, reset start date")
-
-            # Validate live mode readiness
-            if config.trading_mode == TradingMode.LIVE:
-                logger.warning("LIVE TRADING MODE - real capital at risk")
-
-                force_live = "--force-live" in sys.argv
-
-                if not force_live:
-                    from src.daemon.paper_trading_validator import PaperTradingValidator
-
-                    # Initialize tracker early for validation
-                    if self._metrics_tracker is None:
-                        trade_repository = None
-                        if os.getenv("DATABASE_URL"):
-                            try:
-                                from src.database.repositories.trade import TradeRepository
-                                from src.database.session import get_session_factory
-
-                                session_factory = get_session_factory()
-                                trade_repository = TradeRepository(session_factory())
-                            except Exception as e:
-                                logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
-
-                        self._metrics_tracker = create_metrics_tracker(trade_repository)
-
-                    validator = PaperTradingValidator(
-                        config=config.paper_trading,
-                        state=self.state,
-                        metrics_tracker=self._metrics_tracker,
-                    )
-
-                    try:
-                        report = validator.assess_readiness()
-
-                        if not report.ready_for_live:
-                            failed = [c.name for c in report.criteria if not c.passed]
-                            logger.error(f"Paper trading validation failed: {', '.join(failed)}")
-                            msg = "Cannot start live trading - use --force-live to bypass"
-                            raise ValueError(msg)  # noqa: TRY301
-
-                        logger.info("Paper trading validation passed")
-                    except Exception as e:
-                        logger.error(f"Validation error: {e}")
-                        raise
-                else:
-                    logger.warning("--force-live flag used, skipping validation")
-        elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            try:
-                self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
-                self._broker_manager.broker = self.broker
-                logger.info("Alpaca broker initialized for watchlist merging")
-            except Exception as e:
-                logger.exception(f"Failed to initialize broker: {e}")
-                self.broker = None
         self._daemon_rebalancer = None
         if config.rebalancing.enabled:
             from src.daemon.rebalancing import DaemonRebalancer
