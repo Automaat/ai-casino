@@ -250,7 +250,7 @@ class VectorBTRunner:
         else:
             macd_hist = pd.Series(0.0, index=close.index)
 
-        rsi = rsi.fillna(50.0)
+        rsi = rsi.fillna(50.0) if rsi is not None else pd.Series(50.0, index=close.index)
         macd_hist = macd_hist.fillna(0.0)
 
         entries = (rsi < rsi_oversold) & (macd_hist > 0)
@@ -333,8 +333,8 @@ class VectorBTRunner:
         adx_col = f"ADX_{adx_length}"
         adx_val = adx[adx_col] if adx is not None and adx_col in adx else pd.Series(0.0, index=close.index)
 
-        sma_fast = sma_fast.fillna(close)
-        sma_slow = sma_slow.fillna(close)
+        sma_fast = sma_fast.fillna(close) if sma_fast is not None else close.copy()
+        sma_slow = sma_slow.fillna(close) if sma_slow is not None else close.copy()
         adx_val = adx_val.fillna(0.0)
 
         entries = (sma_fast > sma_slow) & (adx_val > adx_strong_threshold)
@@ -414,7 +414,7 @@ class VectorBTRunner:
     def _simulate(self, sim: _SimulationInput) -> VectorBTResult:
         """Simulate portfolio from entry/exit signals using vectorized ops."""
         close = sim.data["Close"].values
-        dates = sim.data.index.to_pydatetime().tolist()
+        dates = [dt.to_pydatetime() for dt in sim.data.index]
         entries_arr = sim.entries.values.astype(bool)
         exits_arr = sim.exits.values.astype(bool)
         n = len(close)
