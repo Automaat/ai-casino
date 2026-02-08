@@ -42,7 +42,7 @@ def daemon(
             if not config.exists():
                 console.print(f"[bold red]Error:[/bold red] Config file not found: {config}")
                 raise typer.Exit(1)
-            daemon_config = DaemonConfig.from_toml(config)
+            daemon_config = DaemonConfig.from_yaml(config)
         else:
             daemon_config = DaemonConfig()
 
@@ -95,7 +95,7 @@ def _load_daemon_config(config: Path | None) -> DaemonConfig:
         if not config.exists():
             console.print(f"[bold red]Error:[/bold red] Config file not found: {config}")
             raise typer.Exit(1)
-        return DaemonConfig.from_toml(config)
+        return DaemonConfig.from_yaml(config)
     return DaemonConfig()
 
 
@@ -198,7 +198,7 @@ def events_daemon(
 
         if not implemented_enabled:
             console.print("[bold red]Error:[/bold red] No event watchers enabled in config")
-            console.print("Enable at least one watcher in daemon.toml:")
+            console.print("Enable at least one watcher in daemon.yaml:")
             console.print("  [daemon.news_watcher]")
             console.print("  enabled = true")
             raise typer.Exit(1)

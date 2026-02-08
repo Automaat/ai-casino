@@ -44,7 +44,7 @@ run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is no
 description = "Run daemon with dashboard (API enabled)"
 run = """
   trap 'pkill -P $$' EXIT
-  uv run python -m src.main daemon --config daemon-dev.toml &
+  uv run python -m src.main daemon --config daemon-dev.yaml &
   DAEMON_PID=$!
   echo "Daemon started (PID: $DAEMON_PID)"
   sleep 3

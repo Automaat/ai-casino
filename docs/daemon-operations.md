@@ -9,7 +9,7 @@ Configuration reference, state management, and operational guide for running the
 python -m src.main daemon
 
 # Start with custom config
-python -m src.main daemon --config daemon.toml
+python -m src.main daemon --config daemon.yaml
 
 # Start Trump watcher
 python -m src.main trump-daemon --interval 5 --max-analyses 10
@@ -33,7 +33,7 @@ classDiagram
         +ScheduleConfig schedule
         +StateConfig state
         +ScreeningConfig screening
-        +from_toml(path: Path) DaemonConfig
+        +from_yaml(path: Path) DaemonConfig
     }
 
     class ScheduleConfig {
@@ -63,35 +63,35 @@ classDiagram
     DaemonConfig *-- ScreeningConfig
 ```
 
-### Complete TOML Example
+### Complete YAML Example
 
-```toml
-# daemon.toml
+```yaml
+# daemon.yaml
 
-[daemon]
-watchlist = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
-interval_minutes = 30
-market_hours_only = true
-auto_trade = false
-max_concurrent_analyses = 3
+daemon:
+  watchlist: ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
+  interval_minutes: 30
+  market_hours_only: true
+  auto_trade: false
+  max_concurrent_analyses: 3
 
-[daemon.schedule]
-start_time = "09:30"
-end_time = "16:00"
-timezone = "America/New_York"
-enable_pre_market = false
+  schedule:
+    start_time: "09:30"
+    end_time: "16:00"
+    timezone: "America/New_York"
+    enable_pre_market: false
 
-[daemon.screening]
-enabled = true
-screen_time = "16:30"
-screen_days = ["mon", "tue", "wed", "thu", "fri"]
-criteria = "momentum"        # momentum, value, breakout
-universe = "COMBINED"        # SP500, NASDAQ100, COMBINED
-top_n = 10
-watchlist_name = "daemon-screening"
+  screening:
+    enabled: true
+    screen_time: "16:30"
+    screen_days: ["mon", "tue", "wed", "thu", "fri"]
+    criteria: "momentum"        # momentum, value, breakout
+    universe: "COMBINED"        # SP500, NASDAQ100, COMBINED
+    top_n: 10
+    watchlist_name: "daemon-screening"
 
-[daemon.state]
-state_file = "~/.ai-casino/daemon-state.json"
+  state:
+    state_file: "~/.ai-casino/daemon-state.json"
 ```
 
 ### Config Parameters

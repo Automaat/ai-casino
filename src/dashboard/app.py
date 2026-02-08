@@ -102,7 +102,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
                         html.P(f"Failed to fetch data from daemon API: {e}"),
                         html.Hr(),
                         html.P("Make sure the daemon is running:", className="mb-0"),
-                        html.Code("mise daemon --config daemon.toml"),
+                        html.Code("mise daemon --config daemon.yaml"),
                     ],
                     color="danger",
                 )
