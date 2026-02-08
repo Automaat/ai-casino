@@ -278,8 +278,7 @@ def _build_section_card(section_name: str, section_data: dict, enabled: bool) ->
                 )
             ),
         ],
-        className="mb-3",
-        style={"border-left": f"4px solid {border_color}"},
+        className=f"mb-3 border-start border-4 border-{border_color}",
     )
 
 
@@ -298,4 +297,4 @@ def _format_value(value: bool | list | dict | None | str | int | float) -> html.
         return html.Span(f"{len(value)} items", className="text-muted")
     if value is None:
         return html.Span("None", className="text-muted")
-    return str(value)
+    return html.Span(str(value))

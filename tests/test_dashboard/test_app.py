@@ -11,6 +11,7 @@ from src.daemon.api import (
     ConfigResponse,
     DegradationResponse,
     EventResponse,
+    FullConfigResponse,
     HealthResponse,
     PositionResponse,
     PositionsResponse,
@@ -197,6 +198,56 @@ def test_overview_tab_renders(mock_daemon_api_client) -> None:
     assert isinstance(content, list)
     mock_daemon_api_client.get_health.assert_called()
     mock_daemon_api_client.get_state_summary.assert_called()
+
+
+def test_config_tab_renders(mock_daemon_api_client) -> None:
+    """Test config tab renders without error."""
+    from src.dashboard.tabs import config
+
+    # Mock get_full_config
+    mock_daemon_api_client.get_full_config.return_value = FullConfigResponse(
+        watchlist=["AAPL"],
+        interval_minutes=5,
+        market_hours_only=True,
+        auto_trade=False,
+        max_concurrent_analyses=5,
+        trading_mode="paper",
+        paper_trading={"enabled": True, "initial_cash": 100000.0},
+        schedule={"enabled": False},
+        state={"state_dir": ".ai-casino"},
+        journal={"enabled": True},
+        health={"check_interval_seconds": 60},
+        optimization={"enabled": False},
+        screening={"enabled": False},
+        prefetch={"enabled": False},
+        sector_rotation={"enabled": False},
+        earnings_calendar={"enabled": False},
+        peer_analysis={"enabled": False},
+        correlation_audit={"enabled": False},
+        reporting={"enabled": False},
+        risk_limits={"enabled": False},
+        rebalancing={"enabled": False},
+        signal_tracking={"enabled": False},
+        pre_trade_backtesting={"enabled": False},
+        game_plan={"enabled": False},
+        position_management={"enabled": False},
+        monte_carlo={"enabled": False},
+        notifications={"enabled": False},
+        analysis_orchestration={"enabled": False},
+        news_watcher={"enabled": False},
+        social_watcher={"enabled": False},
+        filings_watcher={"enabled": False},
+        anomaly_watcher={"enabled": False},
+        api={"host": "127.0.0.1", "port": 8000},
+        llm={"provider": "ollama"},
+        api_keys={},
+    )
+
+    content = config.render(mock_daemon_api_client)
+
+    assert content is not None
+    assert isinstance(content, list)
+    mock_daemon_api_client.get_full_config.assert_called()
 
 
 def test_portfolio_tab_renders(mock_daemon_api_client) -> None:

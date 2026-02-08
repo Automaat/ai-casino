@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -227,45 +227,46 @@ class FullConfigResponse(BaseModel):
     auto_trade: bool
     max_concurrent_analyses: int
     trading_mode: str
-    paper_trading: dict
-    schedule: dict
-    state: dict
-    journal: dict
-    health: dict
-    optimization: dict
-    screening: dict
-    prefetch: dict
-    sector_rotation: dict
-    earnings_calendar: dict
-    peer_analysis: dict
-    correlation_audit: dict
-    reporting: dict
-    risk_limits: dict
-    rebalancing: dict
-    signal_tracking: dict
-    pre_trade_backtesting: dict
-    game_plan: dict
-    position_management: dict
-    monte_carlo: dict
-    notifications: dict
-    analysis_orchestration: dict
-    news_watcher: dict
-    social_watcher: dict
-    filings_watcher: dict
-    anomaly_watcher: dict
-    api: dict
-    llm: dict
-    api_keys: dict
+    paper_trading: dict[str, Any]
+    schedule: dict[str, Any]
+    state: dict[str, Any]
+    journal: dict[str, Any]
+    health: dict[str, Any]
+    optimization: dict[str, Any]
+    screening: dict[str, Any]
+    prefetch: dict[str, Any]
+    sector_rotation: dict[str, Any]
+    earnings_calendar: dict[str, Any]
+    peer_analysis: dict[str, Any]
+    correlation_audit: dict[str, Any]
+    reporting: dict[str, Any]
+    risk_limits: dict[str, Any]
+    rebalancing: dict[str, Any]
+    signal_tracking: dict[str, Any]
+    pre_trade_backtesting: dict[str, Any]
+    game_plan: dict[str, Any]
+    position_management: dict[str, Any]
+    monte_carlo: dict[str, Any]
+    notifications: dict[str, Any]
+    analysis_orchestration: dict[str, Any]
+    news_watcher: dict[str, Any]
+    social_watcher: dict[str, Any]
+    filings_watcher: dict[str, Any]
+    anomaly_watcher: dict[str, Any]
+    api: dict[str, Any]
+    llm: dict[str, Any]
+    api_keys: dict[str, Any]
 
 
 def _mask_sensitive_field(value: str | None) -> str:
-    """Mask sensitive API key (show first 4 + last 4 chars).
+    """Mask sensitive API key (show first 4 + last 4 chars when long enough).
 
     Args:
         value: API key or None
 
     Returns:
-        Masked string (e.g., "sk-1234...xy89") or "Not set"
+        Masked string (e.g., "sk-1234...xy89") for values with length >= 8,
+        "***" for shorter non-empty values, or "Not set" when value is falsy.
     """
     if not value:
         return "Not set"
@@ -392,7 +393,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
             market_hours_only=cfg.market_hours_only,
             auto_trade=cfg.auto_trade,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
-            trading_mode=cfg.trading_mode.value,
+            trading_mode=runner.state.current_trading_mode,
             paper_trading=cfg.paper_trading.model_dump(),
             schedule=cfg.schedule.model_dump(),
             state=cfg.state.model_dump(),
