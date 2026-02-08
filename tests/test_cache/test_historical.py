@@ -42,10 +42,12 @@ class TestTableCreation:
         assert "reddit_posts" in table_names
 
     def test_idempotent_creation(self, tmp_path):
+        # Smoke test: verifies no exception when creating cache multiple times
         db_path = str(tmp_path / "test.db")
         c1 = HistoricalCache(db_path=db_path)
         c1.close()
         c2 = HistoricalCache(db_path=db_path)
+        assert c2 is not None
         c2.close()
 
 

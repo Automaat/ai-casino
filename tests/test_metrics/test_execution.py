@@ -227,10 +227,12 @@ class TestTimedOperation:
 
     def test_noop_without_collector(self):
         """timed_operation should be a no-op when no collector is active."""
+        # Smoke test: verifies no exception when no collector is active
         token = current_collector.set(None)
         try:
             with timed_operation("test_op", key="value"):
                 pass
+            assert True  # Reached here without exception
         finally:
             current_collector.reset(token)
 

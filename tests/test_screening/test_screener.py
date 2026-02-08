@@ -274,8 +274,9 @@ class TestStockScreener:
 
     def test_clear_cache(self, stock_screener):
         """Test cache clearing."""
+        # Smoke test: verifies no exception when clearing cache
         stock_screener.clear_cache()
-        # Should not raise
+        assert stock_screener is not None
 
 
 class TestScoringFunctions:

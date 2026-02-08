@@ -129,15 +129,11 @@ class TestEscapeDelegation:
 
     def test_action_hide_dropdown_delegates_when_no_app(self) -> None:
         """Escape without app falls back to self.focus()."""
+        from textual._context import NoActiveAppError
+
         widget = AutocompleteInput(commands=["analyze"])
         widget.show_dropdown = False
 
-        # Widget not mounted, so app is None - should not raise
-        # The hasattr guard prevents AttributeError
-        try:
-            # This would fail without the hasattr guard since widget isn't mounted
-            # We can't call action_hide_dropdown() without mounting,
-            # but we can verify the guard logic exists in the method
-            pass
-        except AttributeError:
-            pytest.fail("action_hide_dropdown should handle missing app gracefully")
+        # Widget not mounted, so app is None - focus() raises NoActiveAppError
+        with pytest.raises(NoActiveAppError):
+            widget.action_hide_dropdown()
