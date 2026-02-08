@@ -154,6 +154,19 @@ class TestAnalyzeStockTool:
         assert "## News Analysis" in result
         assert "## Decision Rationale" in result
 
+        # Sentiment ratios
+        assert "65%" in result  # positive_ratio
+        assert "15%" in result  # negative_ratio
+        assert "20%" in result  # neutral_ratio
+
+        # News fields
+        assert "Strong positive impact expected" in result  # impact_assessment
+        assert "Consider buying on positive momentum" in result  # recommendation
+
+        # Decision reasoning bullets
+        assert "Strong technical signals" in result  # reasoning[0]
+        assert "Positive sentiment" in result  # reasoning[1]
+
     def test_format_result_with_warnings(self, tool, mock_workflow_result):
         """Test formatted result includes warnings."""
         mock_workflow_result.warnings = ["Fundamental data unavailable", "Rate limit hit"]
