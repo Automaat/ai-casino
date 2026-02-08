@@ -340,6 +340,7 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
         ),
         "account_info": None,
         "order_status": None,
+        "warnings": [],
     }
 
     result_state = workflow._execute_trade(state)
@@ -607,3 +608,108 @@ async def test_backtest_validation_error(mock_workflow_dependencies):
 
     assert result.backtest_validation is None
     assert any("Backtest error" in w for w in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_broker_api_failure_blocks_trade(mock_workflow_dependencies):
+    """Broker API failure prevents trade execution."""
+    from src.data.broker import BrokerAPIError
+
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    mock_broker = MagicMock()
+    mock_broker.get_account_info.side_effect = BrokerAPIError("API timeout")
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        broker=mock_broker,
+        use_meta_agent=False,
+    )
+
+    # Mock trader to force BUY signal
+    mock_decision = TradingDecision(
+        action=Signal.BUY,
+        confidence=0.85,
+        reasoning=["Strong buy signal"],
+        risk_level="LOW",
+        owns_position=False,
+        position_qty=None,
+    )
+    with patch.object(workflow.trader, "decide", return_value=mock_decision):
+        result = await workflow.analyze("AAPL")
+
+    assert not result.risk.validation.approved
+    assert "broker_available" in result.risk.validation.constraints_met
+    assert not result.risk.validation.constraints_met["broker_available"]
+    assert result.order is None
+    assert any("Broker API unavailable" in w for w in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_paper_trading_unaffected(mock_workflow_dependencies):
+    """Paper trading (broker=None) still uses mock data."""
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        broker=None,
+        use_meta_agent=False,
+    )
+
+    result = await workflow.analyze("AAPL")
+
+    assert result.risk.account_info.balance == 100000.0
+    assert not any("Broker API" in w for w in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_order_submission_failure_handled(mock_workflow_dependencies):
+    """Order submission failures handled gracefully."""
+    from src.data.broker import BrokerAccountInfo, BrokerAPIError
+
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    mock_broker = MagicMock()
+    mock_broker.get_account_info.return_value = BrokerAccountInfo(
+        balance=50000.0,
+        available_cash=30000.0,
+        positions={},
+        total_exposure=0.0,
+        portfolio_value=50000.0,
+    )
+    mock_broker.submit_order.side_effect = BrokerAPIError("Order rejected")
+
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        broker=mock_broker,
+        use_meta_agent=False,
+    )
+
+    # Mock trader to force BUY signal
+    mock_decision = TradingDecision(
+        action=Signal.BUY,
+        confidence=0.85,
+        reasoning=["Strong buy signal"],
+        risk_level="LOW",
+        owns_position=False,
+        position_qty=None,
+    )
+    with patch.object(workflow.trader, "decide", return_value=mock_decision):
+        result = await workflow.analyze("AAPL")
+
+    # Risk assessment should approve (broker was available for account info)
+    assert result.risk.validation.approved
+    assert result.order is None
+    assert any("Order submission failed" in w for w in result.warnings)

@@ -772,3 +772,29 @@ class TestWeightBasedPositionSizing:
         assert result.position_sizing.recommended_shares > 0
         assert "Portfolio-weighted position" in result.position_sizing.reasoning
         assert result.position_sizing.position_value <= 15000.0  # 15% target
+
+
+def test_broker_failure_blocks_approval(mock_llm_client, sample_ohlcv_data):
+    """broker_api_failed flag prevents approval."""
+    agent = RiskManagementAgent(mock_llm_client)
+
+    account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
+
+    sample_ohlcv_data["Close"] = [150.0] * len(sample_ohlcv_data)
+    sample_ohlcv_data["High"] = [155.0] * len(sample_ohlcv_data)
+    sample_ohlcv_data["Low"] = [145.0] * len(sample_ohlcv_data)
+
+    assessment = agent.assess(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=150.0,
+        account_info=account_info,
+        market_data=sample_ohlcv_data,
+        decision_confidence=0.8,
+        broker_api_failed=True,
+    )
+
+    assert not assessment.validation.approved
+    assert "broker_available" in assessment.validation.constraints_met
+    assert not assessment.validation.constraints_met["broker_available"]
+    assert any("Broker API unavailable" in w for w in assessment.validation.warnings)

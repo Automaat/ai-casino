@@ -190,6 +190,7 @@ class RiskManagementAgent:
         target_portfolio_weight: float | None = None,
         backtest_validation: "BacktestValidation | None" = None,
         degradation_context: "DegradationContext | None" = None,  # noqa: ARG002
+        broker_api_failed: bool = False,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
 
@@ -205,6 +206,7 @@ class RiskManagementAgent:
             target_portfolio_weight: Optional target portfolio weight for allocation-based sizing
             backtest_validation: Optional pre-trade backtest validation result
             degradation_context: Optional degradation context
+            broker_api_failed: True if broker API failed during account fetch
 
         Returns:
             RiskAssessment with sizing, stop-loss, validation
@@ -234,6 +236,7 @@ class RiskManagementAgent:
                 broker_positions=broker_positions,
                 portfolio_value=portfolio_value,
                 backtest_validation=backtest_validation,
+                broker_api_failed=broker_api_failed,
             )
 
             confidence = self._calculate_risk_confidence(validation, decision_confidence)
@@ -509,6 +512,7 @@ class RiskManagementAgent:
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
         backtest_validation: "BacktestValidation | None" = None,
+        broker_api_failed: bool = False,
     ) -> RiskValidation:
         """Validate risk constraints and generate approval.
 
@@ -521,12 +525,21 @@ class RiskManagementAgent:
             broker_positions: Optional broker positions for VaR check
             portfolio_value: Optional portfolio value for VaR check
             backtest_validation: Optional pre-trade backtest validation result
+            broker_api_failed: True if broker API failed during account fetch
 
         Returns:
             RiskValidation with approval status
         """
         warnings = []
         constraints_met = {}
+
+        # Broker API failure check (highest priority)
+        constraints_met["broker_available"] = not broker_api_failed
+        if broker_api_failed:
+            warnings.append(
+                "Broker API unavailable - cannot verify account balance or positions. "
+                "Trade execution blocked to prevent incorrect sizing."
+            )
 
         constraints_met["position_risk"] = position_sizing.risk_percent <= self.max_position_risk
         if not constraints_met["position_risk"]:
