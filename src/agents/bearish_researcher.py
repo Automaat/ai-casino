@@ -124,7 +124,7 @@ class BearishResearcher(BaseResearcher):
         self,
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
-        news: NewsAnalysis,
+        _news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
     ) -> float:
         """Calculate confidence in bear case.
@@ -132,7 +132,7 @@ class BearishResearcher(BaseResearcher):
         Args:
             technical: Technical analysis result
             sentiment: Sentiment analysis result
-            news: News analysis result (unused, for API consistency)
+            _news: News analysis result (unused, for API consistency)
             fundamental: Fundamental analysis result
 
         Returns:

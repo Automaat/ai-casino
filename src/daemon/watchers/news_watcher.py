@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
-from src.daemon.events import NewsEvent
+from src.daemon.events import BaseEvent, NewsEvent
 from src.data.news import NewsFetcher
 
 

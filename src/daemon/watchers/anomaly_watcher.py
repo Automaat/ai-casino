@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
-from src.daemon.events import AnomalyEvent, Gap, PriceMove, VolumeSpike
+from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
 
 

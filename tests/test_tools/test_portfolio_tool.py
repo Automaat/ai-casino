@@ -95,7 +95,9 @@ class TestOptimizePortfolioTool:
             mock_optimizer.optimize.return_value = mock_optimization_result
             mock_optimizer_cls.return_value = mock_optimizer
 
-            tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following")
+            tool.execute(
+                symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following"
+            )
 
             mock_optimizer.optimize.assert_called_once_with(
                 "AAPL", "2023-01-01", "2024-01-01", "trend_following"
