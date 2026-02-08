@@ -3,7 +3,7 @@
 import os
 from datetime import datetime
 
-import requests
+import httpx
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
@@ -19,9 +19,9 @@ HTTP_RETRY = retry(
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type(
         (
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.ConnectionError,
-            requests.exceptions.Timeout,
+            httpx.ReadTimeout,
+            httpx.ConnectError,
+            httpx.TimeoutException,
         )
     ),
     reraise=True,
@@ -91,33 +91,34 @@ class NewsFetcher:
 
         with timed_operation("news_fetch", source="marketaux"):
             try:
-                response = requests.get(self.BASE_URL, params=params, timeout=30)
-                response.raise_for_status()
+                with httpx.Client(timeout=30.0) as client:
+                    response = client.get(self.BASE_URL, params=params)
+                    response.raise_for_status()
 
-                data = response.json()
-                articles = []
+                    data = response.json()
+                    articles = []
 
-                for item in data.get("data", []):
-                    articles.append(
-                        NewsArticle(
-                            title=item.get("title", ""),
-                            description=item.get("description", ""),
-                            url=item.get("url", ""),
-                            published_at=datetime.fromisoformat(
-                                item.get("published_at", "").replace("Z", "+00:00")
-                            ),
-                            source=item.get("source", ""),
+                    for item in data.get("data", []):
+                        articles.append(
+                            NewsArticle(
+                                title=item.get("title", ""),
+                                description=item.get("description", ""),
+                                url=item.get("url", ""),
+                                published_at=datetime.fromisoformat(
+                                    item.get("published_at", "").replace("Z", "+00:00")
+                                ),
+                                source=item.get("source", ""),
+                            )
                         )
-                    )
 
-                logger.info(f"Fetched {len(articles)} articles")
+                    logger.info(f"Fetched {len(articles)} articles")
 
-                if self._cache and articles:
-                    self._cache.store_news_articles(symbol, articles)
+                    if self._cache and articles:
+                        self._cache.store_news_articles(symbol, articles)
 
-                return articles
+                    return articles
 
-            except requests.exceptions.RequestException as e:
+            except httpx.HTTPError as e:
                 logger.error(f"News fetch failed: {e}")
                 raise
 
@@ -143,29 +144,30 @@ class NewsFetcher:
             params["api_token"] = self.api_key
 
         try:
-            response = requests.get(self.BASE_URL, params=params, timeout=30)
-            response.raise_for_status()
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(self.BASE_URL, params=params)
+                response.raise_for_status()
 
-            data = response.json()
-            articles = []
+                data = response.json()
+                articles = []
 
-            for item in data.get("data", []):
-                articles.append(
-                    NewsArticle(
-                        title=item.get("title", ""),
-                        description=item.get("description", ""),
-                        url=item.get("url", ""),
-                        published_at=datetime.fromisoformat(
-                            item.get("published_at", "").replace("Z", "+00:00")
-                        ),
-                        source=item.get("source", ""),
+                for item in data.get("data", []):
+                    articles.append(
+                        NewsArticle(
+                            title=item.get("title", ""),
+                            description=item.get("description", ""),
+                            url=item.get("url", ""),
+                            published_at=datetime.fromisoformat(
+                                item.get("published_at", "").replace("Z", "+00:00")
+                            ),
+                            source=item.get("source", ""),
+                        )
                     )
-                )
 
-            logger.info(f"Fetched {len(articles)} articles")
-            return articles
+                logger.info(f"Fetched {len(articles)} articles")
+                return articles
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Market news fetch failed: {e}")
             raise
 

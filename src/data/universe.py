@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 from diskcache import Cache
 from loguru import logger
@@ -155,27 +155,28 @@ class StockUniverseFetcher:
         Returns:
             List of StockInfo
         """
-        response = requests.get(SP500_URL, timeout=30)
-        response.raise_for_status()
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(SP500_URL)
+            response.raise_for_status()
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        table = soup.find("table", {"id": "constituents"})
-        if not table:
-            msg = "S&P 500 table not found on Wikipedia"
-            raise ValueError(msg)
+            soup = BeautifulSoup(response.text, "html.parser")
+            table = soup.find("table", {"id": "constituents"})
+            if not table:
+                msg = "S&P 500 table not found on Wikipedia"
+                raise ValueError(msg)
 
-        stocks = []
-        for row in table.find_all("tr")[1:]:  # Skip header
-            cols = row.find_all("td")
-            if len(cols) >= 4:
-                symbol = cols[0].get_text(strip=True).replace(".", "-")  # BRK.B -> BRK-B
-                name = cols[1].get_text(strip=True)
-                sector = cols[3].get_text(strip=True)
-                industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
+            stocks = []
+            for row in table.find_all("tr")[1:]:  # Skip header
+                cols = row.find_all("td")
+                if len(cols) >= 4:
+                    symbol = cols[0].get_text(strip=True).replace(".", "-")  # BRK.B -> BRK-B
+                    name = cols[1].get_text(strip=True)
+                    sector = cols[3].get_text(strip=True)
+                    industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
 
-                stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+                    stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
 
-        return stocks
+            return stocks
 
     def _scrape_nasdaq100(self) -> list[StockInfo]:
         """Scrape NASDAQ 100 list from Wikipedia.
@@ -183,27 +184,28 @@ class StockUniverseFetcher:
         Returns:
             List of StockInfo
         """
-        response = requests.get(NASDAQ100_URL, timeout=30)
-        response.raise_for_status()
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(NASDAQ100_URL)
+            response.raise_for_status()
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        table = soup.find("table", {"id": "constituents"})
-        if not table:
-            msg = "NASDAQ 100 table not found on Wikipedia"
-            raise ValueError(msg)
+            soup = BeautifulSoup(response.text, "html.parser")
+            table = soup.find("table", {"id": "constituents"})
+            if not table:
+                msg = "NASDAQ 100 table not found on Wikipedia"
+                raise ValueError(msg)
 
-        stocks = []
-        for row in table.find_all("tr")[1:]:  # Skip header
-            cols = row.find_all("td")
-            if len(cols) >= 3:
-                name = cols[0].get_text(strip=True)
-                symbol = cols[1].get_text(strip=True).replace(".", "-")
-                sector = cols[2].get_text(strip=True)
-                industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
+            stocks = []
+            for row in table.find_all("tr")[1:]:  # Skip header
+                cols = row.find_all("td")
+                if len(cols) >= 3:
+                    name = cols[0].get_text(strip=True)
+                    symbol = cols[1].get_text(strip=True).replace(".", "-")
+                    sector = cols[2].get_text(strip=True)
+                    industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
 
-                stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+                    stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
 
-        return stocks
+            return stocks
 
     def clear_cache(self) -> None:
         """Clear all cached universes."""

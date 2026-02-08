@@ -86,13 +86,18 @@ class TestStockUniverseFetcher:
         assert cache_dir.exists()
         fetcher.clear_cache()
 
-    @patch("src.data.universe.requests.get")
-    def test_fetch_sp500(self, mock_get, universe_fetcher, mock_sp500_html):
+    @patch("src.data.universe.httpx.Client")
+    def test_fetch_sp500(self, mock_client_class, universe_fetcher, mock_sp500_html):
         """Test fetching S&P 500 stocks."""
         mock_response = MagicMock()
         mock_response.text = mock_sp500_html
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         universe = universe_fetcher.fetch_sp500()
 
@@ -101,13 +106,18 @@ class TestStockUniverseFetcher:
         assert universe.stocks[0].symbol == "AAPL"
         assert universe.stocks[2].symbol == "BRK-B"  # . replaced with -
 
-    @patch("src.data.universe.requests.get")
-    def test_fetch_nasdaq100(self, mock_get, universe_fetcher, mock_nasdaq100_html):
+    @patch("src.data.universe.httpx.Client")
+    def test_fetch_nasdaq100(self, mock_client_class, universe_fetcher, mock_nasdaq100_html):
         """Test fetching NASDAQ 100 stocks."""
         mock_response = MagicMock()
         mock_response.text = mock_nasdaq100_html
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         universe = universe_fetcher.fetch_nasdaq100()
 
@@ -116,16 +126,21 @@ class TestStockUniverseFetcher:
         assert universe.stocks[0].symbol == "AAPL"
         assert universe.stocks[1].symbol == "NVDA"
 
-    @patch("src.data.universe.requests.get")
+    @patch("src.data.universe.httpx.Client")
     def test_fetch_combined_deduplicates(
-        self, mock_get, universe_fetcher, mock_sp500_html, mock_nasdaq100_html
+        self, mock_client_class, universe_fetcher, mock_sp500_html, mock_nasdaq100_html
     ):
         """Test combined fetch deduplicates stocks."""
         responses = [
             MagicMock(text=mock_sp500_html, raise_for_status=MagicMock()),
             MagicMock(text=mock_nasdaq100_html, raise_for_status=MagicMock()),
         ]
-        mock_get.side_effect = responses
+
+        mock_client = MagicMock()
+        mock_client.get.side_effect = responses
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         universe = universe_fetcher.fetch_combined()
 
@@ -135,41 +150,56 @@ class TestStockUniverseFetcher:
         assert "NVDA" in symbols
         assert "MSFT" in symbols
 
-    @patch("src.data.universe.requests.get")
-    def test_caching(self, mock_get, universe_fetcher, mock_sp500_html):
+    @patch("src.data.universe.httpx.Client")
+    def test_caching(self, mock_client_class, universe_fetcher, mock_sp500_html):
         """Test that results are cached."""
         mock_response = MagicMock()
         mock_response.text = mock_sp500_html
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         universe1 = universe_fetcher.fetch_sp500()
         universe2 = universe_fetcher.fetch_sp500()
 
-        assert mock_get.call_count == 1  # Only called once
+        assert mock_client.get.call_count == 1  # Only called once
         assert universe1.stocks == universe2.stocks
 
-    @patch("src.data.universe.requests.get")
-    def test_clear_cache(self, mock_get, universe_fetcher, mock_sp500_html):
+    @patch("src.data.universe.httpx.Client")
+    def test_clear_cache(self, mock_client_class, universe_fetcher, mock_sp500_html):
         """Test cache clearing."""
         mock_response = MagicMock()
         mock_response.text = mock_sp500_html
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         universe_fetcher.fetch_sp500()
         universe_fetcher.clear_cache()
         universe_fetcher.fetch_sp500()
 
-        assert mock_get.call_count == 2
+        assert mock_client.get.call_count == 2
 
-    @patch("src.data.universe.requests.get")
-    def test_missing_table_raises(self, mock_get, universe_fetcher):
+    @patch("src.data.universe.httpx.Client")
+    def test_missing_table_raises(self, mock_client_class, universe_fetcher):
         """Test that missing table raises ValueError."""
         mock_response = MagicMock()
         mock_response.text = "<html><body>No table here</body></html>"
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
 
         with pytest.raises(ValueError, match="table not found"):
             universe_fetcher.fetch_sp500()
