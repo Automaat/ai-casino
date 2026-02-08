@@ -41,9 +41,16 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run autonomous trading daemon"
-usage = 'option "-c --config" help="Config file path"'
-run = "uv run python -m src.main daemon ${usage_config:+--config \"$usage_config\"}"
+description = "Run daemon with dashboard (API enabled)"
+run = """
+  trap 'pkill -P $$' EXIT
+  uv run python -m src.main daemon --config daemon-dev.toml &
+  DAEMON_PID=$!
+  echo "Daemon started (PID: $DAEMON_PID)"
+  sleep 3
+  echo "Starting dashboard at http://localhost:8050"
+  uv run python -m src.main dashboard --api-url http://127.0.0.1:8484
+"""
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
 [tasks."dev:momentum"]
@@ -54,8 +61,7 @@ env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
 [tasks.daemon]
 description = "Run autonomous trading daemon"
-usage = 'option "-c --config" help="Config file path"'
-run = "uv run python -m src.main daemon ${usage_config:+--config \"$usage_config\"}"
+run = "uv run python -m src.main daemon"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
 [tasks.chat]
