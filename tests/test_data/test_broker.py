@@ -86,13 +86,11 @@ def test_broker_init_with_args(mock_trading_client):
     broker = AlpacaBroker(
         api_key="key1",
         secret_key="secret1",
-        base_url="https://test.com",
         paper=False,
     )
 
     assert broker.api_key == "key1"
     assert broker.secret_key == "secret1"
-    assert broker.base_url == "https://test.com"
     assert broker.paper is False
 
 

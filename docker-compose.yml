@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     volumes:
       # Mount production config from host
-      - ~/.ai-casino:/root/.ai-casino
+      - ${HOME}/.ai-casino:/root/.ai-casino
     environment:
       # LLM provider (config takes priority, these are fallbacks)
       - LLM_PROVIDER=openai
