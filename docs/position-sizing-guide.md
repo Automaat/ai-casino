@@ -59,10 +59,10 @@ daemon:
 if primary_goal == "maximize_returns":
     base_shares = portfolio_weight * portfolio_value / price
 elif primary_goal == "minimize_risk":
-    base_shares = (balance * risk_pct) / (price - stop_loss_price)
+    base_shares = (balance * (risk_pct / 100)) / (price - stop_loss_price)
 else:  # balanced
     opt_shares = portfolio_weight * portfolio_value / price
-    risk_shares = (balance * risk_pct) / (price - stop_loss_price)
+    risk_shares = (balance * (risk_pct / 100)) / (price - stop_loss_price)
     base_shares = blend_weight_optimization * opt_shares + blend_weight_risk_based * risk_shares
 ```
 
@@ -70,8 +70,8 @@ else:  # balanced
 
 ```
 1. Available Cash: shares = min(shares, available_cash / price)
-2. Max Single Position: shares = min(shares, balance * max_single_position_pct / price)
-3. Max Risk Per Trade: shares = min(shares, balance * max_risk_per_trade_pct / risk_per_share)
+2. Max Single Position: shares = min(shares, balance * (max_single_position_pct / 100) / price)
+3. Max Risk Per Trade: shares = min(shares, balance * (max_risk_per_trade_pct / 100) / risk_per_share)
 ```
 
 ### Advanced Features (complexity="advanced")
@@ -97,13 +97,14 @@ if monte_carlo_stress_test_failed:
 ### 1. Conservative Growth (Safe)
 
 ```yaml
-position_sizing:
-  primary_goal: "maximize_returns"
-  risk_tolerance: "conservative"
-  complexity: "simple"
-  max_risk_per_trade_pct: 1.0
-  max_single_position_pct: 10.0
-  max_total_exposure_pct: 70.0
+daemon:
+  position_sizing:
+    primary_goal: "maximize_returns"
+    risk_tolerance: "conservative"
+    complexity: "simple"
+    max_risk_per_trade_pct: 1.0
+    max_single_position_pct: 10.0
+    max_total_exposure_pct: 70.0
 ```
 
 **Result:** Small, diversified positions following optimizer, never exceeding 1% risk.
@@ -111,14 +112,15 @@ position_sizing:
 ### 2. Aggressive Returns (Growth Focus)
 
 ```yaml
-position_sizing:
-  primary_goal: "maximize_returns"
-  risk_tolerance: "aggressive"
-  complexity: "advanced"
-  max_risk_per_trade_pct: 3.0
-  max_single_position_pct: 25.0
-  confidence_scaling_enabled: true
-  use_monte_carlo_adjustment: true
+daemon:
+  position_sizing:
+    primary_goal: "maximize_returns"
+    risk_tolerance: "aggressive"
+    complexity: "advanced"
+    max_risk_per_trade_pct: 3.0
+    max_single_position_pct: 25.0
+    confidence_scaling_enabled: true
+    use_monte_carlo_adjustment: true
 ```
 
 **Result:** Larger positions following optimizer, reduced on low confidence or high tail risk.
@@ -126,13 +128,14 @@ position_sizing:
 ### 3. Safety First (Capital Preservation)
 
 ```yaml
-position_sizing:
-  primary_goal: "minimize_risk"
-  risk_tolerance: "conservative"
-  complexity: "simple"
-  max_risk_per_trade_pct: 1.0
-  max_single_position_pct: 15.0
-  max_total_exposure_pct: 60.0
+daemon:
+  position_sizing:
+    primary_goal: "minimize_risk"
+    risk_tolerance: "conservative"
+    complexity: "simple"
+    max_risk_per_trade_pct: 1.0
+    max_single_position_pct: 15.0
+    max_total_exposure_pct: 60.0
 ```
 
 **Result:** All sizing based on stop-loss distance, very small risk per trade.
@@ -140,15 +143,16 @@ position_sizing:
 ### 4. Balanced (Default, Recommended)
 
 ```yaml
-position_sizing:
-  primary_goal: "balanced"
-  risk_tolerance: "moderate"
-  complexity: "simple"
-  max_risk_per_trade_pct: 2.0
-  max_single_position_pct: 20.0
-  max_total_exposure_pct: 80.0
-  blend_weight_optimization: 0.5
-  blend_weight_risk_based: 0.5
+daemon:
+  position_sizing:
+    primary_goal: "balanced"
+    risk_tolerance: "moderate"
+    complexity: "simple"
+    max_risk_per_trade_pct: 2.0
+    max_single_position_pct: 20.0
+    max_total_exposure_pct: 80.0
+    blend_weight_optimization: 0.5
+    blend_weight_risk_based: 0.5
 ```
 
 **Result:** 50/50 blend of optimizer + risk-based, moderate constraints.
@@ -367,10 +371,10 @@ All parameters have validated ranges. See `src/daemon/config.py:PositionSizingCo
 A: `balanced` goal, `moderate` tolerance, `simple` complexity. 50/50 blend of optimizer + risk-based, 2% max risk, 20% max position.
 
 **Q: Can I use only portfolio optimization?**
-A: Yes. Set `primary_goal: "maximize_returns"` and `blend_weight_optimization: 1.0`.
+A: Yes. Set `primary_goal: "maximize_returns"`. The system will prioritize optimization without requiring manual `blend_weight_*` changes.
 
 **Q: Can I use only risk-based?**
-A: Yes. Set `primary_goal: "minimize_risk"` and `blend_weight_risk_based: 1.0`.
+A: Yes. Set `primary_goal: "minimize_risk"`. The system will prioritize risk-based sizing without requiring manual `blend_weight_*` changes.
 
 **Q: Do I need rebalancing enabled for this to work?**
 A: No. Weight-based sizing only applies when rebalancing provides target weights. Otherwise falls back to risk-based.

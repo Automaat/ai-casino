@@ -12,6 +12,7 @@ from src.daemon.config import (
     PaperTradingConfig,
     PeerAnalysisConfig,
     PortfolioRebalancingConfig,
+    PositionSizingConfig,
     ReportingConfig,
     RiskLimitsConfig,
     ScheduleConfig,
@@ -910,3 +911,65 @@ daemon:
         config = DaemonConfig()
         assert isinstance(config.paper_trading, PaperTradingConfig)
         assert config.paper_trading.min_duration_days == 30
+
+    def test_from_yaml_with_position_sizing(self):
+        """Test loading position sizing config from YAML."""
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  position_sizing:
+    primary_goal: "maximize_returns"
+    risk_tolerance: "aggressive"
+    complexity: "advanced"
+    max_risk_per_trade_pct: 3.0
+    max_single_position_pct: 25.0
+    max_total_exposure_pct: 90.0
+    blend_weight_optimization: 0.7
+    blend_weight_risk_based: 0.3
+    confidence_scaling_enabled: true
+    confidence_high_threshold: 0.85
+    confidence_low_threshold: 0.65
+    confidence_low_reduction_factor: 0.6
+    use_monte_carlo_adjustment: true
+    monte_carlo_risk_multiplier: 0.8
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+        assert isinstance(config.position_sizing, PositionSizingConfig)
+        assert config.position_sizing.primary_goal == "maximize_returns"
+        assert config.position_sizing.risk_tolerance == "aggressive"
+        assert config.position_sizing.complexity == "advanced"
+        assert config.position_sizing.max_risk_per_trade_pct == 3.0
+        assert config.position_sizing.max_single_position_pct == 25.0
+        assert config.position_sizing.max_total_exposure_pct == 90.0
+        assert config.position_sizing.blend_weight_optimization == 0.7
+        assert config.position_sizing.blend_weight_risk_based == 0.3
+        assert config.position_sizing.confidence_scaling_enabled is True
+        assert config.position_sizing.confidence_high_threshold == 0.85
+        assert config.position_sizing.confidence_low_threshold == 0.65
+        assert config.position_sizing.confidence_low_reduction_factor == 0.6
+        assert config.position_sizing.use_monte_carlo_adjustment is True
+        assert config.position_sizing.monte_carlo_risk_multiplier == 0.8
+
+        path.unlink()
+
+    def test_position_sizing_blend_weights_validation(self):
+        """Test blend weights validation."""
+        # Valid: weights sum to 1.0
+        config = PositionSizingConfig(
+            blend_weight_optimization=0.6,
+            blend_weight_risk_based=0.4,
+        )
+        assert config.blend_weight_optimization == 0.6
+        assert config.blend_weight_risk_based == 0.4
+
+        # Invalid: weights sum to 0.9
+        with pytest.raises(ValueError, match=r"Blend weights must sum to 1\.0"):
+            PositionSizingConfig(
+                blend_weight_optimization=0.6,
+                blend_weight_risk_based=0.3,
+            )

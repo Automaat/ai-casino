@@ -416,7 +416,7 @@ class PositionSizingConfig(BaseModel):
     blend_weight_optimization: float = Field(default=0.5, ge=0.0, le=1.0)
     blend_weight_risk_based: float = Field(default=0.5, ge=0.0, le=1.0)
 
-    confidence_scaling_enabled: bool = True
+    confidence_scaling_enabled: bool = False
     confidence_high_threshold: float = Field(default=0.8, ge=0.5, le=1.0)
     confidence_low_threshold: float = Field(default=0.6, ge=0.3, le=0.9)
     confidence_low_reduction_factor: float = Field(default=0.5, ge=0.1, le=0.9)

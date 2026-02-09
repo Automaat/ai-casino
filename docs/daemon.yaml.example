@@ -290,7 +290,7 @@ daemon:
     # ===== CONFIDENCE SCALING (complexity="advanced" only) =====
 
     # Reduce position size based on signal confidence
-    confidence_scaling_enabled: true
+    confidence_scaling_enabled: false
 
     # High confidence threshold (no reduction above this)
     # Example: 0.8 = full position size if confidence >= 80%
@@ -300,7 +300,7 @@ daemon:
     # Example: 0.6 = reduce position size if confidence < 60%
     confidence_low_threshold: 0.6
 
-    # Reduction factor for low confidence trades (0.0-1.0)
+    # Reduction factor for low confidence trades (0.1-0.9)
     # Example: 0.5 = use 50% of calculated position size if confidence < low_threshold
     confidence_low_reduction_factor: 0.5
 
