@@ -276,8 +276,12 @@ class DataPrefetcher:
         cached = self._cache.get(key)
         if cached is None:
             return None
-        assert isinstance(cached, dict)  # noqa: S101
-        return cached
+        try:
+            assert isinstance(cached, dict)  # noqa: S101
+            return cached
+        except Exception as e:
+            logger.warning(f"Failed to deserialize cached fundamentals for {symbol}: {e}")
+            return None
 
     def clear_cache(self) -> None:
         """Clear all prefetch cache data."""

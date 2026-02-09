@@ -363,6 +363,9 @@ class TradingWorkflow:
                 msg = "market_data is None, cannot select strategy"
                 raise ValueError(msg)
             if isinstance(market_data, MultiTimeframeData):
+                if Timeframe.DAILY not in market_data.timeframes:
+                    msg = f"Daily timeframe required for strategy selection but missing for {symbol}"
+                    raise ValueError(msg)
                 daily_data = market_data.timeframes[Timeframe.DAILY]
             else:
                 daily_data = market_data
@@ -698,6 +701,9 @@ class TradingWorkflow:
             raise ValueError(msg)
 
         if isinstance(market_data, MultiTimeframeData):
+            if Timeframe.DAILY not in market_data.timeframes:
+                msg = f"Daily timeframe required for analysis but missing for {state['symbol']}"
+                raise ValueError(msg)
             daily_data = market_data.timeframes[Timeframe.DAILY]
         else:
             daily_data = market_data
@@ -874,14 +880,17 @@ class TradingWorkflow:
         """
         logger.info("Fetching market and news data")
 
+        # Capture market hours decision once to avoid race condition
+        use_multi_timeframe = enable_multi_timeframe and self._is_market_hours()
+
         # Prepare parallel tasks
-        if enable_multi_timeframe and self._is_market_hours():
+        if use_multi_timeframe:
             logger.info("Multi-timeframe mode enabled (market hours)")
             market_task = self.market_fetcher.fetch_multi_timeframe(
                 symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
             )
         else:
-            if enable_multi_timeframe and not self._is_market_hours():
+            if enable_multi_timeframe and not use_multi_timeframe:
                 logger.info("Multi-timeframe requested but outside market hours, using daily only")
             market_task = asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days)
 
@@ -899,7 +908,7 @@ class TradingWorkflow:
             logger.error(f"Market data fetch failed: {results[0]}")
             raise results[0]
         market_result = results[0]
-        if enable_multi_timeframe and self._is_market_hours():
+        if use_multi_timeframe:
             # fetch_multi_timeframe returns MultiTimeframeData
             assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
             market_data = market_result
@@ -1070,7 +1079,10 @@ class TradingWorkflow:
             msg = "market_data is None, cannot assess risk"
             raise ValueError(msg)
         if isinstance(market_data, MultiTimeframeData):
-            daily_data = market_data.timeframes[Timeframe.DAILY]
+            daily_data = market_data.timeframes.get(Timeframe.DAILY)
+            if daily_data is None:
+                msg = "Daily timeframe data is missing from market_data, cannot assess risk"
+                raise ValueError(msg)
         else:
             daily_data = market_data
 
