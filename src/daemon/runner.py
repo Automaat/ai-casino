@@ -230,7 +230,7 @@ class DaemonRunner:
         self._analysis_orchestrator: AnalysisOrchestrator | None = None
 
         # Scheduled task runner
-        self._task_runner = ScheduledTaskRunner(config, self.scheduler, daemon_runner=self)
+        self._task_runner = ScheduledTaskRunner(config, self.scheduler, daemon_runner=self)  # type: ignore[arg-type]
 
         # API server components
         self._api_server: uvicorn.Server | None = None
@@ -1026,7 +1026,7 @@ class DaemonRunner:
             validator = PaperTradingValidator(
                 config=self.config.paper_trading,
                 state=self.state,
-                metrics_tracker=self._metrics_tracker,
+                metrics_tracker=self._metrics_tracker,  # type: ignore[arg-type]
             )
             report = validator.assess_readiness()
 
@@ -2271,7 +2271,7 @@ class DaemonRunner:
         try:
             from src.daemon.api import create_api_app
 
-            app = create_api_app(self)
+            app = create_api_app(self)  # type: ignore[arg-type]
             config = uvicorn.Config(
                 app,
                 host=self.config.api.host,

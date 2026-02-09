@@ -23,7 +23,7 @@ def create_dash_app(config: DashboardConfig) -> Dash:
     app.title = "AI Casino Dashboard"
 
     # Store API client in app state (dynamic attribute - not in Dash type stubs)
-    app.api_client = DaemonAPIClient(config.api_url)
+    app.api_client = DaemonAPIClient(config.api_url)  # type: ignore[attr-defined]
 
     # Layout
     app.layout = dbc.Container(

@@ -66,6 +66,9 @@ class FinBERTSentiment:
         self.model.eval()
         self._lock = threading.Lock()
 
+        if self.tokenizer is None:
+            msg = "Tokenizer failed to load"
+            raise RuntimeError(msg)
         logger.info("FinBERT model loaded successfully")
 
     def analyze(self, text: str) -> SentimentScore:
@@ -82,7 +85,7 @@ class FinBERTSentiment:
             return SentimentScore(positive=0.0, negative=0.0, neutral=1.0)
 
         with self._lock:
-            inputs = self.tokenizer(
+            inputs = self.tokenizer(  # type: ignore[misc]
                 text,
                 return_tensors="pt",
                 truncation=True,
@@ -118,7 +121,7 @@ class FinBERTSentiment:
             return []
 
         with timed_operation("finbert_inference", batch_size=len(texts)):
-            inputs = self.tokenizer(
+            inputs = self.tokenizer(  # type: ignore[misc]
                 texts,
                 return_tensors="pt",
                 truncation=True,

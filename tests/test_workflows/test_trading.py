@@ -464,7 +464,7 @@ async def test_account_info_passed_to_trader(
         "order_status": None,
     }
 
-    result_state = await workflow.make_decision(state)
+    result_state = await workflow.make_decision(state)  # type: ignore[arg-type]
 
     final_decision = result_state["final_decision"]
     assert final_decision is not None

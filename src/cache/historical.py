@@ -1,5 +1,7 @@
 """SQLite-backed permanent cache for immutable historical data."""
 
+from __future__ import annotations
+
 import json
 import sqlite3
 import threading
@@ -430,7 +432,7 @@ class HistoricalCache:
             self._conn.commit()
         logger.debug(f"Stored fundamentals for {symbol}")
 
-    def store_order_fill(self, order: "OrderStatus") -> None:
+    def store_order_fill(self, order: OrderStatus) -> None:
         """Store an order fill (INSERT OR IGNORE).
 
         Args:

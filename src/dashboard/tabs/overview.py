@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
@@ -51,13 +52,12 @@ def render(client: DaemonAPIClient) -> list:
     if game_plan_section:
         components.extend([html.Hr(), game_plan_section])
 
-    components.extend(
-        [
-            html.Hr(),
-            html.H4("Analyses (Last 24 Hours)"),
-            analyses_chart,
-        ]
-    )
+    extra_components: list[Any] = [
+        html.Hr(),
+        html.H4("Analyses (Last 24 Hours)"),
+        analyses_chart,
+    ]
+    components.extend(extra_components)  # type: ignore[arg-type]
 
     return components
 

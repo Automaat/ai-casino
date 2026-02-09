@@ -148,6 +148,12 @@ class BaseMetricsTracker(ABC):
         """List of all trade records."""
         ...
 
+    @trades.setter
+    @abstractmethod
+    def trades(self, value: list[TradeRecord]) -> None:
+        """Set trade records."""
+        ...
+
     @abstractmethod
     def record_decision(
         self,
@@ -587,7 +593,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        created_trade = await self._repo.create(trade)
+        created_trade = await self._repo.create(trade)  # type: ignore[arg-type]
         assert isinstance(created_trade, TradeRecord)  # noqa: S101
         self._invalidate_cache()
         return trade

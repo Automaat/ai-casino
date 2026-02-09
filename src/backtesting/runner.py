@@ -7,7 +7,7 @@ import yfinance as yf
 from loguru import logger
 from pydantic import BaseModel
 
-from backtesting import Backtest
+from backtesting import Backtest  # type: ignore[import-untyped]
 from src.backtesting.strategies import MomentumBacktestStrategy
 from src.metrics.tracker import TradeRecord
 from src.strategies.signal import Signal

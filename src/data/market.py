@@ -178,7 +178,11 @@ class MarketDataFetcher:
     def _fetch_alpha_vantage(self, symbol: str) -> MarketData:
         """Fetch from Alpha Vantage API."""
         try:
-            data, _ = self.ts.get_daily(symbol=symbol, outputsize="compact")
+            result = self.ts.get_daily(symbol=symbol, outputsize="compact")
+            if result is None:
+                msg = f"No data returned for {symbol}"
+                raise ValueError(msg)
+            data, _ = result
 
             data = data.sort_index()
             data.columns = ["Open", "High", "Low", "Close", "Volume"]
@@ -309,7 +313,11 @@ class MarketDataFetcher:
         logger.info(f"Fetching intraday data for {symbol} ({interval})")
 
         try:
-            data, _ = self.ts.get_intraday(symbol=symbol, interval=interval, outputsize="compact")
+            result = self.ts.get_intraday(symbol=symbol, interval=interval, outputsize="compact")
+            if result is None:
+                msg = f"No intraday data returned for {symbol}"
+                raise ValueError(msg)
+            data, _ = result
 
             data = data.sort_index()
             data.columns = ["Open", "High", "Low", "Close", "Volume"]

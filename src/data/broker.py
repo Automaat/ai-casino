@@ -4,6 +4,8 @@ This module provides a thin wrapper around the Alpaca API for executing
 paper trades and fetching account information.
 """
 
+from __future__ import annotations
+
 import os
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -210,7 +212,7 @@ class AlpacaBroker:
             )
 
             if self._cache:
-                self._cache.store_order_fill(order_status)
+                self._cache.store_order_fill(order_status)  # type: ignore[arg-type]
 
             return order_status
         except Exception as e:
