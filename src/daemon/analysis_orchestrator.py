@@ -353,6 +353,7 @@ class AnalysisOrchestrator:
                 is_paper_trade=self.trading_mode == "paper",
                 rsi=rsi,
                 macd_hist=macd_hist,
+                reasoning=result.decision.reasoning,
             )
 
             # Record signal outcome in historical cache

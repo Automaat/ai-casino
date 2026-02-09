@@ -28,6 +28,7 @@ class AnalysisRecord(BaseModel):
     is_paper_trade: bool = True
     rsi: float | None = None
     macd_hist: float | None = None
+    reasoning: list[str] = Field(default_factory=list)
 
 
 class ScreeningRecord(BaseModel):
@@ -284,6 +285,7 @@ class DaemonState(BaseModel):
         is_paper_trade: bool = True,
         rsi: float | None = None,
         macd_hist: float | None = None,
+        reasoning: list[str] | None = None,
     ) -> None:
         """Record an analysis result.
 
@@ -296,6 +298,7 @@ class DaemonState(BaseModel):
             is_paper_trade: Whether trade was paper or live
             rsi: RSI indicator value
             macd_hist: MACD histogram value
+            reasoning: LLM decision reasoning
         """
         self.analyses.append(
             AnalysisRecord(
@@ -308,6 +311,7 @@ class DaemonState(BaseModel):
                 is_paper_trade=is_paper_trade,
                 rsi=rsi,
                 macd_hist=macd_hist,
+                reasoning=reasoning or [],
             )
         )
         self.total_analyses += 1

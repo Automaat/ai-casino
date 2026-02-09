@@ -501,6 +501,7 @@ class DaemonRunner:
                 is_paper_trade=self.config.trading_mode.value == "paper",
                 rsi=rsi,
                 macd_hist=macd_hist,
+                reasoning=result.decision.reasoning,
             )
 
             try:
