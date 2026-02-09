@@ -262,18 +262,25 @@ class TechnicalAnalyst:
         self, symbol: str, latest_close: float, signal: Signal, indicators: IndicatorsType
     ) -> tuple[str, str]:
         """Build appropriate prompt based on strategy type."""
-        if isinstance(self.strategy, EnsembleStrategy):
+        if isinstance(self.strategy, EnsembleStrategy) and isinstance(indicators, EnsembleResult):
             prompt_type = "ensemble"
             prompt_vars = self._build_ensemble_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(self.strategy, TrendFollowingStrategy):
+        elif isinstance(self.strategy, TrendFollowingStrategy) and isinstance(
+            indicators, TrendFollowingIndicators
+        ):
             prompt_type = "trend_following"
             prompt_vars = self._build_trend_following_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(self.strategy, MeanReversionStrategy):
+        elif isinstance(self.strategy, MeanReversionStrategy) and isinstance(
+            indicators, MeanReversionIndicators
+        ):
             prompt_type = "mean_reversion"
             prompt_vars = self._build_mean_reversion_vars(symbol, latest_close, signal, indicators)
-        else:
+        elif isinstance(self.strategy, MomentumStrategy) and isinstance(indicators, MomentumIndicators):
             prompt_type = "momentum"
             prompt_vars = self._build_momentum_vars(symbol, latest_close, signal, indicators)
+        else:
+            msg = f"Unexpected indicators type: {type(indicators)}"
+            raise TypeError(msg)
 
         system = self._prompt_loader.load(f"system_{prompt_type}")
         user = self._prompt_loader.load(f"user_{prompt_type}", **prompt_vars)

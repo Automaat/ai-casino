@@ -196,10 +196,24 @@ class MetaAgent:
         # Low confidence -> use ensemble with adjusted weights
         if regime_confidence < LOW_CONFIDENCE_THRESHOLD:
             weights = self._calculate_ensemble_weights(regime)
+            momentum_strategy = self._create_strategy("momentum", symbol)
+            mean_reversion_strategy = self._create_strategy("mean_reversion", symbol)
+            trend_following_strategy = self._create_strategy("trend_following", symbol)
+
+            if not isinstance(momentum_strategy, MomentumStrategy):
+                msg = f"Expected MomentumStrategy, got {type(momentum_strategy)}"
+                raise TypeError(msg)
+            if not isinstance(mean_reversion_strategy, MeanReversionStrategy):
+                msg = f"Expected MeanReversionStrategy, got {type(mean_reversion_strategy)}"
+                raise TypeError(msg)
+            if not isinstance(trend_following_strategy, TrendFollowingStrategy):
+                msg = f"Expected TrendFollowingStrategy, got {type(trend_following_strategy)}"
+                raise TypeError(msg)
+
             strategy = EnsembleStrategy(
-                momentum=self._create_strategy("momentum", symbol),
-                mean_reversion=self._create_strategy("mean_reversion", symbol),
-                trend_following=self._create_strategy("trend_following", symbol),
+                momentum=momentum_strategy,
+                mean_reversion=mean_reversion_strategy,
+                trend_following=trend_following_strategy,
                 weights=weights,
             )
             reasoning = (
