@@ -264,6 +264,12 @@ class LLMConfig(BaseModel):
     model: str | None = None
 
 
+class DataSourcesConfig(BaseModel):
+    """Data sources configuration."""
+
+    market_data: Literal["yfinance", "alpha_vantage"] = "yfinance"
+
+
 class ApiKeysConfig(BaseModel):
     """API keys configuration.
 
@@ -792,6 +798,7 @@ class DaemonConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     api_keys: ApiKeysConfig = Field(default_factory=ApiKeysConfig)
+    data_sources: DataSourcesConfig = Field(default_factory=DataSourcesConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> "DaemonConfig":
@@ -839,6 +846,7 @@ class DaemonConfig(BaseModel):
         api_data = daemon_data.pop("api", {}) or {}
         llm_data = daemon_data.pop("llm", {}) or {}
         api_keys_data = daemon_data.pop("api_keys", {}) or {}
+        data_sources_data = daemon_data.pop("data_sources", {}) or {}
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
@@ -878,6 +886,7 @@ class DaemonConfig(BaseModel):
             api=ApiConfig(**api_data),
             llm=LLMConfig(**llm_data),
             api_keys=ApiKeysConfig(**api_keys_data),
+            data_sources=DataSourcesConfig(**data_sources_data),
         )
 
     def __repr__(self) -> str:

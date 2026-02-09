@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import os
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
@@ -136,6 +137,13 @@ def mock_finbert():
         SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
     ]
     return mock
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _set_test_env():
+    """Set required env vars for tests."""
+    if "ALPHA_VANTAGE_API_KEY" not in os.environ:
+        os.environ["ALPHA_VANTAGE_API_KEY"] = "test"
 
 
 @pytest.fixture(autouse=True)

@@ -55,21 +55,36 @@ def test_create_historical_cache(tmp_path, monkeypatch):
 
 
 def test_create_market_fetcher(mock_daemon_config, mock_historical_cache):
-    """Test MarketDataFetcher creation with config."""
+    """Test MarketDataFetcher creation with config - defaults to yfinance."""
     fetcher = data_providers.create_market_fetcher(mock_daemon_config, mock_historical_cache)
 
     assert isinstance(fetcher, MarketDataFetcher)
     assert fetcher._cache is mock_historical_cache
+    assert fetcher.use_alpha_vantage is False  # Default is yfinance
+
+
+def test_create_market_fetcher_alpha_vantage(monkeypatch, mock_historical_cache):
+    """Test MarketDataFetcher with Alpha Vantage source."""
+    from src.daemon.config import DataSourcesConfig
+
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    config = DaemonConfig(data_sources=DataSourcesConfig(market_data="alpha_vantage"))
+    fetcher = data_providers.create_market_fetcher(config, mock_historical_cache)
+
+    assert isinstance(fetcher, MarketDataFetcher)
     assert fetcher.use_alpha_vantage is True
 
 
 def test_create_market_fetcher_env_fallback(monkeypatch, mock_historical_cache):
-    """Test MarketDataFetcher API key falls back to env var."""
+    """Test MarketDataFetcher API key falls back to env var when using Alpha Vantage."""
+    from src.daemon.config import DataSourcesConfig
+
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
-    config = DaemonConfig()
+    config = DaemonConfig(data_sources=DataSourcesConfig(market_data="alpha_vantage"))
     fetcher = data_providers.create_market_fetcher(config, mock_historical_cache)
 
     assert isinstance(fetcher, MarketDataFetcher)
+    assert fetcher.use_alpha_vantage is True
 
 
 def test_create_news_fetcher(mock_daemon_config, mock_historical_cache):

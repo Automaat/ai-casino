@@ -567,6 +567,13 @@ daemon:
     # provider: "ollama"      # Falls back to LLM_PROVIDER (ollama, anthropic, openai)
     # model: "qwen3:14b"      # Falls back to LLM_MODEL
 
+  # Data Sources Configuration
+  data_sources:
+    # Market data source: "yfinance" (no API key required) or "alpha_vantage" (requires API key)
+    # Default: yfinance (works without API key, auto-fallback behavior)
+    # Use alpha_vantage for higher data quality if you have API key
+    market_data: "yfinance"
+
   # API Keys Configuration (optional, falls back to environment variables)
   # Config keys take priority over env vars when both are present
   api_keys:
