@@ -402,6 +402,49 @@ class GamePlanConfig(BaseModel):
         return self
 
 
+class PositionSizingConfig(BaseModel):
+    """Configuration for position sizing strategy."""
+
+    primary_goal: Literal["maximize_returns", "minimize_risk", "balanced"] = "balanced"
+    risk_tolerance: Literal["conservative", "moderate", "aggressive"] = "moderate"
+    complexity: Literal["simple", "advanced"] = "simple"
+
+    max_risk_per_trade_pct: float = Field(default=2.0, ge=0.1, le=10.0)
+    max_single_position_pct: float = Field(default=20.0, ge=1.0, le=50.0)
+    max_total_exposure_pct: float = Field(default=80.0, ge=10.0, le=100.0)
+
+    blend_weight_optimization: float = Field(default=0.5, ge=0.0, le=1.0)
+    blend_weight_risk_based: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    confidence_scaling_enabled: bool = True
+    confidence_high_threshold: float = Field(default=0.8, ge=0.5, le=1.0)
+    confidence_low_threshold: float = Field(default=0.6, ge=0.3, le=0.9)
+    confidence_low_reduction_factor: float = Field(default=0.5, ge=0.1, le=0.9)
+
+    use_monte_carlo_adjustment: bool = False
+    monte_carlo_risk_multiplier: float = Field(default=0.7, ge=0.1, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_blend_weights(self) -> "PositionSizingConfig":
+        """Validate blend weights sum to 1.0."""
+        total = self.blend_weight_optimization + self.blend_weight_risk_based
+        if not (0.99 <= total <= 1.01):
+            msg = f"Blend weights must sum to 1.0, got {total:.2f}"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def validate_confidence_thresholds(self) -> "PositionSizingConfig":
+        """Validate confidence thresholds are properly ordered."""
+        if self.confidence_low_threshold >= self.confidence_high_threshold:
+            msg = (
+                f"confidence_low_threshold ({self.confidence_low_threshold}) must be < "
+                f"confidence_high_threshold ({self.confidence_high_threshold})"
+            )
+            raise ValueError(msg)
+        return self
+
+
 class PositionManagementConfig(BaseModel):
     """Configuration for position management."""
 
@@ -646,6 +689,7 @@ class DaemonConfig(BaseModel):
     signal_tracking: SignalTrackingConfig = Field(default_factory=SignalTrackingConfig)
     pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
+    position_sizing: PositionSizingConfig = Field(default_factory=PositionSizingConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
     monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
@@ -691,6 +735,7 @@ class DaemonConfig(BaseModel):
         signal_tracking_data = daemon_data.pop("signal_tracking", {}) or {}
         pre_trade_backtesting_data = daemon_data.pop("pre_trade_backtesting", {}) or {}
         game_plan_data = daemon_data.pop("game_plan", {}) or {}
+        position_sizing_data = daemon_data.pop("position_sizing", {}) or {}
         position_management_data = daemon_data.pop("position_management", {}) or {}
         monte_carlo_data = daemon_data.pop("monte_carlo", {}) or {}
         notifications_data = daemon_data.pop("notifications", {}) or {}
@@ -726,6 +771,7 @@ class DaemonConfig(BaseModel):
             signal_tracking=SignalTrackingConfig(**signal_tracking_data),
             pre_trade_backtesting=PreTradeBacktestingConfig(**pre_trade_backtesting_data),
             game_plan=GamePlanConfig(**game_plan_data),
+            position_sizing=PositionSizingConfig(**position_sizing_data),
             position_management=PositionManagementConfig(**position_management_data),
             monte_carlo=MonteCarloConfig(**monte_carlo_data),
             notifications=NotificationsConfig(
