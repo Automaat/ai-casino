@@ -204,15 +204,15 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
     @app.callback(
         Output("signals-filtered-content", "children"),
         [
+            Input("signals-data-store", "data"),
             Input("signals-filter-symbol", "value"),
             Input("signals-filter-signal-type", "value"),
             Input("signals-filter-date-range", "start_date"),
             Input("signals-filter-date-range", "end_date"),
         ],
-        State("signals-data-store", "data"),
     )
     def filter_signals(
-        symbols: list, signal_types: list, start_date: str, end_date: str, store_data: dict | None
+        store_data: dict | None, symbols: list, signal_types: list, start_date: str, end_date: str
     ) -> list:
         """Filter signals based on user selection.
 
