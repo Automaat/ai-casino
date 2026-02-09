@@ -72,8 +72,38 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
 
         try:
             positions_resp = client.get_positions()
-            snapshots_resp = client.get_snapshots(days=30)
-            rebalance = client.get_rebalance()
+
+            # Try to get snapshots, but don't fail if unavailable
+            snapshots = []
+            try:
+                snapshots_resp = client.get_snapshots(days=30)
+                snapshots = [
+                    {
+                        "timestamp": s.timestamp.isoformat(),
+                        "portfolio_value": s.portfolio_value,
+                    }
+                    for s in snapshots_resp.snapshots
+                ]
+            except Exception as e:
+                logger.warning(f"Failed to fetch snapshots (non-critical): {e}")
+
+            # Try to get rebalance data, but don't fail if unavailable
+            rebalance_data = None
+            try:
+                rebalance = client.get_rebalance()
+                if rebalance:
+                    rebalance_data = {
+                        "allocations": [
+                            {
+                                "symbol": a.symbol,
+                                "target_weight": a.target_weight,
+                                "current_weight": a.current_weight,
+                            }
+                            for a in rebalance.allocations
+                        ]
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to fetch rebalance (non-critical): {e}")
 
             return {
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -88,25 +118,8 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                     }
                     for p in positions_resp.positions
                 ],
-                "snapshots": [
-                    {
-                        "timestamp": s.timestamp.isoformat(),
-                        "portfolio_value": s.portfolio_value,
-                    }
-                    for s in snapshots_resp.snapshots
-                ],
-                "rebalance": {
-                    "allocations": [
-                        {
-                            "symbol": a.symbol,
-                            "target_weight": a.target_weight,
-                            "current_weight": a.current_weight,
-                        }
-                        for a in rebalance.allocations
-                    ]
-                }
-                if rebalance
-                else None,
+                "snapshots": snapshots,
+                "rebalance": rebalance_data,
             }
         except Exception as e:
             logger.error(f"Portfolio refresh failed: {e}")

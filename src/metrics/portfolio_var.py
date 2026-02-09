@@ -1,12 +1,16 @@
 """Portfolio-level VaR calculator using position-weighted market returns."""
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.data.broker import BrokerPosition
-from src.data.market import MarketDataFetcher
 from src.metrics.risk import RiskMetricsCalculator
+
+if TYPE_CHECKING:
+    from src.data.market import MarketDataFetcher
 
 
 class PortfolioVaRResult(BaseModel):
@@ -32,7 +36,7 @@ class PortfolioVaRCalculator:
     def __init__(
         self,
         risk_calculator: RiskMetricsCalculator,
-        market_fetcher: MarketDataFetcher,
+        market_fetcher: "MarketDataFetcher",
     ) -> None:
         """Initialize portfolio VaR calculator.
 
