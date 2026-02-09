@@ -16,32 +16,30 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.notifications import NotificationService
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.optimization.param_store import OptimizedParamStore
 
-from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
-from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
-from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
+from src.agents.bearish_researcher import BearishResearchAnalysis
+from src.agents.bullish_researcher import BullishResearchAnalysis
+from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
-from src.agents.meta import MetaAgent, StrategySelection, StrategyType
-from src.agents.news import NewsAnalysis, NewsAnalyst
-from src.agents.risk import AccountInfo, PortfolioVaRConfig, RiskAssessment, RiskManagementAgent
+from src.agents.meta import StrategySelection, StrategyType
+from src.agents.news import NewsAnalysis
+from src.agents.risk import AccountInfo, PortfolioVaRConfig, RiskAssessment
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
-from src.agents.social import SocialSentimentAnalysis, SocialSentimentAnalyst
-from src.agents.technical import TechnicalAnalysis, TechnicalAnalyst
-from src.agents.trader import TraderAgent, TradingDecision
+from src.agents.social import SocialSentimentAnalysis
+from src.agents.technical import TechnicalAnalysis
+from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis, TrumpAnalyst
-from src.agents.web_researcher import WebResearchAgent, WebResearchAnalysis
+from src.agents.web_researcher import WebResearchAnalysis
 from src.backtesting import VectorBTRunner
 from src.cache.historical import HistoricalCache
 from src.daemon.config import PreTradeBacktestingConfig
 from src.data.broker import AlpacaBroker, BrokerAccountInfo, BrokerAPIError, BrokerPosition, OrderStatus
-from src.data.comparative import ComparativeDataFetcher
-from src.data.finnhub import FinnhubFetcher
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
-from src.data.reddit import RedditFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.metrics.execution import (
     ExecutionMetricsCollector,
@@ -55,7 +53,7 @@ from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy
-from src.strategies.regime import MarketRegimeDetector, RegimeAnalysis
+from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
@@ -141,6 +139,7 @@ class TradingWorkflow:
         pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
         notification_service: "NotificationService | None" = None,
         position_sizing_config: "PositionSizingConfig | None" = None,
+        container: "AppContainer | None" = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -164,6 +163,7 @@ class TradingWorkflow:
             pre_trade_backtest_config: Optional pre-trade backtesting configuration
             notification_service: Optional notification service for risk rejection alerts
             position_sizing_config: Optional position sizing configuration
+            container: Optional DI container for agent instantiation (preferred over manual)
         """
         import os
 
@@ -182,43 +182,94 @@ class TradingWorkflow:
         self.use_ensemble = use_ensemble
         self.use_meta_agent = use_meta_agent
         self.trump_mode = trump_mode
+        self._container = container
 
         # Trump mode components
         self.trump_fetcher: TruthSocialFetcher | None = None
         self.trump_analyst: TrumpAnalyst | None = None
         if trump_mode:
             self.trump_fetcher = TruthSocialFetcher(historical_cache=historical_cache)
-            self.trump_analyst = TrumpAnalyst(llm_client)
+            if container:
+                self.trump_analyst = container.trump_analyst()
+            else:
+                self.trump_analyst = TrumpAnalyst(llm_client)
 
         # Meta-agent for dynamic strategy selection
+        from src.agents.meta import MetaAgent
+
         self.meta_agent: MetaAgent | None = None
         if use_meta_agent:
-            regime_detector = MarketRegimeDetector()
-            self.meta_agent = MetaAgent(llm_client, regime_detector, metrics_tracker, param_store=param_store)
+            if container:
+                self.meta_agent = container.meta_agent()
+                # Override metrics_tracker and param_store if provided
+                if metrics_tracker is not None:
+                    self.meta_agent.metrics_tracker = metrics_tracker
+                if param_store is not None:
+                    self.meta_agent.param_store = param_store
+            else:
+                from src.strategies.regime import MarketRegimeDetector
+
+                regime_detector = MarketRegimeDetector()
+                self.meta_agent = MetaAgent(
+                    llm_client, regime_detector, metrics_tracker, param_store=param_store
+                )
 
         # Default strategy (used if meta-agent disabled)
         self._default_strategy: MomentumStrategy | EnsembleStrategy = (
             EnsembleStrategy() if use_ensemble else MomentumStrategy()
         )
 
-        # Non-technical agents (always same)
-        self.sentiment_analyst = SentimentAnalyst(finbert)
-        self.news_analyst = NewsAnalyst(llm_client)
-        self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
-        self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
-        self.web_researcher = WebResearchAgent(llm_client)
-        self.social_analyst = SocialSentimentAnalyst(
-            llm_client, FinnhubFetcher(), RedditFetcher(historical_cache=historical_cache), finbert
-        )
-        self.bullish_researcher = BullishResearcher(llm_client)
-        self.bearish_researcher = BearishResearcher(llm_client)
-        self.trader = TraderAgent(llm_client)
-        self.risk_manager = RiskManagementAgent(
-            llm_client,
-            portfolio_var_calculator=portfolio_var_calculator,
-            portfolio_var_config=portfolio_var_config,
-            position_sizing_config=position_sizing_config,
-        )
+        # Agents (use container if available, fallback to manual instantiation)
+        if container:
+            self.sentiment_analyst = SentimentAnalyst(finbert)
+            self.news_analyst = container.news_analyst()
+            self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
+            self.comparative_analyst = container.comparative_analyst()
+            self.web_researcher = container.web_research_agent()
+            self.social_analyst = container.social_sentiment_analyst()
+            self.bullish_researcher = container.bullish_researcher()
+            self.bearish_researcher = container.bearish_researcher()
+            self.trader = container.trader_agent()
+            # Note: risk_manager config already extracted by container from daemon_config
+            # If overrides needed, must manually instantiate
+            from src.agents.risk import RiskManagementAgent
+
+            self.risk_manager = RiskManagementAgent(
+                llm_client,
+                portfolio_var_calculator=portfolio_var_calculator,
+                portfolio_var_config=portfolio_var_config,
+                position_sizing_config=position_sizing_config,
+            )
+        else:
+            from src.agents.bearish_researcher import BearishResearcher
+            from src.agents.bullish_researcher import BullishResearcher
+            from src.agents.comparative import ComparativeAnalyst
+            from src.agents.news import NewsAnalyst
+            from src.agents.risk import RiskManagementAgent
+            from src.agents.social import SocialSentimentAnalyst
+            from src.agents.trader import TraderAgent
+            from src.agents.web_researcher import WebResearchAgent
+            from src.data.comparative import ComparativeDataFetcher
+            from src.data.finnhub import FinnhubFetcher
+            from src.data.reddit import RedditFetcher
+
+            self.sentiment_analyst = SentimentAnalyst(finbert)
+            self.news_analyst = NewsAnalyst(llm_client)
+            self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
+            self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
+            self.web_researcher = WebResearchAgent(llm_client)
+            self.social_analyst = SocialSentimentAnalyst(
+                llm_client, FinnhubFetcher(), RedditFetcher(historical_cache=historical_cache), finbert
+            )
+            self.bullish_researcher = BullishResearcher(llm_client)
+            self.bearish_researcher = BearishResearcher(llm_client)
+            self.trader = TraderAgent(llm_client)
+            self.risk_manager = RiskManagementAgent(
+                llm_client,
+                portfolio_var_calculator=portfolio_var_calculator,
+                portfolio_var_config=portfolio_var_config,
+                position_sizing_config=position_sizing_config,
+            )
 
         mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")
         trump_str = "+trump" if trump_mode else ""
@@ -532,7 +583,13 @@ class TradingWorkflow:
         state = await self._validate_strategy_with_backtest(symbol, strategy, strategy_name, state, collector)
         self._record_stage(collector, "backtest_validation", start)
 
-        technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
+        # Create TechnicalAnalyst with selected strategy
+        if self._container:
+            technical_analyst = self._container.technical_analyst()(strategy)
+        else:
+            from src.agents.technical import TechnicalAnalyst
+
+            technical_analyst = TechnicalAnalyst(self.llm_client, strategy)
 
         start = time.perf_counter()
         state = await self.run_analyses(state, technical_analyst, collector)
@@ -686,7 +743,7 @@ class TradingWorkflow:
     async def run_analyses(  # noqa: PLR0915
         self,
         state: TradingState,
-        technical_analyst: TechnicalAnalyst,
+        technical_analyst,
         collector: ExecutionMetricsCollector | None = None,
     ) -> TradingState:
         """Run all analysis agents in parallel groups.
