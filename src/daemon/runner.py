@@ -39,6 +39,7 @@ from src.daemon.task_runner import ScheduledTaskRunner
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.database.connection import get_db_engine
 from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.models.llm import LLMClient
@@ -135,10 +136,9 @@ class DaemonRunner:
                     if os.getenv("DATABASE_URL"):
                         try:
                             from src.database.repositories.trade import TradeRepository
-                            from src.database.session import get_session_factory
 
-                            session_factory = get_session_factory()
-                            trade_repository = TradeRepository(session_factory())
+                            db_engine = get_db_engine()
+                            trade_repository = TradeRepository(db_engine.session())
                         except Exception as e:
                             logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
@@ -388,10 +388,9 @@ class DaemonRunner:
                 if os.getenv("DATABASE_URL"):
                     try:
                         from src.database.repositories.trade import TradeRepository
-                        from src.database.session import get_session_factory
 
-                        session_factory = get_session_factory()
-                        trade_repository = TradeRepository(session_factory())
+                        db_engine = get_db_engine()
+                        trade_repository = TradeRepository(db_engine.session())
                     except Exception as e:
                         logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
@@ -497,7 +496,7 @@ class DaemonRunner:
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
                 executed=result.order is not None,
-                trading_session=result.trading_session.value,
+                trading_session=result.trading_session,
                 is_paper_trade=self.config.trading_mode.value == "paper",
                 rsi=rsi,
                 macd_hist=macd_hist,

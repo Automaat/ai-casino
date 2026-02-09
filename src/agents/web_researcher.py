@@ -130,9 +130,13 @@ class WebResearchAgent:
 
         successful_results: list[WebResearchResult] = []
         for category, result in zip(categories, results, strict=True):
+            # Propagate cancellation instead of treating as normal failure
+            if isinstance(result, asyncio.CancelledError):
+                raise result
             if isinstance(result, Exception):
                 logger.error(f"Web research category '{category}' failed for {symbol}: {result!r}")
                 continue
+            # Type narrowing: result is WebResearchResult here
             successful_results.append(result)
 
         return successful_results
@@ -193,9 +197,10 @@ class WebResearchAgent:
 
         successful_results: list[WebResearchResult] = []
         for category, result in zip(categories, results, strict=True):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error(f"Web research category '{category}' failed for {symbol}: {result!r}")
                 continue
+            # Type narrowing: result is WebResearchResult here
             successful_results.append(result)
 
         return successful_results

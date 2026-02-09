@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
-    from src.daemon.position_manager import PositionManager
+    from src.daemon.positions import PositionManager
     from src.daemon.scheduler import MarketScheduler
     from src.daemon.state import DaemonState
     from src.data.broker import AlpacaBroker
@@ -157,6 +157,44 @@ class AnalysisOrchestrator:
 
         return position_actions
 
+    def _filter_analysis_results(
+        self,
+        raw_results: list[TradingWorkflowResult | BaseException | None],
+        watchlist: list[str],
+    ) -> tuple[list[TradingWorkflowResult], list[str]]:
+        """Filter analysis results and propagate control-flow exceptions.
+
+        Args:
+            raw_results: Raw results from asyncio.gather
+            watchlist: Symbols that were analyzed
+
+        Returns:
+            Tuple of (successful_results, failed_symbols)
+
+        Raises:
+            CancelledError, KeyboardInterrupt, SystemExit: Propagated immediately
+        """
+        results: list[TradingWorkflowResult] = []
+        failed_symbols: list[str] = []
+
+        for i, result in enumerate(raw_results):
+            symbol = watchlist[i]
+            # Propagate cancellation and control-flow exceptions immediately
+            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                raise result
+            if isinstance(result, Exception):
+                logger.error(f"Analysis failed for {symbol}: {result}")
+                self.state.record_error(f"{symbol}: {result}")
+                failed_symbols.append(symbol)
+            elif result is None:
+                logger.warning(f"Analysis returned None for {symbol}")
+                failed_symbols.append(symbol)
+            else:
+                # Type narrowing: result is TradingWorkflowResult here
+                results.append(result)
+
+        return results, failed_symbols
+
     async def orchestrate(
         self,
         watchlist: list[str],
@@ -182,8 +220,6 @@ class AnalysisOrchestrator:
         broker_positions = self._prefetch_broker_positions()
 
         # Step 3: Concurrent analysis with semaphore
-        results: list[TradingWorkflowResult] = []
-        failed_symbols: list[str] = []
         semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
 
         async def analyze_with_limit(symbol: str) -> TradingWorkflowResult | None:
@@ -224,17 +260,7 @@ class AnalysisOrchestrator:
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Step 4: Filter exceptions and None results
-        for i, result in enumerate(raw_results):
-            symbol = watchlist[i]
-            if isinstance(result, Exception):
-                logger.error(f"Analysis failed for {symbol}: {result}")
-                self.state.record_error(f"{symbol}: {result}")
-                failed_symbols.append(symbol)
-            elif result is None:
-                logger.warning(f"Analysis returned None for {symbol}")
-                failed_symbols.append(symbol)
-            else:
-                results.append(result)
+        results, failed_symbols = self._filter_analysis_results(raw_results, watchlist)
 
         # Step 5: Apply position management rules
         position_actions = self._apply_position_management(results)
@@ -314,7 +340,7 @@ class AnalysisOrchestrator:
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
                 executed=result.order is not None,
-                trading_session=result.trading_session.value,
+                trading_session=result.trading_session,
                 is_paper_trade=self.trading_mode == "paper",
                 rsi=rsi,
                 macd_hist=macd_hist,

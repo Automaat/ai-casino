@@ -58,7 +58,7 @@ class OpenAIProvider(BaseLLMProvider):
     @retry(max_attempts=3, delay=1.0)
     async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
         """Generate completion from messages."""
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
@@ -74,7 +74,7 @@ class OpenAIProvider(BaseLLMProvider):
 
     async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
         """Stream completion tokens."""
-        stream = await self._client.chat.completions.create(
+        stream = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
@@ -92,7 +92,7 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.7,
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Generate completion with tool calling support."""
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             tools=tools,
@@ -203,7 +203,7 @@ class OpenAIProvider(BaseLLMProvider):
         # OpenAI strict mode requires additionalProperties: false
         schema = self._ensure_additional_properties_false(schema)
 
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),

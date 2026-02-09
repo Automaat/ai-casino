@@ -1,17 +1,13 @@
 """Position lifecycle management for daemon."""
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel
 
 from src.daemon.config import PositionManagementConfig
-from src.data.broker import AlpacaBroker
+from src.data.broker import AlpacaBroker, BrokerPosition
 from src.workflows.types import TradingWorkflowResult
-
-if TYPE_CHECKING:
-    from alpaca.trading.models import Position
 
 
 class PositionRecord(BaseModel):
@@ -106,17 +102,17 @@ class PositionManager:
 
         return new_positions, updated_positions, closed_symbols
 
-    def _create_position_from_broker(self, symbol: str, broker_pos: "Position") -> PositionRecord:
+    def _create_position_from_broker(self, symbol: str, broker_pos: BrokerPosition) -> PositionRecord:
         """Create PositionRecord from broker position.
 
         Args:
             symbol: Stock ticker
-            broker_pos: Position from Alpaca
+            broker_pos: BrokerPosition from broker API
 
         Returns:
             New PositionRecord
         """
-        entry_price = broker_pos.avg_entry_price
+        entry_price = float(broker_pos.avg_entry_price)
         profit_targets = self._calculate_profit_targets(entry_price)
         initial_stop = self._calculate_initial_stop_loss(entry_price)
 

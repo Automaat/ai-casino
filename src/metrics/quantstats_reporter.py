@@ -3,7 +3,9 @@
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import SupportsFloat, cast
 
+import numpy as np
 import pandas as pd
 import quantstats as qs
 from loguru import logger
@@ -13,6 +15,22 @@ from src.metrics.tracker import TearSheet, TradeRecord
 
 # Minimum data points required for statistical calculations
 MIN_REQUIRED_RETURNS = 2
+
+
+def _to_float(value: SupportsFloat | pd.Series) -> float:
+    """Convert numpy/pandas scalar to Python float.
+
+    Args:
+        value: Numeric value (Python, numpy, or pandas scalar)
+
+    Returns:
+        Python float
+    """
+    if isinstance(value, np.generic):
+        return float(value.item())
+    if isinstance(value, pd.Series):
+        return float(value.item())
+    return float(value)
 
 
 class QuantStatsReporter:
@@ -104,25 +122,25 @@ class QuantStatsReporter:
         monthly_returns_dict = {}
         for idx, val in monthly_returns_series.items():
             key = idx.strftime("%Y-%m") if hasattr(idx, "strftime") else str(idx)
-            monthly_returns_dict[key] = float(val)
+            monthly_returns_dict[key] = _to_float(val)
 
         dd_details = qs.stats.to_drawdown_series(returns)
         dd_duration = self._calculate_max_dd_duration(dd_details)
 
         metrics = {
-            "cagr": float(cagr) if pd.notna(cagr) else None,
-            "sharpe_ratio": float(sharpe) if pd.notna(sharpe) else None,
-            "sortino_ratio": float(sortino) if pd.notna(sortino) else None,
-            "calmar_ratio": float(calmar) if pd.notna(calmar) else None,
-            "max_drawdown": float(max_dd) if pd.notna(max_dd) else None,
+            "cagr": _to_float(cagr) if pd.notna(cagr) else None,
+            "sharpe_ratio": _to_float(sharpe) if pd.notna(sharpe) else None,
+            "sortino_ratio": _to_float(sortino) if pd.notna(sortino) else None,
+            "calmar_ratio": _to_float(calmar) if pd.notna(calmar) else None,
+            "max_drawdown": _to_float(max_dd) if pd.notna(max_dd) else None,
             "max_drawdown_duration_days": dd_duration,
-            "volatility_annual": float(volatility) if pd.notna(volatility) else None,
-            "win_rate": float(win_rate),
-            "profit_factor": float(profit_factor),
-            "avg_win": float(avg_win),
-            "avg_loss": float(avg_loss),
-            "best_day": float(best_day),
-            "worst_day": float(worst_day),
+            "volatility_annual": _to_float(volatility) if pd.notna(volatility) else None,
+            "win_rate": _to_float(win_rate),
+            "profit_factor": _to_float(profit_factor),
+            "avg_win": _to_float(avg_win),
+            "avg_loss": _to_float(avg_loss),
+            "best_day": _to_float(best_day),
+            "worst_day": _to_float(worst_day),
             "monthly_returns": monthly_returns_dict,
         }
 
@@ -132,10 +150,10 @@ class QuantStatsReporter:
             beta = self._calculate_beta(returns, benchmark_returns)
             alpha = self._calculate_alpha(returns, benchmark_returns, beta)
 
-            metrics["benchmark_cagr"] = float(benchmark_cagr) if pd.notna(benchmark_cagr) else None
-            metrics["benchmark_sharpe"] = float(benchmark_sharpe) if pd.notna(benchmark_sharpe) else None
-            metrics["alpha"] = float(alpha) if pd.notna(alpha) else None
-            metrics["beta"] = float(beta) if pd.notna(beta) else None
+            metrics["benchmark_cagr"] = _to_float(benchmark_cagr) if pd.notna(benchmark_cagr) else None
+            metrics["benchmark_sharpe"] = _to_float(benchmark_sharpe) if pd.notna(benchmark_sharpe) else None
+            metrics["alpha"] = _to_float(alpha) if pd.notna(alpha) else None
+            metrics["beta"] = _to_float(beta) if pd.notna(beta) else None
         else:
             metrics["benchmark_cagr"] = None
             metrics["benchmark_sharpe"] = None
@@ -162,9 +180,9 @@ class QuantStatsReporter:
         aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
         if len(aligned_returns) < MIN_REQUIRED_RETURNS:
             return 0.0
-        covariance = aligned_returns.cov(aligned_benchmark)
-        benchmark_variance = aligned_benchmark.var()
-        return float(covariance / benchmark_variance) if benchmark_variance != 0 else 0.0
+        covariance = _to_float(aligned_returns.cov(aligned_benchmark))
+        benchmark_variance = _to_float(cast("SupportsFloat", aligned_benchmark.var()))
+        return covariance / benchmark_variance if benchmark_variance != 0 else 0.0
 
     def _calculate_alpha(self, returns: pd.Series, benchmark_returns: pd.Series, beta: float) -> float:
         """Calculate alpha (excess return vs benchmark).

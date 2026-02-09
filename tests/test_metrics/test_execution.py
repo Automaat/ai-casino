@@ -81,6 +81,7 @@ class TestSubOperationMetric:
             metadata={"source": "yfinance", "rows": 90},
         )
         assert metric.name == "market_data_fetch"
+        assert metric.metadata is not None
         assert metric.metadata["source"] == "yfinance"
 
     def test_without_metadata(self):
@@ -162,6 +163,7 @@ class TestExecutionMetricsCollector:
         result = collector.finalize()
         assert len(result.sub_operations) == 2
         assert result.sub_operations[0].name == "finbert_inference"
+        assert result.sub_operations[0].metadata is not None
         assert result.sub_operations[0].metadata["batch_size"] == 10
         assert result.sub_operations[1].name == "pandas_ta_indicators"
 
@@ -249,6 +251,7 @@ class TestTimedOperation:
         assert len(result.sub_operations) == 1
         assert result.sub_operations[0].name == "test_op"
         assert result.sub_operations[0].latency_ms >= 0
+        assert result.sub_operations[0].metadata is not None
         assert result.sub_operations[0].metadata["source"] == "test"
 
     def test_records_timing(self):

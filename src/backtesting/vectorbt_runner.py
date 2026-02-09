@@ -160,7 +160,12 @@ class VectorBTRunner:
         }
 
         equal_weight_returns = returns_df.mean(axis=1)
-        portfolio_return = float((1 + equal_weight_returns).prod() - 1)
+        # .prod() on Series returns scalar, but type checker sees Series | float
+        prod_result = (1 + equal_weight_returns).prod()
+        if isinstance(prod_result, pd.Series):
+            portfolio_return = float(prod_result.iloc[0]) - 1.0
+        else:
+            portfolio_return = float(prod_result) - 1.0  # type: ignore[arg-type]
         portfolio_sharpe = self._calc_sharpe(equal_weight_returns)
         portfolio_max_dd = self._calc_max_drawdown_from_returns(equal_weight_returns)
 

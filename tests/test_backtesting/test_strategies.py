@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from backtesting import Backtest
+from backtesting import Backtest  # type: ignore[import-untyped]
 from src.backtesting.strategies import (
     EnsembleBacktestStrategy,
     MomentumBacktestStrategy,
