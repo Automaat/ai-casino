@@ -156,8 +156,23 @@ class BrokerManager:
         else:
             logger.debug("No broker configured, skipping position merge")
 
-        # Source 3: latest screening candidates (ordered by score)
-        if self.config.screening.enabled and self.state.screening_history:
+        # Source 3: active discovery candidates (ordered by score)
+        if self.config.discovery.enabled and self.state.active_discovery_candidates:
+            # Expire stale candidates first
+            expired = self.state.expire_stale_candidates(self.config.discovery.candidate_ttl_days)
+            if expired:
+                logger.info(f"Expired {len(expired)} discovery candidates: {expired}")
+
+            # Add active candidates (already sorted by score in discovery engine)
+            discovery_symbols = [
+                c.symbol for c in self.state.active_discovery_candidates if c.symbol not in seen
+            ]
+            if discovery_symbols:
+                logger.info(f"Merged {len(discovery_symbols)} discovery candidates: {discovery_symbols}")
+                merged_watchlist.extend(discovery_symbols)
+                seen.update(discovery_symbols)
+        elif self.config.screening.enabled and self.state.screening_history:
+            # Fallback to old screening (backward compatible)
             latest = self.state.screening_history[-1]
             new_symbols = [s for s in latest.top_symbols if s not in seen]
             if new_symbols:
