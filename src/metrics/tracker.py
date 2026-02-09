@@ -5,7 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 from pydantic import BaseModel
@@ -320,8 +320,8 @@ class MetricsTracker(BaseMetricsTracker):
         losing = [t for t in closed if t.pnl and t.pnl < 0]
 
         total_pnl = sum(t.pnl for t in closed if t.pnl is not None)
-        avg_win = sum(t.pnl for t in winning) / len(winning) if winning else 0.0
-        avg_loss = sum(t.pnl for t in losing) / len(losing) if losing else 0.0
+        avg_win = sum(t.pnl for t in winning if t.pnl is not None) / len(winning) if winning else 0.0
+        avg_loss = sum(t.pnl for t in losing if t.pnl is not None) / len(losing) if losing else 0.0
         profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0.0
 
         win_rate = calculate_win_rate(closed)
@@ -495,7 +495,9 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
     async def _get_trades(self) -> list[TradeRecord]:
         """Get all trades from database (cached)."""
         if self._trades_cache is None:
-            self._trades_cache = await self._repo.get_all()
+            trades = await self._repo.get_all()
+            self._trades_cache = cast(list[TradeRecord], trades)
+        assert self._trades_cache is not None
         return self._trades_cache
 
     def _invalidate_cache(self) -> None:
@@ -557,7 +559,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        await self._repo.create(trade)
+        created_trade = await self._repo.create(trade)
+        assert isinstance(created_trade, TradeRecord)
         self._invalidate_cache()
         return trade
 
@@ -614,7 +617,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
                     )
 
         self._invalidate_cache()
-        return closed_trades
+        return cast(list[TradeRecord], closed_trades)
 
     def calculate_metrics(self, window: str = "all") -> PerformanceMetrics:
         """Calculate metrics (sync wrapper)."""
@@ -656,8 +659,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         losing = [t for t in closed if t.pnl and t.pnl < 0]
 
         total_pnl = sum(t.pnl for t in closed if t.pnl is not None)
-        avg_win = sum(t.pnl for t in winning) / len(winning) if winning else 0.0
-        avg_loss = sum(t.pnl for t in losing) / len(losing) if losing else 0.0
+        avg_win = sum(t.pnl for t in winning if t.pnl is not None) / len(winning) if winning else 0.0
+        avg_loss = sum(t.pnl for t in losing if t.pnl is not None) / len(losing) if losing else 0.0
         profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0.0
 
         win_rate = calculate_win_rate(closed)

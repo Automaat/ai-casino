@@ -73,7 +73,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
         orm = result.scalar_one_or_none()
         return self._to_record(orm) if orm else None
 
-    async def update(self, trade_id: str, **updates: dict) -> TradeRecord | None:
+    async def update(self, trade_id: str, **updates: object) -> TradeRecord | None:
         """Update trade record.
 
         Args:
