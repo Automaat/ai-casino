@@ -247,7 +247,7 @@ class TradingChatApp(App):
         tool_widgets = chat.query("ToolCallWidget")
         tool_widget = tool_widgets.last() if tool_widgets else None
 
-        if text.lower() in ("yes", "y"):
+        if pending and text.lower() in ("yes", "y"):
             result = self._tool_registry.execute(pending["name"], pending["args"])
             result_preview = result[:100] + "..." if len(result) > 100 else result
             if tool_widget and hasattr(tool_widget, "set_complete"):
