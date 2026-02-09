@@ -192,7 +192,7 @@ class TestCheckLLM:
 
         with (
             patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}),
-            patch("src.models.llm.LLMClient", return_value=mock_llm),
+            patch.object(checker._container, "llm_client", return_value=mock_llm),
         ):
             result = await checker._check_llm()
 

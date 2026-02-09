@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.health import HealthReport
     from src.daemon.tearsheet import DaemonTearsheetGenerator
+    from src.di.container import AppContainer
     from src.metrics.correlation import CorrelationAuditResult
 from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
@@ -40,10 +41,9 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.database.connection import get_db_engine
+from src.di.container import create_container
 from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
-from src.models.llm import LLMClient
-from src.models.sentiment import get_finbert_sentiment
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
@@ -54,15 +54,22 @@ console = Console()
 class DaemonRunner:
     """Main daemon runner for autonomous trading."""
 
-    def __init__(self, config: DaemonConfig, event_bus: EventBus | None = None) -> None:  # noqa: PLR0915, C901, PLR0912
+    def __init__(  # noqa: PLR0915, C901, PLR0912
+        self,
+        config: DaemonConfig,
+        event_bus: EventBus | None = None,
+        container: AppContainer | None = None,
+    ) -> None:
         """Initialize daemon runner.
 
         Args:
             config: Daemon configuration
             event_bus: Optional EventBus for real-time event streaming
+            container: Optional DI container (auto-created if not provided)
         """
         self.config = config
         self.event_bus = event_bus
+        self._container = container or create_container()
         self._historical_cache = HistoricalCache()
         self.state = DaemonState.load(config.state.state_file)
         self._broker_manager = BrokerManager(config, self.state, self._historical_cache)
@@ -252,29 +259,6 @@ class DaemonRunner:
         """
         return config_value or os.getenv(env_var)
 
-    def _create_llm_client(self) -> LLMClient:
-        """Create LLM client with config/env resolution.
-
-        Returns:
-            Configured LLMClient instance
-        """
-        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
-        if provider == "anthropic":
-            api_key = self._resolve_config_or_env(self.config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
-        elif provider == "openai":
-            api_key = self._resolve_config_or_env(self.config.api_keys.openai_api_key, "OPENAI_API_KEY")
-        else:
-            api_key = None
-
-        return LLMClient(
-            provider=self.config.llm.provider,
-            model=self.config.llm.model,
-            api_key=api_key,
-            openai_base_url=self._resolve_config_or_env(
-                self.config.api_keys.openai_api_base, "OPENAI_API_BASE"
-            ),
-        )
-
     def _init_prefetcher(self) -> DataPrefetcher | None:
         """Initialize data prefetcher (lazy initialization).
 
@@ -322,7 +306,7 @@ class DaemonRunner:
             GamePlanAgent instance
         """
         if self._game_plan_agent is None:
-            llm_client = self._create_llm_client()
+            llm_client = self._container.llm_client()
             market_fetcher = MarketDataFetcher(
                 use_alpha_vantage=False,
                 api_key=self._resolve_config_or_env(
@@ -360,7 +344,7 @@ class DaemonRunner:
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
         if self._workflow is None:
-            llm_client = self._create_llm_client()
+            llm_client = self._container.llm_client()
             market_fetcher = MarketDataFetcher(
                 use_alpha_vantage=False,
                 api_key=self._resolve_config_or_env(
@@ -374,7 +358,7 @@ class DaemonRunner:
                 ),
                 historical_cache=self._historical_cache,
             )
-            finbert = get_finbert_sentiment()
+            finbert = self._container.finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(
                 api_key=self._resolve_config_or_env(
                     self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"

@@ -92,9 +92,7 @@ class TestGetSocialSentimentTool:
 
     def test_execute_error_handling(self, tool):
         """Test error handling on failure."""
-        with (
-            patch("src.models.llm.LLMClient", side_effect=Exception("API error")),
-        ):
+        with patch.object(tool._container, "llm_client", side_effect=Exception("API error")):
             result = tool.execute(symbol="INVALID")
 
             assert "Social sentiment analysis failed" in result

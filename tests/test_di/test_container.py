@@ -77,3 +77,44 @@ def test_load_daemon_config_valid(tmp_path):
     config = load_daemon_config(config_path)
     assert config is not None
     assert config.watchlist == ["MSFT"]
+
+
+def test_llm_client_provider():
+    """Test LLM client provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "llm_client")
+
+    # Should be callable
+    client = container.llm_client()
+    assert client is not None
+
+
+def test_finbert_sentiment_provider():
+    """Test FinBERT sentiment provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "finbert_sentiment")
+
+    # Should be callable (may take time on first call to download model)
+    # We skip actual call to avoid downloading model in tests
+
+
+def test_llm_client_singleton():
+    """Test LLM client is singleton."""
+    container = create_container()
+
+    client1 = container.llm_client()
+    client2 = container.llm_client()
+
+    assert client1 is client2
+
+
+def test_finbert_singleton():
+    """Test FinBERT is singleton."""
+    container = create_container()
+
+    # Note: finbert uses internal singleton, container provides factory wrapper
+    # Each call to container.finbert_sentiment() calls factory which returns same instance
+    finbert1 = container.finbert_sentiment()
+    finbert2 = container.finbert_sentiment()
+
+    assert finbert1 is finbert2
