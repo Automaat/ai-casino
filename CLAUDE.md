@@ -241,12 +241,40 @@ def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
 
 ### Anti-Patterns
 
-❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons
+❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons, dicts/kwargs for structured data
 
-✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations
+✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations, typed classes over dicts
 
 **Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change?
 **If unsure:** ASK for approval.
+
+### Types vs Dicts
+
+**ALWAYS create typed classes (Pydantic/dataclasses) instead of dicts/kwargs for structured data:**
+
+```python
+# ❌ BAD - dict and kwargs
+def analyze(self, **kwargs: Any) -> dict[str, Any]:
+    symbol = kwargs.get("symbol")
+    data = kwargs.get("data")
+    return {"signal": "BUY", "confidence": 0.8}
+
+# ✅ GOOD - typed classes
+class AnalysisRequest(BaseModel):
+    symbol: str
+    data: pd.DataFrame
+
+class AnalysisResult(BaseModel):
+    signal: Signal
+    confidence: float
+
+def analyze(self, request: AnalysisRequest) -> AnalysisResult:
+    return AnalysisResult(signal=Signal.BUY, confidence=0.8)
+```
+
+**Why:** Type safety, IDE autocomplete, validation, self-documenting code, catches errors at definition time
+
+**Exceptions:** Only use dicts for truly dynamic key-value stores (e.g., JSON from external API that you immediately parse into types)
 
 ---
 
