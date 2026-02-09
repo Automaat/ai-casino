@@ -71,6 +71,7 @@ async def test_orchestrator_basic_flow(mock_workflow, mock_state, mock_scheduler
     mock_result.decision = Mock(spec=TradingDecision)
     mock_result.decision.action = Mock(value="BUY")
     mock_result.decision.confidence = 0.8
+    mock_result.decision.reasoning = ["Strong technical signals"]
     mock_result.order = None
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.technical = None
@@ -112,6 +113,7 @@ async def test_orchestrator_position_sync(
     mock_result.decision = Mock(spec=TradingDecision)
     mock_result.decision.action = Mock(value="HOLD")
     mock_result.decision.confidence = 0.7
+    mock_result.decision.reasoning = ["Neutral signals"]
     mock_result.order = None
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.technical = None
@@ -157,6 +159,7 @@ async def test_orchestrator_concurrent_limit(mock_workflow, mock_state, mock_sch
         result.decision = Mock(spec=TradingDecision)
         result.decision.action = Mock(value="HOLD")
         result.decision.confidence = 0.7
+        result.decision.reasoning = ["Neutral signals"]
         result.order = None
         result.trading_session = TradingSession.REGULAR
         result.technical = None
@@ -196,6 +199,7 @@ async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_sch
         result.decision = Mock(spec=TradingDecision)
         result.decision.action = Mock(value="HOLD")
         result.decision.confidence = 0.7
+        result.decision.reasoning = ["Neutral signals"]
         result.order = None
         result.trading_session = TradingSession.REGULAR
         result.technical = None
@@ -234,6 +238,7 @@ async def test_orchestrator_target_allocations(mock_workflow, mock_state, mock_s
     mock_result.decision = Mock(spec=TradingDecision)
     mock_result.decision.action = Mock(value="BUY")
     mock_result.decision.confidence = 0.8
+    mock_result.decision.reasoning = ["Strong technical signals"]
     mock_result.order = None
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.technical = None

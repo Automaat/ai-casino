@@ -326,6 +326,7 @@ async def test_analyze_symbol_records_executed_trade(
     mock_result = Mock()
     mock_result.decision.action.value = "BUY"
     mock_result.decision.confidence = 0.85
+    mock_result.decision.reasoning = ["Strong momentum", "High volume"]
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.order = mock_order
     mock_result.technical = Mock()
@@ -351,6 +352,7 @@ async def test_analyze_symbol_records_executed_trade(
         is_paper_trade=True,
         rsi=45.0,
         macd_hist=0.5,
+        reasoning=["Strong momentum", "High volume"],
     )
 
 
@@ -365,6 +367,7 @@ async def test_analyze_symbol_records_not_executed(
     mock_result = Mock()
     mock_result.decision.action.value = "HOLD"
     mock_result.decision.confidence = 0.6
+    mock_result.decision.reasoning = ["Neutral signals", "Wait for confirmation"]
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.order = None
     mock_result.technical = Mock()
@@ -390,6 +393,7 @@ async def test_analyze_symbol_records_not_executed(
         is_paper_trade=True,
         rsi=55.0,
         macd_hist=-0.2,
+        reasoning=["Neutral signals", "Wait for confirmation"],
     )
 
 
@@ -720,6 +724,7 @@ async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, eve
         mock_result = Mock()
         mock_result.decision.action = Signal.BUY
         mock_result.decision.confidence = 0.85
+        mock_result.decision.reasoning = ["Strong buy signal"]
         mock_result.order = None
         mock_result.trading_session = TradingSession.REGULAR
         mock_result.risk.current_price = 150.0

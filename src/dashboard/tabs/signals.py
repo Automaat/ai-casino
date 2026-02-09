@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, State, dcc, html
+from dash import MATCH, Dash, Input, Output, State, dcc, html
 
 if TYPE_CHECKING:
     from src.dashboard.api_client import DaemonAPIClient
@@ -37,6 +37,7 @@ def render(client: "DaemonAPIClient") -> list:
             "executed_trade": a.executed_trade,
             "is_paper_trade": a.is_paper_trade,
             "trading_session": a.trading_session,
+            "reasoning": a.reasoning,
         }
         for a in analyses_resp.analyses
     ]
@@ -166,9 +167,10 @@ def register_callbacks(app: Dash) -> None:
             html.Hr(),
         ]
 
-        # Build table
+        # Build table with collapsible rows
         table_rows = []
-        for analysis in filtered[:50]:
+
+        for idx, analysis in enumerate(filtered[:50]):
             signal_color = (
                 "success"
                 if analysis["signal"] == "BUY"
@@ -182,17 +184,24 @@ def register_callbacks(app: Dash) -> None:
 
             rsi_str = f"{analysis['rsi']:.1f}" if analysis["rsi"] is not None else "-"
             macd_str = f"{analysis['macd_hist']:.3f}" if analysis["macd_hist"] is not None else "-"
-
             timestamp_obj = datetime.fromisoformat(analysis["timestamp"])
 
+            # Main row (clickable to expand)
             table_rows.append(
                 html.Tr(
                     [
                         html.Td(
                             [
+                                html.Span(
+                                    "▶ ",
+                                    id={"type": "expand-icon", "index": idx},
+                                    style={"cursor": "pointer", "user-select": "none"},
+                                ),
                                 timestamp_obj.strftime("%Y-%m-%d %H:%M:%S"),
                                 session_badge,
-                            ]
+                            ],
+                            id={"type": "expand-trigger", "index": idx},
+                            style={"cursor": "pointer"},
                         ),
                         html.Td(analysis["symbol"]),
                         html.Td(html.Span(analysis["signal"], className=f"badge bg-{signal_color}")),
@@ -201,7 +210,41 @@ def register_callbacks(app: Dash) -> None:
                         html.Td(macd_str),
                         html.Td("✓" if analysis["executed_trade"] else "✗"),
                         html.Td("📄" if analysis["is_paper_trade"] else "💵"),
-                    ]
+                    ],
+                    id={"type": "table-row", "index": idx},
+                )
+            )
+
+            # Reasoning collapse row (hidden by default)
+            reasoning_content = (
+                html.Ul([html.Li(r) for r in analysis.get("reasoning", [])])
+                if analysis.get("reasoning")
+                else html.P("No reasoning available", className="text-muted fst-italic")
+            )
+
+            table_rows.append(
+                html.Tr(
+                    [
+                        html.Td(
+                            dbc.Collapse(
+                                dbc.Card(
+                                    dbc.CardBody(
+                                        [
+                                            html.Strong("Decision Reasoning:"),
+                                            reasoning_content,
+                                        ],
+                                        className="bg-light",
+                                    ),
+                                    className="border-0",
+                                ),
+                                id={"type": "collapse", "index": idx},
+                                is_open=False,
+                            ),
+                            colSpan=8,
+                            className="p-0",
+                        )
+                    ],
+                    id={"type": "collapse-row", "index": idx},
                 )
             )
 
@@ -233,6 +276,29 @@ def register_callbacks(app: Dash) -> None:
             html.H5(f"Recent Signals ({len(filtered)} filtered, showing {min(50, len(filtered))})"),
             table,
         ]
+
+    @app.callback(
+        Output({"type": "collapse", "index": MATCH}, "is_open"),
+        Output({"type": "expand-icon", "index": MATCH}, "children"),
+        Input({"type": "expand-trigger", "index": MATCH}, "n_clicks"),
+        State({"type": "collapse", "index": MATCH}, "is_open"),
+        prevent_initial_call=True,
+    )
+    def toggle_reasoning(n_clicks: int, is_open: bool) -> tuple[bool, str]:
+        """Toggle reasoning collapse on row click.
+
+        Args:
+            n_clicks: Number of clicks on trigger
+            is_open: Current collapse state
+
+        Returns:
+            Tuple of (new_is_open, icon_text)
+        """
+        if n_clicks:
+            new_state = not is_open
+            icon = "▼ " if new_state else "▶ "
+            return new_state, icon
+        return is_open, "▶ "
 
 
 def _apply_filters(analyses: list, symbols: list, signal_types: list, start_date: str, end_date: str) -> list:

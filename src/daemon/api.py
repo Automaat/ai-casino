@@ -55,6 +55,7 @@ class AnalysisRecordResponse(BaseModel):
     is_paper_trade: bool
     rsi: float | None = None
     macd_hist: float | None = None
+    reasoning: list[str] = Field(default_factory=list)
 
 
 class AnalysesResponse(BaseModel):
