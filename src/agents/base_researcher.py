@@ -3,10 +3,12 @@
 import re
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from loguru import logger
 from pydantic import BaseModel
+
+TAnalysis = TypeVar("TAnalysis", bound=BaseModel)
 
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis

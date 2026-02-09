@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel
 
-from src.metrics.tracker import MetricsTracker
+from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
@@ -63,7 +63,7 @@ class MetaAgent:
         self,
         llm_client: LLMClient,
         regime_detector: MarketRegimeDetector,
-        metrics_tracker: MetricsTracker | None = None,
+        metrics_tracker: BaseMetricsTracker | None = None,
         param_store: OptimizedParamStore | None = None,
     ) -> None:
         """Initialize meta-agent.
