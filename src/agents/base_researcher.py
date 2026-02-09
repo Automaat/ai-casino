@@ -103,6 +103,7 @@ class BaseResearcher(ABC):
             llm_response = await self.llm.astructured(
                 prompt, self.llm_response_model, system=system_prompt, temperature=0.5
             )
+            # Access dynamic attributes - type checker sees BaseModel but runtime has specific fields
             thesis = llm_response.thesis
             key_points = getattr(llm_response, self._get_key_points_field())
             target = getattr(llm_response, self._get_target_field())

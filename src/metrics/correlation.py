@@ -244,6 +244,10 @@ class CorrelationAuditor:
         Returns:
             DataFrame with aligned returns (symbols as columns, dates as index)
         """
+        if not self.market_fetcher:
+            warnings.append("Market fetcher not available")
+            return pd.DataFrame()
+
         returns_data = {}
 
         for symbol in symbols:
@@ -492,6 +496,9 @@ class CorrelationAuditor:
         """
         if symbol in self._returns_cache:
             return self._returns_cache[symbol]
+
+        if not self.market_fetcher:
+            return None
 
         try:
             market_data = self.market_fetcher.fetch_daily(symbol, period_days=self.lookback_days)

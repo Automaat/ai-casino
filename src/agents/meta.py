@@ -156,6 +156,8 @@ class MetaAgent:
         Args:
             weights: Current weights dict (modified in place)
         """
+        if not self.metrics_tracker:
+            return
         try:
             metrics = self.metrics_tracker.calculate_metrics("30d")
             if metrics.total_decisions == 0:

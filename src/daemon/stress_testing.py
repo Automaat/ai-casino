@@ -45,7 +45,8 @@ class DaemonStressTester:
             ValueError: If no positions or insufficient historical data
         """
         logger.info("[STRESS TEST] Fetching current positions")
-        positions = self.broker.get_positions()
+        account_info = self.broker.get_account_info()
+        positions = list(account_info.positions.values())
 
         if not positions:
             msg = "No positions in portfolio for stress testing"

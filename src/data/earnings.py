@@ -114,7 +114,7 @@ class EarningsCalendarFetcher:
 
         # DataFrame format
         try:
-            if "Earnings Date" in calendar.index:
+            if hasattr(calendar, "index") and hasattr(calendar, "loc") and "Earnings Date" in calendar.index:
                 raw = calendar.loc["Earnings Date"]
                 if hasattr(raw, "iloc"):
                     return self._parse_date(raw.iloc[0])
@@ -146,7 +146,7 @@ class EarningsCalendarFetcher:
         # DataFrame format
         for key in ("Earnings Average", "EPS Estimate"):
             try:
-                if key in calendar.index:
+                if hasattr(calendar, "index") and hasattr(calendar, "loc") and key in calendar.index:
                     val = calendar.loc[key]
                     if hasattr(val, "iloc"):
                         val = val.iloc[0]

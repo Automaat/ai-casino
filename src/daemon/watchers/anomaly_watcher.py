@@ -144,6 +144,9 @@ class AnomalyWatcher(EventWatcher):
 
     async def _detect_volume_spike(self, symbol: str, current_volume: float) -> VolumeSpike | None:
         """Detect volume spike for symbol."""
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         if symbol not in self._volume_baselines:
             # Establish baseline from daily data
             try:
@@ -194,6 +197,9 @@ class AnomalyWatcher(EventWatcher):
 
     async def _detect_gap(self, symbol: str, open_price: float) -> Gap | None:
         """Detect gap for symbol."""
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         if symbol not in self._previous_close_cache:
             # Fetch prev close from daily data
             try:
@@ -234,6 +240,9 @@ class AnomalyWatcher(EventWatcher):
         Returns:
             AnomalyEvent if anomalies detected, None otherwise
         """
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         # Fetch intraday data
         try:
             intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
@@ -248,7 +257,12 @@ class AnomalyWatcher(EventWatcher):
         # Aggregate current trading day bars
         latest_ts = intraday.data.index[-1]
         current_date = latest_ts.date()
-        day_bars = intraday.data[intraday.data.index.date == current_date]
+        index = intraday.data.index
+        if hasattr(index, "date"):
+            same_day_mask = index.date == current_date
+        else:
+            same_day_mask = index.map(lambda x: x.date()) == current_date
+        day_bars = intraday.data[same_day_mask]
 
         if day_bars.empty:
             day_bars = intraday.data.iloc[[-1]]

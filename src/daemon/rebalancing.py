@@ -144,11 +144,11 @@ class DaemonRebalancer:
                     symbol=rebalance.symbol, qty=shares, side=side, stop_loss_price=None
                 )
 
-                if order_status.filled:
+                if order_status.filled_at is not None and order_status.filled_avg_price is not None:
                     executed += 1
                     logger.info(
                         f"Executed {side.upper()} {shares} shares of {rebalance.symbol} "
-                        f"at ${order_status.avg_fill_price:.2f}"
+                        f"at ${order_status.filled_avg_price:.2f}"
                     )
                 else:
                     logger.warning(f"Order not filled: {rebalance.symbol} {side} {shares}")

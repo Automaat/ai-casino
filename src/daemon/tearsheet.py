@@ -231,7 +231,8 @@ class DaemonTearsheetGenerator:
             nearest_idx = df["date_diff"].idxmin()
             price = float(df.loc[nearest_idx, "close"])
 
-            logger.debug(f"Fetched {symbol} price {price} for {target_date} (nearest: {nearest_idx.date()})")
+            nearest_date = nearest_idx.date() if hasattr(nearest_idx, "date") else nearest_idx
+            logger.debug(f"Fetched {symbol} price {price} for {target_date} (nearest: {nearest_date})")
             return price
 
         except Exception as e:

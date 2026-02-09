@@ -240,11 +240,12 @@ If no specific stocks are affected, return "NONE".
 
         results: dict[str, TradingWorkflowResult] = {}
         semaphore = asyncio.Semaphore(2)  # Limit concurrent analyses
+        workflow = self._workflow
 
         async def analyze_one(symbol: str) -> tuple[str, TradingWorkflowResult | None]:
             async with semaphore:
                 try:
-                    result = await self._workflow.analyze(symbol, period_days=30)
+                    result = await workflow.analyze(symbol, period_days=30)
                     return symbol, result
                 except Exception as e:
                     logger.error(f"Failed to analyze {symbol}: {e}")

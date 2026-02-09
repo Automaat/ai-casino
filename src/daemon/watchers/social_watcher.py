@@ -7,6 +7,7 @@ Detects two types of events:
 
 from collections import deque
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -14,6 +15,9 @@ from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
 from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher
+
+if TYPE_CHECKING:
+    from src.data.reddit import TrendingTicker
 
 
 class SocialWatcher(EventWatcher):
@@ -96,6 +100,66 @@ class SocialWatcher(EventWatcher):
         self._mention_count_order.append(symbol)
         self._previous_mention_counts[symbol] = count
 
+    def _check_volume_spike(self, symbol: str, current_count: int, now: datetime) -> SocialEvent | None:
+        """Check if symbol has volume spike and return event if detected."""
+        if symbol not in self._previous_mention_counts:
+            return None
+
+        prev_count = self._previous_mention_counts[symbol]
+        if prev_count == 0:
+            return None
+
+        delta_pct = ((current_count - prev_count) / prev_count) * 100
+        if delta_pct < self.volume_spike_threshold * 100:
+            return None
+
+        logger.info(f"Volume spike detected: {symbol} ({prev_count} → {current_count}, +{delta_pct:.1f}%)")
+        return SocialEvent(
+            event_id=f"reddit_volume_{symbol}_{now.isoformat()}",
+            event_type="social",
+            timestamp=now,
+            source="reddit",
+            symbol=symbol,
+            mention_count=current_count,
+            mention_delta_pct=delta_pct,
+            viral_post=None,
+        )
+
+    def _check_viral_posts(self, ticker: "TrendingTicker", symbol: str, now: datetime) -> list[SocialEvent]:
+        """Check ticker posts for viral content and return detected events."""
+        events: list[SocialEvent] = []
+
+        for post in ticker.sample_posts:
+            age_seconds = (now - post.created_utc).total_seconds()
+            if age_seconds > 3600:  # >1hr old
+                continue
+            if post.score < self.viral_score_threshold:
+                continue
+            if post.upvote_ratio < self.viral_upvote_ratio:
+                continue
+            if post.id in self._seen_post_ids:
+                continue
+
+            events.append(
+                SocialEvent(
+                    event_id=f"reddit_viral_{post.id}",
+                    event_type="social",
+                    timestamp=post.created_utc,
+                    source="reddit",
+                    symbol=symbol,
+                    mention_count=None,
+                    mention_delta_pct=None,
+                    viral_post=post,
+                )
+            )
+            self._seen_post_ids.append(post.id)
+            logger.info(
+                f"Viral post detected: {symbol} - {post.title[:60]}... "
+                f"(score: {post.score}, ratio: {post.upvote_ratio:.1%}, age: {age_seconds / 60:.1f}m)"
+            )
+
+        return events
+
     async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch social events from Reddit (volume spikes + viral posts).
 
@@ -103,8 +167,10 @@ class SocialWatcher(EventWatcher):
             List of SocialEvent objects for detected signals
         """
         self._init_components()
+        if self._reddit_fetcher is None:
+            msg = "Failed to initialize RedditFetcher"
+            raise RuntimeError(msg)
 
-        # Fetch trending tickers
         trending = self._reddit_fetcher.fetch_trending_tickers(
             subreddits=self.subreddits, limit=100, min_mentions=1
         )
@@ -117,66 +183,13 @@ class SocialWatcher(EventWatcher):
             current_count = ticker.mention_count
 
             # Phase 1: Volume spike detection
-            if symbol in self._previous_mention_counts:
-                prev_count = self._previous_mention_counts[symbol]
-
-                # Skip if previous count was zero (avoid div/0)
-                if prev_count > 0:
-                    delta_pct = ((current_count - prev_count) / prev_count) * 100
-
-                    if delta_pct >= self.volume_spike_threshold * 100:
-                        events.append(
-                            SocialEvent(
-                                event_id=f"reddit_volume_{symbol}_{now.isoformat()}",
-                                event_type="social",
-                                timestamp=now,
-                                source="reddit",
-                                symbol=symbol,
-                                mention_count=current_count,
-                                mention_delta_pct=delta_pct,
-                                viral_post=None,
-                            )
-                        )
-                        logger.info(
-                            f"Volume spike detected: {symbol} "
-                            f"({prev_count} → {current_count}, +{delta_pct:.1f}%)"
-                        )
+            volume_event = self._check_volume_spike(symbol, current_count, now)
+            if volume_event:
+                events.append(volume_event)
 
             # Phase 2: Viral post detection
-            for post in ticker.sample_posts:
-                # Age check
-                age_seconds = (now - post.created_utc).total_seconds()
-                if age_seconds > 3600:  # >1hr old
-                    continue
-
-                # Score/ratio check
-                if post.score < self.viral_score_threshold:
-                    continue
-                if post.upvote_ratio < self.viral_upvote_ratio:
-                    continue
-
-                # Deduplication check
-                if post.id in self._seen_post_ids:
-                    continue
-
-                # Create viral post event
-                events.append(
-                    SocialEvent(
-                        event_id=f"reddit_viral_{post.id}",
-                        event_type="social",
-                        timestamp=post.created_utc,
-                        source="reddit",
-                        symbol=symbol,
-                        mention_count=None,
-                        mention_delta_pct=None,
-                        viral_post=post,
-                    )
-                )
-                self._seen_post_ids.append(post.id)
-                logger.info(
-                    f"Viral post detected: {symbol} - {post.title[:60]}... "
-                    f"(score: {post.score}, ratio: {post.upvote_ratio:.1%}, age: {age_seconds / 60:.1f}m)"
-                )
+            viral_events = self._check_viral_posts(ticker, symbol, now)
+            events.extend(viral_events)
 
             # Update baseline for next poll
             self._update_mention_baseline(symbol, current_count)

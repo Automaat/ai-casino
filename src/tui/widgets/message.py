@@ -90,7 +90,7 @@ class AssistantMessage(SelectionSafeMixin, Static):
             # Render markdown content with Rich
             rendered = RichMarkdown(content)
             self.update(rendered)
-            if self.parent:
+            if self.parent and hasattr(self.parent, "scroll_end"):
                 self.parent.scroll_end(animate=False)
         except Exception as e:
             logger.debug(f"Message update skipped: {e}")

@@ -36,6 +36,8 @@ class LogCaptureSink:
         if not _state.progress_callback:
             return
 
+        if not hasattr(message, "record"):
+            return
         record = message.record
         extra = record.get("extra", {})
 

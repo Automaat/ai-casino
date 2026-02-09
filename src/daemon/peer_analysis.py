@@ -252,6 +252,8 @@ class DeepPeerAnalyzer:
         Returns:
             PeerMetrics or None on failure
         """
+        if not self._fundamental:
+            return None
         try:
             overview = self._fundamental.fetch_overview(symbol)
 

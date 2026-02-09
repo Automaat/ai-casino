@@ -518,6 +518,9 @@ class HealthChecker:
         from src.daemon.config import NotificationTrigger
         from src.daemon.notifications import NotificationMessage
 
+        if not self.notification_service:
+            return
+
         services = ", ".join([f.service for f in failed])
 
         message = NotificationMessage(
