@@ -1101,18 +1101,22 @@ class TradingWorkflow:
             msg = "account_info is None, cannot assess risk"
             raise ValueError(msg)
 
-        from src.agents.risk import RiskAssessment
+        final_decision = state["final_decision"]
+        if final_decision is None:
+            msg = "final_decision is None, cannot assess risk"
+            raise ValueError(msg)
 
         def _sync_assess_risk() -> RiskAssessment:
             assert account_info is not None  # noqa: S101
             assert daily_data is not None  # noqa: S101
+            assert final_decision is not None  # noqa: S101
             return self.risk_manager.assess(
                 symbol=state["symbol"],
-                action=state["final_decision"].action,  # type: ignore[union-attr]
+                action=final_decision.action,
                 current_price=current_price,
                 account_info=account_info,
                 market_data=daily_data,
-                decision_confidence=state["final_decision"].confidence,  # type: ignore[union-attr]
+                decision_confidence=final_decision.confidence,
                 broker_positions=state.get("broker_positions"),
                 portfolio_value=state.get("portfolio_value"),
                 target_portfolio_weight=target_weight,

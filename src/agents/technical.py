@@ -92,9 +92,10 @@ class TechnicalAnalyst:
         import asyncio
         from collections.abc import Callable
 
-        generate_signal: Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]] = (
-            self.strategy.generate_signal
-        )  # type: ignore[assignment]
+        generate_signal = cast(
+            "Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]]",
+            self.strategy.generate_signal,
+        )
         signal, indicators = await asyncio.to_thread(generate_signal, daily_data)
         latest_close = float(daily_data["Close"].iloc[-1])
 
@@ -144,9 +145,10 @@ class TechnicalAnalyst:
         import asyncio
         from collections.abc import Callable
 
-        generate_signal: Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]] = (
-            self.strategy.generate_signal
-        )  # type: ignore[assignment]
+        generate_signal = cast(
+            "Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]]",
+            self.strategy.generate_signal,
+        )
 
         for timeframe, data in multi_data.timeframes.items():
             # Offload CPU-intensive indicator calculation to thread
