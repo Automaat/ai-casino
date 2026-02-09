@@ -29,10 +29,9 @@ def render(client: "DaemonAPIClient") -> list:  # noqa: ARG001
         dbc.Tabs(
             [
                 dbc.Tab(
-                    label="Live Execution",
+                    label="Live Status",
                     children=[
                         html.Div(id="workflow-live-status", className="mb-3 mt-3"),
-                        html.Div(id="workflow-live-progress", className="mb-3"),
                         html.Div(id="workflow-live-agents"),
                     ],
                 ),
@@ -83,7 +82,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             active_tab: Active tab ID
 
         Returns:
-            Tuple of (status HTML, agents HTML)
+            Tuple of (status HTML, activity feed HTML)
         """
         from dash.exceptions import PreventUpdate
 
@@ -91,46 +90,24 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             raise PreventUpdate
 
         try:
-            events = client.get_events(limit=10).events
+            events = client.get_events(limit=20).events
 
-            # Find latest ANALYSIS_START and ANALYSIS_COMPLETE
-            analysis_start = None
-            analysis_complete = None
+            if not events:
+                return [dbc.Alert("No daemon activity detected", color="warning")], []
 
-            for event in events:
-                if event["event_type"] == "ANALYSIS_START" and not analysis_start:
-                    analysis_start = event
-                if event["event_type"] == "ANALYSIS_COMPLETE" and not analysis_complete:
-                    analysis_complete = event
+            # Get latest event
+            latest_event = events[0]
+            event_type = latest_event["event_type"]
+            event_data = latest_event["data"]
+            timestamp = datetime.fromisoformat(latest_event["timestamp"])
 
-            # Determine state
-            if analysis_start and (
-                not analysis_complete or analysis_start["timestamp"] > analysis_complete["timestamp"]
-            ):
-                # Active analysis
-                symbol = analysis_start["data"].get("symbol", "Unknown")
-                status_html = [
-                    dbc.Alert(
-                        [
-                            dbc.Spinner(size="sm", spinner_class_name="me-2"),
-                            html.Span(f"Analyzing {symbol}..."),
-                        ],
-                        color="info",
-                    )
-                ]
+            # Build status based on latest event
+            status_html = _build_status_banner(event_type, event_data, timestamp)
 
-                # Build agent grid (placeholder for now)
-                agents_html = [
-                    html.H5("Active Agents", className="mb-3"),
-                    dbc.Alert("Agent status tracking coming soon", color="secondary"),
-                ]
+            # Build recent activity feed
+            activity_html = _build_activity_feed(events)
 
-            else:
-                # Idle
-                status_html = [dbc.Alert("No analysis running", color="secondary", className="text-center")]
-                agents_html = []
-
-            return status_html, agents_html
+            return status_html, activity_html
 
         except Exception as e:
             logger.error(f"Live view update failed: {e}")
@@ -525,3 +502,202 @@ def _build_llm_calls_table(metrics: dict) -> list:
         html.H5("LLM Call Details", className="mt-4"),
         table,
     ]
+
+
+def _build_status_banner(event_type: str, event_data: dict, timestamp: datetime) -> list:
+    """Build status banner from latest event.
+
+    Args:
+        event_type: Event type string
+        event_data: Event data dict
+        timestamp: Event timestamp
+
+    Returns:
+        Status banner HTML components
+    """
+    time_ago = _format_time_ago(timestamp)
+
+    # Event type to status mapping
+    status_map = {
+        "CYCLE_START": ("info", "🔄 Daemon cycle started", f"Started {time_ago}"),
+        "CYCLE_COMPLETE": ("success", "✓ Daemon cycle completed", f"Completed {time_ago}"),
+        "ANALYSIS_START": (
+            "info",
+            f"📊 Analyzing {event_data.get('symbol', 'Unknown')}",
+            f"Started {time_ago}",
+        ),
+        "ANALYSIS_COMPLETE": (
+            "success",
+            f"✓ Completed {event_data.get('symbol', 'Unknown')} analysis",
+            f"{time_ago} • Signal: {event_data.get('signal', 'N/A')}",
+        ),
+        "ANALYSIS_ERROR": (
+            "danger",
+            f"✗ Analysis failed: {event_data.get('symbol', 'Unknown')}",
+            f"{time_ago} • Error: {event_data.get('error', 'Unknown error')}",
+        ),
+        "TRADE_EXECUTED": (
+            "success",
+            f"💵 Trade executed: {event_data.get('symbol', 'Unknown')}",
+            f"{time_ago} • {event_data.get('side', 'N/A')} {event_data.get('qty', 'N/A')} shares",
+        ),
+        "HEALTH_CHECK": ("secondary", "💊 Health check performed", f"{time_ago}"),
+        "DEGRADATION": (
+            "warning",
+            f"⚠️ Degradation: {event_data.get('tier', 'Unknown')}",
+            f"{time_ago} • Services affected: {len(event_data.get('unavailable_services', []))}",
+        ),
+        "SCHEDULED_TASK": (
+            "info",
+            f"⏰ {event_data.get('task_name', 'Task')} executed",
+            f"{time_ago}",
+        ),
+        "STATE_UPDATE": ("secondary", "💾 State updated", f"{time_ago}"),
+    }
+
+    color, title, subtitle = status_map.get(event_type, ("secondary", f"Event: {event_type}", f"{time_ago}"))
+
+    return [
+        dbc.Alert(
+            [
+                html.H5(title, className="mb-1"),
+                html.Small(subtitle, className="text-muted"),
+            ],
+            color=color,
+        )
+    ]
+
+
+def _build_activity_feed(events: list) -> list:
+    """Build recent activity feed from events.
+
+    Args:
+        events: List of event dicts
+
+    Returns:
+        Activity feed HTML components
+    """
+    if not events:
+        return [dbc.Alert("No recent activity", color="info")]
+
+    # Build timeline items
+    timeline_items = []
+    for event in events[:15]:
+        event_type = event["event_type"]
+        event_data = event["data"]
+        timestamp = datetime.fromisoformat(event["timestamp"])
+
+        # Event icon and color
+        icon_map = {
+            "CYCLE_START": ("🔄", "primary"),
+            "CYCLE_COMPLETE": ("✓", "success"),
+            "ANALYSIS_START": ("📊", "info"),
+            "ANALYSIS_COMPLETE": ("✓", "success"),
+            "ANALYSIS_ERROR": ("✗", "danger"),
+            "TRADE_EXECUTED": ("💵", "success"),
+            "HEALTH_CHECK": ("💊", "secondary"),
+            "DEGRADATION": ("⚠️", "warning"),
+            "SCHEDULED_TASK": ("⏰", "info"),
+            "STATE_UPDATE": ("💾", "light"),
+        }
+
+        icon, color = icon_map.get(event_type, ("•", "secondary"))
+
+        # Build event description
+        desc = _format_event_description(event_type, event_data)
+
+        timeline_items.append(
+            dbc.ListGroupItem(
+                [
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Span(icon, style={"fontSize": "1.2em"}),
+                                width=1,
+                            ),
+                            dbc.Col(
+                                [
+                                    html.Strong(desc),
+                                    html.Br(),
+                                    html.Small(
+                                        timestamp.strftime("%H:%M:%S"),
+                                        className="text-muted",
+                                    ),
+                                ],
+                                width=11,
+                            ),
+                        ]
+                    )
+                ],
+                color=color,
+                className="mb-1",
+            )
+        )
+
+    return [
+        html.H5("Recent Activity", className="mb-3 mt-3"),
+        dbc.ListGroup(timeline_items, flush=True),
+    ]
+
+
+def _format_event_description(event_type: str, event_data: dict) -> str:
+    """Format event description text.
+
+    Args:
+        event_type: Event type
+        event_data: Event data dict
+
+    Returns:
+        Formatted description string
+    """
+    symbol = event_data.get("symbol", "Unknown")
+    signal = event_data.get("signal", "N/A")
+    side = event_data.get("side", "N/A")
+    qty = event_data.get("qty", "N/A")
+
+    desc_map = {
+        "CYCLE_START": "Daemon cycle started",
+        "CYCLE_COMPLETE": "Daemon cycle completed",
+        "ANALYSIS_START": f"Started analyzing {symbol}",
+        "ANALYSIS_COMPLETE": f"Completed {symbol} → {signal}",
+        "ANALYSIS_ERROR": f"Analysis failed: {symbol}",
+        "TRADE_EXECUTED": f"Executed {side} {qty} {symbol}",
+        "HEALTH_CHECK": f"Health check: {event_data.get('status', 'Unknown')}",
+        "DEGRADATION": f"Degradation tier: {event_data.get('tier', 'Unknown')}",
+        "SCHEDULED_TASK": f"{event_data.get('task_name', 'Task')} executed",
+        "STATE_UPDATE": f"State updated: {event_data.get('update_type', 'Unknown')}",
+    }
+
+    return desc_map.get(event_type, f"{event_type}: {event_data.get('message', 'No details')}")
+
+
+def _format_time_ago(timestamp: datetime) -> str:
+    """Format timestamp as relative time.
+
+    Args:
+        timestamp: Timestamp to format
+
+    Returns:
+        Relative time string (e.g., "2m ago", "just now")
+    """
+    seconds_in_minute = 60
+    seconds_in_hour = 3600
+    seconds_in_day = 86400
+    just_now_threshold = 10
+
+    now = datetime.now(UTC)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=UTC)
+
+    delta = now - timestamp
+    seconds = delta.total_seconds()
+
+    if seconds < just_now_threshold:
+        return "just now"
+    if seconds < seconds_in_minute:
+        return f"{int(seconds)}s ago"
+    if seconds < seconds_in_hour:
+        return f"{int(seconds / seconds_in_minute)}m ago"
+    if seconds < seconds_in_day:
+        return f"{int(seconds / seconds_in_hour)}h ago"
+    return f"{int(seconds / seconds_in_day)}d ago"
