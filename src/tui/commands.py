@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -464,14 +464,17 @@ Type freely to chat about markets or ask questions."""
             elif arg.isdigit():
                 top_n = max(1, min(int(arg), 50))
 
-        result_dict = await run_screening_in_process(
-            criteria=criteria,
-            universe=universe,
-            top_n=top_n,
-            save_to_watchlist=save_to_watchlist,
-            progress_callback=progress_callback,
-            is_cancelled=is_cancelled,
-        )
+        kwargs: dict[str, Any] = {
+            "universe": universe,
+            "top_n": top_n,
+            "save_to_watchlist": save_to_watchlist,
+        }
+        if progress_callback is not None:
+            kwargs["progress_callback"] = progress_callback
+        if is_cancelled is not None:
+            kwargs["is_cancelled"] = is_cancelled
+
+        result_dict = await run_screening_in_process(criteria=criteria, **kwargs)
 
         if progress_callback:
             progress_callback("analyzing", "complete", "")
