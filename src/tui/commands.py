@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -464,7 +464,7 @@ Type freely to chat about markets or ask questions."""
             elif arg.isdigit():
                 top_n = max(1, min(int(arg), 50))
 
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "universe": universe,
             "top_n": top_n,
             "save_to_watchlist": save_to_watchlist,

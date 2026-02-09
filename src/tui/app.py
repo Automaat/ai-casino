@@ -4,6 +4,7 @@ import json
 import os
 from functools import cached_property
 from pathlib import Path
+from typing import Any, TypedDict
 
 from loguru import logger
 from textual import work
@@ -39,6 +40,13 @@ from src.tui.widgets.status_bar import StatusBar
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
 
+class PendingToolConfirmation(TypedDict):
+    """Structure for pending tool confirmation."""
+
+    name: str
+    args: dict[str, Any]
+
+
 class TradingChatApp(App):
     """Interactive TUI for AI Casino."""
 
@@ -61,7 +69,7 @@ class TradingChatApp(App):
         self._model_name = self._get_model_name()
         self._analysis_worker: Worker | None = None
         self._tool_registry = self._create_tool_registry()
-        self._pending_tool_confirmation: dict | None = None
+        self._pending_tool_confirmation: PendingToolConfirmation | None = None
         self._quit_pending = False
         self._personality: str = "casino"  # "casino" or "trump"
         self._load_history()
