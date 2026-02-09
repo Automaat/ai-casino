@@ -275,7 +275,7 @@ class TechnicalAnalyst:
         ):
             prompt_type = "mean_reversion"
             prompt_vars = self._build_mean_reversion_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(indicators, MomentumIndicators):
+        elif isinstance(self.strategy, MomentumStrategy) and isinstance(indicators, MomentumIndicators):
             prompt_type = "momentum"
             prompt_vars = self._build_momentum_vars(symbol, latest_close, signal, indicators)
         else:
