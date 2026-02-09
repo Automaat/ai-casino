@@ -20,9 +20,10 @@ from src.tui.types import ProgressCallback
 
 if TYPE_CHECKING:
     from src.agents.technical import TechnicalAnalyst
+    from src.metrics.execution import ExecutionMetricsCollector
     from src.screening.analyzer import ScreeningAnalysis
     from src.screening.screener import ScreeningOutput
-    from src.workflows.trading import TradingWorkflow
+    from src.workflows.trading import TradingState, TradingWorkflow
 
 from src.models.torch_config import configure_torch_env
 
@@ -150,10 +151,10 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
     original_run_analyses = workflow.run_analyses
 
     async def patched_run_analyses(
-        state: dict,
+        state: "TradingState",
         technical_analyst: "TechnicalAnalyst",
-        collector: object = None,
-    ) -> dict:
+        collector: "ExecutionMetricsCollector | None" = None,
+    ) -> "TradingState":
         _update_progress("technical", "Running technical analysis...", progress_callback)
         result = await original_run_analyses(state, technical_analyst, collector)
         clear_active_step()  # Clear after analyses complete
@@ -163,7 +164,7 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
 
     original_make_decision = workflow.make_decision
 
-    async def patched_make_decision(state: dict) -> dict:
+    async def patched_make_decision(state: "TradingState") -> "TradingState":
         _update_progress("decision", "Synthesizing trading decision...", progress_callback)
         result = await original_make_decision(state)
         clear_active_step()  # Clear after decision complete
