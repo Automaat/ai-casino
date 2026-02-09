@@ -8,8 +8,14 @@ from src.di.config import resolve_config_or_env
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
+    from src.data.market import MarketDataFetcher
+    from src.data.websearch import WebSearchFetcher
     from src.metrics.execution import ExecutionMetricsCollector
+    from src.metrics.portfolio_var import PortfolioVaRCalculator
+    from src.metrics.risk import RiskMetricsCalculator
     from src.models.sentiment import FinBERTSentiment
+    from src.strategies.regime import MarketRegimeDetector
+    from src.tools.websearch import WebSearchTool
 
 
 def create_llm_client(
@@ -75,3 +81,57 @@ def create_finbert_sentiment(device: str | None = None) -> "FinBERTSentiment":
     from src.models.sentiment import get_finbert_sentiment
 
     return get_finbert_sentiment(device=device)
+
+
+def create_risk_metrics_calculator() -> "RiskMetricsCalculator":
+    """Create RiskMetricsCalculator with lazy import.
+
+    Returns:
+        RiskMetricsCalculator singleton instance
+    """
+    from src.metrics.risk import RiskMetricsCalculator
+
+    return RiskMetricsCalculator()
+
+
+def create_portfolio_var_calculator(
+    risk_calculator: "RiskMetricsCalculator",
+    market_fetcher: "MarketDataFetcher",
+) -> "PortfolioVaRCalculator":
+    """Create PortfolioVaRCalculator with dependencies.
+
+    Args:
+        risk_calculator: Risk metrics calculator
+        market_fetcher: Market data fetcher for historical data
+
+    Returns:
+        PortfolioVaRCalculator instance
+    """
+    from src.metrics.portfolio_var import PortfolioVaRCalculator
+
+    return PortfolioVaRCalculator(risk_calculator, market_fetcher)
+
+
+def create_web_search_tool(websearch_fetcher: "WebSearchFetcher") -> "WebSearchTool":
+    """Create WebSearchTool with websearch fetcher.
+
+    Args:
+        websearch_fetcher: Web search data fetcher
+
+    Returns:
+        WebSearchTool instance
+    """
+    from src.tools.websearch import WebSearchTool
+
+    return WebSearchTool(websearch_fetcher)
+
+
+def create_market_regime_detector() -> "MarketRegimeDetector":
+    """Create MarketRegimeDetector with lazy import.
+
+    Returns:
+        MarketRegimeDetector singleton instance
+    """
+    from src.strategies.regime import MarketRegimeDetector
+
+    return MarketRegimeDetector()

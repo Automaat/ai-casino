@@ -99,6 +99,25 @@ class AppContainer(containers.DeclarativeContainer):
         device=None,
     )
 
+    risk_metrics_calculator = providers.Singleton(
+        model_providers.create_risk_metrics_calculator,
+    )
+
+    portfolio_var_calculator = providers.Singleton(
+        model_providers.create_portfolio_var_calculator,
+        risk_calculator=risk_metrics_calculator,
+        market_fetcher=market_fetcher,
+    )
+
+    web_search_tool = providers.Singleton(
+        model_providers.create_web_search_tool,
+        websearch_fetcher=websearch_fetcher,
+    )
+
+    market_regime_detector = providers.Singleton(
+        model_providers.create_market_regime_detector,
+    )
+
     # Agent providers
     news_analyst = providers.Factory(
         agent_providers.create_news_analyst,
@@ -127,6 +146,68 @@ class AppContainer(containers.DeclarativeContainer):
         finnhub_fetcher=finnhub_fetcher,
         reddit_fetcher=reddit_fetcher,
         finbert_sentiment=finbert_sentiment,
+    )
+
+    trader_agent = providers.Factory(
+        agent_providers.create_trader_agent,
+        llm_client=llm_client,
+    )
+
+    bullish_researcher = providers.Factory(
+        agent_providers.create_bullish_researcher,
+        llm_client=llm_client,
+    )
+
+    bearish_researcher = providers.Factory(
+        agent_providers.create_bearish_researcher,
+        llm_client=llm_client,
+    )
+
+    event_triage_agent = providers.Factory(
+        agent_providers.create_event_triage_agent,
+        llm_client=llm_client,
+    )
+
+    comparative_analyst = providers.Factory(
+        agent_providers.create_comparative_analyst,
+        llm_client=llm_client,
+        comparative_fetcher=comparative_fetcher,
+    )
+
+    game_plan_agent = providers.Factory(
+        agent_providers.create_game_plan_agent,
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+    )
+
+    trade_journal_agent = providers.Factory(
+        agent_providers.create_trade_journal_agent,
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+    )
+
+    technical_analyst = providers.Factory(
+        agent_providers.create_technical_analyst,
+        llm_client=llm_client,
+    )
+
+    web_research_agent = providers.Factory(
+        agent_providers.create_web_research_agent,
+        llm_client=llm_client,
+        search_tool=web_search_tool,
+    )
+
+    meta_agent = providers.Factory(
+        agent_providers.create_meta_agent,
+        llm_client=llm_client,
+        regime_detector=market_regime_detector,
+    )
+
+    risk_management_agent = providers.Factory(
+        agent_providers.create_risk_management_agent,
+        llm_client=llm_client,
+        daemon_config=daemon_config,
+        portfolio_var_calculator=portfolio_var_calculator,
     )
 
 

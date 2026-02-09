@@ -186,3 +186,325 @@ def test_shared_finbert_singleton():
         assert sentiment_finbert_arg is mock_finbert
         assert social_finbert_arg is mock_finbert
         assert sentiment_finbert_arg is social_finbert_arg
+
+
+def test_trader_agent_provider():
+    """Test TraderAgent provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "trader_agent")
+
+    with patch("src.agents.trader.TraderAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.trader_agent()
+        assert agent is not None
+
+
+def test_trader_agent_factory():
+    """Test TraderAgent is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.trader.TraderAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.trader_agent()
+        agent2 = container.trader_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_bullish_researcher_provider():
+    """Test BullishResearcher provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "bullish_researcher")
+
+    with patch("src.agents.bullish_researcher.BullishResearcher") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.bullish_researcher()
+        assert agent is not None
+
+
+def test_bullish_researcher_factory():
+    """Test BullishResearcher is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.bullish_researcher.BullishResearcher") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.bullish_researcher()
+        agent2 = container.bullish_researcher()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_bearish_researcher_provider():
+    """Test BearishResearcher provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "bearish_researcher")
+
+    with patch("src.agents.bearish_researcher.BearishResearcher") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.bearish_researcher()
+        assert agent is not None
+
+
+def test_bearish_researcher_factory():
+    """Test BearishResearcher is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.bearish_researcher.BearishResearcher") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.bearish_researcher()
+        agent2 = container.bearish_researcher()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_comparative_analyst_provider():
+    """Test ComparativeAnalyst provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "comparative_analyst")
+
+    with patch("src.agents.comparative.ComparativeAnalyst") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.comparative_analyst()
+        assert agent is not None
+
+
+def test_comparative_analyst_factory():
+    """Test ComparativeAnalyst is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.comparative.ComparativeAnalyst") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.comparative_analyst()
+        agent2 = container.comparative_analyst()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_web_research_agent_provider():
+    """Test WebResearchAgent provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "web_research_agent")
+
+    with patch("src.agents.web_researcher.WebResearchAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.web_research_agent()
+        assert agent is not None
+
+
+def test_web_research_agent_factory():
+    """Test WebResearchAgent is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.web_researcher.WebResearchAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.web_research_agent()
+        agent2 = container.web_research_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_meta_agent_provider():
+    """Test MetaAgent provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "meta_agent")
+
+    with patch("src.agents.meta.MetaAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.meta_agent()
+        assert agent is not None
+
+
+def test_meta_agent_factory():
+    """Test MetaAgent is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.meta.MetaAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.meta_agent()
+        agent2 = container.meta_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_risk_management_agent_provider(monkeypatch):
+    """Test RiskManagementAgent provider is accessible."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    container = create_container()
+    assert hasattr(container, "risk_management_agent")
+
+    with patch("src.agents.risk.RiskManagementAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.risk_management_agent()
+        assert agent is not None
+
+
+def test_risk_management_agent_factory(monkeypatch):
+    """Test RiskManagementAgent is factory (new instance per call)."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    container = create_container()
+
+    with patch("src.agents.risk.RiskManagementAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.risk_management_agent()
+        agent2 = container.risk_management_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_technical_analyst_factory_callable():
+    """Test technical_analyst returns factory callable accepting strategy."""
+    container = create_container()
+
+    with patch("src.di.providers.agents.create_technical_analyst") as mock_factory_creator:
+        mock_factory = MagicMock()
+        mock_factory_creator.return_value = mock_factory
+
+        factory = container.technical_analyst()
+        assert callable(factory) or factory is mock_factory
+
+
+def test_technical_analyst_factory_multiple_strategies():
+    """Test technical_analyst factory creates different instances per strategy."""
+    container = create_container()
+
+    with patch("src.agents.technical.TechnicalAnalyst") as mock_class:
+        from src.strategies.momentum import MomentumStrategy
+
+        factory = container.technical_analyst()
+        assert callable(factory)
+
+        strategy1 = MomentumStrategy()
+        strategy2 = MomentumStrategy()
+
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = factory(strategy1)
+        agent2 = factory(strategy2)
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_event_triage_agent_provider():
+    """Test EventTriageAgent provider is accessible."""
+    container = create_container()
+    assert hasattr(container, "event_triage_agent")
+
+    with patch("src.agents.event_triage.EventTriageAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.event_triage_agent()
+        assert agent is not None
+
+
+def test_event_triage_agent_factory():
+    """Test EventTriageAgent is factory (new instance per call)."""
+    container = create_container()
+
+    with patch("src.agents.event_triage.EventTriageAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.event_triage_agent()
+        agent2 = container.event_triage_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_game_plan_agent_provider(monkeypatch):
+    """Test GamePlanAgent provider is accessible."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    container = create_container()
+    assert hasattr(container, "game_plan_agent")
+
+    with patch("src.agents.game_plan.GamePlanAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.game_plan_agent()
+        assert agent is not None
+
+
+def test_game_plan_agent_factory(monkeypatch):
+    """Test GamePlanAgent is factory (new instance per call)."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    container = create_container()
+
+    with patch("src.agents.game_plan.GamePlanAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.game_plan_agent()
+        agent2 = container.game_plan_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
+
+
+def test_trade_journal_agent_provider(monkeypatch):
+    """Test TradeJournalAgent provider is accessible."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    container = create_container()
+    assert hasattr(container, "trade_journal_agent")
+
+    with patch("src.agents.journal.TradeJournalAgent") as mock_class:
+        mock_instance = MagicMock()
+        mock_class.return_value = mock_instance
+        agent = container.trade_journal_agent()
+        assert agent is not None
+
+
+def test_trade_journal_agent_factory(monkeypatch):
+    """Test TradeJournalAgent is factory (new instance per call)."""
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    container = create_container()
+
+    with patch("src.agents.journal.TradeJournalAgent") as mock_class:
+        mock_instance1 = MagicMock()
+        mock_instance2 = MagicMock()
+        mock_class.side_effect = [mock_instance1, mock_instance2]
+
+        agent1 = container.trade_journal_agent()
+        agent2 = container.trade_journal_agent()
+
+        assert agent1 is not agent2
+        assert mock_class.call_count == 2
