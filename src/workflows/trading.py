@@ -231,8 +231,8 @@ class TradingWorkflow:
             self.bullish_researcher = container.bullish_researcher()
             self.bearish_researcher = container.bearish_researcher()
             self.trader = container.trader_agent()
-            # Note: risk_manager config already extracted by container from daemon_config
-            # If overrides needed, must manually instantiate
+            # Note: we instantiate RiskManagementAgent manually here using the provided config;
+            # container.risk_management_agent() is not used, so container-based config is ignored.
             from src.agents.risk import RiskManagementAgent
 
             self.risk_manager = RiskManagementAgent(

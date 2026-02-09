@@ -300,8 +300,14 @@ def create_risk_management_agent(
 
     position_sizing_config = getattr(daemon_config, "position_sizing", None)
     portfolio_var_config = None
-    if hasattr(daemon_config, "portfolio_var") and daemon_config.portfolio_var:
-        portfolio_var_config = PortfolioVaRConfig(**daemon_config.portfolio_var.model_dump())
+    risk_limits = getattr(daemon_config, "risk_limits", None)
+    if risk_limits is not None:
+        enabled = getattr(risk_limits, "enabled", True)
+        if enabled:
+            if hasattr(risk_limits, "model_dump"):
+                portfolio_var_config = PortfolioVaRConfig(**risk_limits.model_dump())
+            else:
+                portfolio_var_config = PortfolioVaRConfig(**risk_limits)
 
     return RiskManagementAgent(
         llm_client,
