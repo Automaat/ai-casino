@@ -14,6 +14,7 @@ from textual.events import Click
 from textual.widgets import Static
 from textual.worker import Worker, get_current_worker
 
+from src.di.container import create_container
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 from src.tools import (
@@ -63,6 +64,7 @@ class TradingChatApp(App):
     def __init__(self) -> None:
         """Initialize the app."""
         super().__init__()
+        self._container = create_container()
         self._command_handler = CommandHandler()
         self._llm: LLMClient | None = None
         self._history: list[dict[str, str]] = []
@@ -80,10 +82,10 @@ class TradingChatApp(App):
         registry.register(WebSearchTool())
         registry.register(GetMarketDataTool())
         registry.register(GetNewsTool())
-        registry.register(AnalyzeStockTool())
-        registry.register(ScreenStocksTool())
-        registry.register(TrumpAnalysisTool())
-        registry.register(GetSocialSentimentTool())
+        registry.register(AnalyzeStockTool(container=self._container))
+        registry.register(ScreenStocksTool(container=self._container))
+        registry.register(TrumpAnalysisTool(container=self._container))
+        registry.register(GetSocialSentimentTool(container=self._container))
         registry.register(GetRiskMetricsTool())
         registry.register(RunBacktestTool())
         registry.register(GenerateTearsheetTool())
@@ -394,7 +396,7 @@ class TradingChatApp(App):
     async def _handle_chat(self, text: str) -> None:
         """Handle free-form chat - dispatch to agentic or streaming mode."""
         if self._llm is None:
-            self._llm = LLMClient()
+            self._llm = self._container.llm_client()
 
         if self._llm.supports_tools:
             await self._handle_agentic_chat(text)

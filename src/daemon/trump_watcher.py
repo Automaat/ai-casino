@@ -4,7 +4,7 @@ import asyncio
 import re
 import signal
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from loguru import logger
 from pydantic import BaseModel
@@ -17,9 +17,11 @@ from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.models.llm import LLMClient
-from src.models.sentiment import get_finbert_sentiment
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 console = Console()
 
@@ -53,25 +55,30 @@ class TrumpWatcher:
         self,
         poll_interval: int = 60,
         max_analyses: int = 5,
+        container: "AppContainer | None" = None,
     ) -> None:
         """Initialize Trump watcher.
 
         Args:
             poll_interval: Seconds between poll cycles
             max_analyses: Maximum stocks to analyze per cycle
+            container: Optional DI container (auto-created if not provided)
         """
+        from src.di.container import create_container
+
         self.poll_interval = poll_interval
         self.max_analyses = max_analyses
         self.running = False
         self._last_post_id: str | None = None
         self._last_check: datetime | None = None
+        self._container = container or create_container()
 
         # Lazy init
         self._historical_cache = HistoricalCache()
         self._fetcher: TruthSocialFetcher | None = None
         self._analyst: TrumpAnalyst | None = None
         self._workflow: TradingWorkflow | None = None
-        self._llm: LLMClient | None = None
+        self._llm: LLMClient | None = None  # Lazy init via container
 
         logger.info(f"TrumpWatcher initialized (poll_interval={poll_interval}s)")
 
@@ -81,7 +88,7 @@ class TrumpWatcher:
             self._fetcher = TruthSocialFetcher(historical_cache=self._historical_cache)
 
         if self._llm is None:
-            self._llm = LLMClient()
+            self._llm = self._container.llm_client()
 
         if self._analyst is None:
             self._analyst = TrumpAnalyst(self._llm)
@@ -91,7 +98,7 @@ class TrumpWatcher:
                 use_alpha_vantage=False, historical_cache=self._historical_cache
             )
             news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
-            finbert = get_finbert_sentiment()
+            finbert = self._container.finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
             self._workflow = TradingWorkflow(

@@ -10,10 +10,21 @@ from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
     from src.agents.social import SocialSentimentAnalysis
+    from src.di.container import AppContainer
 
 
 class GetSocialSentimentTool(BaseTool):
     """Tool to analyze social sentiment from Reddit and Finnhub."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -84,13 +95,11 @@ class GetSocialSentimentTool(BaseTool):
         from src.agents.social import SocialSentimentAnalyst
         from src.data.finnhub import FinnhubFetcher
         from src.data.reddit import RedditFetcher
-        from src.models.llm import LLMClient
-        from src.models.sentiment import get_finbert_sentiment
 
-        llm = LLMClient()
+        llm = self._container.llm_client()
         finnhub = FinnhubFetcher()
         reddit = RedditFetcher()
-        finbert = get_finbert_sentiment()
+        finbert = self._container.finbert_sentiment()
 
         analyst = SocialSentimentAnalyst(llm, finnhub, reddit, finbert)
         result = await analyst.analyze(symbol)

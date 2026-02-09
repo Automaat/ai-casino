@@ -18,6 +18,7 @@ from src.daemon.state import DaemonState
 
 if TYPE_CHECKING:
     from src.daemon.notifications import NotificationService
+    from src.di.container import AppContainer
 
 
 class ServiceStatus(StrEnum):
@@ -65,6 +66,7 @@ class HealthChecker:
         self,
         config: DaemonConfig,
         state: DaemonState,
+        container: "AppContainer | None" = None,
         notification_service: "NotificationService | None" = None,
     ) -> None:
         """Initialize health checker.
@@ -72,10 +74,14 @@ class HealthChecker:
         Args:
             config: Daemon configuration
             state: Current daemon state
+            container: Optional DI container (auto-created if not provided)
             notification_service: Optional notification service for health alerts
         """
+        from src.di.container import create_container
+
         self.config = config
         self.state = state
+        self._container = container or create_container()
         self.notification_service = notification_service
         self._health_dir = Path(config.health.health_dir).expanduser()
         self._archive_dir = Path(config.health.archive_dir).expanduser()
@@ -284,9 +290,7 @@ class HealthChecker:
                     response = await client.get(f"{base_url}/api/tags")
                     response.raise_for_status()
             else:
-                from src.models.llm import LLMClient
-
-                llm = LLMClient()
+                llm = self._container.llm_client()
                 await llm.acomplete("Reply with OK", temperature=0.0)
                 await llm.close()
 
