@@ -10,7 +10,6 @@ class PortfolioFilterConfig(BaseModel):
     """Configuration for portfolio filters."""
 
     max_sector_concentration: float = 0.30  # 30% max per sector
-    max_correlation_threshold: float = 0.75
     min_market_cap: float = 1e9  # $1B
     min_avg_volume: int = 1_000_000  # 1M shares/day
     price_range: tuple[float, float] = (10.0, 500.0)
@@ -107,25 +106,31 @@ class PortfolioFilterEngine:
             return f"{candidate.symbol}: already in watchlist"
         return None
 
-    def _check_quality_filters(self, candidate: DiscoveryCandidate) -> str | None:
+    def _check_quality_filters(self, candidate: DiscoveryCandidate) -> str | None:  # noqa: PLR0911
         """Check market quality filters (cap, volume, price)."""
-        # Market cap filter
         market_cap = candidate.metadata.get("market_cap")
-        if market_cap and isinstance(market_cap, (int, float)) and market_cap < self.config.min_market_cap:
+        avg_volume = candidate.metadata.get("avg_volume")
+        price = candidate.metadata.get("price")
+
+        # Validate all fields present and valid
+        if not market_cap or not isinstance(market_cap, (int, float)) or market_cap <= 0:
+            return f"{candidate.symbol}: missing or invalid market cap"
+        if not avg_volume or not isinstance(avg_volume, (int, float)) or avg_volume <= 0:
+            return f"{candidate.symbol}: missing or invalid avg volume"
+        if not price or not isinstance(price, (int, float)) or price <= 0:
+            return f"{candidate.symbol}: missing or invalid price"
+
+        # Check thresholds
+        if market_cap < self.config.min_market_cap:
             min_cap_b = self.config.min_market_cap / 1e9
             return f"{candidate.symbol}: market cap ${market_cap / 1e9:.1f}B < min ${min_cap_b:.1f}B"
-
-        # Volume filter
-        avg_volume = candidate.metadata.get("avg_volume")
-        if avg_volume and isinstance(avg_volume, (int, float)) and avg_volume < self.config.min_avg_volume:
+        if avg_volume < self.config.min_avg_volume:
             return f"{candidate.symbol}: avg volume {avg_volume:,.0f} < min {self.config.min_avg_volume:,.0f}"
 
-        # Price range filter
-        price = candidate.metadata.get("price")
-        if price and isinstance(price, (int, float)):
-            min_price, max_price = self.config.price_range
-            if price < min_price or price > max_price:
-                return f"{candidate.symbol}: price ${price:.2f} outside range ${min_price}-${max_price}"
+        min_price, max_price = self.config.price_range
+        if price < min_price or price > max_price:
+            return f"{candidate.symbol}: price ${price:.2f} outside range ${min_price}-${max_price}"
+
         return None
 
     def _check_sector_filters(
@@ -172,19 +177,46 @@ class PortfolioFilterEngine:
         """
         sector_counts: dict[str, int] = {}
 
-        # Count sectors in watchlist (use candidate sector info)
+        # Fetch sectors for watchlist symbols
         candidate_sectors = {c.symbol: c.sector for c in candidates}
         for symbol in current_watchlist:
-            sector = candidate_sectors.get(symbol, "Unknown")
+            # Try candidate sectors first, fallback to yfinance fetch
+            if symbol in candidate_sectors:
+                sector = candidate_sectors[symbol]
+            else:
+                sector = self._fetch_symbol_sector(symbol)
+                if sector is None:
+                    logger.warning(f"Could not fetch sector for watchlist symbol {symbol}, skipping")
+                    continue
             sector_counts[sector] = sector_counts.get(sector, 0) + 1
 
-        # Add positions (if sector info available)
-        for _symbol, position_data in current_positions.items():
-            if isinstance(position_data, dict):
-                sector = position_data.get("sector", "Unknown")
-                sector_counts[sector] = sector_counts.get(sector, 0) + 1
+        # Fetch sectors for positions (BrokerPosition doesn't have sector field)
+        for symbol in current_positions:
+            sector = self._fetch_symbol_sector(symbol)
+            if sector is None:
+                logger.warning(f"Could not fetch sector for position {symbol}, skipping")
+                continue
+            sector_counts[sector] = sector_counts.get(sector, 0) + 1
 
         return sector_counts
+
+    def _fetch_symbol_sector(self, symbol: str) -> str | None:
+        """Fetch sector for symbol via yfinance.
+
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            Sector name or None if unavailable
+        """
+        try:
+            import yfinance as yf
+
+            ticker = yf.Ticker(symbol)
+            return ticker.info.get("sector")
+        except Exception as e:
+            logger.debug(f"Failed to fetch sector for {symbol}: {e}")
+            return None
 
     def __repr__(self) -> str:
         """Return string representation."""

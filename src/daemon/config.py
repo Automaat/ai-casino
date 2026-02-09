@@ -72,7 +72,7 @@ class DiscoveryConfig(BaseModel):
     enable_news_trending: bool = False
 
     # Technical screening
-    screening_criteria: Any = Field(default_factory=lambda: ["momentum"])
+    screening_criteria: list[str] = Field(default_factory=lambda: ["momentum"])
     screening_universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
     screening_top_n: int = 20
 
@@ -107,7 +107,6 @@ class DiscoveryConfig(BaseModel):
     portfolio_filters: Any = Field(
         default_factory=lambda: {
             "max_sector_concentration": 0.30,
-            "max_correlation_threshold": 0.75,
             "min_market_cap": 1e9,
             "min_avg_volume": 1_000_000,
             "price_range": [10.0, 500.0],

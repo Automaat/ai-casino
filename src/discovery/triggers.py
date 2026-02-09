@@ -6,7 +6,7 @@ from loguru import logger
 from src.data.market import MarketDataFetcher
 
 # Data quality thresholds (minimum data points required)
-MIN_VOLUME_DATA_POINTS = 20
+MIN_VOLUME_DATA_POINTS = 21
 MIN_GAP_DATA_POINTS = 2
 MIN_ATR_DATA_POINTS = 35
 
@@ -31,7 +31,7 @@ class TriggerDetector:
             f"gap={price_gap_threshold}%, atr={atr_spike_threshold}x)"
         )
 
-    async def detect_volume_spikes(self, universe: list[str]) -> list[str]:
+    def detect_volume_spikes(self, universe: list[str]) -> list[str]:
         """Detect stocks with volume >threshold * average.
 
         Args:
@@ -52,8 +52,8 @@ class TriggerDetector:
                     continue
 
                 # Calculate 20-day average volume
-                avg_volume = df["volume"].iloc[-21:-1].mean()
-                current_volume = df["volume"].iloc[-1]
+                avg_volume = df["Volume"].iloc[-21:-1].mean()
+                current_volume = df["Volume"].iloc[-1]
 
                 if current_volume > avg_volume * self.volume_spike_threshold:
                     spikes.append(symbol)
@@ -69,7 +69,7 @@ class TriggerDetector:
         logger.info(f"Volume spike detection: {len(spikes)} candidates from {len(universe)} symbols")
         return spikes
 
-    async def detect_price_gaps(self, universe: list[str]) -> list[str]:
+    def detect_price_gaps(self, universe: list[str]) -> list[str]:
         """Detect stocks with gap >threshold %.
 
         Args:
@@ -90,8 +90,8 @@ class TriggerDetector:
                     continue
 
                 # Compare previous close to current open/price
-                prev_close = df["close"].iloc[-2]
-                current_price = df["close"].iloc[-1]
+                prev_close = df["Close"].iloc[-2]
+                current_price = df["Open"].iloc[-1]
 
                 gap_pct = abs((current_price - prev_close) / prev_close) * 100
 

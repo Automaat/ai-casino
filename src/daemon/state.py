@@ -803,7 +803,10 @@ class DaemonState(BaseModel):
         # Filter out expired candidates
         active_candidates: list[DiscoveryCandidate] = []
         for candidate in self.active_discovery_candidates:
-            if candidate.ttl_expires_at > now:
+            ttl_expires_at = candidate.ttl_expires_at
+            if ttl_expires_at.tzinfo is None:
+                ttl_expires_at = ttl_expires_at.replace(tzinfo=UTC)
+            if ttl_expires_at > now:
                 active_candidates.append(candidate)
             else:
                 expired_symbols.append(candidate.symbol)

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -35,7 +36,7 @@ class CoreDependencies:
     trigger_detector: TriggerDetector
 
 
-class DiscoveryConfig(BaseModel):
+class DiscoveryEngineConfig(BaseModel):
     """Configuration for stock discovery engine."""
 
     # Source enablement
@@ -92,7 +93,7 @@ class StockDiscoveryEngine:
     def __init__(
         self,
         deps: CoreDependencies,
-        config: DiscoveryConfig,
+        config: DiscoveryEngineConfig,
         services: OptionalServices | None = None,
     ) -> None:
         """Initialize stock discovery engine with dependencies."""
@@ -257,7 +258,11 @@ class StockDiscoveryEngine:
 
         try:
             for criteria_name in self.config.screening_criteria:
-                criteria = ScreeningCriteria[criteria_name.upper()]
+                try:
+                    criteria = ScreeningCriteria[criteria_name.upper()]
+                except KeyError:
+                    logger.warning(f"Invalid screening criteria: {criteria_name}, skipping")
+                    continue
                 result = self.screener.screen(
                     criteria=criteria,
                     universe=self.config.screening_universe,
@@ -349,7 +354,7 @@ class StockDiscoveryEngine:
             universe = self._get_discovery_universe()
 
             # Detect volume spikes
-            spike_symbols = await self.trigger_detector.detect_volume_spikes(universe)
+            spike_symbols = self.trigger_detector.detect_volume_spikes(universe)
 
             for symbol in spike_symbols:
                 stock_info = self._get_stock_info(symbol)
@@ -385,7 +390,7 @@ class StockDiscoveryEngine:
             universe = self._get_discovery_universe()
 
             # Detect price gaps
-            gap_symbols = await self.trigger_detector.detect_price_gaps(universe)
+            gap_symbols = self.trigger_detector.detect_price_gaps(universe)
 
             for symbol in gap_symbols:
                 stock_info = self._get_stock_info(symbol)
@@ -439,26 +444,31 @@ class StockDiscoveryEngine:
         universe = self.universe_fetcher.fetch_combined()
         return [stock.symbol for stock in universe.stocks]
 
-    def _get_stock_info(self, symbol: str) -> dict[str, object]:
+    def _get_stock_info(self, symbol: str, cached_ohlcv: pd.DataFrame | None = None) -> dict[str, object]:
         """Fetch stock metadata (name, sector, market cap, etc).
 
         Args:
             symbol: Stock symbol
+            cached_ohlcv: Optional pre-fetched OHLCV data to avoid duplicate API calls
 
         Returns:
             Dict with stock metadata
         """
         try:
-            market_data = self.market_fetcher.fetch_daily(symbol, period_days=30)
-            df = market_data.data
+            # Use cached OHLCV if available, otherwise fetch
+            if cached_ohlcv is not None:
+                df = cached_ohlcv
+            else:
+                market_data = self.market_fetcher.fetch_daily(symbol, period_days=30)
+                df = market_data.data
 
             if df.empty:
                 return {}
 
             # Calculate basic metrics
             latest = df.iloc[-1]
-            price = float(latest["close"])
-            avg_volume = float(df["volume"].mean())
+            price = float(latest["Close"])
+            avg_volume = float(df["Volume"].mean())
 
             # Calculate ATR
             df.ta.atr(length=14, append=True)  # type: ignore[attr-defined]

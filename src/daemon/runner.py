@@ -288,13 +288,25 @@ class DaemonRunner:
             StockDiscoveryEngine instance
         """
         from src.data.universe import StockUniverseFetcher
-        from src.discovery.engine import DiscoveryConfig, StockDiscoveryEngine
+        from src.discovery.engine import DiscoveryEngineConfig, StockDiscoveryEngine
+        from src.discovery.filters import PortfolioFilterConfig
         from src.discovery.scoring import ScoringWeights
         from src.discovery.triggers import TriggerDetector
         from src.screening.screener import StockScreener
 
+        # Parse portfolio filters from daemon config
+        portfolio_filters_data = self.config.discovery.portfolio_filters or {}
+        portfolio_filters = PortfolioFilterConfig(
+            max_watchlist_size=portfolio_filters_data.get("max_watchlist_size", 50),
+            max_sector_concentration=portfolio_filters_data.get("max_sector_concentration", 0.3),
+            min_market_cap=portfolio_filters_data.get("min_market_cap", 1_000_000_000),
+            min_avg_volume=portfolio_filters_data.get("min_avg_volume", 1_000_000),
+            price_range=tuple(portfolio_filters_data.get("price_range", [10.0, 500.0])),
+            exclude_sectors=portfolio_filters_data.get("exclude_sectors", []),
+        )
+
         # Create discovery config from daemon config
-        discovery_config = DiscoveryConfig(
+        discovery_config = DiscoveryEngineConfig(
             enable_technical_screening=self.config.discovery.enable_technical_screening,
             enable_reddit_trending=self.config.discovery.enable_reddit_trending,
             enable_earnings_calendar=self.config.discovery.enable_earnings_calendar,
@@ -318,6 +330,7 @@ class DaemonRunner:
             auto_remove_on_signal=self.config.discovery.auto_remove_on_signal,
             track_outcomes=self.config.discovery.track_outcomes,
             outcome_lookback_days=self.config.discovery.outcome_lookback_days,
+            portfolio_filters=portfolio_filters,
         )
 
         # Create screener
@@ -1149,7 +1162,10 @@ class DaemonRunner:
 
         # Check if already ran today
         today = datetime.now(self.scheduler.timezone).date()
-        if self.state.last_discovery and self.state.last_discovery.date() == today:
+        if (
+            self.state.last_discovery
+            and self.state.last_discovery.astimezone(self.scheduler.timezone).date() == today
+        ):
             return
 
         logger.info("Running stock discovery")
@@ -1182,7 +1198,7 @@ class DaemonRunner:
             added_candidates = result.candidates[:max_new]
             added_symbols = [c.symbol for c in added_candidates]
 
-            self.state.record_discovery(added_candidates, added_symbols)
+            self.state.record_discovery(result.candidates, added_symbols)
             self.state.last_discovery = datetime.now(UTC)
             self.state.save(self.config.state.state_file)
 
