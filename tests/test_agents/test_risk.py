@@ -118,6 +118,20 @@ def test_calculate_stop_loss_no_trailing(mock_llm_client, sample_ohlcv_data):
     assert stop_loss.trailing_stop is None
 
 
+def test_calculate_stop_loss_rounds_to_two_decimals(risk_agent, sample_ohlcv_data):
+    """Test that stop loss price is always rounded to 2 decimals for broker API compliance."""
+    # Test with price that would produce multi-decimal stop loss
+    current_price = 142.567  # Uneven price to force multi-decimal calculation
+
+    stop_loss = risk_agent._calculate_stop_loss(current_price, sample_ohlcv_data, Signal.BUY)
+
+    # Assert stop loss has exactly 2 decimal places
+    assert isinstance(stop_loss.stop_loss_price, float)
+    assert stop_loss.stop_loss_price == round(stop_loss.stop_loss_price, 2)
+    # Verify it's actually rounded by checking string representation
+    assert len(str(stop_loss.stop_loss_price).split(".")[-1]) <= 2
+
+
 def test_calculate_position_size(risk_agent, account_info):
     """Test position size calculation."""
     stop_loss = StopLossCalculation(

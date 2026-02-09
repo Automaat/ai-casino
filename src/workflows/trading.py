@@ -1206,9 +1206,6 @@ class TradingWorkflow:
             assert risk is not None  # noqa: S101
             try:
                 stop_loss_price = risk.stop_loss.stop_loss_price if risk.stop_loss else None
-                # Round stop loss to 2 decimals for broker API compliance
-                if stop_loss_price is not None:
-                    stop_loss_price = round(stop_loss_price, 2)
                 order = self.broker.submit_order(  # type: ignore[union-attr]
                     symbol=state["symbol"],
                     qty=int(risk.position_sizing.recommended_shares) if risk.position_sizing else 0,
