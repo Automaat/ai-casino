@@ -12,6 +12,7 @@ from loguru import logger
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
+    from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
     from src.daemon.notifications import NotificationService
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
@@ -139,6 +140,7 @@ class TradingWorkflow:
         portfolio_var_config: PortfolioVaRConfig | None = None,
         pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
         notification_service: "NotificationService | None" = None,
+        position_sizing_config: "PositionSizingConfig | None" = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -161,6 +163,7 @@ class TradingWorkflow:
             portfolio_var_config: Optional VaR limit configuration
             pre_trade_backtest_config: Optional pre-trade backtesting configuration
             notification_service: Optional notification service for risk rejection alerts
+            position_sizing_config: Optional position sizing configuration
         """
         import os
 
@@ -214,6 +217,7 @@ class TradingWorkflow:
             llm_client,
             portfolio_var_calculator=portfolio_var_calculator,
             portfolio_var_config=portfolio_var_config,
+            position_sizing_config=position_sizing_config,
         )
 
         mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")

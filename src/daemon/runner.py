@@ -430,6 +430,7 @@ class DaemonRunner:
                 portfolio_var_config=portfolio_var_config,
                 pre_trade_backtest_config=self.config.pre_trade_backtesting,
                 notification_service=self.notification_service,
+                position_sizing_config=self.config.position_sizing,
             )
             logger.info("Trading workflow initialized")
 

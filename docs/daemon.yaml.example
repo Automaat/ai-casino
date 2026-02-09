@@ -242,6 +242,109 @@ daemon:
     # Hours of overnight news to analyze
     lookback_hours: 16
 
+  position_sizing:
+    # Position sizing strategy combining multiple methods
+    # Controls how many shares to buy/sell per trade
+
+    # PRIMARY GOAL: What are you optimizing for?
+    # - "maximize_returns": Use portfolio optimization weights primarily (best for growth)
+    # - "minimize_risk": Use risk-based sizing primarily (best for capital preservation)
+    # - "balanced": Blend both methods 50/50 (moderate approach)
+    primary_goal: "balanced"
+
+    # RISK TOLERANCE: How aggressive are position sizing constraints?
+    # - "conservative": Take minimum of all methods, strict limits, never exceed
+    # - "moderate": Layered constraints, balance safety and opportunity
+    # - "aggressive": Looser limits, confidence-weighted, allow larger positions
+    risk_tolerance: "moderate"
+
+    # COMPLEXITY: How sophisticated should the sizing logic be?
+    # - "simple": Basic layered constraints (primary → cash limit → risk limits)
+    # - "advanced": Include confidence weighting + Monte Carlo adjustment
+    complexity: "simple"
+
+    # ===== RISK LIMITS (always applied) =====
+
+    # Maximum risk per trade (% of account balance)
+    # Example: 2% means you can lose max 2% if stop-loss hits
+    max_risk_per_trade_pct: 2.0
+
+    # Maximum single position size (% of account balance)
+    # Example: 20% means no single stock can exceed $20k on $100k account
+    max_single_position_pct: 20.0
+
+    # Maximum total portfolio exposure (% of account balance)
+    # Example: 80% means max $80k invested on $100k account ($20k cash buffer)
+    max_total_exposure_pct: 80.0
+
+    # ===== BLENDING WEIGHTS (for "balanced" primary_goal) =====
+
+    # Weight for portfolio optimization method (must sum to 1.0 with risk_based)
+    # Higher = trust optimizer more, follow rebalancing targets more closely
+    blend_weight_optimization: 0.5
+
+    # Weight for risk-based method (must sum to 1.0 with optimization)
+    # Higher = trust risk management more, size based on stop-loss distance
+    blend_weight_risk_based: 0.5
+
+    # ===== CONFIDENCE SCALING (complexity="advanced" only) =====
+
+    # Reduce position size based on signal confidence
+    confidence_scaling_enabled: false
+
+    # High confidence threshold (no reduction above this)
+    # Example: 0.8 = full position size if confidence >= 80%
+    confidence_high_threshold: 0.8
+
+    # Low confidence threshold (reduction applied below this)
+    # Example: 0.6 = reduce position size if confidence < 60%
+    confidence_low_threshold: 0.6
+
+    # Reduction factor for low confidence trades (0.1-0.9)
+    # Example: 0.5 = use 50% of calculated position size if confidence < low_threshold
+    confidence_low_reduction_factor: 0.5
+
+    # ===== MONTE CARLO ADJUSTMENT (complexity="advanced" only) =====
+
+    # Reduce position size based on Monte Carlo stress test results
+    # Requires monte_carlo.enabled=true
+    use_monte_carlo_adjustment: false
+
+    # Multiplier applied when Monte Carlo shows high tail risk
+    # Example: 0.7 = reduce position to 70% if stress test fails
+    monte_carlo_risk_multiplier: 0.7
+
+    # ===== EXAMPLES =====
+    #
+    # CONSERVATIVE GROWTH:
+    #   primary_goal: "maximize_returns"
+    #   risk_tolerance: "conservative"
+    #   complexity: "simple"
+    #   max_risk_per_trade_pct: 1.0
+    #   max_single_position_pct: 10.0
+    #
+    # AGGRESSIVE RETURNS:
+    #   primary_goal: "maximize_returns"
+    #   risk_tolerance: "aggressive"
+    #   complexity: "advanced"
+    #   max_risk_per_trade_pct: 3.0
+    #   max_single_position_pct: 25.0
+    #   confidence_scaling_enabled: true
+    #
+    # SAFETY FIRST:
+    #   primary_goal: "minimize_risk"
+    #   risk_tolerance: "conservative"
+    #   complexity: "simple"
+    #   max_risk_per_trade_pct: 1.0
+    #   max_single_position_pct: 15.0
+    #
+    # BALANCED (default):
+    #   primary_goal: "balanced"
+    #   risk_tolerance: "moderate"
+    #   complexity: "simple"
+    #   blend_weight_optimization: 0.5
+    #   blend_weight_risk_based: 0.5
+
   position_management:
     # Advanced position management (trailing stops, profit targets)
     # Requires auto_trade=true
