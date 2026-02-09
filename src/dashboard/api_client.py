@@ -1,5 +1,9 @@
 """Sync httpx client for daemon API."""
 
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
 import httpx
 from loguru import logger
 from tenacity import (
@@ -70,7 +74,30 @@ class DaemonAPIClient:
         """
         self.api_url = api_url.rstrip("/")
         self._client = httpx.Client(timeout=10.0)
+        self._cache: dict[str, tuple[datetime, Any]] = {}
+        self._cache_ttl = timedelta(seconds=30)
         logger.info(f"Initialized DaemonAPIClient (api_url={self.api_url})")
+
+    def _get_cached(self, key: str, fetch_fn: Callable[[], Any]) -> Any:  # noqa: ANN401
+        """Generic cache wrapper.
+
+        Args:
+            key: Cache key
+            fetch_fn: Function to fetch data if cache miss
+
+        Returns:
+            Cached or fresh data
+        """
+        now = datetime.now(UTC)
+        if key in self._cache:
+            ts, cached = self._cache[key]
+            if now - ts < self._cache_ttl:
+                logger.debug(f"Cache hit: {key}")
+                return cached
+        logger.debug(f"Cache miss: {key}")
+        result = fetch_fn()
+        self._cache[key] = (now, result)
+        return result
 
     def is_healthy(self) -> bool:
         """Health check (returns False on exception, no raise).
@@ -208,7 +235,15 @@ class DaemonAPIClient:
 
     @HTTP_RETRY
     def get_correlation_matrix(self) -> CorrelationMatrixResponse | None:
-        """Get latest correlation matrix.
+        """Get latest correlation matrix (cached for 30s).
+
+        Returns:
+            CorrelationMatrixResponse or None if no data available
+        """
+        return self._get_cached("correlation", self._fetch_correlation)
+
+    def _fetch_correlation(self) -> CorrelationMatrixResponse | None:
+        """Fetch correlation matrix from API.
 
         Returns:
             CorrelationMatrixResponse or None if no data available
@@ -285,7 +320,18 @@ class DaemonAPIClient:
 
     @HTTP_RETRY
     def get_snapshots(self, days: int = 30) -> SnapshotsResponse:
-        """Get portfolio snapshots history.
+        """Get portfolio snapshots history (cached for 30s).
+
+        Args:
+            days: Number of days to look back
+
+        Returns:
+            SnapshotsResponse
+        """
+        return self._get_cached(f"snapshots_{days}", lambda: self._fetch_snapshots(days))
+
+    def _fetch_snapshots(self, days: int) -> SnapshotsResponse:
+        """Fetch snapshots from API.
 
         Args:
             days: Number of days to look back

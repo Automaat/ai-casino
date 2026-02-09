@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.dashboard.api_client import DaemonAPIClient
 
 
-def render(client: "DaemonAPIClient") -> list:
+def render(client: "DaemonAPIClient") -> list:  # noqa: ARG001
     """Render Signals tab content.
 
     Args:
@@ -20,29 +20,8 @@ def render(client: "DaemonAPIClient") -> list:
     Returns:
         Tab content components
     """
-    analyses_resp = client.get_analyses(limit=200)
-
-    if analyses_resp.returned_count == 0:
-        return [dbc.Alert("No analyses yet", color="info")]
-
-    # Serialize analyses for dcc.Store
-    analyses_data = [
-        {
-            "timestamp": a.timestamp.isoformat(),
-            "symbol": a.symbol,
-            "signal": a.signal,
-            "confidence": a.confidence,
-            "rsi": a.rsi,
-            "macd_hist": a.macd_hist,
-            "executed_trade": a.executed_trade,
-            "is_paper_trade": a.is_paper_trade,
-            "trading_session": a.trading_session,
-            "reasoning": a.reasoning,
-        }
-        for a in analyses_resp.analyses
-    ]
-
-    unique_symbols = sorted({a.symbol for a in analyses_resp.analyses})
+    # Initial data loaded by interval callback
+    unique_symbols = []  # Will be populated dynamically
 
     filter_controls = dbc.Card(
         dbc.CardBody(
@@ -99,19 +78,128 @@ def render(client: "DaemonAPIClient") -> list:
     )
 
     return [
-        dcc.Store(id="signals-data-store", data=analyses_data),
-        html.H4(f"Signal History ({analyses_resp.returned_count}/{analyses_resp.total_count})"),
+        dcc.Store(id="signals-data-store", data=None),
+        html.Div(id="signals-timestamp", className="text-muted small mb-3", children="Last updated: -"),
+        html.Div(id="signals-header"),
         filter_controls,
         html.Div(id="signals-filtered-content"),
     ]
 
 
-def register_callbacks(app: Dash) -> None:
+def register_callbacks(app: Dash) -> None:  # noqa: C901
     """Register Signals tab filter callbacks.
 
     Args:
         app: Dash app instance
     """
+    client = app.api_client  # type: ignore[attr-defined]
+
+    @app.callback(
+        Output("signals-data-store", "data"),
+        Input("interval-component", "n_intervals"),
+        State("tabs", "active_tab"),
+        State("signals-data-store", "data"),
+    )
+    def update_signals_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
+        """Update Signals store when tab active.
+
+        Args:
+            n_intervals: Interval counter
+            active_tab: Active tab ID
+            current_data: Current store data
+
+        Returns:
+            Serialized analyses data with timestamp
+        """
+        from datetime import UTC, datetime
+
+        from dash.exceptions import PreventUpdate
+        from loguru import logger
+
+        if active_tab != "signals":
+            raise PreventUpdate
+
+        try:
+            analyses_resp = client.get_analyses(limit=200)
+
+            return {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "returned_count": analyses_resp.returned_count,
+                "total_count": analyses_resp.total_count,
+                "analyses": [
+                    {
+                        "timestamp": a.timestamp.isoformat(),
+                        "symbol": a.symbol,
+                        "signal": a.signal,
+                        "confidence": a.confidence,
+                        "rsi": a.rsi,
+                        "macd_hist": a.macd_hist,
+                        "executed_trade": a.executed_trade,
+                        "is_paper_trade": a.is_paper_trade,
+                        "trading_session": a.trading_session,
+                        "reasoning": a.reasoning,
+                    }
+                    for a in analyses_resp.analyses
+                ],
+            }
+        except Exception as e:
+            logger.error(f"Signals refresh failed: {e}")
+            return current_data if current_data else {}
+
+    @app.callback(
+        Output("signals-filter-symbol", "options"),
+        Input("signals-data-store", "data"),
+    )
+    def update_symbol_options(data: dict | None) -> list[dict]:
+        """Update symbol filter options from store.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Symbol options list
+        """
+        if not data or not data.get("analyses"):
+            return []
+        symbols = sorted({a["symbol"] for a in data["analyses"]})
+        return [{"label": s, "value": s} for s in symbols]
+
+    @app.callback(
+        Output("signals-timestamp", "children"),
+        Input("signals-data-store", "data"),
+    )
+    def update_signals_timestamp(data: dict | None) -> str:
+        """Update timestamp display.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Timestamp text
+        """
+        from datetime import datetime
+
+        if not data or "timestamp" not in data:
+            return "Last updated: -"
+        ts = datetime.fromisoformat(data["timestamp"])
+        return f"Last updated: {ts.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    @app.callback(
+        Output("signals-header", "children"),
+        Input("signals-data-store", "data"),
+    )
+    def update_signals_header(data: dict | None) -> str | html.H4:
+        """Update signals header.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Header text
+        """
+        if not data:
+            return ""
+        return html.H4(f"Signal History ({data.get('returned_count', 0)}/{data.get('total_count', 0)})")
 
     @app.callback(
         Output("signals-filtered-content", "children"),
@@ -124,7 +212,7 @@ def register_callbacks(app: Dash) -> None:
         State("signals-data-store", "data"),
     )
     def filter_signals(
-        symbols: list, signal_types: list, start_date: str, end_date: str, analyses_data: list
+        symbols: list, signal_types: list, start_date: str, end_date: str, store_data: dict | None
     ) -> list:
         """Filter signals based on user selection.
 
@@ -133,13 +221,15 @@ def register_callbacks(app: Dash) -> None:
             signal_types: Selected signal types list
             start_date: Start date string
             end_date: End date string
-            analyses_data: Cached analyses from dcc.Store
+            store_data: Cached data from dcc.Store
 
         Returns:
             Filtered content (charts + table)
         """
-        if not analyses_data:
+        if not store_data or not store_data.get("analyses"):
             return [dbc.Alert("No data available", color="info")]
+
+        analyses_data = store_data["analyses"]
 
         # Apply filters
         filtered = _apply_filters(analyses_data, symbols, signal_types, start_date, end_date)
