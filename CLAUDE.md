@@ -77,7 +77,7 @@ tests/               # Full mirror of src structure
 ### Pre-Commit (MANDATORY)
 
 ```bash
-mise check  # Must pass: format, lint, test
+mise check  # Must pass: format, lint, typecheck, test
 mise audit  # Check for CVEs (optional locally, enforced in CI)
 ```
 
@@ -112,10 +112,17 @@ Fixes #<issue-number>
 
 ### Code Style
 
-**Formatter/Linter:** ruff (45+ rule categories)
+**Formatter:** ruff (fast formatter)
+**Linter:** ruff (45+ rule categories)
+**Type Checker:** pyrefly (high-performance type checker, faster than mypy/pyright)
 **Line length:** 110 | **Quotes:** Double | **Docstrings:** Google style | **Type hints:** Mandatory
 
-**Linter errors:** Fix properly (research if needed), NEVER skip/disable (`# noqa`, `# type: ignore`). If stuck after research, ASK.
+**Linter/type errors:** Fix properly (research if needed), NEVER skip/disable (`# noqa`, `# type: ignore`). If stuck after research, ASK.
+
+**When `# type: ignore` is acceptable:**
+- Third-party library missing type stubs (use `# type: ignore[import-untyped]`)
+- Complex generic patterns pyrefly can't infer (add comment explaining why)
+- Interfacing with untyped external APIs (prefer typed wrapper when possible)
 
 ### Import Organization
 
@@ -161,7 +168,16 @@ def fetch_daily(self, symbol: str, period_days: int = 90) -> MarketData:
 def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
 ```
 
-**Use Python 3.10+ syntax:** `list[str]`, `dict[str, int]`, `int | None` (not `Optional[int]`)
+**Syntax:** Python 3.10+ - `list[str]`, `dict[str, int]`, `int | None` (not `Optional[int]`)
+
+**Best Practices:**
+- Type all function parameters and return values (no `Any` unless truly dynamic)
+- Use `TypedDict` for structured dicts with known keys
+- Prefer concrete types over `Any`: `object` for truly unknown, protocol types for duck-typed interfaces
+- Use `collections.abc` types for parameters (`Sequence`, `Mapping`) for broader compatibility
+- Annotate class attributes in `__init__` or at class level
+- Use `Final` for constants: `TIMEOUT: Final[int] = 30`
+- Use string annotations for forward references: `def process(self, result: "TradingWorkflowResult") -> None:`
 
 ### Docstrings (Google Style)
 
@@ -507,12 +523,13 @@ python -m src.main AAPL
 python -m src.main TSLA --period 180
 
 # Quality checks (run before every commit)
-mise check              # All checks: format + lint + test
+mise check              # All checks: format + lint + typecheck + test
 
 # Individual checks
 mise format             # Format code with ruff
 mise format:check       # Check formatting (CI mode)
 mise lint               # Run ruff linter
+mise typecheck          # Run pyrefly type checker
 mise test               # Run pytest
 mise test:cov           # Run with coverage report
 mise audit              # Check dependencies for known CVEs (pip-audit)
