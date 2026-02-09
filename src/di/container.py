@@ -6,6 +6,7 @@ from dependency_injector import containers, providers
 
 from src.di.config import load_daemon_config
 from src.di.providers import data as data_providers
+from src.di.providers import models as model_providers
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -83,6 +84,18 @@ class AppContainer(containers.DeclarativeContainer):
         data_providers.create_alpaca_broker,
         daemon_config=daemon_config,
         historical_cache=historical_cache,
+    )
+
+    # Model providers
+    llm_client = providers.Factory(
+        model_providers.create_llm_client,
+        daemon_config=daemon_config,
+        metrics_collector=None,
+    )
+
+    finbert_sentiment = providers.Singleton(
+        model_providers.create_finbert_sentiment,
+        device=None,
     )
 
 

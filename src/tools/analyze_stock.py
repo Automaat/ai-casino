@@ -9,11 +9,22 @@ from loguru import logger
 from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.workflows.types import TradingWorkflowResult
 
 
 class AnalyzeStockTool(BaseTool):
     """Tool to run full trading analysis workflow."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -98,14 +109,12 @@ class AnalyzeStockTool(BaseTool):
         from src.data.fundamental import FundamentalDataFetcher
         from src.data.market import MarketDataFetcher
         from src.data.news import NewsFetcher
-        from src.models.llm import LLMClient
-        from src.models.sentiment import get_finbert_sentiment
         from src.workflows.trading import TradingWorkflow
 
-        llm = LLMClient()
+        llm = self._container.llm_client()
         market_fetcher = MarketDataFetcher()
         news_fetcher = NewsFetcher()
-        finbert = get_finbert_sentiment()
+        finbert = self._container.finbert_sentiment()
         fundamental_fetcher = FundamentalDataFetcher()
 
         workflow = TradingWorkflow(

@@ -117,18 +117,18 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
     from src.data.fundamental import FundamentalDataFetcher
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
-    from src.models.llm import LLMClient
-    from src.models.sentiment import get_finbert_sentiment
+    from src.di.container import create_container
     from src.workflows.trading import TradingWorkflow
 
+    container = create_container()
     historical_cache = HistoricalCache()
 
-    llm_client = LLMClient()
+    llm_client = container.llm_client()
     market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
     news_fetcher = NewsFetcher(historical_cache=historical_cache)
 
     _update_progress("fetch_data", "Loading FinBERT model...", progress_callback)
-    finbert = get_finbert_sentiment()
+    finbert = container.finbert_sentiment()
     fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
 
     return TradingWorkflow(
@@ -369,11 +369,12 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         _update_progress("fetch_universe", "Fetching stock universe...", params.progress_callback)
 
         from src.data.universe import StockUniverseFetcher
-        from src.models.llm import LLMClient
+        from src.di.container import create_container
         from src.screening.analyzer import ScreeningAnalyzer
         from src.screening.exporter import ScreeningExporter
         from src.screening.screener import ScreeningCriteria, StockScreener
 
+        container = create_container()
         universe_fetcher = StockUniverseFetcher()
 
         _update_progress(
@@ -387,7 +388,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         _check_cancelled(params.cancelled_event)
 
         _update_progress("analyzing", "Analyzing results with LLM...", params.progress_callback)
-        llm = LLMClient()
+        llm = container.llm_client()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
         analysis = await analyzer.analyze(output)

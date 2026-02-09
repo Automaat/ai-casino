@@ -3,12 +3,15 @@
 import asyncio
 import concurrent.futures
 from collections.abc import Coroutine
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from src.agents.trump import TrumpAnalysis
 from src.tools.base import BaseTool
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 
 def _run_async(coro: Coroutine[Any, Any, TrumpAnalysis]) -> TrumpAnalysis:
@@ -29,6 +32,16 @@ class TrumpAnalysisTool(BaseTool):
     """Tool to analyze Trump's recent Truth Social posts for trading signals."""
 
     TOOL_NAME = "analyze_trump_posts"
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -78,7 +91,6 @@ class TrumpAnalysisTool(BaseTool):
         try:
             from src.agents.trump import TrumpAnalyst
             from src.data.truth_social import TruthSocialFetcher
-            from src.models.llm import LLMClient
 
             fetcher = TruthSocialFetcher()
             post_data = fetcher.fetch_recent(hours=hours)
@@ -86,7 +98,7 @@ class TrumpAnalysisTool(BaseTool):
             if not post_data.posts:
                 return f"No Trump posts found in the last {days} days."
 
-            llm = LLMClient()
+            llm = self._container.llm_client()
             analyst = TrumpAnalyst(llm)
 
             # Run async analysis (handles existing event loop)

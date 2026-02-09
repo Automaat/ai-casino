@@ -13,6 +13,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from rich.console import Console
@@ -23,10 +24,11 @@ from src.daemon.events import BaseEvent, EventSignal, Urgency
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
-from src.models.llm import LLMClient
-from src.models.sentiment import get_finbert_sentiment
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 console = Console()
 
@@ -45,6 +47,7 @@ class EventWatcher(ABC):
         cooldown_minutes: int,
         max_concurrent_analyses: int,
         historical_cache: HistoricalCache,
+        container: "AppContainer | None" = None,
         signal_callback: Callable[[EventSignal], None] | None = None,
     ) -> None:
         """Initialize event watcher.
@@ -55,14 +58,18 @@ class EventWatcher(ABC):
             cooldown_minutes: Minutes to wait before re-analyzing same symbol
             max_concurrent_analyses: Maximum symbols to analyze per cycle
             historical_cache: Shared cache for market/news data
+            container: Optional DI container (auto-created if not provided)
             signal_callback: Optional callback to persist signals (e.g., to state)
         """
+        from src.di.container import create_container
+
         self.poll_interval = poll_interval
         self.relevance_threshold = relevance_threshold
         self.cooldown_minutes = cooldown_minutes
         self.max_concurrent_analyses = max_concurrent_analyses
         self.running = False
         self._signal_callback = signal_callback
+        self._container = container or create_container()
 
         # State tracking (in-memory)
         self._last_check: datetime | None = None
@@ -72,7 +79,6 @@ class EventWatcher(ABC):
         self._historical_cache = historical_cache
         self._triage_agent: EventTriageAgent | None = None
         self._workflow: TradingWorkflow | None = None
-        self._llm: LLMClient | None = None
 
     @abstractmethod
     async def _fetch_events(self) -> list[BaseEvent]:
@@ -85,11 +91,10 @@ class EventWatcher(ABC):
 
     def _init_components(self) -> None:
         """Lazy initialization of shared components."""
-        if self._llm is None:
-            self._llm = LLMClient()
+        llm_client = self._container.llm_client()
 
         if self._triage_agent is None:
-            self._triage_agent = EventTriageAgent(self._llm)
+            self._triage_agent = EventTriageAgent(llm_client)
 
         if self._workflow is None:
             # Initialize TradingWorkflow (same as TrumpWatcher lines 89-108)
@@ -97,11 +102,11 @@ class EventWatcher(ABC):
                 use_alpha_vantage=False, historical_cache=self._historical_cache
             )
             news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
-            finbert = get_finbert_sentiment()
+            finbert = self._container.finbert_sentiment()
             fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
 
             self._workflow = TradingWorkflow(
-                self._llm,
+                llm_client,
                 market_fetcher,
                 news_fetcher,
                 finbert,

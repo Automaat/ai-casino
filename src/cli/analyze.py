@@ -16,10 +16,9 @@ from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.di.container import create_container
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
-from src.models.llm import LLMClient
-from src.models.sentiment import get_finbert_sentiment
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -390,12 +389,13 @@ async def _analyze_stock(
     trump_str = "+trump" if trump_mode else ""
     console.print(f"\n[bold]Initializing trading system ({mode_str}{trump_str} mode)...[/bold]")
 
+    container = create_container()
     historical_cache = HistoricalCache()
 
-    llm_client = LLMClient()
+    llm_client = container.llm_client()
     market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
     news_fetcher = NewsFetcher(historical_cache=historical_cache)
-    finbert = get_finbert_sentiment()
+    finbert = container.finbert_sentiment()
     fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
 
     broker = None

@@ -9,12 +9,23 @@ from loguru import logger
 from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.screening.analyzer import ScreeningAnalysis
     from src.screening.screener import ScreeningOutput
 
 
 class ScreenStocksTool(BaseTool):
     """Tool to screen stocks for investment opportunities."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -114,13 +125,12 @@ class ScreenStocksTool(BaseTool):
             Formatted screening results
         """
         from src.data.universe import StockUniverseFetcher
-        from src.models.llm import LLMClient
         from src.screening.analyzer import ScreeningAnalyzer
         from src.screening.screener import ScreeningCriteria, StockScreener
 
         universe_fetcher = StockUniverseFetcher()
         screener = StockScreener(universe_fetcher=universe_fetcher)
-        llm = LLMClient()
+        llm = self._container.llm_client()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
         screening_criteria = ScreeningCriteria(criteria)
