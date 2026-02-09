@@ -20,7 +20,6 @@ from tenacity import (
 )
 
 from src.cache.historical import HistoricalCache
-from src.metrics.execution import timed_operation
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
 
 load_dotenv()
@@ -158,6 +157,8 @@ class MarketDataFetcher:
         Returns:
             MarketData with OHLCV dataframe
         """
+        from src.metrics.execution import timed_operation
+
         logger.info(f"Fetching {period_days} days of data for {symbol}")
 
         cached = self._try_cache(symbol, period_days)
