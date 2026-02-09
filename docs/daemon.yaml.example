@@ -84,6 +84,72 @@ daemon:
     # Watchlist name for screened symbols
     watchlist_name: "daemon-screening"
 
+  # ========================================
+  # AUTOMATED STOCK DISCOVERY
+  # ========================================
+  discovery:
+    # Enable multi-source automated stock discovery
+    enabled: false
+
+    # Discovery schedule (after-hours)
+    discovery_time: "16:30"  # HH:MM, 16:00-20:00 window
+    discovery_days: ["mon", "wed", "fri"]
+
+    # Discovery sources (enable/disable)
+    enable_technical_screening: true    # RSI/MACD/breakout screening
+    enable_reddit_trending: false       # Reddit trending tickers
+    enable_earnings_calendar: true      # Stocks with upcoming earnings
+    enable_sector_rotation: true        # Stocks from leading sectors
+    enable_volume_spikes: false         # Real-time volume >2x avg (intraday)
+    enable_price_gaps: false            # Real-time gaps >5% (intraday)
+    enable_news_trending: false         # Marketaux trending articles
+
+    # Technical screening config
+    screening_criteria: ["momentum"]    # momentum, value, breakout (list)
+    screening_universe: "COMBINED"      # SP500, NASDAQ100, COMBINED
+    screening_top_n: 20                 # Candidates per criteria
+
+    # Reddit config
+    reddit_min_mentions: 5              # Minimum mentions threshold
+    reddit_min_upvote_ratio: 0.75       # Minimum upvote ratio (0-1)
+
+    # Earnings config
+    earnings_lookahead_days: 7          # Find earnings in next N days
+
+    # Trigger thresholds (intraday detection)
+    volume_spike_threshold: 2.0         # 2x average volume
+    price_gap_threshold: 5.0            # 5% price gap
+
+    # Multi-factor scoring weights (must sum to ~1.0)
+    scoring_weights:
+      technical_weight: 0.35    # Screening score
+      liquidity_weight: 0.25    # Volume, market cap
+      timing_weight: 0.20       # Earnings, sector momentum
+      social_weight: 0.15       # Reddit, news mentions
+      volatility_weight: 0.05   # ATR-based
+
+    # Discovery limits
+    max_discovered_per_cycle: 5         # Max new symbols per run
+    min_composite_score: 0.60           # Minimum score (0-1)
+    max_watchlist_size: 50              # Hard cap on total watchlist
+
+    # Portfolio-aware filters
+    portfolio_filters:
+      max_sector_concentration: 0.30    # Max 30% in one sector
+      max_correlation_threshold: 0.75   # Max correlation with holdings
+      min_market_cap: 1000000000        # $1B minimum
+      min_avg_volume: 1000000           # 1M shares/day minimum
+      price_range: [10.0, 500.0]        # Avoid penny stocks & ultra-expensive
+      exclude_sectors: []               # Sectors to exclude (e.g., ["Energy", "Utilities"])
+
+    # Candidate lifecycle management
+    candidate_ttl_days: 7               # Auto-expire after N days no signal
+    auto_remove_on_signal: false        # Remove from discovery after first signal
+
+    # Outcome tracking (learn from discoveries)
+    track_outcomes: true
+    outcome_lookback_days: 90
+
   optimization:
     # After-hours strategy parameter optimization
     enabled: false

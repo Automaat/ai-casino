@@ -138,34 +138,59 @@ class BrokerManager:
                 seen.add(symbol)
 
         # Source 2: broker positions
-        if self.broker:
-            try:
-                account_info = self.broker.get_account_info()
-                position_symbols = set(account_info.positions.keys())
+        self._merge_broker_positions(merged_watchlist, seen)
 
-                if position_symbols:
-                    added = position_symbols - seen
-                    if added:
-                        logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
-                        merged_watchlist.extend(sorted(added))
-                        seen.update(added)
-                else:
-                    logger.debug("No positions to merge")
-            except Exception as e:
-                logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
-        else:
+        # Source 3: active discovery candidates (ordered by score)
+        self._merge_discovery_candidates(merged_watchlist, seen)
+
+        return merged_watchlist
+
+    def _merge_broker_positions(self, merged_watchlist: list[str], seen: set[str]) -> None:
+        """Merge broker positions into watchlist."""
+        if not self.broker:
             logger.debug("No broker configured, skipping position merge")
+            return
 
-        # Source 3: latest screening candidates (ordered by score)
-        if self.config.screening.enabled and self.state.screening_history:
+        try:
+            account_info = self.broker.get_account_info()
+            position_symbols = set(account_info.positions.keys())
+
+            if not position_symbols:
+                logger.debug("No positions to merge")
+                return
+
+            added = position_symbols - seen
+            if added:
+                logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
+                merged_watchlist.extend(sorted(added))
+                seen.update(added)
+        except Exception as e:
+            logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
+
+    def _merge_discovery_candidates(self, merged_watchlist: list[str], seen: set[str]) -> None:
+        """Merge discovery candidates or screening results into watchlist."""
+        if self.config.discovery.enabled and self.state.active_discovery_candidates:
+            # Expire stale candidates first
+            expired = self.state.expire_stale_candidates()
+            if expired:
+                logger.info(f"Expired {len(expired)} discovery candidates: {expired}")
+
+            # Add active candidates (already sorted by score in discovery engine)
+            discovery_symbols = [
+                c.symbol for c in self.state.active_discovery_candidates if c.symbol not in seen
+            ]
+            if discovery_symbols:
+                logger.info(f"Merged {len(discovery_symbols)} discovery candidates: {discovery_symbols}")
+                merged_watchlist.extend(discovery_symbols)
+                seen.update(discovery_symbols)
+        elif self.config.screening.enabled and self.state.screening_history:
+            # Fallback to old screening (backward compatible)
             latest = self.state.screening_history[-1]
             new_symbols = [s for s in latest.top_symbols if s not in seen]
             if new_symbols:
                 logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
                 merged_watchlist.extend(new_symbols)
                 seen.update(new_symbols)
-
-        return merged_watchlist
 
     def is_available(self) -> bool:
         """Check if broker available.

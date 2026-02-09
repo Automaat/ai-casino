@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from src.daemon.health import HealthReport
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.di.container import AppContainer
+    from src.discovery.engine import StockDiscoveryEngine
     from src.metrics.correlation import CorrelationAuditResult
 from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
@@ -43,6 +44,7 @@ from src.data.news import NewsFetcher
 from src.database.connection import get_db_engine
 from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
+from src.models.llm import LLMClient
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
@@ -220,6 +222,11 @@ class DaemonRunner:
             self._position_manager = PositionManager(self.broker, config.position_management)
             logger.info("Position management enabled")
 
+        # Discovery engine
+        self._discovery_engine = None
+        if config.discovery.enabled:
+            self._discovery_engine = self._init_discovery_engine()
+
         # Notification service
         self.notification_service = None
         if config.notifications.enabled:
@@ -268,6 +275,128 @@ class DaemonRunner:
             Resolved config value or None
         """
         return config_value or os.getenv(env_var)
+
+    def _create_llm_client(self) -> LLMClient:
+        """Create LLM client with config/env resolution.
+
+        Returns:
+            Configured LLMClient instance
+        """
+        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+        if provider == "anthropic":
+            api_key = self._resolve_config_or_env(self.config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
+        elif provider == "openai":
+            api_key = self._resolve_config_or_env(self.config.api_keys.openai_api_key, "OPENAI_API_KEY")
+        else:
+            api_key = None
+
+        return LLMClient(
+            provider=self.config.llm.provider,
+            model=self.config.llm.model,
+            api_key=api_key,
+            openai_base_url=self._resolve_config_or_env(
+                self.config.api_keys.openai_api_base, "OPENAI_API_BASE"
+            ),
+        )
+
+    def _init_discovery_engine(self) -> StockDiscoveryEngine:
+        """Initialize stock discovery engine.
+
+        Returns:
+            StockDiscoveryEngine instance
+        """
+        from src.data.universe import StockUniverseFetcher
+        from src.discovery.engine import DiscoveryEngineConfig, StockDiscoveryEngine
+        from src.discovery.filters import PortfolioFilterConfig
+        from src.discovery.scoring import ScoringWeights
+        from src.discovery.triggers import TriggerDetector
+        from src.screening.screener import StockScreener
+
+        # Parse portfolio filters from daemon config
+        portfolio_filters_data = self.config.discovery.portfolio_filters or {}
+        portfolio_filters = PortfolioFilterConfig(
+            max_watchlist_size=portfolio_filters_data.get("max_watchlist_size", 50),
+            max_sector_concentration=portfolio_filters_data.get("max_sector_concentration", 0.3),
+            min_market_cap=portfolio_filters_data.get("min_market_cap", 1_000_000_000),
+            min_avg_volume=portfolio_filters_data.get("min_avg_volume", 1_000_000),
+            price_range=tuple(portfolio_filters_data.get("price_range", [10.0, 500.0])),
+            exclude_sectors=portfolio_filters_data.get("exclude_sectors", []),
+        )
+
+        # Create discovery config from daemon config
+        discovery_config = DiscoveryEngineConfig(
+            enable_technical_screening=self.config.discovery.enable_technical_screening,
+            enable_reddit_trending=self.config.discovery.enable_reddit_trending,
+            enable_earnings_calendar=self.config.discovery.enable_earnings_calendar,
+            enable_sector_rotation=self.config.discovery.enable_sector_rotation,
+            enable_volume_spikes=self.config.discovery.enable_volume_spikes,
+            enable_price_gaps=self.config.discovery.enable_price_gaps,
+            enable_news_trending=self.config.discovery.enable_news_trending,
+            screening_criteria=list(self.config.discovery.screening_criteria),  # type: ignore[arg-type]
+            screening_universe=self.config.discovery.screening_universe,
+            screening_top_n=self.config.discovery.screening_top_n,
+            reddit_min_mentions=self.config.discovery.reddit_min_mentions,
+            reddit_min_upvote_ratio=self.config.discovery.reddit_min_upvote_ratio,
+            earnings_lookahead_days=self.config.discovery.earnings_lookahead_days,
+            volume_spike_threshold=self.config.discovery.volume_spike_threshold,
+            price_gap_threshold=self.config.discovery.price_gap_threshold,
+            scoring_weights=ScoringWeights(**self.config.discovery.scoring_weights),
+            max_discovered_per_cycle=self.config.discovery.max_discovered_per_cycle,
+            min_composite_score=self.config.discovery.min_composite_score,
+            max_watchlist_size=self.config.discovery.max_watchlist_size,
+            candidate_ttl_days=self.config.discovery.candidate_ttl_days,
+            auto_remove_on_signal=self.config.discovery.auto_remove_on_signal,
+            track_outcomes=self.config.discovery.track_outcomes,
+            outcome_lookback_days=self.config.discovery.outcome_lookback_days,
+            portfolio_filters=portfolio_filters,
+        )
+
+        # Create screener
+        screener = StockScreener(universe_fetcher=StockUniverseFetcher(), cache_dir="data/cache/screening")
+
+        # Market fetcher (create if not exists)
+        if self.market_fetcher is None:
+            self.market_fetcher = MarketDataFetcher(
+                use_alpha_vantage=False,
+                api_key=self._resolve_config_or_env(
+                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
+                ),
+                historical_cache=self._historical_cache,
+            )
+
+        # Trigger detector
+        trigger_detector = TriggerDetector(
+            market_fetcher=self.market_fetcher,
+            volume_spike_threshold=self.config.discovery.volume_spike_threshold,
+            price_gap_threshold=self.config.discovery.price_gap_threshold,
+        )
+
+        # Core dependencies
+        from src.discovery.engine import CoreDependencies, OptionalServices
+
+        deps = CoreDependencies(
+            screener=screener,
+            market_fetcher=self.market_fetcher,
+            universe_fetcher=StockUniverseFetcher(),
+            trigger_detector=trigger_detector,
+        )
+
+        # Optional services (set to None for now - TODO: integrate later)
+        services = OptionalServices(
+            reddit_fetcher=None,
+            earnings_fetcher=None,
+            news_fetcher=None,
+            broker=self.broker,
+        )
+
+        engine = StockDiscoveryEngine(
+            deps=deps,
+            config=discovery_config,
+            services=services,
+        )
+
+        logger.info("Stock discovery engine initialized")
+        return engine
 
     def _init_prefetcher(self) -> DataPrefetcher | None:
         """Initialize data prefetcher (lazy initialization).
@@ -1040,6 +1169,94 @@ class DaemonRunner:
                 logger.info("Sent paper trading readiness notification")
         except Exception as e:
             logger.debug(f"Paper readiness check failed: {e}")
+
+    async def _maybe_run_discovery(self) -> None:
+        """Run stock discovery if scheduled."""
+        if not self.config.discovery.enabled or not self._discovery_engine:
+            return
+
+        if not self._is_discovery_time():
+            return
+
+        # Check if already ran today
+        today = datetime.now(self.scheduler.timezone).date()
+        if (
+            self.state.last_discovery
+            and self.state.last_discovery.astimezone(self.scheduler.timezone).date() == today
+        ):
+            return
+
+        logger.info("Running stock discovery")
+        console.print("\n[bold cyan]🔍 Running Stock Discovery...[/bold cyan]")
+
+        try:
+            # Get current state
+            current_watchlist = self.get_merged_watchlist()
+            current_positions = {}
+            if self.broker:
+                try:
+                    account_info = self.broker.get_account_info()
+                    current_positions = account_info.positions
+                except Exception as e:
+                    logger.warning(f"Failed to fetch positions: {e}")
+
+            sector_context = None
+            if self.state.sector_rotation_history:
+                sector_context = self.state.sector_rotation_history[-1]
+
+            # Run discovery
+            result = await self._discovery_engine.discover(
+                current_watchlist=current_watchlist,
+                current_positions=current_positions,
+                sector_context=sector_context,
+            )
+
+            # Add top N to watchlist
+            max_new = self.config.discovery.max_discovered_per_cycle
+            added_candidates = result.candidates[:max_new]
+            added_symbols = [c.symbol for c in added_candidates]
+
+            self.state.record_discovery(result.candidates, added_symbols)
+            self.state.last_discovery = datetime.now(UTC)
+            self.state.save(self.config.state.state_file)
+
+            console.print(
+                f"[bold green]✓[/bold green] Discovery: "
+                f"{len(result.candidates)} candidates, {len(added_symbols)} added"
+            )
+            logger.info(
+                f"Discovery: {result.total_discovered} discovered, "
+                f"{result.filtered_count} filtered, {len(added_symbols)} added"
+            )
+
+            # Log source breakdown
+            for source, count in result.source_breakdown.items():
+                logger.debug(f"  {source}: {count} candidates")
+
+        except Exception as e:
+            logger.error(f"Discovery failed: {e}", exc_info=True)
+            self.state.record_error(f"Discovery failed: {e}")
+
+    def _is_discovery_time(self) -> bool:
+        """Check if current time matches discovery schedule.
+
+        Returns:
+            True if discovery should run
+        """
+        now = datetime.now(self.scheduler.timezone)
+
+        # Check day
+        day_name = now.strftime("%a").lower()[:3]  # mon, tue, etc.
+        if day_name not in [d.lower()[:3] for d in self.config.discovery.discovery_days]:
+            return False
+
+        # Check time window (16:00-20:00)
+        discovery_hour, discovery_min = map(int, self.config.discovery.discovery_time.split(":"))
+        current_time = now.hour * 60 + now.minute
+        discovery_time_mins = discovery_hour * 60 + discovery_min
+
+        # Within 5-minute window
+        return abs(current_time - discovery_time_mins) <= 5
 
     def _run_optimization(self) -> None:
         """Run after-hours strategy parameter optimization."""
@@ -2144,6 +2361,7 @@ class DaemonRunner:
 
         await self._task_runner.run_scheduled_tasks()
         await self._maybe_run_health_check()
+        await self._maybe_run_discovery()
 
         # Evaluate degradation before analysis
         degradation_context = self._evaluate_degradation()

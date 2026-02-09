@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.discovery.models import DiscoveryCandidate, DiscoverySource
 from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
@@ -40,6 +41,21 @@ class ScreeningRecord(BaseModel):
     top_symbols: list[str]
     candidates: list[ScreeningResult]
     screened_at: datetime
+
+
+class DiscoveryHistoryRecord(BaseModel):
+    """Record of stock discovery outcome for learning."""
+
+    symbol: str
+    discovered_at: datetime
+    composite_score: float
+    sources: list[DiscoverySource]
+    added_to_watchlist: bool
+    ttl_expires_at: datetime
+    first_signal: str | None = None
+    first_signal_date: datetime | None = None
+    outcome_7d: float | None = None
+    outcome_30d: float | None = None
 
 
 class PortfolioAllocationRecord(BaseModel):
@@ -233,6 +249,9 @@ class DaemonState(BaseModel):
     degradation_history: list[DegradationRecord] = Field(default_factory=list)
     last_degradation: datetime | None = None
     market_events: list[dict] = Field(default_factory=list)
+    last_discovery: datetime | None = None
+    discovery_history: list[DiscoveryHistoryRecord] = Field(default_factory=list)
+    active_discovery_candidates: list[DiscoveryCandidate] = Field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -743,6 +762,69 @@ class DaemonState(BaseModel):
         self.monte_carlo_tests.append(record)
         if len(self.monte_carlo_tests) > max_records:
             self.monte_carlo_tests = self.monte_carlo_tests[-max_records:]
+
+    def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
+        """Record discovery run and update active candidates.
+
+        Args:
+            candidates: Discovery candidates to record
+            added_symbols: Symbols actually added to watchlist
+        """
+        # Add new history records
+        for candidate in candidates:
+            history_record = DiscoveryHistoryRecord(
+                symbol=candidate.symbol,
+                discovered_at=candidate.discovery_timestamp,
+                composite_score=candidate.composite_score,
+                sources=candidate.sources,
+                added_to_watchlist=candidate.symbol in added_symbols,
+                ttl_expires_at=candidate.ttl_expires_at,
+            )
+            self.discovery_history.append(history_record)
+
+        # Update active candidates (replace old with new)
+        self.active_discovery_candidates = candidates
+
+        # Limit history to last 100 records
+        if len(self.discovery_history) > 100:
+            self.discovery_history = self.discovery_history[-100:]
+
+        logger.info(f"Recorded discovery: {len(candidates)} candidates, {len(added_symbols)} added")
+
+    def expire_stale_candidates(self) -> list[str]:
+        """Remove candidates past TTL, return expired symbols.
+
+        Returns:
+            List of expired symbols
+        """
+        now = datetime.now(UTC)
+        expired_symbols: list[str] = []
+
+        # Filter out expired candidates
+        active_candidates: list[DiscoveryCandidate] = []
+        for candidate in self.active_discovery_candidates:
+            ttl_expires_at = candidate.ttl_expires_at
+            if ttl_expires_at.tzinfo is None:
+                ttl_expires_at = ttl_expires_at.replace(tzinfo=UTC)
+            if ttl_expires_at > now:
+                active_candidates.append(candidate)
+            else:
+                expired_symbols.append(candidate.symbol)
+
+        self.active_discovery_candidates = active_candidates
+
+        if expired_symbols:
+            logger.info(f"Expired {len(expired_symbols)} discovery candidates")
+
+        return expired_symbols
+
+    def get_active_discovery_symbols(self) -> list[str]:
+        """Get symbols from active discovery candidates.
+
+        Returns:
+            List of active discovery symbols
+        """
+        return [c.symbol for c in self.active_discovery_candidates]
 
     def __repr__(self) -> str:
         """Return string representation."""

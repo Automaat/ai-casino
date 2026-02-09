@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from loguru import logger
@@ -50,6 +50,96 @@ class ScreeningConfig(BaseModel):
         # Validate 16:00-20:00 range
         if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
             msg = f"screen_time must be between 16:00-20:00, got {self.screen_time}"
+            raise ValueError(msg)
+
+        return self
+
+
+class DiscoveryConfig(BaseModel):
+    """Configuration for automated stock discovery."""
+
+    enabled: bool = False
+    discovery_time: str = "16:30"
+    discovery_days: list[str] = Field(default_factory=lambda: ["mon", "wed", "fri"])
+
+    # Source enablement
+    enable_technical_screening: bool = True
+    enable_reddit_trending: bool = False
+    enable_earnings_calendar: bool = True
+    enable_sector_rotation: bool = True
+    enable_volume_spikes: bool = False
+    enable_price_gaps: bool = False
+    enable_news_trending: bool = False
+
+    # Technical screening
+    screening_criteria: list[str] = Field(default_factory=lambda: ["momentum"])
+    screening_universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
+    screening_top_n: int = 20
+
+    # Social/Reddit
+    reddit_min_mentions: int = 5
+    reddit_min_upvote_ratio: float = 0.75
+
+    # Earnings
+    earnings_lookahead_days: int = 7
+
+    # Trigger thresholds for intraday detection
+    volume_spike_threshold: float = 2.0
+    price_gap_threshold: float = 5.0
+
+    # Scoring weights
+    scoring_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "technical_weight": 0.35,
+            "liquidity_weight": 0.25,
+            "timing_weight": 0.20,
+            "social_weight": 0.15,
+            "volatility_weight": 0.05,
+        }
+    )
+
+    # Limits
+    max_discovered_per_cycle: int = 5
+    min_composite_score: float = 0.60
+    max_watchlist_size: int = 50
+
+    # Portfolio filters
+    portfolio_filters: Any = Field(
+        default_factory=lambda: {
+            "max_sector_concentration": 0.30,
+            "min_market_cap": 1e9,
+            "min_avg_volume": 1_000_000,
+            "price_range": [10.0, 500.0],
+            "exclude_sectors": [],
+        }
+    )
+
+    # Lifecycle management
+    candidate_ttl_days: int = 7
+    auto_remove_on_signal: bool = False
+
+    # State tracking
+    track_outcomes: bool = True
+    outcome_lookback_days: int = 90
+
+    @model_validator(mode="after")
+    def validate_discovery_time(self) -> "DiscoveryConfig":
+        """Validate discovery_time is within 16:00-20:00."""
+        if not self.enabled:
+            return self
+
+        import re
+
+        pattern = r"^([0-1][0-9]|2[0-3]):([0-5][0-9])$"
+        match = re.match(pattern, self.discovery_time)
+        if not match:
+            msg = f"discovery_time must be in HH:MM format (00:00-23:59), got {self.discovery_time}"
+            raise ValueError(msg)
+
+        hour, minute = int(match.group(1)), int(match.group(2))
+
+        if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
+            msg = f"discovery_time must be between 16:00-20:00, got {self.discovery_time}"
             raise ValueError(msg)
 
         return self
@@ -678,6 +768,7 @@ class DaemonConfig(BaseModel):
     health: HealthConfig = Field(default_factory=HealthConfig)
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
+    discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
     prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
@@ -724,6 +815,7 @@ class DaemonConfig(BaseModel):
         health_data = daemon_data.pop("health", {}) or {}
         optimization_data = daemon_data.pop("optimization", {}) or {}
         screening_data = daemon_data.pop("screening", {}) or {}
+        discovery_data = daemon_data.pop("discovery", {}) or {}
         prefetch_data = daemon_data.pop("prefetch", {}) or {}
         sector_rotation_data = daemon_data.pop("sector_rotation", {}) or {}
         earnings_calendar_data = daemon_data.pop("earnings_calendar", {}) or {}
@@ -760,6 +852,7 @@ class DaemonConfig(BaseModel):
             health=HealthConfig(**health_data),
             optimization=OptimizationConfig(**optimization_data),
             screening=ScreeningConfig(**screening_data),
+            discovery=DiscoveryConfig(**discovery_data),
             prefetch=PrefetchConfig(**prefetch_data),
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
             earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
