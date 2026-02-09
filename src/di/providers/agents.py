@@ -2,21 +2,21 @@
 
 from typing import TYPE_CHECKING
 
-from src.agents.fundamental import FundamentalAnalyst
-from src.agents.news import NewsAnalyst
-from src.agents.sentiment import SentimentAnalyst
-from src.agents.social import SocialSentimentAnalyst
-from src.agents.trump import TrumpAnalyst
 from src.data.finnhub import FinnhubFetcher
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.reddit import RedditFetcher
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
+    from src.agents.fundamental import FundamentalAnalyst
+    from src.agents.news import NewsAnalyst
+    from src.agents.sentiment import SentimentAnalyst
+    from src.agents.social import SocialSentimentAnalyst
+    from src.agents.trump import TrumpAnalyst
     from src.models.sentiment import FinBERTSentiment
 
 
-def create_news_analyst(llm_client: LLMClient) -> NewsAnalyst:
+def create_news_analyst(llm_client: LLMClient) -> "NewsAnalyst":
     """Create NewsAnalyst with LLM client.
 
     Args:
@@ -25,10 +25,12 @@ def create_news_analyst(llm_client: LLMClient) -> NewsAnalyst:
     Returns:
         Configured NewsAnalyst
     """
+    from src.agents.news import NewsAnalyst
+
     return NewsAnalyst(llm_client)
 
 
-def create_sentiment_analyst(finbert_sentiment: "FinBERTSentiment") -> SentimentAnalyst:
+def create_sentiment_analyst(finbert_sentiment: "FinBERTSentiment") -> "SentimentAnalyst":
     """Create SentimentAnalyst with FinBERT model.
 
     Args:
@@ -37,10 +39,12 @@ def create_sentiment_analyst(finbert_sentiment: "FinBERTSentiment") -> Sentiment
     Returns:
         Configured SentimentAnalyst
     """
+    from src.agents.sentiment import SentimentAnalyst
+
     return SentimentAnalyst(finbert_sentiment)
 
 
-def create_trump_analyst(llm_client: LLMClient) -> TrumpAnalyst:
+def create_trump_analyst(llm_client: LLMClient) -> "TrumpAnalyst":
     """Create TrumpAnalyst with LLM client.
 
     Args:
@@ -49,13 +53,15 @@ def create_trump_analyst(llm_client: LLMClient) -> TrumpAnalyst:
     Returns:
         Configured TrumpAnalyst
     """
+    from src.agents.trump import TrumpAnalyst
+
     return TrumpAnalyst(llm_client)
 
 
 def create_fundamental_analyst(
     llm_client: LLMClient,
     fundamental_fetcher: FundamentalDataFetcher,
-) -> FundamentalAnalyst:
+) -> "FundamentalAnalyst":
     """Create FundamentalAnalyst with LLM client and data fetcher.
 
     Args:
@@ -65,6 +71,8 @@ def create_fundamental_analyst(
     Returns:
         Configured FundamentalAnalyst
     """
+    from src.agents.fundamental import FundamentalAnalyst
+
     return FundamentalAnalyst(llm_client, fundamental_fetcher)
 
 
@@ -73,7 +81,7 @@ def create_social_sentiment_analyst(
     finnhub_fetcher: FinnhubFetcher,
     reddit_fetcher: RedditFetcher,
     finbert_sentiment: "FinBERTSentiment",
-) -> SocialSentimentAnalyst:
+) -> "SocialSentimentAnalyst":
     """Create SocialSentimentAnalyst with all dependencies.
 
     Args:
@@ -85,4 +93,6 @@ def create_social_sentiment_analyst(
     Returns:
         Configured SocialSentimentAnalyst
     """
+    from src.agents.social import SocialSentimentAnalyst
+
     return SocialSentimentAnalyst(llm_client, finnhub_fetcher, reddit_fetcher, finbert_sentiment)
