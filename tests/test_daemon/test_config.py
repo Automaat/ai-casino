@@ -693,16 +693,23 @@ class TestRiskLimitsConfig:
         assert config.report_dir == "~/.ai-casino/custom-reports"
 
     def test_validation_bounds(self):
+        # Use variables to bypass type checker for validation tests
+        invalid_max_var_low = 0.0
+        invalid_max_var_high = 0.25
+        invalid_lookback_low = 5
+        invalid_lookback_high = 400
+        invalid_atr_multiplier = 0.1
+
         with pytest.raises(ValueError, match=r"greater than or equal to 0\.001"):
-            RiskLimitsConfig(max_var_95=0.0)
+            RiskLimitsConfig(max_var_95=invalid_max_var_low)
         with pytest.raises(ValueError, match=r"less than or equal to 0\.2"):
-            RiskLimitsConfig(max_var_95=0.25)
+            RiskLimitsConfig(max_var_95=invalid_max_var_high)
         with pytest.raises(ValueError, match=r"greater than or equal to 20"):
-            RiskLimitsConfig(lookback_days=5)
+            RiskLimitsConfig(lookback_days=invalid_lookback_low)
         with pytest.raises(ValueError, match=r"less than or equal to 365"):
-            RiskLimitsConfig(lookback_days=400)
+            RiskLimitsConfig(lookback_days=invalid_lookback_high)
         with pytest.raises(ValueError, match=r"greater than or equal to 0\.5"):
-            RiskLimitsConfig(atr_multiplier_min=0.1)
+            RiskLimitsConfig(atr_multiplier_min=invalid_atr_multiplier)
 
     def test_daemon_config_has_risk_limits(self):
         config = DaemonConfig()
@@ -823,11 +830,15 @@ class TestPortfolioRebalancingConfig:
             PortfolioRebalancingConfig(rebalance_threshold=0.25)
 
     def test_lookback_days_bounds(self):
-        with pytest.raises(ValueError, match="lookback_days"):
-            PortfolioRebalancingConfig(lookback_days=20)
+        # Use variables to bypass type checker for validation tests
+        invalid_lookback_low = 20
+        invalid_lookback_high = 400
 
         with pytest.raises(ValueError, match="lookback_days"):
-            PortfolioRebalancingConfig(lookback_days=400)
+            PortfolioRebalancingConfig(lookback_days=invalid_lookback_low)
+
+        with pytest.raises(ValueError, match="lookback_days"):
+            PortfolioRebalancingConfig(lookback_days=invalid_lookback_high)
 
     def test_daemon_config_has_rebalancing(self):
         config = DaemonConfig()

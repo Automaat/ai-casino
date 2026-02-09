@@ -33,11 +33,15 @@ def test_dashboard_config_custom_values() -> None:
 
 def test_dashboard_config_refresh_interval_validation() -> None:
     """Test refresh_interval must be 1000-60000."""
-    with pytest.raises(ValidationError):
-        DashboardConfig(refresh_interval=500)
+    # Use variables to bypass type checker for validation tests
+    invalid_refresh_low = 500
+    invalid_refresh_high = 70000
 
     with pytest.raises(ValidationError):
-        DashboardConfig(refresh_interval=70000)
+        DashboardConfig(refresh_interval=invalid_refresh_low)
+
+    with pytest.raises(ValidationError):
+        DashboardConfig(refresh_interval=invalid_refresh_high)
 
     # Valid boundaries
     config_min = DashboardConfig(refresh_interval=1000)
@@ -49,11 +53,15 @@ def test_dashboard_config_refresh_interval_validation() -> None:
 
 def test_dashboard_config_port_validation() -> None:
     """Test port must be 1-65535."""
-    with pytest.raises(ValidationError):
-        DashboardConfig(port=0)
+    # Use variables to bypass type checker for validation tests
+    invalid_port_low = 0
+    invalid_port_high = 70000
 
     with pytest.raises(ValidationError):
-        DashboardConfig(port=70000)
+        DashboardConfig(port=invalid_port_low)
+
+    with pytest.raises(ValidationError):
+        DashboardConfig(port=invalid_port_high)
 
     # Valid boundaries
     config_min = DashboardConfig(port=1)
