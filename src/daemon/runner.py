@@ -39,6 +39,7 @@ from src.daemon.task_runner import ScheduledTaskRunner
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.database.connection import get_db_engine
 from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.models.llm import LLMClient
@@ -135,9 +136,8 @@ class DaemonRunner:
                     if os.getenv("DATABASE_URL"):
                         try:
                             from src.database.repositories.trade import TradeRepository
-                            from src.database.engine import DatabaseEngine
 
-                            db_engine = DatabaseEngine()
+                            db_engine = get_db_engine()
                             trade_repository = TradeRepository(db_engine.session())
                         except Exception as e:
                             logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
@@ -388,9 +388,8 @@ class DaemonRunner:
                 if os.getenv("DATABASE_URL"):
                     try:
                         from src.database.repositories.trade import TradeRepository
-                        from src.database.engine import DatabaseEngine
 
-                        db_engine = DatabaseEngine()
+                        db_engine = get_db_engine()
                         trade_repository = TradeRepository(db_engine.session())
                     except Exception as e:
                         logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")

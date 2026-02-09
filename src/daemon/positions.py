@@ -1,7 +1,6 @@
 """Position lifecycle management for daemon."""
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel
@@ -9,9 +8,6 @@ from pydantic import BaseModel
 from src.daemon.config import PositionManagementConfig
 from src.data.broker import AlpacaBroker, BrokerPosition
 from src.workflows.types import TradingWorkflowResult
-
-if TYPE_CHECKING:
-    from alpaca.trading.models import Position
 
 
 class PositionRecord(BaseModel):
