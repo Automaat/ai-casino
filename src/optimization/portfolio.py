@@ -100,11 +100,11 @@ class PortfolioOptimizer:
         logger.info(f"Optimizing max Sharpe for {len(symbols)} symbols")
         returns_df = self._fetch_returns_data(symbols)
 
-        # Initialize variables for type checker
-        cleaned_weights: dict[str, float]
-        expected_return: float
-        volatility: float
-        sharpe: float
+        # Initialize variables with defaults for type checker
+        cleaned_weights: dict[str, float] = {}
+        expected_return: float = 0.0
+        volatility: float = 0.0
+        sharpe: float = 0.0
 
         try:
             # Calculate mean returns and covariance
@@ -170,11 +170,11 @@ class PortfolioOptimizer:
         logger.info(f"Optimizing min volatility for {len(symbols)} symbols")
         returns_df = self._fetch_returns_data(symbols)
 
-        # Initialize variables for type checker
-        cleaned_weights: dict[str, float]
-        expected_return: float
-        volatility: float
-        sharpe: float
+        # Initialize variables with defaults for type checker
+        cleaned_weights: dict[str, float] = {}
+        expected_return: float = 0.0
+        volatility: float = 0.0
+        sharpe: float = 0.0
 
         try:
             # Calculate mean returns and covariance

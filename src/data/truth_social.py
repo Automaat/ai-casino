@@ -104,14 +104,18 @@ class TruthSocialFetcher:
     def _raw_to_post(self, raw: dict) -> TruthPost:
         """Convert raw archive entry to TruthPost."""
         post_id = str(raw.get("id", ""))
+        content = str(raw.get("content", "") or raw.get("text", ""))
+        created_at_raw = raw.get("created_at", raw.get("createdAt", ""))
+        created_at = self._parse_datetime(str(created_at_raw))
+        url = str(raw.get("url", f"https://truthsocial.com/@realDonaldTrump/posts/{post_id}"))
         return TruthPost(
             id=post_id,
-            content=raw.get("content", "") or raw.get("text", ""),
-            created_at=self._parse_datetime(raw.get("created_at", raw.get("createdAt", ""))),
+            content=content,
+            created_at=created_at,
             likes=int(raw.get("favourites_count", raw.get("likes", 0)) or 0),
             reposts=int(raw.get("reblogs_count", raw.get("reposts", 0)) or 0),
             replies=int(raw.get("replies_count", raw.get("replies", 0)) or 0),
-            url=raw.get("url", f"https://truthsocial.com/@realDonaldTrump/posts/{post_id}"),
+            url=url,
         )
 
     @HTTP_RETRY
@@ -121,6 +125,9 @@ class TruthSocialFetcher:
         cached = self._cache.get(cache_key)
         if cached:
             logger.debug("Cache hit for Truth Social archive")
+            if not isinstance(cached, list):
+                msg = f"Expected list, got {type(cached)}"
+                raise TypeError(msg)
             return cached
 
         logger.info("Fetching Truth Social archive from CNN")

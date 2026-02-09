@@ -2,9 +2,11 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 from loguru import logger
+from pandas import DatetimeIndex
 
 from src.daemon.state import AnalysisRecord
 from src.data.broker import AlpacaBroker
@@ -220,18 +222,19 @@ class DaemonTearsheetGenerator:
 
             # Try exact date match
             if target_date in df.index:
-                close_val = df.loc[target_date, "close"]
-                return float(close_val)
+                close_val = df.loc[pd.Timestamp(target_date), "close"]
+                return float(close_val)  # type: ignore[arg-type]
 
             # Fall back to nearest date (handles weekends/holidays)
             import numpy as np
 
             target_timestamp = pd.Timestamp(target_date)
             # Type narrowing for Index subtraction
-            time_diffs_td = df.index - target_timestamp  # TimedeltaIndex
+            time_diffs_td = cast("DatetimeIndex", df.index) - target_timestamp  # TimedeltaIndex
             time_diffs = time_diffs_td.total_seconds()  # type: ignore[union-attr]
-            df["date_diff"] = np.abs(time_diffs)
-            nearest_idx = df["date_diff"].idxmin()
+            date_diff_array = np.abs(time_diffs)
+            df["date_diff"] = date_diff_array
+            nearest_idx = cast("pd.Series", df["date_diff"]).idxmin()
             price_val = df.loc[nearest_idx, "close"]
             price = float(price_val)  # type: ignore[arg-type]
 

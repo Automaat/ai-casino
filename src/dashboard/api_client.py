@@ -34,7 +34,7 @@ from src.daemon.api import (
 _HTTP_SERVER_ERROR_MIN = 500
 
 
-def _is_server_error(exception: Exception) -> bool:
+def _is_server_error(exception: BaseException) -> bool:
     """Check if exception is 5xx HTTP error."""
     return (
         isinstance(exception, httpx.HTTPStatusError)
@@ -143,7 +143,7 @@ class DaemonAPIClient:
         """
         params = {"limit": limit}
         if symbol:
-            params["symbol"] = symbol
+            params["symbol"] = symbol  # type: ignore[assignment]
 
         response = self._client.get(f"{self.api_url}/analyses", params=params)
         response.raise_for_status()

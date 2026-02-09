@@ -1,5 +1,7 @@
 """Config tab - full daemon configuration with masking."""
 
+from typing import Any, cast
+
 import dash_bootstrap_components as dbc
 from dash import Dash, html
 
@@ -221,13 +223,14 @@ def _build_config_accordion(config: FullConfigResponse) -> dbc.Accordion:
     accordion_items = []
     for idx, category in enumerate(categories):
         category_cards = [
-            _build_section_card(name, data, enabled) for name, data, enabled in category["sections"]
+            _build_section_card(name, cast("dict[str, Any]", data), cast("bool", enabled))
+            for name, data, enabled in category["sections"]
         ]
 
         accordion_items.append(
             dbc.AccordionItem(
                 category_cards,
-                title=category["title"],
+                title=cast("str", category["title"]),
                 item_id=f"category-{idx}",
             )
         )

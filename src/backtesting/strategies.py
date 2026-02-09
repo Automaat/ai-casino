@@ -3,7 +3,7 @@
 import pandas as pd
 import pandas_ta_classic as ta  # type: ignore[import-untyped]
 
-from backtesting import Strategy
+from backtesting import Strategy  # type: ignore[import-untyped]
 
 
 class MomentumBacktestStrategy(Strategy):

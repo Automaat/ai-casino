@@ -1,17 +1,22 @@
 """Trade repository for database operations."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import TradeORM
 from src.database.repositories.base import BaseRepository
 from src.metrics.tracker import TradeRecord
 from src.strategies.signal import Signal
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TradeRepository(BaseRepository[TradeRecord]):
@@ -83,7 +88,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
         Returns:
             Updated TradeRecord if found, None otherwise
         """
-        converted = {}
+        converted: dict[str, object] = {}
         for key, value in updates.items():
             if isinstance(value, float):
                 converted[key] = Decimal(str(value))

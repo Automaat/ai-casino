@@ -113,7 +113,7 @@ class NotificationService:
         if "telegram" in self.config.channels:
             channel = TelegramChannel(self.config.telegram)
             if channel.is_configured():
-                self.channels["telegram"] = channel
+                self.channels["telegram"] = channel  # type: ignore[unsupported-operation]
                 logger.info("Enabled telegram notification channel")
             else:
                 logger.warning("Telegram channel not configured (missing bot_token or chat_id)")

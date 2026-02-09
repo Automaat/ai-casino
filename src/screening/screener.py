@@ -329,8 +329,8 @@ class StockScreener:
             return_3m = 0
 
         # Score: lower P/E and P/B = better, positive momentum helps
-        pe_score = min(max(0, (PE_VALUE_THRESHOLD - pe) / PE_VALUE_THRESHOLD), 1.0)
-        pb_score = min(max(0, (PB_VALUE_THRESHOLD - pb) / PB_VALUE_THRESHOLD), 1.0)
+        pe_score = min(max(0.0, (PE_VALUE_THRESHOLD - pe) / PE_VALUE_THRESHOLD), 1.0)
+        pb_score = min(max(0.0, (PB_VALUE_THRESHOLD - pb) / PB_VALUE_THRESHOLD), 1.0)
         momentum_score = min(max(return_3m / 20, 0), 1.0)  # Cap at 20% return
 
         score = pe_score * 0.4 + pb_score * 0.4 + momentum_score * 0.2

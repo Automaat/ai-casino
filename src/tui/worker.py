@@ -200,7 +200,7 @@ def _cleanup_event_loop(loop: asyncio.AbstractEventLoop) -> None:
 
     if pending:
         with contextlib.suppress(Exception):
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))  # type: ignore[arg-type]
 
     loop.close()
 

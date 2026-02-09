@@ -55,7 +55,14 @@ class FundamentalDataFetcher:
         with timed_operation("fundamental_data_fetch", source="alpha_vantage"):
             try:
                 logger.info(f"Fetching fundamental overview for {symbol}")
-                data, _ = self.fd.get_company_overview(symbol)
+                result = self.fd.get_company_overview(symbol)
+                if result is None:
+                    msg = f"No data returned for {symbol}"
+                    raise ValueError(msg)
+                data, _ = result
+                if not isinstance(data, dict):
+                    msg = f"Expected dict, got {type(data)}"
+                    raise TypeError(msg)
 
                 if not data or "Symbol" not in data:
                     msg = f"No fundamental data available for {symbol}"

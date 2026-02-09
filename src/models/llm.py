@@ -7,7 +7,7 @@ import os
 import time
 from collections.abc import AsyncIterator, Callable
 from types import TracebackType
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import sniffio
 from dotenv import load_dotenv
@@ -30,7 +30,7 @@ def _set_asyncio_context() -> None:
     nest_asyncio (used by CLI with asyncio.run), sniffio sometimes fails to detect
     the context properly. This explicitly sets it to asyncio.
     """
-    sniffio.current_async_library_cvar.set("asyncio")
+    sniffio.current_async_library_cvar.set("asyncio")  # type: ignore[bad-argument-type]
 
 
 _DEFAULT_CONCURRENT_REQUESTS = 5
@@ -86,7 +86,7 @@ def _parse_max_concurrent_requests() -> int:
 # With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
 # OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
 MAX_CONCURRENT_REQUESTS = _parse_max_concurrent_requests()
-_semaphore_holder: dict[str, asyncio.Semaphore | int] = {}
+_semaphore_holder: dict[str, asyncio.Semaphore | int | None] = {}
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -103,7 +103,7 @@ def _get_semaphore() -> asyncio.Semaphore:
         _semaphore_holder["semaphore"] = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
         _semaphore_holder["loop_id"] = current_loop_id
 
-    return _semaphore_holder["semaphore"]
+    return cast("asyncio.Semaphore", _semaphore_holder["semaphore"])
 
 
 class ToolResult(BaseModel):
