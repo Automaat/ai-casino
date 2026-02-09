@@ -44,10 +44,14 @@ def mock_historical_cache(tmp_path) -> HistoricalCache:
     return HistoricalCache(db_path=str(db_path))
 
 
-def test_create_historical_cache():
+def test_create_historical_cache(tmp_path, monkeypatch):
     """Test HistoricalCache creation."""
+    from pathlib import Path
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     cache = data_providers.create_historical_cache()
     assert isinstance(cache, HistoricalCache)
+    assert str(cache._db_path).startswith(str(tmp_path))
 
 
 def test_create_market_fetcher(mock_daemon_config, mock_historical_cache):

@@ -225,20 +225,27 @@ def create_alpaca_broker(
     trading_mode = daemon_config.trading_mode.value
 
     if trading_mode == "paper":
-        api_key = resolve_config_or_env(
+        paper_api_key = resolve_config_or_env(
             daemon_config.api_keys.alpaca_paper_api_key,
             "ALPACA_PAPER_API_KEY",
-        ) or resolve_config_or_env(
-            daemon_config.api_keys.alpaca_api_key,
-            "ALPACA_API_KEY",
         )
-        secret_key = resolve_config_or_env(
+        paper_secret_key = resolve_config_or_env(
             daemon_config.api_keys.alpaca_paper_secret_key,
             "ALPACA_PAPER_SECRET_KEY",
-        ) or resolve_config_or_env(
-            daemon_config.api_keys.alpaca_secret_key,
-            "ALPACA_SECRET_KEY",
         )
+
+        if paper_api_key and paper_secret_key:
+            api_key = paper_api_key
+            secret_key = paper_secret_key
+        else:
+            api_key = resolve_config_or_env(
+                daemon_config.api_keys.alpaca_api_key,
+                "ALPACA_API_KEY",
+            )
+            secret_key = resolve_config_or_env(
+                daemon_config.api_keys.alpaca_secret_key,
+                "ALPACA_SECRET_KEY",
+            )
     else:  # live
         api_key = resolve_config_or_env(
             daemon_config.api_keys.alpaca_api_key,

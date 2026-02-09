@@ -4,7 +4,6 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
-from src.cache.historical import HistoricalCache
 from src.di.config import load_daemon_config
 from src.di.providers import data as data_providers
 
@@ -12,7 +11,7 @@ from src.di.providers import data as data_providers
 class AppContainer(containers.DeclarativeContainer):
     """Application DI container.
 
-    Provides config, historical cache, and 11 data fetchers + broker.
+    Provides config, a historical cache, multiple data fetchers, and a broker.
     """
 
     # Config path storage
@@ -26,8 +25,7 @@ class AppContainer(containers.DeclarativeContainer):
 
     # Historical cache singleton - shared across all fetchers
     historical_cache = providers.Singleton(
-        HistoricalCache,
-        db_path=None,
+        data_providers.create_historical_cache,
     )
 
     # Data fetchers - all Singleton
