@@ -261,7 +261,10 @@ class VectorBTRunner:
         entries = (rsi < rsi_oversold) & (macd_hist > 0)
         exits = (rsi > rsi_overbought) & (macd_hist < 0)
 
-        return entries, exits
+        # Type narrowing: ensure Series return type
+        entries_series = entries if isinstance(entries, pd.Series) else entries.iloc[:, 0]
+        exits_series = exits if isinstance(exits, pd.Series) else exits.iloc[:, 0]
+        return entries_series, exits_series
 
     def _generate_mean_reversion_signals(
         self, data: pd.DataFrame, strategy: "MeanReversionStrategy | None" = None
@@ -420,14 +423,15 @@ class VectorBTRunner:
         """Simulate portfolio from entry/exit signals using vectorized ops."""
         close = sim.data["Close"].values
         dates = [dt.to_pydatetime() for dt in sim.data.index]
-        entries_arr = sim.entries.values.astype(bool)
-        exits_arr = sim.exits.values.astype(bool)
+        entries_arr = np.asarray(sim.entries.values, dtype=bool)
+        exits_arr = np.asarray(sim.exits.values, dtype=bool)
         n = len(close)
 
         position, trade_entries, trade_exits = self._build_positions(entries_arr, exits_arr, n)
 
         # Compute equity curve
-        daily_returns = np.diff(close) / close[:-1]
+        close_arr = np.asarray(close, dtype=float)
+        daily_returns = np.diff(close_arr) / close_arr[:-1]
         strategy_returns = np.zeros(n)
         strategy_returns[1:] = daily_returns * position[:-1]
 
@@ -455,7 +459,7 @@ class VectorBTRunner:
         win_rate = len(wins) / total_trades if total_trades > 0 else 0.0
 
         gross_profit = sum(wins) if wins else 0.0
-        gross_loss = abs(sum(losses)) if losses else 0.0
+        gross_loss = float(abs(sum(losses))) if losses else 0.0
         if gross_loss > 0:
             profit_factor = gross_profit / gross_loss
         elif gross_profit > 0:

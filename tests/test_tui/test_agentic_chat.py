@@ -75,7 +75,7 @@ class TestChatModeDispatch:
             app = TradingChatApp()
             app._llm = mock_llm
 
-            assert mock_llm.supports_tools is False
+            assert not mock_llm.supports_tools
 
     def test_handle_chat_dispatches_to_agentic_for_anthropic(self):
         """Test that Anthropic provider uses agentic chat."""
@@ -90,7 +90,7 @@ class TestChatModeDispatch:
             app = TradingChatApp()
             app._llm = mock_llm
 
-            assert mock_llm.supports_tools is True
+            assert mock_llm.supports_tools
 
 
 class TestToolDefinitions:

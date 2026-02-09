@@ -2,7 +2,7 @@
 
 import math
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import numpy as np
 import pandas as pd
@@ -59,7 +59,7 @@ class PortfolioRebalance(BaseModel):
     shares_to_trade: int | None = Field(default=None, description="Shares to buy/sell if broker available")
 
 
-def _raise_optimization_error(message: str) -> None:
+def _raise_optimization_error(message: str) -> NoReturn:
     """Raise optimization error with formatted message."""
     msg = f"Optimization failed: {message}"
     raise ValueError(msg)

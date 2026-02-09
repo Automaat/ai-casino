@@ -1,6 +1,7 @@
 """Thinking indicator widget for chat."""
 
 import time
+from typing import Any
 
 from textual.widget import Widget
 
@@ -14,7 +15,7 @@ class ThinkingIndicator(Widget):
     }
     """
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:  # noqa: ANN401
         """Initialize thinking indicator."""
         super().__init__(**kwargs)
         self.auto_refresh = 1 / 8  # 8 FPS animation

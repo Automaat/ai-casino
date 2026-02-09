@@ -137,7 +137,8 @@ class WebResearchAgent:
                 logger.error(f"Web research category '{category}' failed for {symbol}: {result!r}")
                 continue
             # Type narrowing: result is WebResearchResult here
-            successful_results.append(result)
+            if isinstance(result, WebResearchResult):
+                successful_results.append(result)
 
         return successful_results
 
@@ -222,7 +223,7 @@ class WebResearchAgent:
         query = QUERY_TEMPLATES[category].format(symbol=symbol)
         search_type = "news" if category == ResearchCategory.LATEST_NEWS else "general"
 
-        search_results = self.search_tool.execute(query, search_type=search_type, max_results=5)
+        search_results = self.search_tool.execute(query=query, search_type=search_type, max_results=5)
 
         prompt = self._prompts.load(
             "user_template", symbol=symbol, category=category.value, search_results=search_results

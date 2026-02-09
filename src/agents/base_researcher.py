@@ -106,7 +106,8 @@ class BaseResearcher(ABC):
                 prompt, self.llm_response_model, system=system_prompt, temperature=0.5
             )
             # Access dynamic attributes - type checker sees BaseModel but runtime has specific fields
-            thesis = llm_response.thesis
+            assert hasattr(llm_response, "thesis"), "LLM response missing thesis attribute"  # noqa: S101
+            thesis = llm_response.thesis  # type: ignore[attr-defined]
             key_points = getattr(llm_response, self._get_key_points_field())
             target = getattr(llm_response, self._get_target_field())
         except StructuredOutputError as e:
