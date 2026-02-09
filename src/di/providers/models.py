@@ -9,8 +9,10 @@ from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
     from src.data.market import MarketDataFetcher
+    from src.data.websearch import WebSearchFetcher
     from src.metrics.execution import ExecutionMetricsCollector
     from src.metrics.portfolio_var import PortfolioVaRCalculator
+    from src.metrics.risk import RiskMetricsCalculator
     from src.models.sentiment import FinBERTSentiment
     from src.strategies.regime import MarketRegimeDetector
     from src.tools.websearch import WebSearchTool
@@ -81,7 +83,7 @@ def create_finbert_sentiment(device: str | None = None) -> "FinBERTSentiment":
     return get_finbert_sentiment(device=device)
 
 
-def create_risk_metrics_calculator():
+def create_risk_metrics_calculator() -> "RiskMetricsCalculator":
     """Create RiskMetricsCalculator with lazy import.
 
     Returns:
@@ -93,7 +95,7 @@ def create_risk_metrics_calculator():
 
 
 def create_portfolio_var_calculator(
-    risk_calculator,
+    risk_calculator: "RiskMetricsCalculator",
     market_fetcher: "MarketDataFetcher",
 ) -> "PortfolioVaRCalculator":
     """Create PortfolioVaRCalculator with dependencies.
@@ -110,7 +112,7 @@ def create_portfolio_var_calculator(
     return PortfolioVaRCalculator(risk_calculator, market_fetcher)
 
 
-def create_web_search_tool(websearch_fetcher) -> "WebSearchTool":
+def create_web_search_tool(websearch_fetcher: "WebSearchFetcher") -> "WebSearchTool":
     """Create WebSearchTool with websearch fetcher.
 
     Args:

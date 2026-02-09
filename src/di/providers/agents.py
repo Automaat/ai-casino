@@ -1,7 +1,9 @@
 """Agent providers for DI container."""
 
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
+from src.agents.meta import StrategyType
 from src.daemon.config import DaemonConfig
 from src.data.comparative import ComparativeDataFetcher
 from src.data.finnhub import FinnhubFetcher
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
     from src.agents.fundamental import FundamentalAnalyst
     from src.agents.game_plan import GamePlanAgent
     from src.agents.journal import TradeJournalAgent
-    from src.agents.meta import MetaAgent, StrategyType
+    from src.agents.meta import MetaAgent
     from src.agents.news import NewsAnalyst
     from src.agents.risk import RiskManagementAgent
     from src.agents.sentiment import SentimentAnalyst

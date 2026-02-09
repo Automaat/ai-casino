@@ -12,6 +12,7 @@ from loguru import logger
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
+    from src.agents.technical import TechnicalAnalyst
     from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
     from src.daemon.notifications import NotificationService
@@ -118,7 +119,7 @@ class WorkflowExtraContext(TypedDict, total=False):
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913, PLR0915
         self,
         llm_client: LLMClient,
         market_fetcher: MarketDataFetcher,
@@ -743,7 +744,7 @@ class TradingWorkflow:
     async def run_analyses(  # noqa: PLR0915
         self,
         state: TradingState,
-        technical_analyst,
+        technical_analyst: "TechnicalAnalyst",
         collector: ExecutionMetricsCollector | None = None,
     ) -> TradingState:
         """Run all analysis agents in parallel groups.
