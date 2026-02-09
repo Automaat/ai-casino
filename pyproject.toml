@@ -54,6 +54,7 @@ dependencies = [
     # CLI & TUI
     "typer==0.21.1",
     "textual==7.5.0",
+    "dependency-injector==4.48.3",  # DI container infrastructure
 ]
 
 [project.optional-dependencies]
