@@ -312,6 +312,8 @@ class RiskManagementAgent:
                 stop_loss_price = current_price * (1 + stop_loss_percent / 100)
             methodology = f"Fixed {stop_loss_percent}%"
 
+        # Round stop loss to 2 decimals for broker API compliance
+        stop_loss_price = round(stop_loss_price, 2)
         risk_per_share = abs(current_price - stop_loss_price)
 
         trailing_stop = None
