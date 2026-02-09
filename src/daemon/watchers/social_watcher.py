@@ -7,7 +7,7 @@ Detects two types of events:
 
 from collections import deque
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -175,7 +175,7 @@ class SocialWatcher(EventWatcher):
             subreddits=self.subreddits, limit=100, min_mentions=1
         )
 
-        events: list[SocialEvent] = []
+        events: list[BaseEvent] = []
         now = datetime.now(UTC)
 
         for ticker in trending:
@@ -185,11 +185,11 @@ class SocialWatcher(EventWatcher):
             # Phase 1: Volume spike detection
             volume_event = self._check_volume_spike(symbol, current_count, now)
             if volume_event:
-                events.append(volume_event)
+                events.append(cast("BaseEvent", volume_event))
 
             # Phase 2: Viral post detection
             viral_events = self._check_viral_posts(ticker, symbol, now)
-            events.extend(viral_events)
+            events.extend(cast("list[BaseEvent]", viral_events))
 
             # Update baseline for next poll
             self._update_mention_baseline(symbol, current_count)

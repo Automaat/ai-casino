@@ -158,6 +158,9 @@ class PositionManager:
 
     def _execute_stop_loss_action(self, position: PositionRecord, action: PositionManagementAction) -> None:
         """Execute stop-loss update action."""
+        if action.new_stop_loss is None:
+            action.executed = False
+            return
         order_id = self._update_stop_loss(position, action.new_stop_loss)
         if order_id:
             action.executed = True
@@ -167,6 +170,9 @@ class PositionManager:
 
     def _execute_sell_action(self, position: PositionRecord, action: PositionManagementAction) -> None:
         """Execute sell order action."""
+        if action.qty_sold is None:
+            action.executed = False
+            return
         try:
             order = self.broker.submit_order(
                 symbol=position.symbol,

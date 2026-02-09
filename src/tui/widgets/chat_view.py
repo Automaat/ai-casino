@@ -1,6 +1,6 @@
 """Chat view widget for message display."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from textual.containers import VerticalScroll
 
@@ -25,7 +25,7 @@ class ChatView(VerticalScroll):
     }
     """
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:  # noqa: ANN401
         """Initialize chat view."""
         super().__init__(**kwargs)
         self._streaming_message: AssistantMessage | None = None

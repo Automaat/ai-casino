@@ -94,8 +94,14 @@ class AnalysisOrchestrator:
             return False
 
         try:
+            # Filter out None positions for type safety
+            state_positions = {
+                sym: pos
+                for sym in self.state.active_positions
+                if (pos := self.state.get_position(sym)) is not None
+            }
             new_positions, updated_positions, closed_symbols = self.position_manager.sync_with_broker(
-                {sym: self.state.get_position(sym) for sym in self.state.active_positions}
+                state_positions
             )
             for pos in new_positions:
                 self.state.add_position(pos)
@@ -189,9 +195,12 @@ class AnalysisOrchestrator:
             elif result is None:
                 logger.warning(f"Analysis returned None for {symbol}")
                 failed_symbols.append(symbol)
-            else:
+            elif isinstance(result, TradingWorkflowResult):
                 # Type narrowing: result is TradingWorkflowResult here
                 results.append(result)
+            else:
+                logger.warning(f"Unexpected result type for {symbol}: {type(result)}")
+                failed_symbols.append(symbol)
 
         return results, failed_symbols
 

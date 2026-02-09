@@ -43,8 +43,8 @@ class TestBaseTool:
 
     def test_cannot_instantiate_abstract(self):
         """Test that BaseTool cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            BaseTool()
+        with pytest.raises(TypeError, match="abstract"):
+            BaseTool()  # type: ignore[abstract]
 
     def test_concrete_tool_name(self):
         """Test name property on concrete implementation."""

@@ -103,7 +103,7 @@ def _init_event_watchers(
     daemon_config: DaemonConfig, historical_cache: HistoricalCache
 ) -> list[EventWatcher]:
     """Initialize enabled event watchers."""
-    watchers = []
+    watchers: list[EventWatcher] = []
 
     if daemon_config.news_watcher.enabled:
         watchers.append(

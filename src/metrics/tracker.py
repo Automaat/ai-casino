@@ -142,6 +142,12 @@ class BaseMetricsTracker(ABC):
         else:
             self.risk_free_rate = risk_free_rate
 
+    @property
+    @abstractmethod
+    def trades(self) -> list[TradeRecord]:
+        """List of all trade records."""
+        ...
+
     @abstractmethod
     def record_decision(
         self,
@@ -174,9 +180,19 @@ class MetricsTracker(BaseMetricsTracker):
             risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
         """
         super().__init__(risk_free_rate)
-        self.trades: list[TradeRecord] = []
+        self._trades: list[TradeRecord] = []
         self._load_trades()
         logger.info(f"Initialized MetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
+
+    @property
+    def trades(self) -> list[TradeRecord]:
+        """List of all trade records."""
+        return self._trades
+
+    @trades.setter
+    def trades(self, value: list[TradeRecord]) -> None:
+        """Set trade records."""
+        self._trades = value
 
     def _load_trades(self) -> None:
         """Load trades from JSONL file."""
@@ -190,8 +206,8 @@ class MetricsTracker(BaseMetricsTracker):
                 for line in f:
                     if line.strip():
                         data = json.loads(line)
-                        self.trades.append(TradeRecord(**data))
-            logger.info(f"Loaded {len(self.trades)} trades from {trades_path}")
+                        self._trades.append(TradeRecord(**data))
+            logger.info(f"Loaded {len(self._trades)} trades from {trades_path}")
         except Exception as e:
             logger.error(f"Failed to load trades: {e}")
             raise
@@ -237,7 +253,7 @@ class MetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        self.trades.append(trade)
+        self._trades.append(trade)
         self._append_to_jsonl(trade)
 
         return trade
@@ -491,6 +507,18 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         self._repo = trade_repository
         self._trades_cache: list[TradeRecord] | None = None
         logger.info(f"Initialized DatabaseMetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
+
+    @property
+    def trades(self) -> list[TradeRecord]:
+        """List of all trade records (cached)."""
+        if self._trades_cache is None:
+            return []
+        return self._trades_cache
+
+    @trades.setter
+    def trades(self, value: list[TradeRecord]) -> None:
+        """Set trade records (updates cache)."""
+        self._trades_cache = value
 
     async def _get_trades(self) -> list[TradeRecord]:
         """Get all trades from database (cached)."""

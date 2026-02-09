@@ -2,6 +2,8 @@
 
 import asyncio
 import concurrent.futures
+from collections.abc import Coroutine
+from typing import Any
 
 from loguru import logger
 
@@ -9,7 +11,7 @@ from src.agents.trump import TrumpAnalysis
 from src.tools.base import BaseTool
 
 
-def _run_async(coro: asyncio.Future[TrumpAnalysis]) -> TrumpAnalysis:
+def _run_async(coro: Coroutine[Any, Any, TrumpAnalysis]) -> TrumpAnalysis:
     """Run async coroutine, handling existing event loop."""
     try:
         asyncio.get_running_loop()

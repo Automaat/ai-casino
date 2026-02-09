@@ -18,7 +18,7 @@ from src.daemon.config import PreTradeBacktestingConfig
 from src.data.market import MarketData
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.signal import Signal
-from src.workflows.trading import TradingWorkflow
+from src.workflows.trading import TradingState, TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 
@@ -186,10 +186,12 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
         llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
     )
 
-    state = {
+    state: TradingState = {
         "symbol": "AAPL",
         "market_data": None,
+        "enable_multi_timeframe": False,
         "news_articles": None,
+        "trump_posts": None,
         "technical_analysis": TechnicalAnalysis(
             signal=Signal.BUY,
             rsi=35.0,
@@ -211,6 +213,7 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
             impact_assessment="Positive",
             recommendation="Buy",
         ),
+        "trump_analysis": None,
         "fundamental_analysis": FundamentalAnalysis(
             valuation="FAIRLY_VALUED",
             pe_ratio=28.5,
@@ -223,6 +226,8 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
             confidence=0.75,
         ),
         "comparative_analysis": None,
+        "web_research": None,
+        "social_sentiment_analysis": None,
         "bullish_research": sample_bullish_research,
         "bearish_research": sample_bearish_research,
         "final_decision": None,
@@ -234,6 +239,19 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
             total_exposure=0.0,
         ),
         "order_status": None,
+        "regime_analysis": None,
+        "strategy_selection": None,
+        "sector_rotation_context": None,
+        "earnings_context": None,
+        "peer_analysis_context": None,
+        "game_plan_context": None,
+        "position_context": None,
+        "broker_positions": None,
+        "portfolio_value": None,
+        "backtest_validation": None,
+        "degradation_context": None,
+        "warnings": [],
+        "broker_api_failed": False,
     }
 
     result_state = await workflow.make_decision(state)
@@ -271,13 +289,22 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
         use_meta_agent=False,
     )
 
-    state = {
+    state: TradingState = {
         "symbol": "AAPL",
         "market_data": sample_ohlcv_data,
+        "enable_multi_timeframe": False,
         "news_articles": None,
+        "trump_posts": None,
         "technical_analysis": None,
         "sentiment_analysis": None,
         "news_analysis": None,
+        "trump_analysis": None,
+        "fundamental_analysis": None,
+        "comparative_analysis": None,
+        "web_research": None,
+        "social_sentiment_analysis": None,
+        "bullish_research": None,
+        "bearish_research": None,
         "final_decision": TradingDecision(
             action=Signal.BUY, confidence=0.85, reasoning=["Test"], risk_level="LOW"
         ),
@@ -288,6 +315,19 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
         ),
         "account_info": None,
         "order_status": None,
+        "regime_analysis": None,
+        "strategy_selection": None,
+        "sector_rotation_context": None,
+        "earnings_context": None,
+        "peer_analysis_context": None,
+        "game_plan_context": None,
+        "position_context": None,
+        "broker_positions": None,
+        "portfolio_value": None,
+        "backtest_validation": None,
+        "degradation_context": None,
+        "warnings": [],
+        "broker_api_failed": False,
     }
 
     result_state = workflow._execute_trade(state)
@@ -317,13 +357,22 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
         use_meta_agent=False,
     )
 
-    state = {
+    state: TradingState = {
         "symbol": "AAPL",
         "market_data": sample_ohlcv_data,
+        "enable_multi_timeframe": False,
         "news_articles": None,
+        "trump_posts": None,
         "technical_analysis": None,
         "sentiment_analysis": None,
         "news_analysis": None,
+        "trump_analysis": None,
+        "fundamental_analysis": None,
+        "comparative_analysis": None,
+        "web_research": None,
+        "social_sentiment_analysis": None,
+        "bullish_research": None,
+        "bearish_research": None,
         "final_decision": TradingDecision(
             action=Signal.BUY, confidence=0.85, reasoning=["Test"], risk_level="LOW"
         ),
@@ -334,7 +383,19 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
         ),
         "account_info": None,
         "order_status": None,
+        "regime_analysis": None,
+        "strategy_selection": None,
+        "sector_rotation_context": None,
+        "earnings_context": None,
+        "peer_analysis_context": None,
+        "game_plan_context": None,
+        "position_context": None,
+        "broker_positions": None,
+        "portfolio_value": None,
+        "backtest_validation": None,
+        "degradation_context": None,
         "warnings": [],
+        "broker_api_failed": False,
     }
 
     result_state = workflow._execute_trade(state)

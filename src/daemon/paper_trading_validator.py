@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.daemon.config import PaperTradingConfig
 from src.daemon.state import DaemonState
-from src.metrics.tracker import MetricsTracker, PerformanceMetrics
+from src.metrics.tracker import BaseMetricsTracker, PerformanceMetrics
 
 
 class ValidationCriterion(BaseModel):
@@ -55,7 +55,7 @@ class PaperTradingValidator:
         self,
         config: PaperTradingConfig,
         state: DaemonState,
-        metrics_tracker: MetricsTracker,
+        metrics_tracker: BaseMetricsTracker,
     ) -> None:
         """Initialize validator.
 

@@ -6,7 +6,7 @@ deduplicates via URL tracking, and triggers LLM triage + analysis for relevant e
 
 from collections import deque
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from loguru import logger
 
@@ -110,7 +110,7 @@ class NewsWatcher(EventWatcher):
         articles = self._news_fetcher.fetch_market_news(limit=50)
 
         # Filter: breaking (published <N min ago + keywords)
-        breaking = []
+        breaking: list[BaseEvent] = []
         now = datetime.now(UTC)
 
         for article in articles:
@@ -130,12 +130,15 @@ class NewsWatcher(EventWatcher):
 
             if any(kw in combined_text for kw in self.BREAKING_KEYWORDS):
                 breaking.append(
-                    NewsEvent(
-                        event_id=article.url,
-                        event_type="news",
-                        timestamp=article.published_at,
-                        source="marketaux",
-                        article=article,
+                    cast(
+                        "BaseEvent",
+                        NewsEvent(
+                            event_id=article.url,
+                            event_type="news",
+                            timestamp=article.published_at,
+                            source="marketaux",
+                            article=article,
+                        ),
                     )
                 )
                 self._seen_urls.append(article.url)  # Auto-evicts oldest when maxlen reached

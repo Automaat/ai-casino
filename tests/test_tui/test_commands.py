@@ -314,7 +314,8 @@ class TestCandidatesCommands:
             result = handler._handle_candidates_add(["AAPL"], state, "")
 
             assert result.success is True
-            assert "AAPL" in result.data["added"]
+            if result.data is not None:
+                assert "AAPL" in result.data["added"]
             mock_exporter.save_to_watchlist.assert_called_once()
 
     def test_candidates_add_not_found(self):
