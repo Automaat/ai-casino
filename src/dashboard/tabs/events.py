@@ -15,7 +15,7 @@ _HIGH_DRAWDOWN_THRESHOLD = 0.10
 _DETAILS_MAX_LENGTH = 150
 
 
-def render(client: DaemonAPIClient) -> list:
+def render(client: DaemonAPIClient) -> list:  # noqa: ARG001
     """Render Events tab content.
 
     Args:
@@ -25,50 +25,8 @@ def render(client: DaemonAPIClient) -> list:
         Tab content components
     """
     try:
-        # Fetch all data
-        system_events = client.get_events(limit=100).events
-        market_events_resp = client.get_market_events(limit=100)
-        market_events = market_events_resp.events
-        degradation_history = client.get_degradation_history(limit=50)
-
-        # Merge events and sort by timestamp
-        all_events = []
-
-        for e in system_events:
-            e["source"] = "system"
-            all_events.append(e)
-
-        for e in market_events:
-            e["source"] = "market"
-            all_events.append(e)
-
-        all_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-
-        if not all_events:
-            return [dbc.Alert("No events yet", color="info")]
-
-        # Serialize events for dcc.Store
-        events_data = [
-            {
-                "timestamp": e.get("timestamp") or e.get("signal_timestamp"),
-                "event_type": e.get("event_type") or (e.get("event", {}).get("event_type", "unknown")),
-                "source": e.get("source"),
-                "data": e.get("data", {}),
-                "summary": e.get("summary", "-"),
-            }
-            for e in all_events
-        ]
-
-        # Generate warnings
-        warnings = _generate_warnings(client)
-        warnings_banner = _render_warnings_banner(warnings)
-
-        # Build degradation timeline
-        degradation_records = degradation_history.records
-        timeline = _build_degradation_timeline(degradation_records)
-
-        # Build filter controls
-        unique_categories = sorted({_categorize_event(e) for e in events_data})
+        # Initial data loaded by interval callback
+        unique_categories = []  # Will be populated dynamically
 
         filters = dbc.Card(
             dbc.CardBody(
@@ -114,10 +72,11 @@ def render(client: DaemonAPIClient) -> list:
         )
 
         return [
-            dcc.Store(id="events-data-store", data=events_data),
+            dcc.Store(id="events-data-store", data=None),
+            html.Div(id="events-timestamp", className="text-muted small mb-3", children="Last updated: -"),
             html.H4("Events & Monitoring"),
-            warnings_banner,
-            timeline,
+            html.Div(id="events-warnings-banner"),
+            html.Div(id="events-degradation-timeline"),
             filters,
             html.Div(id="events-filtered-content"),
         ]
@@ -127,12 +86,134 @@ def render(client: DaemonAPIClient) -> list:
         return [dbc.Alert(f"Failed to load events: {e!s}", color="danger")]
 
 
-def register_callbacks(app: Dash) -> None:
+def register_callbacks(app: Dash) -> None:  # noqa: C901
     """Register Events tab filter callbacks.
 
     Args:
         app: Dash app instance
     """
+    client = app.api_client  # type: ignore[attr-defined]
+
+    @app.callback(
+        Output("events-data-store", "data"),
+        Input("interval-component", "n_intervals"),
+        State("tabs", "active_tab"),
+    )
+    def update_events_data(n_intervals: int, active_tab: str) -> dict:  # noqa: ARG001
+        """Update Events store when tab active.
+
+        Args:
+            n_intervals: Interval counter
+            active_tab: Active tab ID
+
+        Returns:
+            Serialized events data with timestamp
+        """
+        from dash.exceptions import PreventUpdate
+
+        if active_tab != "events":
+            raise PreventUpdate
+
+        try:
+            system_events = client.get_events(limit=100).events
+            market_events_resp = client.get_market_events(limit=100)
+            market_events = market_events_resp.events
+
+            all_events = []
+
+            for e in system_events:
+                e["source"] = "system"
+                all_events.append(e)
+
+            for e in market_events:
+                e["source"] = "market"
+                all_events.append(e)
+
+            all_events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+            events_data = [
+                {
+                    "timestamp": e.get("timestamp") or e.get("signal_timestamp"),
+                    "event_type": e.get("event_type") or (e.get("event", {}).get("event_type", "unknown")),
+                    "source": e.get("source"),
+                    "data": e.get("data", {}),
+                    "summary": e.get("summary", "-"),
+                }
+                for e in all_events
+            ]
+
+            return {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "events": events_data,
+            }
+        except Exception as e:
+            logger.error(f"Events refresh failed: {e}")
+            return {"timestamp": datetime.now(UTC).isoformat(), "events": []}
+
+    @app.callback(
+        Output("events-timestamp", "children"),
+        Input("events-data-store", "data"),
+    )
+    def update_events_timestamp(data: dict | None) -> str:
+        """Update timestamp display.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Timestamp text
+        """
+        if not data or "timestamp" not in data:
+            return "Last updated: -"
+        ts = datetime.fromisoformat(data["timestamp"])
+        age = (datetime.now(UTC) - ts).total_seconds()
+        return f"Last updated: {age:.0f}s ago"
+
+    @app.callback(
+        Output("events-warnings-banner", "children"),
+        Input("interval-component", "n_intervals"),
+        State("tabs", "active_tab"),
+    )
+    def update_warnings_banner(n_intervals: int, active_tab: str) -> html.Div:  # noqa: ARG001
+        """Update warnings banner.
+
+        Args:
+            n_intervals: Interval counter
+            active_tab: Active tab ID
+
+        Returns:
+            Warnings banner
+        """
+        from dash.exceptions import PreventUpdate
+
+        if active_tab != "events":
+            raise PreventUpdate
+
+        warnings = _generate_warnings(client)
+        return _render_warnings_banner(warnings)
+
+    @app.callback(
+        Output("events-degradation-timeline", "children"),
+        Input("interval-component", "n_intervals"),
+        State("tabs", "active_tab"),
+    )
+    def update_degradation_timeline(n_intervals: int, active_tab: str) -> dcc.Graph | dbc.Alert:  # noqa: ARG001
+        """Update degradation timeline.
+
+        Args:
+            n_intervals: Interval counter
+            active_tab: Active tab ID
+
+        Returns:
+            Degradation timeline
+        """
+        from dash.exceptions import PreventUpdate
+
+        if active_tab != "events":
+            raise PreventUpdate
+
+        degradation_history = client.get_degradation_history(limit=50)
+        return _build_degradation_timeline(degradation_history.records)
 
     @app.callback(
         Output("events-filtered-content", "children"),
@@ -143,20 +224,22 @@ def register_callbacks(app: Dash) -> None:
         ],
         State("events-data-store", "data"),
     )
-    def filter_events(event_types: list, start_date: str, end_date: str, events_data: list) -> list:
+    def filter_events(event_types: list, start_date: str, end_date: str, store_data: dict | None) -> list:
         """Filter events based on user selection.
 
         Args:
             event_types: Selected event type categories
             start_date: Start date string
             end_date: End date string
-            events_data: Cached events from dcc.Store
+            store_data: Cached data from dcc.Store
 
         Returns:
             Filtered event table
         """
-        if not events_data:
+        if not store_data or not store_data.get("events"):
             return [dbc.Alert("No events available", color="info")]
+
+        events_data = store_data["events"]
 
         # Apply filters
         filtered = _apply_event_filters(events_data, event_types, start_date, end_date)

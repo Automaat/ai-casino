@@ -189,15 +189,15 @@ def test_dash_app_has_tabs() -> None:
 
 
 def test_overview_tab_renders(mock_daemon_api_client) -> None:
-    """Test overview tab renders without error."""
+    """Test overview tab renders static structure."""
     from src.dashboard.tabs import overview
 
     content = overview.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
-    mock_daemon_api_client.get_health.assert_called()
-    mock_daemon_api_client.get_state_summary.assert_called()
+    # Renders static structure with Store, no API calls
+    assert len(content) > 0  # Has Store and divs
 
 
 def test_config_tab_renders(mock_daemon_api_client) -> None:
@@ -251,92 +251,84 @@ def test_config_tab_renders(mock_daemon_api_client) -> None:
 
 
 def test_portfolio_tab_renders(mock_daemon_api_client) -> None:
-    """Test portfolio tab renders without error."""
+    """Test portfolio tab renders static structure."""
     from src.dashboard.tabs import portfolio
 
     content = portfolio.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
-    mock_daemon_api_client.get_positions.assert_called()
+    # Renders static structure with Store, no API calls
+    assert len(content) > 0  # Has Store and divs
 
 
 def test_signals_tab_renders(mock_daemon_api_client) -> None:
-    """Test signals tab renders without error."""
+    """Test signals tab renders static structure."""
     from src.dashboard.tabs import signals
 
     content = signals.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
-    mock_daemon_api_client.get_analyses.assert_called()
+    # Renders static structure with Store, no API calls
+    assert len(content) > 0  # Has Store and divs
 
 
 def test_risk_tab_renders(mock_daemon_api_client) -> None:
-    """Test risk tab renders without error."""
+    """Test risk tab renders static structure."""
     from src.dashboard.tabs import risk
 
     content = risk.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
-    mock_daemon_api_client.get_risk.assert_called()
+    # Renders static structure with Store, no API calls
+    assert len(content) > 0  # Has Store and divs
 
 
 def test_events_tab_renders(mock_daemon_api_client) -> None:
-    """Test events tab renders without error."""
+    """Test events tab renders static structure."""
     from src.dashboard.tabs import events
-
-    # Add missing mocks for events tab
-    mock_daemon_api_client.get_market_events.return_value = EventResponse(events=[], returned_count=0)
-    mock_daemon_api_client.get_degradation_history.return_value = MagicMock(records=[])
 
     content = events.render(mock_daemon_api_client)
 
     assert content is not None
     assert isinstance(content, list)
-    mock_daemon_api_client.get_events.assert_called()
+    # Renders static structure with Store, no API calls
+    assert len(content) > 0  # Has Store and divs
 
 
 def test_portfolio_tab_empty_positions(mock_daemon_api_client) -> None:
-    """Test portfolio tab with no positions."""
-    mock_daemon_api_client.get_positions.return_value = PositionsResponse(positions=[], count=0)
-
+    """Test portfolio tab with no positions renders static structure."""
     from src.dashboard.tabs import portfolio
 
     content = portfolio.render(mock_daemon_api_client)
 
     assert content is not None
-    # Should show "No active positions" alert
-    assert len(content) == 1
+    # Renders static structure with Store, alerts shown by callbacks
+    assert len(content) > 0
 
 
 def test_signals_tab_empty_analyses(mock_daemon_api_client) -> None:
-    """Test signals tab with no analyses."""
-    mock_daemon_api_client.get_analyses.return_value = AnalysesResponse(
-        analyses=[], total_count=0, returned_count=0
-    )
-
+    """Test signals tab with no analyses renders static structure."""
     from src.dashboard.tabs import signals
 
     content = signals.render(mock_daemon_api_client)
 
     assert content is not None
-    # Should show "No analyses yet" alert
-    assert len(content) == 1
+    # Renders static structure with Store, alerts shown by callbacks
+    assert len(content) > 0
 
 
 def test_risk_tab_no_report(mock_daemon_api_client) -> None:
-    """Test risk tab with no risk report."""
-    mock_daemon_api_client.get_risk.return_value = None
-
+    """Test risk tab with no risk report renders static structure."""
     from src.dashboard.tabs import risk
 
     content = risk.render(mock_daemon_api_client)
 
     assert content is not None
-    # Should show "No risk report available" alert
-    assert len(content) == 1
+    # Renders static structure with Store, alerts shown by callbacks
+    assert len(content) > 0
 
 
 def test_events_tab_empty_events(mock_daemon_api_client) -> None:

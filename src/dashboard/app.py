@@ -1,7 +1,7 @@
 """Dash app factory with layout and callbacks."""
 
 import dash_bootstrap_components as dbc
-from dash import Dash, Input, Output, State, ctx, dcc, html
+from dash import Dash, Input, Output, dcc, html
 from loguru import logger
 
 from src.dashboard.api_client import DaemonAPIClient
@@ -49,24 +49,17 @@ def create_dash_app(config: DashboardConfig) -> Dash:
 
     @app.callback(
         Output("tab-content", "children"),
-        [Input("tabs", "active_tab"), Input("interval-component", "n_intervals")],
-        [State("tab-content", "children")],
+        Input("tabs", "active_tab"),
     )
-    def render_tab_content(active_tab: str, n_intervals: int, current_content: list) -> list:  # noqa: ARG001, PLR0911
-        """Render tab content (triggered by tab switch OR interval refresh).
+    def render_tab_content(active_tab: str) -> list:  # noqa: PLR0911
+        """Render tab content (triggered by tab switch only).
 
         Args:
             active_tab: Active tab ID
-            n_intervals: Interval counter
-            current_content: Current tab content
 
         Returns:
             Tab content
         """
-        # Config tab is static - skip interval refresh to preserve accordion state
-        if active_tab == "config" and ctx.triggered_id == "interval-component":
-            return current_content
-
         try:
             if active_tab == "overview":
                 return overview.render(app.api_client)
