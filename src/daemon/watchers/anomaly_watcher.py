@@ -257,7 +257,12 @@ class AnomalyWatcher(EventWatcher):
         # Aggregate current trading day bars
         latest_ts = intraday.data.index[-1]
         current_date = latest_ts.date()
-        day_bars = intraday.data[intraday.data.index.map(lambda x: x.date()) == current_date]
+        index = intraday.data.index
+        if hasattr(index, "date"):
+            same_day_mask = index.date == current_date
+        else:
+            same_day_mask = index.map(lambda x: x.date()) == current_date
+        day_bars = intraday.data[same_day_mask]
 
         if day_bars.empty:
             day_bars = intraday.data.iloc[[-1]]
