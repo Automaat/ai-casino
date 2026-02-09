@@ -86,7 +86,7 @@ def render(client: DaemonAPIClient) -> list:  # noqa: ARG001
         return [dbc.Alert(f"Failed to load events: {e!s}", color="danger")]
 
 
-def register_callbacks(app: Dash) -> None:  # noqa: C901
+def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     """Register Events tab filter callbacks.
 
     Args:
@@ -98,13 +98,15 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         Output("events-data-store", "data"),
         Input("interval-component", "n_intervals"),
         State("tabs", "active_tab"),
+        State("events-data-store", "data"),
     )
-    def update_events_data(n_intervals: int, active_tab: str) -> dict:  # noqa: ARG001
+    def update_events_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
         """Update Events store when tab active.
 
         Args:
             n_intervals: Interval counter
             active_tab: Active tab ID
+            current_data: Current store data
 
         Returns:
             Serialized events data with timestamp
@@ -148,7 +150,29 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
             }
         except Exception as e:
             logger.error(f"Events refresh failed: {e}")
-            return {"timestamp": datetime.now(UTC).isoformat(), "events": []}
+            fallback = {"timestamp": datetime.now(UTC).isoformat(), "events": []}
+            return current_data if current_data else fallback
+
+    @app.callback(
+        Output("events-filter-type", "options"),
+        Output("events-filter-type", "value"),
+        Input("events-data-store", "data"),
+    )
+    def update_category_options(data: dict | None) -> tuple[list[dict], list[str]]:
+        """Update category filter options from store.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Tuple of (options, default_values)
+        """
+        if not data or not data.get("events"):
+            return [], []
+        categories = sorted({_categorize_event(e) for e in data["events"]})
+        options = [{"label": f" {cat}", "value": cat} for cat in categories]
+        default = [c for c in categories if c in ["ANALYSIS", "NEWS", "SOCIAL", "ANOMALY", "ERROR"]]
+        return options, default
 
     @app.callback(
         Output("events-timestamp", "children"),
@@ -166,8 +190,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         if not data or "timestamp" not in data:
             return "Last updated: -"
         ts = datetime.fromisoformat(data["timestamp"])
-        age = (datetime.now(UTC) - ts).total_seconds()
-        return f"Last updated: {age:.0f}s ago"
+        return f"Last updated: {ts.strftime('%Y-%m-%d %H:%M:%S')}"
 
     @app.callback(
         Output("events-warnings-banner", "children"),
@@ -212,8 +235,12 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         if active_tab != "events":
             raise PreventUpdate
 
-        degradation_history = client.get_degradation_history(limit=50)
-        return _build_degradation_timeline(degradation_history.records)
+        try:
+            degradation_history = client.get_degradation_history(limit=50)
+            return _build_degradation_timeline(degradation_history.records)
+        except Exception as e:
+            logger.error(f"Degradation timeline refresh failed: {e}")
+            return dbc.Alert("Degradation history unavailable", color="warning", className="mb-3")
 
     @app.callback(
         Output("events-filtered-content", "children"),

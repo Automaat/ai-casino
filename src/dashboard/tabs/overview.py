@@ -136,8 +136,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
         if not data or "timestamp" not in data:
             return "Last updated: -"
         ts = datetime.fromisoformat(data["timestamp"])
-        age = (datetime.now(UTC) - ts).total_seconds()
-        return f"Last updated: {age:.0f}s ago"
+        return f"Last updated: {ts.strftime('%Y-%m-%d %H:%M:%S')}"
 
     @app.callback(
         Output("overview-status-cards", "children"),

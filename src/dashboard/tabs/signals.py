@@ -98,13 +98,15 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         Output("signals-data-store", "data"),
         Input("interval-component", "n_intervals"),
         State("tabs", "active_tab"),
+        State("signals-data-store", "data"),
     )
-    def update_signals_data(n_intervals: int, active_tab: str) -> dict:  # noqa: ARG001
+    def update_signals_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
         """Update Signals store when tab active.
 
         Args:
             n_intervals: Interval counter
             active_tab: Active tab ID
+            current_data: Current store data
 
         Returns:
             Serialized analyses data with timestamp
@@ -112,32 +114,55 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         from datetime import UTC, datetime
 
         from dash.exceptions import PreventUpdate
+        from loguru import logger
 
         if active_tab != "signals":
             raise PreventUpdate
 
-        analyses_resp = client.get_analyses(limit=200)
+        try:
+            analyses_resp = client.get_analyses(limit=200)
 
-        return {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "returned_count": analyses_resp.returned_count,
-            "total_count": analyses_resp.total_count,
-            "analyses": [
-                {
-                    "timestamp": a.timestamp.isoformat(),
-                    "symbol": a.symbol,
-                    "signal": a.signal,
-                    "confidence": a.confidence,
-                    "rsi": a.rsi,
-                    "macd_hist": a.macd_hist,
-                    "executed_trade": a.executed_trade,
-                    "is_paper_trade": a.is_paper_trade,
-                    "trading_session": a.trading_session,
-                    "reasoning": a.reasoning,
-                }
-                for a in analyses_resp.analyses
-            ],
-        }
+            return {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "returned_count": analyses_resp.returned_count,
+                "total_count": analyses_resp.total_count,
+                "analyses": [
+                    {
+                        "timestamp": a.timestamp.isoformat(),
+                        "symbol": a.symbol,
+                        "signal": a.signal,
+                        "confidence": a.confidence,
+                        "rsi": a.rsi,
+                        "macd_hist": a.macd_hist,
+                        "executed_trade": a.executed_trade,
+                        "is_paper_trade": a.is_paper_trade,
+                        "trading_session": a.trading_session,
+                        "reasoning": a.reasoning,
+                    }
+                    for a in analyses_resp.analyses
+                ],
+            }
+        except Exception as e:
+            logger.error(f"Signals refresh failed: {e}")
+            return current_data if current_data else {}
+
+    @app.callback(
+        Output("signals-filter-symbol", "options"),
+        Input("signals-data-store", "data"),
+    )
+    def update_symbol_options(data: dict | None) -> list[dict]:
+        """Update symbol filter options from store.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Symbol options list
+        """
+        if not data or not data.get("analyses"):
+            return []
+        symbols = sorted({a["symbol"] for a in data["analyses"]})
+        return [{"label": s, "value": s} for s in symbols]
 
     @app.callback(
         Output("signals-timestamp", "children"),
@@ -152,13 +177,12 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         Returns:
             Timestamp text
         """
-        from datetime import UTC, datetime
+        from datetime import datetime
 
         if not data or "timestamp" not in data:
             return "Last updated: -"
         ts = datetime.fromisoformat(data["timestamp"])
-        age = (datetime.now(UTC) - ts).total_seconds()
-        return f"Last updated: {age:.0f}s ago"
+        return f"Last updated: {ts.strftime('%Y-%m-%d %H:%M:%S')}"
 
     @app.callback(
         Output("signals-header", "children"),
