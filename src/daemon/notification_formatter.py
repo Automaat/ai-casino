@@ -84,7 +84,8 @@ class NotificationFormatter:
             f"{m.get('macd'):.2f}" if isinstance(m.get("macd"), (int, float)) else str(m.get("macd", "N/A"))
         )
 
-        reasoning = NotificationFormatter._escape_markdown(m.get("reasoning", "No reasoning provided"))
+        reasoning_obj = m.get("reasoning", "No reasoning provided")
+        reasoning = NotificationFormatter._escape_markdown(str(reasoning_obj))
         return (
             f"{signal_emoji} *{m['signal']} {m['symbol']}* at ${m['price']:.2f}{session_tag}\n\n"
             f"*Confidence:* {m['confidence']:.1%} | *Risk:* {m['risk_level']}\n"
@@ -107,7 +108,7 @@ class NotificationFormatter:
             f"{m.get('risk_score'):.2f}" if isinstance(m.get("risk_score"), (int, float)) else "N/A"
         )
 
-        rejection_reason = NotificationFormatter._escape_markdown(m["rejection_reason"])
+        rejection_reason = NotificationFormatter._escape_markdown(str(m["rejection_reason"]))
         return (
             f"⛔ *Trade Blocked: {m['symbol']}*\n\n"
             f"*Action:* {m['signal']} at ${m['price']:.2f}\n"
@@ -146,7 +147,12 @@ class NotificationFormatter:
             Formatted markdown string
         """
         m = message.metadata
-        services = ", ".join(m["failed_services"])
+        failed_services_obj = m["failed_services"]
+        services = (
+            ", ".join(str(s) for s in failed_services_obj)
+            if isinstance(failed_services_obj, list)
+            else str(failed_services_obj)
+        )
         return (
             f"⚠️ *API Health Check Failed*\n\n"
             f"*Services Down:* {services}\n\n"

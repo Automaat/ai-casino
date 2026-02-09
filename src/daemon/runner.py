@@ -2113,6 +2113,10 @@ class DaemonRunner:
         try:
             from src.daemon.stress_testing import DaemonStressTester
 
+            if self.broker is None or self.market_fetcher is None:
+                logger.warning("[MONTE CARLO] Skipping: broker or market_fetcher not configured")
+                return
+
             executor = DaemonStressTester(
                 broker_client=self.broker,
                 market_fetcher=self.market_fetcher,

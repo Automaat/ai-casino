@@ -189,7 +189,7 @@ def test_calculate_rebalance_with_manual_weights(portfolio_optimizer: PortfolioO
 
     # Check deltas sum close to 0 (conservation)
     total_delta = sum(r.delta for r in rebalances)
-    assert abs(total_delta) < 0.01
+    assert float(abs(total_delta)) < 0.01
 
 
 @pytest.mark.unit

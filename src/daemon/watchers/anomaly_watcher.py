@@ -322,12 +322,14 @@ class AnomalyWatcher(EventWatcher):
         if not symbols_to_check:
             return []
 
-        events: list[AnomalyEvent] = []
+        from typing import cast
+
+        events: list[BaseEvent] = []
         for symbol in symbols_to_check:
             try:
                 event = await self._process_symbol_for_anomalies(symbol)
                 if event:
-                    events.append(event)
+                    events.append(cast("BaseEvent", event))
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {e}")
                 continue

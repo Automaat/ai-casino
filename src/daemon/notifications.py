@@ -33,6 +33,7 @@ class NotificationChannel(ABC):
         Returns:
             True if sent successfully, False otherwise
         """
+        ...
 
     @abstractmethod
     def is_configured(self) -> bool:
@@ -41,6 +42,7 @@ class NotificationChannel(ABC):
         Returns:
             True if configured, False otherwise
         """
+        ...
 
 
 class NotificationRateLimiter:
