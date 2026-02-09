@@ -144,7 +144,6 @@ def _set_test_env():
     """Set required env vars for tests."""
     if "ALPHA_VANTAGE_API_KEY" not in os.environ:
         os.environ["ALPHA_VANTAGE_API_KEY"] = "test"
-    yield
 
 
 @pytest.fixture(autouse=True)

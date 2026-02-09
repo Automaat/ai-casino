@@ -10,7 +10,7 @@ def test_dashboard_config_defaults() -> None:
     """Test default configuration values."""
     config = DashboardConfig()
 
-    assert config.api_url == "http://localhost:8001"
+    assert config.api_url == "http://localhost:8484"
     assert config.refresh_interval == 5000
     assert config.port == 8050
     assert config.host == "127.0.0.1"
@@ -77,6 +77,6 @@ def test_dashboard_config_repr() -> None:
     repr_str = repr(config)
 
     assert "DashboardConfig" in repr_str
-    assert "http://localhost:8001" in repr_str
+    assert "http://localhost:8484" in repr_str
     assert "8050" in repr_str
     assert "5000ms" in repr_str
