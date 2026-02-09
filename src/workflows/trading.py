@@ -521,7 +521,7 @@ class TradingWorkflow:
         self._record_stage(collector, "fetch_data", start)
 
         start = time.perf_counter()
-        state = self._fetch_account_info(state)
+        state = await self._fetch_account_info(state)
         self._record_stage(collector, "fetch_account_info", start)
 
         start = time.perf_counter()
@@ -543,7 +543,7 @@ class TradingWorkflow:
         self._record_stage(collector, "decision", start)
 
         start = time.perf_counter()
-        state = self._assess_risk(state)
+        state = await self._assess_risk(state)
         self._record_stage(collector, "risk_assessment", start)
 
         # Notify if trade rejected by risk gate
@@ -563,7 +563,7 @@ class TradingWorkflow:
             and state["risk_assessment"].validation.approved
             and state["final_decision"].action != Signal.HOLD
         ):
-            state = self._execute_trade(state)
+            state = await self._execute_trade(state)
 
         final_decision = state["final_decision"]
         risk_assessment = state["risk_assessment"]
@@ -978,7 +978,7 @@ class TradingWorkflow:
             broker_api_failed=False,
         )
 
-    def _fetch_account_info(self, state: TradingState) -> TradingState:
+    async def _fetch_account_info(self, state: TradingState) -> TradingState:
         """Fetch account info for portfolio-aware decisions.
 
         Args:
@@ -988,7 +988,7 @@ class TradingWorkflow:
             Updated state with account info and broker positions
         """
         logger.info("Fetching account info")
-        account_info, broker_info, account_info_valid = self._get_account_info()
+        account_info, broker_info, account_info_valid = await self._get_account_info()
         state["account_info"] = account_info
 
         # Track broker availability for risk assessment
@@ -1062,8 +1062,8 @@ class TradingWorkflow:
         state["final_decision"] = decision
         return state
 
-    def _assess_risk(self, state: TradingState) -> TradingState:
-        """Assess risk for trading decision.
+    async def _assess_risk(self, state: TradingState) -> TradingState:
+        """Assess risk for trading decision (async, thread-offloaded).
 
         Args:
             state: Current workflow state
@@ -1101,26 +1101,32 @@ class TradingWorkflow:
             msg = "account_info is None, cannot assess risk"
             raise ValueError(msg)
 
-        risk_assessment = self.risk_manager.assess(
-            symbol=state["symbol"],
-            action=state["final_decision"].action,
-            current_price=current_price,
-            account_info=account_info,
-            market_data=daily_data,
-            decision_confidence=state["final_decision"].confidence,
-            broker_positions=state.get("broker_positions"),
-            portfolio_value=state.get("portfolio_value"),
-            target_portfolio_weight=target_weight,
-            backtest_validation=state.get("backtest_validation"),
-            degradation_context=state.get("degradation_context"),
-            broker_api_failed=state.get("broker_api_failed", False),
-        )
+        from src.agents.risk import RiskAssessment
 
+        def _sync_assess_risk() -> RiskAssessment:
+            assert account_info is not None  # noqa: S101
+            assert daily_data is not None  # noqa: S101
+            return self.risk_manager.assess(
+                symbol=state["symbol"],
+                action=state["final_decision"].action,  # type: ignore[union-attr]
+                current_price=current_price,
+                account_info=account_info,
+                market_data=daily_data,
+                decision_confidence=state["final_decision"].confidence,  # type: ignore[union-attr]
+                broker_positions=state.get("broker_positions"),
+                portfolio_value=state.get("portfolio_value"),
+                target_portfolio_weight=target_weight,
+                backtest_validation=state.get("backtest_validation"),
+                degradation_context=state.get("degradation_context"),
+                broker_api_failed=state.get("broker_api_failed", False),
+            )
+
+        risk_assessment = await asyncio.to_thread(_sync_assess_risk)
         state["risk_assessment"] = risk_assessment
         return state
 
-    def _get_account_info(self) -> tuple[AccountInfo, BrokerAccountInfo | None, bool]:
-        """Get account information.
+    async def _get_account_info(self) -> tuple[AccountInfo, BrokerAccountInfo | None, bool]:
+        """Get account information (async, thread-offloaded).
 
         Returns:
             Tuple of (AccountInfo, BrokerAccountInfo | None, account_info_valid: bool)
@@ -1139,36 +1145,39 @@ class TradingWorkflow:
             )  # No broker = safe mock mode
 
         # Dangerous case: broker configured but API fails
-        try:
-            broker_info = self.broker.get_account_info()
-            return (
-                AccountInfo(
-                    balance=broker_info.balance,
-                    available_cash=broker_info.available_cash,
-                    positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
-                    total_exposure=broker_info.total_exposure,
-                ),
-                broker_info,
-                True,
-            )
-        except BrokerAPIError:
-            logger.critical(
-                "BROKER API FAILURE: Account info unavailable but auto_trade configured. "
-                "This would cause incorrect position sizing. Trade execution disabled for this symbol."
-            )
-            return (
-                AccountInfo(
-                    balance=100000.0,  # Mock data - DO NOT USE FOR REAL TRADES
-                    available_cash=100000.0,
-                    positions={},
-                    total_exposure=0.0,
-                ),
-                None,
-                False,
-            )  # Signal broker failure
+        def _sync_get_account() -> tuple[AccountInfo, BrokerAccountInfo | None, bool]:
+            try:
+                broker_info = self.broker.get_account_info()  # type: ignore[union-attr]
+                return (
+                    AccountInfo(
+                        balance=broker_info.balance,
+                        available_cash=broker_info.available_cash,
+                        positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
+                        total_exposure=broker_info.total_exposure,
+                    ),
+                    broker_info,
+                    True,
+                )
+            except BrokerAPIError:
+                logger.critical(
+                    "BROKER API FAILURE: Account info unavailable but auto_trade configured. "
+                    "This would cause incorrect position sizing. Trade execution disabled for this symbol."
+                )
+                return (
+                    AccountInfo(
+                        balance=100000.0,  # Mock data - DO NOT USE FOR REAL TRADES
+                        available_cash=100000.0,
+                        positions={},
+                        total_exposure=0.0,
+                    ),
+                    None,
+                    False,
+                )  # Signal broker failure
 
-    def _execute_trade(self, state: TradingState) -> TradingState:
-        """Execute trade via broker.
+        return await asyncio.to_thread(_sync_get_account)
+
+    async def _execute_trade(self, state: TradingState) -> TradingState:
+        """Execute trade via broker (async, thread-offloaded).
 
         Args:
             state: Current workflow state
@@ -1185,31 +1194,40 @@ class TradingWorkflow:
 
         action = final_decision.action
 
-        order: OrderStatus | None = None
-        try:
-            stop_loss_price = risk.stop_loss.stop_loss_price if risk.stop_loss else None
-            order = self.broker.submit_order(
-                symbol=state["symbol"],
-                qty=int(risk.position_sizing.recommended_shares) if risk.position_sizing else 0,
-                side=action.value.lower(),
-                stop_loss_price=stop_loss_price,
-            )
-            stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None"
-            logger.info(
-                f"Executed {action.value}: {state['symbol']} x{order.qty} (stop-loss={stop_loss_str})"
-            )
-        except BrokerAPIError as e:
-            logger.critical(
-                f"BROKER API FAILURE during order submission for {state['symbol']} "
-                f"with action {action.value}: {e}"
-            )
-            if "warnings" in state:
-                state["warnings"].append(f"Order submission failed: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error submitting order for {state['symbol']}: {e}")
-            if "warnings" in state:
-                state["warnings"].append(f"Order submission error: {e}")
+        if not state.get("risk_assessment") or not state["risk_assessment"].validation.approved:
+            state["order_status"] = None
+            return state
 
+        def _sync_submit_order() -> OrderStatus | None:
+            assert risk is not None  # noqa: S101
+            try:
+                stop_loss_price = risk.stop_loss.stop_loss_price if risk.stop_loss else None
+                order = self.broker.submit_order(  # type: ignore[union-attr]
+                    symbol=state["symbol"],
+                    qty=int(risk.position_sizing.recommended_shares) if risk.position_sizing else 0,
+                    side=action.value.lower(),
+                    stop_loss_price=stop_loss_price,
+                )
+                stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None"
+                logger.info(
+                    f"Executed {action.value}: {state['symbol']} x{order.qty} (stop-loss={stop_loss_str})"
+                )
+                return order
+            except BrokerAPIError as e:
+                logger.critical(
+                    f"BROKER API FAILURE during order submission for {state['symbol']} "
+                    f"with action {action.value}: {e}"
+                )
+                if "warnings" in state:
+                    state["warnings"].append(f"Order submission failed: {e}")
+                return None
+            except Exception as e:
+                logger.error(f"Unexpected error submitting order for {state['symbol']}: {e}")
+                if "warnings" in state:
+                    state["warnings"].append(f"Order submission error: {e}")
+                return None
+
+        order = await asyncio.to_thread(_sync_submit_order)
         state["order_status"] = order
         return state
 

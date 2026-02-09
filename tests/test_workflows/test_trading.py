@@ -270,7 +270,7 @@ def test_repr(mock_workflow_dependencies):
     assert repr(workflow) == "TradingWorkflow(agents=9, mode=momentum)"
 
 
-def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
+async def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data):
     """Test trade execution when broker provided and risk approved."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
     mock_broker = MagicMock()
@@ -330,7 +330,7 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
         "broker_api_failed": False,
     }
 
-    result_state = workflow._execute_trade(state)
+    result_state = await workflow._execute_trade(state)
 
     assert result_state["order_status"] == mock_order
     mock_broker.submit_order.assert_called_once_with(
@@ -341,7 +341,7 @@ def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlcv_data
     )
 
 
-def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_data):
+async def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_data):
     """Test trade execution handles broker errors gracefully."""
     market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
     mock_broker = MagicMock()
@@ -398,7 +398,7 @@ def test_execute_trade_error_handling(mock_workflow_dependencies, sample_ohlcv_d
         "broker_api_failed": False,
     }
 
-    result_state = workflow._execute_trade(state)
+    result_state = await workflow._execute_trade(state)
 
     assert result_state["order_status"] is None
     mock_broker.submit_order.assert_called_once()

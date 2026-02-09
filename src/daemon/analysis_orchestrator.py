@@ -222,11 +222,11 @@ class AnalysisOrchestrator:
         """
         start_time = datetime.now(UTC)
 
-        # Step 1: Sync positions with broker (if enabled)
-        position_sync_performed = self._sync_positions_with_broker()
+        # Step 1: Sync positions with broker (if enabled) - offload to thread
+        position_sync_performed = await asyncio.to_thread(self._sync_positions_with_broker)
 
-        # Step 2: Prefetch broker positions once
-        broker_positions = self._prefetch_broker_positions()
+        # Step 2: Prefetch broker positions once - offload to thread
+        broker_positions = await asyncio.to_thread(self._prefetch_broker_positions)
 
         # Step 3: Concurrent analysis with semaphore
         semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
