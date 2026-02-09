@@ -21,6 +21,7 @@ from src.daemon.api import (
     DegradationHistoryResponse,
     DegradationResponse,
     EventResponse,
+    ExecutionMetricsListResponse,
     FullConfigResponse,
     GamePlanResponse,
     HealthResponse,
@@ -354,6 +355,45 @@ class DaemonAPIClient:
         response.raise_for_status()
         data = response.json()
         return RebalanceResponse.model_validate(data) if data else None
+
+    @HTTP_RETRY
+    def get_execution_metrics(self, limit: int = 50) -> ExecutionMetricsListResponse:
+        """Get recent execution metrics (cached for 30s).
+
+        Args:
+            limit: Max number of metrics to return
+
+        Returns:
+            ExecutionMetricsListResponse
+        """
+        return self._get_cached(f"execution_metrics_{limit}", lambda: self._fetch_execution_metrics(limit))
+
+    def _fetch_execution_metrics(self, limit: int) -> ExecutionMetricsListResponse:
+        """Fetch execution metrics from API.
+
+        Args:
+            limit: Max number of metrics to return
+
+        Returns:
+            ExecutionMetricsListResponse
+        """
+        response = self._client.get(f"{self.api_url}/api/execution-metrics", params={"limit": limit})
+        response.raise_for_status()
+        return ExecutionMetricsListResponse.model_validate(response.json())
+
+    @HTTP_RETRY
+    def get_execution_metric_detail(self, workflow_id: str) -> dict:
+        """Get single workflow execution detail (no cache).
+
+        Args:
+            workflow_id: Workflow ID to fetch
+
+        Returns:
+            WorkflowExecutionMetrics as dict
+        """
+        response = self._client.get(f"{self.api_url}/api/execution-metrics/{workflow_id}")
+        response.raise_for_status()
+        return response.json()
 
     def close(self) -> None:
         """Close HTTP client."""
