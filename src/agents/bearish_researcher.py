@@ -76,7 +76,7 @@ class BearishResearcher(BaseResearcher):
         result = await super().analyze(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
-        assert isinstance(result, BearishResearchAnalysis)
+        assert isinstance(result, BearishResearchAnalysis)  # noqa: S101
         return result
 
     def _build_analysis(

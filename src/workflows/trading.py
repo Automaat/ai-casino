@@ -259,7 +259,7 @@ class TradingWorkflow:
                 state["warnings"].append(warning)
                 return None
             raise result
-        assert isinstance(result, FundamentalAnalysis)
+        assert isinstance(result, FundamentalAnalysis)  # noqa: S101
         return result
 
     def _handle_optional_result(self, result: T | Exception, name: str, state: TradingState) -> T | None:
@@ -676,7 +676,7 @@ class TradingWorkflow:
             collector.record_agent_timing(agent_name, (time.perf_counter() - start) * 1000)
             current_agent.reset(token)
 
-    async def run_analyses(
+    async def run_analyses(  # noqa: PLR0915
         self,
         state: TradingState,
         technical_analyst: TechnicalAnalyst,
@@ -778,14 +778,15 @@ class TradingWorkflow:
             raise news
 
         # Type narrowing - after exception checks, these must be their proper types
-        assert isinstance(technical, TechnicalAnalysis)
-        assert isinstance(sentiment, SentimentAnalysis)
-        assert isinstance(news, NewsAnalysis)
+        assert isinstance(technical, TechnicalAnalysis)  # noqa: S101
+        assert isinstance(sentiment, SentimentAnalysis)  # noqa: S101
+        assert isinstance(news, NewsAnalysis)  # noqa: S101
 
         # Process optional analyses
         fundamental = self._handle_fundamental_result(fundamental_result, state)
         comparative = cast(
-            "ComparativeAnalysis | None", self._handle_optional_result(comparative_result, "Comparative", state)
+            "ComparativeAnalysis | None",
+            self._handle_optional_result(comparative_result, "Comparative", state),
         )
         web_research = cast(
             "WebResearchAnalysis | None",
@@ -815,9 +816,9 @@ class TradingWorkflow:
         technical = state["technical_analysis"]
         sentiment = state["sentiment_analysis"]
         news = state["news_analysis"]
-        assert technical is not None, "technical_analysis must be present"
-        assert sentiment is not None, "sentiment_analysis must be present"
-        assert news is not None, "news_analysis must be present"
+        assert technical is not None, "technical_analysis must be present"  # noqa: S101
+        assert sentiment is not None, "sentiment_analysis must be present"  # noqa: S101
+        assert news is not None, "news_analysis must be present"  # noqa: S101
 
         bullish_task = self._timed_agent_call(
             "bullish_researcher",
@@ -900,13 +901,13 @@ class TradingWorkflow:
         market_result = results[0]
         if enable_multi_timeframe and self._is_market_hours():
             # fetch_multi_timeframe returns MultiTimeframeData
-            assert isinstance(market_result, MultiTimeframeData)
+            assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
             market_data = market_result
         else:
             # fetch_daily returns MarketData with .data attribute
             from src.data.market import MarketData
 
-            assert isinstance(market_result, MarketData)
+            assert isinstance(market_result, MarketData)  # noqa: S101
             market_data = market_result.data
 
         # Extract news data
@@ -914,7 +915,7 @@ class TradingWorkflow:
             logger.error(f"News fetch failed: {results[1]}")
             raise results[1]
         news_result = results[1]
-        assert isinstance(news_result, list)
+        assert isinstance(news_result, list)  # noqa: S101
 
         # Extract trump data
         trump_posts: list[TruthPost] | None = None
@@ -925,7 +926,7 @@ class TradingWorkflow:
             else:
                 from src.data.truth_social import TrumpPostData
 
-                assert isinstance(trump_result, TrumpPostData)
+                assert isinstance(trump_result, TrumpPostData)  # noqa: S101
                 trump_posts = trump_result.posts
                 logger.info(f"Fetched {len(trump_posts)} Trump posts")
 

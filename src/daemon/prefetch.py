@@ -228,8 +228,10 @@ class DataPrefetcher:
         try:
             from io import StringIO
 
-            assert isinstance(cached, dict)
-            assert "data" in cached and "symbol" in cached and "last_updated" in cached
+            assert isinstance(cached, dict)  # noqa: S101
+            assert "data" in cached  # noqa: S101
+            assert "symbol" in cached  # noqa: S101
+            assert "last_updated" in cached  # noqa: S101
             df = pd.read_json(StringIO(cached["data"]), orient="split")
             return MarketData(
                 symbol=cached["symbol"],
@@ -255,7 +257,7 @@ class DataPrefetcher:
             return None
 
         try:
-            assert isinstance(cached, list)
+            assert isinstance(cached, list)  # noqa: S101
             return [NewsArticle.model_validate(a) for a in cached]
         except Exception as e:
             logger.warning(f"Failed to deserialize cached news for {symbol}: {e}")
@@ -274,7 +276,7 @@ class DataPrefetcher:
         cached = self._cache.get(key)
         if cached is None:
             return None
-        assert isinstance(cached, dict)
+        assert isinstance(cached, dict)  # noqa: S101
         return cached
 
     def clear_cache(self) -> None:

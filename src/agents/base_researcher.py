@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, TypeVar
 from loguru import logger
 from pydantic import BaseModel
 
-TAnalysis = TypeVar("TAnalysis", bound=BaseModel)
-
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
@@ -21,6 +19,8 @@ from src.prompts import PromptLoader
 
 if TYPE_CHECKING:
     from src.agents.trump import TrumpAnalysis
+
+TAnalysis = TypeVar("TAnalysis", bound=BaseModel)
 
 
 class ResearchDirection(StrEnum):

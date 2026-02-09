@@ -496,8 +496,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         """Get all trades from database (cached)."""
         if self._trades_cache is None:
             trades = await self._repo.get_all()
-            self._trades_cache = cast(list[TradeRecord], trades)
-        assert self._trades_cache is not None
+            self._trades_cache = cast("list[TradeRecord]", trades)
+        assert self._trades_cache is not None  # noqa: S101
         return self._trades_cache
 
     def _invalidate_cache(self) -> None:
@@ -560,7 +560,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         )
 
         created_trade = await self._repo.create(trade)
-        assert isinstance(created_trade, TradeRecord)
+        assert isinstance(created_trade, TradeRecord)  # noqa: S101
         self._invalidate_cache()
         return trade
 
@@ -617,7 +617,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
                     )
 
         self._invalidate_cache()
-        return cast(list[TradeRecord], closed_trades)
+        return cast("list[TradeRecord]", closed_trades)
 
     def calculate_metrics(self, window: str = "all") -> PerformanceMetrics:
         """Calculate metrics (sync wrapper)."""
