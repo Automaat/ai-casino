@@ -681,6 +681,10 @@ class TradingWorkflow:
             Updated state with all analyses
         """
         market_data = state["market_data"]
+        if market_data is None:
+            msg = "market_data is None, cannot run analyses"
+            raise ValueError(msg)
+
         if isinstance(market_data, MultiTimeframeData):
             daily_data = market_data.timeframes[Timeframe.DAILY]
         else:
@@ -688,19 +692,25 @@ class TradingWorkflow:
 
         current_price = float(daily_data["Close"].iloc[-1])
 
+        # Validate news_articles
+        news_articles = state["news_articles"]
+        if news_articles is None:
+            msg = "news_articles is None, cannot run sentiment/news analyses"
+            raise ValueError(msg)
+
         # Parallel Group 1: independent analyses (comparative, web_research, social, trump are optional)
         technical_task = self._timed_agent_call(
             "technical",
             technical_analyst.analyze(
-                state["symbol"], state["market_data"], enable_multi_timeframe=state["enable_multi_timeframe"]
+                state["symbol"], market_data, enable_multi_timeframe=state["enable_multi_timeframe"]
             ),
             collector,
         )
         sentiment_task = self._timed_agent_call(
-            "sentiment", self.sentiment_analyst.analyze(state["symbol"], state["news_articles"]), collector
+            "sentiment", self.sentiment_analyst.analyze(state["symbol"], news_articles), collector
         )
         news_task = self._timed_agent_call(
-            "news", self.news_analyst.analyze(state["symbol"], state["news_articles"]), collector
+            "news", self.news_analyst.analyze(state["symbol"], news_articles), collector
         )
         fundamental_task = self._timed_agent_call(
             "fundamental", self.fundamental_analyst.analyze(state["symbol"], current_price), collector
@@ -949,11 +959,21 @@ class TradingWorkflow:
         owns_position = symbol in positions
         position_qty = positions.get(symbol)
 
+        # Ensure critical analyses are present
+        technical = state["technical_analysis"]
+        sentiment = state["sentiment_analysis"]
+        news = state["news_analysis"]
+
+        if not technical or not sentiment or not news:
+            msg = "Missing critical analyses (technical, sentiment, news)"
+            raise ValueError(msg)
+
+        # Optional analyses can be None
         decision = await self.trader.decide(
             symbol,
-            state["technical_analysis"],
-            state["sentiment_analysis"],
-            state["news_analysis"],
+            technical,
+            sentiment,
+            news,
             state["fundamental_analysis"],
             state["bullish_research"],
             state["bearish_research"],

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
-    from src.daemon.position_manager import PositionManager
+    from src.daemon.positions import PositionManager
     from src.daemon.scheduler import MarketScheduler
     from src.daemon.state import DaemonState
     from src.data.broker import AlpacaBroker
@@ -226,7 +226,7 @@ class AnalysisOrchestrator:
         # Step 4: Filter exceptions and None results
         for i, result in enumerate(raw_results):
             symbol = watchlist[i]
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error(f"Analysis failed for {symbol}: {result}")
                 self.state.record_error(f"{symbol}: {result}")
                 failed_symbols.append(symbol)
@@ -234,6 +234,7 @@ class AnalysisOrchestrator:
                 logger.warning(f"Analysis returned None for {symbol}")
                 failed_symbols.append(symbol)
             else:
+                # Type narrowing: result is TradingWorkflowResult here
                 results.append(result)
 
         # Step 5: Apply position management rules
@@ -314,7 +315,7 @@ class AnalysisOrchestrator:
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
                 executed=result.order is not None,
-                trading_session=result.trading_session.value,
+                trading_session=result.trading_session,
                 is_paper_trade=self.trading_mode == "paper",
                 rsi=rsi,
                 macd_hist=macd_hist,

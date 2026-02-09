@@ -316,4 +316,5 @@ class TestStrategySelection:
 
         assert selection.strategy_name == "ensemble"
         assert selection.ensemble_weights == weights
+        assert selection.ensemble_weights is not None
         assert sum(selection.ensemble_weights.values()) == pytest.approx(1.0)

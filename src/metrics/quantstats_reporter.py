@@ -104,19 +104,19 @@ class QuantStatsReporter:
         monthly_returns_dict = {}
         for idx, val in monthly_returns_series.items():
             key = idx.strftime("%Y-%m") if hasattr(idx, "strftime") else str(idx)
-            monthly_returns_dict[key] = float(val)
+            monthly_returns_dict[key] = float(val)  # type: ignore[arg-type]
 
         dd_details = qs.stats.to_drawdown_series(returns)
         dd_duration = self._calculate_max_dd_duration(dd_details)
 
         metrics = {
-            "cagr": float(cagr) if pd.notna(cagr) else None,
-            "sharpe_ratio": float(sharpe) if pd.notna(sharpe) else None,
-            "sortino_ratio": float(sortino) if pd.notna(sortino) else None,
-            "calmar_ratio": float(calmar) if pd.notna(calmar) else None,
-            "max_drawdown": float(max_dd) if pd.notna(max_dd) else None,
+            "cagr": float(cagr) if pd.notna(cagr) else None,  # type: ignore[arg-type]
+            "sharpe_ratio": float(sharpe) if pd.notna(sharpe) else None,  # type: ignore[arg-type]
+            "sortino_ratio": float(sortino) if pd.notna(sortino) else None,  # type: ignore[arg-type]
+            "calmar_ratio": float(calmar) if pd.notna(calmar) else None,  # type: ignore[arg-type]
+            "max_drawdown": float(max_dd) if pd.notna(max_dd) else None,  # type: ignore[arg-type]
             "max_drawdown_duration_days": dd_duration,
-            "volatility_annual": float(volatility) if pd.notna(volatility) else None,
+            "volatility_annual": float(volatility) if pd.notna(volatility) else None,  # type: ignore[arg-type]
             "win_rate": float(win_rate),
             "profit_factor": float(profit_factor),
             "avg_win": float(avg_win),
@@ -132,8 +132,8 @@ class QuantStatsReporter:
             beta = self._calculate_beta(returns, benchmark_returns)
             alpha = self._calculate_alpha(returns, benchmark_returns, beta)
 
-            metrics["benchmark_cagr"] = float(benchmark_cagr) if pd.notna(benchmark_cagr) else None
-            metrics["benchmark_sharpe"] = float(benchmark_sharpe) if pd.notna(benchmark_sharpe) else None
+            metrics["benchmark_cagr"] = float(benchmark_cagr) if pd.notna(benchmark_cagr) else None  # type: ignore[arg-type]
+            metrics["benchmark_sharpe"] = float(benchmark_sharpe) if pd.notna(benchmark_sharpe) else None  # type: ignore[arg-type]
             metrics["alpha"] = float(alpha) if pd.notna(alpha) else None
             metrics["beta"] = float(beta) if pd.notna(beta) else None
         else:
@@ -164,7 +164,7 @@ class QuantStatsReporter:
             return 0.0
         covariance = aligned_returns.cov(aligned_benchmark)
         benchmark_variance = aligned_benchmark.var()
-        return float(covariance / benchmark_variance) if benchmark_variance != 0 else 0.0
+        return float(covariance / benchmark_variance) if benchmark_variance != 0 else 0.0  # type: ignore[arg-type]
 
     def _calculate_alpha(self, returns: pd.Series, benchmark_returns: pd.Series, beta: float) -> float:
         """Calculate alpha (excess return vs benchmark).

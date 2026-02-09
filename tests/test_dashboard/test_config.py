@@ -38,10 +38,10 @@ def test_dashboard_config_refresh_interval_validation() -> None:
     invalid_refresh_high = 70000
 
     with pytest.raises(ValidationError):
-        DashboardConfig(refresh_interval=invalid_refresh_low)
+        DashboardConfig(refresh_interval=invalid_refresh_low)  # type: ignore[arg-type]
 
     with pytest.raises(ValidationError):
-        DashboardConfig(refresh_interval=invalid_refresh_high)
+        DashboardConfig(refresh_interval=invalid_refresh_high)  # type: ignore[arg-type]
 
     # Valid boundaries
     config_min = DashboardConfig(refresh_interval=1000)
@@ -58,10 +58,10 @@ def test_dashboard_config_port_validation() -> None:
     invalid_port_high = 70000
 
     with pytest.raises(ValidationError):
-        DashboardConfig(port=invalid_port_low)
+        DashboardConfig(port=invalid_port_low)  # type: ignore[arg-type]
 
     with pytest.raises(ValidationError):
-        DashboardConfig(port=invalid_port_high)
+        DashboardConfig(port=invalid_port_high)  # type: ignore[arg-type]
 
     # Valid boundaries
     config_min = DashboardConfig(port=1)

@@ -705,9 +705,9 @@ class TestRiskLimitsConfig:
         with pytest.raises(ValueError, match=r"less than or equal to 0\.2"):
             RiskLimitsConfig(max_var_95=invalid_max_var_high)
         with pytest.raises(ValueError, match=r"greater than or equal to 20"):
-            RiskLimitsConfig(lookback_days=invalid_lookback_low)
+            RiskLimitsConfig(lookback_days=invalid_lookback_low)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match=r"less than or equal to 365"):
-            RiskLimitsConfig(lookback_days=invalid_lookback_high)
+            RiskLimitsConfig(lookback_days=invalid_lookback_high)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match=r"greater than or equal to 0\.5"):
             RiskLimitsConfig(atr_multiplier_min=invalid_atr_multiplier)
 
@@ -835,10 +835,10 @@ class TestPortfolioRebalancingConfig:
         invalid_lookback_high = 400
 
         with pytest.raises(ValueError, match="lookback_days"):
-            PortfolioRebalancingConfig(lookback_days=invalid_lookback_low)
+            PortfolioRebalancingConfig(lookback_days=invalid_lookback_low)  # type: ignore[arg-type]
 
         with pytest.raises(ValueError, match="lookback_days"):
-            PortfolioRebalancingConfig(lookback_days=invalid_lookback_high)
+            PortfolioRebalancingConfig(lookback_days=invalid_lookback_high)  # type: ignore[arg-type]
 
     def test_daemon_config_has_rebalancing(self):
         config = DaemonConfig()

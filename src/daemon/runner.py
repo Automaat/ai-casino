@@ -135,10 +135,10 @@ class DaemonRunner:
                     if os.getenv("DATABASE_URL"):
                         try:
                             from src.database.repositories.trade import TradeRepository
-                            from src.database.session import get_session_factory
+                            from src.database.engine import DatabaseEngine
 
-                            session_factory = get_session_factory()
-                            trade_repository = TradeRepository(session_factory())
+                            db_engine = DatabaseEngine()
+                            trade_repository = TradeRepository(db_engine.session())
                         except Exception as e:
                             logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
@@ -388,10 +388,10 @@ class DaemonRunner:
                 if os.getenv("DATABASE_URL"):
                     try:
                         from src.database.repositories.trade import TradeRepository
-                        from src.database.session import get_session_factory
+                        from src.database.engine import DatabaseEngine
 
-                        session_factory = get_session_factory()
-                        trade_repository = TradeRepository(session_factory())
+                        db_engine = DatabaseEngine()
+                        trade_repository = TradeRepository(db_engine.session())
                     except Exception as e:
                         logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
@@ -497,7 +497,7 @@ class DaemonRunner:
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
                 executed=result.order is not None,
-                trading_session=result.trading_session.value,
+                trading_session=result.trading_session,
                 is_paper_trade=self.config.trading_mode.value == "paper",
                 rsi=rsi,
                 macd_hist=macd_hist,

@@ -220,16 +220,20 @@ class DaemonTearsheetGenerator:
 
             # Try exact date match
             if target_date in df.index:
-                return float(df.loc[target_date, "close"])
+                close_val = df.loc[target_date, "close"]
+                return float(close_val)
 
             # Fall back to nearest date (handles weekends/holidays)
             import numpy as np
 
             target_timestamp = pd.Timestamp(target_date)
-            time_diffs = (df.index - target_timestamp).total_seconds()
+            # Type narrowing for Index subtraction
+            time_diffs_td = df.index - target_timestamp  # TimedeltaIndex
+            time_diffs = time_diffs_td.total_seconds()  # type: ignore[union-attr]
             df["date_diff"] = np.abs(time_diffs)
             nearest_idx = df["date_diff"].idxmin()
-            price = float(df.loc[nearest_idx, "close"])
+            price_val = df.loc[nearest_idx, "close"]
+            price = float(price_val)  # type: ignore[arg-type]
 
             nearest_date = nearest_idx.date() if hasattr(nearest_idx, "date") else nearest_idx
             logger.debug(f"Fetched {symbol} price {price} for {target_date} (nearest: {nearest_date})")

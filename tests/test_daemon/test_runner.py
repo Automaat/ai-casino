@@ -708,6 +708,7 @@ async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_
 
 async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, event_bus) -> None:
     """Test runner publishes ANALYSIS_START and ANALYSIS_COMPLETE events."""
+    from src.strategies.session import TradingSession
     from src.strategies.signal import Signal
 
     runner = DaemonRunner(sample_config, event_bus=event_bus)
@@ -720,7 +721,7 @@ async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, eve
         mock_result.decision.action = Signal.BUY
         mock_result.decision.confidence = 0.85
         mock_result.order = None
-        mock_result.trading_session.value = "REGULAR"
+        mock_result.trading_session = TradingSession.REGULAR
         mock_result.risk.current_price = 150.0
         mock_result.strategy_used = "momentum"
         mock_result.regime = None
