@@ -88,7 +88,15 @@ class TechnicalAnalyst:
 
         logger.info(f"Analyzing {symbol} technicals with {self._strategy_type}")
 
-        signal, indicators = self.strategy.generate_signal(daily_data)
+        # Offload CPU-intensive indicator calculation to thread
+        import asyncio
+        from collections.abc import Callable
+
+        generate_signal = cast(
+            "Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]]",
+            self.strategy.generate_signal,
+        )
+        signal, indicators = await asyncio.to_thread(generate_signal, daily_data)
         latest_close = float(daily_data["Close"].iloc[-1])
 
         prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
@@ -134,8 +142,17 @@ class TechnicalAnalyst:
 
         timeframe_results: dict[Timeframe, TimeframeResult] = {}
 
+        import asyncio
+        from collections.abc import Callable
+
+        generate_signal = cast(
+            "Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]]",
+            self.strategy.generate_signal,
+        )
+
         for timeframe, data in multi_data.timeframes.items():
-            signal, indicators = self.strategy.generate_signal(data)
+            # Offload CPU-intensive indicator calculation to thread
+            signal, indicators = await asyncio.to_thread(generate_signal, data)
             latest_close = float(data["Close"].iloc[-1])
 
             prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
