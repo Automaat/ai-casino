@@ -1,6 +1,7 @@
 """Test DI container infrastructure."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -98,23 +99,31 @@ def test_finbert_sentiment_provider():
     # We skip actual call to avoid downloading model in tests
 
 
-def test_llm_client_singleton():
-    """Test LLM client is singleton."""
+def test_llm_client_factory():
+    """Test LLM client is factory (new instance per request)."""
     container = create_container()
 
     client1 = container.llm_client()
     client2 = container.llm_client()
 
-    assert client1 is client2
+    # Factory: each call creates new instance
+    assert client1 is not client2
 
 
 def test_finbert_singleton():
-    """Test FinBERT is singleton."""
+    """Test FinBERT singleton behavior."""
     container = create_container()
 
-    # Note: finbert uses internal singleton, container provides factory wrapper
-    # Each call to container.finbert_sentiment() calls factory which returns same instance
-    finbert1 = container.finbert_sentiment()
-    finbert2 = container.finbert_sentiment()
+    # Mock the underlying factory to avoid loading real 440MB model in CI
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
+        mock_instance = MagicMock()
+        mock_factory.return_value = mock_instance
 
-    assert finbert1 is finbert2
+        finbert1 = container.finbert_sentiment()
+        finbert2 = container.finbert_sentiment()
+
+        # Singleton: same instance returned (factory called once, cached)
+        assert finbert1 is finbert2
+        assert finbert1 is mock_instance
+        # Singleton provider calls factory once, caches result
+        assert mock_factory.call_count == 1

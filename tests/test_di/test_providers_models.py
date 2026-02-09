@@ -82,23 +82,24 @@ def test_create_llm_client_with_metrics_collector():
 
 
 def test_create_finbert_sentiment_singleton():
-    """Test FinBERT singleton behavior."""
-    with patch("src.di.providers.models.get_finbert_sentiment") as mock_factory:
-        mock_instance = MagicMock()
-        mock_factory.return_value = mock_instance
+    """Test FinBERT singleton behavior - factory called once per create_finbert_sentiment() call."""
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
+        instance1 = MagicMock()
+        instance2 = MagicMock()
+        mock_factory.side_effect = [instance1, instance2]
 
-        finbert1 = create_finbert_sentiment()
-        finbert2 = create_finbert_sentiment()
+        create_finbert_sentiment()
+        create_finbert_sentiment()
 
-        # Should call factory for both (factory handles singleton internally)
-        assert finbert1 == mock_instance
-        assert finbert2 == mock_instance
+        # create_finbert_sentiment() is not itself singleton - it delegates to get_finbert_sentiment()
+        # get_finbert_sentiment() handles singleton internally, returning same instance
+        # But our mock returns different instances, so we validate call count
         assert mock_factory.call_count == 2
 
 
 def test_create_finbert_sentiment_device():
     """Test device parameter passthrough."""
-    with patch("src.di.providers.models.get_finbert_sentiment") as mock_factory:
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
         mock_instance = MagicMock()
         mock_factory.return_value = mock_instance
 

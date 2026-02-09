@@ -87,7 +87,7 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     # Model providers
-    llm_client = providers.Singleton(
+    llm_client = providers.Factory(
         model_providers.create_llm_client,
         daemon_config=daemon_config,
         metrics_collector=None,

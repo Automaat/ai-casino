@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 from src.daemon.config import DaemonConfig
 from src.di.config import resolve_config_or_env
 from src.models.llm import LLMClient
-from src.models.sentiment import FinBERTSentiment, get_finbert_sentiment
 
 if TYPE_CHECKING:
     from src.metrics.execution import ExecutionMetricsCollector
+    from src.models.sentiment import FinBERTSentiment
 
 
 def create_llm_client(
@@ -59,11 +59,12 @@ def create_llm_client(
     return llm_client
 
 
-def create_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
-    """Create FinBERT sentiment analyzer.
+def create_finbert_sentiment(device: str | None = None) -> "FinBERTSentiment":
+    """Create FinBERT sentiment analyzer with lazy import.
 
     Thin wrapper over existing get_finbert_sentiment() factory.
     Maintains singleton behavior via existing implementation.
+    Uses lazy import to avoid loading 440MB model on container creation.
 
     Args:
         device: Device for inference (cuda/cpu). Auto-detect if None.
@@ -71,4 +72,6 @@ def create_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
     Returns:
         FinBERTSentiment singleton instance
     """
+    from src.models.sentiment import get_finbert_sentiment
+
     return get_finbert_sentiment(device=device)

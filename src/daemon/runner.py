@@ -41,7 +41,6 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.database.connection import get_db_engine
-from src.di.container import create_container
 from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
@@ -69,7 +68,18 @@ class DaemonRunner:
         """
         self.config = config
         self.event_bus = event_bus
-        self._container = container or create_container()
+
+        # Create container and wire config
+        if container is not None:
+            self._container = container
+        else:
+            # Lazy import to avoid circular dependency
+            from src.di.container import create_container
+
+            # Create container and override daemon_config provider to use runner's config
+            self._container = create_container()
+            self._container.daemon_config.override(config)
+
         self._historical_cache = HistoricalCache()
         self.state = DaemonState.load(config.state.state_file)
         self._broker_manager = BrokerManager(config, self.state, self._historical_cache)

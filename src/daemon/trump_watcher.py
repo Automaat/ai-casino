@@ -16,6 +16,7 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
+from src.models.llm import LLMClient
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -77,7 +78,7 @@ class TrumpWatcher:
         self._fetcher: TruthSocialFetcher | None = None
         self._analyst: TrumpAnalyst | None = None
         self._workflow: TradingWorkflow | None = None
-        self._llm = None  # type: ignore[assignment]  # Lazy init via container
+        self._llm: LLMClient | None = None  # Lazy init via container
 
         logger.info(f"TrumpWatcher initialized (poll_interval={poll_interval}s)")
 
