@@ -73,9 +73,11 @@ class BullishResearcher(BaseResearcher):
         Returns:
             BullishResearchAnalysis with thesis, strengths, target, confidence
         """
-        return await super().analyze(
+        result = await super().analyze(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
+        assert isinstance(result, BullishResearchAnalysis)  # noqa: S101
+        return result
 
     def _build_analysis(
         self, thesis: str, key_points: list[str], target: float | None, confidence: float

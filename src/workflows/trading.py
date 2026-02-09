@@ -5,7 +5,7 @@ import time
 import zoneinfo
 from collections.abc import Coroutine
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import pandas as pd
 from loguru import logger
@@ -22,7 +22,7 @@ from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResear
 from src.agents.bullish_researcher import BullishResearchAnalysis, BullishResearcher
 from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
-from src.agents.meta import MetaAgent, StrategySelection
+from src.agents.meta import MetaAgent, StrategySelection, StrategyType
 from src.agents.news import NewsAnalysis, NewsAnalyst
 from src.agents.risk import AccountInfo, PortfolioVaRConfig, RiskAssessment, RiskManagementAgent
 from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
@@ -113,6 +113,7 @@ class WorkflowExtraContext(TypedDict, total=False):
     earnings_context: str | None
     peer_analysis_context: str | None
     game_plan_context: str | None
+    position_context: dict[str, object] | None
 
 
 class TradingWorkflow:
@@ -258,9 +259,10 @@ class TradingWorkflow:
                 state["warnings"].append(warning)
                 return None
             raise result
+        assert isinstance(result, FundamentalAnalysis)  # noqa: S101
         return result
 
-    def _handle_optional_result(self, result: object, name: str, state: TradingState) -> object | None:
+    def _handle_optional_result(self, result: T | Exception, name: str, state: TradingState) -> T | None:
         """Handle optional analysis result, logging failures as warnings."""
         if isinstance(result, Exception):
             warning = f"{name} analysis failed: {result}"
@@ -343,7 +345,7 @@ class TradingWorkflow:
         symbol: str,
         state: TradingState,
         collector: ExecutionMetricsCollector | None,
-    ) -> tuple[object, str]:
+    ) -> tuple[StrategyType, str]:
         """Select trading strategy via meta-agent or fallback.
 
         Args:
@@ -355,9 +357,22 @@ class TradingWorkflow:
             Tuple of (strategy_instance, strategy_name)
         """
         if self.meta_agent:
+            # Extract daily DataFrame for meta-agent
+            market_data = state["market_data"]
+            if market_data is None:
+                msg = "market_data is None, cannot select strategy"
+                raise ValueError(msg)
+            if isinstance(market_data, MultiTimeframeData):
+                if Timeframe.DAILY not in market_data.timeframes:
+                    msg = f"Daily timeframe required for strategy selection but missing for {symbol}"
+                    raise ValueError(msg)
+                daily_data = market_data.timeframes[Timeframe.DAILY]
+            else:
+                daily_data = market_data
+
             selection = await self._timed_agent_call(
                 "meta_agent",
-                self.meta_agent.select_strategy(symbol, state["market_data"]),
+                self.meta_agent.select_strategy(symbol, daily_data),
                 collector,
             )
             state["regime_analysis"] = selection.regime_analysis
@@ -372,7 +387,7 @@ class TradingWorkflow:
     async def _validate_strategy_with_backtest(
         self,
         symbol: str,
-        strategy: object,
+        strategy: StrategyType,
         strategy_name: str,
         state: TradingState,
         collector: ExecutionMetricsCollector | None,  # noqa: ARG002
@@ -664,7 +679,7 @@ class TradingWorkflow:
             collector.record_agent_timing(agent_name, (time.perf_counter() - start) * 1000)
             current_agent.reset(token)
 
-    async def run_analyses(
+    async def run_analyses(  # noqa: PLR0915
         self,
         state: TradingState,
         technical_analyst: TechnicalAnalyst,
@@ -686,6 +701,9 @@ class TradingWorkflow:
             raise ValueError(msg)
 
         if isinstance(market_data, MultiTimeframeData):
+            if Timeframe.DAILY not in market_data.timeframes:
+                msg = f"Daily timeframe required for analysis but missing for {state['symbol']}"
+                raise ValueError(msg)
             daily_data = market_data.timeframes[Timeframe.DAILY]
         else:
             daily_data = market_data
@@ -726,7 +744,7 @@ class TradingWorkflow:
         )
 
         # Include trump analysis if enabled
-        tasks = [
+        tasks: list[Coroutine[Any, Any, Any]] = [
             technical_task,
             sentiment_task,
             news_task,
@@ -758,34 +776,63 @@ class TradingWorkflow:
         trump_result = results[core_task_count] if len(results) > core_task_count else None
 
         # Re-raise if core analyses failed
-        for result in (technical, sentiment, news):
-            if isinstance(result, Exception):
-                raise result
+        if isinstance(technical, Exception):
+            raise technical
+        if isinstance(sentiment, Exception):
+            raise sentiment
+        if isinstance(news, Exception):
+            raise news
+
+        # Type narrowing - after exception checks, these must be their proper types
+        assert isinstance(technical, TechnicalAnalysis)  # noqa: S101
+        assert isinstance(sentiment, SentimentAnalysis)  # noqa: S101
+        assert isinstance(news, NewsAnalysis)  # noqa: S101
 
         # Process optional analyses
         fundamental = self._handle_fundamental_result(fundamental_result, state)
-        comparative = self._handle_optional_result(comparative_result, "Comparative", state)
-        web_research = self._handle_optional_result(web_research_result, "Web research", state)
-        social_sentiment = self._handle_optional_result(social_result, "Social sentiment", state)
-        trump_analysis = self._handle_optional_result(trump_result, "Trump", state) if trump_result else None
+        comparative = cast(
+            "ComparativeAnalysis | None",
+            self._handle_optional_result(comparative_result, "Comparative", state),
+        )
+        web_research = cast(
+            "WebResearchAnalysis | None",
+            self._handle_optional_result(web_research_result, "Web research", state),
+        )
+        social_sentiment = cast(
+            "SocialSentimentAnalysis | None",
+            self._handle_optional_result(social_result, "Social sentiment", state),
+        )
+        trump_analysis_processed = (
+            cast("TrumpAnalysis | None", self._handle_optional_result(trump_result, "Trump", state))
+            if trump_result
+            else None
+        )
 
         state["technical_analysis"] = technical
         state["sentiment_analysis"] = sentiment
         state["news_analysis"] = news
-        state["trump_analysis"] = trump_analysis
+        state["trump_analysis"] = trump_analysis_processed
         state["fundamental_analysis"] = fundamental
         state["comparative_analysis"] = comparative
         state["social_sentiment_analysis"] = social_sentiment
         state["web_research"] = web_research
 
         # Parallel Group 2: research (depends on Group 1)
+        # Ensure required analyses are present
+        technical = state["technical_analysis"]
+        sentiment = state["sentiment_analysis"]
+        news = state["news_analysis"]
+        assert technical is not None, "technical_analysis must be present"  # noqa: S101
+        assert sentiment is not None, "sentiment_analysis must be present"  # noqa: S101
+        assert news is not None, "news_analysis must be present"  # noqa: S101
+
         bullish_task = self._timed_agent_call(
             "bullish_researcher",
             self.bullish_researcher.analyze(
                 state["symbol"],
-                state["technical_analysis"],
-                state["sentiment_analysis"],
-                state["news_analysis"],
+                technical,
+                sentiment,
+                news,
                 state["fundamental_analysis"],
                 state["comparative_analysis"],
                 state["trump_analysis"],
@@ -796,9 +843,9 @@ class TradingWorkflow:
             "bearish_researcher",
             self.bearish_researcher.analyze(
                 state["symbol"],
-                state["technical_analysis"],
-                state["sentiment_analysis"],
-                state["news_analysis"],
+                technical,
+                sentiment,
+                news,
                 state["fundamental_analysis"],
                 state["comparative_analysis"],
                 state["trump_analysis"],
@@ -833,19 +880,22 @@ class TradingWorkflow:
         """
         logger.info("Fetching market and news data")
 
+        # Capture market hours decision once to avoid race condition
+        use_multi_timeframe = enable_multi_timeframe and self._is_market_hours()
+
         # Prepare parallel tasks
-        if enable_multi_timeframe and self._is_market_hours():
+        if use_multi_timeframe:
             logger.info("Multi-timeframe mode enabled (market hours)")
             market_task = self.market_fetcher.fetch_multi_timeframe(
                 symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
             )
         else:
-            if enable_multi_timeframe and not self._is_market_hours():
+            if enable_multi_timeframe and not use_multi_timeframe:
                 logger.info("Multi-timeframe requested but outside market hours, using daily only")
             market_task = asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, period_days)
 
         news_task = asyncio.to_thread(self.news_fetcher.fetch_company_news, symbol, limit=10)
-        tasks = [market_task, news_task]
+        tasks: list[Coroutine[Any, Any, Any]] = [market_task, news_task]
 
         if self.trump_mode and self.trump_fetcher:
             tasks.append(asyncio.to_thread(self.trump_fetcher.fetch_recent, hours=24))
@@ -858,9 +908,15 @@ class TradingWorkflow:
             logger.error(f"Market data fetch failed: {results[0]}")
             raise results[0]
         market_result = results[0]
-        if enable_multi_timeframe and self._is_market_hours():
+        if use_multi_timeframe:
+            # fetch_multi_timeframe returns MultiTimeframeData
+            assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
             market_data = market_result
         else:
+            # fetch_daily returns MarketData with .data attribute
+            from src.data.market import MarketData
+
+            assert isinstance(market_result, MarketData)  # noqa: S101
             market_data = market_result.data
 
         # Extract news data
@@ -868,6 +924,7 @@ class TradingWorkflow:
             logger.error(f"News fetch failed: {results[1]}")
             raise results[1]
         news_result = results[1]
+        assert isinstance(news_result, list)  # noqa: S101
 
         # Extract trump data
         trump_posts: list[TruthPost] | None = None
@@ -876,6 +933,9 @@ class TradingWorkflow:
             if isinstance(trump_result, Exception):
                 logger.warning(f"Failed to fetch Trump posts: {trump_result}")
             else:
+                from src.data.truth_social import TrumpPostData
+
+                assert isinstance(trump_result, TrumpPostData)  # noqa: S101
                 trump_posts = trump_result.posts
                 logger.info(f"Fetched {len(trump_posts)} Trump posts")
 
@@ -909,6 +969,7 @@ class TradingWorkflow:
             broker_positions=None,
             portfolio_value=None,
             backtest_validation=None,
+            degradation_context=None,
             warnings=[],
             broker_api_failed=False,
         )
@@ -963,9 +1024,14 @@ class TradingWorkflow:
         technical = state["technical_analysis"]
         sentiment = state["sentiment_analysis"]
         news = state["news_analysis"]
+        bullish = state["bullish_research"]
+        bearish = state["bearish_research"]
 
         if not technical or not sentiment or not news:
             msg = "Missing critical analyses (technical, sentiment, news)"
+            raise ValueError(msg)
+        if not bullish or not bearish:
+            msg = "Missing research analyses (bullish, bearish)"
             raise ValueError(msg)
 
         # Optional analyses can be None
@@ -975,8 +1041,8 @@ class TradingWorkflow:
             sentiment,
             news,
             state["fundamental_analysis"],
-            state["bullish_research"],
-            state["bearish_research"],
+            bullish,
+            bearish,
             comparative=state["comparative_analysis"],
             owns_position=owns_position,
             position_qty=position_qty,
@@ -1007,17 +1073,36 @@ class TradingWorkflow:
             msg = "Cannot assess risk without final decision"
             raise ValueError(msg)
 
-        current_price = float(state["market_data"]["Close"].iloc[-1])
+        # Extract daily DataFrame for price lookup
+        market_data = state["market_data"]
+        if market_data is None:
+            msg = "market_data is None, cannot assess risk"
+            raise ValueError(msg)
+        if isinstance(market_data, MultiTimeframeData):
+            daily_data = market_data.timeframes.get(Timeframe.DAILY)
+            if daily_data is None:
+                msg = "Daily timeframe data is missing from market_data, cannot assess risk"
+                raise ValueError(msg)
+        else:
+            daily_data = market_data
+
+        current_price = float(daily_data["Close"].iloc[-1])
 
         # Get target weight from allocations if available
         target_weight = self._target_allocations.get(state["symbol"]) if self._target_allocations else None
+
+        # Ensure account_info is present
+        account_info = state["account_info"]
+        if account_info is None:
+            msg = "account_info is None, cannot assess risk"
+            raise ValueError(msg)
 
         risk_assessment = self.risk_manager.assess(
             symbol=state["symbol"],
             action=state["final_decision"].action,
             current_price=current_price,
-            account_info=state["account_info"],
-            market_data=state["market_data"],
+            account_info=account_info,
+            market_data=daily_data,
             decision_confidence=state["final_decision"].confidence,
             broker_positions=state.get("broker_positions"),
             portfolio_value=state.get("portfolio_value"),

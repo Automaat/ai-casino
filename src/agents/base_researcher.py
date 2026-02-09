@@ -3,7 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from loguru import logger
 from pydantic import BaseModel
@@ -19,6 +19,8 @@ from src.prompts import PromptLoader
 
 if TYPE_CHECKING:
     from src.agents.trump import TrumpAnalysis
+
+TAnalysis = TypeVar("TAnalysis", bound=BaseModel)
 
 
 class ResearchDirection(StrEnum):

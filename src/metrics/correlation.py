@@ -376,7 +376,11 @@ class CorrelationAuditor:
         # Portfolio volatility
         cov_matrix = returns_df.cov() * 252  # Annualized
         portfolio_variance = weight_array @ cov_matrix @ weight_array
-        portfolio_vol = portfolio_variance**0.5
+        # Ensure scalar result from matrix multiplication
+        import numpy as np
+
+        portfolio_var_scalar = float(np.asarray(portfolio_variance).item())
+        portfolio_vol = portfolio_var_scalar**0.5
 
         diversification_ratio = portfolio_vol / weighted_avg_vol
 
