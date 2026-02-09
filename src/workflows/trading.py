@@ -778,6 +778,11 @@ class TradingWorkflow:
             msg = "news_articles is None, cannot run sentiment/news analyses"
             raise ValueError(msg)
 
+        # Handle empty news with warning
+        if not news_articles:
+            logger.warning(f"No news articles available for {state['symbol']}, analyses may be degraded")
+            state["warnings"].append("No news articles available - sentiment and news analyses degraded")
+
         # Parallel Group 1: independent analyses (comparative, web_research, social, trump are optional)
         technical_task = self._timed_agent_call(
             "technical",
@@ -983,10 +988,11 @@ class TradingWorkflow:
 
         # Extract news data
         if isinstance(results[1], Exception):
-            logger.error(f"News fetch failed: {results[1]}")
-            raise results[1]
-        news_result = results[1]
-        assert isinstance(news_result, list)  # noqa: S101
+            logger.warning(f"News fetch failed, continuing with empty news: {results[1]}")
+            news_result = []
+        else:
+            news_result = results[1]
+            assert isinstance(news_result, list)  # noqa: S101
 
         # Extract trump data
         trump_posts: list[TruthPost] | None = None
