@@ -113,35 +113,13 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
 
     configure_torch_runtime()
 
-    from src.cache.historical import HistoricalCache
-    from src.data.fundamental import FundamentalDataFetcher
-    from src.data.market import MarketDataFetcher
-    from src.data.news import NewsFetcher
     from src.di.container import create_container
-    from src.workflows.trading import TradingWorkflow
 
     container = create_container()
-    historical_cache = HistoricalCache()
-
-    llm_client = container.llm_client()
-    market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
-    news_fetcher = NewsFetcher(historical_cache=historical_cache)
 
     _update_progress("fetch_data", "Loading FinBERT model...", progress_callback)
-    finbert = container.finbert_sentiment()
-    fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
 
-    return TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert,
-        fundamental_fetcher,
-        broker=None,
-        metrics_tracker=None,
-        use_meta_agent=True,
-        historical_cache=historical_cache,
-    )
+    return container.workflow_meta()
 
 
 def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:

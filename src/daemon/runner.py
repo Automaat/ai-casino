@@ -483,28 +483,6 @@ class DaemonRunner:
     def _init_workflow(self) -> TradingWorkflow:
         """Initialize trading workflow (lazy initialization)."""
         if self._workflow is None:
-            llm_client = self._container.llm_client()
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False,
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
-            news_fetcher = NewsFetcher(
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.marketaux_api_key, "MARKETAUX_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
-            finbert = self._container.finbert_sentiment()
-            fundamental_fetcher = FundamentalDataFetcher(
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
-
             # Initialize metrics tracker (DB or JSONL based on DATABASE_URL)
             if self._metrics_tracker is None:
                 trade_repository = None
@@ -519,41 +497,11 @@ class DaemonRunner:
 
                 self._metrics_tracker = create_metrics_tracker(trade_repository)
 
-            # Portfolio VaR calculator (if risk limits enabled)
-            portfolio_var_calculator = None
-            portfolio_var_config = None
-            if self.config.risk_limits.enabled:
-                from src.agents.risk import PortfolioVaRConfig
-                from src.metrics.portfolio_var import PortfolioVaRCalculator
-                from src.metrics.risk import RiskMetricsCalculator
-
-                portfolio_var_calculator = PortfolioVaRCalculator(RiskMetricsCalculator(), market_fetcher)
-                portfolio_var_config = PortfolioVaRConfig(
-                    enabled=self.config.risk_limits.enabled,
-                    max_var_95=self.config.risk_limits.max_var_95,
-                    max_cvar_99=self.config.risk_limits.max_cvar_99,
-                    lookback_days=self.config.risk_limits.lookback_days,
-                    adaptive_stop_loss=self.config.risk_limits.adaptive_stop_loss,
-                    cdar_stop_threshold=self.config.risk_limits.cdar_stop_threshold,
-                    atr_multiplier_min=self.config.risk_limits.atr_multiplier_min,
-                )
-
-            self._workflow = TradingWorkflow(
-                llm_client,
-                market_fetcher,
-                news_fetcher,
-                finbert,
-                fundamental_fetcher,
+            self._workflow = self._container.workflow_meta(
                 broker=self.broker,
                 metrics_tracker=self._metrics_tracker,
-                use_meta_agent=True,
                 param_store=self.param_store,
-                historical_cache=self._historical_cache,
-                portfolio_var_calculator=portfolio_var_calculator,
-                portfolio_var_config=portfolio_var_config,
-                pre_trade_backtest_config=self.config.pre_trade_backtesting,
                 notification_service=self.notification_service,
-                position_sizing_config=self.config.position_sizing,
             )
             logger.info("Trading workflow initialized")
 

@@ -12,9 +12,6 @@ from rich.console import Console
 
 from src.agents.trump import COMPANY_TICKERS, TrumpAnalysis, TrumpAnalyst
 from src.cache.historical import HistoricalCache
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.models.llm import LLMClient
 from src.workflows.trading import TradingWorkflow
@@ -94,25 +91,7 @@ class TrumpWatcher:
             self._analyst = TrumpAnalyst(self._llm)
 
         if self._workflow is None:
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False, historical_cache=self._historical_cache
-            )
-            news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
-            finbert = self._container.finbert_sentiment()
-            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
-
-            self._workflow = TradingWorkflow(
-                self._llm,
-                market_fetcher,
-                news_fetcher,
-                finbert,
-                fundamental_fetcher,
-                broker=None,
-                metrics_tracker=None,
-                use_meta_agent=True,
-                trump_mode=True,
-                historical_cache=self._historical_cache,
-            )
+            self._workflow = self._container.workflow_trump()
             logger.info("TrumpWatcher workflow initialized")
 
     async def _check_new_posts(self) -> list[TruthPost]:
