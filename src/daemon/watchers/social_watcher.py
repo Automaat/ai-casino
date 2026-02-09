@@ -113,10 +113,7 @@ class SocialWatcher(EventWatcher):
         if delta_pct < self.volume_spike_threshold * 100:
             return None
 
-        logger.info(
-            f"Volume spike detected: {symbol} "
-            f"({prev_count} → {current_count}, +{delta_pct:.1f}%)"
-        )
+        logger.info(f"Volume spike detected: {symbol} ({prev_count} → {current_count}, +{delta_pct:.1f}%)")
         return SocialEvent(
             event_id=f"reddit_volume_{symbol}_{now.isoformat()}",
             event_type="social",
