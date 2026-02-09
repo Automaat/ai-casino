@@ -15,6 +15,17 @@ def test_create_container_without_config():
     assert hasattr(container, "daemon_config")
 
 
+def test_daemon_config_returns_defaults_without_yaml():
+    """Verify daemon_config() returns defaults when no config_path set."""
+    container = create_container()
+
+    # Should return DaemonConfig() defaults, not raise
+    config = container.daemon_config()
+
+    assert config is not None
+    assert config.watchlist == ["AAPL", "TSLA", "GOOGL", "MSFT"]  # Default watchlist
+
+
 def test_create_container_with_config(tmp_path):
     """Create container with valid config."""
     config_path = tmp_path / "daemon.yaml"
@@ -52,8 +63,10 @@ def test_load_daemon_config_nonexistent():
 
 
 def test_load_daemon_config_none():
-    """None when no path."""
-    assert load_daemon_config(None) is None
+    """Returns defaults when no path."""
+    config = load_daemon_config(None)
+    assert config is not None
+    assert config.watchlist == ["AAPL", "TSLA", "GOOGL", "MSFT"]  # Default watchlist
 
 
 def test_load_daemon_config_valid(tmp_path):

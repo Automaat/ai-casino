@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
-from src.daemon.config import DaemonConfig
+from src.di.config import load_daemon_config
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -16,30 +16,27 @@ class AppContainer(containers.DeclarativeContainer):
     # Config path storage
     config = providers.Configuration()
 
-    # DaemonConfig singleton - parsed from YAML
+    # DaemonConfig singleton - loaded via utility
     daemon_config = providers.Singleton(
-        DaemonConfig.from_yaml,
-        path=config.config_path,
+        load_daemon_config,
+        config_path=config.config_path,
     )
 
 
-def create_container(config_path: Path | None = None) -> AppContainer:
-    """Create configured container.
+def create_container(config_path: str | Path | None = None) -> AppContainer:
+    """Create dependency injection container.
 
     Args:
-        config_path: Optional daemon.yaml path. If None, daemon_config
-                    provider will fail (use for future service-only containers)
+        config_path: Optional path to daemon.yaml (supports ~ expansion)
 
     Returns:
-        AppContainer instance
-
-    Example:
-        container = create_container(Path("daemon.yaml"))
-        config = container.daemon_config()  # Pydantic model
+        Configured Container instance
     """
     container = AppContainer()
 
     if config_path:
-        container.config.from_dict({"config_path": config_path})
+        # Expand ~ and resolve to absolute path
+        normalized_path = Path(config_path).expanduser().resolve()
+        container.config.from_dict({"config_path": normalized_path})
 
     return container

@@ -9,22 +9,27 @@ from loguru import logger
 from src.daemon.config import DaemonConfig
 
 
-def load_daemon_config(config_path: Path | None = None) -> DaemonConfig | None:
-    """Load DaemonConfig with env + YAML priority.
+def load_daemon_config(config_path: Path | None = None) -> DaemonConfig:
+    """Load daemon config from YAML or return defaults.
 
-    Loads .env first, then YAML. Preserves priority: YAML > env > defaults.
+    Loads .env first (for downstream env var consumers), then loads
+    DaemonConfig from YAML if path provided. Returns default DaemonConfig()
+    if no path given.
 
     Args:
-        config_path: Optional daemon.yaml path
+        config_path: Path to daemon.yaml, or None for defaults
 
     Returns:
-        DaemonConfig if config_path provided, None otherwise
+        DaemonConfig from YAML or default instance
+
+    Raises:
+        FileNotFoundError: If config_path provided but doesn't exist
     """
     load_dotenv()  # Idempotent - safe to call multiple times
 
     if config_path is None:
-        logger.debug("No config_path - skipping YAML")
-        return None
+        logger.debug("No config_path - returning default DaemonConfig")
+        return DaemonConfig()
 
     if not config_path.exists():
         msg = f"Config not found: {config_path}"
