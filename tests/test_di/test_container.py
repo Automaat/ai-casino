@@ -132,22 +132,30 @@ def test_finbert_singleton():
 def test_workflow_meta_provider():
     """Test workflow_meta provider instantiation."""
     container = create_container()
-    workflow = container.workflow_meta()
 
-    assert workflow.use_meta_agent is True
-    assert workflow.trump_mode is False
-    # meta_agent is lazily initialized on first analyze() call
+    # Mock FinBERT to avoid 440MB model download in CI
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
+        mock_factory.return_value = MagicMock()
+        workflow = container.workflow_meta()
+
+        assert workflow.use_meta_agent is True
+        assert workflow.trump_mode is False
+        # meta_agent is constructed in __init__ when use_meta_agent=True
 
 
 def test_workflow_trump_provider():
     """Test workflow_trump provider instantiation."""
     container = create_container()
-    workflow = container.workflow_trump()
 
-    assert workflow.use_meta_agent is True
-    assert workflow.trump_mode is True
-    # Trump analyst instantiated in __init__
-    assert workflow.trump_analyst is not None
+    # Mock FinBERT to avoid 440MB model download in CI
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
+        mock_factory.return_value = MagicMock()
+        workflow = container.workflow_trump()
+
+        assert workflow.use_meta_agent is True
+        assert workflow.trump_mode is True
+        # Trump analyst instantiated in __init__
+        assert workflow.trump_analyst is not None
 
 
 def test_workflow_momentum_provider():
@@ -155,11 +163,15 @@ def test_workflow_momentum_provider():
     from src.strategies.momentum import MomentumStrategy
 
     container = create_container()
-    workflow = container.workflow_momentum()
 
-    assert workflow.use_meta_agent is False
-    assert workflow.trump_mode is False
-    assert isinstance(workflow._default_strategy, MomentumStrategy)
+    # Mock FinBERT to avoid 440MB model download in CI
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
+        mock_factory.return_value = MagicMock()
+        workflow = container.workflow_momentum()
+
+        assert workflow.use_meta_agent is False
+        assert workflow.trump_mode is False
+        assert isinstance(workflow._default_strategy, MomentumStrategy)
 
 
 def test_workflow_with_overrides():
@@ -171,10 +183,14 @@ def test_workflow_with_overrides():
     mock_broker = MagicMock()
     mock_metrics_tracker = MagicMock()
 
-    workflow = container.workflow_meta(
-        broker=mock_broker,
-        metrics_tracker=mock_metrics_tracker,
-    )
+    # Mock FinBERT to avoid 440MB model download in CI
+    with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
+        mock_factory.return_value = MagicMock()
 
-    assert workflow.broker is mock_broker
-    assert workflow.metrics_tracker is mock_metrics_tracker
+        workflow = container.workflow_meta(
+            broker=mock_broker,
+            metrics_tracker=mock_metrics_tracker,
+        )
+
+        assert workflow.broker is mock_broker
+        assert workflow.metrics_tracker is mock_metrics_tracker

@@ -502,6 +502,7 @@ class DaemonRunner:
                 metrics_tracker=self._metrics_tracker,
                 param_store=self.param_store,
                 notification_service=self.notification_service,
+                historical_cache=self._historical_cache,
             )
             logger.info("Trading workflow initialized")
 

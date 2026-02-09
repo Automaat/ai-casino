@@ -91,7 +91,7 @@ class TrumpWatcher:
             self._analyst = TrumpAnalyst(self._llm)
 
         if self._workflow is None:
-            self._workflow = self._container.workflow_trump()
+            self._workflow = self._container.workflow_trump(historical_cache=self._historical_cache)
             logger.info("TrumpWatcher workflow initialized")
 
     async def _check_new_posts(self) -> list[TruthPost]:
