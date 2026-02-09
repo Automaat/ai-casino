@@ -84,8 +84,8 @@ def render(client: "DaemonAPIClient") -> list:
                                 html.Label("Date Range"),
                                 dcc.DatePickerRange(
                                     id="signals-filter-date-range",
-                                    start_date=datetime.now(UTC) - timedelta(days=7),
-                                    end_date=datetime.now(UTC),
+                                    start_date=(datetime.now(UTC) - timedelta(days=7)).date(),
+                                    end_date=datetime.now(UTC).date(),
                                     display_format="YYYY-MM-DD",
                                 ),
                             ],
