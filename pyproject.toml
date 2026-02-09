@@ -119,5 +119,5 @@ project-includes = [
 [dependency-groups]
 dev = [
     "pip-audit>=2.10.0",
-    "pyrefly==0.51.2",
+    "pyrefly==0.52.0",
 ]
