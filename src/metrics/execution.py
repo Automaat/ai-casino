@@ -30,7 +30,7 @@ _PRICING: dict[str, tuple[float, float]] = {
 
 def is_metrics_enabled() -> bool:
     """Check EXECUTION_METRICS env var."""
-    return os.getenv("EXECUTION_METRICS", "false").lower() == "true"
+    return os.getenv("EXECUTION_METRICS", "true").lower() == "true"
 
 
 class LLMUsageStats(BaseModel):

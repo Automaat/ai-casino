@@ -203,9 +203,9 @@ class TestPersistJsonl:
 class TestIsMetricsEnabled:
     """Tests for is_metrics_enabled()."""
 
-    def test_disabled_by_default(self, monkeypatch):
+    def test_enabled_by_default(self, monkeypatch):
         monkeypatch.delenv("EXECUTION_METRICS", raising=False)
-        assert is_metrics_enabled() is False
+        assert is_metrics_enabled() is True
 
     def test_enabled_true(self, monkeypatch):
         monkeypatch.setenv("EXECUTION_METRICS", "true")
