@@ -74,7 +74,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             # Fetch positions (required)
             positions_resp = client.get_positions()
 
-            # Fetch snapshots (optional - may fail if DB not configured)
+            # Try to get snapshots, but don't fail if unavailable
             snapshots = []
             try:
                 snapshots_resp = client.get_snapshots(days=30)
@@ -86,25 +86,25 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                     for s in snapshots_resp.snapshots
                 ]
             except Exception as e:
-                logger.warning(f"Snapshots unavailable (DB not configured?): {e}")
+                logger.warning(f"Failed to fetch snapshots (non-critical): {e}")
 
-            # Fetch rebalance data (optional)
-            rebalance = None
+            # Try to get rebalance data, but don't fail if unavailable
+            rebalance_data = None
             try:
-                rebalance_resp = client.get_rebalance()
-                if rebalance_resp:
-                    rebalance = {
+                rebalance = client.get_rebalance()
+                if rebalance:
+                    rebalance_data = {
                         "allocations": [
                             {
                                 "symbol": a.symbol,
                                 "target_weight": a.target_weight,
                                 "current_weight": a.current_weight,
                             }
-                            for a in rebalance_resp.allocations
+                            for a in rebalance.allocations
                         ]
                     }
             except Exception as e:
-                logger.warning(f"Rebalance data unavailable: {e}")
+                logger.warning(f"Failed to fetch rebalance (non-critical): {e}")
 
             return {
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -120,7 +120,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                     for p in positions_resp.positions
                 ],
                 "snapshots": snapshots,
-                "rebalance": rebalance,
+                "rebalance": rebalance_data,
             }
         except Exception as e:
             logger.error(f"Portfolio refresh failed: {e}")
