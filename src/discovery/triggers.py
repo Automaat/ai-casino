@@ -1,10 +1,14 @@
 """Real-time market triggers for stock discovery."""
 
-
 import pandas as pd
 from loguru import logger
 
 from src.data.market import MarketDataFetcher
+
+# Data quality thresholds (minimum data points required)
+MIN_VOLUME_DATA_POINTS = 20
+MIN_GAP_DATA_POINTS = 2
+MIN_ATR_DATA_POINTS = 35
 
 
 class TriggerDetector:
@@ -17,6 +21,7 @@ class TriggerDetector:
         price_gap_threshold: float = 5.0,
         atr_spike_threshold: float = 1.5,
     ) -> None:
+        """Initialize trigger detector with thresholds."""
         self.market_fetcher = market_fetcher
         self.volume_spike_threshold = volume_spike_threshold
         self.price_gap_threshold = price_gap_threshold
@@ -43,7 +48,7 @@ class TriggerDetector:
                 market_data = self.market_fetcher.fetch_daily(symbol, period_days=30)
                 df = market_data.data
 
-                if len(df) < 20:
+                if len(df) < MIN_VOLUME_DATA_POINTS:
                     continue
 
                 # Calculate 20-day average volume
@@ -81,7 +86,7 @@ class TriggerDetector:
                 market_data = self.market_fetcher.fetch_daily(symbol, period_days=5)
                 df = market_data.data
 
-                if len(df) < 2:
+                if len(df) < MIN_GAP_DATA_POINTS:
                     continue
 
                 # Compare previous close to current open/price
@@ -120,7 +125,7 @@ class TriggerDetector:
                 market_data = self.market_fetcher.fetch_daily(symbol, period_days=50)
                 df = market_data.data
 
-                if len(df) < 35:
+                if len(df) < MIN_ATR_DATA_POINTS:
                     continue
 
                 # Calculate ATR(14)
@@ -151,6 +156,7 @@ class TriggerDetector:
         return anomalies
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return (
             f"TriggerDetector(volume={self.volume_spike_threshold}x, "
             f"gap={self.price_gap_threshold}%, atr={self.atr_spike_threshold}x)"

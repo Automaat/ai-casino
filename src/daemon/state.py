@@ -791,11 +791,8 @@ class DaemonState(BaseModel):
 
         logger.info(f"Recorded discovery: {len(candidates)} candidates, {len(added_symbols)} added")
 
-    def expire_stale_candidates(self, ttl_days: int) -> list[str]:
+    def expire_stale_candidates(self) -> list[str]:
         """Remove candidates past TTL, return expired symbols.
-
-        Args:
-            ttl_days: TTL in days (unused - ttl_expires_at already set)
 
         Returns:
             List of expired symbols

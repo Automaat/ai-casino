@@ -83,7 +83,7 @@ class DiscoveryConfig(BaseModel):
     # Earnings
     earnings_lookahead_days: int = 7
 
-    # Triggers (intraday)
+    # Trigger thresholds for intraday detection
     volume_spike_threshold: float = 2.0
     price_gap_threshold: float = 5.0
 

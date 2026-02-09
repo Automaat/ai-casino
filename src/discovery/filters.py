@@ -18,6 +18,7 @@ class PortfolioFilterConfig(BaseModel):
     max_watchlist_size: int = 50
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"PortfolioFilterConfig(sector_max={self.max_sector_concentration})"
 
 
@@ -25,6 +26,7 @@ class PortfolioFilterEngine:
     """Apply portfolio-aware filters to discovery candidates."""
 
     def __init__(self, config: PortfolioFilterConfig) -> None:
+        """Initialize portfolio filter engine."""
         self.config = config
         logger.info(f"Initialized PortfolioFilterEngine with {config}")
 
@@ -51,75 +53,106 @@ class PortfolioFilterEngine:
         sector_exposure = self._calculate_sector_exposure(current_positions, current_watchlist, candidates)
 
         for candidate in candidates:
-            # Check watchlist size limit
-            if len(current_watchlist) + len(accepted) >= self.config.max_watchlist_size:
-                rejection_reasons.append(f"{candidate.symbol}: watchlist size limit reached")
-                continue
+            # Check if candidate passes all filters
+            rejection = self._check_candidate_filters(candidate, current_watchlist, accepted, sector_exposure)
 
-            # Check if already in watchlist
-            if candidate.symbol in current_watchlist:
-                rejection_reasons.append(f"{candidate.symbol}: already in watchlist")
-                continue
-
-            # Market cap filter
-            market_cap = candidate.metadata.get("market_cap")
-            if market_cap and isinstance(market_cap, (int, float)):
-                if market_cap < self.config.min_market_cap:
-                    rejection_reasons.append(
-                        f"{candidate.symbol}: market cap ${market_cap / 1e9:.1f}B < min ${self.config.min_market_cap / 1e9:.1f}B"
-                    )
-                    continue
-
-            # Volume filter
-            avg_volume = candidate.metadata.get("avg_volume")
-            if avg_volume and isinstance(avg_volume, (int, float)):
-                if avg_volume < self.config.min_avg_volume:
-                    rejection_reasons.append(
-                        f"{candidate.symbol}: avg volume {avg_volume:,.0f} < min {self.config.min_avg_volume:,.0f}"
-                    )
-                    continue
-
-            # Price range filter
-            price = candidate.metadata.get("price")
-            if price and isinstance(price, (int, float)):
-                min_price, max_price = self.config.price_range
-                if price < min_price or price > max_price:
-                    rejection_reasons.append(
-                        f"{candidate.symbol}: price ${price:.2f} outside range ${min_price}-${max_price}"
-                    )
-                    continue
-
-            # Sector exclusion
-            if candidate.sector in self.config.exclude_sectors:
-                rejection_reasons.append(f"{candidate.symbol}: sector {candidate.sector} excluded")
-                continue
-
-            # Sector concentration check
-            sector = candidate.sector
-            current_sector_count = sector_exposure.get(sector, 0)
-            total_count = len(current_watchlist) + len(accepted)
-
-            if total_count > 0:
-                projected_concentration = (current_sector_count + 1) / (total_count + 1)
-                if projected_concentration > self.config.max_sector_concentration:
-                    rejection_reasons.append(
-                        f"{candidate.symbol}: sector {sector} concentration "
-                        f"{projected_concentration:.1%} > max {self.config.max_sector_concentration:.1%}"
-                    )
-                    continue
-
-            # Accept candidate
-            accepted.append(candidate)
-            sector_exposure[sector] = current_sector_count + 1
+            if rejection:
+                rejection_reasons.append(rejection)
+            else:
+                # Accept candidate
+                accepted.append(candidate)
+                sector_exposure[candidate.sector] = sector_exposure.get(candidate.sector, 0) + 1
 
         logger.info(
-            f"Portfolio filters: {len(accepted)}/{len(candidates)} accepted, {len(rejection_reasons)} rejected"
+            f"Portfolio filters: {len(accepted)}/{len(candidates)} accepted, "
+            f"{len(rejection_reasons)} rejected"
         )
         if rejection_reasons:
             for reason in rejection_reasons[:5]:  # Log first 5
                 logger.debug(f"  Rejected: {reason}")
 
         return accepted, rejection_reasons
+
+    def _check_candidate_filters(
+        self,
+        candidate: DiscoveryCandidate,
+        current_watchlist: list[str],
+        accepted: list[DiscoveryCandidate],
+        sector_exposure: dict[str, int],
+    ) -> str | None:
+        """Check if candidate passes all filters.
+
+        Returns rejection reason if rejected, None if accepted.
+        """
+        # Basic filters
+        basic_rejection = self._check_basic_filters(candidate, current_watchlist, accepted)
+        if basic_rejection:
+            return basic_rejection
+
+        # Market quality filters
+        quality_rejection = self._check_quality_filters(candidate)
+        if quality_rejection:
+            return quality_rejection
+
+        # Sector filters
+        return self._check_sector_filters(candidate, current_watchlist, accepted, sector_exposure)
+
+    def _check_basic_filters(
+        self, candidate: DiscoveryCandidate, current_watchlist: list[str], accepted: list[DiscoveryCandidate]
+    ) -> str | None:
+        """Check basic filters (size limit, duplicates)."""
+        if len(current_watchlist) + len(accepted) >= self.config.max_watchlist_size:
+            return f"{candidate.symbol}: watchlist size limit reached"
+        if candidate.symbol in current_watchlist:
+            return f"{candidate.symbol}: already in watchlist"
+        return None
+
+    def _check_quality_filters(self, candidate: DiscoveryCandidate) -> str | None:
+        """Check market quality filters (cap, volume, price)."""
+        # Market cap filter
+        market_cap = candidate.metadata.get("market_cap")
+        if market_cap and isinstance(market_cap, (int, float)) and market_cap < self.config.min_market_cap:
+            min_cap_b = self.config.min_market_cap / 1e9
+            return f"{candidate.symbol}: market cap ${market_cap / 1e9:.1f}B < min ${min_cap_b:.1f}B"
+
+        # Volume filter
+        avg_volume = candidate.metadata.get("avg_volume")
+        if avg_volume and isinstance(avg_volume, (int, float)) and avg_volume < self.config.min_avg_volume:
+            return f"{candidate.symbol}: avg volume {avg_volume:,.0f} < min {self.config.min_avg_volume:,.0f}"
+
+        # Price range filter
+        price = candidate.metadata.get("price")
+        if price and isinstance(price, (int, float)):
+            min_price, max_price = self.config.price_range
+            if price < min_price or price > max_price:
+                return f"{candidate.symbol}: price ${price:.2f} outside range ${min_price}-${max_price}"
+        return None
+
+    def _check_sector_filters(
+        self,
+        candidate: DiscoveryCandidate,
+        current_watchlist: list[str],
+        accepted: list[DiscoveryCandidate],
+        sector_exposure: dict[str, int],
+    ) -> str | None:
+        """Check sector-based filters (exclusion, concentration)."""
+        # Sector exclusion
+        if candidate.sector in self.config.exclude_sectors:
+            return f"{candidate.symbol}: sector {candidate.sector} excluded"
+
+        # Sector concentration check
+        sector = candidate.sector
+        current_sector_count = sector_exposure.get(sector, 0)
+        total_count = len(current_watchlist) + len(accepted)
+
+        if total_count > 0:
+            projected_concentration = (current_sector_count + 1) / (total_count + 1)
+            if projected_concentration > self.config.max_sector_concentration:
+                return (
+                    f"{candidate.symbol}: sector {sector} concentration "
+                    f"{projected_concentration:.1%} > max {self.config.max_sector_concentration:.1%}"
+                )
+        return None
 
     def _calculate_sector_exposure(
         self,
@@ -146,7 +179,7 @@ class PortfolioFilterEngine:
             sector_counts[sector] = sector_counts.get(sector, 0) + 1
 
         # Add positions (if sector info available)
-        for symbol, position_data in current_positions.items():
+        for _symbol, position_data in current_positions.items():
             if isinstance(position_data, dict):
                 sector = position_data.get("sector", "Unknown")
                 sector_counts[sector] = sector_counts.get(sector, 0) + 1
@@ -154,4 +187,5 @@ class PortfolioFilterEngine:
         return sector_counts
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"PortfolioFilterEngine(config={self.config})"

@@ -32,6 +32,7 @@ class DiscoveryCandidate(BaseModel):
     ttl_expires_at: datetime
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"DiscoveryCandidate(symbol={self.symbol}, score={self.composite_score:.2f})"
 
 
@@ -45,4 +46,5 @@ class DiscoveryResult(BaseModel):
     source_breakdown: dict[str, int] = Field(default_factory=dict)
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"DiscoveryResult(candidates={len(self.candidates)}, total={self.total_discovered})"

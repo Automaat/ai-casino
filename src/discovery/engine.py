@@ -1,8 +1,10 @@
 """Stock discovery orchestration engine."""
 
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from src.data.market import MarketDataFetcher
 from src.data.universe import StockUniverseFetcher
@@ -13,77 +15,75 @@ from src.discovery.triggers import TriggerDetector
 from src.screening.screener import ScreeningCriteria, StockScreener
 
 
-class DiscoveryConfig:
+@dataclass
+class OptionalServices:
+    """Optional external services for discovery engine."""
+
+    reddit_fetcher: object | None = None
+    earnings_fetcher: object | None = None
+    news_fetcher: object | None = None
+    broker: object | None = None
+
+
+@dataclass
+class CoreDependencies:
+    """Core dependencies for stock discovery engine."""
+
+    screener: StockScreener
+    market_fetcher: MarketDataFetcher
+    universe_fetcher: StockUniverseFetcher
+    trigger_detector: TriggerDetector
+
+
+class DiscoveryConfig(BaseModel):
     """Configuration for stock discovery engine."""
 
-    def __init__(
-        self,
-        enable_technical_screening: bool = True,
-        enable_reddit_trending: bool = False,
-        enable_earnings_calendar: bool = True,
-        enable_sector_rotation: bool = True,
-        enable_volume_spikes: bool = False,
-        enable_price_gaps: bool = False,
-        enable_news_trending: bool = False,
-        screening_criteria: list[str] | None = None,  # Accepts ["momentum", "value", "breakout"]
-        screening_universe: str = "COMBINED",
-        screening_top_n: int = 20,
-        reddit_min_mentions: int = 5,
-        reddit_min_upvote_ratio: float = 0.75,
-        earnings_lookahead_days: int = 7,
-        volume_spike_threshold: float = 2.0,
-        price_gap_threshold: float = 5.0,
-        scoring_weights: ScoringWeights | None = None,
-        max_discovered_per_cycle: int = 5,
-        min_composite_score: float = 0.60,
-        max_watchlist_size: int = 50,
-        portfolio_filters: PortfolioFilterConfig | None = None,
-        candidate_ttl_days: int = 7,
-        auto_remove_on_signal: bool = False,
-        track_outcomes: bool = True,
-        outcome_lookback_days: int = 90,
-    ) -> None:
-        # Source enablement
-        self.enable_technical_screening = enable_technical_screening
-        self.enable_reddit_trending = enable_reddit_trending
-        self.enable_earnings_calendar = enable_earnings_calendar
-        self.enable_sector_rotation = enable_sector_rotation
-        self.enable_volume_spikes = enable_volume_spikes
-        self.enable_price_gaps = enable_price_gaps
-        self.enable_news_trending = enable_news_trending
+    # Source enablement
+    enable_technical_screening: bool = True
+    enable_reddit_trending: bool = False
+    enable_earnings_calendar: bool = True
+    enable_sector_rotation: bool = True
+    enable_volume_spikes: bool = False
+    enable_price_gaps: bool = False
+    enable_news_trending: bool = False
 
-        # Screening config
-        self.screening_criteria = screening_criteria or ["momentum"]
-        self.screening_universe = screening_universe
-        self.screening_top_n = screening_top_n
+    # Screening config
+    screening_criteria: list[str] = Field(default_factory=lambda: ["momentum"])
+    screening_universe: str = "COMBINED"
+    screening_top_n: int = 20
 
-        # Reddit config
-        self.reddit_min_mentions = reddit_min_mentions
-        self.reddit_min_upvote_ratio = reddit_min_upvote_ratio
+    # Reddit config
+    reddit_min_mentions: int = 5
+    reddit_min_upvote_ratio: float = 0.75
 
-        # Earnings config
-        self.earnings_lookahead_days = earnings_lookahead_days
+    # Earnings config
+    earnings_lookahead_days: int = 7
 
-        # Trigger thresholds
-        self.volume_spike_threshold = volume_spike_threshold
-        self.price_gap_threshold = price_gap_threshold
+    # Trigger thresholds
+    volume_spike_threshold: float = 2.0
+    price_gap_threshold: float = 5.0
 
-        # Scoring
-        self.scoring_weights = scoring_weights or ScoringWeights()
-        self.max_discovered_per_cycle = max_discovered_per_cycle
-        self.min_composite_score = min_composite_score
-        self.max_watchlist_size = max_watchlist_size
+    # Scoring
+    scoring_weights: ScoringWeights = Field(default_factory=ScoringWeights)
+    max_discovered_per_cycle: int = 5
+    min_composite_score: float = 0.60
+    max_watchlist_size: int = 50
 
-        # Portfolio filters
-        self.portfolio_filters = portfolio_filters or PortfolioFilterConfig()
+    # Portfolio filters
+    portfolio_filters: PortfolioFilterConfig = Field(default_factory=PortfolioFilterConfig)
 
-        # Lifecycle
-        self.candidate_ttl_days = candidate_ttl_days
-        self.auto_remove_on_signal = auto_remove_on_signal
+    # Lifecycle
+    candidate_ttl_days: int = 7
+    auto_remove_on_signal: bool = False
 
-        # Tracking
-        self.track_outcomes = track_outcomes
-        self.outcome_lookback_days = outcome_lookback_days
+    # Tracking
+    track_outcomes: bool = True
+    outcome_lookback_days: int = 90
+
+    class Config:
+        """Pydantic model configuration."""
+
+        arbitrary_types_allowed = True
 
 
 class StockDiscoveryEngine:
@@ -91,25 +91,23 @@ class StockDiscoveryEngine:
 
     def __init__(
         self,
-        screener: StockScreener,
-        market_fetcher: MarketDataFetcher,
-        universe_fetcher: StockUniverseFetcher,
-        trigger_detector: TriggerDetector,
+        deps: CoreDependencies,
         config: DiscoveryConfig,
-        reddit_fetcher: object | None = None,
-        earnings_fetcher: object | None = None,
-        news_fetcher: object | None = None,
-        broker: object | None = None,
+        services: OptionalServices | None = None,
     ) -> None:
-        self.screener = screener
-        self.market_fetcher = market_fetcher
-        self.universe_fetcher = universe_fetcher
-        self.trigger_detector = trigger_detector
+        """Initialize stock discovery engine with dependencies."""
+        self.screener = deps.screener
+        self.market_fetcher = deps.market_fetcher
+        self.universe_fetcher = deps.universe_fetcher
+        self.trigger_detector = deps.trigger_detector
         self.config = config
-        self.reddit_fetcher = reddit_fetcher
-        self.earnings_fetcher = earnings_fetcher
-        self.news_fetcher = news_fetcher
-        self.broker = broker
+
+        # Unpack optional services
+        services = services or OptionalServices()
+        self.reddit_fetcher = services.reddit_fetcher
+        self.earnings_fetcher = services.earnings_fetcher
+        self.news_fetcher = services.news_fetcher
+        self.broker = services.broker
 
         self.scorer = MultiFactorScorer(config.scoring_weights)
         self.filter_engine = PortfolioFilterEngine(config.portfolio_filters)
@@ -133,7 +131,7 @@ class StockDiscoveryEngine:
             DiscoveryResult with ranked candidates
         """
         logger.info("Starting stock discovery")
-        discovered_at = datetime.now()
+        discovered_at = datetime.now(UTC)
 
         # Fetch from all enabled sources in parallel
         all_candidates: dict[str, DiscoveryCandidate] = {}
@@ -276,13 +274,13 @@ class StockDiscoveryEngine:
                         sector=str(stock_info.get("sector", "Unknown")),
                         sources=[],  # Will be set by _merge_candidates
                         composite_score=0.0,  # Will be calculated later
-                        discovery_timestamp=datetime.now(),
+                        discovery_timestamp=datetime.now(UTC),
                         metadata={
                             "technical_score": screening_result.score,
                             "screening_criteria": criteria_name,
                             **stock_info,
                         },
-                        ttl_expires_at=datetime.now(),  # Will be set later
+                        ttl_expires_at=datetime.now(UTC),  # Will be set later
                     )
                     candidates.append(candidate)
 
@@ -320,7 +318,7 @@ class StockDiscoveryEngine:
 
         return candidates
 
-    async def _fetch_sector_rotation_candidates(self, sector_context: object) -> list[DiscoveryCandidate]:
+    async def _fetch_sector_rotation_candidates(self, _sector_context: object) -> list[DiscoveryCandidate]:
         """Fetch candidates from leading sectors.
 
         Args:
@@ -361,9 +359,9 @@ class StockDiscoveryEngine:
                     sector=str(stock_info.get("sector", "Unknown")),
                     sources=[],
                     composite_score=0.0,
-                    discovery_timestamp=datetime.now(),
+                    discovery_timestamp=datetime.now(UTC),
                     metadata={**stock_info, "trigger": "volume_spike"},
-                    ttl_expires_at=datetime.now(),
+                    ttl_expires_at=datetime.now(UTC),
                 )
                 candidates.append(candidate)
 
@@ -397,9 +395,9 @@ class StockDiscoveryEngine:
                     sector=str(stock_info.get("sector", "Unknown")),
                     sources=[],
                     composite_score=0.0,
-                    discovery_timestamp=datetime.now(),
+                    discovery_timestamp=datetime.now(UTC),
                     metadata={**stock_info, "trigger": "price_gap"},
-                    ttl_expires_at=datetime.now(),
+                    ttl_expires_at=datetime.now(UTC),
                 )
                 candidates.append(candidate)
 
@@ -437,7 +435,7 @@ class StockDiscoveryEngine:
         if universe_type == "NASDAQ100":
             universe = self.universe_fetcher.fetch_nasdaq100()
             return [stock.symbol for stock in universe.stocks]
-        # Default: COMBINED
+        # Fallback to combined universe for any other value
         universe = self.universe_fetcher.fetch_combined()
         return [stock.symbol for stock in universe.stocks]
 
@@ -488,4 +486,6 @@ class StockDiscoveryEngine:
             return {}
 
     def __repr__(self) -> str:
-        return f"StockDiscoveryEngine(sources={len([s for s in dir(self.config) if s.startswith('enable_') and getattr(self.config, s)])})"
+        """Return string representation."""
+        enabled_sources = [s for s in dir(self.config) if s.startswith("enable_") and getattr(self.config, s)]
+        return f"StockDiscoveryEngine(sources={len(enabled_sources)})"

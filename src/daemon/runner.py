@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.health import HealthReport
     from src.daemon.tearsheet import DaemonTearsheetGenerator
+    from src.discovery.engine import StockDiscoveryEngine
     from src.metrics.correlation import CorrelationAuditResult
 from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
@@ -280,7 +281,7 @@ class DaemonRunner:
             ),
         )
 
-    def _init_discovery_engine(self):  # type: ignore[no-untyped-def]
+    def _init_discovery_engine(self) -> StockDiscoveryEngine:
         """Initialize stock discovery engine.
 
         Returns:
@@ -339,21 +340,28 @@ class DaemonRunner:
             price_gap_threshold=self.config.discovery.price_gap_threshold,
         )
 
-        # Optional fetchers (set to None for now - TODO: integrate later)
-        reddit_fetcher = None
-        earnings_fetcher = None
-        news_fetcher = None
+        # Core dependencies
+        from src.discovery.engine import CoreDependencies, OptionalServices
 
-        engine = StockDiscoveryEngine(
+        deps = CoreDependencies(
             screener=screener,
             market_fetcher=self.market_fetcher,
             universe_fetcher=StockUniverseFetcher(),
             trigger_detector=trigger_detector,
-            config=discovery_config,
-            reddit_fetcher=reddit_fetcher,
-            earnings_fetcher=earnings_fetcher,
-            news_fetcher=news_fetcher,
+        )
+
+        # Optional services (set to None for now - TODO: integrate later)
+        services = OptionalServices(
+            reddit_fetcher=None,
+            earnings_fetcher=None,
+            news_fetcher=None,
             broker=self.broker,
+        )
+
+        engine = StockDiscoveryEngine(
+            deps=deps,
+            config=discovery_config,
+            services=services,
         )
 
         logger.info("Stock discovery engine initialized")

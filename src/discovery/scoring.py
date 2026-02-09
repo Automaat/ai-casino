@@ -5,6 +5,28 @@ from pydantic import BaseModel
 
 from src.discovery.models import DiscoveryCandidate
 
+# Market cap thresholds (in dollars)
+MARKET_CAP_SMALL = 1e9  # $1B
+MARKET_CAP_LARGE = 10e9  # $10B
+
+# Price range thresholds (in dollars)
+PRICE_MIN = 10.0
+PRICE_MAX = 500.0
+
+# Earnings window (in days)
+EARNINGS_SWEET_SPOT_MIN = 3
+EARNINGS_SWEET_SPOT_MAX = 7
+EARNINGS_LOOKBACK_MAX = 14
+
+# Volatility thresholds (ATR percentage)
+ATR_MIN = 2.0
+ATR_MAX = 5.0
+
+# Data quality thresholds
+MIN_DATA_POINTS_VOLUME = 20
+MIN_DATA_POINTS_GAP = 2
+MIN_DATA_POINTS_ATR = 35
+
 
 class ScoringWeights(BaseModel):
     """Weights for multi-factor scoring."""
@@ -16,6 +38,7 @@ class ScoringWeights(BaseModel):
     volatility_weight: float = 0.05  # ATR-based scoring
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return (
             f"ScoringWeights(tech={self.technical_weight}, liq={self.liquidity_weight}, "
             f"timing={self.timing_weight}, social={self.social_weight}, vol={self.volatility_weight})"
@@ -26,6 +49,7 @@ class MultiFactorScorer:
     """Score discovery candidates using multiple factors."""
 
     def __init__(self, weights: ScoringWeights | None = None) -> None:
+        """Initialize multi-factor scorer."""
         self.weights = weights or ScoringWeights()
         logger.info(f"Initialized MultiFactorScorer with {self.weights}")
 
@@ -105,17 +129,16 @@ class MultiFactorScorer:
         market_cap = metadata.get("market_cap")
         if market_cap and isinstance(market_cap, (int, float)):
             # Normalize: $1B = 0.5, $10B = 1.0
-            if market_cap >= 10e9:
+            if market_cap >= MARKET_CAP_LARGE:
                 score += 0.3
-            elif market_cap >= 1e9:
-                mc_score = (float(market_cap) - 1e9) / (10e9 - 1e9)
+            elif market_cap >= MARKET_CAP_SMALL:
+                mc_score = (float(market_cap) - MARKET_CAP_SMALL) / (MARKET_CAP_LARGE - MARKET_CAP_SMALL)
                 score += mc_score * 0.3
 
         # Price component (20% - prefer $10-500 range)
         price = metadata.get("price")
-        if price and isinstance(price, (int, float)):
-            if 10.0 <= price <= 500.0:
-                score += 0.2
+        if price and isinstance(price, (int, float)) and PRICE_MIN <= price <= PRICE_MAX:
+            score += 0.2
 
         return min(score, 1.0)
 
@@ -134,9 +157,9 @@ class MultiFactorScorer:
         days_to_earnings = metadata.get("days_to_earnings")
         if days_to_earnings is not None and isinstance(days_to_earnings, (int, float)):
             # Prefer 3-7 days window (sweet spot for volatility)
-            if 3 <= days_to_earnings <= 7:
+            if EARNINGS_SWEET_SPOT_MIN <= days_to_earnings <= EARNINGS_SWEET_SPOT_MAX:
                 score += 0.6
-            elif 0 <= days_to_earnings <= 14:
+            elif 0 <= days_to_earnings <= EARNINGS_LOOKBACK_MAX:
                 # Linear decay outside sweet spot
                 score += 0.6 * (1 - abs(days_to_earnings - 5) / 10)
 
@@ -191,13 +214,14 @@ class MultiFactorScorer:
         # Prefer 2-5% daily range (moderate volatility)
         atr_pct = float(atr_ratio) * 100
 
-        if 2.0 <= atr_pct <= 5.0:
+        if ATR_MIN <= atr_pct <= ATR_MAX:
             return 1.0
-        if atr_pct < 2.0:
+        if atr_pct < ATR_MIN:
             # Too low volatility - linear penalty
-            return max(atr_pct / 2.0, 0.0)
+            return max(atr_pct / ATR_MIN, 0.0)
         # Too high volatility - exponential penalty
-        return max(1.0 - (atr_pct - 5.0) / 10.0, 0.0)
+        return max(1.0 - (atr_pct - ATR_MAX) / 10.0, 0.0)
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"MultiFactorScorer(weights={self.weights})"
