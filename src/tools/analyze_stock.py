@@ -107,7 +107,7 @@ class AnalyzeStockTool(BaseTool):
             Formatted analysis summary
         """
         # Use workflow from container (momentum strategy by default)
-        workflow = self._container.workflow_momentum()
+        workflow = self._container.workflow_momentum(container=self._container)
 
         result = await workflow.analyze(symbol, period_days)
 

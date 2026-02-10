@@ -136,7 +136,7 @@ def test_workflow_meta_provider():
     # Mock FinBERT to avoid 440MB model download in CI
     with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
         mock_factory.return_value = MagicMock()
-        workflow = container.workflow_meta()
+        workflow = container.workflow_meta(container=container)
 
         assert workflow.use_meta_agent is True
         assert workflow.trump_mode is False
@@ -150,7 +150,7 @@ def test_workflow_trump_provider():
     # Mock FinBERT to avoid 440MB model download in CI
     with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
         mock_factory.return_value = MagicMock()
-        workflow = container.workflow_trump()
+        workflow = container.workflow_trump(container=container)
 
         assert workflow.use_meta_agent is True
         assert workflow.trump_mode is True
@@ -167,7 +167,7 @@ def test_workflow_momentum_provider():
     # Mock FinBERT to avoid 440MB model download in CI
     with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
         mock_factory.return_value = MagicMock()
-        workflow = container.workflow_momentum()
+        workflow = container.workflow_momentum(container=container)
 
         assert workflow.use_meta_agent is False
         assert workflow.trump_mode is False
@@ -190,6 +190,7 @@ def test_workflow_with_overrides():
         workflow = container.workflow_meta(
             broker=mock_broker,
             metrics_tracker=mock_metrics_tracker,
+            container=container,
         )
 
         assert workflow.broker is mock_broker

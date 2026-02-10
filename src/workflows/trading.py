@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
     from src.daemon.notifications import NotificationService
+    from src.data.finnhub import FinnhubFetcher
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
@@ -120,7 +121,7 @@ class WorkflowExtraContext(TypedDict, total=False):
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
-    def __init__(  # noqa: PLR0913, PLR0915
+    def __init__(  # noqa: PLR0913, PLR0915, C901, PLR0912
         self,
         llm_client: LLMClient,
         market_fetcher: MarketDataFetcher,
@@ -138,6 +139,7 @@ class TradingWorkflow:
         historical_cache: HistoricalCache | None = None,
         portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
+        finnhub_fetcher: "FinnhubFetcher | None" = None,
         pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
         notification_service: "NotificationService | None" = None,
         position_sizing_config: "PositionSizingConfig | None" = None,
@@ -162,6 +164,7 @@ class TradingWorkflow:
             historical_cache: Optional permanent cache for historical data
             portfolio_var_calculator: Optional VaR calculator for portfolio-level risk limits
             portfolio_var_config: Optional VaR limit configuration
+            finnhub_fetcher: Optional Finnhub fetcher for fundamental data
             pre_trade_backtest_config: Optional pre-trade backtesting configuration
             notification_service: Optional notification service for risk rejection alerts
             position_sizing_config: Optional position sizing configuration
@@ -260,8 +263,18 @@ class TradingWorkflow:
             self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
             self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
             self.web_researcher = WebResearchAgent(llm_client)
+            # Get Finnhub fetcher from explicit parameter or fall back to env-var-based configuration
+            finnhub = finnhub_fetcher
+            if finnhub is None:
+                # Last resort: create without DI container (will read from env var)
+                logger.warning("Creating FinnhubFetcher without DI - falling back to env var")
+                finnhub = FinnhubFetcher()
+
             self.social_analyst = SocialSentimentAnalyst(
-                llm_client, FinnhubFetcher(), RedditFetcher(historical_cache=historical_cache), finbert
+                llm_client,
+                finnhub,
+                RedditFetcher(historical_cache=historical_cache),
+                finbert,
             )
             self.bullish_researcher = BullishResearcher(llm_client)
             self.bearish_researcher = BearishResearcher(llm_client)

@@ -298,8 +298,9 @@ def analyze(self, request: AnalysisRequest) -> AnalysisResult:
 
 ### Dependency Injection (MANDATORY)
 
-**All classes accept dependencies via `__init__` - no singletons, no globals:**
+**All classes accept dependencies via `__init__` - no singletons, no globals. ALWAYS use the DI container (`src/di/container.py`) for dependency resolution.**
 
+**Basic DI pattern:**
 ```python
 class TechnicalAnalyst:
     def __init__(self, llm_client: LLMClient, strategy: MomentumStrategy) -> None:
@@ -307,6 +308,108 @@ class TechnicalAnalyst:
         self.strategy = strategy
         logger.info("Initialized TechnicalAnalyst")
 ```
+
+**DI Container Usage:**
+
+The project uses `dependency-injector` for centralized dependency management. The container is defined in `src/di/container.py` and provides:
+- **Singleton** providers for stateful services (cache, database, API clients)
+- **Factory** providers for per-request instances (workflows, agents)
+
+**Creating dependencies from container:**
+```python
+from src.di.container import create_container
+
+# Create container (optionally with config path)
+container = create_container(config_path="~/.ai-casino/daemon-production.yaml")
+
+# Get singleton instances (shared across app)
+llm_client = container.llm_client()
+market_fetcher = container.market_fetcher()
+finnhub_fetcher = container.finnhub_fetcher()
+
+# Create workflow instances (new instance each time)
+workflow = container.workflow_meta(
+    broker=broker,
+    metrics_tracker=tracker,
+    container=container,  # IMPORTANT: Explicitly pass container to factories
+)
+```
+
+**CRITICAL: Factory providers and `providers.Self()`**
+
+`providers.Self()` does NOT work reliably with Factory providers. It evaluates to `None` instead of the container instance.
+
+```python
+# ❌ BAD - providers.Self() doesn't work with Factory
+workflow_meta = providers.Factory(
+    create_workflow_meta,
+    container=providers.Self(),  # This will be None!
+)
+
+# ✅ GOOD - pass container explicitly when calling factory
+workflow_meta = providers.Factory(
+    create_workflow_meta,
+    # Don't include container in factory definition
+)
+
+# Then in usage:
+workflow = container.workflow_meta(
+    broker=broker,
+    container=container,  # Explicitly pass here
+)
+```
+
+**Adding new providers:**
+
+When adding new services to the container:
+
+1. **Singleton for stateful services:**
+```python
+# In src/di/container.py
+new_service = providers.Singleton(
+    create_new_service,
+    dependency1=other_provider,
+    daemon_config=daemon_config,
+)
+```
+
+2. **Factory for per-request instances:**
+```python
+# In src/di/container.py
+new_workflow = providers.Factory(
+    create_new_workflow,
+    llm_client=llm_client,
+    # Don't include container=providers.Self() - won't work!
+)
+```
+
+3. **Create provider function in `src/di/providers/`:**
+```python
+# In src/di/providers/data.py (or appropriate module)
+def create_new_service(daemon_config: DaemonConfig) -> NewService:
+    """Create NewService with resolved config."""
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.new_service_api_key,
+        "NEW_SERVICE_API_KEY",
+    )
+    return NewService(api_key=api_key)
+```
+
+4. **Pass container explicitly when needed:**
+```python
+# In code that uses the factory
+instance = container.new_workflow(
+    param1=value1,
+    container=container,  # Explicitly pass container
+)
+```
+
+**Best practices:**
+- NEVER create service instances directly (e.g., `FinnhubFetcher()`) - always use container
+- NEVER use `providers.Self()` with Factory providers
+- Always pass `container` parameter explicitly when calling factories
+- For optional dependencies, check container first: `service = container.service() if container else None`
+- Add fallback only as last resort: `service = param or (container.service() if container else None) or Service()`
 
 ### LLM Abstraction (Custom Provider Pattern)
 

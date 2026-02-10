@@ -12,6 +12,8 @@ services:
       - LLM_MODEL=gpt-5-nano
       # LLM API keys (read from host .env if available)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Database (optional - JSONL fallback if not set)
+      - DATABASE_URL=${DATABASE_URL:-}
       # Log level
       - LOG_LEVEL=INFO
     ports:

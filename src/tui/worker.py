@@ -119,7 +119,7 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
 
     _update_progress("fetch_data", "Loading FinBERT model...", progress_callback)
 
-    return container.workflow_meta()
+    return container.workflow_meta(container=container)
 
 
 def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:

@@ -85,6 +85,7 @@ def create_workflow_meta(
         pre_trade_backtest_config=pre_trade_backtest_config,
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
+        finnhub_fetcher=container.finnhub_fetcher() if container else None,
         container=container,
     )
 
@@ -130,6 +131,7 @@ def create_workflow_momentum(
         pre_trade_backtest_config=pre_trade_backtest_config,
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
+        finnhub_fetcher=container.finnhub_fetcher() if container else None,
         container=container,
     )
 
@@ -175,6 +177,7 @@ def create_workflow_trump(
         pre_trade_backtest_config=pre_trade_backtest_config,
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
+        finnhub_fetcher=container.finnhub_fetcher() if container else None,
         container=container,
     )
 

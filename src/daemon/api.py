@@ -545,8 +545,16 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/portfolio/snapshots", response_model=SnapshotsResponse)
     async def get_snapshots(days: int = 30) -> SnapshotsResponse:
         """Get portfolio snapshots history."""
+        import os
+
         from src.database.connection import get_session
+        from src.database.engine import MissingDatabaseURLError
         from src.database.repositories.snapshot import PortfolioSnapshotRepository
+
+        # Return empty if DATABASE_URL not configured
+        if not os.getenv("DATABASE_URL"):
+            logger.debug("DATABASE_URL not set, returning empty snapshots")
+            return SnapshotsResponse(snapshots=[], count=0)
 
         # Clamp days to prevent abuse
         days = max(1, min(days, 365))
@@ -573,6 +581,9 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                 ]
 
                 return SnapshotsResponse(snapshots=snapshot_records, count=len(snapshot_records))
+        except MissingDatabaseURLError:
+            logger.debug("DATABASE_URL not configured, returning empty snapshots")
+            return SnapshotsResponse(snapshots=[], count=0)
         except Exception as e:
             logger.error(f"Failed to fetch snapshots: {e}")
             raise HTTPException(status_code=500, detail="Failed to fetch portfolio snapshots") from e
