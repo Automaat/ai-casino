@@ -87,7 +87,7 @@ def dashboard(
         client.close()
 
         # Create and run app
-        app = create_dash_app(config)
+        app = create_dash_app(config, debug=debug)
 
         console.print()
         console.print(f"[bold green]Starting dashboard at http://{config.host}:{config.port}[/bold green]")
