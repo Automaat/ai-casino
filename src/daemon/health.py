@@ -319,12 +319,12 @@ class HealthChecker:
 
     async def _check_finnhub(self) -> ServiceCheckResult:
         """Check Finnhub API connectivity."""
-        api_key = os.getenv("FINNHUB_API_KEY")
+        api_key = self.config.api_keys.finnhub_api_key or os.getenv("FINNHUB_API_KEY")
         if not api_key:
             return ServiceCheckResult(
                 service="finnhub",
                 status=ServiceStatus.SKIPPED,
-                message="FINNHUB_API_KEY not configured",
+                message="Finnhub API key not configured",
                 duration_ms=0,
                 checked_at=datetime.now(UTC),
             )

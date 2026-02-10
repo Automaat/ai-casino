@@ -138,6 +138,7 @@ class TradingWorkflow:
         historical_cache: HistoricalCache | None = None,
         portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
+        finnhub_fetcher: "FinnhubFetcher | None" = None,
         pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
         notification_service: "NotificationService | None" = None,
         position_sizing_config: "PositionSizingConfig | None" = None,
@@ -261,7 +262,10 @@ class TradingWorkflow:
             self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
             self.web_researcher = WebResearchAgent(llm_client)
             self.social_analyst = SocialSentimentAnalyst(
-                llm_client, FinnhubFetcher(), RedditFetcher(historical_cache=historical_cache), finbert
+                llm_client,
+                finnhub_fetcher or FinnhubFetcher(),
+                RedditFetcher(historical_cache=historical_cache),
+                finbert,
             )
             self.bullish_researcher = BullishResearcher(llm_client)
             self.bearish_researcher = BearishResearcher(llm_client)
