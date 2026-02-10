@@ -139,8 +139,14 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
             .order_by(PortfolioSnapshotORM.timestamp.asc())
         )
         all_snapshots = result.scalars().all()
-        step = total_count // max_points
-        sampled = [all_snapshots[i] for i in range(0, len(all_snapshots), step)][:max_points]
+
+        # Compute evenly spaced indices including first and last snapshots
+        if max_points <= 1:
+            indices = [total_count - 1]
+        else:
+            indices = [round(i * (total_count - 1) / (max_points - 1)) for i in range(max_points)]
+
+        sampled = [all_snapshots[i] for i in indices]
 
         return [self._to_snapshot(orm) for orm in sampled]
 

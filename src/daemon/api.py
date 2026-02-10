@@ -304,27 +304,27 @@ async def get_broker_account_info_cached(
         yield None
         return
 
-    cache = _broker_cache.get()
-    if cache is None:
-        cache = {}
-        _broker_cache.set(cache)
+    token = _broker_cache.set({})
+    cache: dict[str, Any] = _broker_cache.get()  # type: ignore[assignment]
     cache_key = "account_info"
 
-    if cache_key not in cache:
-        try:
-            from src.data.broker import BrokerAccountInfo
+    try:
+        if cache_key not in cache:
+            try:
+                from src.data.broker import BrokerAccountInfo
 
-            account_info: BrokerAccountInfo = await asyncio.to_thread(runner.broker.get_account_info)
-            cache[cache_key] = {
-                "positions": account_info.positions,
-                "portfolio_value": account_info.portfolio_value,
-            }
-        except Exception as e:
-            logger.warning(f"Failed to fetch broker account info: {e}")
-            cache[cache_key] = None
+                account_info: BrokerAccountInfo = await asyncio.to_thread(runner.broker.get_account_info)
+                cache[cache_key] = {
+                    "positions": account_info.positions,
+                    "portfolio_value": account_info.portfolio_value,
+                }
+            except Exception as e:
+                logger.warning(f"Failed to fetch broker account info: {e}")
+                cache[cache_key] = None
 
-    yield cache[cache_key]
-    cache.clear()
+        yield cache[cache_key]
+    finally:
+        _broker_cache.reset(token)
 
 
 def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915

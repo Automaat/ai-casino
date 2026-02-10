@@ -472,17 +472,22 @@ class DaemonAPIClient:
         Returns:
             Dict with keys: positions, snapshots, rebalance
         """
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(self.aget_portfolio_data_parallel(days))
-        finally:
-            loop.close()
+        return asyncio.run(self.aget_portfolio_data_parallel(days))
 
     def close(self) -> None:
         """Close HTTP clients."""
         self._client.close()
-        asyncio.run(self._async_client.aclose())
+        try:
+            asyncio.run(self._async_client.aclose())
+        except RuntimeError:
+            # Already in async context, schedule aclose() on existing loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                task = loop.create_task(self._async_client.aclose())
+                # Store reference to avoid RUF006 warning (fire-and-forget cleanup)
+                _ = task
+            else:
+                loop.run_until_complete(self._async_client.aclose())
 
     def __repr__(self) -> str:
         """String representation."""
