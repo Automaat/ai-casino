@@ -764,3 +764,158 @@ async def test_order_submission_failure_handled(mock_workflow_dependencies):
     assert result.risk.validation.approved
     assert result.order is None
     assert any("Order submission failed" in w for w in result.warnings)
+
+
+async def test_risk_rejection_notification_suppressed_pre_market(mock_workflow_dependencies):
+    """Risk rejection notifications suppressed during PRE_MARKET session."""
+    from src.agents.risk import AccountInfo, RiskValidation
+
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    mock_notification_service = MagicMock()
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        notification_service=mock_notification_service,
+        use_meta_agent=False,
+    )
+
+    # Mock trader to force BUY signal that will be rejected by risk
+    mock_decision = TradingDecision(
+        action=Signal.BUY,
+        confidence=0.85,
+        reasoning=["Strong buy signal"],
+        risk_level="LOW",
+        owns_position=False,
+        position_qty=None,
+    )
+
+    # Mock risk manager to reject with proper typed validation
+    from src.agents.risk import PositionSizeCalculation, StopLossCalculation
+
+    mock_risk = RiskAssessment(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=150.0,
+        account_info=AccountInfo(
+            balance=100000.0,
+            available_cash=100000.0,
+            positions={},
+            total_exposure=0.0,
+        ),
+        position_sizing=PositionSizeCalculation(
+            recommended_shares=0,
+            position_value=0.0,
+            risk_amount=0.0,
+            risk_percent=0.0,
+            reasoning="Rejected by risk validation",
+        ),
+        stop_loss=StopLossCalculation(
+            stop_loss_price=0.0,
+            stop_loss_percent=0.0,
+            risk_per_share=0.0,
+            max_loss_amount=0.0,
+            methodology="N/A",
+        ),
+        validation=RiskValidation(
+            approved=False,
+            risk_score=0.5,
+            risk_level="HIGH",
+            warnings=["Test rejection"],
+            reasoning="Test rejection",
+            constraints_met={"account_info_available": False},
+        ),
+        confidence=0.0,
+    )
+
+    with (
+        patch.object(workflow.trader, "decide", return_value=mock_decision),
+        patch.object(workflow.risk_manager, "assess", return_value=mock_risk),
+    ):
+        result = await workflow.analyze("AAPL", trading_session=TradingSession.PRE_MARKET)
+
+    # Notification should NOT be sent during pre-market
+    mock_notification_service.notify.assert_not_called()
+    assert not result.risk.validation.approved
+
+
+async def test_risk_rejection_notification_sent_regular_hours(mock_workflow_dependencies):
+    """Risk rejection notifications sent during REGULAR session."""
+    from unittest.mock import AsyncMock
+
+    from src.agents.risk import AccountInfo, RiskValidation
+
+    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
+
+    mock_notification_service = MagicMock()
+    mock_notification_service.notify = AsyncMock()
+    workflow = TradingWorkflow(
+        llm_client,
+        market_fetcher,
+        news_fetcher,
+        finbert,
+        fundamental_fetcher,
+        notification_service=mock_notification_service,
+        use_meta_agent=False,
+    )
+
+    # Mock trader to force BUY signal that will be rejected by risk
+    mock_decision = TradingDecision(
+        action=Signal.BUY,
+        confidence=0.85,
+        reasoning=["Strong buy signal"],
+        risk_level="LOW",
+        owns_position=False,
+        position_qty=None,
+    )
+
+    # Mock risk manager to reject with proper typed validation
+    from src.agents.risk import PositionSizeCalculation, StopLossCalculation
+
+    mock_risk = RiskAssessment(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=150.0,
+        account_info=AccountInfo(
+            balance=100000.0,
+            available_cash=100000.0,
+            positions={},
+            total_exposure=0.0,
+        ),
+        position_sizing=PositionSizeCalculation(
+            recommended_shares=0,
+            position_value=0.0,
+            risk_amount=0.0,
+            risk_percent=0.0,
+            reasoning="Rejected by risk validation",
+        ),
+        stop_loss=StopLossCalculation(
+            stop_loss_price=0.0,
+            stop_loss_percent=0.0,
+            risk_per_share=0.0,
+            max_loss_amount=0.0,
+            methodology="N/A",
+        ),
+        validation=RiskValidation(
+            approved=False,
+            risk_score=0.5,
+            risk_level="HIGH",
+            warnings=["Test rejection"],
+            reasoning="Test rejection",
+            constraints_met={"account_info_available": False},
+        ),
+        confidence=0.0,
+    )
+
+    with (
+        patch.object(workflow.trader, "decide", return_value=mock_decision),
+        patch.object(workflow.risk_manager, "assess", return_value=mock_risk),
+    ):
+        result = await workflow.analyze("AAPL", trading_session=TradingSession.REGULAR)
+
+    # Notification SHOULD be sent during regular hours
+    mock_notification_service.notify.assert_called_once()
+    assert not result.risk.validation.approved
