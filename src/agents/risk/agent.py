@@ -23,12 +23,11 @@ from src.agents.risk.models import (
     RiskAssessment,
     RiskValidation,
     StopLossCalculation,
-    TrailingStopConfig,
 )
 from src.agents.risk.position_sizer import PositionSizer
 from src.agents.risk.stop_loss_calculator import StopLossCalculator
 from src.data.broker import BrokerPosition
-from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
+from src.metrics.portfolio_var import PortfolioVaRCalculator
 from src.models.llm import LLMClient
 from src.strategies.signal import Signal
 
