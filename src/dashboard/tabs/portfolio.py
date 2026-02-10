@@ -71,40 +71,31 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             raise PreventUpdate
 
         try:
-            # Fetch positions (required)
-            positions_resp = client.get_positions()
+            result = client.get_portfolio_data_parallel(days=30)
 
-            # Try to get snapshots, but don't fail if unavailable
+            positions_resp = result["positions"]
+            snapshots_resp = result["snapshots"]
+            rebalance = result["rebalance"]
+
             snapshots = []
-            try:
-                snapshots_resp = client.get_snapshots(days=30)
+            if snapshots_resp:
                 snapshots = [
-                    {
-                        "timestamp": s.timestamp.isoformat(),
-                        "portfolio_value": s.portfolio_value,
-                    }
+                    {"timestamp": s.timestamp.isoformat(), "portfolio_value": s.portfolio_value}
                     for s in snapshots_resp.snapshots
                 ]
-            except Exception as e:
-                logger.warning(f"Failed to fetch snapshots (non-critical): {e}")
 
-            # Try to get rebalance data, but don't fail if unavailable
             rebalance_data = None
-            try:
-                rebalance = client.get_rebalance()
-                if rebalance:
-                    rebalance_data = {
-                        "allocations": [
-                            {
-                                "symbol": a.symbol,
-                                "target_weight": a.target_weight,
-                                "current_weight": a.current_weight,
-                            }
-                            for a in rebalance.allocations
-                        ]
-                    }
-            except Exception as e:
-                logger.warning(f"Failed to fetch rebalance (non-critical): {e}")
+            if rebalance:
+                rebalance_data = {
+                    "allocations": [
+                        {
+                            "symbol": a.symbol,
+                            "target_weight": a.target_weight,
+                            "current_weight": a.current_weight,
+                        }
+                        for a in rebalance.allocations
+                    ]
+                }
 
             return {
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -118,7 +109,9 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                         "entry_confidence": p.entry_confidence,
                     }
                     for p in positions_resp.positions
-                ],
+                ]
+                if positions_resp
+                else [],
                 "snapshots": snapshots,
                 "rebalance": rebalance_data,
             }

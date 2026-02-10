@@ -1,5 +1,6 @@
 """Sync httpx client for daemon API."""
 
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -75,6 +76,7 @@ class DaemonAPIClient:
         """
         self.api_url = api_url.rstrip("/")
         self._client = httpx.Client(timeout=10.0)
+        self._async_client = httpx.AsyncClient(timeout=10.0)
         self._cache: dict[str, tuple[datetime, Any]] = {}
         self._cache_ttl = timedelta(seconds=30)
         logger.info(f"Initialized DaemonAPIClient (api_url={self.api_url})")
@@ -179,7 +181,15 @@ class DaemonAPIClient:
 
     @HTTP_RETRY
     def get_positions(self) -> PositionsResponse:
-        """Get active positions.
+        """Get active positions (cached 30s).
+
+        Returns:
+            PositionsResponse
+        """
+        return self._get_cached("positions", self._fetch_positions)
+
+    def _fetch_positions(self) -> PositionsResponse:
+        """Fetch positions from API.
 
         Returns:
             PositionsResponse
@@ -346,7 +356,15 @@ class DaemonAPIClient:
 
     @HTTP_RETRY
     def get_rebalance(self) -> RebalanceResponse | None:
-        """Get latest portfolio rebalance data.
+        """Get latest portfolio rebalance data (cached 30s).
+
+        Returns:
+            RebalanceResponse or None if no rebalancing data
+        """
+        return self._get_cached("rebalance", self._fetch_rebalance)
+
+    def _fetch_rebalance(self) -> RebalanceResponse | None:
+        """Fetch rebalance from API.
 
         Returns:
             RebalanceResponse or None if no rebalancing data
@@ -395,9 +413,81 @@ class DaemonAPIClient:
         response.raise_for_status()
         return response.json()
 
+    async def aget_portfolio_data_parallel(self, days: int = 30) -> dict[str, Any]:
+        """Fetch positions, snapshots, rebalance in parallel.
+
+        Args:
+            days: Number of days for snapshots
+
+        Returns:
+            Dict with keys: positions, snapshots, rebalance
+        """
+        positions_task = self._async_client.get(f"{self.api_url}/positions")
+        snapshots_task = self._async_client.get(f"{self.api_url}/portfolio/snapshots", params={"days": days})
+        rebalance_task = self._async_client.get(f"{self.api_url}/portfolio/rebalance")
+
+        positions_resp, snapshots_resp, rebalance_resp = await asyncio.gather(
+            positions_task, snapshots_task, rebalance_task, return_exceptions=True
+        )
+
+        positions = None
+        if isinstance(positions_resp, httpx.Response):
+            try:
+                positions_resp.raise_for_status()
+                positions = PositionsResponse.model_validate(positions_resp.json())
+            except Exception as e:
+                logger.warning(f"Failed to parse positions: {e}")
+        elif isinstance(positions_resp, Exception):
+            logger.warning(f"Failed to fetch positions: {positions_resp}")
+
+        snapshots = None
+        if isinstance(snapshots_resp, httpx.Response):
+            try:
+                snapshots_resp.raise_for_status()
+                snapshots = SnapshotsResponse.model_validate(snapshots_resp.json())
+            except Exception as e:
+                logger.warning(f"Failed to parse snapshots: {e}")
+        elif isinstance(snapshots_resp, Exception):
+            logger.warning(f"Failed to fetch snapshots: {snapshots_resp}")
+
+        rebalance = None
+        if isinstance(rebalance_resp, httpx.Response):
+            try:
+                rebalance_resp.raise_for_status()
+                data = rebalance_resp.json()
+                rebalance = RebalanceResponse.model_validate(data) if data else None
+            except Exception as e:
+                logger.warning(f"Failed to parse rebalance: {e}")
+        elif isinstance(rebalance_resp, Exception):
+            logger.warning(f"Failed to fetch rebalance: {rebalance_resp}")
+
+        return {"positions": positions, "snapshots": snapshots, "rebalance": rebalance}
+
+    def get_portfolio_data_parallel(self, days: int = 30) -> dict[str, Any]:
+        """Sync wrapper for parallel portfolio data fetch.
+
+        Args:
+            days: Number of days for snapshots
+
+        Returns:
+            Dict with keys: positions, snapshots, rebalance
+        """
+        return asyncio.run(self.aget_portfolio_data_parallel(days))
+
     def close(self) -> None:
-        """Close HTTP client."""
+        """Close HTTP clients."""
         self._client.close()
+        try:
+            asyncio.run(self._async_client.aclose())
+        except RuntimeError:
+            # Already in async context, schedule aclose() on existing loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                task = loop.create_task(self._async_client.aclose())
+                # Store reference to avoid RUF006 warning (fire-and-forget cleanup)
+                _ = task
+            else:
+                loop.run_until_complete(self._async_client.aclose())
 
     def __repr__(self) -> str:
         """String representation."""

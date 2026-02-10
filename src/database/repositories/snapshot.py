@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import PortfolioSnapshotORM
@@ -108,6 +108,47 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
             .order_by(PortfolioSnapshotORM.timestamp.asc())
         )
         return [self._to_snapshot(orm) for orm in result.scalars().all()]
+
+    async def get_by_date_range_sampled(
+        self, start: datetime, end: datetime, max_points: int = 100
+    ) -> list[PortfolioSnapshot]:
+        """Get snapshots with downsampling for large ranges.
+
+        Args:
+            start: Start datetime (inclusive)
+            end: End datetime (inclusive)
+            max_points: Maximum number of points to return
+
+        Returns:
+            List of PortfolioSnapshots (downsampled if needed)
+        """
+        count_result = await self._session.execute(
+            select(func.count(PortfolioSnapshotORM.id))
+            .where(PortfolioSnapshotORM.timestamp >= start)
+            .where(PortfolioSnapshotORM.timestamp <= end)
+        )
+        total_count = count_result.scalar_one()
+
+        if total_count <= max_points:
+            return await self.get_by_date_range(start, end)
+
+        result = await self._session.execute(
+            select(PortfolioSnapshotORM)
+            .where(PortfolioSnapshotORM.timestamp >= start)
+            .where(PortfolioSnapshotORM.timestamp <= end)
+            .order_by(PortfolioSnapshotORM.timestamp.asc())
+        )
+        all_snapshots = result.scalars().all()
+
+        # Compute evenly spaced indices including first and last snapshots
+        if max_points <= 1:
+            indices = [total_count - 1]
+        else:
+            indices = [round(i * (total_count - 1) / (max_points - 1)) for i in range(max_points)]
+
+        sampled = [all_snapshots[i] for i in indices]
+
+        return [self._to_snapshot(orm) for orm in sampled]
 
     async def get_by_trigger(self, trigger: str) -> list[PortfolioSnapshot]:
         """Get snapshots by trigger type.
