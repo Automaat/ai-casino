@@ -1,5 +1,7 @@
 """Dash app factory with layout and callbacks."""
 
+import logging
+
 import dash_bootstrap_components as dbc
 from dash import Dash, Input, Output, dcc, html
 from loguru import logger
@@ -10,17 +12,23 @@ from src.dashboard.tabs import config as config_tab
 from src.dashboard.tabs import events, overview, portfolio, risk, signals, workflow
 
 
-def create_dash_app(config: DashboardConfig) -> Dash:
+def create_dash_app(config: DashboardConfig, debug: bool = False) -> Dash:
     """Create Dash app with layout and callbacks.
 
     Args:
         config: Dashboard configuration
+        debug: Enable debug mode (shows all HTTP requests)
 
     Returns:
         Dash app instance
     """
     app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
     app.title = "AI Casino Dashboard"
+
+    # Suppress Flask/Werkzeug HTTP request logs unless in debug mode
+    if not debug:
+        log = logging.getLogger("werkzeug")
+        log.setLevel(logging.ERROR)
 
     # Store API client in app state (dynamic attribute - not in Dash type stubs)
     app.api_client = DaemonAPIClient(config.api_url)  # type: ignore[attr-defined]
