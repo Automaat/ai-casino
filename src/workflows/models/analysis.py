@@ -40,12 +40,15 @@ class AnalysisInput(BaseModel):
             Daily OHLCV dataframe
 
         Raises:
-            ValueError: If market data is missing
+            ValueError: If market data is missing or daily timeframe data is unavailable
         """
         if self.market_data is None:
             msg = "Market data is None"
             raise ValueError(msg)
         if isinstance(self.market_data, MultiTimeframeData):
+            if Timeframe.DAILY not in self.market_data.timeframes:
+                msg = "Daily timeframe data is missing from market data"
+                raise ValueError(msg)
             return self.market_data.timeframes[Timeframe.DAILY]
         return self.market_data
 

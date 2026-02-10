@@ -121,16 +121,10 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
 
 
 def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:
-    """Patch workflow methods to report progress."""
-    # TODO(refactor): TUI progress tracking needs update for new stage-based architecture
-    # After refactoring, run_analyses() and make_decision() are now stage functions
-    # in src/workflows/stages/, not methods on TradingWorkflow.
-    # Progress tracking needs to be reimplemented by patching stage functions
-    # or adding progress hooks to the orchestrator.
-    #
-    # Previous approach (commented out - broken after refactor):
-    # - Patched workflow.run_analyses() to show "Running technical analysis..."
-    # - Patched workflow.make_decision() to show "Synthesizing trading decision..."
+    """Patch workflow methods to report progress.
+
+    Note: Progress tracking currently not implemented for stage-based architecture.
+    """
 
 
 def _setup_isolated_event_loop() -> asyncio.AbstractEventLoop:
