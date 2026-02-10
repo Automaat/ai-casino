@@ -9,8 +9,8 @@ services:
       - POSTGRES_USER=ai_casino
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ai_casino_secure_pass_2025}
     volumes:
-      # Persistent storage on host machine (survives container restarts)
-      - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql/data
+      # Persistent storage on host machine (PG 18+ uses version-specific subdirs)
+      - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql
     ports:
       - "5432:5432"
     networks:
