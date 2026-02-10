@@ -370,10 +370,10 @@ def test_submit_stop_order_invalid_price(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(ValueError, match="Stop price must be positive, got 0"):
+    with pytest.raises(ValueError, match=r"Stop price must be positive, got 0"):
         broker.submit_stop_order("AAPL", 10, 0.0)
 
-    with pytest.raises(ValueError, match="Stop price must be positive, got -10.5"):
+    with pytest.raises(ValueError, match=r"Stop price must be positive, got -10\.5"):
         broker.submit_stop_order("AAPL", 10, -10.5)
 
 
