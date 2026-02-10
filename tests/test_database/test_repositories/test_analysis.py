@@ -3,10 +3,8 @@
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.daemon.state import AnalysisRecord
-from src.database.repositories.analysis import AnalysisRecordRepository
 from src.strategies.session import TradingSession
 
 
@@ -29,24 +27,17 @@ def analysis_record() -> AnalysisRecord:
 
 @pytest.mark.asyncio
 async def test_create_analysis_record(analysis_record: AnalysisRecord) -> None:
-    """Test creating analysis record."""
-    # Mock session would go here - placeholder for integration test
-    # repository = AnalysisRecordRepository(mock_session)
-    # created = await repository.create(analysis_record)
-    # assert created.symbol == "AAPL"
-    # assert created.signal == "BUY"
-    pass
+    """Test creating analysis record - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_get_by_symbol() -> None:
-    """Test retrieving analysis records by symbol."""
-    # Mock repository query
-    pass
+    """Test retrieving analysis records by symbol - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_delete_before() -> None:
-    """Test cleanup of old records."""
-    # Test retention policy deletion
-    pass
+    """Test cleanup of old records - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")

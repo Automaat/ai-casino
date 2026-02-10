@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from src.daemon.state import DiscoveryHistoryRecord
-from src.database.repositories.discovery import DiscoveryHistoryRepository
 from src.discovery.models import DiscoverySource
 
 
@@ -28,23 +27,23 @@ def discovery_record() -> DiscoveryHistoryRecord:
 
 @pytest.mark.asyncio
 async def test_create_discovery_record(discovery_record: DiscoveryHistoryRecord) -> None:
-    """Test creating discovery history record."""
-    pass
+    """Test creating discovery history record - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_get_by_symbol() -> None:
-    """Test retrieving discovery records by symbol."""
-    pass
+    """Test retrieving discovery records by symbol - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_update_outcome() -> None:
-    """Test updating outcome metrics."""
-    pass
+    """Test updating outcome metrics - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_delete_before() -> None:
-    """Test cleanup of old discovery records."""
-    pass
+    """Test cleanup of old discovery records - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")

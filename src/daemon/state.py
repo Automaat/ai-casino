@@ -46,6 +46,17 @@ class ScreeningRecord(BaseModel):
     screened_at: datetime
 
 
+class PortfolioSnapshot(BaseModel):
+    """Snapshot of portfolio state at a point in time."""
+
+    balance: float
+    available_cash: float
+    total_exposure: float
+    portfolio_value: float
+    positions: dict
+    trigger: str
+
+
 class DiscoveryHistoryRecord(BaseModel):
     """Record of stock discovery outcome for learning."""
 
@@ -365,7 +376,8 @@ class DaemonState(BaseModel):
             try:
                 import asyncio
 
-                asyncio.create_task(self._analysis_repository.create(record))
+                task = asyncio.create_task(self._analysis_repository.create(record))
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
                 logger.debug(f"Persisted analysis record to database: {symbol} {signal}")
             except Exception as e:
                 logger.error(f"Failed to persist analysis record to database: {e}")
@@ -826,7 +838,8 @@ class DaemonState(BaseModel):
                 try:
                     import asyncio
 
-                    asyncio.create_task(self._discovery_repository.create(history_record))
+                    task = asyncio.create_task(self._discovery_repository.create(history_record))
+                    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
                     logger.debug(f"Persisted discovery history to database: {candidate.symbol}")
                 except Exception as e:
                     logger.error(f"Failed to persist discovery history to database: {e}")
@@ -844,44 +857,35 @@ class DaemonState(BaseModel):
 
         logger.info(f"Recorded discovery: {len(candidates)} candidates, {len(added_symbols)} added")
 
-    def snapshot_portfolio(
-        self,
-        balance: float,
-        available_cash: float,
-        total_exposure: float,
-        portfolio_value: float,
-        positions: dict,
-        trigger: str,
-    ) -> None:
+    def snapshot_portfolio(self, snapshot: PortfolioSnapshot) -> None:
         """Create portfolio snapshot and persist to database.
 
         Args:
-            balance: Account balance
-            available_cash: Available cash
-            total_exposure: Total portfolio exposure
-            portfolio_value: Total portfolio value
-            positions: Position details dict
-            trigger: Snapshot trigger (e.g., "daily_close", "rebalancing")
+            snapshot: Portfolio snapshot with balance, positions, and trigger info
         """
         if self._snapshot_repository:
             try:
-                from src.database.repositories.snapshot import PortfolioSnapshot
                 import asyncio
 
-                snapshot = PortfolioSnapshot(
+                from src.database.repositories.snapshot import PortfolioSnapshot as DBSnapshot
+
+                db_snapshot = DBSnapshot(
                     timestamp=datetime.now(UTC),
-                    balance=balance,
-                    available_cash=available_cash,
-                    total_exposure=total_exposure,
-                    portfolio_value=portfolio_value,
-                    positions=positions,
-                    trigger=trigger,
+                    balance=snapshot.balance,
+                    available_cash=snapshot.available_cash,
+                    total_exposure=snapshot.total_exposure,
+                    portfolio_value=snapshot.portfolio_value,
+                    positions=snapshot.positions,
+                    trigger=snapshot.trigger,
                 )
-                asyncio.create_task(self._snapshot_repository.create(snapshot))
-                logger.info(f"Created portfolio snapshot: {trigger} value={portfolio_value}")
+                task = asyncio.create_task(self._snapshot_repository.create(db_snapshot))
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                logger.info(
+                    f"Created portfolio snapshot: {snapshot.trigger} value={snapshot.portfolio_value}"
+                )
             except Exception as e:
                 logger.error(f"Failed to persist portfolio snapshot to database: {e}")
-                raise  # Fail fast per user requirement
+                raise
 
     def expire_stale_candidates(self) -> list[str]:
         """Remove candidates past TTL, return expired symbols.

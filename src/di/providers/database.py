@@ -1,11 +1,19 @@
 """Database provider functions for DI container."""
 
 import os
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from src.daemon.config import DaemonConfig
 from src.database.engine import DatabaseEngine, MissingDatabaseURLError
+
+if TYPE_CHECKING:
+    from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.position import PositionRecordRepository
+    from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
 
 def resolve_config_or_env(config_value: str | None, env_var: str) -> str | None:
@@ -64,7 +72,8 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     try:
         asyncio.get_running_loop()
         # If already in event loop, schedule migration
-        asyncio.create_task(engine.ensure_migrated())
+        task = asyncio.create_task(engine.ensure_migrated())
+        task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
     except RuntimeError:
         # No event loop yet, run in new loop
         asyncio.run(engine.ensure_migrated())
@@ -73,7 +82,7 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     return engine
 
 
-def create_analysis_repository(database_engine: DatabaseEngine):
+def create_analysis_repository(database_engine: DatabaseEngine) -> "AnalysisRecordRepository":
     """Create AnalysisRecordRepository with database session.
 
     Args:
@@ -88,7 +97,7 @@ def create_analysis_repository(database_engine: DatabaseEngine):
     return AnalysisRecordRepository(session)
 
 
-def create_position_repository(database_engine: DatabaseEngine):
+def create_position_repository(database_engine: DatabaseEngine) -> "PositionRecordRepository":
     """Create PositionRecordRepository with database session.
 
     Args:
@@ -103,7 +112,9 @@ def create_position_repository(database_engine: DatabaseEngine):
     return PositionRecordRepository(session)
 
 
-def create_position_action_repository(database_engine: DatabaseEngine):
+def create_position_action_repository(
+    database_engine: DatabaseEngine,
+) -> "PositionManagementActionRepository":
     """Create PositionManagementActionRepository with database session.
 
     Args:
@@ -118,7 +129,7 @@ def create_position_action_repository(database_engine: DatabaseEngine):
     return PositionManagementActionRepository(session)
 
 
-def create_discovery_repository(database_engine: DatabaseEngine):
+def create_discovery_repository(database_engine: DatabaseEngine) -> "DiscoveryHistoryRepository":
     """Create DiscoveryHistoryRepository with database session.
 
     Args:
@@ -133,7 +144,7 @@ def create_discovery_repository(database_engine: DatabaseEngine):
     return DiscoveryHistoryRepository(session)
 
 
-def create_snapshot_repository(database_engine: DatabaseEngine):
+def create_snapshot_repository(database_engine: DatabaseEngine) -> "PortfolioSnapshotRepository":
     """Create PortfolioSnapshotRepository with database session.
 
     Args:

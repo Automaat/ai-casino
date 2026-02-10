@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import pytest
 
 from src.daemon.positions import PositionRecord
-from src.database.repositories.position import PositionRecordRepository
 
 
 @pytest.fixture
@@ -30,25 +29,23 @@ def position_record() -> PositionRecord:
 
 @pytest.mark.asyncio
 async def test_create_position_record(position_record: PositionRecord) -> None:
-    """Test creating position record."""
-    # Mock session placeholder
-    pass
+    """Test creating position record - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_update_position_record(position_record: PositionRecord) -> None:
-    """Test updating position record."""
-    # Test position update (qty, stop loss, etc.)
-    pass
+    """Test updating position record - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_get_by_symbol() -> None:
-    """Test retrieving position by symbol."""
-    pass
+    """Test retrieving position by symbol - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
 
 
 @pytest.mark.asyncio
 async def test_delete_by_symbol() -> None:
-    """Test deleting position by symbol."""
-    pass
+    """Test deleting position by symbol - placeholder for integration test."""
+    pytest.skip("Integration test - requires database setup")
