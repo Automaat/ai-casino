@@ -2304,6 +2304,17 @@ class DaemonRunner:
         """Run the daemon main loop."""
         self.running = True
 
+        # Initialize database (run migrations)
+        try:
+            if self.config.database.enable_persistence:
+                database_engine = self._container.database_engine()
+                await database_engine.ensure_migrated()
+                logger.info("Database migrations applied successfully")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            if self.config.database.enable_persistence:
+                raise  # Fail fast if persistence enabled but DB unavailable
+
         def shutdown_handler(sig: int, _frame: object) -> None:
             logger.info(f"Received signal {sig}, shutting down...")
             self.running = False

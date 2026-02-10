@@ -7,6 +7,7 @@ from dependency_injector import containers, providers
 from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
 from src.di.providers import data as data_providers
+from src.di.providers import database as database_providers
 from src.di.providers import models as model_providers
 from src.di.providers import workflows as workflow_providers
 
@@ -29,6 +30,38 @@ class AppContainer(containers.DeclarativeContainer):
     # Historical cache singleton - shared across all fetchers
     historical_cache = providers.Singleton(
         data_providers.create_historical_cache,
+    )
+
+    # Database engine singleton
+    database_engine = providers.Singleton(
+        database_providers.create_database_engine,
+        daemon_config=daemon_config,
+    )
+
+    # Database repositories - Factory pattern for per-request sessions
+    analysis_repository = providers.Factory(
+        database_providers.create_analysis_repository,
+        database_engine=database_engine,
+    )
+
+    position_repository = providers.Factory(
+        database_providers.create_position_repository,
+        database_engine=database_engine,
+    )
+
+    position_action_repository = providers.Factory(
+        database_providers.create_position_action_repository,
+        database_engine=database_engine,
+    )
+
+    discovery_repository = providers.Factory(
+        database_providers.create_discovery_repository,
+        database_engine=database_engine,
+    )
+
+    snapshot_repository = providers.Factory(
+        database_providers.create_snapshot_repository,
+        database_engine=database_engine,
     )
 
     # Data fetchers - all Singleton

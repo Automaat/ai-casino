@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from src.discovery.models import DiscoveryCandidate, DiscoverySource
 from src.screening.screener import ScreeningResult
@@ -15,6 +15,9 @@ from src.strategies.session import TradingSession
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
+    from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
 
 class AnalysisRecord(BaseModel):
@@ -210,6 +213,8 @@ class DegradationRecord(BaseModel):
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     last_run: datetime | None = None
     analyses: list[AnalysisRecord] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
@@ -252,6 +257,29 @@ class DaemonState(BaseModel):
     last_discovery: datetime | None = None
     discovery_history: list[DiscoveryHistoryRecord] = Field(default_factory=list)
     active_discovery_candidates: list[DiscoveryCandidate] = Field(default_factory=list)
+
+    # Database repositories (private attributes - not serialized)
+    _analysis_repository: "AnalysisRecordRepository | None" = PrivateAttr(default=None)
+    _discovery_repository: "DiscoveryHistoryRepository | None" = PrivateAttr(default=None)
+    _snapshot_repository: "PortfolioSnapshotRepository | None" = PrivateAttr(default=None)
+
+    def set_repositories(
+        self,
+        analysis_repository: "AnalysisRecordRepository | None" = None,
+        discovery_repository: "DiscoveryHistoryRepository | None" = None,
+        snapshot_repository: "PortfolioSnapshotRepository | None" = None,
+    ) -> None:
+        """Inject database repositories after loading state.
+
+        Args:
+            analysis_repository: Analysis record repository
+            discovery_repository: Discovery history repository
+            snapshot_repository: Portfolio snapshot repository
+        """
+        self._analysis_repository = analysis_repository
+        self._discovery_repository = discovery_repository
+        self._snapshot_repository = snapshot_repository
+        logger.debug("Repositories injected into DaemonState")
 
     @classmethod
     def load(cls, path: str) -> "DaemonState":
@@ -319,20 +347,32 @@ class DaemonState(BaseModel):
             macd_hist: MACD histogram value
             reasoning: LLM decision reasoning
         """
-        self.analyses.append(
-            AnalysisRecord(
-                symbol=symbol,
-                timestamp=datetime.now(UTC),
-                signal=signal,
-                confidence=confidence,
-                executed_trade=executed,
-                trading_session=trading_session,
-                is_paper_trade=is_paper_trade,
-                rsi=rsi,
-                macd_hist=macd_hist,
-                reasoning=reasoning or [],
-            )
+        record = AnalysisRecord(
+            symbol=symbol,
+            timestamp=datetime.now(UTC),
+            signal=signal,
+            confidence=confidence,
+            executed_trade=executed,
+            trading_session=trading_session,
+            is_paper_trade=is_paper_trade,
+            rsi=rsi,
+            macd_hist=macd_hist,
+            reasoning=reasoning or [],
         )
+
+        # Persist to database if repository available
+        if self._analysis_repository:
+            try:
+                import asyncio
+
+                asyncio.create_task(self._analysis_repository.create(record))
+                logger.debug(f"Persisted analysis record to database: {symbol} {signal}")
+            except Exception as e:
+                logger.error(f"Failed to persist analysis record to database: {e}")
+                raise  # Fail fast per user requirement
+
+        # Keep in-memory list (capped for transition period)
+        self.analyses.append(record)
         self.total_analyses += 1
         if executed:
             self.total_trades += 1
@@ -780,6 +820,19 @@ class DaemonState(BaseModel):
                 added_to_watchlist=candidate.symbol in added_symbols,
                 ttl_expires_at=candidate.ttl_expires_at,
             )
+
+            # Persist to database if repository available
+            if self._discovery_repository:
+                try:
+                    import asyncio
+
+                    asyncio.create_task(self._discovery_repository.create(history_record))
+                    logger.debug(f"Persisted discovery history to database: {candidate.symbol}")
+                except Exception as e:
+                    logger.error(f"Failed to persist discovery history to database: {e}")
+                    raise  # Fail fast per user requirement
+
+            # Keep in-memory list (capped for transition period)
             self.discovery_history.append(history_record)
 
         # Update active candidates (replace old with new)
@@ -790,6 +843,45 @@ class DaemonState(BaseModel):
             self.discovery_history = self.discovery_history[-100:]
 
         logger.info(f"Recorded discovery: {len(candidates)} candidates, {len(added_symbols)} added")
+
+    def snapshot_portfolio(
+        self,
+        balance: float,
+        available_cash: float,
+        total_exposure: float,
+        portfolio_value: float,
+        positions: dict,
+        trigger: str,
+    ) -> None:
+        """Create portfolio snapshot and persist to database.
+
+        Args:
+            balance: Account balance
+            available_cash: Available cash
+            total_exposure: Total portfolio exposure
+            portfolio_value: Total portfolio value
+            positions: Position details dict
+            trigger: Snapshot trigger (e.g., "daily_close", "rebalancing")
+        """
+        if self._snapshot_repository:
+            try:
+                from src.database.repositories.snapshot import PortfolioSnapshot
+                import asyncio
+
+                snapshot = PortfolioSnapshot(
+                    timestamp=datetime.now(UTC),
+                    balance=balance,
+                    available_cash=available_cash,
+                    total_exposure=total_exposure,
+                    portfolio_value=portfolio_value,
+                    positions=positions,
+                    trigger=trigger,
+                )
+                asyncio.create_task(self._snapshot_repository.create(snapshot))
+                logger.info(f"Created portfolio snapshot: {trigger} value={portfolio_value}")
+            except Exception as e:
+                logger.error(f"Failed to persist portfolio snapshot to database: {e}")
+                raise  # Fail fast per user requirement
 
     def expire_stale_candidates(self) -> list[str]:
         """Remove candidates past TTL, return expired symbols.

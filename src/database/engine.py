@@ -19,11 +19,20 @@ class MissingDatabaseURLError(ValueError):
 class DatabaseEngine:
     """Database engine with connection pooling and auto-migration."""
 
-    def __init__(self, database_url: str | None = None) -> None:
+    def __init__(
+        self,
+        database_url: str | None = None,
+        pool_size: int = 5,
+        max_overflow: int = 10,
+        pool_pre_ping: bool = True,
+    ) -> None:
         """Initialize database engine.
 
         Args:
             database_url: PostgreSQL connection URL (or from DATABASE_URL env)
+            pool_size: Connection pool size (1-20)
+            max_overflow: Max connections beyond pool_size (0-50)
+            pool_pre_ping: Verify connections before use
 
         Raises:
             MissingDatabaseURLError: If no database URL provided
@@ -34,9 +43,9 @@ class DatabaseEngine:
 
         self._engine: AsyncEngine = create_async_engine(
             self._database_url,
-            pool_size=5,
-            max_overflow=10,
-            pool_pre_ping=True,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_pre_ping=pool_pre_ping,
         )
         self._session_factory = async_sessionmaker(
             self._engine,

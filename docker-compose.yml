@@ -1,4 +1,26 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-casino-postgres
+    restart: unless-stopped
+    environment:
+      # Hardcoded credentials (only accessible within docker network)
+      - POSTGRES_DB=ai_casino
+      - POSTGRES_USER=ai_casino
+      - POSTGRES_PASSWORD=ai_casino_secure_pass_2025
+    volumes:
+      # Persistent storage on host machine (survives container restarts)
+      - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ai-casino-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_casino"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   daemon:
     build: .
     container_name: ai-casino-daemon
@@ -7,20 +29,16 @@ services:
       # Mount production config from host
       - ${HOME}/.ai-casino:/root/.ai-casino
     environment:
-      # LLM provider (config takes priority, these are fallbacks)
-      - LLM_PROVIDER=openai
-      - LLM_MODEL=gpt-5-nano
-      # LLM API keys (read from host .env if available)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # Database (optional - JSONL fallback if not set)
-      - DATABASE_URL=${DATABASE_URL:-}
-      # Log level
+      # Log level (can override in config)
       - LOG_LEVEL=INFO
     ports:
       # Expose API for dashboard
       - "8484:8484"
     networks:
       - ai-casino-net
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8484/health"]
       interval: 5s
