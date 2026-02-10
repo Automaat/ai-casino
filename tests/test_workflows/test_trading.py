@@ -116,14 +116,14 @@ async def test_trading_workflow_analyze_with_meta_agent(test_container_full):
     assert isinstance(result.risk, RiskAssessment)
 
 
-async def test_fetch_data(test_container, sample_news_articles):
+async def test_fetch_data(test_container_full, sample_news_articles):
     """Test data fetching."""
     # Override news fetcher to return sample articles
     mock_news_fetcher = MagicMock()
     mock_news_fetcher.fetch_company_news.return_value = sample_news_articles
-    test_container.news_fetcher.override(mock_news_fetcher)
+    test_container_full.news_fetcher.override(mock_news_fetcher)
 
-    workflow = test_container.workflow_momentum()
+    workflow = test_container_full.workflow_momentum()
     state = await workflow._fetch_data("AAPL", 90, TradingSession.REGULAR)
 
     assert state["symbol"] == "AAPL"

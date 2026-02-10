@@ -36,9 +36,9 @@ class TestEvaluateSignal:
 class TestTradeJournalAgent:
     def test_init(self, test_container):
         market_fetcher = MagicMock()
-        agent = TradeJournalAgent(test_container, market_fetcher)
+        agent = TradeJournalAgent(test_container.llm_client(), market_fetcher)
 
-        assert agent.llm == test_container
+        assert agent.llm == test_container.llm_client()
         assert agent.market_fetcher == market_fetcher
 
     def test_repr(self, test_container):
@@ -48,7 +48,8 @@ class TestTradeJournalAgent:
         assert "TradeJournalAgent" in repr_str
         assert "ollama" in repr_str
 
-    async def test_generate_empty_records(self, test_container):
+    async def test_generate_empty_records(self, test_container, mock_market_fetcher):
+        test_container.market_fetcher.override(mock_market_fetcher)
         agent = test_container.trade_journal_agent()
         journal = await agent.generate(date(2024, 1, 15), [])
 
@@ -56,7 +57,8 @@ class TestTradeJournalAgent:
         assert journal.outcomes == []
         assert journal.overall_assessment == "No signals to evaluate"
 
-    async def test_generate_journal(self, test_container, sample_analysis_records):
+    async def test_generate_journal(self, test_container, sample_analysis_records, mock_market_fetcher):
+        test_container.market_fetcher.override(mock_market_fetcher)
         agent = test_container.trade_journal_agent()
         journal = await agent.generate(date(2024, 1, 15), sample_analysis_records)
 
@@ -69,8 +71,9 @@ class TestTradeJournalAgent:
             assert outcome.price_open > 0
             assert outcome.price_close > 0
 
-    async def test_generate_deduplicates_symbols(self, test_container):
+    async def test_generate_deduplicates_symbols(self, test_container, mock_market_fetcher):
         """Latest signal per symbol is used when duplicates exist."""
+        test_container.market_fetcher.override(mock_market_fetcher)
         records = [
             AnalysisRecord(
                 symbol="AAPL",

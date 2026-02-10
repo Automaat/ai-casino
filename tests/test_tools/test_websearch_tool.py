@@ -105,8 +105,6 @@ class TestWebSearchTool:
 
     def test_execute_empty_results(self, test_container_full):
         """Test handling empty search results."""
-        tool = WebSearchTool(container=test_container_full)
-
         empty_response = WebSearchResponse(
             query="nonexistent",
             search_type=SearchType.GENERAL,
@@ -117,6 +115,7 @@ class TestWebSearchTool:
         mock_fetcher.search.return_value = empty_response
         test_container_full.websearch_fetcher.override(mock_fetcher)
 
+        tool = WebSearchTool(container=test_container_full)
         result = tool.execute(query="nonexistent query", search_type="general")
 
         assert "No results found" in result

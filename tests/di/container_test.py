@@ -277,10 +277,13 @@ def create_mock_truth_social_fetcher() -> MagicMock:
     """Create mock TruthSocialFetcher.
 
     Returns:
-        Mock with fetch_recent_posts method
+        Mock with fetch_recent(hours=...) method returning TrumpPostData-like object
     """
     mock = MagicMock()
+    # Maintain backward compatibility
     mock.fetch_recent_posts.return_value = []
+    # Match real TruthSocialFetcher API: fetch_recent(hours=...) -> TrumpPostData
+    mock.fetch_recent.return_value = MagicMock(posts=[])
     return mock
 
 
