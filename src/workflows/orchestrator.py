@@ -685,13 +685,24 @@ class TradingWorkflow:
         from src.workflows.models.decision import DecisionContext, DecisionInput
         from src.workflows.stages import decision
 
+        # Derive position_context from account_info if not explicitly provided
+        position_context = state.get("position_context")
+        if position_context is None and state.get("account_info"):
+            account_info = state["account_info"]
+            symbol = state["symbol"]
+            position_qty = account_info.positions.get(symbol)
+            if position_qty is not None:
+                position_context = {"owns_position": True, "qty": position_qty}
+            else:
+                position_context = {"owns_position": False, "qty": 0.0}
+
         # Build context from state dict fields
         context = DecisionContext(
             sector_rotation=state.get("sector_rotation_context"),
             earnings=state.get("earnings_context"),
             peer_analysis=state.get("peer_analysis_context"),
             game_plan=state.get("game_plan_context"),
-            position=state.get("position_context"),
+            position=position_context,
         )
 
         decision_input = DecisionInput(
