@@ -109,6 +109,43 @@ class SocialSentimentAnalyst:
             confidence=confidence,
         )
 
+    def _process_fetch_results(
+        self,
+        results: tuple[
+            BaseException | SocialSentimentData | None,
+            BaseException | NewsSentimentData | None,
+            BaseException | RedditSentimentData | None,
+        ],
+    ) -> tuple[SocialSentimentData | None, NewsSentimentData | None, RedditSentimentData | None]:
+        """Process gather results, handling exceptions and logging errors.
+
+        Args:
+            results: Results from asyncio.gather with return_exceptions=True
+
+        Returns:
+            Tuple of (finnhub_social, finnhub_news, reddit_data)
+        """
+        finnhub_social: SocialSentimentData | None = None
+        finnhub_news: NewsSentimentData | None = None
+        reddit_data: RedditSentimentData | None = None
+
+        if isinstance(results[0], BaseException):
+            logger.error(f"Finnhub social fetch failed: {results[0]}")
+        else:
+            finnhub_social = results[0]
+
+        if isinstance(results[1], BaseException):
+            logger.error(f"Finnhub news fetch failed: {results[1]}")
+        else:
+            finnhub_news = results[1]
+
+        if isinstance(results[2], BaseException):
+            logger.error(f"Reddit fetch failed: {results[2]}")
+        else:
+            reddit_data = results[2]
+
+        return finnhub_social, finnhub_news, reddit_data
+
     async def _fetch_all_sources(
         self, symbol: str
     ) -> tuple[SocialSentimentData | None, NewsSentimentData | None, RedditSentimentData | None]:
@@ -166,27 +203,7 @@ class SocialSentimentAnalyst:
             if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
                 raise result
 
-        # Log and convert other exceptions to None
-        finnhub_social = None
-        finnhub_news = None
-        reddit_data = None
-
-        if isinstance(results[0], BaseException):
-            logger.error(f"Finnhub social fetch failed: {results[0]}")
-        else:
-            finnhub_social = results[0]
-
-        if isinstance(results[1], BaseException):
-            logger.error(f"Finnhub news fetch failed: {results[1]}")
-        else:
-            finnhub_news = results[1]
-
-        if isinstance(results[2], BaseException):
-            logger.error(f"Reddit fetch failed: {results[2]}")
-        else:
-            reddit_data = results[2]
-
-        return finnhub_social, finnhub_news, reddit_data
+        return self._process_fetch_results(results)
 
     def _compute_finnhub_sentiment(self, data: SocialSentimentData | None) -> float | None:
         """Compute average Finnhub sentiment from Reddit and Twitter.
