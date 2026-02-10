@@ -209,6 +209,53 @@ class TestOpenAISchemaProcessing:
         current_schema = TestModel.model_json_schema()
         assert set(current_schema.keys()) == original_keys
 
+    def test_all_properties_required(self, provider):
+        """Test all properties are in required array (OpenAI strict mode)."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"},
+                "email": {"type": "string"},
+            },
+        }
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        assert "required" in result
+        assert set(result["required"]) == {"name", "age", "email"}
+
+    def test_nested_properties_all_required(self, provider):
+        """Test nested object properties all required recursively."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "user": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"},
+                    },
+                },
+                "address": {
+                    "type": "object",
+                    "properties": {
+                        "street": {"type": "string"},
+                        "city": {"type": "string"},
+                    },
+                },
+            },
+        }
+
+        result = provider._ensure_additional_properties_false(schema)
+
+        # Top-level properties required
+        assert set(result["required"]) == {"user", "address"}
+        # Nested user properties required
+        assert set(result["properties"]["user"]["required"]) == {"name", "age"}
+        # Nested address properties required
+        assert set(result["properties"]["address"]["required"]) == {"street", "city"}
+
 
 class TestAnthropicProviderStructured:
     """Tests for Anthropic provider structured output."""
