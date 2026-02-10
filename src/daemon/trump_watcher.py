@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from src.agents.trump import COMPANY_TICKERS, TrumpAnalysis, TrumpAnalyst
-from src.cache.historical import HistoricalCache
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.models.llm import LLMClient
 from src.workflows.trading import TradingWorkflow
@@ -71,7 +70,7 @@ class TrumpWatcher:
         self._container = container or create_container()
 
         # Lazy init
-        self._historical_cache = HistoricalCache()
+        self._historical_cache = self._container.historical_cache()
         self._fetcher: TruthSocialFetcher | None = None
         self._analyst: TrumpAnalyst | None = None
         self._workflow: TradingWorkflow | None = None

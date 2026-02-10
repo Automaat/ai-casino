@@ -13,19 +13,22 @@ from src.data.market import MarketDataFetcher
 class SignalOutcomeTracker:
     """Track price outcomes after signals for accuracy metrics."""
 
-    def __init__(self, historical_cache: HistoricalCache, broker: AlpacaBroker | None = None) -> None:
+    def __init__(
+        self,
+        historical_cache: HistoricalCache,
+        market_fetcher: MarketDataFetcher,
+        broker: AlpacaBroker | None = None,
+    ) -> None:
         """Initialize signal outcome tracker.
 
         Args:
             historical_cache: Historical cache for signal storage and OHLCV
+            market_fetcher: MarketDataFetcher for price lookups
             broker: Optional broker for early exit detection
         """
         self._cache = historical_cache
         self._broker = broker
-        self._market_fetcher = MarketDataFetcher(
-            historical_cache=historical_cache,
-            use_alpha_vantage=False,
-        )
+        self._market_fetcher = market_fetcher
 
     def update_outcomes(self) -> dict[str, int]:
         """Batch update outcomes for signals needing T+1d/5d/20d prices.

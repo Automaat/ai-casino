@@ -79,6 +79,7 @@ def create_test_container(
     # Fetcher overrides (all Singleton pattern)
     if override_fetchers:
         container.market_fetcher.override(create_mock_market_fetcher())
+        container.yfinance_market_fetcher.override(create_mock_market_fetcher())
         container.news_fetcher.override(create_mock_news_fetcher())
         container.fundamental_fetcher.override(create_mock_fundamental_fetcher())
         container.finnhub_fetcher.override(create_mock_finnhub_fetcher())
@@ -116,6 +117,7 @@ def reset_test_container(container: AppContainer, providers: list[str] | None = 
         "llm_client",
         "finbert_sentiment",
         "market_fetcher",
+        "yfinance_market_fetcher",
         "news_fetcher",
         "fundamental_fetcher",
         "finnhub_fetcher",

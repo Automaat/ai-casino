@@ -25,10 +25,11 @@ def mock_market_fetcher():
 
 
 @pytest.fixture
-def anomaly_watcher(historical_cache):
+def anomaly_watcher(historical_cache, mock_market_fetcher):
     """Create anomaly watcher with test config."""
     return AnomalyWatcher(
         historical_cache=historical_cache,
+        market_fetcher=mock_market_fetcher,
         poll_interval=900,
         relevance_threshold=0.7,
         cooldown_minutes=15,

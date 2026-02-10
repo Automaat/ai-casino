@@ -38,6 +38,11 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
     )
 
+    yfinance_market_fetcher = providers.Singleton(
+        data_providers.create_yfinance_market_fetcher,
+        historical_cache=historical_cache,
+    )
+
     news_fetcher = providers.Singleton(
         data_providers.create_news_fetcher,
         daemon_config=daemon_config,

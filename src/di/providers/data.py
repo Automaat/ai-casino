@@ -54,6 +54,22 @@ def create_market_fetcher(
     )
 
 
+def create_yfinance_market_fetcher(historical_cache: HistoricalCache) -> MarketDataFetcher:
+    """Create yfinance-only MarketDataFetcher (no Alpha Vantage).
+
+    Args:
+        historical_cache: Shared historical cache
+
+    Returns:
+        MarketDataFetcher configured for yfinance only
+    """
+    return MarketDataFetcher(
+        use_alpha_vantage=False,
+        api_key=None,
+        historical_cache=historical_cache,
+    )
+
+
 def create_news_fetcher(
     daemon_config: DaemonConfig,
     historical_cache: HistoricalCache,
