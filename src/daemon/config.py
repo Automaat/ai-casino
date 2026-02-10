@@ -168,7 +168,7 @@ class HealthConfig(BaseModel):
     """Configuration for API health checks and state cleanup."""
 
     enabled: bool = True
-    run_time: str = "17:00"
+    check_interval_seconds: int = 5  # Run every 5 seconds by default
     archive_days: int = 30
     log_max_size_mb: int = 5
     health_dir: str = "~/.ai-casino/health"

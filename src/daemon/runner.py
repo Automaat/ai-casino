@@ -92,7 +92,6 @@ class DaemonRunner:
             after_hours_screen_days=config.screening.screen_days,
             optimization_time=config.optimization.optimization_time,
             optimization_days=config.optimization.optimization_days,
-            health_check_time=config.health.run_time,
             prefetch_time=config.prefetch.prefetch_time,
             pre_market_refresh_time=config.prefetch.pre_market_refresh_time,
             sector_rotation_time=config.sector_rotation.run_time,
@@ -2014,16 +2013,17 @@ class DaemonRunner:
             )
 
     async def _maybe_run_health_check(self) -> None:
-        """Run health check if conditions are met."""
+        """Run health check if interval elapsed or first run."""
         if not self.config.health.enabled:
             return
 
-        if not self.scheduler.is_health_check_time(self.config.health.run_time):
-            return
+        now = datetime.now(tz=UTC)
 
-        today = datetime.now(self.scheduler.timezone).date()
-        if self.state.last_health_check and self.state.last_health_check.date() == today:
-            return
+        # Run on first startup or after interval elapsed
+        if self.state.last_health_check:
+            elapsed = (now - self.state.last_health_check).total_seconds()
+            if elapsed < self.config.health.check_interval_seconds:
+                return
 
         logger.info("Starting API health checks")
         console.print(f"\n[bold cyan]Running Health Checks ({datetime.now(tz=UTC):%H:%M})[/bold cyan]")
