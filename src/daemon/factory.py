@@ -156,7 +156,7 @@ class DaemonFactory:
         discovery_engine = None
         market_fetcher = None
         if self.config.discovery.enabled:
-            discovery_engine, market_fetcher = self._create_discovery_engine()
+            discovery_engine, market_fetcher = self._create_discovery_engine(broker)
 
         # Phase 9: Notifications (if enabled)
         notification_service = None
@@ -356,8 +356,13 @@ class DaemonFactory:
         logger.info("Position management enabled")
         return position_manager
 
-    def _create_discovery_engine(self) -> tuple[StockDiscoveryEngine, MarketDataFetcher]:
+    def _create_discovery_engine(
+        self, broker: AlpacaBroker | None
+    ) -> tuple[StockDiscoveryEngine, MarketDataFetcher]:
         """Create stock discovery engine and market fetcher.
+
+        Args:
+            broker: Broker instance for discovery (optional)
 
         Returns:
             Tuple of (StockDiscoveryEngine, MarketDataFetcher)
@@ -434,11 +439,7 @@ class DaemonFactory:
             trigger_detector=trigger_detector,
         )
 
-        # Optional services (broker only for now)
-        broker = None
-        if hasattr(self, "_broker"):
-            broker = self._broker
-
+        # Optional services (broker passed from create_components)
         services = OptionalServices(
             reddit_fetcher=None,
             earnings_fetcher=None,

@@ -585,17 +585,26 @@ class DaemonTaskService:
             event_type: Event type string
             data: Event data dictionary
         """
-        import asyncio
-
         from src.daemon.event_bus import DashboardEvent, EventType
 
         if not self.components.event_bus:
             return
 
         try:
-            asyncio.run(
-                self.components.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
+            publish_coro = self.components.event_bus.publish(
+                DashboardEvent(event_type=EventType[event_type], data=data)
             )
+
+            try:
+                # If we're already inside an event loop (e.g. daemon async runner),
+                # schedule the publish as a task instead of calling asyncio.run(...)
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop in this thread: safe to use asyncio.run
+                asyncio.run(publish_coro)
+            else:
+                task = loop.create_task(publish_coro)
+                task.add_done_callback(lambda _: None)  # Ensure exception is logged
         except Exception as e:
             logger.error(f"Failed to publish {event_type} event: {e}")
 

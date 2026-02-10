@@ -72,7 +72,6 @@ class ScheduledTaskRunner:
             config: Daemon configuration
             scheduler: Market scheduler for time checks
             daemon_runner: DaemonRunner instance for task delegation
-        task_service: Optional task service for extracted scheduled tasks
         """
         self.config = config
         self.scheduler = scheduler
