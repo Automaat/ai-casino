@@ -321,3 +321,71 @@ def test_submit_order_invalid_qty(mock_trading_client, monkeypatch):
 
     with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
         broker.submit_order("AAPL", -5, "buy")
+
+
+def test_submit_stop_order(mock_trading_client, mock_order, monkeypatch):
+    """Test submitting stop order."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    mock_order.side = Mock(value="sell")
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.return_value = mock_order
+
+    broker = AlpacaBroker()
+    order_status = broker.submit_stop_order("AAPL", 10, 140.0)
+
+    assert isinstance(order_status, OrderStatus)
+    assert order_status.order_id == "order-123"
+    assert order_status.symbol == "AAPL"
+    assert order_status.qty == 10.0
+    assert order_status.side == "sell"
+
+    client_instance.submit_order.assert_called_once()
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.symbol == "AAPL"
+    assert order_data.qty == 10
+    assert order_data.stop_price == 140.0
+
+
+def test_submit_stop_order_invalid_qty(mock_trading_client, monkeypatch):
+    """Test submitting stop order with invalid quantity."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(ValueError, match="Order quantity must be positive, got 0"):
+        broker.submit_stop_order("AAPL", 0, 140.0)
+
+    with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
+        broker.submit_stop_order("AAPL", -5, 140.0)
+
+
+def test_submit_stop_order_invalid_price(mock_trading_client, monkeypatch):
+    """Test submitting stop order with invalid stop price."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(ValueError, match=r"Stop price must be positive, got 0"):
+        broker.submit_stop_order("AAPL", 10, 0.0)
+
+    with pytest.raises(ValueError, match=r"Stop price must be positive, got -10\.5"):
+        broker.submit_stop_order("AAPL", 10, -10.5)
+
+
+def test_submit_stop_order_error(mock_trading_client, monkeypatch):
+    """Test error handling in stop order submission."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.side_effect = Exception("Stop order failed")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(Exception, match="Stop order failed"):
+        broker.submit_stop_order("AAPL", 10, 140.0)

@@ -116,6 +116,8 @@ Fixes #<issue-number>
 **Linter:** ruff (45+ rule categories)
 **Type Checker:** pyrefly (high-performance type checker, faster than mypy/pyright)
 **Line length:** 110 | **Quotes:** Double | **Docstrings:** Google style | **Type hints:** Mandatory
+**File length:** Max 400 lines per file - split into logical modules if exceeded
+**Method length:** Max 60 lines per method/function - extract helper methods if exceeded
 
 **Linter/type errors:** Fix properly (research if needed), NEVER skip/disable (`# noqa`, `# type: ignore`). If stuck after research, ASK.
 
@@ -257,11 +259,11 @@ def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
 
 ### Anti-Patterns
 
-❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons, dicts/kwargs for structured data
+❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, >400 line files, >60 line methods, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons, dicts/kwargs for structured data, inheritance hierarchies (prefer composition)
 
-✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations, typed classes over dicts
+✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations, typed classes over dicts, split files >400 lines into logical modules, extract helper methods for >60 line functions, composition over inheritance, extract proper encapsulated abstractions
 
-**Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change?
+**Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change? File too large (>400 lines)? Method too long (>60 lines)?
 **If unsure:** ASK for approval.
 
 ### Types vs Dicts
@@ -410,6 +412,151 @@ instance = container.new_workflow(
 - Always pass `container` parameter explicitly when calling factories
 - For optional dependencies, check container first: `service = container.service() if container else None`
 - Add fallback only as last resort: `service = param or (container.service() if container else None) or Service()`
+
+### Composition over Inheritance (MANDATORY)
+
+**ALWAYS prefer composition over inheritance. Extract proper encapsulated abstractions and compose them together.**
+
+**Core principles:**
+- Favor "has-a" relationships over "is-a" relationships
+- Extract single-responsibility components that can be composed
+- Each abstraction should be independently testable and reusable
+- Compose abstractions via dependency injection
+
+**Why composition:**
+- **Flexibility:** Change behavior at runtime by swapping components
+- **Testability:** Mock individual components independently
+- **Maintainability:** Changes to one component don't cascade through inheritance hierarchy
+- **Clarity:** Explicit dependencies make code relationships obvious
+- **Reusability:** Components can be used in different contexts without inheritance constraints
+
+**Pattern:**
+
+```python
+# ❌ BAD - inheritance hierarchy
+class BaseAnalyst:
+    def __init__(self, llm_client: LLMClient) -> None:
+        self.llm = llm_client
+
+    def _format_result(self, data: dict) -> str:
+        return json.dumps(data, indent=2)
+
+class TechnicalAnalyst(BaseAnalyst):
+    def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+        result = self._run_analysis(market_data)
+        formatted = self._format_result(result)  # Inherited method
+        return TechnicalAnalysis(...)
+
+class SentimentAnalyst(BaseAnalyst):
+    def analyze(self, articles: list[NewsArticle]) -> SentimentAnalysis:
+        result = self._run_sentiment(articles)
+        formatted = self._format_result(result)  # Inherited method
+        return SentimentAnalysis(...)
+
+# ✅ GOOD - composition with extracted abstractions
+class ResultFormatter:
+    """Encapsulated formatting abstraction."""
+    def format(self, data: dict) -> str:
+        return json.dumps(data, indent=2)
+
+class TechnicalAnalyst:
+    def __init__(self, llm_client: LLMClient, formatter: ResultFormatter) -> None:
+        self.llm = llm_client
+        self.formatter = formatter  # Composed dependency
+
+    def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+        result = self._run_analysis(market_data)
+        formatted = self.formatter.format(result)  # Composed behavior
+        return TechnicalAnalysis(...)
+
+class SentimentAnalyst:
+    def __init__(self, llm_client: LLMClient, formatter: ResultFormatter) -> None:
+        self.llm = llm_client
+        self.formatter = formatter  # Composed dependency
+
+    def analyze(self, articles: list[NewsArticle]) -> SentimentAnalysis:
+        result = self._run_sentiment(articles)
+        formatted = self.formatter.format(result)  # Composed behavior
+        return SentimentAnalysis(...)
+```
+
+**When to extract abstractions:**
+
+1. **Shared behavior across multiple classes** → Extract to composable component
+2. **Complex logic that can be isolated** → Extract to single-responsibility class
+3. **Behavior that might change independently** → Extract to swappable component
+4. **Logic with its own dependencies** → Extract to injected component
+
+**Example: Extract validation logic**
+
+```python
+# ❌ BAD - validation mixed in class
+class OrderExecutor:
+    def execute(self, order: Order) -> ExecutionResult:
+        # Validation logic embedded
+        if order.quantity <= 0:
+            raise ValueError("Invalid quantity")
+        if order.price <= 0:
+            raise ValueError("Invalid price")
+        if not order.symbol:
+            raise ValueError("Missing symbol")
+
+        # Execution logic
+        return self._submit_order(order)
+
+# ✅ GOOD - extracted validation abstraction
+class OrderValidator:
+    """Encapsulated validation abstraction."""
+    def validate(self, order: Order) -> None:
+        if order.quantity <= 0:
+            raise ValueError("Invalid quantity")
+        if order.price <= 0:
+            raise ValueError("Invalid price")
+        if not order.symbol:
+            raise ValueError("Missing symbol")
+
+class OrderExecutor:
+    def __init__(self, validator: OrderValidator, broker: Broker) -> None:
+        self.validator = validator  # Composed validation
+        self.broker = broker
+
+    def execute(self, order: Order) -> ExecutionResult:
+        self.validator.validate(order)  # Delegated validation
+        return self._submit_order(order)  # Focused execution
+```
+
+**Benefits in testing:**
+
+```python
+# Easy to test with composition
+def test_order_executor_with_valid_order():
+    mock_validator = Mock(spec=OrderValidator)
+    mock_broker = Mock(spec=Broker)
+    executor = OrderExecutor(mock_validator, mock_broker)
+
+    result = executor.execute(order)
+
+    mock_validator.validate.assert_called_once_with(order)
+    assert result.success
+
+# Validator is independently testable
+def test_order_validator_rejects_negative_quantity():
+    validator = OrderValidator()
+    invalid_order = Order(quantity=-10, price=100, symbol="AAPL")
+
+    with pytest.raises(ValueError, match="Invalid quantity"):
+        validator.validate(invalid_order)
+```
+
+**Exceptions:**
+
+Inheritance is acceptable ONLY for:
+- Protocol/ABC definitions (interfaces)
+- Pydantic BaseModel subclasses (data models)
+- Framework-required inheritance (pytest fixtures, Django models)
+- Enum subclasses
+
+**Never use inheritance for code reuse** - always extract and compose instead.
 
 ### LLM Abstraction (Custom Provider Pattern)
 

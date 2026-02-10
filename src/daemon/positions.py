@@ -587,11 +587,10 @@ class PositionManager:
 
         # Submit new stop-loss order
         try:
-            order = self.broker.submit_order(
+            order = self.broker.submit_stop_order(
                 symbol=position.symbol,
                 qty=int(position.current_qty),
-                side="sell",
-                stop_loss_price=new_stop_loss,
+                stop_price=new_stop_loss,
             )
             position.stop_loss_order_id = order.order_id
             position.current_stop_loss = new_stop_loss
