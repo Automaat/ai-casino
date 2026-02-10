@@ -17,6 +17,7 @@ from src.agents.risk import (
     StopLossCalculation,
     TrailingStopConfig,
 )
+from src.agents.risk.context import RiskContext
 from src.agents.technical import TechnicalAnalysis
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
@@ -143,7 +144,10 @@ def test_validate_risk_approved(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk(
+        "AAPL", Signal.BUY, position_sizing, account_info, 0.75, context
+    )
 
     assert isinstance(validation, RiskValidation)
     assert validation.approved is True
@@ -162,7 +166,10 @@ def test_validate_risk_insufficient_cash(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk(
+        "AAPL", Signal.BUY, position_sizing, account_info, 0.75, context
+    )
 
     assert validation.approved is False
     assert len(validation.warnings) > 0
@@ -180,7 +187,8 @@ def test_validate_risk_high_position_risk(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["position_risk"] is False
@@ -198,7 +206,8 @@ def test_validate_risk_high_exposure(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["total_exposure"] is False
@@ -214,7 +223,8 @@ def test_validate_risk_duplicate_position(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("SPY", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("SPY", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["no_duplicate"] is False
@@ -231,7 +241,8 @@ def test_validate_risk_sell_without_position(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.SELL, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.SELL, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["has_position_to_sell"] is False
@@ -248,7 +259,8 @@ def test_validate_risk_sell_with_position(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("SPY", Signal.SELL, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("SPY", Signal.SELL, position_sizing, account_info, 0.75, context)
 
     assert "has_position_to_sell" in validation.constraints_met
     assert validation.constraints_met["has_position_to_sell"] is True
@@ -264,7 +276,8 @@ def test_validate_risk_low_confidence(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.5)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.5, context)
 
     assert validation.constraints_met["confidence"] is False
 
@@ -447,6 +460,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -454,6 +468,7 @@ class TestPortfolioVaRValidation:
             {"SPY": _make_position("SPY", 20000.0)},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -468,6 +483,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -475,6 +491,7 @@ class TestPortfolioVaRValidation:
             {"SPY": _make_position("SPY", 20000.0)},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is False
@@ -488,6 +505,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -495,6 +513,7 @@ class TestPortfolioVaRValidation:
             {},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -519,6 +538,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -526,6 +546,7 @@ class TestPortfolioVaRValidation:
             {},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -540,6 +561,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.SELL,
@@ -547,6 +569,7 @@ class TestPortfolioVaRValidation:
             {"AAPL": _make_position("AAPL", 15000.0)},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True

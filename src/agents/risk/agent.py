@@ -635,6 +635,22 @@ class RiskManagementAgent:
         except Exception as e:
             logger.error(f"Audit logging failed: {e}")
 
+    # Delegation methods for backward compatibility with tests
+    def _get_atr(self, market_data: pd.DataFrame, period: int = 14) -> float | None:
+        """Delegate to stop-loss calculator."""
+        return self._stop_loss_calculator._get_atr(market_data, period)
+
+    def _calculate_stop_loss(
+        self, current_price: float, market_data: pd.DataFrame, action: Signal
+    ) -> StopLossCalculation:
+        """Delegate to stop-loss calculator."""
+        return self._stop_loss_calculator.calculate(current_price, market_data, action, None)
+
+    def _get_adaptive_atr_multiplier(self) -> float:
+        """Delegate to stop-loss calculator with current CDaR context."""
+        context = RiskContext(portfolio_cdar=getattr(self, "_portfolio_cdar", None))
+        return self._stop_loss_calculator._get_adaptive_multiplier(context)
+
     def __repr__(self) -> str:
         """String representation."""
         return (
