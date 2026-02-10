@@ -472,7 +472,26 @@ class DaemonAPIClient:
         Returns:
             Dict with keys: positions, snapshots, rebalance
         """
-        return asyncio.run(self.aget_portfolio_data_parallel(days))
+        # Use sync methods to avoid event loop conflicts in Dash callbacks
+        positions = None
+        try:
+            positions = self.get_positions()
+        except Exception as e:
+            logger.warning(f"Failed to fetch positions: {e}")
+
+        snapshots = None
+        try:
+            snapshots = self.get_snapshots(days)
+        except Exception as e:
+            logger.warning(f"Failed to fetch snapshots: {e}")
+
+        rebalance = None
+        try:
+            rebalance = self.get_rebalance()
+        except Exception as e:
+            logger.warning(f"Failed to fetch rebalance: {e}")
+
+        return {"positions": positions, "snapshots": snapshots, "rebalance": rebalance}
 
     def close(self) -> None:
         """Close HTTP clients."""
