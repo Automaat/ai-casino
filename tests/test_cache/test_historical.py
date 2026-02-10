@@ -438,7 +438,7 @@ class TestSignalOutcomes:
         signal_id = signals[0]["id"]
 
         # Attempt to update with invalid field name (SQL injection attempt)
-        with pytest.raises(ValueError, match=r"Invalid signal outcome fields: \{'malicious_field'\}"):
+        with pytest.raises(ValueError, match=r"Invalid signal outcome fields: .*malicious_field"):
             cache.update_signal_outcome(signal_id, malicious_field="DROP TABLE signal_outcomes")
 
         # Attempt with multiple invalid fields

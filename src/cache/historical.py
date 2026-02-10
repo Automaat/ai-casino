@@ -675,7 +675,7 @@ class HistoricalCache:
 
         invalid = set(fields.keys()) - ALLOWED_OUTCOME_FIELDS
         if invalid:
-            msg = f"Invalid signal outcome fields: {invalid}"
+            msg = "Invalid signal outcome fields: " + ", ".join(sorted(invalid))
             raise ValueError(msg)
 
         set_clause = ", ".join(f"{k} = ?" for k in fields)
