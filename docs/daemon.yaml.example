@@ -617,9 +617,9 @@ daemon:
     host: "127.0.0.1"
     # TCP port (1-65535)
     port: 8484
-    # Allowed CORS origins for dashboard access
-    # Add additional origins if dashboard runs on different port
-    # cors_origins: ["http://localhost:8050"]
+    # CORS allowed origins for dashboard access
+    # Add additional origins if dashboard runs on different ports
+    # cors_origins: ["http://localhost:8050", "http://localhost:3000"]
 
   # LLM Provider Configuration (optional, falls back to environment variables)
   llm:

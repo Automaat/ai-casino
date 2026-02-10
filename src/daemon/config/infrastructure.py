@@ -31,8 +31,25 @@ class ApiConfig(BaseModel):
     )
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:8050"],
-        description="Allowed CORS origins for dashboard access",
+        description="CORS allowed origins for dashboard access",
     )
+
+    @field_validator("cors_origins")
+    @classmethod
+    def warn_permissive_cors(cls, v: list[str]) -> list[str]:
+        """Warn if CORS origins include wildcards or non-localhost."""
+        for origin in v:
+            if origin == "*":
+                logger.warning(
+                    "CORS origin '*' allows all domains - security risk. "
+                    "Only use for development in trusted environments."
+                )
+            elif not any(localhost in origin for localhost in ("localhost", "127.0.0.1", "::1")):
+                logger.warning(
+                    f"CORS origin '{origin}' is not localhost - allows external dashboard access. "
+                    "Only use for development in trusted environments."
+                )
+        return v
 
     @field_validator("host")
     @classmethod
