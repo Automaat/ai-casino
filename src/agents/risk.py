@@ -314,10 +314,7 @@ class RiskManagementAgent:
 
         # Round stop loss to broker-compliant increment
         # Note: Broker rounding is also applied in AlpacaBroker as safety net
-        if stop_loss_price >= 1.0:
-            stop_loss_price = round(stop_loss_price, 2)
-        else:
-            stop_loss_price = round(stop_loss_price, 4)
+        stop_loss_price = round(stop_loss_price, 2) if stop_loss_price >= 1.0 else round(stop_loss_price, 4)
         risk_per_share = abs(current_price - stop_loss_price)
 
         trailing_stop = None

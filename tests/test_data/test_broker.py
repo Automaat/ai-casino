@@ -466,8 +466,8 @@ def test_submit_order_validates_stop_loss_price(mock_trading_client, monkeypatch
 
     broker = AlpacaBroker()
 
-    with pytest.raises(BrokerAPIError, match="Stop loss price must be positive, got 0"):
+    with pytest.raises(BrokerAPIError, match=r"Stop loss price must be positive, got 0"):
         broker.submit_order("AAPL", 10, "buy", stop_loss_price=0.0)
 
-    with pytest.raises(BrokerAPIError, match="Stop loss price must be positive, got -10.5"):
+    with pytest.raises(BrokerAPIError, match=r"Stop loss price must be positive, got -10\.5"):
         broker.submit_order("AAPL", 10, "buy", stop_loss_price=-10.5)
