@@ -20,7 +20,7 @@ from rich.console import Console
 
 from src.agents.event_triage import EventTriageAgent
 from src.cache.historical import HistoricalCache
-from src.daemon.events import BaseEvent, EventSignal, Urgency
+from src.daemon.events import BaseEvent, EventSignal, TriageResult, Urgency
 from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -153,9 +153,16 @@ class EventWatcher(ABC):
                     return symbol, None
 
         tasks = [analyze_one(s) for s in symbols]
-        raw_results = await asyncio.gather(*tasks)
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for symbol, result in raw_results:
+        for entry in raw_results:
+            if isinstance(entry, BaseException):
+                # Preserve cancellation/shutdown semantics
+                if isinstance(entry, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise entry
+                logger.error(f"Analysis task failed: {entry}")
+                continue
+            symbol, result = entry
             if result:
                 results[symbol] = result
 
@@ -204,6 +211,20 @@ class EventWatcher(ABC):
             except Exception as e:
                 logger.error(f"Signal callback failed: {e}")
 
+    def _filter_relevant_events(
+        self,
+        events: list[BaseEvent],
+        triage_results: list[TriageResult | BaseException],
+    ) -> list[tuple[BaseEvent, TriageResult]]:
+        """Filter triage results by relevance/urgency, log failures."""
+        relevant = []
+        for event, triage in zip(events, triage_results, strict=True):
+            if isinstance(triage, BaseException):
+                logger.error(f"Event triage failed: {triage}")
+            elif triage.relevance >= self.relevance_threshold and triage.urgency == Urgency.IMMEDIATE:
+                relevant.append((event, triage))
+        return relevant
+
     async def _run_cycle(self) -> None:
         """Main poll cycle (template method)."""
         self._init_components()
@@ -221,14 +242,10 @@ class EventWatcher(ABC):
 
         # 2. Triage events with LLM
         triage_tasks = [self._triage_agent.analyze(e) for e in events]
-        triage_results = await asyncio.gather(*triage_tasks)
+        triage_results = await asyncio.gather(*triage_tasks, return_exceptions=True)
 
-        # 3. Filter by relevance threshold and urgency
-        relevant = [
-            (event, triage)
-            for event, triage in zip(events, triage_results, strict=True)
-            if triage.relevance >= self.relevance_threshold and triage.urgency == Urgency.IMMEDIATE
-        ]
+        # 3. Filter by relevance threshold and urgency (skip failed triages)
+        relevant = self._filter_relevant_events(events, triage_results)
 
         if not relevant:
             logger.debug(

@@ -38,6 +38,26 @@ HTTP_RETRY = retry(
 )
 
 
+def _collect_timeframe_results(
+    results: list[tuple[Timeframe, pd.DataFrame | None] | BaseException],
+) -> dict[Timeframe, pd.DataFrame]:
+    """Collect successful timeframe results, logging failures."""
+    timeframe_dict: dict[Timeframe, pd.DataFrame] = {}
+    for result in results:
+        if isinstance(result, BaseException):
+            # Re-raise cancellation/shutdown exceptions
+            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise result
+            logger.error(f"Timeframe fetch failed: {result}")
+            continue
+        tf, data = result
+        if data is not None and not data.empty:
+            timeframe_dict[tf] = data
+        else:
+            logger.warning(f"No data available for {tf}, skipping")
+    return timeframe_dict
+
+
 class MarketData(BaseModel):
     """Market data container."""
 
@@ -379,14 +399,9 @@ class MarketDataFetcher:
                 logger.warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)
 
-        results = await asyncio.gather(*[fetch_timeframe(tf) for tf in timeframes])
+        results = await asyncio.gather(*[fetch_timeframe(tf) for tf in timeframes], return_exceptions=True)
 
-        timeframe_dict = {}
-        for tf, data in results:
-            if data is not None and not data.empty:
-                timeframe_dict[tf] = data
-            else:
-                logger.warning(f"No data available for {tf}, skipping")
+        timeframe_dict = _collect_timeframe_results(results)
 
         if not timeframe_dict:
             msg = f"No timeframe data could be fetched for {symbol}"

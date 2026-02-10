@@ -34,6 +34,22 @@ from src.workflows.stages.strategy_selection import _timed_agent_call
 T = TypeVar("T")
 
 
+def _unwrap_or_log(result: T | BaseException, label: str) -> T | None:
+    """Return result if successful, log and return None if exception.
+
+    Control-flow exceptions (e.g. cancellation, shutdown) are re-raised to
+    allow proper propagation.
+    """
+    if isinstance(result, BaseException):
+        # Re-raise control-flow exceptions so shutdown/cancellation propagates.
+        if isinstance(result, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
+            raise result
+        # Log other exceptions with stack trace and return None.
+        logger.opt(exception=result).error(f"{label} failed")
+        return None
+    return result
+
+
 def _is_rate_limit_error(e: Exception) -> bool:
     """Check if exception is related to API rate limiting."""
     msg = str(e).lower()
@@ -286,7 +302,7 @@ async def run_analyses(  # noqa: PLR0913
         collector,
     )
 
-    bullish, bearish = await asyncio.gather(bullish_task, bearish_task)
+    bullish, bearish = await asyncio.gather(bullish_task, bearish_task, return_exceptions=True)
 
     return AnalysisOutput(
         technical_analysis=technical,
@@ -297,7 +313,7 @@ async def run_analyses(  # noqa: PLR0913
         comparative_analysis=comparative,
         web_research=web_research,
         social_sentiment_analysis=social_sentiment,
-        bullish_research=bullish,
-        bearish_research=bearish,
+        bullish_research=_unwrap_or_log(bullish, "Bullish research"),
+        bearish_research=_unwrap_or_log(bearish, "Bearish research"),
         warnings=warnings,
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,15 @@ from src.workflows.types import TradingWorkflowResult
 if TYPE_CHECKING:
     from src.database.repositories.position import PositionRecordRepository
     from src.database.repositories.position_action import PositionManagementActionRepository
+
+
+def _log_task_exception(task: asyncio.Task[object]) -> None:
+    """Log exceptions from fire-and-forget tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.opt(exception=exc).error("Background task failed")
 
 
 class PositionRecord(BaseModel):
@@ -143,10 +153,8 @@ class PositionManager:
         """Persist new position to database."""
         if self._position_repository:
             try:
-                import asyncio
-
                 task = asyncio.create_task(self._position_repository.create(position))  # type: ignore[bad-argument-type]
-                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                task.add_done_callback(_log_task_exception)
             except Exception as e:
                 logger.error(f"Failed to persist new position to database: {e}")
                 raise
@@ -155,10 +163,8 @@ class PositionManager:
         """Persist position update to database."""
         if self._position_repository:
             try:
-                import asyncio
-
                 task = asyncio.create_task(self._position_repository.update(position))  # type: ignore[bad-argument-type]
-                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                task.add_done_callback(_log_task_exception)
             except Exception as e:
                 logger.error(f"Failed to update position in database: {e}")
                 raise
@@ -167,10 +173,8 @@ class PositionManager:
         """Delete position from database."""
         if self._position_repository:
             try:
-                import asyncio
-
                 task = asyncio.create_task(self._position_repository.delete_by_symbol(symbol))
-                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                task.add_done_callback(_log_task_exception)
             except Exception as e:
                 logger.error(f"Failed to delete position from database: {e}")
                 raise
@@ -273,7 +277,7 @@ class PositionManager:
                     import asyncio
 
                     task = asyncio.create_task(self._position_action_repository.create(action))  # type: ignore[bad-argument-type]
-                    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                    task.add_done_callback(_log_task_exception)
                     logger.debug(
                         f"Persisted position action to database: {action.symbol} {action.action_type}"
                     )

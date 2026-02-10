@@ -289,6 +289,53 @@ def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
 
 **Rules:** Mock all external APIs, test ranges/types, no real API integration tests
 
+### Async & Concurrency
+
+**Async-first API:** All I/O-bound methods must be `async`. Sync wrappers (`asyncio.run()`) only at CLI entry points — never inside async context.
+
+**Blocking I/O offloading (MANDATORY):**
+- Network/disk/ML inference → `await asyncio.to_thread(blocking_fn, *args)`
+- CPU-heavy (FinBERT) → `await loop.run_in_executor(None, fn, *args)`
+- Never call blocking functions directly in async code (freezes event loop)
+
+```python
+# ✅ GOOD
+daily = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol, 30)
+scores = await loop.run_in_executor(None, self.finbert.analyze_batch, texts)
+
+# ❌ BAD - blocks event loop
+daily = self._market_fetcher.fetch_daily(symbol, 30)
+```
+
+**Concurrency control:**
+- `asyncio.Semaphore` for rate limiting (LLM calls, API requests)
+- `asyncio.Lock` for shared async state
+- `threading.Lock` only for thread-shared state (cache, model access)
+- Never use `threading.Lock` in async code — use `asyncio.Lock`
+
+**Parallel execution:** `asyncio.gather(*tasks, return_exceptions=True)` — always handle exceptions:
+
+```python
+results = await asyncio.gather(*tasks, return_exceptions=True)
+for result in results:
+    if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+        raise result
+    if isinstance(result, Exception):
+        logger.error(f"Task failed: {result}")
+```
+
+**HTTP clients:**
+- Reuse clients for connection pooling (don't create per-request)
+- `async with httpx.AsyncClient()` for short-lived scopes
+- Store as instance attribute for long-lived services
+
+**Anti-patterns:**
+- ❌ `nest_asyncio` — archived, breaks cancellation/exceptions
+- ❌ `asyncio.run()` inside async functions — RuntimeError
+- ❌ Blocking calls (`requests.get`, `time.sleep`, `open().read()`) in async
+- ❌ Fire-and-forget `asyncio.create_task()` without error handling
+- ❌ Unbounded `asyncio.gather()` — use semaphore for backpressure
+
 ---
 
 ## Simplicity Principles

@@ -16,6 +16,17 @@ from src.daemon.notification_helper import DaemonNotificationHelper
 
 console = Console()
 
+
+def _log_event_publish_error(task: asyncio.Task[object]) -> None:
+    """Log exceptions from fire-and-forget event publish tasks."""
+    if task.cancelled():
+        return
+
+    exc = task.exception()
+    if exc is not None:
+        logger.error(f"Event publish failed: {exc}")
+
+
 if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
     from src.daemon.state import SectorRotationRecord
@@ -604,7 +615,7 @@ class DaemonTaskService:
                 asyncio.run(publish_coro)
             else:
                 task = loop.create_task(publish_coro)
-                task.add_done_callback(lambda _: None)  # Ensure exception is logged
+                task.add_done_callback(_log_event_publish_error)
         except Exception as e:
             logger.error(f"Failed to publish {event_type} event: {e}")
 
@@ -1277,7 +1288,15 @@ class DaemonTaskService:
                 task = asyncio.create_task(
                     self._notification_helper.notify_var_breach(report, self.components)
                 )
-                _ = task  # Suppress RUF006
+
+                def _log_var_notification_result(t: asyncio.Task) -> None:
+                    if t.cancelled():
+                        return
+                    exc = t.exception()
+                    if exc is not None:
+                        logger.opt(exception=exc).error("VaR notification failed")
+
+                task.add_done_callback(_log_var_notification_result)
 
         except Exception as e:
             error_msg = f"Risk report generation failed: {e}"
