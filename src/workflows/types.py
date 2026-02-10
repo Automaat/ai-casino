@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel
+from typing_extensions import TypedDict
+
+if TYPE_CHECKING:
+    from src.daemon.degradation import DegradationContext
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
@@ -20,6 +26,18 @@ from src.data.broker import OrderStatus
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
+
+
+class WorkflowExtraContext(TypedDict, total=False):
+    """Optional context passed to workflow pipeline."""
+
+    degradation_context: "DegradationContext | None"
+    enable_multi_timeframe: bool
+    sector_rotation_context: str | None
+    earnings_context: str | None
+    peer_analysis_context: str | None
+    game_plan_context: str | None
+    position_context: dict[str, object] | None
 
 
 class BacktestValidation(BaseModel):
