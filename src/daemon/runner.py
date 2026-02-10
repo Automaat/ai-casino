@@ -2031,7 +2031,12 @@ class DaemonRunner:
         try:
             from src.daemon.health import HealthChecker
 
-            checker = HealthChecker(self.config, self.state, notification_service=self.notification_service)
+            checker = HealthChecker(
+                self.config,
+                self.state,
+                container=self._container,
+                notification_service=self.notification_service,
+            )
             report = await checker.run()
 
             self.state.last_health_check = datetime.now(tz=self.scheduler.timezone)
