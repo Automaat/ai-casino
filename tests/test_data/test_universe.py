@@ -403,6 +403,9 @@ class TestStockUniverseFetcher:
             universe1 = universe_fetcher.fetch_us_liquid(filters1)
             universe2 = universe_fetcher.fetch_us_liquid(filters2)
 
-            # Both should succeed but use different cache keys
+            # Both should succeed and use different cache keys
             assert universe1.name == "US_LIQUID"
             assert universe2.name == "US_LIQUID"
+            # Verify different filter configs produce different results
+            # (first should include more stocks due to lower market cap threshold)
+            assert len(universe1.stocks) >= len(universe2.stocks)

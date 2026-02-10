@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pandas as pd
+import yfinance as yf
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -444,12 +445,16 @@ class StockDiscoveryEngine:
             universe = self.universe_fetcher.fetch_russell3000()
             return [stock.symbol for stock in universe.stocks]
         if universe_type == "US_LIQUID":
-            # US_LIQUID requires liquidity_filters from config
-            # Discovery engine doesn't have access to liquidity_filters, so fetch unfiltered Russell 3000
-            # and rely on portfolio_filters to handle quality filtering
-            logger.warning("US_LIQUID not supported in discovery engine, using RUSSELL3000 instead")
-            universe = self.universe_fetcher.fetch_russell3000()
-            return [stock.symbol for stock in universe.stocks]
+            # US_LIQUID requires liquidity_filters from config, which are not available
+            # in the discovery engine. Failing fast here avoids silently using a different
+            # universe than configured and returning low-quality/illiquid stocks.
+            msg = (
+                "Discovery engine does not support 'US_LIQUID' screening_universe. "
+                "Please use a supported universe (e.g. SP500, NASDAQ100, RUSSELL3000) "
+                "or configure liquidity filtering in a component that has access to "
+                "liquidity_filters."
+            )
+            raise ValueError(msg)
         # Fallback to combined universe for any other value
         universe = self.universe_fetcher.fetch_combined()
         return [stock.symbol for stock in universe.stocks]
@@ -464,8 +469,6 @@ class StockDiscoveryEngine:
             Dict with name, sector, market_cap
         """
         try:
-            import yfinance as yf
-
             ticker = yf.Ticker(symbol)
             info = ticker.info
 

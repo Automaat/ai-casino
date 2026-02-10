@@ -1,5 +1,6 @@
 """Stock universe fetcher for S&P 500 and NASDAQ 100."""
 
+import csv
 import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -404,18 +405,16 @@ class StockUniverseFetcher:
             lines = response.text.strip().split("\n")[10:]
             stocks = []
 
-            for line in lines:
-                if not line.strip():
-                    continue
-
-                parts = line.split(",")
+            # Use csv.reader to properly handle quoted fields with commas
+            reader = csv.reader(lines)
+            for parts in reader:
                 if len(parts) < 4:
                     continue
 
                 # Columns: Ticker, Name, Sector, Asset Class, Market Value, Weight, ...
-                ticker = parts[0].strip().replace('"', "")
-                name = parts[1].strip().replace('"', "")
-                sector = parts[2].strip().replace('"', "")
+                ticker = parts[0].strip()
+                name = parts[1].strip()
+                sector = parts[2].strip()
 
                 # Skip header row and non-equity entries
                 if ticker in ("Ticker", "-", "") or sector == "-":
