@@ -53,7 +53,7 @@ def dashboard(
     """Launch Dash dashboard for daemon monitoring.
 
     Args:
-        api_url: Daemon API URL (default: http://localhost:8001)
+        api_url: Daemon API URL. If not provided, DashboardConfig uses $DAEMON_API_URL or defaults to http://localhost:8484
         port: Dashboard server port (default: 8050)
         debug: Enable debug mode (default: False)
     """
@@ -71,11 +71,18 @@ def dashboard(
     )
 
     try:
-        # Create config
-        config = DashboardConfig(
-            api_url=api_url or "http://localhost:8001",
-            port=port,
-        )
+        # Create config - let DashboardConfig handle api_url default
+        # Normalize empty/whitespace-only strings to None so DashboardConfig applies env/default
+        normalized_api_url = None
+        if api_url is not None:
+            stripped_api_url = api_url.strip()
+            if stripped_api_url:
+                normalized_api_url = stripped_api_url
+
+        if normalized_api_url is not None:
+            config = DashboardConfig(api_url=normalized_api_url, port=port)
+        else:
+            config = DashboardConfig(port=port)
 
         console.print("[bold cyan]AI Casino Dashboard[/bold cyan]")
         console.print(f"API URL: {config.api_url}")
