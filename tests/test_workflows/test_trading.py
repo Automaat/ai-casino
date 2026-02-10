@@ -24,7 +24,7 @@ from src.workflows.types import TradingWorkflowResult
 
 def test_trading_workflow_init(test_container):
     """Test workflow initialization from container."""
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
 
     assert workflow.market_fetcher is not None
     assert workflow.news_fetcher is not None
@@ -73,7 +73,7 @@ def test_trading_workflow_init_meta_agent(test_container):
 
 async def test_trading_workflow_analyze(test_container_full):
     """Test full workflow analyze."""
-    workflow = test_container_full.workflow_momentum()
+    workflow = test_container_full.workflow_momentum(container=test_container_full)
     result = await workflow.analyze("AAPL", period_days=90)
 
     assert isinstance(result, TradingWorkflowResult)
@@ -123,7 +123,7 @@ async def test_fetch_data(test_container_full, sample_news_articles):
     mock_news_fetcher.fetch_company_news.return_value = sample_news_articles
     test_container_full.news_fetcher.override(mock_news_fetcher)
 
-    workflow = test_container_full.workflow_momentum()
+    workflow = test_container_full.workflow_momentum(container=test_container_full)
     state = await workflow._fetch_data("AAPL", 90, TradingSession.REGULAR)
 
     assert state["symbol"] == "AAPL"
@@ -145,7 +145,7 @@ async def test_run_technical_analysis(test_container, sample_ohlcv_data):
 
 async def test_run_sentiment_analysis(test_container, sample_news_articles):
     """Test sentiment analysis component."""
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
     result = await workflow.sentiment_analyst.analyze("AAPL", sample_news_articles)
 
     assert result is not None
@@ -154,7 +154,7 @@ async def test_run_sentiment_analysis(test_container, sample_news_articles):
 
 async def test_make_decision(test_container, sample_bullish_research, sample_bearish_research):
     """Test decision making step."""
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
 
     state: TradingState = {
         "symbol": "AAPL",
@@ -233,7 +233,7 @@ async def test_make_decision(test_container, sample_bullish_research, sample_bea
 
 def test_repr(test_container):
     """Test workflow string representation."""
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
     assert repr(workflow) == "TradingWorkflow(agents=9, mode=momentum)"
 
 
@@ -374,7 +374,7 @@ async def test_account_info_passed_to_trader(
     test_container, sample_bullish_research, sample_bearish_research
 ):
     """Test portfolio info passed to trader for context-aware decisions."""
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
 
     state = {
         "symbol": "AAPL",
@@ -441,7 +441,7 @@ async def test_workflow_continues_when_fundamental_rate_limited(test_container):
     mock_fundamental_fetcher.fetch_overview.side_effect = Exception("API rate limit: 5 api calls per minute")
     test_container.fundamental_fetcher.override(mock_fundamental_fetcher)
 
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
     result = await workflow.analyze("AAPL", period_days=90)
 
     assert result.fundamental is None
@@ -462,7 +462,7 @@ async def test_workflow_raises_when_fundamental_fails_non_rate_limit(test_contai
     mock_fundamental_fetcher.fetch_overview.side_effect = Exception("Invalid API key")
     test_container.fundamental_fetcher.override(mock_fundamental_fetcher)
 
-    workflow = test_container.workflow_momentum()
+    workflow = test_container.workflow_momentum(container=test_container)
 
     with pytest.raises(Exception, match="Invalid API key"):
         await workflow.analyze("AAPL", period_days=90)

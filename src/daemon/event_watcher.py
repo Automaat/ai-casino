@@ -94,7 +94,10 @@ class EventWatcher(ABC):
             self._triage_agent = EventTriageAgent(llm_client)
 
         if self._workflow is None:
-            self._workflow = self._container.workflow_meta(historical_cache=self._historical_cache)
+            self._workflow = self._container.workflow_meta(
+                historical_cache=self._historical_cache,
+                container=self._container,
+            )
             logger.info(f"{self.__class__.__name__} workflow initialized")
 
     def _check_cooldown(self, symbol: str) -> bool:

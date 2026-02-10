@@ -72,7 +72,7 @@ class TestAnalyzeStockTool:
         mock_workflow = MagicMock(spec=TradingWorkflow)
         mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
         # Override workflow_momentum provider (used by analyze_stock)
-        test_container_full.workflow_momentum.override(providers.Factory(lambda: mock_workflow))
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
 
         result = tool.execute(symbol="AAPL", period_days=90)
 
@@ -91,7 +91,7 @@ class TestAnalyzeStockTool:
 
         mock_workflow = MagicMock(spec=TradingWorkflow)
         mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
-        test_container_full.workflow_momentum.override(providers.Factory(lambda: mock_workflow))
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
 
         tool.execute(symbol="AAPL")
 
@@ -107,7 +107,7 @@ class TestAnalyzeStockTool:
 
         mock_workflow = MagicMock(spec=TradingWorkflow)
         mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
-        test_container_full.workflow_momentum.override(providers.Factory(lambda: mock_workflow))
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
 
         tool.execute(symbol="aapl", period_days=90)
 
@@ -123,7 +123,7 @@ class TestAnalyzeStockTool:
 
         mock_workflow = MagicMock(spec=TradingWorkflow)
         mock_workflow.analyze = AsyncMock(side_effect=Exception("Workflow error"))
-        test_container_full.workflow_momentum.override(providers.Factory(lambda: mock_workflow))
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
 
         result = tool.execute(symbol="INVALID")
 

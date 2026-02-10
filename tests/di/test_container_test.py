@@ -71,7 +71,7 @@ def test_test_container_full_fixture(test_container_full):
     assert test_container_full is not None
 
     # Verify workflow can be created
-    workflow = test_container_full.workflow_momentum()
+    workflow = test_container_full.workflow_momentum(container=test_container_full)
     assert workflow is not None
 
 
