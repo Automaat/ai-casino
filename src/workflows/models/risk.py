@@ -1,0 +1,77 @@
+"""Risk assessment stage I/O models."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pandas as pd
+from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from src.daemon.degradation import DegradationContext
+
+from src.agents.risk import AccountInfo, RiskAssessment
+from src.agents.trader import TradingDecision
+from src.data.broker import BrokerPosition
+from src.strategies.timeframe import MultiTimeframeData, Timeframe
+from src.workflows.types import BacktestValidation
+
+
+class RiskAssessmentInput(BaseModel):
+    """Input for risk assessment stage."""
+
+    symbol: str
+    market_data: pd.DataFrame | MultiTimeframeData | None
+    final_decision: TradingDecision
+    account_info: AccountInfo | None
+    broker_positions: dict[str, BrokerPosition] | None
+    portfolio_value: float | None
+    target_portfolio_weight: float | None
+    backtest_validation: BacktestValidation | None
+    degradation_context: "DegradationContext | None"
+    broker_api_failed: bool
+
+    class Config:
+        """Pydantic config."""
+
+        arbitrary_types_allowed = True
+
+    def get_daily_data(self) -> pd.DataFrame:
+        """Extract daily timeframe data from market data.
+
+        Returns:
+            Daily OHLCV dataframe
+
+        Raises:
+            ValueError: If market data is missing
+        """
+        if self.market_data is None:
+            raise ValueError("Market data is None")
+        if isinstance(self.market_data, MultiTimeframeData):
+            return self.market_data.timeframes[Timeframe.DAILY]
+        return self.market_data
+
+    def get_current_price(self) -> float:
+        """Extract current price from market data.
+
+        Returns:
+            Current closing price
+
+        Raises:
+            ValueError: If market data is missing or has no price data
+        """
+        daily_data = self.get_daily_data()
+        if daily_data.empty:
+            raise ValueError("Market data is empty")
+        return float(daily_data["close"].iloc[-1])
+
+
+class RiskAssessmentOutput(BaseModel):
+    """Output from risk assessment stage."""
+
+    risk_assessment: RiskAssessment
+
+    class Config:
+        """Pydantic config."""
+
+        arbitrary_types_allowed = True
