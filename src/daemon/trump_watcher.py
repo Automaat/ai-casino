@@ -237,9 +237,13 @@ If no specific stocks are affected, return "NONE".
                     return symbol, None
 
         tasks = [analyze_one(s) for s in symbols]
-        raw_results = await asyncio.gather(*tasks)
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for symbol, result in raw_results:
+        for entry in raw_results:
+            if isinstance(entry, BaseException):
+                logger.error(f"Analysis task failed: {entry}")
+                continue
+            symbol, result = entry
             if result:
                 results[symbol] = result
 

@@ -235,7 +235,7 @@ def events_daemon(
             signal.signal(signal.SIGTERM, shutdown_handler)
 
             tasks = [w.run() for w in watchers]
-            await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         console.print()
         console.print(f"[bold green]Starting {len(watchers)} event watcher(s)...[/bold green]")

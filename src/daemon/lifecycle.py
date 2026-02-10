@@ -98,6 +98,9 @@ class DaemonLifecycle:
             )
             self._api_server = uvicorn.Server(config)
             self._api_task = asyncio.create_task(self._api_server.serve())
+            self._api_task.add_done_callback(
+                lambda t: logger.error(f"API server crashed: {t.exception()}") if t.exception() else None
+            )
 
             logger.info(
                 f"API server started at http://{self.components.config.api.host}:"

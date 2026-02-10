@@ -73,7 +73,9 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
         asyncio.get_running_loop()
         # If already in event loop, schedule migration
         task = asyncio.create_task(engine.ensure_migrated())
-        task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        task.add_done_callback(
+            lambda t: logger.error(f"DB migration failed: {t.exception()}") if t.exception() else None
+        )
     except RuntimeError:
         # No event loop yet, run in new loop
         asyncio.run(engine.ensure_migrated())

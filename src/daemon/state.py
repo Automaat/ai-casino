@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,12 @@ if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+
+
+def _log_task_exception(task: asyncio.Task[object]) -> None:
+    """Log exceptions from fire-and-forget tasks."""
+    if not task.cancelled() and task.exception():
+        logger.error(f"Background task failed: {task.exception()}")
 
 
 class AnalysisRecord(BaseModel):
@@ -376,10 +383,8 @@ class DaemonState(BaseModel):
         # Persist to database if repository available
         if self._analysis_repository:
             try:
-                import asyncio
-
                 task = asyncio.create_task(self._analysis_repository.create(record))  # type: ignore[bad-argument-type]
-                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                task.add_done_callback(_log_task_exception)
                 logger.debug(f"Persisted analysis record to database: {symbol} {signal}")
             except Exception as e:
                 logger.error(f"Failed to persist analysis record to database: {e}")
@@ -841,7 +846,7 @@ class DaemonState(BaseModel):
                     import asyncio
 
                     task = asyncio.create_task(self._discovery_repository.create(history_record))  # type: ignore[bad-argument-type]
-                    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                    task.add_done_callback(_log_task_exception)
                     logger.debug(f"Persisted discovery history to database: {candidate.symbol}")
                 except Exception as e:
                     logger.error(f"Failed to persist discovery history to database: {e}")
@@ -867,8 +872,6 @@ class DaemonState(BaseModel):
         """
         if self._snapshot_repository:
             try:
-                import asyncio
-
                 from src.database.repositories.snapshot import PortfolioSnapshot as DBSnapshot
 
                 db_snapshot = DBSnapshot(
@@ -881,7 +884,7 @@ class DaemonState(BaseModel):
                     trigger=snapshot.trigger,
                 )
                 task = asyncio.create_task(self._snapshot_repository.create(db_snapshot))
-                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                task.add_done_callback(_log_task_exception)
                 logger.info(
                     f"Created portfolio snapshot: {snapshot.trigger} value={snapshot.portfolio_value}"
                 )

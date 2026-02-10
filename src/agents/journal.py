@@ -48,6 +48,17 @@ class DailyJournal(BaseModel):
     overall_assessment: str
 
 
+def _filter_outcomes(raw_outcomes: list[SignalOutcome | BaseException | None]) -> list[SignalOutcome]:
+    """Filter gather results, logging exceptions."""
+    outcomes: list[SignalOutcome] = []
+    for o in raw_outcomes:
+        if isinstance(o, BaseException):
+            logger.error(f"Outcome fetch failed: {o}")
+        elif o is not None:
+            outcomes.append(o)
+    return outcomes
+
+
 class TradeJournalAgent:
     """Agent that reviews day's trading signals against actual price movement."""
 
@@ -125,8 +136,8 @@ class TradeJournalAgent:
                     return None
 
         tasks = [fetch_outcome(symbol, record) for symbol, record in latest_by_symbol.items()]
-        raw_outcomes = await asyncio.gather(*tasks)
-        outcomes = [o for o in raw_outcomes if o is not None]
+        raw_outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        outcomes = _filter_outcomes(raw_outcomes)
 
         if not outcomes:
             return DailyJournal(
