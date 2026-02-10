@@ -15,7 +15,7 @@ def discovery_record() -> DiscoveryHistoryRecord:
         symbol="NVDA",
         discovered_at=datetime.now(UTC),
         composite_score=0.78,
-        sources=[DiscoverySource.TECHNICAL_SCREENING, DiscoverySource.EARNINGS_CALENDAR],
+        sources=[DiscoverySource.TECHNICAL_SCREENING, DiscoverySource.EARNINGS_UPCOMING],
         added_to_watchlist=True,
         ttl_expires_at=datetime.now(UTC) + timedelta(days=7),
         first_signal="BUY",
