@@ -15,6 +15,7 @@ from src.database.models import DiscoveryHistoryRecordORM
 from src.database.repositories.base import BaseRepository
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import Result
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -161,11 +162,11 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
         Returns:
             Number of records deleted
         """
-        result = await self._session.execute(
+        result: Result = await self._session.execute(
             delete(DiscoveryHistoryRecordORM).where(DiscoveryHistoryRecordORM.created_at < cutoff)
         )
         await self._session.commit()
-        deleted_count = result.rowcount if result.rowcount else 0
+        deleted_count = result.rowcount or 0  # type: ignore[missing-attribute]
         logger.info(f"Deleted {deleted_count} discovery history records before {cutoff}")
         return deleted_count
 

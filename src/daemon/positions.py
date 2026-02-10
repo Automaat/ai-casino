@@ -1,5 +1,7 @@
 """Position lifecycle management for daemon."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -57,8 +59,8 @@ class PositionManager:
         self,
         broker: AlpacaBroker,
         config: PositionManagementConfig,
-        position_repository: "PositionRecordRepository | None" = None,
-        position_action_repository: "PositionManagementActionRepository | None" = None,
+        position_repository: PositionRecordRepository | None = None,
+        position_action_repository: PositionManagementActionRepository | None = None,
     ) -> None:
         """Initialize position manager.
 
@@ -143,7 +145,7 @@ class PositionManager:
             try:
                 import asyncio
 
-                task = asyncio.create_task(self._position_repository.create(position))
+                task = asyncio.create_task(self._position_repository.create(position))  # type: ignore[bad-argument-type]
                 task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
             except Exception as e:
                 logger.error(f"Failed to persist new position to database: {e}")
@@ -155,7 +157,7 @@ class PositionManager:
             try:
                 import asyncio
 
-                task = asyncio.create_task(self._position_repository.update(position))
+                task = asyncio.create_task(self._position_repository.update(position))  # type: ignore[bad-argument-type]
                 task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
             except Exception as e:
                 logger.error(f"Failed to update position in database: {e}")
@@ -270,7 +272,7 @@ class PositionManager:
                 try:
                     import asyncio
 
-                    task = asyncio.create_task(self._position_action_repository.create(action))
+                    task = asyncio.create_task(self._position_action_repository.create(action))  # type: ignore[bad-argument-type]
                     task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
                     logger.debug(
                         f"Persisted position action to database: {action.symbol} {action.action_type}"

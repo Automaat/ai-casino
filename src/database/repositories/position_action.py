@@ -15,6 +15,7 @@ from src.database.models import PositionManagementActionORM
 from src.database.repositories.base import BaseRepository
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import Result
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -117,11 +118,11 @@ class PositionManagementActionRepository(BaseRepository[PositionManagementAction
         Returns:
             Number of actions deleted
         """
-        result = await self._session.execute(
+        result: Result = await self._session.execute(
             delete(PositionManagementActionORM).where(PositionManagementActionORM.created_at < cutoff)
         )
         await self._session.commit()
-        deleted_count = result.rowcount if result.rowcount else 0
+        deleted_count = result.rowcount or 0  # type: ignore[missing-attribute]
         logger.info(f"Deleted {deleted_count} position actions before {cutoff}")
         return deleted_count
 

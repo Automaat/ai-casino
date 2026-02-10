@@ -144,7 +144,7 @@ class PositionRecordORM(Base):
     current_stop_loss: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     initial_stop_loss: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     stop_loss_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    profit_targets: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    profit_targets: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     days_held: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     last_updated: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     trailing_stop_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

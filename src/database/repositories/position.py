@@ -15,6 +15,7 @@ from src.database.models import PositionRecordORM
 from src.database.repositories.base import BaseRepository
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import Result
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -148,11 +149,11 @@ class PositionRecordRepository(BaseRepository[PositionRecord]):
         Returns:
             True if deleted, False if not found
         """
-        result = await self._session.execute(
+        result: Result = await self._session.execute(
             delete(PositionRecordORM).where(PositionRecordORM.symbol == symbol)
         )
         await self._session.commit()
-        deleted = result.rowcount > 0 if result.rowcount else False
+        deleted = (result.rowcount or 0) > 0  # type: ignore[missing-attribute]
         if deleted:
             logger.info(f"Deleted position record: {symbol}")
         return deleted

@@ -1,5 +1,7 @@
 """Daemon state persistence."""
 
+from __future__ import annotations
+
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -270,15 +272,15 @@ class DaemonState(BaseModel):
     active_discovery_candidates: list[DiscoveryCandidate] = Field(default_factory=list)
 
     # Database repositories (private attributes - not serialized)
-    _analysis_repository: "AnalysisRecordRepository | None" = PrivateAttr(default=None)
-    _discovery_repository: "DiscoveryHistoryRepository | None" = PrivateAttr(default=None)
-    _snapshot_repository: "PortfolioSnapshotRepository | None" = PrivateAttr(default=None)
+    _analysis_repository: AnalysisRecordRepository | None = PrivateAttr(default=None)
+    _discovery_repository: DiscoveryHistoryRepository | None = PrivateAttr(default=None)
+    _snapshot_repository: PortfolioSnapshotRepository | None = PrivateAttr(default=None)
 
     def set_repositories(
         self,
-        analysis_repository: "AnalysisRecordRepository | None" = None,
-        discovery_repository: "DiscoveryHistoryRepository | None" = None,
-        snapshot_repository: "PortfolioSnapshotRepository | None" = None,
+        analysis_repository: AnalysisRecordRepository | None = None,
+        discovery_repository: DiscoveryHistoryRepository | None = None,
+        snapshot_repository: PortfolioSnapshotRepository | None = None,
     ) -> None:
         """Inject database repositories after loading state.
 
@@ -293,7 +295,7 @@ class DaemonState(BaseModel):
         logger.debug("Repositories injected into DaemonState")
 
     @classmethod
-    def load(cls, path: str) -> "DaemonState":
+    def load(cls, path: str) -> DaemonState:
         """Load state from JSON file.
 
         Args:
@@ -376,7 +378,7 @@ class DaemonState(BaseModel):
             try:
                 import asyncio
 
-                task = asyncio.create_task(self._analysis_repository.create(record))
+                task = asyncio.create_task(self._analysis_repository.create(record))  # type: ignore[bad-argument-type]
                 task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
                 logger.debug(f"Persisted analysis record to database: {symbol} {signal}")
             except Exception as e:
@@ -405,7 +407,7 @@ class DaemonState(BaseModel):
         if len(self.errors) > 100:
             self.errors = self.errors[-50:]
 
-    def record_degradation(self, context: "DegradationContext") -> None:
+    def record_degradation(self, context: DegradationContext) -> None:
         """Record degradation event.
 
         Args:
@@ -751,7 +753,7 @@ class DaemonState(BaseModel):
         if len(self.game_plan_history) > 30:
             self.game_plan_history = self.game_plan_history[-30:]
 
-    def add_position(self, position: "PositionRecord") -> None:
+    def add_position(self, position: PositionRecord) -> None:
         """Add or update position in state.
 
         Args:
@@ -770,7 +772,7 @@ class DaemonState(BaseModel):
             self.active_positions.pop(symbol)
             logger.debug(f"Removed position: {symbol}")
 
-    def update_position(self, position: "PositionRecord") -> None:
+    def update_position(self, position: PositionRecord) -> None:
         """Update existing position in state.
 
         Args:
@@ -778,7 +780,7 @@ class DaemonState(BaseModel):
         """
         self.add_position(position)
 
-    def record_position_action(self, action: "PositionManagementAction") -> None:
+    def record_position_action(self, action: PositionManagementAction) -> None:
         """Record position management action.
 
         Args:
@@ -789,7 +791,7 @@ class DaemonState(BaseModel):
         if len(self.position_management_history) > 100:
             self.position_management_history = self.position_management_history[-100:]
 
-    def get_position(self, symbol: str) -> "PositionRecord | None":
+    def get_position(self, symbol: str) -> PositionRecord | None:
         """Get position record by symbol.
 
         Args:
@@ -838,7 +840,7 @@ class DaemonState(BaseModel):
                 try:
                     import asyncio
 
-                    task = asyncio.create_task(self._discovery_repository.create(history_record))
+                    task = asyncio.create_task(self._discovery_repository.create(history_record))  # type: ignore[bad-argument-type]
                     task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
                     logger.debug(f"Persisted discovery history to database: {candidate.symbol}")
                 except Exception as e:

@@ -15,6 +15,7 @@ from src.database.models import AnalysisRecordORM
 from src.database.repositories.base import BaseRepository
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import Result
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -140,7 +141,7 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
             stmt = stmt.where(AnalysisRecordORM.symbol == symbol)
 
         result = await self._session.execute(stmt)
-        return dict(result.all())
+        return {row[0]: row[1] for row in result.all()}
 
     async def delete_before(self, cutoff: datetime) -> int:
         """Delete analysis records older than cutoff date.
@@ -151,11 +152,11 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         Returns:
             Number of records deleted
         """
-        result = await self._session.execute(
+        result: Result = await self._session.execute(
             delete(AnalysisRecordORM).where(AnalysisRecordORM.created_at < cutoff)
         )
         await self._session.commit()
-        deleted_count = result.rowcount if result.rowcount else 0
+        deleted_count = result.rowcount or 0  # type: ignore[missing-attribute]
         logger.info(f"Deleted {deleted_count} analysis records before {cutoff}")
         return deleted_count
 
