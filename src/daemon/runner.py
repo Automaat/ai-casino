@@ -426,6 +426,7 @@ class DaemonRunner:
                 param_store=self.param_store,
                 notification_service=self.notification_service,
                 historical_cache=self._historical_cache,
+                container=self._container,  # Explicitly pass container (providers.Self() doesn't work)
             )
             logger.info("Trading workflow initialized")
 

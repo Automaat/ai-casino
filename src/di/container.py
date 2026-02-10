@@ -212,6 +212,8 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides
+    # Note: container must be passed explicitly when calling these factories
+    # (providers.Self() doesn't work reliably with Factory providers)
     workflow_meta = providers.Factory(
         workflow_providers.create_workflow_meta,
         llm_client=llm_client,
@@ -222,7 +224,6 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
-        container=providers.Self(),
     )
 
     workflow_momentum = providers.Factory(
@@ -235,7 +236,6 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
-        container=providers.Self(),
     )
 
     workflow_trump = providers.Factory(
@@ -248,7 +248,6 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
-        container=providers.Self(),
     )
 
     workflow_full = providers.Factory(
@@ -261,7 +260,6 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
-        container=providers.Self(),
     )
 
 

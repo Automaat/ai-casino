@@ -123,6 +123,8 @@ class AnalyzeStockTool(BaseTool):
             news_fetcher=news_fetcher,
             finbert=finbert,
             fundamental_fetcher=fundamental_fetcher,
+            finnhub_fetcher=self._container.finnhub_fetcher(),
+            container=self._container,
         )
 
         result = await workflow.analyze(symbol, period_days)
