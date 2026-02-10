@@ -24,11 +24,10 @@ load_dotenv()
 
 
 def _set_asyncio_context() -> None:
-    """Set sniffio context to asyncio to fix detection issues with nest_asyncio.
+    """Set sniffio context to asyncio for httpx/httpcore compatibility.
 
-    httpx/httpcore uses sniffio to detect the async library. When running under
-    nest_asyncio (used by CLI with asyncio.run), sniffio sometimes fails to detect
-    the context properly. This explicitly sets it to asyncio.
+    httpx/httpcore uses sniffio to detect the async library. This explicitly
+    sets it to asyncio to ensure proper detection in CLI and daemon contexts.
     """
     sniffio.current_async_library_cvar.set("asyncio")  # type: ignore[bad-argument-type]
 

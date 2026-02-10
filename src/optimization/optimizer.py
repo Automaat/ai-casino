@@ -121,7 +121,11 @@ class OptunaOptimizer:
     def _run_backtest_safe(
         self, symbol: str, start_date: str, end_date: str, strategy_class: type
     ) -> tuple[float, float, float] | None:
-        """Run backtest and return metrics or None on failure."""
+        """Run backtest and return metrics or None on failure.
+
+        Returns None for expected failures (insufficient data, invalid params).
+        Re-raises unexpected errors (bugs in strategy logic).
+        """
         try:
             result = self.runner.run_backtest(
                 symbol=symbol,
@@ -130,9 +134,14 @@ class OptunaOptimizer:
                 strategy_class=strategy_class,
             )
             return result.sharpe_ratio, result.total_return, abs(result.max_drawdown)
-        except Exception:
-            logger.exception("Backtest failed")
+        except (ValueError, KeyError, IndexError) as e:
+            # Expected: insufficient data, invalid params, missing OHLCV columns
+            logger.opt(exception=True).warning(f"Backtest skipped - invalid params/data: {e}")
             return None
+        except Exception:
+            # Unexpected: strategy bugs, computation errors - should be investigated
+            logger.exception("Backtest failed unexpectedly")
+            raise
 
     def _objective(self, trial: optuna.Trial, ctx: _OptimizationContext) -> float | tuple[float, ...]:
         """Objective function for optimization."""

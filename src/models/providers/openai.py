@@ -148,6 +148,23 @@ class OpenAIProvider(BaseLLMProvider):
             for item_schema in items:
                 self._ensure_additional_properties_false(item_schema, visited)
 
+    def _ensure_all_properties_required(self, schema: dict) -> dict:
+        """Ensure all properties are in the required array (OpenAI strict mode requirement).
+
+        Args:
+            schema: JSON schema dictionary
+
+        Returns:
+            Modified schema with all properties in required array
+        """
+        # If schema has properties, ensure all are in required array
+        if "properties" in schema and isinstance(schema["properties"], dict):
+            all_props = list(schema["properties"].keys())
+            if all_props:
+                schema["required"] = all_props
+
+        return schema
+
     def _ensure_additional_properties_false(self, schema: dict, visited: set[int] | None = None) -> dict:
         """Recursively ensure additionalProperties is false in schema (required by OpenAI strict mode).
 
@@ -173,6 +190,8 @@ class OpenAIProvider(BaseLLMProvider):
         # Set additionalProperties: false for objects
         if schema.get("type") == "object" or "properties" in schema:
             schema["additionalProperties"] = False
+            # Also ensure all properties are required (OpenAI strict mode)
+            self._ensure_all_properties_required(schema)
 
         # Process nested schemas
         if "properties" in schema and isinstance(schema["properties"], dict):

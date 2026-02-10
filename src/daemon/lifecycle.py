@@ -95,7 +95,18 @@ class DaemonLifecycle:
                 access_log=False,
             )
             self._api_server = uvicorn.Server(config)
+
+            def _log_api_task_result(t: asyncio.Task) -> None:
+                if t.cancelled():
+                    # Task was cancelled as part of shutdown; no error to log.
+                    return
+                exc = t.exception()
+                if exc is not None:
+                    # Log real server crashes with traceback.
+                    logger.opt(exception=exc).error("API server crashed")
+
             self._api_task = asyncio.create_task(self._api_server.serve())
+            self._api_task.add_done_callback(_log_api_task_result)
 
             logger.info(
                 f"API server started at http://{self.components.config.api.host}:"
