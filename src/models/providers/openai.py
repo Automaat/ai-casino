@@ -157,9 +157,6 @@ class OpenAIProvider(BaseLLMProvider):
         Returns:
             Modified schema with all properties in required array
         """
-        if not isinstance(schema, dict):
-            return schema
-
         # If schema has properties, ensure all are in required array
         if "properties" in schema and isinstance(schema["properties"], dict):
             all_props = list(schema["properties"].keys())
