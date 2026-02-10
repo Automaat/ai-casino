@@ -411,3 +411,70 @@ class TestThesisResearcher:
         confidence = researcher._calculate_confidence(technical, sentiment, sample_news_analysis, fundamental)
 
         assert confidence == pytest.approx(expected_min, abs=1e-9)
+
+    async def test_analyze_with_structured_output(
+        self,
+        researcher,
+        direction,
+        sample_technical_analysis,
+        sample_sentiment_analysis,
+        sample_news_analysis,
+        sample_fundamental_analysis,
+    ):
+        """Test analyze uses structured output path when available."""
+        from src.agents.thesis_researcher import ResearchLLMResponse
+
+        # Create valid structured response with direction-appropriate fields
+        if direction == ResearchDirection.BULLISH:
+            structured_response = ResearchLLMResponse(
+                thesis="Strong bullish thesis with compelling upside potential.",
+                key_strengths=[
+                    "Strong technical momentum",
+                    "Positive sentiment",
+                    "Undervalued fundamentals",
+                ],
+                key_weaknesses=[],
+                target_upside=25.0,
+                target_downside=None,
+            )
+        else:
+            structured_response = ResearchLLMResponse(
+                thesis="Significant bearish thesis with downside risk.",
+                key_strengths=[],
+                key_weaknesses=[
+                    "Weak technical momentum",
+                    "Negative sentiment",
+                    "Overvalued fundamentals",
+                ],
+                target_upside=None,
+                target_downside=30.0,
+            )
+
+        # Mock astructured to return valid response
+        researcher.llm.astructured = AsyncMock(return_value=structured_response)
+        researcher.llm.acomplete = AsyncMock()  # Should not be called
+
+        result = await researcher.analyze(
+            "AAPL",
+            sample_technical_analysis,
+            sample_sentiment_analysis,
+            sample_news_analysis,
+            sample_fundamental_analysis,
+        )
+
+        # Verify astructured was used, not acomplete fallback
+        researcher.llm.astructured.assert_called_once()
+        researcher.llm.acomplete.assert_not_called()
+
+        # Verify result matches structured response
+        assert isinstance(result, ResearchAnalysis)
+        assert result.direction == direction
+        assert result.thesis == structured_response.thesis
+        assert len(result.key_points) == 3
+
+        if direction == ResearchDirection.BULLISH:
+            assert result.target == 25.0
+            assert result.key_points == structured_response.key_strengths
+        else:
+            assert result.target == 30.0
+            assert result.key_points == structured_response.key_weaknesses

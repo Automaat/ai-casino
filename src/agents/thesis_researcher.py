@@ -22,11 +22,11 @@ class ResearchLLMResponse(BaseModel):
     """Unified LLM response for thesis research."""
 
     thesis: str = Field(description="Investment thesis (3-4 sentences)")
-    key_strengths: list[str] | None = Field(
-        default=None, description="Top 3-5 bullish signals (bullish only)"
+    key_strengths: list[str] = Field(
+        default_factory=list, description="Top 3-5 bullish signals (bullish only)"
     )
-    key_weaknesses: list[str] | None = Field(
-        default=None, description="Top 3-5 bearish signals (bearish only)"
+    key_weaknesses: list[str] = Field(
+        default_factory=list, description="Top 3-5 bearish signals (bearish only)"
     )
     target_upside: float | None = Field(
         default=None, description="Expected upside percentage or null (bullish only)"
