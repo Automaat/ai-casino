@@ -13,7 +13,7 @@ from rich.console import Console
 from src.agents.trump import COMPANY_TICKERS, TrumpAnalysis, TrumpAnalyst
 from src.data.truth_social import TruthPost, TruthSocialFetcher
 from src.models.llm import LLMClient
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:

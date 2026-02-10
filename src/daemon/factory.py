@@ -21,7 +21,7 @@ from src.data.market import MarketDataFetcher
 from src.database.connection import get_db_engine
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent

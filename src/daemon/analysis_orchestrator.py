@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from src.daemon.scheduler import MarketScheduler
     from src.daemon.state import DaemonState
     from src.data.broker import AlpacaBroker
-    from src.workflows.trading import TradingWorkflow
+    from src.workflows import TradingWorkflow
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.workflows.types import TradingWorkflowResult

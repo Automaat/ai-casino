@@ -15,7 +15,7 @@ from rich.table import Table
 from src.di.container import AppContainer, create_container
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 console = Console()

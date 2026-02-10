@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from src.metrics.execution import ExecutionMetricsCollector
     from src.screening.analyzer import ScreeningAnalysis
     from src.screening.screener import ScreeningOutput
-    from src.workflows.trading import TradingState, TradingWorkflow
+    from src.workflows import TradingWorkflow
 
 from src.models.torch_config import configure_torch_env
 
@@ -126,29 +126,16 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
     """Patch workflow methods to report progress."""
     from src.tui.log_capture import clear_active_step
 
-    original_run_analyses = workflow.run_analyses
-
-    async def patched_run_analyses(
-        state: "TradingState",
-        technical_analyst: "TechnicalAnalyst",
-        collector: "ExecutionMetricsCollector | None" = None,
-    ) -> "TradingState":
-        _update_progress("technical", "Running technical analysis...", progress_callback)
-        result = await original_run_analyses(state, technical_analyst, collector)
-        clear_active_step()  # Clear after analyses complete
-        return result
-
-    workflow.run_analyses = patched_run_analyses
-
-    original_make_decision = workflow.make_decision
-
-    async def patched_make_decision(state: "TradingState") -> "TradingState":
-        _update_progress("decision", "Synthesizing trading decision...", progress_callback)
-        result = await original_make_decision(state)
-        clear_active_step()  # Clear after decision complete
-        return result
-
-    workflow.make_decision = patched_make_decision
+    # TODO(refactor): TUI progress tracking needs update for new stage-based architecture
+    # After refactoring, run_analyses() and make_decision() are now stage functions
+    # in src/workflows/stages/, not methods on TradingWorkflow.
+    # Progress tracking needs to be reimplemented by patching stage functions
+    # or adding progress hooks to the orchestrator.
+    #
+    # Previous approach (commented out - broken after refactor):
+    # - Patched workflow.run_analyses() to show "Running technical analysis..."
+    # - Patched workflow.make_decision() to show "Synthesizing trading decision..."
+    pass
 
 
 def _setup_isolated_event_loop() -> asyncio.AbstractEventLoop:

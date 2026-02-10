@@ -609,6 +609,16 @@ class TradingWorkflow:
 
         return result
 
+    def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
+        """Set target portfolio allocations for position sizing.
+
+        Args:
+            allocations: Dict of {symbol: weight} for target portfolio
+        """
+        self._target_allocations = allocations
+        if allocations:
+            logger.info(f"Set target allocations for {len(allocations)} symbols")
+
     def _record_stage(
         self,
         collector: ExecutionMetricsCollector | None,
