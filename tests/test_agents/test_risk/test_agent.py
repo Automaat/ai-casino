@@ -145,9 +145,7 @@ def test_validate_risk_approved(risk_agent, account_info):
     )
 
     context = RiskContext()
-    validation = risk_agent._validate_risk(
-        "AAPL", Signal.BUY, position_sizing, account_info, 0.75, context
-    )
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert isinstance(validation, RiskValidation)
     assert validation.approved is True
@@ -167,9 +165,7 @@ def test_validate_risk_insufficient_cash(risk_agent, account_info):
     )
 
     context = RiskContext()
-    validation = risk_agent._validate_risk(
-        "AAPL", Signal.BUY, position_sizing, account_info, 0.75, context
-    )
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert len(validation.warnings) > 0

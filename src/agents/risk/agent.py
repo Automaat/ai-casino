@@ -638,7 +638,7 @@ class RiskManagementAgent:
     # Delegation methods for backward compatibility with tests
     def _get_atr(self, market_data: pd.DataFrame, period: int = 14) -> float | None:
         """Delegate to stop-loss calculator."""
-        return self._stop_loss_calculator._get_atr(market_data, period)
+        return self._stop_loss_calculator._get_atr(market_data, period)  # noqa: SLF001
 
     def _calculate_stop_loss(
         self, current_price: float, market_data: pd.DataFrame, action: Signal
@@ -649,7 +649,7 @@ class RiskManagementAgent:
     def _get_adaptive_atr_multiplier(self) -> float:
         """Delegate to stop-loss calculator with current CDaR context."""
         context = RiskContext(portfolio_cdar=getattr(self, "_portfolio_cdar", None))
-        return self._stop_loss_calculator._get_adaptive_multiplier(context)
+        return self._stop_loss_calculator._get_adaptive_multiplier(context)  # noqa: SLF001
 
     def __repr__(self) -> str:
         """String representation."""
