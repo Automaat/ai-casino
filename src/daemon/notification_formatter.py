@@ -150,9 +150,7 @@ class NotificationFormatter:
         # Handle both "failed_services" (health check) and "unavailable_services" (degradation)
         services_obj = m.get("failed_services") or m.get("unavailable_services") or []
         services = (
-            ", ".join(str(s) for s in services_obj)
-            if isinstance(services_obj, list)
-            else str(services_obj)
+            ", ".join(str(s) for s in services_obj) if isinstance(services_obj, list) else str(services_obj)
         )
         # Use message.title to reflect originating context (health check vs degradation)
         title = message.title
