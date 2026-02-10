@@ -347,7 +347,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     app.state.components = components
     app.state.start_time = datetime.now(UTC)
 
-    # CORS middleware - only allow dashboard origin
+    # CORS middleware - allow configured origins for the dashboard
     app.add_middleware(
         CORSMiddleware,
         allow_origins=components.config.api.cors_origins,
