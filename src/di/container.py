@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
+from src.agents.base_researcher import ResearchDirection
 from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
 from src.di.providers import daemon as daemon_providers
@@ -217,13 +218,15 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     bullish_researcher = providers.Factory(
-        agent_providers.create_bullish_researcher,
+        agent_providers.create_thesis_researcher,
         llm_client=llm_client,
+        direction=providers.Object(ResearchDirection.BULLISH),
     )
 
     bearish_researcher = providers.Factory(
-        agent_providers.create_bearish_researcher,
+        agent_providers.create_thesis_researcher,
         llm_client=llm_client,
+        direction=providers.Object(ResearchDirection.BEARISH),
     )
 
     event_triage_agent = providers.Factory(

@@ -380,8 +380,7 @@ def test_display_action_buy_unchanged():
 
 def test_extract_confidence_action_aware_buy(test_container):
     """High bullish + high bearish → BUY should boost from bullish, penalize from bearish."""
-    from src.agents.bearish_researcher import BearishResearchAnalysis
-    from src.agents.bullish_researcher import BullishResearchAnalysis
+    from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 
     agent = test_container.trader_agent()
 
@@ -428,8 +427,7 @@ def test_extract_confidence_action_aware_buy(test_container):
 
 def test_extract_confidence_action_aware_sell(test_container):
     """High bearish confidence should BOOST sell confidence, not penalize."""
-    from src.agents.bearish_researcher import BearishResearchAnalysis
-    from src.agents.bullish_researcher import BullishResearchAnalysis
+    from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 
     agent = test_container.trader_agent()
 
@@ -476,8 +474,7 @@ def test_extract_confidence_action_aware_sell(test_container):
 
 def test_extract_confidence_action_aware_hold(test_container):
     """HOLD should average both bull and bear weights."""
-    from src.agents.bearish_researcher import BearishResearchAnalysis
-    from src.agents.bullish_researcher import BullishResearchAnalysis
+    from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 
     agent = test_container.trader_agent()
 

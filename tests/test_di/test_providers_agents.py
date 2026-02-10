@@ -221,7 +221,7 @@ def test_bullish_researcher_provider():
     container = create_container()
     assert hasattr(container, "bullish_researcher")
 
-    with patch("src.agents.bullish_researcher.BullishResearcher") as mock_class:
+    with patch("src.agents.thesis_researcher.ThesisResearcher") as mock_class:
         mock_instance = MagicMock()
         mock_class.return_value = mock_instance
         agent = container.bullish_researcher()
@@ -232,7 +232,7 @@ def test_bullish_researcher_factory():
     """Test BullishResearcher is factory (new instance per call)."""
     container = create_container()
 
-    with patch("src.agents.bullish_researcher.BullishResearcher") as mock_class:
+    with patch("src.agents.thesis_researcher.ThesisResearcher") as mock_class:
         mock_instance1 = MagicMock()
         mock_instance2 = MagicMock()
         mock_class.side_effect = [mock_instance1, mock_instance2]
@@ -249,7 +249,7 @@ def test_bearish_researcher_provider():
     container = create_container()
     assert hasattr(container, "bearish_researcher")
 
-    with patch("src.agents.bearish_researcher.BearishResearcher") as mock_class:
+    with patch("src.agents.thesis_researcher.ThesisResearcher") as mock_class:
         mock_instance = MagicMock()
         mock_class.return_value = mock_instance
         agent = container.bearish_researcher()
@@ -260,7 +260,7 @@ def test_bearish_researcher_factory():
     """Test BearishResearcher is factory (new instance per call)."""
     container = create_container()
 
-    with patch("src.agents.bearish_researcher.BearishResearcher") as mock_class:
+    with patch("src.agents.thesis_researcher.ThesisResearcher") as mock_class:
         mock_instance1 = MagicMock()
         mock_instance2 = MagicMock()
         mock_class.side_effect = [mock_instance1, mock_instance2]
