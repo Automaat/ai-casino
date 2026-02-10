@@ -18,7 +18,7 @@ from src.daemon.config import PreTradeBacktestingConfig
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
-from src.workflows.trading import TradingState, TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 

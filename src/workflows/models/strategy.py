@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel
 
+from typing import Any
+
 from src.agents.meta import StrategySelection
-from src.strategies.ensemble import EnsembleStrategy
-from src.strategies.momentum import MomentumStrategy
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
 
@@ -42,7 +42,7 @@ class StrategySelectionInput(BaseModel):
 class StrategySelectionOutput(BaseModel):
     """Output from strategy selection stage."""
 
-    strategy_instance: MomentumStrategy | EnsembleStrategy
+    strategy_instance: Any  # Any strategy type (Momentum, Ensemble, TrendFollowing, etc.)
     strategy_name: str
     regime_analysis: RegimeAnalysis | None
     strategy_selection: StrategySelection | None

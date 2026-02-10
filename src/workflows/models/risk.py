@@ -63,7 +63,7 @@ class RiskAssessmentInput(BaseModel):
         daily_data = self.get_daily_data()
         if daily_data.empty:
             raise ValueError("Market data is empty")
-        return float(daily_data["close"].iloc[-1])
+        return float(daily_data["Close"].iloc[-1])
 
 
 class RiskAssessmentOutput(BaseModel):
