@@ -213,6 +213,9 @@ class DaemonRunner:
             self._position_manager = PositionManager(self.broker, config.position_management)
             logger.info("Position management enabled")
 
+        # Market data fetcher (shared instance for various features)
+        self.market_fetcher: MarketDataFetcher | None = None
+
         # Discovery engine
         self._discovery_engine = None
         if config.discovery.enabled:
@@ -237,9 +240,6 @@ class DaemonRunner:
                 market_fetcher=None,  # Will be set later if needed
             )
             logger.info("Tearsheet generator enabled")
-
-        # Market data fetcher (shared instance for various features)
-        self.market_fetcher: MarketDataFetcher | None = None
 
         # Analysis orchestrator (initialized after workflow is ready)
         self._analysis_orchestrator: AnalysisOrchestrator | None = None
