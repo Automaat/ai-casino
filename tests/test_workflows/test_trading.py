@@ -17,7 +17,7 @@ from src.daemon.config import PreTradeBacktestingConfig
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
-from src.workflows.trading import TradingState, TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 
@@ -155,7 +155,7 @@ async def test_make_decision(test_container, sample_bullish_research, sample_bea
     """Test decision making step."""
     workflow = test_container.workflow_momentum(container=test_container)
 
-    state: TradingState = {
+    state = {
         "symbol": "AAPL",
         "trading_session": TradingSession.REGULAR,
         "market_data": None,
@@ -238,9 +238,24 @@ def test_repr(test_container):
 
 async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
     """Test trade execution when broker provided and risk approved."""
+    from datetime import datetime
+
+    from src.agents.risk import PositionSizeCalculation, RiskAssessment, RiskValidation, StopLossCalculation
+    from src.data.broker import OrderStatus
+    from src.workflows.models.account import AccountInfo
+
     mock_broker = MagicMock()
-    mock_order = MagicMock()
-    mock_order.qty = 10
+    mock_order = OrderStatus(
+        order_id="test-order-123",
+        symbol="AAPL",
+        qty=10.0,
+        filled_qty=10.0,
+        side="buy",
+        status="filled",
+        submitted_at=datetime.now(),
+        filled_at=datetime.now(),
+        filled_avg_price=150.0,
+    )
     mock_broker.submit_order.return_value = mock_order
 
     workflow = TradingWorkflow(
@@ -253,7 +268,38 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
         use_meta_agent=False,
     )
 
-    state: TradingState = {
+    account_info = AccountInfo(balance=100000.0, available_cash=90000.0, positions={}, total_exposure=0.0)
+    risk_assessment = RiskAssessment(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=150.0,
+        account_info=account_info,
+        validation=RiskValidation(
+            approved=True,
+            risk_score=0.2,
+            risk_level="LOW",
+            warnings=[],
+            constraints_met={"position_risk": True, "exposure": True},
+            reasoning="Risk approved",
+        ),
+        position_sizing=PositionSizeCalculation(
+            recommended_shares=10,
+            position_value=1500.0,
+            risk_amount=30.0,
+            risk_percent=2.0,
+            reasoning="Position sized",
+        ),
+        stop_loss=StopLossCalculation(
+            stop_loss_price=140.0,
+            stop_loss_percent=6.67,
+            risk_per_share=10.0,
+            max_loss_amount=100.0,
+            methodology="ATR",
+        ),
+        confidence=0.85,
+    )
+
+    state = {
         "symbol": "AAPL",
         "trading_session": TradingSession.REGULAR,
         "market_data": sample_ohlcv_data,
@@ -273,11 +319,7 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
         "final_decision": TradingDecision(
             action=Signal.BUY, confidence=0.85, reasoning=["Test"], risk_level="LOW"
         ),
-        "risk_assessment": MagicMock(
-            validation=MagicMock(approved=True),
-            position_sizing=MagicMock(recommended_shares=10),
-            stop_loss=MagicMock(stop_loss_price=140.0),
-        ),
+        "risk_assessment": risk_assessment,
         "account_info": None,
         "order_status": None,
         "regime_analysis": None,
@@ -298,6 +340,7 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
     result_state = await workflow._execute_trade(state)
 
     assert result_state["order_status"] == mock_order
+    assert result_state["order_status"].qty == 10.0
     mock_broker.submit_order.assert_called_once_with(
         symbol="AAPL",
         qty=10,
@@ -308,6 +351,9 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
 
 async def test_execute_trade_error_handling(test_container, sample_ohlcv_data):
     """Test trade execution handles broker errors gracefully."""
+    from src.agents.risk import PositionSizeCalculation, RiskAssessment, RiskValidation, StopLossCalculation
+    from src.workflows.models.account import AccountInfo
+
     mock_broker = MagicMock()
     mock_broker.submit_order.side_effect = Exception("API error")
 
@@ -321,7 +367,38 @@ async def test_execute_trade_error_handling(test_container, sample_ohlcv_data):
         use_meta_agent=False,
     )
 
-    state: TradingState = {
+    account_info = AccountInfo(balance=100000.0, available_cash=90000.0, positions={}, total_exposure=0.0)
+    risk_assessment = RiskAssessment(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=150.0,
+        account_info=account_info,
+        validation=RiskValidation(
+            approved=True,
+            risk_score=0.2,
+            risk_level="LOW",
+            warnings=[],
+            constraints_met={"position_risk": True, "exposure": True},
+            reasoning="Risk approved",
+        ),
+        position_sizing=PositionSizeCalculation(
+            recommended_shares=10,
+            position_value=1500.0,
+            risk_amount=30.0,
+            risk_percent=2.0,
+            reasoning="Position sized",
+        ),
+        stop_loss=StopLossCalculation(
+            stop_loss_price=140.0,
+            stop_loss_percent=6.67,
+            risk_per_share=10.0,
+            max_loss_amount=100.0,
+            methodology="ATR",
+        ),
+        confidence=0.85,
+    )
+
+    state = {
         "symbol": "AAPL",
         "trading_session": TradingSession.REGULAR,
         "market_data": sample_ohlcv_data,
@@ -341,11 +418,7 @@ async def test_execute_trade_error_handling(test_container, sample_ohlcv_data):
         "final_decision": TradingDecision(
             action=Signal.BUY, confidence=0.85, reasoning=["Test"], risk_level="LOW"
         ),
-        "risk_assessment": MagicMock(
-            validation=MagicMock(approved=True),
-            position_sizing=MagicMock(recommended_shares=10),
-            stop_loss=MagicMock(stop_loss_price=140.0),
-        ),
+        "risk_assessment": risk_assessment,
         "account_info": None,
         "order_status": None,
         "regime_analysis": None,

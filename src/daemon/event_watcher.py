@@ -21,7 +21,7 @@ from rich.console import Console
 from src.agents.event_triage import EventTriageAgent
 from src.cache.historical import HistoricalCache
 from src.daemon.events import BaseEvent, EventSignal, Urgency
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:

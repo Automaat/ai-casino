@@ -65,7 +65,7 @@ class TestAnalyzeStockTool:
         """Test successful execution."""
         from dependency_injector import providers
 
-        from src.workflows.trading import TradingWorkflow
+        from src.workflows.orchestrator import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
 
@@ -85,7 +85,7 @@ class TestAnalyzeStockTool:
         """Test execution with default period."""
         from dependency_injector import providers
 
-        from src.workflows.trading import TradingWorkflow
+        from src.workflows.orchestrator import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
 
@@ -101,7 +101,7 @@ class TestAnalyzeStockTool:
         """Test that symbol is uppercased."""
         from dependency_injector import providers
 
-        from src.workflows.trading import TradingWorkflow
+        from src.workflows.orchestrator import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
 
@@ -117,7 +117,7 @@ class TestAnalyzeStockTool:
         """Test error handling on workflow failure."""
         from dependency_injector import providers
 
-        from src.workflows.trading import TradingWorkflow
+        from src.workflows.orchestrator import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
 

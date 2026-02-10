@@ -22,7 +22,7 @@ from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 from src.daemon.config import DaemonConfig
 from src.daemon.factory import DaemonFactory
 from src.daemon.notification_helper import DaemonNotificationHelper
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 console = Console()

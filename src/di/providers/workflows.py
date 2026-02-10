@@ -21,7 +21,7 @@ from src.metrics.tracker import MetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.optimization.param_store import OptimizedParamStore
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
