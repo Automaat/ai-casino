@@ -8,6 +8,7 @@ from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
 from src.di.providers import data as data_providers
 from src.di.providers import models as model_providers
+from src.di.providers import workflows as workflow_providers
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -208,6 +209,59 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
         daemon_config=daemon_config,
         portfolio_var_calculator=portfolio_var_calculator,
+    )
+
+    # Workflow providers (4 named variants) - Factory pattern to support runtime overrides
+    workflow_meta = providers.Factory(
+        workflow_providers.create_workflow_meta,
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=providers.Self(),
+    )
+
+    workflow_momentum = providers.Factory(
+        workflow_providers.create_workflow_momentum,
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=providers.Self(),
+    )
+
+    workflow_trump = providers.Factory(
+        workflow_providers.create_workflow_trump,
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=providers.Self(),
+    )
+
+    workflow_full = providers.Factory(
+        workflow_providers.create_workflow_full,
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=providers.Self(),
     )
 
 

@@ -13,7 +13,7 @@ dependencies = [
     "transformers==5.1.0",
     "torch==2.10.0",
     # LLM & Agents
-    "openai==2.17.0",
+    "openai==2.18.0",
     "anthropic==0.79.0",
     "httpx==0.28.1",
     "langgraph==1.0.8",
@@ -120,5 +120,5 @@ project-includes = [
 [dependency-groups]
 dev = [
     "pip-audit>=2.10.0",
-    "pyrefly==0.51.2",
+    "pyrefly==0.52.0",
 ]

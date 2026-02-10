@@ -21,9 +21,6 @@ from rich.console import Console
 from src.agents.event_triage import EventTriageAgent
 from src.cache.historical import HistoricalCache
 from src.daemon.events import BaseEvent, EventSignal, Urgency
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -97,26 +94,7 @@ class EventWatcher(ABC):
             self._triage_agent = EventTriageAgent(llm_client)
 
         if self._workflow is None:
-            # Initialize TradingWorkflow (same as TrumpWatcher lines 89-108)
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False, historical_cache=self._historical_cache
-            )
-            news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
-            finbert = self._container.finbert_sentiment()
-            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
-
-            self._workflow = TradingWorkflow(
-                llm_client,
-                market_fetcher,
-                news_fetcher,
-                finbert,
-                fundamental_fetcher,
-                broker=None,
-                metrics_tracker=None,
-                use_meta_agent=True,
-                trump_mode=False,
-                historical_cache=self._historical_cache,
-            )
+            self._workflow = self._container.workflow_meta(historical_cache=self._historical_cache)
             logger.info(f"{self.__class__.__name__} workflow initialized")
 
     def _check_cooldown(self, symbol: str) -> bool:

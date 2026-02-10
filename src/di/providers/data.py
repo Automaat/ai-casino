@@ -38,12 +38,17 @@ def create_market_fetcher(
     Returns:
         Configured MarketDataFetcher
     """
-    api_key = resolve_config_or_env(
-        daemon_config.api_keys.alpha_vantage_api_key,
-        "ALPHA_VANTAGE_API_KEY",
-    )
+    use_alpha_vantage = daemon_config.data_sources.market_data == "alpha_vantage"
+
+    api_key = None
+    if use_alpha_vantage:
+        api_key = resolve_config_or_env(
+            daemon_config.api_keys.alpha_vantage_api_key,
+            "ALPHA_VANTAGE_API_KEY",
+        )
+
     return MarketDataFetcher(
-        use_alpha_vantage=True,
+        use_alpha_vantage=use_alpha_vantage,
         api_key=api_key,
         historical_cache=historical_cache,
     )
