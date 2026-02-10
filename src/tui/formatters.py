@@ -123,8 +123,7 @@ def format_candidates(record: ScreeningRecord | dict) -> str:
 
     lines = [
         "## After-Hours Screening Candidates",
-        f"*{record.criteria.title()} | {record.universe} | "
-        f"{record.screened_at.strftime('%Y-%m-%d %H:%M')}*",
+        f"*{record.criteria.title()} | {record.universe} | {record.screened_at.strftime('%Y-%m-%d %H:%M')}*",
         "",
     ]
 
