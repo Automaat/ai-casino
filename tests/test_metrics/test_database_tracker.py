@@ -5,8 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import (
@@ -18,6 +16,7 @@ from src.agents.risk import (
 )
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.trader import TradingDecision
 from src.metrics.tracker import DatabaseMetricsTracker, PerformanceMetrics, TradeRecord
 from src.strategies.signal import Signal
