@@ -263,12 +263,10 @@ class TradingWorkflow:
             self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
             self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
             self.web_researcher = WebResearchAgent(llm_client)
-            # Get Finnhub fetcher from parameter or create with API key from container
+            # Get Finnhub fetcher from explicit parameter or fall back to env-var-based configuration
             finnhub = finnhub_fetcher
-            if finnhub is None and container is not None:
-                finnhub = container.finnhub_fetcher()
             if finnhub is None:
-                # Last resort: create without container (will read from env var)
+                # Last resort: create without DI container (will read from env var)
                 logger.warning("Creating FinnhubFetcher without DI - falling back to env var")
                 finnhub = FinnhubFetcher()
 
