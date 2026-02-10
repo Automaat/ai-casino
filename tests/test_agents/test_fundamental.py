@@ -15,11 +15,9 @@ class TestFundamentalAnalyst:
         assert analyst.llm is not None
         assert analyst.fetcher is not None
 
-    async def test_analyze_returns_fundamental_analysis(self, test_container):
+    async def test_analyze_returns_fundamental_analysis(self, test_container_full):
         """Test analyze returns FundamentalAnalysis with correct types."""
-        analyst = test_container.fundamental_analyst()
-        mock_fundamental_fetcher = test_container.fundamental_fetcher()
-        analyst.fetcher = mock_fundamental_fetcher
+        analyst = test_container_full.fundamental_analyst()
 
         result = await analyst.analyze("AAPL", current_price=150.0)
 
@@ -34,11 +32,10 @@ class TestFundamentalAnalyst:
         assert isinstance(result.interpretation, str)
         assert 0.0 <= result.confidence <= 1.0
 
-    async def test_analyze_calls_fetcher_and_llm(self, test_container):
+    async def test_analyze_calls_fetcher_and_llm(self, test_container_full):
         """Test analyze calls fetcher and LLM."""
-        analyst = test_container.fundamental_analyst()
-        mock_fundamental_fetcher = test_container.fundamental_fetcher()
-        analyst.fetcher = mock_fundamental_fetcher
+        analyst = test_container_full.fundamental_analyst()
+        mock_fundamental_fetcher = test_container_full.fundamental_fetcher()
 
         await analyst.analyze("AAPL")
 
@@ -257,28 +254,25 @@ class TestFundamentalAnalyst:
         assert "28.5" in prompt
         assert "$" not in prompt  # No price
 
-    async def test_analyze_without_current_price(self, test_container):
+    async def test_analyze_without_current_price(self, test_container_full):
         """Test analyze without providing current price."""
-        analyst = test_container.fundamental_analyst()
-        mock_fundamental_fetcher = test_container.fundamental_fetcher()
-        analyst.fetcher = mock_fundamental_fetcher
+        analyst = test_container_full.fundamental_analyst()
 
         result = await analyst.analyze("AAPL")
 
         assert isinstance(result, FundamentalAnalysis)
         assert result.confidence > 0.0
 
-    async def test_analyze_edge_case_negative_earnings(self, test_container):
+    async def test_analyze_edge_case_negative_earnings(self, test_container_full):
         """Test analyze with negative earnings."""
-        mock_fundamental_fetcher = test_container.fundamental_fetcher()
+        mock_fundamental_fetcher = test_container_full.fundamental_fetcher()
         mock_fundamental_fetcher.fetch_overview.return_value = {
             "Symbol": "TEST",
             "PERatio": "-10.0",
             "EPS": "-2.50",
             "QuarterlyEarningsGrowthYOY": "-0.15",
         }
-        analyst = test_container.fundamental_analyst()
-        analyst.fetcher = mock_fundamental_fetcher
+        analyst = test_container_full.fundamental_analyst()
 
         result = await analyst.analyze("TEST")
 
@@ -286,12 +280,11 @@ class TestFundamentalAnalyst:
         assert result.eps is not None
         assert result.eps < 0
 
-    async def test_analyze_raises_on_fetcher_error(self, test_container):
+    async def test_analyze_raises_on_fetcher_error(self, test_container_full):
         """Test analyze raises exception when fetcher fails."""
-        mock_fundamental_fetcher = test_container.fundamental_fetcher()
+        mock_fundamental_fetcher = test_container_full.fundamental_fetcher()
         mock_fundamental_fetcher.fetch_overview.side_effect = ValueError("API error")
-        analyst = test_container.fundamental_analyst()
-        analyst.fetcher = mock_fundamental_fetcher
+        analyst = test_container_full.fundamental_analyst()
 
         with pytest.raises(ValueError, match="API error"):
             await analyst.analyze("INVALID")

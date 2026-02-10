@@ -79,12 +79,11 @@ class TestMetaAgent:
         assert agent.metrics_tracker is None  # Container doesn't inject tracker by default
 
     async def test_select_strategy_trending_market(
-        self, test_container, sample_ohlcv_trending_up, sample_regime_analysis
+        self, test_container, sample_ohlcv_trending_up, sample_regime_analysis, mocker
     ) -> None:
         """Test strategy selection for trending market."""
         agent = test_container.meta_agent()
-        regime_detector = agent.regime_detector
-        regime_detector.detect_regime.return_value = sample_regime_analysis
+        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=sample_regime_analysis)
         result = await agent.select_strategy("AAPL", sample_ohlcv_trending_up)
 
         assert isinstance(result, StrategySelection)
@@ -94,7 +93,7 @@ class TestMetaAgent:
         assert result.ensemble_weights is None
         assert result.confidence == sample_regime_analysis.confidence
 
-    async def test_select_strategy_ranging_market(self, test_container, sample_ohlcv_ranging) -> None:
+    async def test_select_strategy_ranging_market(self, test_container, sample_ohlcv_ranging, mocker) -> None:
         """Test strategy selection for ranging market."""
         ranging_analysis = RegimeAnalysis(
             regime=MarketRegime.RANGING,
@@ -105,14 +104,14 @@ class TestMetaAgent:
             reasoning="Ranging market detected",
         )
         agent = test_container.meta_agent()
-        agent.regime_detector.detect_regime.return_value = ranging_analysis
+        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=ranging_analysis)
         result = await agent.select_strategy("AAPL", sample_ohlcv_ranging)
 
         assert result.strategy_name == "mean_reversion"
         assert isinstance(result.strategy_instance, MeanReversionStrategy)
         assert result.regime == MarketRegime.RANGING
 
-    async def test_select_strategy_volatile_market(self, test_container, sample_ohlcv_volatile) -> None:
+    async def test_select_strategy_volatile_market(self, test_container, sample_ohlcv_volatile, mocker) -> None:
         """Test strategy selection for volatile market."""
         volatile_analysis = RegimeAnalysis(
             regime=MarketRegime.HIGH_VOLATILITY,
@@ -124,8 +123,7 @@ class TestMetaAgent:
         )
 
         agent = test_container.meta_agent()
-        regime_detector = agent.regime_detector
-        regime_detector.detect_regime.return_value = volatile_analysis
+        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=volatile_analysis)
         result = await agent.select_strategy("AAPL", sample_ohlcv_volatile)
 
         assert result.strategy_name == "momentum"
@@ -133,12 +131,11 @@ class TestMetaAgent:
         assert result.regime == MarketRegime.HIGH_VOLATILITY
 
     async def test_ensemble_fallback_on_low_confidence(
-        self, test_container, sample_ohlcv_data, low_confidence_regime_analysis
+        self, test_container, sample_ohlcv_data, low_confidence_regime_analysis, mocker
     ) -> None:
         """Test ensemble fallback when regime confidence is low."""
         agent = test_container.meta_agent()
-        regime_detector = agent.regime_detector
-        regime_detector.detect_regime.return_value = low_confidence_regime_analysis
+        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=low_confidence_regime_analysis)
         result = await agent.select_strategy("AAPL", sample_ohlcv_data)
 
         assert result.strategy_name == "ensemble"
@@ -147,7 +144,7 @@ class TestMetaAgent:
         assert sum(result.ensemble_weights.values()) == pytest.approx(1.0, abs=0.01)
         assert result.confidence == low_confidence_regime_analysis.confidence
 
-    async def test_ensemble_weights_boost_regime_strategy(self, test_container, sample_ohlcv_data) -> None:
+    async def test_ensemble_weights_boost_regime_strategy(self, test_container, sample_ohlcv_data, mocker) -> None:
         """Test that ensemble weights boost the regime-matched strategy."""
         low_conf_bullish = RegimeAnalysis(
             regime=MarketRegime.TRENDING_BULLISH,
@@ -159,15 +156,14 @@ class TestMetaAgent:
         )
 
         agent = test_container.meta_agent()
-        regime_detector = agent.regime_detector
-        regime_detector.detect_regime.return_value = low_conf_bullish
+        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=low_conf_bullish)
         result = await agent.select_strategy("AAPL", sample_ohlcv_data)
 
         assert result.ensemble_weights is not None
         # trend_following should have highest weight (boosted)
         assert result.ensemble_weights["trend_following"] > DEFAULT_WEIGHTS["trend_following"]
 
-    async def test_performance_based_weight_adjustment(self, test_container, sample_ohlcv_data) -> None:
+    async def test_performance_based_weight_adjustment(self, test_container, sample_ohlcv_data, mocker) -> None:
         """Test performance-based weight adjustment."""
         low_conf = RegimeAnalysis(
             regime=MarketRegime.RANGING,
@@ -178,8 +174,7 @@ class TestMetaAgent:
             reasoning="Ranging",
         )
         agent = test_container.meta_agent()
-        regime_detector = agent.regime_detector
-        regime_detector.detect_regime.return_value = low_conf
+        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=low_conf)
         result = await agent.select_strategy("AAPL", sample_ohlcv_data)
 
         assert result.ensemble_weights is not None

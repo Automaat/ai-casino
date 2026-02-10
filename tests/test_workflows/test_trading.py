@@ -71,9 +71,9 @@ def test_trading_workflow_init_meta_agent(test_container):
     assert repr(workflow) == "TradingWorkflow(agents=9, mode=meta-agent)"
 
 
-async def test_trading_workflow_analyze(test_container):
+async def test_trading_workflow_analyze(test_container_full):
     """Test full workflow analyze."""
-    workflow = test_container.workflow_momentum()
+    workflow = test_container_full.workflow_momentum()
     result = await workflow.analyze("AAPL", period_days=90)
 
     assert isinstance(result, TradingWorkflowResult)
@@ -89,14 +89,14 @@ async def test_trading_workflow_analyze(test_container):
     assert result.risk.validation is not None
 
 
-async def test_trading_workflow_analyze_with_meta_agent(test_container):
+async def test_trading_workflow_analyze_with_meta_agent(test_container_full):
     """Test full analyze flow with meta-agent enabled."""
     workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
+        llm_client=test_container_full.llm_client(),
+        market_fetcher=test_container_full.market_fetcher(),
+        news_fetcher=test_container_full.news_fetcher(),
+        finbert=test_container_full.finbert_sentiment(),
+        fundamental_fetcher=test_container_full.fundamental_fetcher(),
         use_meta_agent=True,
     )
 
@@ -705,19 +705,17 @@ async def test_order_submission_failure_handled(test_container):
     assert any("Order submission failed" in w for w in result.warnings)
 
 
-async def test_risk_rejection_notification_suppressed_pre_market(mock_workflow_dependencies):
+async def test_risk_rejection_notification_suppressed_pre_market(test_container_full):
     """Risk rejection notifications suppressed during PRE_MARKET session."""
     from src.agents.risk import AccountInfo, RiskValidation
 
-    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
-
     mock_notification_service = MagicMock()
     workflow = TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert,
-        fundamental_fetcher,
+        test_container_full.llm_client(),
+        test_container_full.market_fetcher(),
+        test_container_full.news_fetcher(),
+        test_container_full.finbert_sentiment(),
+        test_container_full.fundamental_fetcher(),
         notification_service=mock_notification_service,
         use_meta_agent=False,
     )
@@ -781,22 +779,20 @@ async def test_risk_rejection_notification_suppressed_pre_market(mock_workflow_d
     assert not result.risk.validation.approved
 
 
-async def test_risk_rejection_notification_sent_regular_hours(mock_workflow_dependencies):
+async def test_risk_rejection_notification_sent_regular_hours(test_container_full):
     """Risk rejection notifications sent during REGULAR session."""
     from unittest.mock import AsyncMock
 
     from src.agents.risk import AccountInfo, RiskValidation
 
-    market_fetcher, news_fetcher, llm_client, finbert, fundamental_fetcher = mock_workflow_dependencies
-
     mock_notification_service = MagicMock()
     mock_notification_service.notify = AsyncMock()
     workflow = TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert,
-        fundamental_fetcher,
+        test_container_full.llm_client(),
+        test_container_full.market_fetcher(),
+        test_container_full.news_fetcher(),
+        test_container_full.finbert_sentiment(),
+        test_container_full.fundamental_fetcher(),
         notification_service=mock_notification_service,
         use_meta_agent=False,
     )

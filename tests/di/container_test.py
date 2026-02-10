@@ -199,13 +199,14 @@ def create_mock_market_fetcher() -> MagicMock:
     def fetch_daily(symbol: str, period_days: int = 90) -> MarketData:
         prices = {"AAPL": (150.0, 155.0), "TSLA": (200.0, 195.0), "GOOGL": (140.0, 140.5)}
         open_price, close_price = prices.get(symbol, (100.0, 101.0))
+        # Generate 50 rows of data (minimum for MACD/regime detection)
         df = pd.DataFrame(
             {
-                "Open": [open_price],
-                "High": [max(open_price, close_price) + 2],
-                "Low": [min(open_price, close_price) - 2],
-                "Close": [close_price],
-                "Volume": [1000000],
+                "Open": [open_price + i * 0.5 for i in range(50)],
+                "High": [max(open_price, close_price) + 2 + i * 0.5 for i in range(50)],
+                "Low": [min(open_price, close_price) - 2 + i * 0.5 for i in range(50)],
+                "Close": [close_price + i * 0.5 for i in range(50)],
+                "Volume": [1000000] * 50,
             }
         )
         return MarketData(symbol=symbol, data=df, last_updated=datetime(2024, 1, 15, 16, 0))
@@ -219,11 +220,12 @@ def create_mock_news_fetcher() -> MagicMock:
     """Create mock NewsDataFetcher.
 
     Returns:
-        Mock with fetch_news method
+        Mock with fetch_news and fetch_company_news methods
     """
     mock = MagicMock()
     mock.api_key = "test_news_key"
     mock.fetch_news.return_value = []
+    mock.fetch_company_news.return_value = []
     return mock
 
 
@@ -240,6 +242,10 @@ def create_mock_fundamental_fetcher() -> MagicMock:
         "PERatio": "28.5",
         "EPS": "6.15",
         "MarketCapitalization": "2850000000000",
+        "QuarterlyRevenueGrowthYOY": "0.062",
+        "QuarterlyEarningsGrowthYOY": "0.102",
+        "DebtToEquity": "2.05",
+        "CurrentRatio": "0.94",
     }
     return mock
 
