@@ -605,13 +605,14 @@ class TradingWorkflow:
         state = await self._assess_risk(state)
         self._record_stage(collector, "risk_assessment", start)
 
-        # Notify if trade rejected by risk gate
+        # Notify if trade rejected by risk gate (only during regular hours when trades can execute)
         if (
             state["risk_assessment"]
             and state["final_decision"]
             and not state["risk_assessment"].validation.approved
             and state["final_decision"].action != Signal.HOLD
             and self.notification_service
+            and trading_session == TradingSession.REGULAR
         ):
             await self._notify_risk_rejection(symbol, state)
 
