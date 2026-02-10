@@ -26,6 +26,7 @@ class AnomalyWatcher(EventWatcher):
     def __init__(  # noqa: PLR0913
         self,
         historical_cache: HistoricalCache,
+        market_fetcher: MarketDataFetcher,
         poll_interval: int = 900,
         relevance_threshold: float = 0.7,
         cooldown_minutes: int = 15,
@@ -40,6 +41,7 @@ class AnomalyWatcher(EventWatcher):
 
         Args:
             historical_cache: Shared cache for market data
+            market_fetcher: Market data fetcher for Alpha Vantage
             poll_interval: Seconds between poll cycles
             relevance_threshold: Minimum relevance score to trigger analysis
             cooldown_minutes: Minutes to wait before re-analyzing same symbol
@@ -57,6 +59,7 @@ class AnomalyWatcher(EventWatcher):
             max_concurrent_analyses=max_concurrent_analyses,
             historical_cache=historical_cache,
         )
+        self._market_fetcher = market_fetcher
         self.volume_spike_multiplier = volume_spike_multiplier
         self.price_move_threshold_pct = price_move_threshold_pct
         self.gap_threshold_pct = gap_threshold_pct
@@ -64,7 +67,6 @@ class AnomalyWatcher(EventWatcher):
         self.max_symbols_per_cycle = max_symbols_per_cycle
 
         # State tracking
-        self._market_fetcher: MarketDataFetcher | None = None
         self._volume_baselines: OrderedDict[str, float] = OrderedDict()  # LRU cache
         self._previous_close_cache: dict[str, float] = {}
         self._last_cache_refresh_date: datetime | None = None
@@ -77,12 +79,8 @@ class AnomalyWatcher(EventWatcher):
         )
 
     def _init_components(self) -> None:
-        """Lazy initialization including market fetcher."""
+        """Lazy initialization of parent components."""
         super()._init_components()
-        if self._market_fetcher is None:
-            self._market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=True, historical_cache=self._historical_cache
-            )
 
     def _get_next_symbols(self) -> list[str]:
         """Get next batch of symbols using round-robin rotation.

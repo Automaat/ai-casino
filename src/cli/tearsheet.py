@@ -11,13 +11,13 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
+from src.data.market import MarketDataFetcher
 from src.metrics.quantstats_reporter import QuantStatsReporter
 from src.metrics.tracker import create_metrics_tracker
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from src.di.container import AppContainer
     from src.metrics.tracker import TearSheet
 
 console = Console()
@@ -87,12 +87,13 @@ async def _tearsheet_async(
 
     console.print(f"Found {len(filtered_trades)} closed trades")
 
-    container = create_container()
     benchmark_returns = None
     if benchmark:
         console.print(f"Fetching benchmark data for {benchmark}...")
         try:
-            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, container)
+            container = create_container()
+            fetcher = container.yfinance_market_fetcher()
+            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, fetcher)
             console.print(f"[green]Benchmark data fetched ({len(benchmark_returns)} days)[/green]")
         except Exception as e:
             logger.warning(f"Failed to fetch benchmark data: {e}")
@@ -150,19 +151,17 @@ def _parse_period(period: str) -> int:
         return 365
 
 
-async def _fetch_benchmark_returns(benchmark: str, period_days: int, container: AppContainer) -> pd.Series:
+async def _fetch_benchmark_returns(benchmark: str, period_days: int, fetcher: MarketDataFetcher) -> pd.Series:
     """Fetch benchmark returns data.
 
     Args:
         benchmark: Benchmark ticker symbol
         period_days: Number of days (-1 for all available)
-        container: DI container for yfinance fetcher
+        fetcher: Market data fetcher for benchmark data
 
     Returns:
         pandas Series with daily returns
     """
-    fetcher = container.yfinance_market_fetcher()
-
     fetch_days = period_days if period_days != -1 else 365 * 5
 
     market_data = fetcher.fetch_daily(benchmark, period_days=fetch_days)

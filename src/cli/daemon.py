@@ -1,10 +1,12 @@
 """Daemon subcommand for autonomous trading mode."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from loguru import logger
@@ -17,6 +19,9 @@ from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
 from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher
 from src.di.container import create_container
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 console = Console()
 
@@ -102,9 +107,15 @@ def _load_daemon_config(config: Path | None) -> DaemonConfig:
 
 
 def _init_event_watchers(
-    daemon_config: DaemonConfig, historical_cache: HistoricalCache
+    daemon_config: DaemonConfig, historical_cache: HistoricalCache, container: AppContainer
 ) -> list[EventWatcher]:
-    """Initialize enabled event watchers."""
+    """Initialize enabled event watchers.
+
+    Args:
+        daemon_config: Daemon configuration
+        historical_cache: Shared historical data cache
+        container: DI container for resolving dependencies
+    """
     watchers: list[EventWatcher] = []
 
     if daemon_config.news_watcher.enabled:
@@ -140,6 +151,7 @@ def _init_event_watchers(
         watchers.append(
             AnomalyWatcher(
                 historical_cache=historical_cache,
+                market_fetcher=container.market_fetcher(),
                 poll_interval=daemon_config.anomaly_watcher.poll_interval_minutes * 60,
                 relevance_threshold=daemon_config.anomaly_watcher.relevance_threshold,
                 cooldown_minutes=daemon_config.anomaly_watcher.cooldown_minutes,
@@ -208,7 +220,7 @@ def events_daemon(
         container = create_container()
         container.daemon_config.override(daemon_config)
         historical_cache = container.historical_cache()
-        watchers = _init_event_watchers(daemon_config, historical_cache)
+        watchers = _init_event_watchers(daemon_config, historical_cache, container)
 
         async def run_all() -> None:
             """Run all enabled watchers with graceful shutdown."""
