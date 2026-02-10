@@ -26,7 +26,7 @@ class ScreeningConfig(BaseModel):
     screen_time: str = "16:30"
     screen_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
     criteria: Literal["momentum", "value", "breakout"] = "momentum"
-    universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
+    universe: Literal["SP500", "NASDAQ100", "COMBINED", "RUSSELL3000", "US_LIQUID"] = "COMBINED"
     top_n: int = 10
     watchlist_name: str = "daemon-screening"
 
@@ -73,7 +73,7 @@ class DiscoveryConfig(BaseModel):
 
     # Technical screening
     screening_criteria: list[str] = Field(default_factory=lambda: ["momentum"])
-    screening_universe: Literal["SP500", "NASDAQ100", "COMBINED"] = "COMBINED"
+    screening_universe: Literal["SP500", "NASDAQ100", "COMBINED", "RUSSELL3000", "US_LIQUID"] = "COMBINED"
     screening_top_n: int = 20
 
     # Social/Reddit
@@ -140,6 +140,46 @@ class DiscoveryConfig(BaseModel):
 
         if not (16 <= hour < 20 or (hour == 20 and minute == 0)):
             msg = f"discovery_time must be between 16:00-20:00, got {self.discovery_time}"
+            raise ValueError(msg)
+
+        return self
+
+
+class LiquidityFilterConfig(BaseModel):
+    """Configuration for universe liquidity filtering."""
+
+    min_market_cap: float = Field(
+        default=1e9,
+        gt=0,
+        description="Minimum market capitalization in USD (must be > 0)",
+    )  # $1B default
+    min_avg_volume: int = Field(
+        default=1_000_000,
+        gt=0,
+        description="Minimum average daily volume in shares (must be > 0)",
+    )  # 1M shares/day
+    price_range: tuple[float, float] = (10.0, 500.0)
+
+    @model_validator(mode="after")
+    def validate_price_range(self) -> "LiquidityFilterConfig":
+        """Validate that price_range is (min_price, max_price) with 0 < min < max."""
+        if self.price_range is None:
+            return self
+
+        if not isinstance(self.price_range, tuple) or len(self.price_range) != 2:
+            msg = (
+                f"price_range must be a tuple of two values (min_price, max_price), got {self.price_range!r}"
+            )
+            raise ValueError(msg)
+
+        min_price, max_price = self.price_range
+
+        if min_price <= 0 or max_price <= 0:
+            msg = f"price_range values must be positive, got ({min_price}, {max_price})"
+            raise ValueError(msg)
+
+        if min_price >= max_price:
+            msg = f"price_range must satisfy min_price < max_price, got ({min_price}, {max_price})"
             raise ValueError(msg)
 
         return self
@@ -795,6 +835,7 @@ class DaemonConfig(BaseModel):
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
     discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
+    liquidity_filters: LiquidityFilterConfig = Field(default_factory=LiquidityFilterConfig)
     prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
@@ -844,6 +885,7 @@ class DaemonConfig(BaseModel):
         optimization_data = daemon_data.pop("optimization", {}) or {}
         screening_data = daemon_data.pop("screening", {}) or {}
         discovery_data = daemon_data.pop("discovery", {}) or {}
+        liquidity_filters_data = daemon_data.pop("liquidity_filters", {}) or {}
         prefetch_data = daemon_data.pop("prefetch", {}) or {}
         sector_rotation_data = daemon_data.pop("sector_rotation", {}) or {}
         earnings_calendar_data = daemon_data.pop("earnings_calendar", {}) or {}
@@ -883,6 +925,7 @@ class DaemonConfig(BaseModel):
             optimization=OptimizationConfig(**optimization_data),
             screening=ScreeningConfig(**screening_data),
             discovery=DiscoveryConfig(**discovery_data),
+            liquidity_filters=LiquidityFilterConfig(**liquidity_filters_data),
             prefetch=PrefetchConfig(**prefetch_data),
             sector_rotation=SectorRotationConfig(**sector_rotation_data),
             earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),

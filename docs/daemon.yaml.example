@@ -110,7 +110,8 @@ daemon:
     screen_days: ["mon", "tue", "wed", "thu", "fri"]
     # Screening criteria: momentum, value, or breakout
     criteria: "momentum"
-    # Universe to screen: SP500, NASDAQ100, or COMBINED
+    # Universe to screen: SP500 (~500), NASDAQ100 (~100), COMBINED (~600),
+    # RUSSELL3000 (~3000 unfiltered), US_LIQUID (~500-1500 filtered by liquidity_filters)
     universe: "COMBINED"
     # Number of top symbols to add to watchlist
     top_n: 10
@@ -139,7 +140,9 @@ daemon:
 
     # Technical screening config
     screening_criteria: ["momentum"]    # momentum, value, breakout (list)
-    screening_universe: "COMBINED"      # SP500, NASDAQ100, COMBINED
+    # Universe: SP500 (~500), NASDAQ100 (~100), COMBINED (~600),
+    # RUSSELL3000 (~3000 unfiltered), US_LIQUID (~500-1500 filtered)
+    screening_universe: "COMBINED"
     screening_top_n: 20                 # Candidates per criteria
 
     # Reddit config
@@ -182,6 +185,23 @@ daemon:
     # Outcome tracking (learn from discoveries)
     track_outcomes: true
     outcome_lookback_days: 90
+
+  # ========================================
+  # LIQUIDITY FILTERS (for US_LIQUID universe)
+  # ========================================
+  liquidity_filters:
+    # Minimum market capitalization (default: $1B)
+    # Examples: 2000000000 ($2B strict), 500000000 ($500M moderate), 100000000 ($100M relaxed)
+    min_market_cap: 1000000000
+
+    # Minimum average daily volume in shares (default: 1M shares/day)
+    # Examples: 2000000 (2M strict), 500000 (500k moderate), 100000 (100k relaxed)
+    min_avg_volume: 1000000
+
+    # Price range to filter stocks [min, max] (default: $10-$500)
+    # Avoids penny stocks (<$10) and ultra-expensive stocks (>$500)
+    # Examples: [20.0, 500.0] (strict), [5.0, 500.0] (moderate), [2.0, 1000.0] (relaxed)
+    price_range: [10.0, 500.0]
 
   optimization:
     # After-hours strategy parameter optimization
