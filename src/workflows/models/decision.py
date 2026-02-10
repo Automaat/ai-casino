@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    from src.daemon.degradation import DegradationContext
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.bullish_researcher import BullishResearchAnalysis
@@ -19,6 +14,7 @@ from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis
+from src.daemon.degradation import DegradationContext
 from src.workflows.types import BacktestValidation
 
 

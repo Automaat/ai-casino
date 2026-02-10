@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
 from src.strategies.session import TradingSession
 from src.strategies.timeframe import MultiTimeframeData
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 
 class FetchDataOutput(BaseModel):

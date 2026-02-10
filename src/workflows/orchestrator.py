@@ -1,7 +1,7 @@
 """Trading workflow orchestrator coordinating all stages."""
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -635,6 +635,108 @@ class TradingWorkflow:
         """
         if collector:
             collector.record_pipeline_stage(stage, (time.perf_counter() - start) * 1000)
+
+    # Backward compatibility methods for tests
+    async def _fetch_data(
+        self, symbol: str, period_days: int, trading_session: TradingSession
+    ) -> dict[str, Any]:
+        """Fetch data stage (backward compatibility for tests).
+
+        Args:
+            symbol: Stock ticker
+            period_days: Historical data period
+            trading_session: Trading session type
+
+        Returns:
+            State dict with market and news data
+        """
+        from src.workflows.stages import data_fetch
+
+        data_output = await data_fetch.fetch_data(
+            symbol=symbol,
+            period_days=period_days,
+            trading_session=trading_session,
+            market_fetcher=self.market_fetcher,
+            news_fetcher=self.news_fetcher,
+            enable_multi_timeframe=False,
+            trump_mode=self.trump_mode,
+            trump_fetcher=self.trump_fetcher if self.trump_mode else None,
+        )
+
+        return {
+            "symbol": data_output.symbol,
+            "trading_session": data_output.trading_session,
+            "market_data": data_output.market_data,
+            "news_articles": data_output.news_articles,
+            "trump_posts": data_output.trump_posts,
+            "enable_multi_timeframe": data_output.enable_multi_timeframe,
+            "warnings": data_output.warnings,
+        }
+
+    async def make_decision(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Make trading decision stage (backward compatibility for tests).
+
+        Args:
+            state: State dict from previous stages
+
+        Returns:
+            Updated state dict with trading decision
+        """
+        from src.workflows.models.decision import DecisionContext, DecisionInput
+        from src.workflows.stages import decision
+
+        # Build context from state dict fields
+        context = DecisionContext(
+            sector_rotation=state.get("sector_rotation_context"),
+            earnings=state.get("earnings_context"),
+            peer_analysis=state.get("peer_analysis_context"),
+            game_plan=state.get("game_plan_context"),
+            position=state.get("position_context"),
+        )
+
+        decision_input = DecisionInput(
+            symbol=state["symbol"],
+            technical=state.get("technical_analysis"),
+            sentiment=state.get("sentiment_analysis"),
+            news=state.get("news_analysis"),
+            bullish=state.get("bullish_research"),
+            bearish=state.get("bearish_research"),
+            fundamental=state.get("fundamental_analysis"),
+            comparative=state.get("comparative_analysis"),
+            trump=state.get("trump_analysis"),
+            account_info=state.get("account_info"),
+            context=context,
+            backtest_validation=state.get("backtest_validation"),
+            degradation_context=state.get("degradation_context"),
+        )
+        decision_output = await decision.make_decision(decision_input, self.trader, None)
+
+        return {**state, "final_decision": decision_output.final_decision}
+
+    async def _execute_trade(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Execute trade stage (backward compatibility for tests).
+
+        Args:
+            state: State dict from previous stages
+
+        Returns:
+            Updated state dict with order status
+        """
+        from src.workflows.models.execution import TradeExecutionInput
+        from src.workflows.stages import execution
+
+        if not self.broker:
+            return {**state, "order_status": None}
+
+        execution_input = TradeExecutionInput(
+            symbol=state["symbol"],
+            final_decision=state["final_decision"],
+            risk_assessment=state["risk_assessment"],
+            trading_session=state.get("trading_session", TradingSession.REGULAR),
+        )
+        execution_output = await execution.execute_trade(execution_input, self.broker)
+
+        return {**state, "order_status": execution_output.order_status}
 
     def __repr__(self) -> str:
         """String representation."""
