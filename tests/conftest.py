@@ -8,10 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
 import pytest
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.web_researcher import ResearchCategory, WebResearchAnalysis, WebResearchResult
 from src.daemon.state import AnalysisRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
@@ -580,6 +579,8 @@ def mock_universe_fetcher(sample_stock_universe):
     mock.fetch_sp500.return_value = sample_stock_universe
     mock.fetch_nasdaq100.return_value = sample_stock_universe
     mock.fetch_combined.return_value = sample_stock_universe
+    mock.fetch_russell3000.return_value = sample_stock_universe
+    mock.fetch_us_liquid.return_value = sample_stock_universe
     return mock
 
 

@@ -180,12 +180,12 @@ class TradingWorkflow:
                 position_sizing_config=position_sizing_config,
             )
         else:
-            from src.agents.bearish_researcher import BearishResearcher
-            from src.agents.bullish_researcher import BullishResearcher
+            from src.agents.base_researcher import ResearchDirection
             from src.agents.comparative import ComparativeAnalyst
             from src.agents.news import NewsAnalyst
             from src.agents.risk import RiskManagementAgent
             from src.agents.social import SocialSentimentAnalyst
+            from src.agents.thesis_researcher import ThesisResearcher
             from src.agents.trader import TraderAgent
             from src.agents.web_researcher import WebResearchAgent
             from src.data.comparative import ComparativeDataFetcher
@@ -210,8 +210,8 @@ class TradingWorkflow:
                 RedditFetcher(historical_cache=historical_cache),
                 finbert,
             )
-            self.bullish_researcher = BullishResearcher(llm_client)
-            self.bearish_researcher = BearishResearcher(llm_client)
+            self.bullish_researcher = ThesisResearcher(llm_client, ResearchDirection.BULLISH)
+            self.bearish_researcher = ThesisResearcher(llm_client, ResearchDirection.BEARISH)
             self.trader = TraderAgent(llm_client)
             self.risk_manager = RiskManagementAgent(
                 llm_client,

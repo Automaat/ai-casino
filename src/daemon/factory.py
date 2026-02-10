@@ -419,7 +419,11 @@ class DaemonFactory:
         )
 
         # Create screener
-        screener = StockScreener(universe_fetcher=StockUniverseFetcher(), cache_dir="data/cache/screening")
+        screener = StockScreener(
+            universe_fetcher=StockUniverseFetcher(),
+            liquidity_filters=self.config.liquidity_filters,
+            cache_dir="data/cache/screening",
+        )
 
         # Market fetcher
         market_fetcher = self._container.market_fetcher()

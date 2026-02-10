@@ -5,13 +5,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.trader import TradingDecision
 from src.backtesting.vectorbt_runner import VectorBTResult
 from src.daemon.config import PreTradeBacktestingConfig

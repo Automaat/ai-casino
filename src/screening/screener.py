@@ -4,6 +4,7 @@ import hashlib
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pandas_ta_classic  # noqa: F401 - Required to register .ta accessor
@@ -21,6 +22,9 @@ from tenacity import (
 
 from src.data.universe import StockInfo, StockUniverseFetcher
 from src.strategies.signal import Signal
+
+if TYPE_CHECKING:
+    from src.daemon.config import LiquidityFilterConfig
 
 MIN_MACD_DATA_POINTS = 35
 RSI_OVERSOLD_THRESHOLD = 40
@@ -81,15 +85,18 @@ class StockScreener:
     def __init__(
         self,
         universe_fetcher: StockUniverseFetcher,
+        liquidity_filters: "LiquidityFilterConfig | None" = None,
         cache_dir: str | None = None,
     ) -> None:
         """Initialize stock screener.
 
         Args:
             universe_fetcher: StockUniverseFetcher instance
+            liquidity_filters: Liquidity filter configuration for US_LIQUID universe
             cache_dir: Cache directory path. Defaults to data/cache/screening/
         """
         self._universe_fetcher = universe_fetcher
+        self._liquidity_filters = liquidity_filters
         self._cache_dir = Path(cache_dir or "data/cache/screening")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache = Cache(str(self._cache_dir))
@@ -108,7 +115,7 @@ class StockScreener:
         raw = f"{criteria.value}:{universe}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
-    def screen(
+    def screen(  # noqa: C901, PLR0912
         self,
         criteria: ScreeningCriteria,
         universe: str = "COMBINED",
@@ -139,6 +146,13 @@ class StockScreener:
             stock_universe = self._universe_fetcher.fetch_sp500()
         elif universe == "NASDAQ100":
             stock_universe = self._universe_fetcher.fetch_nasdaq100()
+        elif universe == "RUSSELL3000":
+            stock_universe = self._universe_fetcher.fetch_russell3000()
+        elif universe == "US_LIQUID":
+            if self._liquidity_filters is None:
+                msg = "US_LIQUID universe requires liquidity_filters config"
+                raise ValueError(msg)
+            stock_universe = self._universe_fetcher.fetch_us_liquid(self._liquidity_filters)
         else:
             stock_universe = self._universe_fetcher.fetch_combined()
 

@@ -1,10 +1,14 @@
 """Stock universe fetcher for S&P 500 and NASDAQ 100."""
 
+import csv
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
+import yfinance as yf
 from bs4 import BeautifulSoup
 from diskcache import Cache
 from loguru import logger
@@ -16,6 +20,9 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+if TYPE_CHECKING:
+    from src.daemon.config import LiquidityFilterConfig
 
 HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
@@ -31,6 +38,7 @@ UNIVERSE_CACHE_TTL = 604800  # 7 days
 
 SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 NASDAQ100_URL = "https://en.wikipedia.org/wiki/Nasdaq-100"
+ISHARES_RUSSELL3000_URL = "https://www.ishares.com/us/products/239714/ishares-russell-3000-etf/1467271812596.ajax?fileType=csv&fileName=IWV_holdings&dataType=fund"
 
 
 class StockInfo(BaseModel):
@@ -149,6 +157,182 @@ class StockUniverseFetcher:
         logger.info(f"Fetched {len(combined_stocks)} combined stocks (deduplicated)")
         return universe
 
+    @HTTP_RETRY
+    def fetch_russell3000(self) -> StockUniverse:
+        """Fetch Russell 3000 stock list (unfiltered).
+
+        Returns:
+            StockUniverse with Russell 3000 stocks
+        """
+        logger.info("Fetching Russell 3000 universe")
+
+        cache_key = self._cache_key("RUSSELL3000")
+        cached = self._cache.get(cache_key)
+        if cached:
+            logger.debug("Cache hit for Russell 3000")
+            return StockUniverse.model_validate(cached)
+
+        stocks = self._scrape_ishares_russell3000()
+        universe = StockUniverse(name="RUSSELL3000", stocks=stocks, fetched_at=datetime.now())
+
+        self._cache.set(cache_key, universe.model_dump(), expire=UNIVERSE_CACHE_TTL)
+        logger.info(f"Fetched {len(stocks)} Russell 3000 stocks")
+        return universe
+
+    def _fetch_batch_metadata(  # noqa: C901, PLR0912
+        self,
+        symbols: list[str],
+        batch_size: int = 50,
+    ) -> dict[str, dict[str, float]]:
+        """Fetch price, volume, market cap for symbols in batches.
+
+        Args:
+            symbols: List of stock symbols
+            batch_size: Number of symbols per batch
+
+        Returns:
+            Dict mapping symbol to {price, avg_volume, market_cap}
+        """
+        logger.info(f"Fetching metadata for {len(symbols)} symbols")
+        all_data: dict[str, dict[str, float]] = {}
+
+        # Stage 1: Batch fetch OHLCV data for price and volume
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i : i + batch_size]
+            try:
+                batch_num = i // batch_size + 1
+                total_batches = (len(symbols) + batch_size - 1) // batch_size
+                logger.debug(f"Fetching OHLCV batch {batch_num}/{total_batches}")
+                data = yf.download(batch, period="3mo", progress=False, group_by="ticker", threads=True)
+
+                if data.empty:
+                    continue
+
+                # Handle single symbol vs multiple symbols response structure
+                if len(batch) == 1:
+                    symbol = batch[0]
+                    if not data.empty and "Close" in data.columns:
+                        price = float(data["Close"].iloc[-1])
+                        avg_volume = float(data["Volume"].tail(30).mean())
+                        all_data[symbol] = {"price": price, "avg_volume": avg_volume, "market_cap": 0.0}
+                else:
+                    for symbol in batch:
+                        try:
+                            if symbol not in data.columns.get_level_values(0):
+                                continue
+                            symbol_data = data[symbol]
+                            if symbol_data.empty or "Close" not in symbol_data.columns:
+                                continue
+                            price = float(symbol_data["Close"].iloc[-1])
+                            avg_volume = float(symbol_data["Volume"].tail(30).mean())
+                            all_data[symbol] = {"price": price, "avg_volume": avg_volume, "market_cap": 0.0}
+                        except Exception as e:
+                            logger.debug(f"Failed to parse {symbol}: {e}")
+                            continue
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch OHLCV batch: {e}")
+                continue
+
+        logger.info(f"Stage 1: Fetched OHLCV for {len(all_data)} symbols")
+
+        # Stage 2: Fetch market cap in parallel for survivors
+        def fetch_market_cap(symbol: str) -> tuple[str, float]:
+            try:
+                ticker = yf.Ticker(symbol)
+                market_cap = ticker.info.get("marketCap", 0)
+                return symbol, float(market_cap) if market_cap else 0.0
+            except Exception as e:
+                logger.debug(f"Failed to fetch market cap for {symbol}: {e}")
+                return symbol, 0.0
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(fetch_market_cap, sym): sym for sym in all_data}
+            for completed, future in enumerate(as_completed(futures), start=1):
+                if completed % 100 == 0:
+                    logger.debug(f"Stage 2: Fetched market cap {completed}/{len(all_data)}")
+                try:
+                    symbol, market_cap = future.result()
+                    all_data[symbol]["market_cap"] = market_cap
+                except Exception as e:
+                    logger.debug(f"Failed to get market cap result: {e}")
+
+        logger.info(f"Stage 2: Fetched market cap for {len(all_data)} symbols")
+        return all_data
+
+    @HTTP_RETRY
+    def fetch_us_liquid(self, filters: "LiquidityFilterConfig") -> StockUniverse:
+        """Fetch US liquid stocks (Russell 3000 filtered by liquidity).
+
+        Args:
+            filters: Liquidity filter configuration
+
+        Returns:
+            StockUniverse with filtered stocks (~500-1500 depending on filters)
+        """
+        # Import here to avoid circular dependency
+        from src.daemon.config import LiquidityFilterConfig  # noqa: F401
+
+        # Generate cache key from filter config hash
+        filter_hash = hashlib.sha256(
+            f"{filters.min_market_cap}_{filters.min_avg_volume}_{filters.price_range}".encode()
+        ).hexdigest()[:16]
+        cache_key = self._cache_key(f"US_LIQUID_{filter_hash}")
+
+        # Check cache
+        cached = self._cache.get(cache_key)
+        if cached:
+            logger.debug("Cache hit for US_LIQUID")
+            return StockUniverse.model_validate(cached)
+
+        logger.info("Fetching US_LIQUID universe (filtered Russell 3000)")
+
+        # Fetch unfiltered Russell 3000
+        russell3000 = self.fetch_russell3000()
+        symbols = [s.symbol for s in russell3000.stocks]
+
+        # Fetch metadata and filter in two stages
+        metadata = self._fetch_batch_metadata(symbols)
+
+        # Apply filters
+        filtered_stocks = []
+        for stock in russell3000.stocks:
+            if stock.symbol not in metadata:
+                continue
+
+            meta = metadata[stock.symbol]
+
+            # Price range filter
+            price = meta["price"]
+            min_price, max_price = filters.price_range
+            if not (min_price <= price <= max_price):
+                continue
+
+            # Volume filter
+            if meta["avg_volume"] < filters.min_avg_volume:
+                continue
+
+            # Market cap filter
+            if meta["market_cap"] < filters.min_market_cap:
+                continue
+
+            filtered_stocks.append(stock)
+
+        universe = StockUniverse(
+            name="US_LIQUID",
+            stocks=filtered_stocks,
+            fetched_at=datetime.now(),
+        )
+
+        # Cache for 7 days
+        self._cache.set(cache_key, universe.model_dump(), expire=UNIVERSE_CACHE_TTL)
+        logger.info(
+            f"Filtered to {len(filtered_stocks)} liquid stocks "
+            f"from {len(russell3000.stocks)} Russell 3000 stocks"
+        )
+
+        return universe
+
     def _scrape_sp500(self) -> list[StockInfo]:
         """Scrape S&P 500 list from Wikipedia.
 
@@ -204,6 +388,49 @@ class StockUniverseFetcher:
                     industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
 
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+
+            return stocks
+
+    def _scrape_ishares_russell3000(self) -> list[StockInfo]:
+        """Scrape Russell 3000 list from iShares IWV ETF holdings CSV.
+
+        Returns:
+            List of StockInfo
+        """
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(ISHARES_RUSSELL3000_URL)
+            response.raise_for_status()
+
+            # Parse CSV (skip first 10 rows which are metadata)
+            lines = response.text.strip().split("\n")[10:]
+            stocks = []
+
+            # Use csv.reader to properly handle quoted fields with commas
+            reader = csv.reader(lines)
+            for parts in reader:
+                if len(parts) < 4:
+                    continue
+
+                # Columns: Ticker, Name, Sector, Asset Class, Market Value, Weight, ...
+                ticker = parts[0].strip()
+                name = parts[1].strip()
+                sector = parts[2].strip()
+
+                # Skip header row and non-equity entries
+                if ticker in ("Ticker", "-", "") or sector == "-":
+                    continue
+
+                # Handle BRK.B -> BRK-B conversion
+                symbol = ticker.replace(".", "-")
+
+                stocks.append(
+                    StockInfo(
+                        symbol=symbol,
+                        name=name,
+                        sector=sector if sector else "Unknown",
+                        industry="",  # Not available in iShares CSV
+                    )
+                )
 
             return stocks
 

@@ -13,8 +13,7 @@ from src.data.reddit import RedditFetcher
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
-    from src.agents.bearish_researcher import BearishResearcher
-    from src.agents.bullish_researcher import BullishResearcher
+    from src.agents.base_researcher import ResearchDirection
     from src.agents.comparative import ComparativeAnalyst
     from src.agents.event_triage import EventTriageAgent
     from src.agents.fundamental import FundamentalAnalyst
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     from src.agents.sentiment import SentimentAnalyst
     from src.agents.social import SocialSentimentAnalyst
     from src.agents.technical import TechnicalAnalyst
+    from src.agents.thesis_researcher import ThesisResearcher
     from src.agents.trader import TraderAgent
     from src.agents.trump import TrumpAnalyst
     from src.agents.web_researcher import WebResearchAgent
@@ -131,32 +131,19 @@ def create_trader_agent(llm_client: LLMClient) -> "TraderAgent":
     return TraderAgent(llm_client)
 
 
-def create_bullish_researcher(llm_client: LLMClient) -> "BullishResearcher":
-    """Create BullishResearcher with LLM client.
+def create_thesis_researcher(llm_client: LLMClient, direction: "ResearchDirection") -> "ThesisResearcher":
+    """Create ThesisResearcher with direction.
 
     Args:
-        llm_client: LLM client for bullish research
+        llm_client: LLM client for thesis research
+        direction: Research direction (BULLISH or BEARISH)
 
     Returns:
-        Configured BullishResearcher
+        Configured ThesisResearcher
     """
-    from src.agents.bullish_researcher import BullishResearcher
+    from src.agents.thesis_researcher import ThesisResearcher
 
-    return BullishResearcher(llm_client)
-
-
-def create_bearish_researcher(llm_client: LLMClient) -> "BearishResearcher":
-    """Create BearishResearcher with LLM client.
-
-    Args:
-        llm_client: LLM client for bearish research
-
-    Returns:
-        Configured BearishResearcher
-    """
-    from src.agents.bearish_researcher import BearishResearcher
-
-    return BearishResearcher(llm_client)
+    return ThesisResearcher(llm_client, direction)
 
 
 def create_event_triage_agent(llm_client: LLMClient) -> "EventTriageAgent":

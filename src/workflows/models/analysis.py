@@ -5,14 +5,13 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.social import SocialSentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.trump import TrumpAnalysis
 from src.agents.web_researcher import WebResearchAnalysis
 from src.data.news import NewsArticle

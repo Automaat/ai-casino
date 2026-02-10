@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import AccountInfo
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis
 from src.daemon.degradation import DegradationContext

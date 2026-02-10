@@ -9,14 +9,13 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.agents.bearish_researcher import BearishResearcher
-    from src.agents.bullish_researcher import BullishResearcher
     from src.agents.comparative import ComparativeAnalyst
     from src.agents.fundamental import FundamentalAnalyst
     from src.agents.news import NewsAnalyst
     from src.agents.sentiment import SentimentAnalyst
     from src.agents.social import SocialSentimentAnalyst
     from src.agents.technical import TechnicalAnalyst
+    from src.agents.thesis_researcher import ThesisResearcher
     from src.agents.trump import TrumpAnalyst
     from src.agents.web_researcher import WebResearchAgent
     from src.metrics.execution import ExecutionMetricsCollector
@@ -105,8 +104,8 @@ async def run_analyses(  # noqa: PLR0913
     comparative_analyst: ComparativeAnalyst,
     web_researcher: WebResearchAgent,
     social_analyst: SocialSentimentAnalyst,
-    bullish_researcher: BullishResearcher,
-    bearish_researcher: BearishResearcher,
+    bullish_researcher: ThesisResearcher,
+    bearish_researcher: ThesisResearcher,
     trump_mode: bool,
     trump_analyst: TrumpAnalyst | None,
     collector: ExecutionMetricsCollector | None = None,
