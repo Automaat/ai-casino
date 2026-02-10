@@ -27,7 +27,6 @@ class MarketScheduler:
         after_hours_screen_days: list[str] | None = None,
         optimization_time: str = "17:00",
         optimization_days: list[str] | None = None,
-        health_check_time: str = "17:00",
         prefetch_time: str = "16:30",
         pre_market_refresh_time: str = "04:00",
         sector_rotation_time: str = "16:15",
@@ -66,7 +65,6 @@ class MarketScheduler:
             after_hours_screen_days: Days to run screening (e.g., ["mon", "tue", "wed", "thu", "fri"])
             optimization_time: Time to run parameter optimization (HH:MM format)
             optimization_days: Days to run optimization (e.g., ["sat"])
-            health_check_time: Time to run health check (HH:MM format)
             prefetch_time: Time to run after-hours data prefetch (HH:MM format)
             pre_market_refresh_time: Time to run pre-market data refresh (HH:MM format)
             sector_rotation_time: Time to run sector rotation analysis (HH:MM format)
@@ -102,7 +100,6 @@ class MarketScheduler:
         self.after_hours_screen_days = after_hours_screen_days or ["mon", "tue", "wed", "thu", "fri"]
         self.optimization_time = optimization_time
         self.optimization_days = optimization_days or ["sat"]
-        self.health_check_time = health_check_time
         self.prefetch_time = prefetch_time
         self.pre_market_refresh_time = pre_market_refresh_time
         self.sector_rotation_time = sector_rotation_time
@@ -305,33 +302,6 @@ class MarketScheduler:
         target_hour, target_minute = map(int, self.after_hours_screen_time.split(":"))
 
         # Check if within 1 minute of target time
-        current_minutes = now.hour * 60 + now.minute
-        target_minutes = target_hour * 60 + target_minute
-
-        return abs(current_minutes - target_minutes) <= 1
-
-    def is_health_check_time(self, health_run_time: str | None = None) -> bool:
-        """Check if current time matches health check schedule.
-
-        Args:
-            health_run_time: Time to run health checks (HH:MM format). If None, uses self.health_check_time.
-
-        Returns:
-            True if current time is within 1 minute of configured health check time on weekday
-        """
-        now = datetime.now(self.timezone)
-
-        # Weekend check
-        if now.weekday() >= 5:
-            return False
-
-        run_time = health_run_time if health_run_time is not None else self.health_check_time
-        try:
-            target_hour, target_minute = map(int, run_time.split(":"))
-        except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed health_run_time '{run_time}': {e}")
-            return False
-
         current_minutes = now.hour * 60 + now.minute
         target_minutes = target_hour * 60 + target_minute
 

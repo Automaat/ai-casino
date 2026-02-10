@@ -168,7 +168,11 @@ class HealthConfig(BaseModel):
     """Configuration for API health checks and state cleanup."""
 
     enabled: bool = True
-    run_time: str = "17:00"
+    check_interval_seconds: int = Field(
+        default=5,
+        ge=1,
+        description="Interval in seconds between health checks (must be >= 1)",
+    )
     archive_days: int = 30
     log_max_size_mb: int = 5
     health_dir: str = "~/.ai-casino/health"
@@ -547,6 +551,7 @@ class PositionManagementConfig(BaseModel):
     enabled: bool = False
     trailing_stop_enabled: bool = True
     trailing_stop_percent: float = Field(default=3.0, ge=0.5, le=10.0)
+    min_stop_gap_dollars: float = Field(default=0.10, ge=0.01, le=1.0)
     partial_profit_enabled: bool = True
     profit_target_1_percent: float = Field(default=5.0, ge=1.0, le=20.0)
     profit_target_1_sell_pct: float = Field(default=0.5, ge=0.1, le=1.0)
