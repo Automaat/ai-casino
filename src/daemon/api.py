@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from src.daemon.runner import DaemonRunner
 
-_broker_cache: ContextVar[dict[str, Any]] = ContextVar("_broker_cache", default={})
+_broker_cache: ContextVar[dict[str, Any] | None] = ContextVar("_broker_cache", default=None)
 
 
 class HealthResponse(BaseModel):
@@ -305,6 +305,9 @@ async def get_broker_account_info_cached(
         return
 
     cache = _broker_cache.get()
+    if cache is None:
+        cache = {}
+        _broker_cache.set(cache)
     cache_key = "account_info"
 
     if cache_key not in cache:
