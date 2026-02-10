@@ -10,3 +10,4 @@ daemon:
     enabled: true
     host: "127.0.0.1"
     port: 8484
+    cors_origins: ["http://localhost:8050"]
