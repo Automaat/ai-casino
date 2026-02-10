@@ -422,6 +422,12 @@ class AnalysisOrchestrator:
         try:
             conf = result.decision.confidence
             risk = result.risk.validation.risk_level
+            price = result.risk.current_price
+            rsi = result.technical.rsi if result.technical else None
+            macd = result.technical.macd_hist if result.technical else None
+            reasoning = result.decision.reasoning
+            session = result.trading_session.value if result.trading_session else "REGULAR"
+
             message = NotificationMessage(
                 trigger=NotificationTrigger.SIGNAL,
                 title=f"{result.symbol} {result.decision.action.value}",
@@ -431,6 +437,11 @@ class AnalysisOrchestrator:
                     "signal": result.decision.action.value,
                     "confidence": conf,
                     "risk_level": risk,
+                    "price": price,
+                    "rsi": rsi,
+                    "macd": macd,
+                    "reasoning": reasoning,
+                    "session": session,
                 },
                 timestamp=datetime.now(UTC),
             )
