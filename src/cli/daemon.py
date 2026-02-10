@@ -235,7 +235,14 @@ def events_daemon(
             signal.signal(signal.SIGTERM, shutdown_handler)
 
             tasks = [w.run() for w in watchers]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Log failures and re-raise cancellation/shutdown exceptions
+            for i, result in enumerate(results):
+                if isinstance(result, BaseException):
+                    if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+                        raise result
+                    logger.error(f"Watcher {i} failed: {result}")
 
         console.print()
         console.print(f"[bold green]Starting {len(watchers)} event watcher(s)...[/bold green]")

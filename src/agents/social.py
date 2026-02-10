@@ -160,9 +160,31 @@ class SocialSentimentAnalyst:
         results = await asyncio.gather(
             fetch_finnhub_social(), fetch_finnhub_news(), fetch_reddit(), return_exceptions=True
         )
-        finnhub_social = None if isinstance(results[0], BaseException) else results[0]
-        finnhub_news = None if isinstance(results[1], BaseException) else results[1]
-        reddit_data = None if isinstance(results[2], BaseException) else results[2]
+
+        # Re-raise cancellation/shutdown exceptions
+        for result in results:
+            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise result
+
+        # Log and convert other exceptions to None
+        finnhub_social = None
+        finnhub_news = None
+        reddit_data = None
+
+        if isinstance(results[0], BaseException):
+            logger.error(f"Finnhub social fetch failed: {results[0]}")
+        else:
+            finnhub_social = results[0]
+
+        if isinstance(results[1], BaseException):
+            logger.error(f"Finnhub news fetch failed: {results[1]}")
+        else:
+            finnhub_news = results[1]
+
+        if isinstance(results[2], BaseException):
+            logger.error(f"Reddit fetch failed: {results[2]}")
+        else:
+            reddit_data = results[2]
 
         return finnhub_social, finnhub_news, reddit_data
 

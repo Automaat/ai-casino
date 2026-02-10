@@ -53,6 +53,9 @@ def _filter_outcomes(raw_outcomes: list[SignalOutcome | BaseException | None]) -
     outcomes: list[SignalOutcome] = []
     for o in raw_outcomes:
         if isinstance(o, BaseException):
+            # Re-raise cancellation/shutdown exceptions
+            if isinstance(o, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise o
             logger.error(f"Outcome fetch failed: {o}")
         elif o is not None:
             outcomes.append(o)

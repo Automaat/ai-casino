@@ -25,8 +25,11 @@ if TYPE_CHECKING:
 
 def _log_task_exception(task: asyncio.Task[object]) -> None:
     """Log exceptions from fire-and-forget tasks."""
-    if not task.cancelled() and task.exception():
-        logger.error(f"Background task failed: {task.exception()}")
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.opt(exception=exc).error("Background task failed")
 
 
 class AnalysisRecord(BaseModel):

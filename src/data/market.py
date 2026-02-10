@@ -45,6 +45,9 @@ def _collect_timeframe_results(
     timeframe_dict: dict[Timeframe, pd.DataFrame] = {}
     for result in results:
         if isinstance(result, BaseException):
+            # Re-raise cancellation/shutdown exceptions
+            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise result
             logger.error(f"Timeframe fetch failed: {result}")
             continue
         tf, data = result

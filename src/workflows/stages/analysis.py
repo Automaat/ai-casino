@@ -35,9 +35,17 @@ T = TypeVar("T")
 
 
 def _unwrap_or_log(result: T | BaseException, label: str) -> T | None:
-    """Return result if successful, log and return None if exception."""
+    """Return result if successful, log and return None if exception.
+
+    Control-flow exceptions (e.g. cancellation, shutdown) are re-raised to
+    allow proper propagation.
+    """
     if isinstance(result, BaseException):
-        logger.error(f"{label} failed: {result}")
+        # Re-raise control-flow exceptions so shutdown/cancellation propagates.
+        if isinstance(result, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
+            raise result
+        # Log other exceptions with stack trace and return None.
+        logger.opt(exception=result).error(f"{label} failed")
         return None
     return result
 

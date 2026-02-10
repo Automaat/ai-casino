@@ -19,8 +19,12 @@ console = Console()
 
 def _log_event_publish_error(task: asyncio.Task[object]) -> None:
     """Log exceptions from fire-and-forget event publish tasks."""
-    if task.exception():
-        logger.error(f"Event publish failed: {task.exception()}")
+    if task.cancelled():
+        return
+
+    exc = task.exception()
+    if exc is not None:
+        logger.error(f"Event publish failed: {exc}")
 
 
 if TYPE_CHECKING:
@@ -1284,11 +1288,15 @@ class DaemonTaskService:
                 task = asyncio.create_task(
                     self._notification_helper.notify_var_breach(report, self.components)
                 )
-                task.add_done_callback(
-                    lambda t: (
-                        logger.error(f"VaR notification failed: {t.exception()}") if t.exception() else None
-                    )
-                )
+
+                def _log_var_notification_result(t: asyncio.Task) -> None:
+                    if t.cancelled():
+                        return
+                    exc = t.exception()
+                    if exc is not None:
+                        logger.opt(exception=exc).error("VaR notification failed")
+
+                task.add_done_callback(_log_var_notification_result)
 
         except Exception as e:
             error_msg = f"Risk report generation failed: {e}"

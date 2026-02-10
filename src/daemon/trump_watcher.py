@@ -241,6 +241,9 @@ If no specific stocks are affected, return "NONE".
 
         for entry in raw_results:
             if isinstance(entry, BaseException):
+                # Preserve cancellation/shutdown semantics
+                if isinstance(entry, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise entry
                 logger.error(f"Analysis task failed: {entry}")
                 continue
             symbol, result = entry
