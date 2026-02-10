@@ -210,6 +210,9 @@ class AlpacaBroker:
             )
 
             if stop_loss_price is not None:
+                if stop_loss_price <= 0:
+                    msg = f"Stop loss price must be positive, got {stop_loss_price}"
+                    raise ValueError(msg)
                 # Round stop loss price to valid broker increment
                 stop_loss_price = round_price_for_broker(stop_loss_price)
                 order_data.order_class = OrderClass.OTO
@@ -300,7 +303,8 @@ class AlpacaBroker:
 
             order: Order = self.client.submit_order(order_data=order_data)  # type: ignore[assignment]
 
-            logger.info(f"Submitted stop order: SELL {qty} {symbol} @ ${stop_price:.2f}")
+            price_fmt = f"${stop_price:.4f}" if stop_price < 1.0 else f"${stop_price:.2f}"
+            logger.info(f"Submitted stop order: SELL {qty} {symbol} @ {price_fmt}")
 
             return OrderStatus(
                 order_id=str(order.id),
