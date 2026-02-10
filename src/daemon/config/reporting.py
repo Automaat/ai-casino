@@ -29,7 +29,7 @@ class ReportingConfig(BaseModel):
     retention_days: int = 30
 
     @model_validator(mode="after")
-    def validate_tearsheet_time(self) -> "ReportingConfig":
+    def validate_tearsheet_time(self) -> ReportingConfig:
         """Validate tearsheet_time is in HH:MM format within 16:00-20:00 and retention_days >= 1."""
         if not self.enabled:
             return self
@@ -50,7 +50,7 @@ class SignalTrackingConfig(BaseModel):
     tracking_time: str = "17:00"
 
     @model_validator(mode="after")
-    def validate_tracking_time(self) -> "SignalTrackingConfig":
+    def validate_tracking_time(self) -> SignalTrackingConfig:
         """Validate tracking_time is in HH:MM format within 16:00-20:00."""
         if self.enabled:
             validate_time_range(self.tracking_time, "tracking_time", "after_hours")

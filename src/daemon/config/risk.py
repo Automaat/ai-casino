@@ -53,7 +53,7 @@ class PositionSizingConfig(BaseModel):
     monte_carlo_risk_multiplier: float = Field(default=0.7, ge=0.1, le=1.0)
 
     @model_validator(mode="after")
-    def validate_blend_weights(self) -> "PositionSizingConfig":
+    def validate_blend_weights(self) -> PositionSizingConfig:
         """Validate blend weights sum to 1.0."""
         total = self.blend_weight_optimization + self.blend_weight_risk_based
         if not (0.99 <= total <= 1.01):
@@ -62,7 +62,7 @@ class PositionSizingConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def validate_confidence_thresholds(self) -> "PositionSizingConfig":
+    def validate_confidence_thresholds(self) -> PositionSizingConfig:
         """Validate confidence thresholds are properly ordered."""
         if self.confidence_low_threshold >= self.confidence_high_threshold:
             msg = (
@@ -119,7 +119,7 @@ class MonteCarloConfig(BaseModel):
     max_history_records: int = Field(default=52, ge=1, le=520)
 
     @model_validator(mode="after")
-    def validate_schedule_time(self) -> "MonteCarloConfig":
+    def validate_schedule_time(self) -> MonteCarloConfig:
         """Validate schedule_time is within 16:00-20:00 for after-hours or any time for weekends."""
         if not self.enabled:
             return self

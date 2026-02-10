@@ -19,7 +19,7 @@ class ScreeningConfig(BaseModel):
     watchlist_name: str = "daemon-screening"
 
     @model_validator(mode="after")
-    def validate_screen_time(self) -> "ScreeningConfig":
+    def validate_screen_time(self) -> ScreeningConfig:
         """Validate screen_time is within 16:00-20:00."""
         if self.enabled:
             validate_time_range(self.screen_time, "screen_time", "after_hours")
@@ -94,7 +94,7 @@ class DiscoveryConfig(BaseModel):
     outcome_lookback_days: int = 90
 
     @model_validator(mode="after")
-    def validate_discovery_time(self) -> "DiscoveryConfig":
+    def validate_discovery_time(self) -> DiscoveryConfig:
         """Validate discovery_time is within 16:00-20:00."""
         if self.enabled:
             validate_time_range(self.discovery_time, "discovery_time", "after_hours")
@@ -117,7 +117,7 @@ class LiquidityFilterConfig(BaseModel):
     price_range: tuple[float, float] = (10.0, 500.0)
 
     @model_validator(mode="after")
-    def validate_price_range(self) -> "LiquidityFilterConfig":
+    def validate_price_range(self) -> LiquidityFilterConfig:
         """Validate that price_range is (min_price, max_price) with 0 < min < max."""
         if self.price_range is None:
             return self
@@ -152,7 +152,7 @@ class SectorRotationConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "SectorRotationConfig":
+    def validate_run_time(self) -> SectorRotationConfig:
         """Validate run_time is in HH:MM format within 16:00-20:00."""
         if self.enabled:
             validate_time_range(self.run_time, "run_time", "after_hours")
@@ -170,7 +170,7 @@ class EarningsCalendarConfig(BaseModel):
     position_reduction_factor: float = Field(default=0.5, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
-    def validate_fetch_time(self) -> "EarningsCalendarConfig":
+    def validate_fetch_time(self) -> EarningsCalendarConfig:
         """Validate fetch_time is in HH:MM format within 16:00-20:00."""
         if self.enabled:
             validate_time_range(self.fetch_time, "fetch_time", "after_hours")

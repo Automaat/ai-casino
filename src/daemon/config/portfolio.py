@@ -18,7 +18,7 @@ class PortfolioRebalancingConfig(BaseModel):
     lookback_days: int = Field(default=90, ge=30, le=365)
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "PortfolioRebalancingConfig":
+    def validate_run_time(self) -> PortfolioRebalancingConfig:
         """Validate run_time is in HH:MM format within 16:00-20:00."""
         if self.enabled:
             validate_time_range(self.run_time, "run_time", "after_hours")
@@ -36,7 +36,7 @@ class PeerAnalysisConfig(BaseModel):
     rate_limit_sleep: float = 13.0
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "PeerAnalysisConfig":
+    def validate_run_time(self) -> PeerAnalysisConfig:
         """Validate run_time is in HH:MM format."""
         if self.enabled:
             validate_time_format(self.run_time, "run_time")
@@ -54,7 +54,7 @@ class CorrelationAuditConfig(BaseModel):
     output_dir: str = "~/.ai-casino/correlation-audits"
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "CorrelationAuditConfig":
+    def validate_run_time(self) -> CorrelationAuditConfig:
         """Validate run_time is in HH:MM format."""
         if self.enabled:
             validate_time_format(self.run_time, "run_time")
@@ -71,7 +71,7 @@ class GamePlanConfig(BaseModel):
     lookback_hours: int = 16
 
     @model_validator(mode="after")
-    def validate_generation_time(self) -> "GamePlanConfig":
+    def validate_generation_time(self) -> GamePlanConfig:
         """Validate generation_time is in pre-market window (04:00-09:30)."""
         if self.enabled:
             validate_time_range(self.generation_time, "generation_time", "pre_market")

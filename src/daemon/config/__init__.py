@@ -139,7 +139,7 @@ class DaemonConfig(BaseModel):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "DaemonConfig":
+    def from_yaml(cls, path: Path) -> DaemonConfig:
         """Load configuration from YAML file.
 
         Args:
