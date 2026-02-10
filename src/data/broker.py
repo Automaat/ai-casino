@@ -22,6 +22,24 @@ if TYPE_CHECKING:
     from alpaca.trading.models import Clock, Order, Position, TradeAccount
 
 
+def round_price_for_broker(price: float) -> float:
+    """Round price to valid broker increment.
+
+    Alpaca requires:
+    - Stocks >= $1.00: $0.01 increment (2 decimals)
+    - Stocks < $1.00: $0.0001 increment (4 decimals)
+
+    Args:
+        price: Price to round
+
+    Returns:
+        Rounded price compliant with broker API
+    """
+    if price >= 1.0:
+        return round(price, 2)
+    return round(price, 4)
+
+
 class BrokerAPIError(Exception):
     """Broker API communication failure."""
 
@@ -192,6 +210,8 @@ class AlpacaBroker:
             )
 
             if stop_loss_price is not None:
+                # Round stop loss price to valid broker increment
+                stop_loss_price = round_price_for_broker(stop_loss_price)
                 order_data.order_class = OrderClass.OTO
                 order_data.stop_loss = StopLossRequest(stop_price=stop_loss_price)
 
@@ -265,6 +285,9 @@ class AlpacaBroker:
         if stop_price <= 0:
             msg = f"Stop price must be positive, got {stop_price}"
             raise ValueError(msg)
+
+        # Round stop price to valid broker increment
+        stop_price = round_price_for_broker(stop_price)
 
         try:
             order_data = StopOrderRequest(
