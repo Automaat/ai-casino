@@ -147,14 +147,15 @@ class NotificationFormatter:
             Formatted markdown string
         """
         m = message.metadata
-        failed_services_obj = m["failed_services"]
+        # Handle both "failed_services" (health check) and "unavailable_services" (degradation)
+        services_obj = m.get("failed_services") or m.get("unavailable_services") or []
         services = (
-            ", ".join(str(s) for s in failed_services_obj)
-            if isinstance(failed_services_obj, list)
-            else str(failed_services_obj)
+            ", ".join(str(s) for s in services_obj) if isinstance(services_obj, list) else str(services_obj)
         )
+        # Use message.title to reflect originating context (health check vs degradation)
+        title = message.title
         return (
-            f"⚠️ *API Health Check Failed*\n\n"
+            f"⚠️ *{title}*\n\n"
             f"*Services Down:* {services}\n\n"
             f"Analysis quality may be affected. Check health report."
         )
