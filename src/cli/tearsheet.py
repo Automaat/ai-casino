@@ -11,13 +11,13 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from src.data.market import MarketDataFetcher
 from src.metrics.quantstats_reporter import QuantStatsReporter
 from src.metrics.tracker import create_metrics_tracker
 
 if TYPE_CHECKING:
     import pandas as pd
 
+    from src.di.container import AppContainer
     from src.metrics.tracker import TearSheet
 
 console = Console()
@@ -50,6 +50,8 @@ async def _tearsheet_async(
         period: Time period specification
         benchmark: Benchmark symbol or None
     """
+    from src.di.container import create_container
+
     console.print(f"\n[bold cyan]Generating tearsheet for {symbol}[/bold cyan]")
 
     period_days = _parse_period(period)
@@ -85,11 +87,12 @@ async def _tearsheet_async(
 
     console.print(f"Found {len(filtered_trades)} closed trades")
 
+    container = create_container()
     benchmark_returns = None
     if benchmark:
         console.print(f"Fetching benchmark data for {benchmark}...")
         try:
-            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days)
+            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, container)
             console.print(f"[green]Benchmark data fetched ({len(benchmark_returns)} days)[/green]")
         except Exception as e:
             logger.warning(f"Failed to fetch benchmark data: {e}")
@@ -147,17 +150,18 @@ def _parse_period(period: str) -> int:
         return 365
 
 
-async def _fetch_benchmark_returns(benchmark: str, period_days: int) -> pd.Series:
+async def _fetch_benchmark_returns(benchmark: str, period_days: int, container: AppContainer) -> pd.Series:
     """Fetch benchmark returns data.
 
     Args:
         benchmark: Benchmark ticker symbol
         period_days: Number of days (-1 for all available)
+        container: DI container for yfinance fetcher
 
     Returns:
         pandas Series with daily returns
     """
-    fetcher = MarketDataFetcher(use_alpha_vantage=False)
+    fetcher = container.yfinance_market_fetcher()
 
     fetch_days = period_days if period_days != -1 else 365 * 5
 

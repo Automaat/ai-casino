@@ -3,7 +3,7 @@
 from rich.console import Console
 from rich.table import Table
 
-from src.cache.historical import HistoricalCache
+from src.di.container import create_container
 from src.metrics.signal_accuracy import SignalAccuracyCalculator
 
 console = Console()
@@ -22,7 +22,8 @@ def signal_accuracy(window: str = "30d") -> None:
         console.print(f"Allowed values: {', '.join(sorted(ALLOWED_WINDOWS))}")
         return
 
-    cache = HistoricalCache()
+    container = create_container()
+    cache = container.historical_cache()
     calculator = SignalAccuracyCalculator(cache)
     metrics = calculator.calculate(window)
 

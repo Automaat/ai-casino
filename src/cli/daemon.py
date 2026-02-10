@@ -16,6 +16,7 @@ from src.daemon.event_watcher import EventWatcher
 from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
 from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher
+from src.di.container import create_container
 
 console = Console()
 
@@ -79,7 +80,8 @@ def trump_daemon(
     )
 
     try:
-        watcher = TrumpWatcher(poll_interval=poll_interval, max_analyses=max_analyses)
+        container = create_container()
+        watcher = TrumpWatcher(poll_interval=poll_interval, max_analyses=max_analyses, container=container)
         asyncio.run(watcher.run())
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Trump watcher interrupted[/bold yellow]")
@@ -203,7 +205,9 @@ def events_daemon(
             console.print("  enabled = true")
             raise typer.Exit(1)
 
-        historical_cache = HistoricalCache()
+        container = create_container()
+        container.daemon_config.override(daemon_config)
+        historical_cache = container.historical_cache()
         watchers = _init_event_watchers(daemon_config, historical_cache)
 
         async def run_all() -> None:

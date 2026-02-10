@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from src.di.container import AppContainer
     from src.discovery.engine import StockDiscoveryEngine
     from src.metrics.correlation import CorrelationAuditResult
-from src.cache.historical import HistoricalCache
 from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 from src.daemon.broker_manager import BrokerManager
 from src.daemon.config import DaemonConfig, TradingMode
@@ -79,7 +78,7 @@ class DaemonRunner:
             self._container = create_container()
             self._container.daemon_config.override(config)
 
-        self._historical_cache = HistoricalCache()
+        self._historical_cache = self._container.historical_cache()
         self.state = DaemonState.load(config.state.state_file)
         self._broker_manager = BrokerManager(config, self.state, self._historical_cache)
         self.scheduler = MarketScheduler(
@@ -2162,7 +2161,8 @@ class DaemonRunner:
         try:
             from src.daemon.signal_tracker import SignalOutcomeTracker
 
-            tracker = SignalOutcomeTracker(self._historical_cache, self.broker)
+            market_fetcher = self._container.yfinance_market_fetcher()
+            tracker = SignalOutcomeTracker(self._historical_cache, market_fetcher, self.broker)
             stats = tracker.update_outcomes()
 
             self.state.last_signal_tracking = datetime.now(UTC)
