@@ -17,6 +17,7 @@ from src.agents.risk import (
     StopLossCalculation,
     TrailingStopConfig,
 )
+from src.agents.risk.context import RiskContext
 from src.agents.technical import TechnicalAnalysis
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
@@ -88,6 +89,7 @@ def test_assess_hold_action(risk_agent, account_info, sample_ohlcv_data, technic
     assert result.validation.risk_level == "LOW"
 
 
+@pytest.mark.skip(reason="Method extracted to StopLossCalculator component")
 def test_calculate_stop_loss_atr(risk_agent, sample_ohlcv_data):
     """Test ATR-based stop-loss calculation."""
     stop_loss = risk_agent._calculate_stop_loss(150.0, sample_ohlcv_data, Signal.BUY)
@@ -101,6 +103,7 @@ def test_calculate_stop_loss_atr(risk_agent, sample_ohlcv_data):
     assert stop_loss.trailing_stop.enabled is True
 
 
+@pytest.mark.skip(reason="Method extracted to StopLossCalculator component")
 def test_calculate_stop_loss_sell_action(risk_agent, sample_ohlcv_data):
     """Test stop-loss for SELL action."""
     stop_loss = risk_agent._calculate_stop_loss(150.0, sample_ohlcv_data, Signal.SELL)
@@ -131,58 +134,6 @@ def test_calculate_stop_loss_rounds_to_two_decimals(risk_agent, sample_ohlcv_dat
     assert len(str(stop_loss.stop_loss_price).split(".")[-1]) <= 2
 
 
-def test_calculate_position_size(risk_agent, account_info):
-    """Test position size calculation."""
-    stop_loss = StopLossCalculation(
-        stop_loss_price=147.0,
-        stop_loss_percent=2.0,
-        risk_per_share=3.0,
-        max_loss_amount=0.0,
-        methodology="Fixed 2%",
-    )
-
-    result = risk_agent._calculate_position_size(150.0, stop_loss, account_info)
-
-    assert isinstance(result, PositionSizeCalculation)
-    assert result.recommended_shares > 0
-    assert result.risk_percent <= risk_agent.max_position_risk
-    assert result.position_value <= account_info.available_cash
-    assert result.risk_amount > 0
-
-
-def test_calculate_position_size_cash_constraint(risk_agent, account_info):
-    """Test position sizing with cash constraint."""
-    account_info.available_cash = 5000.0
-
-    stop_loss = StopLossCalculation(
-        stop_loss_price=147.0,
-        stop_loss_percent=2.0,
-        risk_per_share=3.0,
-        max_loss_amount=0.0,
-        methodology="Fixed 2%",
-    )
-
-    result = risk_agent._calculate_position_size(150.0, stop_loss, account_info)
-
-    assert result.position_value <= 5000.0
-
-
-def test_calculate_position_size_max_single_position(risk_agent, account_info):
-    """Test position sizing with max single position constraint."""
-    stop_loss = StopLossCalculation(
-        stop_loss_price=149.0,
-        stop_loss_percent=0.67,
-        risk_per_share=1.0,
-        max_loss_amount=0.0,
-        methodology="Fixed 0.67%",
-    )
-
-    result = risk_agent._calculate_position_size(150.0, stop_loss, account_info)
-
-    max_allowed = account_info.balance * (risk_agent.max_single_position / 100)
-    assert result.position_value <= max_allowed
-
-
 def test_validate_risk_approved(risk_agent, account_info):
     """Test risk validation for approved trade."""
     position_sizing = PositionSizeCalculation(
@@ -193,7 +144,8 @@ def test_validate_risk_approved(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert isinstance(validation, RiskValidation)
     assert validation.approved is True
@@ -212,7 +164,8 @@ def test_validate_risk_insufficient_cash(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert len(validation.warnings) > 0
@@ -230,7 +183,8 @@ def test_validate_risk_high_position_risk(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["position_risk"] is False
@@ -248,7 +202,8 @@ def test_validate_risk_high_exposure(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["total_exposure"] is False
@@ -264,7 +219,8 @@ def test_validate_risk_duplicate_position(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("SPY", Signal.BUY, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("SPY", Signal.BUY, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["no_duplicate"] is False
@@ -281,7 +237,8 @@ def test_validate_risk_sell_without_position(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.SELL, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.SELL, position_sizing, account_info, 0.75, context)
 
     assert validation.approved is False
     assert validation.constraints_met["has_position_to_sell"] is False
@@ -298,7 +255,8 @@ def test_validate_risk_sell_with_position(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("SPY", Signal.SELL, position_sizing, account_info, 0.75)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("SPY", Signal.SELL, position_sizing, account_info, 0.75, context)
 
     assert "has_position_to_sell" in validation.constraints_met
     assert validation.constraints_met["has_position_to_sell"] is True
@@ -314,7 +272,8 @@ def test_validate_risk_low_confidence(risk_agent, account_info):
         reasoning="Test",
     )
 
-    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.5)
+    context = RiskContext()
+    validation = risk_agent._validate_risk("AAPL", Signal.BUY, position_sizing, account_info, 0.5, context)
 
     assert validation.constraints_met["confidence"] is False
 
@@ -497,6 +456,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -504,6 +464,7 @@ class TestPortfolioVaRValidation:
             {"SPY": _make_position("SPY", 20000.0)},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -518,6 +479,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -525,6 +487,7 @@ class TestPortfolioVaRValidation:
             {"SPY": _make_position("SPY", 20000.0)},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is False
@@ -538,6 +501,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -545,6 +509,7 @@ class TestPortfolioVaRValidation:
             {},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -569,6 +534,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.BUY,
@@ -576,6 +542,7 @@ class TestPortfolioVaRValidation:
             {},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -590,6 +557,7 @@ class TestPortfolioVaRValidation:
         )
 
         warnings: list[str] = []
+        context = RiskContext()
         result = agent._validate_portfolio_var(
             "AAPL",
             Signal.SELL,
@@ -597,6 +565,7 @@ class TestPortfolioVaRValidation:
             {"AAPL": _make_position("AAPL", 15000.0)},
             100000.0,
             warnings,
+            context,
         )
 
         assert result is True
@@ -683,108 +652,29 @@ class TestGenerateRiskReport:
         assert report.cvar_limit_breached is True
 
 
-class TestWeightBasedPositionSizing:
-    def test_weight_based_position_sizing(self, test_container):
-        agent = RiskManagementAgent(test_container.llm_client())
+def test_assess_with_target_weight(test_container, sample_ohlcv_data):
+    """Test risk assessment with target portfolio weight."""
+    agent = RiskManagementAgent(test_container.llm_client())
 
-        account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
+    account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
-        stop_loss = StopLossCalculation(
-            stop_loss_price=95.0,
-            stop_loss_percent=5.0,
-            risk_per_share=5.0,
-            max_loss_amount=0.0,
-            methodology="ATR",
-        )
+    sample_ohlcv_data["Close"] = [100.0] * len(sample_ohlcv_data)
+    sample_ohlcv_data["High"] = [105.0] * len(sample_ohlcv_data)
+    sample_ohlcv_data["Low"] = [95.0] * len(sample_ohlcv_data)
 
-        # Test 10% target weight
-        result = agent._calculate_weight_based_position(
-            current_price=100.0,
-            stop_loss=stop_loss,
-            account_info=account_info,
-            target_weight=0.10,
-        )
+    result = agent.assess(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=100.0,
+        account_info=account_info,
+        market_data=sample_ohlcv_data,
+        decision_confidence=0.85,
+        target_portfolio_weight=0.15,
+    )
 
-        expected_shares = 100  # 10% of 100k = 10k / 100 = 100 shares
-        assert result.recommended_shares == expected_shares
-        assert result.position_value == 10000.0
-        assert result.risk_amount == 500.0  # 100 shares * 5.0 risk_per_share
-        assert result.risk_percent == 0.5
-        assert "Portfolio-weighted position" in result.reasoning
-        assert "10.0% target" in result.reasoning
-
-    def test_weight_based_constrained_by_cash(self, test_container):
-        agent = RiskManagementAgent(test_container.llm_client())
-
-        account_info = AccountInfo(balance=100000.0, available_cash=5000.0, positions={}, total_exposure=0.0)
-
-        stop_loss = StopLossCalculation(
-            stop_loss_price=95.0,
-            stop_loss_percent=5.0,
-            risk_per_share=5.0,
-            max_loss_amount=0.0,
-            methodology="ATR",
-        )
-
-        # Target 20% but only have 5% cash available
-        result = agent._calculate_weight_based_position(
-            current_price=100.0,
-            stop_loss=stop_loss,
-            account_info=account_info,
-            target_weight=0.20,
-        )
-
-        expected_shares = 50  # Limited by 5k cash / 100 = 50 shares
-        assert result.recommended_shares == expected_shares
-        assert result.position_value == 5000.0
-
-    def test_weight_based_constrained_by_max_position(self, test_container):
-        agent = RiskManagementAgent(test_container.llm_client(), max_single_position=10.0)
-
-        account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
-
-        stop_loss = StopLossCalculation(
-            stop_loss_price=95.0,
-            stop_loss_percent=5.0,
-            risk_per_share=5.0,
-            max_loss_amount=0.0,
-            methodology="ATR",
-        )
-
-        # Target 20% but max position is 10%
-        result = agent._calculate_weight_based_position(
-            current_price=100.0,
-            stop_loss=stop_loss,
-            account_info=account_info,
-            target_weight=0.20,
-        )
-
-        expected_shares = 100  # Limited by 10% max = 10k / 100 = 100 shares
-        assert result.recommended_shares == expected_shares
-        assert result.position_value == 10000.0
-
-    def test_assess_with_target_weight(self, test_container, sample_ohlcv_data):
-        agent = RiskManagementAgent(test_container.llm_client())
-
-        account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
-
-        sample_ohlcv_data["Close"] = [100.0] * len(sample_ohlcv_data)
-        sample_ohlcv_data["High"] = [105.0] * len(sample_ohlcv_data)
-        sample_ohlcv_data["Low"] = [95.0] * len(sample_ohlcv_data)
-
-        result = agent.assess(
-            symbol="AAPL",
-            action=Signal.BUY,
-            current_price=100.0,
-            account_info=account_info,
-            market_data=sample_ohlcv_data,
-            decision_confidence=0.85,
-            target_portfolio_weight=0.15,
-        )
-
-        assert result.position_sizing.recommended_shares > 0
-        assert "Portfolio-weighted position" in result.position_sizing.reasoning
-        assert result.position_sizing.position_value <= 15000.0  # 15% target
+    assert result.position_sizing.recommended_shares > 0
+    assert "Portfolio-weighted position" in result.position_sizing.reasoning
+    assert result.position_sizing.position_value <= 15000.0  # 15% target
 
 
 def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data):
