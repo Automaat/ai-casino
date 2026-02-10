@@ -440,9 +440,47 @@ class StockDiscoveryEngine:
         if universe_type == "NASDAQ100":
             universe = self.universe_fetcher.fetch_nasdaq100()
             return [stock.symbol for stock in universe.stocks]
+        if universe_type == "RUSSELL3000":
+            universe = self.universe_fetcher.fetch_russell3000()
+            return [stock.symbol for stock in universe.stocks]
+        if universe_type == "US_LIQUID":
+            # US_LIQUID requires liquidity_filters from config
+            # Discovery engine doesn't have access to liquidity_filters, so fetch unfiltered Russell 3000
+            # and rely on portfolio_filters to handle quality filtering
+            logger.warning("US_LIQUID not supported in discovery engine, using RUSSELL3000 instead")
+            universe = self.universe_fetcher.fetch_russell3000()
+            return [stock.symbol for stock in universe.stocks]
         # Fallback to combined universe for any other value
         universe = self.universe_fetcher.fetch_combined()
         return [stock.symbol for stock in universe.stocks]
+
+    def _fetch_stock_metadata(self, symbol: str) -> dict[str, object]:
+        """Fetch stock metadata from yfinance Ticker.info.
+
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            Dict with name, sector, market_cap
+        """
+        try:
+            import yfinance as yf
+
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+
+            return {
+                "name": info.get("shortName", symbol),
+                "sector": info.get("sector", "Unknown"),
+                "market_cap": info.get("marketCap", 0),
+            }
+        except Exception as e:
+            logger.debug(f"Failed to fetch metadata for {symbol}: {e}")
+            return {
+                "name": symbol,
+                "sector": "Unknown",
+                "market_cap": 0,
+            }
 
     def _get_stock_info(self, symbol: str, cached_ohlcv: pd.DataFrame | None = None) -> dict[str, object]:
         """Fetch stock metadata (name, sector, market cap, etc).
@@ -479,15 +517,14 @@ class StockDiscoveryEngine:
             )
             atr_ratio = atr / price if price > 0 else 0.0
 
-            # TODO: Fetch actual name, sector, market cap from yfinance Ticker
-            # For now, return basic info
+            # Fetch real metadata from yfinance
+            metadata = self._fetch_stock_metadata(symbol)
+
             info: dict[str, object] = {
                 "price": price,
                 "avg_volume": avg_volume,
                 "atr_ratio": atr_ratio,
-                "name": str(symbol),
-                "sector": "Unknown",
-                "market_cap": 1e9,  # Placeholder ($1B)
+                **metadata,  # Real name, sector, market_cap
             }
             return info
 

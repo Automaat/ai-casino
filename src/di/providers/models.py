@@ -200,15 +200,22 @@ def create_quantstats_reporter(risk_free_rate: float | None = None) -> "QuantSta
     return QuantStatsReporter(risk_free_rate=risk_free_rate)
 
 
-def create_stock_screener(universe_fetcher: "StockUniverseFetcher") -> "StockScreener":
+def create_stock_screener(
+    universe_fetcher: "StockUniverseFetcher",
+    daemon_config: DaemonConfig,
+) -> "StockScreener":
     """Create StockScreener with dependencies.
 
     Args:
         universe_fetcher: Stock universe fetcher
+        daemon_config: Daemon configuration for liquidity filters
 
     Returns:
         StockScreener instance
     """
     from src.screening.screener import StockScreener
 
-    return StockScreener(universe_fetcher)
+    return StockScreener(
+        universe_fetcher=universe_fetcher,
+        liquidity_filters=daemon_config.liquidity_filters,
+    )

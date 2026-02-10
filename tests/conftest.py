@@ -580,6 +580,8 @@ def mock_universe_fetcher(sample_stock_universe):
     mock.fetch_sp500.return_value = sample_stock_universe
     mock.fetch_nasdaq100.return_value = sample_stock_universe
     mock.fetch_combined.return_value = sample_stock_universe
+    mock.fetch_russell3000.return_value = sample_stock_universe
+    mock.fetch_us_liquid.return_value = sample_stock_universe
     return mock
 
 
