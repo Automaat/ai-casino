@@ -1,6 +1,9 @@
 """Position lifecycle management for daemon."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel
@@ -8,6 +11,10 @@ from pydantic import BaseModel
 from src.daemon.config import PositionManagementConfig
 from src.data.broker import AlpacaBroker, BrokerPosition
 from src.workflows.types import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.database.repositories.position import PositionRecordRepository
+    from src.database.repositories.position_action import PositionManagementActionRepository
 
 
 class PositionRecord(BaseModel):
@@ -48,15 +55,25 @@ class PositionManagementAction(BaseModel):
 class PositionManager:
     """Manage position lifecycle (trailing stops, profit-taking, time exits, conviction scaling)."""
 
-    def __init__(self, broker: AlpacaBroker, config: PositionManagementConfig) -> None:
+    def __init__(
+        self,
+        broker: AlpacaBroker,
+        config: PositionManagementConfig,
+        position_repository: PositionRecordRepository | None = None,
+        position_action_repository: PositionManagementActionRepository | None = None,
+    ) -> None:
         """Initialize position manager.
 
         Args:
             broker: Alpaca broker for order execution
             config: Position management configuration
+            position_repository: Optional position record repository
+            position_action_repository: Optional position action repository
         """
         self.broker = broker
         self.config = config
+        self._position_repository = position_repository
+        self._position_action_repository = position_action_repository
         logger.info(f"PositionManager initialized: {config}")
 
     def sync_with_broker(
@@ -75,32 +92,88 @@ class PositionManager:
         broker_info = self.broker.get_account_info()
         broker_positions = broker_info.positions
 
-        new_positions: list[PositionRecord] = []
-        updated_positions: list[PositionRecord] = []
-        closed_symbols: list[str] = []
+        new_positions = self._find_new_positions(state_positions, broker_positions)
+        updated_positions = self._find_updated_positions(state_positions, broker_positions)
+        closed_symbols = self._find_closed_positions(state_positions, broker_positions)
 
-        # Find new positions
+        return new_positions, updated_positions, closed_symbols
+
+    def _find_new_positions(
+        self, state_positions: dict[str, PositionRecord], broker_positions: dict[str, BrokerPosition]
+    ) -> list[PositionRecord]:
+        """Find new positions not in state."""
+        new_positions: list[PositionRecord] = []
         for symbol, broker_pos in broker_positions.items():
             if symbol not in state_positions:
                 logger.info(f"New position detected: {symbol}")
                 new_pos = self._create_position_from_broker(symbol, broker_pos)
                 new_positions.append(new_pos)
-            else:
-                # Update quantity if changed
+                self._persist_position_create(new_pos)
+        return new_positions
+
+    def _find_updated_positions(
+        self, state_positions: dict[str, PositionRecord], broker_positions: dict[str, BrokerPosition]
+    ) -> list[PositionRecord]:
+        """Find positions with updated quantities."""
+        updated_positions: list[PositionRecord] = []
+        for symbol, broker_pos in broker_positions.items():
+            if symbol in state_positions:
                 existing = state_positions[symbol]
                 if existing.current_qty != broker_pos.qty:
                     logger.info(f"Position qty changed: {symbol} {existing.current_qty} → {broker_pos.qty}")
                     existing.current_qty = broker_pos.qty
                     existing.last_updated = datetime.now(UTC)
                     updated_positions.append(existing)
+                    self._persist_position_update(existing)
+        return updated_positions
 
-        # Find closed positions
+    def _find_closed_positions(
+        self, state_positions: dict[str, PositionRecord], broker_positions: dict[str, BrokerPosition]
+    ) -> list[str]:
+        """Find positions closed at broker."""
+        closed_symbols: list[str] = []
         for symbol in state_positions:
             if symbol not in broker_positions:
                 logger.info(f"Position closed: {symbol}")
                 closed_symbols.append(symbol)
+                self._persist_position_delete(symbol)
+        return closed_symbols
 
-        return new_positions, updated_positions, closed_symbols
+    def _persist_position_create(self, position: PositionRecord) -> None:
+        """Persist new position to database."""
+        if self._position_repository:
+            try:
+                import asyncio
+
+                task = asyncio.create_task(self._position_repository.create(position))  # type: ignore[bad-argument-type]
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+            except Exception as e:
+                logger.error(f"Failed to persist new position to database: {e}")
+                raise
+
+    def _persist_position_update(self, position: PositionRecord) -> None:
+        """Persist position update to database."""
+        if self._position_repository:
+            try:
+                import asyncio
+
+                task = asyncio.create_task(self._position_repository.update(position))  # type: ignore[bad-argument-type]
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+            except Exception as e:
+                logger.error(f"Failed to update position in database: {e}")
+                raise
+
+    def _persist_position_delete(self, symbol: str) -> None:
+        """Delete position from database."""
+        if self._position_repository:
+            try:
+                import asyncio
+
+                task = asyncio.create_task(self._position_repository.delete_by_symbol(symbol))
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+            except Exception as e:
+                logger.error(f"Failed to delete position from database: {e}")
+                raise
 
     def _create_position_from_broker(self, symbol: str, broker_pos: BrokerPosition) -> PositionRecord:
         """Create PositionRecord from broker position.
@@ -193,6 +266,20 @@ class PositionManager:
                 self._execute_stop_loss_action(position, action)
             elif action.action_type in ("PARTIAL_PROFIT", "TIME_EXIT", "CONVICTION_SCALE"):
                 self._execute_sell_action(position, action)
+
+            # Persist action to database if repository available
+            if self._position_action_repository:
+                try:
+                    import asyncio
+
+                    task = asyncio.create_task(self._position_action_repository.create(action))  # type: ignore[bad-argument-type]
+                    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                    logger.debug(
+                        f"Persisted position action to database: {action.symbol} {action.action_type}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to persist position action to database: {e}")
+                    raise  # Fail fast per user requirement
 
     def review_position(
         self,

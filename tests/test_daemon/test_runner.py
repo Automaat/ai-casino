@@ -36,6 +36,9 @@ def sample_config(tmp_path: Path) -> DaemonConfig:
         "state": {
             "state_file": str(tmp_path / "daemon_state.json"),
         },
+        "database": {
+            "enable_persistence": False,
+        },
     }
     return DaemonConfig.model_validate(config_dict)
 

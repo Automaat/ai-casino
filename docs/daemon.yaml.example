@@ -44,8 +44,41 @@ daemon:
     enable_after_hours: false
 
   state:
-    # State persistence file
+    # State persistence file (deprecated - use database for production)
     state_file: "~/.ai-casino/daemon-state.json"
+
+    # Database cleanup configuration
+    # Enable automatic cleanup of old records
+    cleanup_enabled: true
+    # Retention period in days (1-365)
+    cleanup_retention_days: 90
+    # Hour to run daily cleanup (0-23, 3 = 3 AM)
+    cleanup_hour: 3
+
+  # ========================================
+  # DATABASE CONFIGURATION
+  # ========================================
+  database:
+    # PostgreSQL connection URL (priority: config > DATABASE_URL env var)
+    # Format: postgresql+asyncpg://user:password@host:port/dbname
+    # Example: postgresql+asyncpg://postgres:dev@localhost:5432/ai_casino_dev
+    # database_url: null
+
+    # Connection pool size (1-20)
+    # Controls max number of persistent connections
+    pool_size: 5
+
+    # Max connections beyond pool_size (0-50)
+    # Allows temporary burst capacity
+    max_overflow: 10
+
+    # Verify connection health before use
+    # Prevents stale connection errors
+    pool_pre_ping: true
+
+    # Enable database persistence (vs JSON file)
+    # Set to false to disable database writes (read-only mode)
+    enable_persistence: true
 
   journal:
     # After-hours trade journal

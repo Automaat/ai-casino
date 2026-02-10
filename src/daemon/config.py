@@ -149,6 +149,11 @@ class StateConfig(BaseModel):
     """State persistence configuration."""
 
     state_file: str = "~/.ai-casino/daemon-state.json"
+    cleanup_enabled: bool = True
+    cleanup_retention_days: int = Field(
+        default=90, ge=1, le=365, description="Data retention in days (1-365)"
+    )
+    cleanup_hour: int = Field(default=3, ge=0, le=23, description="Hour to run cleanup (0-23, default 3 AM)")
 
 
 class JournalConfig(BaseModel):
@@ -294,6 +299,16 @@ class ApiKeysConfig(BaseModel):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     openai_api_base: str | None = None
+
+
+class DatabaseConfig(BaseModel):
+    """Database configuration for PostgreSQL persistence."""
+
+    database_url: str | None = None
+    pool_size: int = Field(default=5, ge=1, le=20, description="Database connection pool size (1-20)")
+    max_overflow: int = Field(default=10, ge=0, le=50, description="Max connections beyond pool_size (0-50)")
+    pool_pre_ping: bool = Field(default=True, description="Verify connections before use")
+    enable_persistence: bool = Field(default=True, description="Enable database persistence")
 
 
 class SectorRotationConfig(BaseModel):
@@ -804,6 +819,7 @@ class DaemonConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     api_keys: ApiKeysConfig = Field(default_factory=ApiKeysConfig)
     data_sources: DataSourcesConfig = Field(default_factory=DataSourcesConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> "DaemonConfig":
@@ -852,6 +868,7 @@ class DaemonConfig(BaseModel):
         llm_data = daemon_data.pop("llm", {}) or {}
         api_keys_data = daemon_data.pop("api_keys", {}) or {}
         data_sources_data = daemon_data.pop("data_sources", {}) or {}
+        database_data = daemon_data.pop("database", {}) or {}
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
@@ -892,6 +909,7 @@ class DaemonConfig(BaseModel):
             llm=LLMConfig(**llm_data),
             api_keys=ApiKeysConfig(**api_keys_data),
             data_sources=DataSourcesConfig(**data_sources_data),
+            database=DatabaseConfig(**database_data),
         )
 
     def __repr__(self) -> str:
