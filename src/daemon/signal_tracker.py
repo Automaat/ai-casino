@@ -146,34 +146,10 @@ class SignalOutcomeTracker:
         if not self._broker:
             return {}
 
-        exit_prices = {}
-
-        try:
-            # Query historical order fills for symbols with signals
-            symbols = {s["symbol"] for s in signals}
-
-            # TODO: Match signal timestamps to specific trade sequences in order_fills table
-            # to detect early exits and populate exit_prices dict
-            self._raise_not_implemented(len(symbols))
-
-        except NotImplementedError:
-            raise
-        except Exception as e:
-            logger.warning(f"Failed to check early exits: {e}")
-
-        return exit_prices
-
-    def _raise_not_implemented(self, symbol_count: int) -> None:
-        """Raise NotImplementedError for early exit detection.
-
-        Args:
-            symbol_count: Number of symbols being processed
-        """
-        msg = (
-            "Early exit detection not implemented - requires matching signals "
-            f"to closed positions in order_fills for {symbol_count} symbols"
-        )
-        raise NotImplementedError(msg)
+        # Early exit detection not yet implemented
+        symbol_count = len({s["symbol"] for s in signals})
+        logger.debug(f"Early exit detection skipped (not implemented) for {symbol_count} symbols")
+        return {}
 
     def __repr__(self) -> str:
         """Return string representation."""

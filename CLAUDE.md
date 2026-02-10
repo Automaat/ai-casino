@@ -211,6 +211,42 @@ except Exception as e:
     raise
 ```
 
+**Critical vs Non-Critical:**
+- **Critical** (always propagate): data fetchers, LLM calls, broker API, database writes, user-facing operations
+- **Non-Critical** (may swallow): batch processing (screening 500+ stocks, optimization 100+ trials), cache, metrics
+
+**Swallowing Exceptions (Non-Critical Only):**
+```python
+# ALWAYS use logger.opt(exception=True) when swallowing for traceback
+except ValueError as e:
+    logger.opt(exception=True).warning(f"Invalid data, skipping: {e}")
+    return None
+
+# NOT this (missing context):
+except Exception as e:
+    logger.warning(f"Failed: {e}")  # ❌ No traceback
+    return None
+```
+
+**Specific Exceptions First:**
+```python
+# Hierarchical exception handling (specific → general)
+except HTTPStatusError as e:
+    logger.error(f"HTTP {e.response.status_code}: {url}")
+    raise
+except HTTPError as e:
+    logger.error(f"Network error: {e}")
+    raise
+except Exception as e:
+    logger.error(f"Unexpected error: {e}")
+    raise
+```
+
+**Never:**
+- Bare `except Exception: return None` without logging
+- `except Exception` in critical paths (use specific exceptions)
+- Warning-level logs without `logger.opt(exception=True)` when swallowing exception
+
 **Logging (loguru):** `logger.info/warning/error/debug()` - set level via `LOG_LEVEL` env var
 
 ### Pydantic Models & Enums

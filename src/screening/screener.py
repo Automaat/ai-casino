@@ -319,7 +319,8 @@ class StockScreener:
         try:
             ticker = yf.Ticker(symbol)
             ticker_info = ticker.info
-        except Exception:
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to fetch yfinance info for {symbol}: {e}")
             return None
 
         pe = ticker_info.get("trailingPE")
