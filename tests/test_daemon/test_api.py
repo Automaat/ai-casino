@@ -658,6 +658,42 @@ class TestCORS:
         assert response.status_code == 200
         assert response.headers["access-control-allow-credentials"] == "true"
 
+    def test_cors_custom_origins_config(self) -> None:
+        """Test ApiConfig accepts custom CORS origins."""
+        config = ApiConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=8484,
+            cors_origins=["http://localhost:3000", "http://dashboard.example.com"],
+        )
+
+        assert config.cors_origins == [
+            "http://localhost:3000",
+            "http://dashboard.example.com",
+        ]
+        assert len(config.cors_origins) == 2
+
+    def test_cors_custom_origins_daemon_config(self) -> None:
+        """Test DaemonConfig propagates custom CORS origins."""
+        config = DaemonConfig(
+            watchlist=["AAPL"],
+            interval_minutes=30,
+            market_hours_only=True,
+            auto_trade=False,
+            schedule=ScheduleConfig(enable_pre_market=False),
+            api=ApiConfig(
+                enabled=True,
+                host="127.0.0.1",
+                port=8484,
+                cors_origins=["http://localhost:3000", "http://dashboard.example.com"],
+            ),
+        )
+
+        assert config.api.cors_origins == [
+            "http://localhost:3000",
+            "http://dashboard.example.com",
+        ]
+
 
 class TestWebSocketEvents:
     """Test /ws/events WebSocket endpoint."""
