@@ -100,43 +100,9 @@ def sample_news_articles():
     ]
 
 
-@pytest.fixture
-def mock_llm_client():
-    """Mock LLM client for testing."""
-    from src.models.providers.base import StructuredOutputError
-
-    mock = MagicMock()
-    mock.provider = "ollama"
-    mock.model = "qwen3:14b"
-    mock.complete.return_value = "Mock LLM response with analysis and high confidence."
-    mock.acomplete = AsyncMock(return_value="Mock LLM response with analysis and high confidence.")
-
-    # astructured raises StructuredOutputError to trigger fallback to acomplete
-    async def astructured_side_effect(*args, **kwargs):
-        msg = "Mock structured output not configured"
-        raise StructuredOutputError(msg, raw_response=None)
-
-    mock.astructured = AsyncMock(side_effect=astructured_side_effect)
-    mock.supports_structured_output = True
-    return mock
-
-
-@pytest.fixture
-def mock_finbert():
-    """Mock FinBERT sentiment analyzer."""
-    mock = MagicMock()
-    mock.device = "cpu"
-    mock.analyze.return_value = SentimentScore(
-        positive=0.7,
-        negative=0.1,
-        neutral=0.2,
-    )
-    mock.analyze_batch.return_value = [
-        SentimentScore(positive=0.7, negative=0.1, neutral=0.2),
-        SentimentScore(positive=0.6, negative=0.2, neutral=0.2),
-        SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
-    ]
-    return mock
+# Deprecated fixtures removed - use test_container instead
+# - mock_llm_client: replaced by test_container.llm_client()
+# - mock_finbert: replaced by test_container.finbert_sentiment()
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -222,13 +188,7 @@ def sample_fundamental_overview():
     }
 
 
-@pytest.fixture
-def mock_fundamental_fetcher(sample_fundamental_overview):
-    """Mock fundamental data fetcher."""
-    mock = MagicMock()
-    mock.api_key = "test_api_key"
-    mock.fetch_overview.return_value = sample_fundamental_overview
-    return mock
+# Deprecated: mock_fundamental_fetcher replaced by test_container.fundamental_fetcher()
 
 
 @pytest.fixture
@@ -457,12 +417,7 @@ def sample_comparative_analysis():
     )
 
 
-@pytest.fixture
-def mock_comparative_fetcher(sample_comparative_data):
-    """Mock comparative data fetcher."""
-    mock = MagicMock()
-    mock.fetch_comparative_data.return_value = sample_comparative_data
-    return mock
+# Deprecated: mock_comparative_fetcher replaced by test_container.comparative_fetcher()
 
 
 @pytest.fixture
@@ -771,27 +726,7 @@ def sample_analysis_records():
     ]
 
 
-@pytest.fixture
-def mock_market_fetcher():
-    """Mock MarketDataFetcher returning canned OHLCV data."""
-    mock = MagicMock()
-
-    def fetch_daily(symbol: str, period_days: int = 90) -> MarketData:
-        prices = {"AAPL": (150.0, 155.0), "TSLA": (200.0, 195.0), "GOOGL": (140.0, 140.5)}
-        open_price, close_price = prices.get(symbol, (100.0, 101.0))
-        df = pd.DataFrame(
-            {
-                "Open": [open_price],
-                "High": [max(open_price, close_price) + 2],
-                "Low": [min(open_price, close_price) - 2],
-                "Close": [close_price],
-                "Volume": [1000000],
-            }
-        )
-        return MarketData(symbol=symbol, data=df, last_updated=datetime(2024, 1, 15, 16, 0))
-
-    mock.fetch_daily = MagicMock(side_effect=fetch_daily)
-    return mock
+# Deprecated: mock_market_fetcher replaced by test_container.market_fetcher()
 
 
 @pytest.fixture
