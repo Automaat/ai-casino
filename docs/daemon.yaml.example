@@ -418,6 +418,9 @@ daemon:
     # Trailing stop loss
     trailing_stop_enabled: true
     trailing_stop_percent: 3.0
+    # Minimum dollar gap between stop price and current price (0.01-1.0, default: 0.10)
+    # Prevents Alpaca rejection due to stop price too close to market price
+    min_stop_gap_dollars: 0.10
     # Partial profit taking
     partial_profit_enabled: true
     profit_target_1_percent: 5.0

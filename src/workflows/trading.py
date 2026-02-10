@@ -71,6 +71,7 @@ class TradingState(TypedDict):
     """State for trading workflow."""
 
     symbol: str
+    trading_session: TradingSession
     market_data: pd.DataFrame | MultiTimeframeData | None
     enable_multi_timeframe: bool
     news_articles: list[NewsArticle] | None
@@ -563,7 +564,7 @@ class TradingWorkflow:
 
         enable_multi_timeframe = bool(ctx.get("enable_multi_timeframe", False))
         start = time.perf_counter()
-        state = await self._fetch_data(symbol, period_days, enable_multi_timeframe)
+        state = await self._fetch_data(symbol, period_days, trading_session, enable_multi_timeframe)
         state["sector_rotation_context"] = ctx.get("sector_rotation_context")
         state["earnings_context"] = ctx.get("earnings_context")
         state["peer_analysis_context"] = ctx.get("peer_analysis_context")
@@ -933,13 +934,18 @@ class TradingWorkflow:
         return MARKET_HOURS_START <= now.hour < MARKET_HOURS_END
 
     async def _fetch_data(
-        self, symbol: str, period_days: int, enable_multi_timeframe: bool = False
+        self,
+        symbol: str,
+        period_days: int,
+        trading_session: TradingSession,
+        enable_multi_timeframe: bool = False,
     ) -> TradingState:
         """Fetch market and news data (async, parallel execution).
 
         Args:
             symbol: Stock ticker
             period_days: Historical data period
+            trading_session: Trading session type
             enable_multi_timeframe: Enable multi-timeframe data fetching
 
         Returns:
@@ -1009,6 +1015,7 @@ class TradingWorkflow:
 
         return TradingState(
             symbol=symbol,
+            trading_session=trading_session,
             market_data=market_data,
             enable_multi_timeframe=enable_multi_timeframe,
             news_articles=news_result,
@@ -1261,6 +1268,15 @@ class TradingWorkflow:
             raise ValueError(msg)
 
         action = final_decision.action
+
+        # Block trades during pre-market session
+        if state["trading_session"] != TradingSession.REGULAR:
+            logger.warning(
+                f"Trade blocked: {action.value} {state['symbol']} - "
+                f"trades only allowed during REGULAR session (current: {state['trading_session'].value})"
+            )
+            state["order_status"] = None
+            return state
 
         if not state.get("risk_assessment") or not state["risk_assessment"].validation.approved:
             state["order_status"] = None

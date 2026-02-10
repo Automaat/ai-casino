@@ -466,10 +466,36 @@ class PositionManager:
             except Exception as e:
                 logger.warning(f"Failed to cancel old stop-loss order: {e}")
 
-        # Verify position still exists
+        # Verify position still exists and get current price
         broker_info = self.broker.get_account_info()
         if position.symbol not in broker_info.positions:
             logger.warning(f"Position closed during stop update: {position.symbol}")
+            return None
+
+        broker_pos = broker_info.positions[position.symbol]
+        current_price = broker_pos.market_value / broker_pos.qty if broker_pos.qty > 0 else 0.0
+
+        if current_price <= 0:
+            logger.warning(f"Invalid current price for {position.symbol}: {current_price}")
+            return None
+
+        # Enforce minimum gap between stop and current price
+        min_gap = self.config.min_stop_gap_dollars
+        max_allowed_stop = current_price - min_gap
+
+        if new_stop_loss > max_allowed_stop:
+            logger.warning(
+                f"Stop price ${new_stop_loss:.2f} too close to current ${current_price:.2f} "
+                f"(min gap ${min_gap:.2f}). Adjusting to ${max_allowed_stop:.2f}"
+            )
+            new_stop_loss = max_allowed_stop
+
+        # Verify adjusted stop is still higher than current stop
+        if new_stop_loss <= position.current_stop_loss:
+            logger.debug(
+                f"Adjusted stop ${new_stop_loss:.2f} not higher than current "
+                f"${position.current_stop_loss:.2f}, skipping update"
+            )
             return None
 
         # Submit new stop-loss order

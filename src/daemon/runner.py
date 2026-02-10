@@ -92,7 +92,6 @@ class DaemonRunner:
             after_hours_screen_days=config.screening.screen_days,
             optimization_time=config.optimization.optimization_time,
             optimization_days=config.optimization.optimization_days,
-            health_check_time=config.health.run_time,
             prefetch_time=config.prefetch.prefetch_time,
             pre_market_refresh_time=config.prefetch.pre_market_refresh_time,
             sector_rotation_time=config.sector_rotation.run_time,
@@ -213,6 +212,9 @@ class DaemonRunner:
             self._position_manager = PositionManager(self.broker, config.position_management)
             logger.info("Position management enabled")
 
+        # Market data fetcher (shared instance for various features)
+        self.market_fetcher: MarketDataFetcher | None = None
+
         # Discovery engine
         self._discovery_engine = None
         if config.discovery.enabled:
@@ -237,9 +239,6 @@ class DaemonRunner:
                 market_fetcher=None,  # Will be set later if needed
             )
             logger.info("Tearsheet generator enabled")
-
-        # Market data fetcher (shared instance for various features)
-        self.market_fetcher: MarketDataFetcher | None = None
 
         # Analysis orchestrator (initialized after workflow is ready)
         self._analysis_orchestrator: AnalysisOrchestrator | None = None
@@ -2014,16 +2013,17 @@ class DaemonRunner:
             )
 
     async def _maybe_run_health_check(self) -> None:
-        """Run health check if conditions are met."""
+        """Run health check if interval elapsed or first run."""
         if not self.config.health.enabled:
             return
 
-        if not self.scheduler.is_health_check_time(self.config.health.run_time):
-            return
+        now = datetime.now(tz=UTC)
 
-        today = datetime.now(self.scheduler.timezone).date()
-        if self.state.last_health_check and self.state.last_health_check.date() == today:
-            return
+        # Run on first startup or after interval elapsed
+        if self.state.last_health_check:
+            elapsed = (now - self.state.last_health_check).total_seconds()
+            if elapsed < self.config.health.check_interval_seconds:
+                return
 
         logger.info("Starting API health checks")
         console.print(f"\n[bold cyan]Running Health Checks ({datetime.now(tz=UTC):%H:%M})[/bold cyan]")
@@ -2031,7 +2031,12 @@ class DaemonRunner:
         try:
             from src.daemon.health import HealthChecker
 
-            checker = HealthChecker(self.config, self.state, notification_service=self.notification_service)
+            checker = HealthChecker(
+                self.config,
+                self.state,
+                container=self._container,
+                notification_service=self.notification_service,
+            )
             report = await checker.run()
 
             self.state.last_health_check = datetime.now(tz=self.scheduler.timezone)

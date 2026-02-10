@@ -230,7 +230,7 @@ class TestHealthConfig:
         config = HealthConfig()
 
         assert config.enabled is True
-        assert config.run_time == "17:00"
+        assert config.check_interval_seconds == 5
         assert config.archive_days == 30
         assert config.log_max_size_mb == 5
         assert config.health_dir == "~/.ai-casino/health"
@@ -239,13 +239,13 @@ class TestHealthConfig:
     def test_custom_values(self):
         config = HealthConfig(
             enabled=False,
-            run_time="18:00",
+            check_interval_seconds=10,
             archive_days=60,
             log_max_size_mb=10,
         )
 
         assert config.enabled is False
-        assert config.run_time == "18:00"
+        assert config.check_interval_seconds == 10
         assert config.archive_days == 60
         assert config.log_max_size_mb == 10
 
@@ -260,7 +260,7 @@ daemon:
   watchlist: ["AAPL"]
   health:
     enabled: false
-    run_time: "18:30"
+    check_interval_seconds: 10
     archive_days: 14
     log_max_size_mb: 2
 """
@@ -272,7 +272,7 @@ daemon:
         config = DaemonConfig.from_yaml(path)
 
         assert config.health.enabled is False
-        assert config.health.run_time == "18:30"
+        assert config.health.check_interval_seconds == 10
         assert config.health.archive_days == 14
         assert config.health.log_max_size_mb == 2
 
@@ -291,7 +291,7 @@ daemon:
         config = DaemonConfig.from_yaml(path)
 
         assert config.health.enabled is True
-        assert config.health.run_time == "17:00"
+        assert config.health.check_interval_seconds == 5
 
         path.unlink()
 

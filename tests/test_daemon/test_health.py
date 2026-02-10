@@ -40,8 +40,20 @@ def daemon_state() -> DaemonState:
 
 
 @pytest.fixture
-def checker(daemon_config: DaemonConfig, daemon_state: DaemonState) -> HealthChecker:
-    return HealthChecker(daemon_config, daemon_state)
+def mock_container():
+    from unittest.mock import AsyncMock, Mock
+
+    container = Mock()
+    mock_llm = AsyncMock()
+    mock_llm.acomplete = AsyncMock(return_value="OK")
+    mock_llm.close = AsyncMock()
+    container.llm_client = Mock(return_value=mock_llm)
+    return container
+
+
+@pytest.fixture
+def checker(daemon_config: DaemonConfig, daemon_state: DaemonState, mock_container) -> HealthChecker:
+    return HealthChecker(daemon_config, daemon_state, container=mock_container)
 
 
 class TestServiceStatus:
@@ -186,14 +198,7 @@ class TestCheckLLM:
         assert result.status == ServiceStatus.UNHEALTHY
 
     async def test_anthropic_healthy(self, checker: HealthChecker):
-        mock_llm = AsyncMock()
-        mock_llm.acomplete = AsyncMock(return_value="OK")
-        mock_llm.close = AsyncMock()
-
-        with (
-            patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}),
-            patch.object(checker._container, "llm_client", return_value=mock_llm),
-        ):
+        with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}):
             result = await checker._check_llm()
 
         assert result.status == ServiceStatus.HEALTHY

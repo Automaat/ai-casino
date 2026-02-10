@@ -17,6 +17,7 @@ from src.backtesting.vectorbt_runner import VectorBTResult
 from src.daemon.config import PreTradeBacktestingConfig
 from src.data.market import MarketData
 from src.strategies.ensemble import EnsembleStrategy
+from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
 from src.workflows.trading import TradingState, TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
@@ -144,7 +145,7 @@ async def test_fetch_data(mock_workflow_dependencies):
         llm_client, market_fetcher, news_fetcher, finbert, fundamental_fetcher, use_meta_agent=False
     )
 
-    state = await workflow._fetch_data("AAPL", 90)
+    state = await workflow._fetch_data("AAPL", 90, TradingSession.REGULAR)
 
     assert state["symbol"] == "AAPL"
     assert state["market_data"] is not None
@@ -188,6 +189,7 @@ async def test_make_decision(mock_workflow_dependencies, sample_bullish_research
 
     state: TradingState = {
         "symbol": "AAPL",
+        "trading_session": TradingSession.REGULAR,
         "market_data": None,
         "enable_multi_timeframe": False,
         "news_articles": None,
@@ -291,6 +293,7 @@ async def test_execute_trade_with_broker(mock_workflow_dependencies, sample_ohlc
 
     state: TradingState = {
         "symbol": "AAPL",
+        "trading_session": TradingSession.REGULAR,
         "market_data": sample_ohlcv_data,
         "enable_multi_timeframe": False,
         "news_articles": None,
@@ -359,6 +362,7 @@ async def test_execute_trade_error_handling(mock_workflow_dependencies, sample_o
 
     state: TradingState = {
         "symbol": "AAPL",
+        "trading_session": TradingSession.REGULAR,
         "market_data": sample_ohlcv_data,
         "enable_multi_timeframe": False,
         "news_articles": None,
