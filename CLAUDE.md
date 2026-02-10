@@ -116,6 +116,7 @@ Fixes #<issue-number>
 **Linter:** ruff (45+ rule categories)
 **Type Checker:** pyrefly (high-performance type checker, faster than mypy/pyright)
 **Line length:** 110 | **Quotes:** Double | **Docstrings:** Google style | **Type hints:** Mandatory
+**File length:** Max 400 lines per file - split into logical modules if exceeded
 
 **Linter/type errors:** Fix properly (research if needed), NEVER skip/disable (`# noqa`, `# type: ignore`). If stuck after research, ASK.
 
@@ -257,11 +258,11 @@ def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
 
 ### Anti-Patterns
 
-❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons, dicts/kwargs for structured data
+❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, >400 line files, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons, dicts/kwargs for structured data
 
-✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations, typed classes over dicts
+✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations, typed classes over dicts, split files >400 lines into logical modules
 
-**Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change?
+**Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change? File too large (>400 lines)?
 **If unsure:** ASK for approval.
 
 ### Types vs Dicts
