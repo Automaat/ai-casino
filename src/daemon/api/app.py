@@ -663,7 +663,7 @@ def create_api_app(components: "DaemonComponents") -> FastAPI:  # noqa: C901, PL
 
                     # Extract complete lines
                     while b"\n" in buffer and len(lines) < limit:
-                        line, buffer = buffer.rsplit(b"\n", 1)
+                        buffer, line = buffer.rsplit(b"\n", 1)
                         if line:
                             lines.insert(0, line)
 

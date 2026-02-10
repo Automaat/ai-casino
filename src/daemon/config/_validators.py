@@ -50,7 +50,7 @@ def validate_time_range(
     if range_type == "after_hours" and not (16 <= hour < 20 or (hour == 20 and minute == 0)):
         msg = f"{field_name} must be between 16:00-20:00, got {time_str}"
         raise ValueError(msg)
-    if range_type == "pre_market" and not (4 <= hour < 9 or (hour == 9 and minute < 30)):
+    if range_type == "pre_market" and not (4 <= hour < 9 or (hour == 9 and minute <= 30)):
         msg = f"{field_name} must be 04:00-09:30, got {time_str}"
         raise ValueError(msg)
 
