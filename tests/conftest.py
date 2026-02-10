@@ -8,10 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
 import pytest
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.web_researcher import ResearchCategory, WebResearchAnalysis, WebResearchResult
 from src.daemon.state import AnalysisRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
