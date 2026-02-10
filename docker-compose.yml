@@ -10,6 +10,8 @@ services:
       # LLM provider (config takes priority, these are fallbacks)
       - LLM_PROVIDER=openai
       - LLM_MODEL=gpt-5-nano
+      # LLM API keys (read from host .env if available)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Log level
       - LOG_LEVEL=INFO
     ports:
