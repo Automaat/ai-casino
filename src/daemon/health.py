@@ -263,15 +263,11 @@ class HealthChecker:
     async def _check_llm(self) -> ServiceCheckResult:
         """Check LLM provider connectivity."""
         # Use config provider if set, fallback to env var
-        provider = self.config.llm.provider if self.config.llm else os.getenv("LLM_PROVIDER", "ollama")
+        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
 
         # Check API keys from config first, then env vars
-        anthropic_key = (
-            self.config.api_keys.anthropic_api_key if self.config.api_keys else None
-        ) or os.getenv("ANTHROPIC_API_KEY")
-        openai_key = (
-            self.config.api_keys.openai_api_key if self.config.api_keys else None
-        ) or os.getenv("OPENAI_API_KEY")
+        anthropic_key = self.config.api_keys.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
+        openai_key = self.config.api_keys.openai_api_key or os.getenv("OPENAI_API_KEY")
 
         # Check API keys for non-Ollama providers
         if provider == "anthropic" and not anthropic_key:
