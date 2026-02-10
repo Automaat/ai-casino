@@ -217,9 +217,9 @@ except Exception as e:
 
 **Swallowing Exceptions (Non-Critical Only):**
 ```python
-# ALWAYS add exc_info=True when swallowing for traceback
+# ALWAYS use logger.opt(exception=True) when swallowing for traceback
 except ValueError as e:
-    logger.warning(f"Invalid data, skipping: {e}", exc_info=True)
+    logger.opt(exception=True).warning(f"Invalid data, skipping: {e}")
     return None
 
 # NOT this (missing context):
@@ -245,7 +245,7 @@ except Exception as e:
 **Never:**
 - Bare `except Exception: return None` without logging
 - `except Exception` in critical paths (use specific exceptions)
-- Warning-level logs without `exc_info=True` when swallowing exception
+- Warning-level logs without `logger.opt(exception=True)` when swallowing exception
 
 **Logging (loguru):** `logger.info/warning/error/debug()` - set level via `LOG_LEVEL` env var
 

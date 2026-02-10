@@ -136,11 +136,11 @@ class OptunaOptimizer:
             return result.sharpe_ratio, result.total_return, abs(result.max_drawdown)
         except (ValueError, KeyError, IndexError) as e:
             # Expected: insufficient data, invalid params, missing OHLCV columns
-            logger.warning(f"Backtest skipped - invalid params/data: {e}", exc_info=True)
+            logger.opt(exception=True).warning(f"Backtest skipped - invalid params/data: {e}")
             return None
         except Exception as e:
             # Unexpected: strategy bugs, computation errors - should be investigated
-            logger.error(f"Backtest failed unexpectedly: {e}")
+            logger.exception("Backtest failed unexpectedly")
             raise
 
     def _objective(self, trial: optuna.Trial, ctx: _OptimizationContext) -> float | tuple[float, ...]:
