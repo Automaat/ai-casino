@@ -32,7 +32,7 @@ All database settings are in `~/.ai-casino/daemon-production.yaml`:
 
 ```yaml
 database:
-  database_url: "postgresql+asyncpg://ai_casino:ai_casino_secure_pass_2025@postgres:5432/ai_casino"
+  database_url: "postgresql+asyncpg://ai_casino:YOUR_PASSWORD_HERE@postgres:5432/ai_casino"
   pool_size: 5
   max_overflow: 10
   pool_pre_ping: true
@@ -57,10 +57,10 @@ Migrations run automatically on daemon startup:
 If you have existing JSON state, backfill to database:
 
 ```bash
-# From inside daemon container
+# From inside daemon container (use password from your daemon-production.yaml)
 docker-compose exec daemon python -m src.database.migrations.backfill_from_json \
   --state-file ~/.ai-casino/daemon-state.json \
-  --database-url postgresql+asyncpg://ai_casino:ai_casino_secure_pass_2025@postgres:5432/ai_casino
+  --database-url postgresql+asyncpg://ai_casino:YOUR_PASSWORD_HERE@postgres:5432/ai_casino
 ```
 
 ## Retention Policy
@@ -86,7 +86,8 @@ docker-compose exec postgres psql -U ai_casino -d ai_casino \
 ### Via Host (if port exposed)
 
 ```bash
-psql postgresql://ai_casino:ai_casino_secure_pass_2025@localhost:5432/ai_casino
+# Use password from your daemon-production.yaml or .env file
+psql postgresql://ai_casino:YOUR_PASSWORD_HERE@localhost:5432/ai_casino
 ```
 
 ## Useful Queries

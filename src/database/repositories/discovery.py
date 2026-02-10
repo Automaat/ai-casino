@@ -104,12 +104,10 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
         Returns:
             List of recent DiscoveryHistoryRecords
         """
+        from datetime import timedelta
+
         cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff = (
-            cutoff.replace(day=cutoff.day - days)
-            if cutoff.day > days
-            else cutoff.replace(month=cutoff.month - 1)
-        )
+        cutoff = cutoff - timedelta(days=days)
 
         result = await self._session.execute(
             select(DiscoveryHistoryRecordORM)

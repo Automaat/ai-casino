@@ -4,10 +4,10 @@ services:
     container_name: ai-casino-postgres
     restart: unless-stopped
     environment:
-      # Hardcoded credentials (only accessible within docker network)
+      # Database configuration (POSTGRES_PASSWORD must be provided via environment or .env)
       - POSTGRES_DB=ai_casino
       - POSTGRES_USER=ai_casino
-      - POSTGRES_PASSWORD=ai_casino_secure_pass_2025
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ai_casino_secure_pass_2025}
     volumes:
       # Persistent storage on host machine (survives container restarts)
       - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql/data

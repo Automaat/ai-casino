@@ -102,7 +102,7 @@ class AnalysisRecordORM(Base):
     is_paper_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     rsi: Mapped[Decimal | None] = mapped_column(DECIMAL(6, 2), nullable=True)
     macd_hist: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True)
-    reasoning: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    reasoning: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,

@@ -129,8 +129,10 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         Returns:
             Dict mapping signal to count
         """
+        from datetime import timedelta
+
         cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff = cutoff.replace(day=cutoff.day - days)
+        cutoff = cutoff - timedelta(days=days)
 
         stmt = (
             select(AnalysisRecordORM.signal, func.count(AnalysisRecordORM.id))

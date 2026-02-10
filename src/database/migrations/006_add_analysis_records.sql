@@ -11,7 +11,7 @@ CREATE TABLE analysis_records (
     is_paper_trade BOOLEAN NOT NULL DEFAULT true,
     rsi DECIMAL(6,2),
     macd_hist DECIMAL(10,4),
-    reasoning JSONB DEFAULT '[]'::jsonb,
+    reasoning JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
