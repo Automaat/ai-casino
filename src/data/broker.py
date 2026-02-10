@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest, StopLossRequest
+from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, StopOrderRequest
 from loguru import logger
 from pydantic import BaseModel
 
@@ -246,6 +246,54 @@ class AlpacaBroker:
         except Exception as e:
             logger.error(f"Failed to get order status: {e}")
             raise
+
+    def submit_stop_order(self, symbol: str, qty: int, stop_price: float) -> OrderStatus:
+        """Submit stop order to protect existing long position.
+
+        Args:
+            symbol: Stock ticker symbol
+            qty: Number of shares to sell
+            stop_price: Price to trigger sell order
+
+        Returns:
+            OrderStatus with order details
+        """
+        if qty <= 0:
+            msg = f"Order quantity must be positive, got {qty}"
+            raise ValueError(msg)
+
+        if stop_price <= 0:
+            msg = f"Stop price must be positive, got {stop_price}"
+            raise ValueError(msg)
+
+        try:
+            order_data = StopOrderRequest(
+                symbol=symbol,
+                qty=qty,
+                side=OrderSide.SELL,
+                time_in_force=TimeInForce.GTC,
+                stop_price=stop_price,
+            )
+
+            order: Order = self.client.submit_order(order_data=order_data)  # type: ignore[assignment]
+
+            logger.info(f"Submitted stop order: SELL {qty} {symbol} @ ${stop_price:.2f}")
+
+            return OrderStatus(
+                order_id=str(order.id),
+                symbol=order.symbol or "",
+                qty=float(order.qty or 0),
+                filled_qty=float(order.filled_qty or 0),
+                side=order.side.value if order.side else "unknown",
+                status=order.status.value,
+                submitted_at=order.submitted_at,
+                filled_at=order.filled_at,
+                filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
+            )
+        except Exception as e:
+            msg = f"Failed to submit order: {e}"
+            logger.error(msg)
+            raise BrokerAPIError(msg) from e
 
     def cancel_order(self, order_id: str) -> None:
         """Cancel an existing order.
