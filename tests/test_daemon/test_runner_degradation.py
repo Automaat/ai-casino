@@ -79,21 +79,23 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    # Mock health check to avoid overwriting fake report with real check
-    with patch.object(runner, "_maybe_run_health_check", new_callable=AsyncMock):
-        with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
-            sleep_time = await runner._run_cycle()
+    # Mock to avoid overwriting fake report and analyzing
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
+        sleep_time = await runner._run_cycle()
 
-            # Should halt and return 60s retry
-            assert sleep_time == 60
-            mock_analyze.assert_not_called()
+        # Should halt and return 60s retry
+        assert sleep_time == 60
+        mock_analyze.assert_not_called()
 
-            # Verify degradation recorded in state
-            assert runner.state.degradation_history
-            assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
-            halt_reason = runner.state.degradation_history[-1].halt_reason
-            assert halt_reason is not None
-            assert "market data" in halt_reason.lower()
+        # Verify degradation recorded in state
+        assert runner.state.degradation_history
+        assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
+        halt_reason = runner.state.degradation_history[-1].halt_reason
+        assert halt_reason is not None
+        assert "market data" in halt_reason.lower()
 
 
 async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_dir):
@@ -121,18 +123,20 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    with patch.object(runner, "_maybe_run_health_check", new_callable=AsyncMock):
-        with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
-            sleep_time = await runner._run_cycle()
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
+        sleep_time = await runner._run_cycle()
 
-            assert sleep_time == 60
-            mock_analyze.assert_not_called()
+        assert sleep_time == 60
+        mock_analyze.assert_not_called()
 
-            assert runner.state.degradation_history
-            assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
-            halt_reason = runner.state.degradation_history[-1].halt_reason
-            assert halt_reason is not None
-            assert "llm" in halt_reason.lower()
+        assert runner.state.degradation_history
+        assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
+        halt_reason = runner.state.degradation_history[-1].halt_reason
+        assert halt_reason is not None
+        assert "llm" in halt_reason.lower()
 
 
 async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp_health_dir):
@@ -167,26 +171,28 @@ async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    with patch.object(runner, "_maybe_run_health_check", new_callable=AsyncMock):
-        with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
-            mock_analyze.return_value = []
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
+        mock_analyze.return_value = []
 
-            sleep_time = await runner._run_cycle()
+        sleep_time = await runner._run_cycle()
 
-            # Should continue normally
-            assert sleep_time == daemon_config_with_health.interval_minutes * 60
-            mock_analyze.assert_called_once()
+        # Should continue normally
+        assert sleep_time == daemon_config_with_health.interval_minutes * 60
+        mock_analyze.assert_called_once()
 
-            # Verify degradation context passed
-            call_args = mock_analyze.call_args
-            degradation_context = call_args[0][1]  # Second positional arg
-            assert degradation_context is not None
-            assert degradation_context.tier == DegradationTier.DEGRADED
+        # Verify degradation context passed
+        call_args = mock_analyze.call_args
+        degradation_context = call_args[0][1]  # Second positional arg
+        assert degradation_context is not None
+        assert degradation_context.tier == DegradationTier.DEGRADED
 
-            # Verify degradation recorded
-            assert runner.state.degradation_history
-            assert runner.state.degradation_history[-1].tier == DegradationTier.DEGRADED.value
-            assert runner.state.degradation_history[-1].confidence_adjustment == 0.8
+        # Verify degradation recorded
+        assert runner.state.degradation_history
+        assert runner.state.degradation_history[-1].tier == DegradationTier.DEGRADED.value
+        assert runner.state.degradation_history[-1].confidence_adjustment == 0.8
 
 
 async def test_notification_sent_on_degradation(daemon_config_with_health, temp_health_dir):
@@ -214,21 +220,26 @@ async def test_notification_sent_on_degradation(daemon_config_with_health, temp_
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    # Mock notification service
+    # Mock notification service (both on components and runner property)
+    # Cycle orchestrator checks components.notification_service
+    # _notify_degradation checks runner.notification_service
     mock_notification_service = AsyncMock()
+    runner._components.notification_service = mock_notification_service
     runner.notification_service = mock_notification_service
 
-    with patch.object(runner, "_maybe_run_health_check", new_callable=AsyncMock):
-        with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
-            mock_analyze.return_value = []
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
+        mock_analyze.return_value = []
 
-            await runner._run_cycle()
+        await runner._run_cycle()
 
-            # Verify notification sent
-            mock_notification_service.notify.assert_awaited_once()
-            await_args = mock_notification_service.notify.await_args
-            message = await_args.args[1]
-            assert "DEGRADED" in message.title or "degraded" in message.body.lower()
+        # Verify notification sent
+        mock_notification_service.notify.assert_awaited_once()
+        await_args = mock_notification_service.notify.await_args
+        message = await_args.args[1]
+        assert "DEGRADED" in message.title or "degraded" in message.body.lower()
 
 
 async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_health_dir):
@@ -263,18 +274,20 @@ async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_h
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    with patch.object(runner, "_maybe_run_health_check", new_callable=AsyncMock):
-        with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
-            mock_analyze.return_value = []
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
+        mock_analyze.return_value = []
 
-            sleep_time = await runner._run_cycle()
+        sleep_time = await runner._run_cycle()
 
-            assert sleep_time == daemon_config_with_health.interval_minutes * 60
+        assert sleep_time == daemon_config_with_health.interval_minutes * 60
 
-            # Verify no degradation recorded (or FULL tier recorded)
-            # Note: Implementation may or may not record FULL tier
-            if runner.state.degradation_history:
-                assert runner.state.degradation_history[-1].tier == DegradationTier.FULL.value
+        # Verify no degradation recorded (or FULL tier recorded)
+        # Note: Implementation may or may not record FULL tier
+        if runner.state.degradation_history:
+            assert runner.state.degradation_history[-1].tier == DegradationTier.FULL.value
 
 
 async def test_degradation_history_limited_to_100(daemon_config_with_health, temp_health_dir):

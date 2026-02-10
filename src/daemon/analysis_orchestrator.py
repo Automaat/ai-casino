@@ -1,5 +1,7 @@
 """Analysis orchestration for daemon - extracts watchlist analysis logic."""
 
+from __future__ import annotations
+
 import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -9,11 +11,14 @@ from pydantic import BaseModel
 
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
+from src.daemon.notification_helper import DaemonNotificationHelper
 
 if TYPE_CHECKING:
     from src.cache.historical import HistoricalCache
+    from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
+    from src.daemon.factory import DaemonComponents
     from src.daemon.notifications import NotificationService
     from src.daemon.positions import PositionManager
     from src.daemon.scheduler import MarketScheduler
@@ -44,17 +49,18 @@ class AnalysisOrchestrator:
 
     def __init__(  # noqa: PLR0913
         self,
-        workflow: "TradingWorkflow",
-        state: "DaemonState",
-        scheduler: "MarketScheduler",
+        workflow: TradingWorkflow,
+        state: DaemonState,
+        scheduler: MarketScheduler,
         config: AnalysisOrchestratorConfig,
         trading_mode: str = "paper",
-        broker: "AlpacaBroker | None" = None,
-        position_manager: "PositionManager | None" = None,
-        event_bus: "EventBus | None" = None,
-        historical_cache: "HistoricalCache | None" = None,
-        notification_service: "NotificationService | None" = None,
-        context_builder: object | None = None,
+        broker: AlpacaBroker | None = None,
+        position_manager: PositionManager | None = None,
+        event_bus: EventBus | None = None,
+        historical_cache: HistoricalCache | None = None,
+        notification_service: NotificationService | None = None,
+        context_builder: DaemonContextBuilder | None = None,
+        components: DaemonComponents | None = None,
     ) -> None:
         """Initialize analysis orchestrator.
 
@@ -69,7 +75,8 @@ class AnalysisOrchestrator:
             event_bus: Optional event bus for publishing
             historical_cache: Optional historical cache
             notification_service: Optional notification service
-            context_builder: Object with _build_analysis_contexts method
+            context_builder: Optional context builder for analysis contexts
+            components: Optional daemon components for notification helper
         """
         self.workflow = workflow
         self.state = state
@@ -82,6 +89,8 @@ class AnalysisOrchestrator:
         self.historical_cache = historical_cache
         self.notification_service = notification_service
         self._context_builder = context_builder
+        self._components = components
+        self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
 
     def _sync_positions_with_broker(self) -> bool:
@@ -130,7 +139,7 @@ class AnalysisOrchestrator:
             logger.warning(f"Failed to prefetch account info: {e}")
             return None
 
-    def _apply_position_management(self, results: list["TradingWorkflowResult"]) -> int:
+    def _apply_position_management(self, results: list[TradingWorkflowResult]) -> int:
         """Apply position management rules to results.
 
         Args:
@@ -208,7 +217,7 @@ class AnalysisOrchestrator:
         self,
         watchlist: list[str],
         target_allocations: dict[str, float] | None = None,
-        degradation_context: "DegradationContext | None" = None,
+        degradation_context: DegradationContext | None = None,
     ) -> AnalysisOrchestrationResult:
         """Orchestrate watchlist analysis.
 
@@ -288,12 +297,32 @@ class AnalysisOrchestrator:
             position_sync_performed=position_sync_performed,
         )
 
+    async def _analyze_symbol(
+        self,
+        symbol: str,
+        position_context: dict[str, object] | None = None,
+        degradation_context: DegradationContext | None = None,
+    ) -> TradingWorkflowResult | None:
+        """Analyze a single symbol.
+
+        Args:
+            symbol: Stock ticker symbol
+            position_context: Position context (entry price, P&L, days held) (optional)
+            degradation_context: Optional degradation context
+
+        Returns:
+            TradingWorkflowResult or None on error
+        """
+        return await self._analyze_symbol_with_context(
+            symbol, position_context, target_allocations=None, degradation_context=degradation_context
+        )
+
     async def _analyze_symbol_with_context(
         self,
         symbol: str,
         position_context: dict[str, object] | None,
         target_allocations: dict[str, float] | None,
-        degradation_context: "DegradationContext | None",
+        degradation_context: DegradationContext | None,
     ) -> TradingWorkflowResult | None:
         """Analyze single symbol with full context.
 
@@ -314,7 +343,7 @@ class AnalysisOrchestrator:
 
             # Build contexts via delegated method
             sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = None, None, None, None
-            if self._context_builder and hasattr(self._context_builder, "build_analysis_contexts"):
+            if self._context_builder:
                 sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = (
                     self._context_builder.build_analysis_contexts(symbol)
                 )
@@ -338,8 +367,8 @@ class AnalysisOrchestrator:
                 if target_allocations is not None:
                     self.workflow.set_target_allocations(None)
 
-            if self.notification_service:
-                await self._maybe_notify_signal(result)
+            if self.notification_service and self._components:
+                await self._notification_helper.maybe_notify_signal(result, self._components)
 
             rsi = result.technical.rsi if result.technical else None
             macd_hist = result.technical.macd_hist if result.technical else None
@@ -405,49 +434,6 @@ class AnalysisOrchestrator:
                 await self.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
             except Exception as e:
                 logger.warning(f"Event publish failed: {e}")
-
-    async def _maybe_notify_signal(self, result: TradingWorkflowResult) -> None:
-        """Send notification for signal.
-
-        Args:
-            result: Analysis result
-        """
-        if not self.notification_service:
-            return
-
-        from datetime import UTC, datetime
-
-        from src.daemon.notifications import NotificationMessage, NotificationTrigger
-
-        try:
-            conf = result.decision.confidence
-            risk = result.risk.validation.risk_level
-            price = result.risk.current_price
-            rsi = result.technical.rsi if result.technical else None
-            macd = result.technical.macd_hist if result.technical else None
-            reasoning = " | ".join(result.decision.reasoning)
-            session = result.trading_session.value if result.trading_session else "REGULAR"
-
-            message = NotificationMessage(
-                trigger=NotificationTrigger.SIGNAL,
-                title=f"{result.symbol} {result.decision.action.value}",
-                body=f"Confidence: {conf:.2f}, Risk: {risk}",
-                metadata={
-                    "symbol": result.symbol,
-                    "signal": result.decision.action.value,
-                    "confidence": conf,
-                    "risk_level": risk,
-                    "price": price,
-                    "rsi": rsi,
-                    "macd": macd,
-                    "reasoning": reasoning,
-                    "session": session,
-                },
-                timestamp=datetime.now(UTC),
-            )
-            await self.notification_service.notify(NotificationTrigger.SIGNAL, message)
-        except Exception as e:
-            logger.warning(f"Notification failed for {result.symbol}: {e}")
 
     def _extract_sentiment_signal(self, sentiment: SentimentAnalysis | None) -> str | None:
         """Extract sentiment signal.

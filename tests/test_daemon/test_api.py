@@ -7,9 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.daemon.api import create_api_app
+from src.daemon.broker_manager import BrokerManager
 from src.daemon.config import ApiConfig, DaemonConfig, ScheduleConfig
 from src.daemon.event_bus import DashboardEvent, EventType
-from src.daemon.runner import DaemonRunner
+from src.daemon.factory import DaemonComponents
 from src.daemon.state import AnalysisRecord, DaemonState, DegradationRecord, RiskReportRecord
 from src.strategies.session import TradingSession
 
@@ -128,7 +129,7 @@ def mock_runner(
     sample_risk_report: RiskReportRecord,
     sample_events: list[DashboardEvent],
 ) -> Mock:
-    """Create mock DaemonRunner with config and state."""
+    """Create mock DaemonComponents with config and state."""
     config = DaemonConfig(
         watchlist=["AAPL", "TSLA"],
         interval_minutes=30,
@@ -157,20 +158,28 @@ def mock_runner(
         ],
     )
 
-    runner = Mock(spec=DaemonRunner)
-    runner.config = config
-    runner.state = state
-    runner.running = True
-    runner.broker = None
-    runner.get_merged_watchlist = Mock(return_value=["AAPL", "TSLA"])
+    # Create mock broker manager
+    broker_manager = Mock(spec=BrokerManager)
+    broker_manager.get_merged_watchlist = Mock(return_value=["AAPL", "TSLA"])
+
+    components = Mock(spec=DaemonComponents)
+    components.config = config
+    components.state = state
+    components.running = True
+    components.broker = None
+    components.broker_manager = broker_manager
+    components.event_bus = None
 
     mock_event_bus = Mock()
     mock_event_bus.get_history = Mock(return_value=sample_events)
     mock_event_bus.subscribe = AsyncMock(return_value=("sub123", AsyncMock()))
     mock_event_bus.unsubscribe = AsyncMock()
-    runner.event_bus = mock_event_bus
+    components.event_bus = mock_event_bus
 
-    return runner
+    # Mock container (minimal for now)
+    components.container = Mock()
+
+    return components
 
 
 @pytest.fixture
@@ -428,7 +437,7 @@ class TestWatchlistEndpoint:
 
     def test_get_watchlist_merged(self, client: TestClient, mock_runner: Mock) -> None:
         """Test watchlist endpoint with all sources."""
-        mock_runner.get_merged_watchlist = Mock(return_value=["AAPL", "TSLA", "NVDA"])
+        mock_runner.broker_manager.get_merged_watchlist = Mock(return_value=["AAPL", "TSLA", "NVDA"])
 
         # Add NVDA to active positions (AAPL and TSLA already in fixture)
         mock_runner.state.active_positions["NVDA"] = {

@@ -234,10 +234,8 @@ async def test_analyze_watchlist_uses_merged(
     # Get merged watchlist and pass it to _analyze_watchlist
     merged = runner.get_merged_watchlist()
 
-    # Mock orchestrator
-    from unittest.mock import Mock as MockClass
-
-    mock_orchestrator = MockClass()
+    # Mock _init_analysis_orchestrator to return our mock
+    mock_orchestrator = Mock()
     mock_orchestrator.orchestrate = mock_orchestrate
     monkeypatch.setattr(runner, "_init_analysis_orchestrator", lambda: mock_orchestrator)
 
@@ -261,7 +259,12 @@ async def test_run_cycle_uses_merged_watchlist(
     # Mock dependencies
     monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
     monkeypatch.setattr(runner, "_analyze_watchlist", AsyncMock(return_value=[]))
-    monkeypatch.setattr(runner, "_log_results", Mock())
+    monkeypatch.setattr(runner._task_runner, "run_scheduled_tasks", AsyncMock())
+
+    # Mock _log_results on DaemonCycleOrchestrator
+    from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
+
+    monkeypatch.setattr(DaemonCycleOrchestrator, "_log_results", Mock())
     monkeypatch.setattr(
         runner,
         "_evaluate_degradation",
@@ -483,12 +486,37 @@ class TestSectorRotationIntegration:
             nonlocal rotation_called
             rotation_called = True
 
+        # Mock degradation evaluation to prevent HALTED state
+        from src.daemon.degradation import AgentType, DegradationContext, DegradationTier
+
+        monkeypatch.setattr(
+            runner,
+            "_evaluate_degradation",
+            lambda: DegradationContext(
+                tier=DegradationTier.FULL,
+                available_agents=set(AgentType),  # All agents available
+                unavailable_services=[],
+                confidence_adjustment=1.0,
+                halt_reason=None,
+            ),
+        )
+
         monkeypatch.setattr(runner.scheduler, "is_sector_rotation_time", lambda: True)
         monkeypatch.setattr(runner.scheduler, "is_after_hours_screening_time", lambda: False)
         monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
-        monkeypatch.setattr(runner, "_run_sector_rotation", mock_run_rotation)
         monkeypatch.setattr(runner, "_analyze_watchlist", AsyncMock(return_value=[]))
-        monkeypatch.setattr(runner, "_log_results", Mock())
+
+        # Mock _log_results on DaemonCycleOrchestrator
+        from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
+
+        monkeypatch.setattr(DaemonCycleOrchestrator, "_log_results", Mock())
+
+        # Mock task_service.run_sector_rotation
+        from src.daemon.task_service import DaemonTaskService
+
+        task_service = DaemonTaskService(runner._components, runner._container)
+        monkeypatch.setattr(task_service, "run_sector_rotation", mock_run_rotation)
+        runner._task_runner.set_task_service(task_service)
 
         await runner._run_cycle()
 
@@ -509,9 +537,19 @@ class TestSectorRotationIntegration:
         monkeypatch.setattr(runner.scheduler, "is_sector_rotation_time", lambda: False)
         monkeypatch.setattr(runner.scheduler, "is_after_hours_screening_time", lambda: False)
         monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
-        monkeypatch.setattr(runner, "_run_sector_rotation", mock_run_rotation)
         monkeypatch.setattr(runner, "_analyze_watchlist", AsyncMock(return_value=[]))
-        monkeypatch.setattr(runner, "_log_results", Mock())
+
+        # Mock _log_results on DaemonCycleOrchestrator
+        from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
+
+        monkeypatch.setattr(DaemonCycleOrchestrator, "_log_results", Mock())
+
+        # Mock task_service.run_sector_rotation
+        from src.daemon.task_service import DaemonTaskService
+
+        task_service = DaemonTaskService(runner._components, runner._container)
+        monkeypatch.setattr(task_service, "run_sector_rotation", mock_run_rotation)
+        runner._task_runner.set_task_service(task_service)
 
         await runner._run_cycle()
 
@@ -519,9 +557,10 @@ class TestSectorRotationIntegration:
 
     @patch.dict(os.environ, {}, clear=True)
     def test_run_sector_rotation_records_state(self, sample_config: DaemonConfig) -> None:
-        """Test _run_sector_rotation records analysis in state."""
+        """Test run_sector_rotation records analysis in state."""
         from datetime import UTC, datetime
 
+        from src.daemon.task_service import DaemonTaskService
         from src.metrics.sector_rotation import Momentum, SectorRotationAnalysis, SectorStrength
 
         sample_config.sector_rotation = SectorRotationConfig(enabled=True)
@@ -552,8 +591,10 @@ class TestSectorRotationIntegration:
         mock_daemon_rotation = Mock()
         mock_daemon_rotation.run.return_value = mock_analysis
 
+        task_service = DaemonTaskService(runner._components, runner._container)
+
         with patch("src.daemon.sector_rotation.DaemonSectorRotation", return_value=mock_daemon_rotation):
-            runner._run_sector_rotation()
+            task_service.run_sector_rotation()
 
         assert runner.state.last_sector_rotation is not None
         assert len(runner.state.sector_rotation_history) == 1
@@ -564,6 +605,8 @@ class TestSectorRotationIntegration:
         """Test sector rotation deduplication (skip if already ran today)."""
         from datetime import datetime
         from zoneinfo import ZoneInfo
+
+        from src.daemon.task_service import DaemonTaskService
 
         sample_config.sector_rotation = SectorRotationConfig(enabled=True)
         runner = DaemonRunner(sample_config)
@@ -576,9 +619,11 @@ class TestSectorRotationIntegration:
             nonlocal rotation_ran
             rotation_ran = True
 
+        task_service = DaemonTaskService(runner._components, runner._container)
+
         with patch("src.daemon.sector_rotation.DaemonSectorRotation") as mock_cls:
             mock_cls.return_value.run = mock_analyze
-            runner._run_sector_rotation()
+            task_service.run_sector_rotation()
 
         assert not rotation_ran
 
@@ -594,7 +639,7 @@ async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_
     with (
         patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
         patch.object(runner.scheduler, "is_market_open", return_value=True),
-        patch.object(runner, "_maybe_run_journal", new_callable=AsyncMock),
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
         patch.object(
             runner,
             "_evaluate_degradation",
@@ -705,7 +750,7 @@ async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
     with (
         patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
         patch.object(runner.scheduler, "is_market_open", return_value=True),
-        patch.object(runner, "_maybe_run_journal", new_callable=AsyncMock),
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
     ):
         mock_analyze.return_value = []
 
@@ -714,6 +759,8 @@ async def test_runner_eventbus_optional(sample_config: DaemonConfig) -> None:
 
 async def test_api_server_lifecycle(sample_config: DaemonConfig) -> None:
     """Test API server starts and stops with daemon."""
+    import httpx
+
     sample_config.api.enabled = True
     sample_config.api.port = 18484
 
@@ -730,21 +777,32 @@ async def test_api_server_lifecycle(sample_config: DaemonConfig) -> None:
         # Poll for API server readiness with timeout
         async def wait_for_api_ready() -> None:
             """Wait for API server to start with timeout."""
-            for _ in range(100):  # 100 * 0.05s = 5s timeout
-                if runner._api_server is not None and runner._api_task is not None:
-                    return
-                await asyncio.sleep(0.05)
+            async with httpx.AsyncClient() as client:
+                for _ in range(100):  # 100 * 0.05s = 5s timeout
+                    try:
+                        response = await client.get("http://127.0.0.1:18484/health")
+                        if response.status_code == 200:
+                            return
+                    except httpx.ConnectError:
+                        pass  # Server not ready yet
+                    await asyncio.sleep(0.05)
             msg = "API server did not start within 5 seconds"
             raise TimeoutError(msg)
 
         await wait_for_api_ready()
 
-        # Verify API server started
-        assert runner._api_server is not None
-        assert runner._api_task is not None
+        # Verify API server is responding
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://127.0.0.1:18484/health")
+            assert response.status_code == 200
 
         # Wait for daemon to stop
         await asyncio.wait_for(run_task, timeout=10.0)
 
-        # Verify API server stopped
-        assert runner._api_task.done()
+        # Verify API server is no longer responding
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.get("http://127.0.0.1:18484/health", timeout=1.0)
+                pytest.fail("API server should be stopped")
+            except httpx.ConnectError:
+                pass  # Expected - server should be down

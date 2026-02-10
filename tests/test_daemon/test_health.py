@@ -269,7 +269,10 @@ class TestArchiveOldAnalyses:
 
 
 class TestPruneStaleCache:
-    def test_no_cache_dir(self, checker: HealthChecker):
+    def test_no_cache_dir(self, checker: HealthChecker, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        # Run from tmp_path so "data/cache" doesn't resolve to project cache
+        monkeypatch.chdir(tmp_path)
+
         result = checker._prune_stale_cache()
 
         assert result.files_affected == 0
