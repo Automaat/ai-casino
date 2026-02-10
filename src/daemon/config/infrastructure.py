@@ -29,6 +29,10 @@ class ApiConfig(BaseModel):
         le=65535,
         description="TCP port for embedded API server (1-65535)",
     )
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:8050"],
+        description="Allowed CORS origins for dashboard access",
+    )
 
     @field_validator("host")
     @classmethod

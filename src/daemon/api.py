@@ -350,7 +350,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     # CORS middleware - only allow dashboard origin
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:8050"],
+        allow_origins=components.config.api.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "OPTIONS"],
         allow_headers=["*"],
