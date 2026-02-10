@@ -54,7 +54,14 @@ class StopLossCalculator:
 
         Returns:
             StopLossCalculation with stop price and methodology
+
+        Raises:
+            ValueError: If current_price is non-positive
         """
+        if current_price <= 0:
+            msg = f"current_price must be positive, got {current_price}"
+            raise ValueError(msg)
+
         atr = self._get_atr(market_data)
         atr_multiplier = self._get_adaptive_multiplier(context)
 
