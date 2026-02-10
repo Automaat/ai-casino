@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from src.daemon.degradation import DegradationContext
 
 from src.agents.risk import AccountInfo, RiskAssessment
@@ -28,7 +29,7 @@ class RiskAssessmentInput(BaseModel):
     portfolio_value: float | None
     target_portfolio_weight: float | None
     backtest_validation: BacktestValidation | None
-    degradation_context: "DegradationContext | None"
+    degradation_context: DegradationContext | None
     broker_api_failed: bool
 
     class Config:
@@ -46,7 +47,8 @@ class RiskAssessmentInput(BaseModel):
             ValueError: If market data is missing
         """
         if self.market_data is None:
-            raise ValueError("Market data is None")
+            msg = "Market data is None"
+            raise ValueError(msg)
         if isinstance(self.market_data, MultiTimeframeData):
             return self.market_data.timeframes[Timeframe.DAILY]
         return self.market_data
@@ -62,7 +64,8 @@ class RiskAssessmentInput(BaseModel):
         """
         daily_data = self.get_daily_data()
         if daily_data.empty:
-            raise ValueError("Market data is empty")
+            msg = "Market data is empty"
+            raise ValueError(msg)
         return float(daily_data["Close"].iloc[-1])
 
 

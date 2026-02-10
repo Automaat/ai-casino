@@ -20,7 +20,7 @@ from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOu
 
 async def execute_trade(
     input_data: TradeExecutionInput,
-    broker: "AlpacaBroker | None",
+    broker: AlpacaBroker | None,
 ) -> TradeExecutionOutput:
     """Execute trade via broker (async, thread-offloaded).
 
@@ -71,7 +71,9 @@ async def execute_trade(
                 stop_loss_price=stop_loss_price,
             )
             stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None"
-            logger.info(f"Executed {action.value}: {input_data.symbol} x{order.qty} (stop-loss={stop_loss_str})")
+            logger.info(
+                f"Executed {action.value}: {input_data.symbol} x{order.qty} (stop-loss={stop_loss_str})"
+            )
             return order
         except BrokerAPIError as e:
             logger.critical(
@@ -92,7 +94,7 @@ async def execute_trade(
 async def create_portfolio_snapshot(
     symbol: str,
     account_info,  # AccountInfo
-    snapshot_repository: "PortfolioSnapshotRepository | None",
+    snapshot_repository: PortfolioSnapshotRepository | None,
 ) -> None:
     """Capture portfolio snapshot after trade execution.
 
@@ -126,7 +128,7 @@ async def notify_trade_execution(
     symbol: str,
     final_decision,  # TradingDecision
     risk_assessment,  # RiskAssessment
-    notification_service: "NotificationService | None",
+    notification_service: NotificationService | None,
 ) -> None:
     """Send risk rejection notification.
 

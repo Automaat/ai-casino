@@ -21,20 +21,20 @@ if TYPE_CHECKING:
 class WorkflowContext(BaseModel):
     """Composed workflow context from all stage outputs."""
 
-    data: "FetchDataOutput"
-    account: "AccountInfoOutput"
-    strategy: "StrategySelectionOutput"
-    backtest: "BacktestValidationOutput"
-    analysis: "AnalysisOutput"
-    decision: "DecisionOutput"
-    risk: "RiskAssessmentOutput"
-    execution: "TradeExecutionOutput"
+    data: FetchDataOutput
+    account: AccountInfoOutput
+    strategy: StrategySelectionOutput
+    backtest: BacktestValidationOutput
+    analysis: AnalysisOutput
+    decision: DecisionOutput
+    risk: RiskAssessmentOutput
+    execution: TradeExecutionOutput
     sector_rotation_context: str | None = None
     earnings_context: str | None = None
     peer_analysis_context: str | None = None
     game_plan_context: str | None = None
     position_context: dict[str, object] | None = None
-    degradation_context: "DegradationContext | None" = None
+    degradation_context: DegradationContext | None = None
     target_portfolio_weight: float | None = None
 
     class Config:

@@ -47,7 +47,7 @@ class DecisionInput(BaseModel):
     account_info: AccountInfo | None
     context: DecisionContext
     backtest_validation: BacktestValidation | None
-    degradation_context: "DegradationContext | None"
+    degradation_context: DegradationContext | None
 
     class Config:
         """Pydantic config."""

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import pandas as pd
-from pydantic import BaseModel
+from typing import TYPE_CHECKING, Any
 
-from typing import Any
+from pydantic import BaseModel
 
 from src.agents.meta import StrategySelection
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class StrategySelectionInput(BaseModel):
@@ -33,7 +35,8 @@ class StrategySelectionInput(BaseModel):
             ValueError: If market data is missing
         """
         if self.market_data is None:
-            raise ValueError("Market data is None")
+            msg = "Market data is None"
+            raise ValueError(msg)
         if isinstance(self.market_data, MultiTimeframeData):
             return self.market_data.timeframes[Timeframe.DAILY]
         return self.market_data

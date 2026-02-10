@@ -156,7 +156,7 @@ async def test_make_decision(test_container, sample_bullish_research, sample_bea
     """Test decision making step."""
     workflow = test_container.workflow_momentum(container=test_container)
 
-    state: TradingState = {
+    state = {
         "symbol": "AAPL",
         "trading_session": TradingSession.REGULAR,
         "market_data": None,
@@ -254,7 +254,7 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
         use_meta_agent=False,
     )
 
-    state: TradingState = {
+    state = {
         "symbol": "AAPL",
         "trading_session": TradingSession.REGULAR,
         "market_data": sample_ohlcv_data,
@@ -322,7 +322,7 @@ async def test_execute_trade_error_handling(test_container, sample_ohlcv_data):
         use_meta_agent=False,
     )
 
-    state: TradingState = {
+    state = {
         "symbol": "AAPL",
         "trading_session": TradingSession.REGULAR,
         "market_data": sample_ohlcv_data,

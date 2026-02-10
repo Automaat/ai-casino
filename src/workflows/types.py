@@ -31,7 +31,7 @@ from src.strategies.session import TradingSession
 class WorkflowExtraContext(TypedDict, total=False):
     """Optional context passed to workflow pipeline."""
 
-    degradation_context: "DegradationContext | None"
+    degradation_context: DegradationContext | None
     enable_multi_timeframe: bool
     sector_rotation_context: str | None
     earnings_context: str | None

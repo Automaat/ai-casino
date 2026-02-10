@@ -16,8 +16,8 @@ from src.workflows.stages.strategy_selection import _timed_agent_call
 
 async def make_decision(
     input_data: DecisionInput,
-    trader: "TraderAgent",
-    collector: "ExecutionMetricsCollector | None" = None,
+    trader: TraderAgent,
+    collector: ExecutionMetricsCollector | None = None,
 ) -> DecisionOutput:
     """Make final trading decision.
 

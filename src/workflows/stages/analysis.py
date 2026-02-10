@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     from src.agents.web_researcher import WebResearchAgent
     from src.metrics.execution import ExecutionMetricsCollector
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
@@ -100,18 +98,18 @@ def _handle_optional_result(
 
 async def run_analyses(
     input_data: AnalysisInput,
-    technical_analyst: "TechnicalAnalyst",
-    sentiment_analyst: "SentimentAnalyst",
-    news_analyst: "NewsAnalyst",
-    fundamental_analyst: "FundamentalAnalyst",
-    comparative_analyst: "ComparativeAnalyst",
-    web_researcher: "WebResearchAgent",
-    social_analyst: "SocialSentimentAnalyst",
-    bullish_researcher: "BullishResearcher",
-    bearish_researcher: "BearishResearcher",
+    technical_analyst: TechnicalAnalyst,
+    sentiment_analyst: SentimentAnalyst,
+    news_analyst: NewsAnalyst,
+    fundamental_analyst: FundamentalAnalyst,
+    comparative_analyst: ComparativeAnalyst,
+    web_researcher: WebResearchAgent,
+    social_analyst: SocialSentimentAnalyst,
+    bullish_researcher: BullishResearcher,
+    bearish_researcher: BearishResearcher,
     trump_mode: bool,
-    trump_analyst: "TrumpAnalyst | None",
-    collector: "ExecutionMetricsCollector | None" = None,
+    trump_analyst: TrumpAnalyst | None,
+    collector: ExecutionMetricsCollector | None = None,
 ) -> AnalysisOutput:
     """Run all analysis agents in parallel groups.
 

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import pandas as pd
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
@@ -18,6 +19,9 @@ from src.agents.web_researcher import WebResearchAnalysis
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class AnalysisInput(BaseModel):
@@ -44,7 +48,8 @@ class AnalysisInput(BaseModel):
             ValueError: If market data is missing
         """
         if self.market_data is None:
-            raise ValueError("Market data is None")
+            msg = "Market data is None"
+            raise ValueError(msg)
         if isinstance(self.market_data, MultiTimeframeData):
             return self.market_data.timeframes[Timeframe.DAILY]
         return self.market_data
@@ -60,7 +65,8 @@ class AnalysisInput(BaseModel):
         """
         daily_data = self.get_daily_data()
         if daily_data.empty:
-            raise ValueError("Market data is empty")
+            msg = "Market data is empty"
+            raise ValueError(msg)
         return float(daily_data["Close"].iloc[-1])
 
 

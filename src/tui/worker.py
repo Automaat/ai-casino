@@ -19,8 +19,6 @@ from loguru import logger
 from src.tui.types import ProgressCallback
 
 if TYPE_CHECKING:
-    from src.agents.technical import TechnicalAnalyst
-    from src.metrics.execution import ExecutionMetricsCollector
     from src.screening.analyzer import ScreeningAnalysis
     from src.screening.screener import ScreeningOutput
     from src.workflows import TradingWorkflow
@@ -124,8 +122,6 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
 
 def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:
     """Patch workflow methods to report progress."""
-    from src.tui.log_capture import clear_active_step
-
     # TODO(refactor): TUI progress tracking needs update for new stage-based architecture
     # After refactoring, run_analyses() and make_decision() are now stage functions
     # in src/workflows/stages/, not methods on TradingWorkflow.
@@ -135,7 +131,6 @@ def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: Pro
     # Previous approach (commented out - broken after refactor):
     # - Patched workflow.run_analyses() to show "Running technical analysis..."
     # - Patched workflow.make_decision() to show "Synthesizing trading decision..."
-    pass
 
 
 def _setup_isolated_event_loop() -> asyncio.AbstractEventLoop:

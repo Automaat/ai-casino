@@ -11,14 +11,13 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.cache.historical import HistoricalCache
     from src.data.broker import AlpacaBroker
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
     from src.data.truth_social import TruthSocialFetcher
 
 from src.agents.risk import AccountInfo
-from src.data.broker import BrokerAPIError, BrokerAccountInfo
+from src.data.broker import BrokerAccountInfo, BrokerAPIError
 from src.data.market import MarketData
 from src.data.truth_social import TrumpPostData
 from src.strategies.session import TradingSession
@@ -41,11 +40,11 @@ async def fetch_data(
     symbol: str,
     period_days: int,
     trading_session: TradingSession,
-    market_fetcher: "MarketDataFetcher",
-    news_fetcher: "NewsFetcher",
+    market_fetcher: MarketDataFetcher,
+    news_fetcher: NewsFetcher,
     enable_multi_timeframe: bool = False,
     trump_mode: bool = False,
-    trump_fetcher: "TruthSocialFetcher | None" = None,
+    trump_fetcher: TruthSocialFetcher | None = None,
 ) -> FetchDataOutput:
     """Fetch market and news data (async, parallel execution).
 
@@ -132,7 +131,7 @@ async def fetch_data(
 
 
 async def _get_account_info_internal(
-    broker: "AlpacaBroker | None",
+    broker: AlpacaBroker | None,
 ) -> tuple[AccountInfo, BrokerAccountInfo | None, bool]:
     """Get account information (async, thread-offloaded).
 
@@ -189,7 +188,7 @@ async def _get_account_info_internal(
     return await asyncio.to_thread(_sync_get_account)
 
 
-async def fetch_account_info(broker: "AlpacaBroker | None") -> AccountInfoOutput:
+async def fetch_account_info(broker: AlpacaBroker | None) -> AccountInfoOutput:
     """Fetch account info for portfolio-aware decisions.
 
     Args:

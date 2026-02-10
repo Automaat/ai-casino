@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from src.metrics.execution import ExecutionMetricsCollector
 
 from src.metrics.execution import current_agent
-from src.strategies.timeframe import MultiTimeframeData, Timeframe
 from src.workflows.models.backtest import BacktestValidationOutput
 from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
 from src.workflows.types import BacktestValidation
@@ -28,7 +27,7 @@ T = TypeVar("T")
 async def _timed_agent_call(
     agent_name: str,
     coro: Coroutine[Any, Any, T],
-    collector: "ExecutionMetricsCollector | None",
+    collector: ExecutionMetricsCollector | None,
 ) -> T:
     """Wrap an agent coroutine with timing and context var tracking.
 
@@ -53,10 +52,10 @@ async def _timed_agent_call(
 
 async def select_strategy(
     input_data: StrategySelectionInput,
-    meta_agent: "MetaAgent | None",
+    meta_agent: MetaAgent | None,
     default_strategy: Any,
     use_ensemble: bool,
-    collector: "ExecutionMetricsCollector | None",
+    collector: ExecutionMetricsCollector | None,
 ) -> StrategySelectionOutput:
     """Select trading strategy via meta-agent or fallback.
 
@@ -101,9 +100,9 @@ async def validate_strategy_with_backtest(
     strategy: Any,
     strategy_name: str,
     input_data: StrategySelectionInput,
-    pre_trade_backtest_config: "PreTradeBacktestingConfig | None",
-    vectorbt_runner: "VectorBTRunner | None",
-    collector: "ExecutionMetricsCollector | None",  # noqa: ARG001
+    pre_trade_backtest_config: PreTradeBacktestingConfig | None,
+    vectorbt_runner: VectorBTRunner | None,
+    collector: ExecutionMetricsCollector | None,  # noqa: ARG001
 ) -> BacktestValidationOutput:
     """Run pre-trade backtesting validation on selected strategy.
 
@@ -151,9 +150,7 @@ async def validate_strategy_with_backtest(
             )
 
         passed = len(failure_reasons) == 0
-        confidence_adjustment = (
-            1.0 if passed else pre_trade_backtest_config.confidence_penalty_multiplier
-        )
+        confidence_adjustment = 1.0 if passed else pre_trade_backtest_config.confidence_penalty_multiplier
 
         validation = BacktestValidation(
             symbol=symbol,

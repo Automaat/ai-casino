@@ -1,13 +1,11 @@
 """Trading workflow orchestrator coordinating all stages."""
 
-import asyncio
 import time
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.agents.technical import TechnicalAnalyst
     from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
     from src.daemon.notifications import NotificationService
@@ -18,12 +16,12 @@ if TYPE_CHECKING:
     from src.optimization.param_store import OptimizedParamStore
 
 from src.agents.fundamental import FundamentalAnalyst
+from src.agents.risk import PortfolioVaRConfig
 from src.agents.sentiment import SentimentAnalyst
 from src.agents.trump import TrumpAnalyst
 from src.backtesting import VectorBTRunner
 from src.cache.historical import HistoricalCache
 from src.daemon.config import PreTradeBacktestingConfig
-from src.agents.risk import PortfolioVaRConfig
 from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher

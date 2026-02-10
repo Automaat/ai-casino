@@ -16,7 +16,7 @@ from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
 
 async def assess_risk(
     input_data: RiskAssessmentInput,
-    risk_manager: "RiskManagementAgent",
+    risk_manager: RiskManagementAgent,
 ) -> RiskAssessmentOutput:
     """Assess risk for trading decision (async, thread-offloaded).
 
