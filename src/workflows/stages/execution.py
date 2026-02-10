@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from src.data.broker import AlpacaBroker
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
+from src.agents.risk import AccountInfo, RiskAssessment
+from src.agents.trader import TradingDecision
 from src.data.broker import BrokerAPIError, OrderStatus
 from src.strategies.session import TradingSession
 from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOutput
@@ -92,8 +94,8 @@ async def execute_trade(
 
 
 async def create_portfolio_snapshot(
-    symbol: str,
-    account_info,  # AccountInfo
+    symbol: str,  # noqa: ARG001
+    account_info: AccountInfo | None,
     snapshot_repository: PortfolioSnapshotRepository | None,
 ) -> None:
     """Capture portfolio snapshot after trade execution.
@@ -126,8 +128,8 @@ async def create_portfolio_snapshot(
 
 async def notify_trade_execution(
     symbol: str,
-    final_decision,  # TradingDecision
-    risk_assessment,  # RiskAssessment
+    final_decision: TradingDecision,
+    risk_assessment: RiskAssessment,
     notification_service: NotificationService | None,
 ) -> None:
     """Send risk rejection notification.

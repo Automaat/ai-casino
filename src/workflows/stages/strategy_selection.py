@@ -6,22 +6,33 @@ import asyncio
 import time
 from collections.abc import Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from loguru import logger
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from src.agents.meta import MetaAgent
     from src.backtesting import VectorBTRunner
     from src.daemon.config import PreTradeBacktestingConfig
     from src.metrics.execution import ExecutionMetricsCollector
 
 from src.metrics.execution import current_agent
+from src.strategies.signal import Signal
 from src.workflows.models.backtest import BacktestValidationOutput
 from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
 from src.workflows.types import BacktestValidation
 
 T = TypeVar("T")
+
+
+class TradingStrategy(Protocol):
+    """Protocol for trading strategy implementations."""
+
+    def generate_signal(self, data: pd.DataFrame) -> tuple[Signal, Any]:
+        """Generate trading signal from market data."""
+        ...
 
 
 async def _timed_agent_call(
@@ -53,7 +64,7 @@ async def _timed_agent_call(
 async def select_strategy(
     input_data: StrategySelectionInput,
     meta_agent: MetaAgent | None,
-    default_strategy: Any,
+    default_strategy: TradingStrategy,
     use_ensemble: bool,
     collector: ExecutionMetricsCollector | None,
 ) -> StrategySelectionOutput:
@@ -95,11 +106,11 @@ async def select_strategy(
     )
 
 
-async def validate_strategy_with_backtest(
+async def validate_strategy_with_backtest(  # noqa: PLR0913
     symbol: str,
-    strategy: Any,
+    strategy: TradingStrategy,
     strategy_name: str,
-    input_data: StrategySelectionInput,
+    input_data: StrategySelectionInput,  # noqa: ARG001
     pre_trade_backtest_config: PreTradeBacktestingConfig | None,
     vectorbt_runner: VectorBTRunner | None,
     collector: ExecutionMetricsCollector | None,  # noqa: ARG001
@@ -136,7 +147,7 @@ async def validate_strategy_with_backtest(
             symbol,
             start_date,
             end_date,
-            strategy,
+            strategy,  # type: ignore[arg-type]
         )
 
         failure_reasons = []

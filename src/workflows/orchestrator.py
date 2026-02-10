@@ -40,11 +40,14 @@ from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
-from src.workflows.models.analysis import AnalysisInput
-from src.workflows.models.decision import DecisionContext, DecisionInput
-from src.workflows.models.execution import TradeExecutionInput
-from src.workflows.models.risk import RiskAssessmentInput
-from src.workflows.models.strategy import StrategySelectionInput
+from src.workflows.models.account import AccountInfoOutput
+from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
+from src.workflows.models.backtest import BacktestValidationOutput
+from src.workflows.models.data_fetch import FetchDataOutput
+from src.workflows.models.decision import DecisionContext, DecisionInput, DecisionOutput
+from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOutput
+from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
+from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
 from src.workflows.stages import analysis, data_fetch, decision, execution, risk, strategy_selection
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
@@ -495,17 +498,17 @@ class TradingWorkflow:
     async def _build_and_persist_result(  # noqa: PLR0913
         self,
         symbol: str,
-        data_output,
-        account_output,
-        strategy_output,
-        backtest_output,
-        analysis_output,
-        decision_output,
-        risk_output,
-        execution_output,
-        decision_context,
-        degradation_context,
-        target_weight,
+        data_output: FetchDataOutput,
+        account_output: AccountInfoOutput,
+        strategy_output: StrategySelectionOutput,
+        backtest_output: BacktestValidationOutput,
+        analysis_output: AnalysisOutput,
+        decision_output: DecisionOutput,
+        risk_output: RiskAssessmentOutput,
+        execution_output: TradeExecutionOutput | None,
+        decision_context: DecisionContext,
+        degradation_context: "DegradationContext | None",
+        target_weight: float | None,  # noqa: ARG002
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
     ) -> TradingWorkflowResult:

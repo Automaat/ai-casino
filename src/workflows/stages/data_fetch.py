@@ -36,7 +36,7 @@ def _is_market_hours() -> bool:
     return MARKET_HOURS_START <= now.hour < MARKET_HOURS_END
 
 
-async def fetch_data(
+async def fetch_data(  # noqa: PLR0913
     symbol: str,
     period_days: int,
     trading_session: TradingSession,

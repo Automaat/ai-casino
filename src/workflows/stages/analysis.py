@@ -96,7 +96,7 @@ def _handle_optional_result(
     return result
 
 
-async def run_analyses(
+async def run_analyses(  # noqa: PLR0913
     input_data: AnalysisInput,
     technical_analyst: TechnicalAnalyst,
     sentiment_analyst: SentimentAnalyst,

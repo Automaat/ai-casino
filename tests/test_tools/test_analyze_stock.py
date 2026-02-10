@@ -64,7 +64,6 @@ class TestAnalyzeStockTool:
     def test_execute_success(self, test_container_full, mock_workflow_result):
         """Test successful execution."""
         from dependency_injector import providers
-
         from src.workflows.trading import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
@@ -84,7 +83,6 @@ class TestAnalyzeStockTool:
     def test_execute_default_period(self, test_container_full, mock_workflow_result):
         """Test execution with default period."""
         from dependency_injector import providers
-
         from src.workflows.trading import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
@@ -100,7 +98,6 @@ class TestAnalyzeStockTool:
     def test_execute_uppercase_symbol(self, test_container_full, mock_workflow_result):
         """Test that symbol is uppercased."""
         from dependency_injector import providers
-
         from src.workflows.trading import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
@@ -116,7 +113,6 @@ class TestAnalyzeStockTool:
     def test_execute_error_handling(self, test_container_full):
         """Test error handling on workflow failure."""
         from dependency_injector import providers
-
         from src.workflows.trading import TradingWorkflow
 
         tool = AnalyzeStockTool(container=test_container_full)
