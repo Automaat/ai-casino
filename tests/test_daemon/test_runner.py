@@ -8,7 +8,7 @@ from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 
-from src.daemon.config import ApiKeysConfig, DaemonConfig, ScreeningConfig, SectorRotationConfig
+from src.daemon.config import DaemonConfig, ScreeningConfig, SectorRotationConfig
 from src.daemon.runner import DaemonRunner
 from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
@@ -141,36 +141,6 @@ def test_get_merged_watchlist_empty_positions(sample_config: DaemonConfig, mock_
     assert len(watchlist) == 2
 
 
-def test_resolve_config_or_env_prefers_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Config api_keys take priority over env vars."""
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
-    config = DaemonConfig(
-        watchlist=["AAPL"],
-        api_keys=ApiKeysConfig(alpha_vantage_api_key="config_key"),
-    )
-    runner = DaemonRunner(config)
-    result = runner._resolve_config_or_env(config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY")
-    assert result == "config_key"
-
-
-def test_resolve_config_or_env_falls_back_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Env var used when config api_key is None."""
-    monkeypatch.setenv("MARKETAUX_API_KEY", "env_key")
-    config = DaemonConfig(watchlist=["AAPL"])
-    runner = DaemonRunner(config)
-    result = runner._resolve_config_or_env(None, "MARKETAUX_API_KEY")
-    assert result == "env_key"
-
-
-def test_resolve_config_or_env_returns_none_when_both_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Returns None when both config and env are missing."""
-    monkeypatch.delenv("MARKETAUX_API_KEY", raising=False)
-    config = DaemonConfig(watchlist=["AAPL"])
-    runner = DaemonRunner(config)
-    result = runner._resolve_config_or_env(None, "MARKETAUX_API_KEY")
-    assert result is None
-
-
 @patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_with_credentials(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test broker initialization for watchlist merging when credentials present."""
@@ -279,6 +249,8 @@ async def test_run_cycle_uses_merged_watchlist(
     sample_config: DaemonConfig, mock_broker: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Test _run_cycle logs correct merged watchlist count."""
+    from src.daemon.degradation import DegradationContext, DegradationTier
+
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
     runner._broker_manager.broker = mock_broker
@@ -287,6 +259,16 @@ async def test_run_cycle_uses_merged_watchlist(
     monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
     monkeypatch.setattr(runner, "_analyze_watchlist", AsyncMock(return_value=[]))
     monkeypatch.setattr(runner, "_log_results", Mock())
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_degradation",
+        lambda: DegradationContext(
+            tier=DegradationTier.FULL,
+            available_agents=set(),
+            unavailable_services=[],
+            confidence_adjustment=1.0,
+        ),
+    )
 
     # Capture log messages
     logged_messages: list[str] = []
@@ -683,6 +665,8 @@ class TestSectorRotationIntegration:
 
 async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_bus) -> None:
     """Test runner publishes CYCLE_START and CYCLE_COMPLETE events."""
+    from src.daemon.degradation import DegradationContext, DegradationTier
+
     runner = DaemonRunner(sample_config, event_bus=event_bus)
 
     sub_id, queue = await event_bus.subscribe()
@@ -691,6 +675,16 @@ async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_
         patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
         patch.object(runner.scheduler, "is_market_open", return_value=True),
         patch.object(runner, "_maybe_run_journal", new_callable=AsyncMock),
+        patch.object(
+            runner,
+            "_evaluate_degradation",
+            return_value=DegradationContext(
+                tier=DegradationTier.FULL,
+                available_agents=set(),
+                unavailable_services=[],
+                confidence_adjustment=1.0,
+            ),
+        ),
     ):
         mock_analyze.return_value = []
 

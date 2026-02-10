@@ -38,13 +38,10 @@ from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState, EarningsEventRecord, RiskReportRecord, SectorRotationRecord
 from src.daemon.task_runner import ScheduledTaskRunner
-from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
 from src.database.connection import get_db_engine
 from src.metrics.sector_rotation import SectorRotationAnalysis
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
-from src.models.llm import LLMClient
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows.trading import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
@@ -190,13 +187,7 @@ class DaemonRunner:
             from src.daemon.rebalancing import DaemonRebalancer
             from src.optimization.portfolio import PortfolioOptimizer
 
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False,
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
+            market_fetcher = self._container.market_fetcher()
             portfolio_optimizer = PortfolioOptimizer(
                 market_fetcher=market_fetcher,
                 broker=self.broker,
@@ -262,43 +253,6 @@ class DaemonRunner:
 
         logger.info(f"DaemonRunner initialized with {config}")
 
-    def _resolve_config_or_env(self, config_value: str | None, env_var: str) -> str | None:
-        """Resolve config value from daemon config or env var.
-
-        Config takes priority over environment variable.
-
-        Args:
-            config_value: Value from daemon config (priority)
-            env_var: Environment variable name (fallback)
-
-        Returns:
-            Resolved config value or None
-        """
-        return config_value or os.getenv(env_var)
-
-    def _create_llm_client(self) -> LLMClient:
-        """Create LLM client with config/env resolution.
-
-        Returns:
-            Configured LLMClient instance
-        """
-        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
-        if provider == "anthropic":
-            api_key = self._resolve_config_or_env(self.config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
-        elif provider == "openai":
-            api_key = self._resolve_config_or_env(self.config.api_keys.openai_api_key, "OPENAI_API_KEY")
-        else:
-            api_key = None
-
-        return LLMClient(
-            provider=self.config.llm.provider,
-            model=self.config.llm.model,
-            api_key=api_key,
-            openai_base_url=self._resolve_config_or_env(
-                self.config.api_keys.openai_api_base, "OPENAI_API_BASE"
-            ),
-        )
-
     def _init_discovery_engine(self) -> StockDiscoveryEngine:
         """Initialize stock discovery engine.
 
@@ -356,13 +310,7 @@ class DaemonRunner:
 
         # Market fetcher (create if not exists)
         if self.market_fetcher is None:
-            self.market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False,
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
+            self.market_fetcher = self._container.market_fetcher()
 
         # Trigger detector
         trigger_detector = TriggerDetector(
@@ -406,25 +354,9 @@ class DaemonRunner:
         """
         if self._prefetcher is None:
             try:
-                market_fetcher = MarketDataFetcher(
-                    use_alpha_vantage=False,
-                    api_key=self._resolve_config_or_env(
-                        self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                    ),
-                    historical_cache=self._historical_cache,
-                )
-                news_fetcher = NewsFetcher(
-                    api_key=self._resolve_config_or_env(
-                        self.config.api_keys.marketaux_api_key, "MARKETAUX_API_KEY"
-                    ),
-                    historical_cache=self._historical_cache,
-                )
-                fundamental_fetcher = FundamentalDataFetcher(
-                    api_key=self._resolve_config_or_env(
-                        self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                    ),
-                    historical_cache=self._historical_cache,
-                )
+                market_fetcher = self._container.market_fetcher()
+                news_fetcher = self._container.news_fetcher()
+                fundamental_fetcher = self._container.fundamental_fetcher()
 
                 self._prefetcher = DataPrefetcher(
                     market_fetcher=market_fetcher,
@@ -445,15 +377,7 @@ class DaemonRunner:
             GamePlanAgent instance
         """
         if self._game_plan_agent is None:
-            llm_client = self._container.llm_client()
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False,
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
-            self._game_plan_agent = GamePlanAgent(llm_client, market_fetcher)
+            self._game_plan_agent = self._container.game_plan_agent()
         return self._game_plan_agent
 
     def _init_analysis_orchestrator(self) -> AnalysisOrchestrator:
@@ -1043,16 +967,7 @@ class DaemonRunner:
         console.print(f"\n[bold magenta]Generating trade journal for {today}...[/bold magenta]")
 
         try:
-            from src.agents.journal import TradeJournalAgent
-
-            workflow = self._init_workflow()
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False,
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-            )
-            journal_agent = TradeJournalAgent(workflow.llm_client, market_fetcher)
+            journal_agent = self._container.trade_journal_agent()
 
             journal = await journal_agent.generate(today, today_records)
             file_path = journal_agent.persist(journal, self.config.journal.journal_dir)
@@ -1847,7 +1762,6 @@ class DaemonRunner:
     def _run_peer_analysis(self) -> None:
         """Run weekly deep peer benchmarking analysis."""
         from src.daemon.peer_analysis import DeepPeerAnalyzer
-        from src.data.universe import StockUniverseFetcher
 
         # Dedup check
         now = datetime.now(self.scheduler.timezone)
@@ -1862,13 +1776,8 @@ class DaemonRunner:
         console.print("-" * 50)
 
         try:
-            fundamental_fetcher = FundamentalDataFetcher(
-                api_key=self._resolve_config_or_env(
-                    self.config.api_keys.alpha_vantage_api_key, "ALPHA_VANTAGE_API_KEY"
-                ),
-                historical_cache=self._historical_cache,
-            )
-            universe_fetcher = StockUniverseFetcher()
+            fundamental_fetcher = self._container.fundamental_fetcher()
+            universe_fetcher = self._container.stock_universe_fetcher()
             analyzer = DeepPeerAnalyzer(
                 fundamental_fetcher=fundamental_fetcher,
                 universe_fetcher=universe_fetcher,
