@@ -19,6 +19,16 @@ if TYPE_CHECKING:
 # 90-day TTL for fundamentals
 FUNDAMENTALS_TTL_DAYS = 90
 
+# Allowed fields for signal outcome updates
+ALLOWED_OUTCOME_FIELDS = {
+    "price_at_1d",
+    "price_at_5d",
+    "price_at_20d",
+    "actual_exit_price",
+    "actual_exit_date",
+    "outcome_updated_at",
+}
+
 
 class HistoricalCache:
     """Permanent SQLite cache for OHLCV, news, fundamentals, orders, and social posts."""
@@ -656,9 +666,17 @@ class HistoricalCache:
         Args:
             signal_id: Signal outcome ID
             **fields: Fields to update (e.g., price_at_1d=150.5, outcome_updated_at="...")
+
+        Raises:
+            ValueError: If any field name is not in ALLOWED_OUTCOME_FIELDS
         """
         if not fields:
             return
+
+        invalid = set(fields.keys()) - ALLOWED_OUTCOME_FIELDS
+        if invalid:
+            msg = f"Invalid signal outcome fields: {invalid}"
+            raise ValueError(msg)
 
         set_clause = ", ".join(f"{k} = ?" for k in fields)
         values = list(fields.values())
