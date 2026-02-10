@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agents.game_plan import GamePlan, GamePlanAgent, GamePlanLLMResponse
+from src.agents.game_plan import GamePlan, GamePlanLLMResponse
 from src.models.providers.base import StructuredOutputError
 
 

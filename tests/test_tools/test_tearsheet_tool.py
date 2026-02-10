@@ -73,6 +73,7 @@ class TestGenerateTearsheetTool:
     def test_execute_success(self, test_container_full, mock_tearsheet, mock_trade):
         """Test successful execution."""
         import pandas as pd
+
         from src.metrics.quantstats_reporter import QuantStatsReporter
 
         tool = GenerateTearsheetTool(container=test_container_full)

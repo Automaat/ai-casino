@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.backtesting.runner import BacktestRunner
     from src.data.market import MarketDataFetcher
     from src.data.universe import StockUniverseFetcher
-    from src.data.websearch import WebSearchFetcher
+    from src.di.container import AppContainer
     from src.metrics.execution import ExecutionMetricsCollector
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.metrics.quantstats_reporter import QuantStatsReporter
@@ -118,18 +118,18 @@ def create_portfolio_var_calculator(
     return PortfolioVaRCalculator(risk_calculator, market_fetcher)
 
 
-def create_web_search_tool(websearch_fetcher: "WebSearchFetcher") -> "WebSearchTool":
-    """Create WebSearchTool with websearch fetcher.
+def create_web_search_tool(container: "AppContainer") -> "WebSearchTool":
+    """Create WebSearchTool with DI container.
 
     Args:
-        websearch_fetcher: Web search data fetcher
+        container: DI container for dependency resolution
 
     Returns:
         WebSearchTool instance
     """
     from src.tools.websearch import WebSearchTool
 
-    return WebSearchTool(websearch_fetcher)
+    return WebSearchTool(container)
 
 
 def create_market_regime_detector() -> "MarketRegimeDetector":

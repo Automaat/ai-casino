@@ -55,7 +55,7 @@ def test_risk_agent_custom_limits(test_container):
     """Test custom risk limits."""
     agent = RiskManagementAgent(
         test_container.llm_client(),
-                max_position_risk=3.0,
+        max_position_risk=3.0,
         max_exposure=90.0,
         max_single_position=25.0,
         enable_trailing_stop=False,
@@ -492,7 +492,7 @@ class TestPortfolioVaRValidation:
         var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
 
@@ -513,7 +513,7 @@ class TestPortfolioVaRValidation:
         var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
         )
 
@@ -534,7 +534,7 @@ class TestPortfolioVaRValidation:
     def test_disabled(self, test_container):
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_config=PortfolioVaRConfig(enabled=False),
+            portfolio_var_config=PortfolioVaRConfig(enabled=False),
         )
 
         warnings: list[str] = []
@@ -564,7 +564,7 @@ class TestPortfolioVaRValidation:
         )
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_calculator=_make_mock_var_calculator(insufficient_result),
+            portfolio_var_calculator=_make_mock_var_calculator(insufficient_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
 
@@ -585,7 +585,7 @@ class TestPortfolioVaRValidation:
         var_result = _make_var_result(var_95=0.10, cvar_99=0.20)
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
 
@@ -606,7 +606,7 @@ class TestAdaptiveStopLoss:
     def test_high_cdar(self, test_container):
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_config=PortfolioVaRConfig(
+            portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=True,
                 cdar_stop_threshold=0.10,
@@ -622,7 +622,7 @@ class TestAdaptiveStopLoss:
     def test_low_cdar(self, test_container):
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_config=PortfolioVaRConfig(
+            portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=True,
                 cdar_stop_threshold=0.10,
@@ -637,7 +637,7 @@ class TestAdaptiveStopLoss:
     def test_disabled(self, test_container):
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_config=PortfolioVaRConfig(
+            portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=False,
             ),
@@ -653,7 +653,7 @@ class TestGenerateRiskReport:
         var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
 
@@ -671,7 +671,7 @@ class TestGenerateRiskReport:
         var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
         agent = RiskManagementAgent(
             test_container.llm_client(),
-                        portfolio_var_calculator=_make_mock_var_calculator(var_result),
+            portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
         )
 

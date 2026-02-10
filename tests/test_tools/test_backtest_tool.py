@@ -88,6 +88,7 @@ class TestRunBacktestTool:
     def test_execute_custom_cash(self, test_container_full, mock_backtest_result):
         """Test execution with custom cash."""
         from dependency_injector import providers
+
         from src.backtesting.runner import BacktestRunner
 
         tool = RunBacktestTool(container=test_container_full)

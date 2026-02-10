@@ -1,6 +1,6 @@
 """Tests for sentiment analyst agent."""
 
-from src.agents.sentiment import SentimentAnalysis, SentimentAnalyst
+from src.agents.sentiment import SentimentAnalysis
 
 
 def test_sentiment_analyst_init(test_container):

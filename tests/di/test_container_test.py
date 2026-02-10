@@ -1,6 +1,5 @@
 """Tests for test container utilities."""
 
-from src.di.container import AppContainer
 from tests.di.container_test import (
     create_mock_llm_client,
     create_test_config,

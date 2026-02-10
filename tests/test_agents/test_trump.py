@@ -1,6 +1,6 @@
 """Tests for Trump analyst agent."""
 
-from src.agents.trump import COMPANY_TICKERS, MARKET_KEYWORDS, TrumpAnalysis, TrumpAnalyst
+from src.agents.trump import COMPANY_TICKERS, MARKET_KEYWORDS, TrumpAnalysis
 from src.strategies.signal import Signal
 
 

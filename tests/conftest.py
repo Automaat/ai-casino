@@ -17,7 +17,6 @@ from src.daemon.state import AnalysisRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeData, PerformanceData
 from src.data.comparative import StockInfo as ComparativeStockInfo
-from src.data.market import MarketData
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
 from src.data.universe import StockInfo as UniverseStockInfo
@@ -25,7 +24,7 @@ from src.data.universe import StockUniverse
 from src.data.websearch import SearchType, WebSearchResponse
 from src.data.websearch import WebSearchResult as SearchResult
 from src.metrics.tracker import TradeRecord
-from src.models.sentiment import SentimentScore, clear_finbert_sentiment
+from src.models.sentiment import clear_finbert_sentiment
 from src.screening.analyzer import ScreeningAnalysis
 from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
 from src.strategies.signal import Signal

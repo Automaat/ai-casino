@@ -11,8 +11,8 @@ from src.tools.base import BaseTool
 if TYPE_CHECKING:
     import pandas as pd
 
-    from src.metrics.tracker import TearSheet
     from src.di.container import AppContainer
+    from src.metrics.tracker import TearSheet
 
 
 class GenerateTearsheetTool(BaseTool):

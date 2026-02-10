@@ -101,13 +101,16 @@ class TestOptimizePortfolioTool:
         mock_optimizer.optimize.return_value = mock_optimization_result
         test_container_full.optuna_optimizer.override(mock_optimizer)
 
-        tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following")
+        tool.execute(
+            symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following"
+        )
 
         mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "trend_following")
 
     def test_execute_custom_trials(self, test_container_full, mock_optimization_result):
         """Test execution with custom trial count."""
         from dependency_injector import providers
+
         from src.optimization.optimizer import OptunaOptimizer
 
         tool = OptimizePortfolioTool(container=test_container_full)

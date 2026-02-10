@@ -56,7 +56,7 @@ class TestTradeJournalAgent:
         assert journal.outcomes == []
         assert journal.overall_assessment == "No signals to evaluate"
 
-    async def test_generate_journal(self, test_container, sample_analysis_records, mock_market_fetcher):
+    async def test_generate_journal(self, test_container, sample_analysis_records):
         agent = test_container.trade_journal_agent()
         journal = await agent.generate(date(2024, 1, 15), sample_analysis_records)
 
@@ -69,7 +69,7 @@ class TestTradeJournalAgent:
             assert outcome.price_open > 0
             assert outcome.price_close > 0
 
-    async def test_generate_deduplicates_symbols(self, test_container, mock_market_fetcher):
+    async def test_generate_deduplicates_symbols(self, test_container):
         """Latest signal per symbol is used when duplicates exist."""
         records = [
             AnalysisRecord(

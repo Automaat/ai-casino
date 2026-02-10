@@ -7,7 +7,6 @@ import pytest
 
 from src.agents.comparative import (
     ComparativeAnalysis,
-    ComparativeAnalyst,
     RelativeValuation,
 )
 from src.data.comparative import ComparativeData, PerformanceData, StockInfo

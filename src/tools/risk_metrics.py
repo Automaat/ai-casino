@@ -7,8 +7,8 @@ from loguru import logger
 from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
-    from src.metrics.risk import RiskMetrics
     from src.di.container import AppContainer
+    from src.metrics.risk import RiskMetrics
 
 
 class GetRiskMetricsTool(BaseTool):

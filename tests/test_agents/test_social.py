@@ -92,10 +92,9 @@ def mock_finbert():
     return mock
 
 
-async def test_analyze_full_data(
-    test_container, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert
-):
+async def test_analyze_full_data(test_container, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert):
     """Test analysis with all sources available."""
+
     async def astructured_response(*args, **kwargs):
         return SocialSentimentLLMResponse(
             interpretation="Strong bullish sentiment across social platforms",
@@ -407,7 +406,9 @@ async def test_compute_reddit_sentiment_weighted():
     assert -1.0 <= sentiment <= 1.0
 
 
-async def test_structured_output_fallback(test_container, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert):
+async def test_structured_output_fallback(
+    test_container, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert
+):
     """Test fallback when structured output fails."""
     from src.models.providers.base import StructuredOutputError
 

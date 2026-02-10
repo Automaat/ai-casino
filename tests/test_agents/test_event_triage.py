@@ -1,11 +1,11 @@
 """Tests for EventTriageAgent."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from src.agents.event_triage import EventTriageAgent, TriageLLMResponse
+from src.agents.event_triage import TriageLLMResponse
 from src.daemon.events import NewsEvent, Sentiment, Urgency
 from src.data.news import NewsArticle
 from src.models.providers.base import StructuredOutputError

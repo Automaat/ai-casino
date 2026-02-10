@@ -6,7 +6,6 @@ import pytest
 
 from src.agents.web_researcher import (
     ResearchCategory,
-    WebResearchAgent,
     WebResearchAnalysis,
     WebResearchResult,
 )

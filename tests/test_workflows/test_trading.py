@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
 import pytest
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
@@ -16,7 +15,6 @@ from src.agents.technical import TechnicalAnalysis
 from src.agents.trader import TradingDecision
 from src.backtesting.vectorbt_runner import VectorBTResult
 from src.daemon.config import PreTradeBacktestingConfig
-from src.data.market import MarketData
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal

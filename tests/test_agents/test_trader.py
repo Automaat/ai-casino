@@ -4,7 +4,7 @@ from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
-from src.agents.trader import TraderAgent, TradingDecision
+from src.agents.trader import TradingDecision
 from src.strategies.signal import Signal
 
 
