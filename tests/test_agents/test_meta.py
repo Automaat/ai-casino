@@ -111,7 +111,9 @@ class TestMetaAgent:
         assert isinstance(result.strategy_instance, MeanReversionStrategy)
         assert result.regime == MarketRegime.RANGING
 
-    async def test_select_strategy_volatile_market(self, test_container, sample_ohlcv_volatile, mocker) -> None:
+    async def test_select_strategy_volatile_market(
+        self, test_container, sample_ohlcv_volatile, mocker
+    ) -> None:
         """Test strategy selection for volatile market."""
         volatile_analysis = RegimeAnalysis(
             regime=MarketRegime.HIGH_VOLATILITY,
@@ -135,7 +137,9 @@ class TestMetaAgent:
     ) -> None:
         """Test ensemble fallback when regime confidence is low."""
         agent = test_container.meta_agent()
-        mocker.patch.object(agent.regime_detector, "detect_regime", return_value=low_confidence_regime_analysis)
+        mocker.patch.object(
+            agent.regime_detector, "detect_regime", return_value=low_confidence_regime_analysis
+        )
         result = await agent.select_strategy("AAPL", sample_ohlcv_data)
 
         assert result.strategy_name == "ensemble"
@@ -144,7 +148,9 @@ class TestMetaAgent:
         assert sum(result.ensemble_weights.values()) == pytest.approx(1.0, abs=0.01)
         assert result.confidence == low_confidence_regime_analysis.confidence
 
-    async def test_ensemble_weights_boost_regime_strategy(self, test_container, sample_ohlcv_data, mocker) -> None:
+    async def test_ensemble_weights_boost_regime_strategy(
+        self, test_container, sample_ohlcv_data, mocker
+    ) -> None:
         """Test that ensemble weights boost the regime-matched strategy."""
         low_conf_bullish = RegimeAnalysis(
             regime=MarketRegime.TRENDING_BULLISH,
@@ -163,7 +169,9 @@ class TestMetaAgent:
         # trend_following should have highest weight (boosted)
         assert result.ensemble_weights["trend_following"] > DEFAULT_WEIGHTS["trend_following"]
 
-    async def test_performance_based_weight_adjustment(self, test_container, sample_ohlcv_data, mocker) -> None:
+    async def test_performance_based_weight_adjustment(
+        self, test_container, sample_ohlcv_data, mocker
+    ) -> None:
         """Test performance-based weight adjustment."""
         low_conf = RegimeAnalysis(
             regime=MarketRegime.RANGING,
