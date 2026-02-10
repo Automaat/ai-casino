@@ -68,7 +68,7 @@ def _safe_float(value: str | float | None) -> float | None:
         return None
     try:
         return float(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
