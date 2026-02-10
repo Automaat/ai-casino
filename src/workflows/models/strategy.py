@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import pandas as pd
 from pydantic import BaseModel
 
 from src.agents.meta import StrategySelection
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 
 class StrategySelectionInput(BaseModel):

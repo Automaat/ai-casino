@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from src.daemon.degradation import DegradationContext
 
 from src.agents.risk import AccountInfo, RiskAssessment

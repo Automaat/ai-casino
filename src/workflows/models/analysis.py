@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from src.agents.bearish_researcher import BearishResearchAnalysis
@@ -19,9 +18,6 @@ from src.agents.web_researcher import WebResearchAnalysis
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 
 class AnalysisInput(BaseModel):
