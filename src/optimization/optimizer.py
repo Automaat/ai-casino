@@ -138,7 +138,7 @@ class OptunaOptimizer:
             # Expected: insufficient data, invalid params, missing OHLCV columns
             logger.opt(exception=True).warning(f"Backtest skipped - invalid params/data: {e}")
             return None
-        except Exception as e:
+        except Exception:
             # Unexpected: strategy bugs, computation errors - should be investigated
             logger.exception("Backtest failed unexpectedly")
             raise
