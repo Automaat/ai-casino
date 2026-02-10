@@ -8,10 +8,21 @@ from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
     from src.backtesting.runner import BacktestResult
+    from src.di.container import AppContainer
 
 
 class RunBacktestTool(BaseTool):
     """Tool to run backtest on a stock with momentum strategy."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -81,9 +92,7 @@ class RunBacktestTool(BaseTool):
         logger.info(f"Running backtest for {symbol} ({start_date} to {end_date}, cash=${cash:,})")
 
         try:
-            from src.backtesting.runner import BacktestRunner
-
-            runner = BacktestRunner(cash=float(cash))
+            runner = self._container.backtest_runner(cash=float(cash))
             result = runner.run_backtest(symbol, start_date, end_date)
 
             return self._format_result(result)

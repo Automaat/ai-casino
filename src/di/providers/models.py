@@ -8,12 +8,18 @@ from src.di.config import resolve_config_or_env
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
+    from src.backtesting.runner import BacktestRunner
     from src.data.market import MarketDataFetcher
-    from src.data.websearch import WebSearchFetcher
+    from src.data.universe import StockUniverseFetcher
+    from src.di.container import AppContainer
     from src.metrics.execution import ExecutionMetricsCollector
     from src.metrics.portfolio_var import PortfolioVaRCalculator
+    from src.metrics.quantstats_reporter import QuantStatsReporter
     from src.metrics.risk import RiskMetricsCalculator
+    from src.metrics.tracker import MetricsTracker
     from src.models.sentiment import FinBERTSentiment
+    from src.optimization.optimizer import OptunaOptimizer
+    from src.screening.screener import StockScreener
     from src.strategies.regime import MarketRegimeDetector
     from src.tools.websearch import WebSearchTool
 
@@ -112,18 +118,18 @@ def create_portfolio_var_calculator(
     return PortfolioVaRCalculator(risk_calculator, market_fetcher)
 
 
-def create_web_search_tool(websearch_fetcher: "WebSearchFetcher") -> "WebSearchTool":
-    """Create WebSearchTool with websearch fetcher.
+def create_web_search_tool(container: "AppContainer") -> "WebSearchTool":
+    """Create WebSearchTool with DI container.
 
     Args:
-        websearch_fetcher: Web search data fetcher
+        container: DI container for dependency resolution
 
     Returns:
         WebSearchTool instance
     """
     from src.tools.websearch import WebSearchTool
 
-    return WebSearchTool(websearch_fetcher)
+    return WebSearchTool(container)
 
 
 def create_market_regime_detector() -> "MarketRegimeDetector":
@@ -135,3 +141,74 @@ def create_market_regime_detector() -> "MarketRegimeDetector":
     from src.strategies.regime import MarketRegimeDetector
 
     return MarketRegimeDetector()
+
+
+def create_backtest_runner(cash: float = 100000.0, commission: float = 0.002) -> "BacktestRunner":
+    """Create BacktestRunner with lazy import.
+
+    Args:
+        cash: Initial cash balance
+        commission: Commission rate (0.002 = 0.2%)
+
+    Returns:
+        BacktestRunner instance
+    """
+    from src.backtesting.runner import BacktestRunner
+
+    return BacktestRunner(cash=cash, commission=commission)
+
+
+def create_optuna_optimizer(n_trials: int = 100) -> "OptunaOptimizer":
+    """Create OptunaOptimizer with lazy import.
+
+    Args:
+        n_trials: Number of optimization trials
+
+    Returns:
+        OptunaOptimizer instance
+    """
+    from src.optimization.optimizer import OptunaOptimizer
+
+    return OptunaOptimizer(n_trials=n_trials)
+
+
+def create_metrics_tracker(risk_free_rate: float | None = None) -> "MetricsTracker":
+    """Create MetricsTracker with lazy import.
+
+    Args:
+        risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
+
+    Returns:
+        MetricsTracker instance
+    """
+    from src.metrics.tracker import MetricsTracker
+
+    return MetricsTracker(risk_free_rate=risk_free_rate)
+
+
+def create_quantstats_reporter(risk_free_rate: float | None = None) -> "QuantStatsReporter":
+    """Create QuantStatsReporter with lazy import.
+
+    Args:
+        risk_free_rate: Annual risk-free rate (default from env or 0.02)
+
+    Returns:
+        QuantStatsReporter instance
+    """
+    from src.metrics.quantstats_reporter import QuantStatsReporter
+
+    return QuantStatsReporter(risk_free_rate=risk_free_rate)
+
+
+def create_stock_screener(universe_fetcher: "StockUniverseFetcher") -> "StockScreener":
+    """Create StockScreener with dependencies.
+
+    Args:
+        universe_fetcher: Stock universe fetcher
+
+    Returns:
+        StockScreener instance
+    """
+    from src.screening.screener import StockScreener
+
+    return StockScreener(universe_fetcher)

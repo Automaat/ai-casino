@@ -1,18 +1,12 @@
 """Tests for GetNewsTool."""
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.data.news import NewsArticle
 from src.tools.news import GetNewsTool
-
-
-@pytest.fixture
-def tool():
-    """Create GetNewsTool."""
-    return GetNewsTool()
 
 
 @pytest.fixture
@@ -39,16 +33,19 @@ def sample_articles():
 class TestGetNewsTool:
     """Tests for GetNewsTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = GetNewsTool(container=test_container_full)
         assert tool.name == "get_news"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool doesn't require confirmation."""
+        tool = GetNewsTool(container=test_container_full)
         assert tool.requires_confirmation is False
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
+        tool = GetNewsTool(container=test_container_full)
         definition = tool.get_tool_definition()
 
         assert definition["type"] == "function"
@@ -60,67 +57,73 @@ class TestGetNewsTool:
         assert "limit" in params["properties"]
         assert "symbol" in params["required"]
 
-    def test_execute_success(self, tool, sample_articles):
+    def test_execute_success(self, test_container_full, sample_articles):
         """Test successful execution."""
-        with patch("src.data.news.NewsFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_company_news.return_value = sample_articles
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetNewsTool(container=test_container_full)
 
-            result = tool.execute(symbol="AAPL", limit=5)
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_company_news.return_value = sample_articles
+        test_container_full.news_fetcher.override(mock_fetcher)
 
-            assert "AAPL" in result
-            assert "Apple Announces New Product" in result
-            assert "TechNews" in result
-            mock_instance.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+        result = tool.execute(symbol="AAPL", limit=5)
 
-    def test_execute_default_limit(self, tool, sample_articles):
+        assert "AAPL" in result
+        assert "Apple Announces New Product" in result
+        assert "TechNews" in result
+        mock_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+
+    def test_execute_default_limit(self, test_container_full, sample_articles):
         """Test execution with default limit."""
-        with patch("src.data.news.NewsFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_company_news.return_value = sample_articles
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetNewsTool(container=test_container_full)
 
-            tool.execute(symbol="AAPL")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_company_news.return_value = sample_articles
+        test_container_full.news_fetcher.override(mock_fetcher)
 
-            mock_instance.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+        tool.execute(symbol="AAPL")
 
-    def test_execute_uppercase_symbol(self, tool, sample_articles):
+        mock_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+
+    def test_execute_uppercase_symbol(self, test_container_full, sample_articles):
         """Test that symbol is uppercased."""
-        with patch("src.data.news.NewsFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_company_news.return_value = sample_articles
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetNewsTool(container=test_container_full)
 
-            tool.execute(symbol="aapl", limit=5)
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_company_news.return_value = sample_articles
+        test_container_full.news_fetcher.override(mock_fetcher)
 
-            mock_instance.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+        tool.execute(symbol="aapl", limit=5)
 
-    def test_execute_empty_results(self, tool):
+        mock_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+
+    def test_execute_empty_results(self, test_container_full):
         """Test handling empty news results."""
-        with patch("src.data.news.NewsFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_company_news.return_value = []
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetNewsTool(container=test_container_full)
 
-            result = tool.execute(symbol="AAPL")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_company_news.return_value = []
+        test_container_full.news_fetcher.override(mock_fetcher)
 
-            assert "No recent news found" in result
+        result = tool.execute(symbol="AAPL")
 
-    def test_execute_error_handling(self, tool):
+        assert "No recent news found" in result
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on fetch failure."""
-        with patch("src.data.news.NewsFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_company_news.side_effect = Exception("API error")
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetNewsTool(container=test_container_full)
 
-            result = tool.execute(symbol="INVALID")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_company_news.side_effect = Exception("API error")
+        test_container_full.news_fetcher.override(mock_fetcher)
 
-            assert "Failed to fetch news" in result
-            assert "API error" in result
+        result = tool.execute(symbol="INVALID")
 
-    def test_format_articles_truncates_long_description(self, tool):
+        assert "Failed to fetch news" in result
+        assert "API error" in result
+
+    def test_format_articles_truncates_long_description(self, test_container_full):
         """Test that long descriptions are truncated."""
+        tool = GetNewsTool(container=test_container_full)
         long_description = "A" * 500
         articles = [
             NewsArticle(
@@ -137,8 +140,9 @@ class TestGetNewsTool:
         assert "..." in result
         assert len(result) < len(long_description) + 200
 
-    def test_format_articles_content(self, tool, sample_articles):
+    def test_format_articles_content(self, test_container_full, sample_articles):
         """Test formatted articles content."""
+        tool = GetNewsTool(container=test_container_full)
         result = tool._format_articles("AAPL", sample_articles)
 
         assert "# AAPL Recent News" in result
@@ -147,7 +151,8 @@ class TestGetNewsTool:
         assert "TechNews" in result
         assert "MarketWatch" in result
 
-    def test_repr(self, tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = GetNewsTool(container=test_container_full)
         repr_str = repr(tool)
         assert "GetNewsTool" in repr_str

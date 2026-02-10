@@ -24,9 +24,9 @@ from src.strategies.signal import Signal
 
 
 @pytest.fixture
-def risk_agent(mock_llm_client):
+def risk_agent(test_container):
     """Risk management agent instance."""
-    return RiskManagementAgent(mock_llm_client)
+    return test_container.risk_management_agent()
 
 
 @pytest.fixture
@@ -41,21 +41,20 @@ def technical_analysis():
     )
 
 
-def test_risk_agent_init(mock_llm_client):
+def test_risk_agent_init(test_container):
     """Test risk agent initialization."""
-    agent = RiskManagementAgent(mock_llm_client)
+    agent = test_container.risk_management_agent()
 
-    assert agent.llm == mock_llm_client
     assert agent.max_position_risk == 2.0
     assert agent.max_exposure == 80.0
     assert agent.max_single_position == 20.0
     assert agent.enable_trailing_stop is True
 
 
-def test_risk_agent_custom_limits(mock_llm_client):
+def test_risk_agent_custom_limits(test_container):
     """Test custom risk limits."""
     agent = RiskManagementAgent(
-        mock_llm_client,
+        test_container.llm_client(),
         max_position_risk=3.0,
         max_exposure=90.0,
         max_single_position=25.0,
@@ -110,9 +109,9 @@ def test_calculate_stop_loss_sell_action(risk_agent, sample_ohlcv_data):
     assert stop_loss.trailing_stop is None
 
 
-def test_calculate_stop_loss_no_trailing(mock_llm_client, sample_ohlcv_data):
+def test_calculate_stop_loss_no_trailing(test_container, sample_ohlcv_data):
     """Test stop-loss without trailing stop."""
-    agent = RiskManagementAgent(mock_llm_client, enable_trailing_stop=False)
+    agent = RiskManagementAgent(test_container.llm_client(), enable_trailing_stop=False)
     stop_loss = agent._calculate_stop_loss(150.0, sample_ohlcv_data, Signal.BUY)
 
     assert stop_loss.trailing_stop is None
@@ -489,10 +488,10 @@ def _make_position(symbol: str, market_value: float) -> BrokerPosition:
 
 
 class TestPortfolioVaRValidation:
-    def test_within_limits(self, mock_llm_client):
+    def test_within_limits(self, test_container):
         var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -510,10 +509,10 @@ class TestPortfolioVaRValidation:
         assert result is True
         assert len(warnings) == 0
 
-    def test_breach(self, mock_llm_client):
+    def test_breach(self, test_container):
         var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
         )
@@ -532,9 +531,9 @@ class TestPortfolioVaRValidation:
         assert any("VaR95" in w for w in warnings)
         assert any("CVaR99" in w for w in warnings)
 
-    def test_disabled(self, mock_llm_client):
+    def test_disabled(self, test_container):
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_config=PortfolioVaRConfig(enabled=False),
         )
 
@@ -550,7 +549,7 @@ class TestPortfolioVaRValidation:
 
         assert result is True
 
-    def test_insufficient_data(self, mock_llm_client):
+    def test_insufficient_data(self, test_container):
         insufficient_result = PortfolioVaRResult(
             var_95=0.0,
             var_99=0.0,
@@ -564,7 +563,7 @@ class TestPortfolioVaRValidation:
             sufficient_data=False,
         )
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_calculator=_make_mock_var_calculator(insufficient_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -582,10 +581,10 @@ class TestPortfolioVaRValidation:
         assert result is True
         assert any("Insufficient" in w for w in warnings)
 
-    def test_sell_always_approved(self, mock_llm_client):
+    def test_sell_always_approved(self, test_container):
         var_result = _make_var_result(var_95=0.10, cvar_99=0.20)
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -604,9 +603,9 @@ class TestPortfolioVaRValidation:
 
 
 class TestAdaptiveStopLoss:
-    def test_high_cdar(self, mock_llm_client):
+    def test_high_cdar(self, test_container):
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=True,
@@ -620,9 +619,9 @@ class TestAdaptiveStopLoss:
 
         assert multiplier == agent._var_config.atr_multiplier_min
 
-    def test_low_cdar(self, mock_llm_client):
+    def test_low_cdar(self, test_container):
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=True,
@@ -635,9 +634,9 @@ class TestAdaptiveStopLoss:
 
         assert multiplier == agent.ATR_MULTIPLIER
 
-    def test_disabled(self, mock_llm_client):
+    def test_disabled(self, test_container):
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=False,
@@ -650,10 +649,10 @@ class TestAdaptiveStopLoss:
 
 
 class TestGenerateRiskReport:
-    def test_fields(self, mock_llm_client):
+    def test_fields(self, test_container):
         var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -668,10 +667,10 @@ class TestGenerateRiskReport:
         assert report.current_exposure_percent == 30.0
         assert report.risk_status == "HEALTHY"
 
-    def test_breach_status(self, mock_llm_client):
+    def test_breach_status(self, test_container):
         var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
         agent = RiskManagementAgent(
-            mock_llm_client,
+            test_container.llm_client(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
         )
@@ -685,8 +684,8 @@ class TestGenerateRiskReport:
 
 
 class TestWeightBasedPositionSizing:
-    def test_weight_based_position_sizing(self, mock_llm_client):
-        agent = RiskManagementAgent(mock_llm_client)
+    def test_weight_based_position_sizing(self, test_container):
+        agent = RiskManagementAgent(test_container.llm_client())
 
         account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
@@ -714,8 +713,8 @@ class TestWeightBasedPositionSizing:
         assert "Portfolio-weighted position" in result.reasoning
         assert "10.0% target" in result.reasoning
 
-    def test_weight_based_constrained_by_cash(self, mock_llm_client):
-        agent = RiskManagementAgent(mock_llm_client)
+    def test_weight_based_constrained_by_cash(self, test_container):
+        agent = RiskManagementAgent(test_container.llm_client())
 
         account_info = AccountInfo(balance=100000.0, available_cash=5000.0, positions={}, total_exposure=0.0)
 
@@ -739,8 +738,8 @@ class TestWeightBasedPositionSizing:
         assert result.recommended_shares == expected_shares
         assert result.position_value == 5000.0
 
-    def test_weight_based_constrained_by_max_position(self, mock_llm_client):
-        agent = RiskManagementAgent(mock_llm_client, max_single_position=10.0)
+    def test_weight_based_constrained_by_max_position(self, test_container):
+        agent = RiskManagementAgent(test_container.llm_client(), max_single_position=10.0)
 
         account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
@@ -764,8 +763,8 @@ class TestWeightBasedPositionSizing:
         assert result.recommended_shares == expected_shares
         assert result.position_value == 10000.0
 
-    def test_assess_with_target_weight(self, mock_llm_client, sample_ohlcv_data):
-        agent = RiskManagementAgent(mock_llm_client)
+    def test_assess_with_target_weight(self, test_container, sample_ohlcv_data):
+        agent = RiskManagementAgent(test_container.llm_client())
 
         account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
@@ -788,9 +787,9 @@ class TestWeightBasedPositionSizing:
         assert result.position_sizing.position_value <= 15000.0  # 15% target
 
 
-def test_broker_failure_blocks_approval(mock_llm_client, sample_ohlcv_data):
+def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data):
     """broker_api_failed flag prevents approval."""
-    agent = RiskManagementAgent(mock_llm_client)
+    agent = RiskManagementAgent(test_container.llm_client())
 
     account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 

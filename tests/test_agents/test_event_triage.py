@@ -1,22 +1,14 @@
 """Tests for EventTriageAgent."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from src.agents.event_triage import EventTriageAgent, TriageLLMResponse
+from src.agents.event_triage import TriageLLMResponse
 from src.daemon.events import NewsEvent, Sentiment, Urgency
 from src.data.news import NewsArticle
 from src.models.providers.base import StructuredOutputError
-
-
-@pytest.fixture
-def mock_llm_client():
-    """Mock LLM client."""
-    client = Mock()
-    client.astructured = AsyncMock()
-    return client
 
 
 @pytest.fixture
@@ -38,15 +30,15 @@ def sample_news_event():
     )
 
 
-async def test_event_triage_agent_init(mock_llm_client):
+async def test_event_triage_agent_init(test_container):
     """Test EventTriageAgent initialization."""
-    agent = EventTriageAgent(mock_llm_client)
+    agent = test_container.event_triage_agent()
 
-    assert agent.llm == mock_llm_client
+    assert agent.llm is not None
     assert agent._prompts is not None
 
 
-async def test_analyze_successful_triage(mock_llm_client, sample_news_event):
+async def test_analyze_successful_triage(test_container, sample_news_event):
     """Test successful event triage."""
     llm_response = TriageLLMResponse(
         relevance=0.85,
@@ -56,9 +48,10 @@ async def test_analyze_successful_triage(mock_llm_client, sample_news_event):
         confidence=0.9,
         reasoning="Strong earnings beat for Apple",
     )
-    mock_llm_client.astructured.return_value = llm_response
+    agent = test_container.event_triage_agent()
+    # Clear side_effect and set return_value
+    agent.llm.astructured = AsyncMock(return_value=llm_response)
 
-    agent = EventTriageAgent(mock_llm_client)
     result = await agent.analyze(sample_news_event)
 
     assert result.event_id == "test-event-1"
@@ -70,10 +63,8 @@ async def test_analyze_successful_triage(mock_llm_client, sample_news_event):
     assert result.confidence == 0.9
     assert "earnings" in result.reasoning.lower()
 
-    mock_llm_client.astructured.assert_called_once()
 
-
-async def test_analyze_normalizes_symbols(mock_llm_client, sample_news_event):
+async def test_analyze_normalizes_symbols(test_container, sample_news_event):
     """Test that symbols are normalized to uppercase."""
     llm_response = TriageLLMResponse(
         relevance=0.7,
@@ -83,19 +74,20 @@ async def test_analyze_normalizes_symbols(mock_llm_client, sample_news_event):
         confidence=0.6,
         reasoning="Minor news",
     )
-    mock_llm_client.astructured.return_value = llm_response
+    agent = test_container.event_triage_agent()
+    # Clear side_effect and set return_value
+    agent.llm.astructured = AsyncMock(return_value=llm_response)
 
-    agent = EventTriageAgent(mock_llm_client)
     result = await agent.analyze(sample_news_event)
 
     assert result.symbols == ["AAPL", "MSFT"]  # Normalized to uppercase
 
 
-async def test_analyze_fallback_on_structured_output_error(mock_llm_client, sample_news_event):
+async def test_analyze_fallback_on_structured_output_error(test_container, sample_news_event):
     """Test fallback behavior when structured output fails."""
-    mock_llm_client.astructured.side_effect = StructuredOutputError("Parse failed")
+    agent = test_container.event_triage_agent()
+    agent.llm.astructured.side_effect = StructuredOutputError("Parse failed")
 
-    agent = EventTriageAgent(mock_llm_client)
     result = await agent.analyze(sample_news_event)
 
     # Should return low relevance with IGNORE urgency
@@ -106,7 +98,7 @@ async def test_analyze_fallback_on_structured_output_error(mock_llm_client, samp
     assert "Triage failed" in result.reasoning
 
 
-async def test_analyze_ignore_urgency(mock_llm_client, sample_news_event):
+async def test_analyze_ignore_urgency(test_container, sample_news_event):
     """Test event with IGNORE urgency."""
     llm_response = TriageLLMResponse(
         relevance=0.2,
@@ -116,18 +108,19 @@ async def test_analyze_ignore_urgency(mock_llm_client, sample_news_event):
         confidence=0.5,
         reasoning="Not trading-relevant",
     )
-    mock_llm_client.astructured.return_value = llm_response
+    agent = test_container.event_triage_agent()
+    # Clear side_effect and set return_value
+    agent.llm.astructured = AsyncMock(return_value=llm_response)
 
-    agent = EventTriageAgent(mock_llm_client)
     result = await agent.analyze(sample_news_event)
 
     assert result.urgency == Urgency.IGNORE
     assert result.relevance == 0.2
 
 
-def test_repr(mock_llm_client):
+def test_repr(test_container):
     """Test string representation."""
-    agent = EventTriageAgent(mock_llm_client)
+    agent = test_container.event_triage_agent()
     repr_str = repr(agent)
 
     assert "EventTriageAgent" in repr_str

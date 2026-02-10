@@ -7,11 +7,22 @@ from loguru import logger
 from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.optimization.results import OptimizationResult
 
 
 class OptimizePortfolioTool(BaseTool):
     """Tool to optimize trading strategy parameters with Optuna."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -94,9 +105,7 @@ class OptimizePortfolioTool(BaseTool):
         )
 
         try:
-            from src.optimization.optimizer import OptunaOptimizer
-
-            optimizer = OptunaOptimizer(n_trials=n_trials)
+            optimizer = self._container.optuna_optimizer(n_trials=n_trials)
             result = optimizer.optimize(symbol, start_date, end_date, strategy)
 
             return self._format_result(result)

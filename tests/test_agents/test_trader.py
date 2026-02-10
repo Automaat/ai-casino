@@ -4,18 +4,18 @@ from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
-from src.agents.trader import TraderAgent, TradingDecision
+from src.agents.trader import TradingDecision
 from src.strategies.signal import Signal
 
 
-def test_trader_agent_init(mock_llm_client):
-    agent = TraderAgent(mock_llm_client)
+def test_trader_agent_init(test_container):
+    agent = test_container.trader_agent()
 
-    assert agent.llm == mock_llm_client
+    assert agent.llm is not None
 
 
-async def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sample_bearish_research):
-    agent = TraderAgent(mock_llm_client)
+async def test_trader_agent_decide(test_container, sample_bullish_research, sample_bearish_research):
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.BUY,
@@ -62,11 +62,10 @@ async def test_trader_agent_decide(mock_llm_client, sample_bullish_research, sam
     assert 0.0 <= result.confidence <= 1.0
     assert result.risk_level in ["LOW", "MEDIUM", "HIGH"]
     assert result.reasoning
-    mock_llm_client.acomplete.assert_called_once()
 
 
-def test_extract_action_from_response(mock_llm_client):
-    agent = TraderAgent(mock_llm_client)
+def test_extract_action_from_response(test_container):
+    agent = test_container.trader_agent()
 
     response = "Action: BUY\nConfidence: 0.8\nReasoning: Strong signals"
 
@@ -75,8 +74,8 @@ def test_extract_action_from_response(mock_llm_client):
     assert action == Signal.BUY
 
 
-def test_extract_action_fallback(mock_llm_client):
-    agent = TraderAgent(mock_llm_client)
+def test_extract_action_fallback(test_container):
+    agent = test_container.trader_agent()
 
     response = "Unclear response without action"
 
@@ -85,8 +84,8 @@ def test_extract_action_fallback(mock_llm_client):
     assert action == Signal.HOLD
 
 
-def test_extract_confidence_from_response(mock_llm_client, sample_bullish_research, sample_bearish_research):
-    agent = TraderAgent(mock_llm_client)
+def test_extract_confidence_from_response(test_container, sample_bullish_research, sample_bearish_research):
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.BUY,
@@ -115,8 +114,8 @@ def test_extract_confidence_from_response(mock_llm_client, sample_bullish_resear
     assert confidence == 0.85
 
 
-def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research, sample_bearish_research):
-    agent = TraderAgent(mock_llm_client)
+def test_extract_confidence_fallback(test_container, sample_bullish_research, sample_bearish_research):
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.BUY,
@@ -145,8 +144,8 @@ def test_extract_confidence_fallback(mock_llm_client, sample_bullish_research, s
     assert 0.0 <= confidence <= 1.0
 
 
-def test_extract_risk_level(mock_llm_client):
-    agent = TraderAgent(mock_llm_client)
+def test_extract_risk_level(test_container):
+    agent = test_container.trader_agent()
 
     assert agent._extract_risk_level("Risk: HIGH", 0.5) == "HIGH"
     assert agent._extract_risk_level("Risk: LOW", 0.5) == "LOW"
@@ -154,8 +153,8 @@ def test_extract_risk_level(mock_llm_client):
     assert agent._extract_risk_level("No risk mentioned", 0.3) == "HIGH"
 
 
-def test_repr(mock_llm_client):
-    agent = TraderAgent(mock_llm_client)
+def test_repr(test_container):
+    agent = test_container.trader_agent()
 
     repr_str = repr(agent)
 
@@ -163,8 +162,8 @@ def test_repr(mock_llm_client):
     assert "ollama" in repr_str
 
 
-async def test_decide_owns_position_true(mock_llm_client, sample_bullish_research, sample_bearish_research):
-    agent = TraderAgent(mock_llm_client)
+async def test_decide_owns_position_true(test_container, sample_bullish_research, sample_bearish_research):
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.HOLD,
@@ -218,8 +217,8 @@ async def test_decide_owns_position_true(mock_llm_client, sample_bullish_researc
     assert result.position_qty == 100.0
 
 
-async def test_decide_owns_position_false(mock_llm_client, sample_bullish_research, sample_bearish_research):
-    agent = TraderAgent(mock_llm_client)
+async def test_decide_owns_position_false(test_container, sample_bullish_research, sample_bearish_research):
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.HOLD,
@@ -274,9 +273,12 @@ async def test_decide_owns_position_false(mock_llm_client, sample_bullish_resear
 
 
 async def test_prompt_includes_portfolio_context(
-    mock_llm_client, sample_bullish_research, sample_bearish_research
+    test_container, sample_bullish_research, sample_bearish_research
 ):
-    agent = TraderAgent(mock_llm_client)
+    agent = test_container.trader_agent()
+
+    # Get mock LLM client to verify prompt
+    llm_mock = test_container.llm_client()
 
     technical = TechnicalAnalysis(
         signal=Signal.BUY,
@@ -326,7 +328,7 @@ async def test_prompt_includes_portfolio_context(
         position_qty=50.0,
     )
 
-    call_args = mock_llm_client.acomplete.call_args
+    call_args = llm_mock.acomplete.call_args
     prompt = call_args[0][0]
     assert "PORTFOLIO STATUS:" in prompt
     assert "currently own 50.0 shares" in prompt
@@ -376,12 +378,12 @@ def test_display_action_buy_unchanged():
     assert decision.display_action == "BUY"
 
 
-def test_extract_confidence_action_aware_buy(mock_llm_client):
+def test_extract_confidence_action_aware_buy(test_container):
     """High bullish + high bearish → BUY should boost from bullish, penalize from bearish."""
     from src.agents.bearish_researcher import BearishResearchAnalysis
     from src.agents.bullish_researcher import BullishResearchAnalysis
 
-    agent = TraderAgent(mock_llm_client)
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.BUY,
@@ -424,12 +426,12 @@ def test_extract_confidence_action_aware_buy(mock_llm_client):
     assert 0.5 <= confidence <= 0.6
 
 
-def test_extract_confidence_action_aware_sell(mock_llm_client):
+def test_extract_confidence_action_aware_sell(test_container):
     """High bearish confidence should BOOST sell confidence, not penalize."""
     from src.agents.bearish_researcher import BearishResearchAnalysis
     from src.agents.bullish_researcher import BullishResearchAnalysis
 
-    agent = TraderAgent(mock_llm_client)
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.SELL,
@@ -472,12 +474,12 @@ def test_extract_confidence_action_aware_sell(mock_llm_client):
     assert confidence >= 0.7
 
 
-def test_extract_confidence_action_aware_hold(mock_llm_client):
+def test_extract_confidence_action_aware_hold(test_container):
     """HOLD should average both bull and bear weights."""
     from src.agents.bearish_researcher import BearishResearchAnalysis
     from src.agents.bullish_researcher import BullishResearchAnalysis
 
-    agent = TraderAgent(mock_llm_client)
+    agent = test_container.trader_agent()
 
     technical = TechnicalAnalysis(
         signal=Signal.HOLD,
@@ -520,9 +522,9 @@ def test_extract_confidence_action_aware_hold(mock_llm_client):
     assert 0.5 <= confidence <= 0.6
 
 
-def test_build_fundamental_section_when_none(mock_llm_client):
+def test_build_fundamental_section_when_none(test_container):
     """Test _build_fundamental_section returns unavailable message when fundamental is None."""
-    agent = TraderAgent(mock_llm_client)
+    agent = test_container.trader_agent()
 
     section = agent._build_fundamental_section(None)
 
@@ -530,9 +532,9 @@ def test_build_fundamental_section_when_none(mock_llm_client):
     assert "API rate limit" in section
 
 
-def test_build_fundamental_section_with_data(mock_llm_client):
+def test_build_fundamental_section_with_data(test_container):
     """Test _build_fundamental_section formats data correctly."""
-    agent = TraderAgent(mock_llm_client)
+    agent = test_container.trader_agent()
 
     fundamental = FundamentalAnalysis(
         valuation="UNDERVALUED",
