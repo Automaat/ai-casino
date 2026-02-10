@@ -197,6 +197,13 @@ class RiskHistoryResponse(BaseModel):
     count: int
 
 
+class ExecutionMetricsListResponse(BaseModel):
+    """Execution metrics list endpoint response."""
+
+    metrics: list[dict]
+    count: int
+
+
 class SectorRotationResponse(BaseModel):
     """Sector rotation analysis."""
 
@@ -789,6 +796,107 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
             records=[r.model_dump(mode="json") for r in history],
             count=len(history),
         )
+
+    @app.get("/api/execution-metrics", response_model=ExecutionMetricsListResponse)
+    async def get_execution_metrics(limit: int = 50) -> ExecutionMetricsListResponse:
+        """Get recent execution metrics from JSONL.
+
+        Args:
+            limit: Max number of metrics to return (clamped to 1-500)
+
+        Returns:
+            ExecutionMetricsListResponse with list of metrics
+        """
+        import json
+        from pathlib import Path
+
+        limit = max(1, min(limit, 500))
+        metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
+
+        if not metrics_file.exists():
+            return ExecutionMetricsListResponse(metrics=[], count=0)
+
+        metrics = []
+        try:
+            # Read last N lines efficiently (read backwards)
+            with metrics_file.open("rb") as f:
+                f.seek(0, 2)
+                file_size = f.tell()
+                if file_size == 0:
+                    return ExecutionMetricsListResponse(metrics=[], count=0)
+
+                # Read file in chunks from end
+                buffer_size = 8192
+                lines = []
+                buffer = b""
+                pos = file_size
+
+                while pos > 0 and len(lines) < limit:
+                    chunk_size = min(buffer_size, pos)
+                    pos -= chunk_size
+                    f.seek(pos)
+                    chunk = f.read(chunk_size)
+                    buffer = chunk + buffer
+
+                    # Extract complete lines
+                    while b"\n" in buffer and len(lines) < limit:
+                        line, buffer = buffer.rsplit(b"\n", 1)
+                        if line:
+                            lines.insert(0, line)
+
+                # Parse JSONL
+                for line in lines[-limit:]:
+                    try:
+                        metric = json.loads(line)
+                        metrics.append(metric)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Malformed JSONL line: {e}")
+                        continue
+
+                # Reverse to get newest first
+                metrics.reverse()
+
+        except Exception as e:
+            logger.error(f"Failed to read execution metrics: {e}")
+            raise HTTPException(status_code=500, detail="Failed to read execution metrics") from e
+
+        return ExecutionMetricsListResponse(metrics=metrics, count=len(metrics))
+
+    @app.get("/api/execution-metrics/{workflow_id}", response_model=dict)
+    async def get_execution_metric_detail(workflow_id: str) -> dict:
+        """Get single workflow execution detail.
+
+        Args:
+            workflow_id: Workflow ID to fetch
+
+        Returns:
+            WorkflowExecutionMetrics as dict
+        """
+        import json
+        from pathlib import Path
+
+        metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
+
+        if not metrics_file.exists():
+            raise HTTPException(status_code=404, detail="Execution metrics file not found")
+
+        try:
+            with metrics_file.open() as f:
+                for line in f:
+                    try:
+                        metric = json.loads(line)
+                        if metric.get("workflow_id") == workflow_id:
+                            return metric
+                    except json.JSONDecodeError:
+                        continue
+
+            raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to fetch workflow detail: {e}")
+            raise HTTPException(status_code=500, detail="Failed to fetch workflow detail") from e
 
     @app.websocket("/ws/events")
     async def websocket_events(websocket: WebSocket) -> None:

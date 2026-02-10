@@ -71,6 +71,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             raise PreventUpdate
 
         try:
+            # Fetch positions (required)
             positions_resp = client.get_positions()
 
             # Try to get snapshots, but don't fail if unavailable
