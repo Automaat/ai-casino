@@ -8,110 +8,29 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
-from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
     from src.workflows.types import BacktestValidation
 
+from src.agents.risk.context import RiskContext
+from src.agents.risk.models import (
+    AccountInfo,
+    PortfolioRiskReport,
+    PortfolioVaRConfig,
+    PositionSizeCalculation,
+    RiskAssessment,
+    RiskValidation,
+    StopLossCalculation,
+    TrailingStopConfig,
+)
+from src.agents.risk.position_sizer import PositionSizer
+from src.agents.risk.stop_loss_calculator import StopLossCalculator
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
 from src.models.llm import LLMClient
 from src.strategies.signal import Signal
-
-
-class AccountInfo(BaseModel):
-    """Account information for risk calculations."""
-
-    balance: float
-    available_cash: float
-    positions: dict[str, float]
-    total_exposure: float
-
-
-class PositionSizeCalculation(BaseModel):
-    """Position sizing result."""
-
-    recommended_shares: int
-    position_value: float
-    risk_amount: float
-    risk_percent: float
-    reasoning: str
-
-
-class TrailingStopConfig(BaseModel):
-    """Trailing stop-loss configuration."""
-
-    enabled: bool
-    trail_percent: float
-    activation_percent: float
-
-
-class StopLossCalculation(BaseModel):
-    """Stop-loss calculation result."""
-
-    stop_loss_price: float
-    stop_loss_percent: float
-    risk_per_share: float
-    max_loss_amount: float
-    methodology: str
-    trailing_stop: TrailingStopConfig | None = None
-
-
-class RiskValidation(BaseModel):
-    """Risk validation result."""
-
-    approved: bool
-    risk_score: float
-    risk_level: str
-    warnings: list[str]
-    constraints_met: dict[str, bool]
-    reasoning: str
-
-
-class PortfolioVaRConfig(BaseModel):
-    """Configuration for portfolio-level VaR limits."""
-
-    enabled: bool = False
-    max_var_95: float = Field(default=0.03, ge=0.001, le=0.20)
-    max_cvar_99: float = Field(default=0.05, ge=0.001, le=0.30)
-    lookback_days: int = Field(default=90, ge=20, le=365)
-    adaptive_stop_loss: bool = True
-    cdar_stop_threshold: float = Field(default=0.10, ge=0.01, le=0.50)
-    atr_multiplier_min: float = Field(default=1.0, ge=0.5, le=2.0)
-
-
-class PortfolioRiskReport(BaseModel):
-    """Daily portfolio risk report."""
-
-    date: str
-    var_95: float
-    var_99: float
-    cvar_95: float
-    cvar_99: float
-    cdar_95: float
-    max_drawdown: float
-    portfolio_volatility: float
-    current_exposure_percent: float
-    num_positions: int
-    var_limit_breached: bool
-    cvar_limit_breached: bool
-    risk_status: str
-
-
-class RiskAssessment(BaseModel):
-    """Complete risk management assessment."""
-
-    symbol: str
-    action: Signal
-    current_price: float
-    account_info: AccountInfo
-    position_sizing: PositionSizeCalculation
-    stop_loss: StopLossCalculation
-    validation: RiskValidation
-    confidence: float
-    portfolio_var: PortfolioVaRResult | None = None
 
 
 class RiskManagementAgent:
@@ -179,8 +98,23 @@ class RiskManagementAgent:
         self.enable_trailing_stop = enable_trailing_stop
         self._var_calculator = portfolio_var_calculator
         self._var_config = portfolio_var_config or PortfolioVaRConfig()
-        self._portfolio_cdar: float | None = None
-        self._latest_portfolio_var: PortfolioVaRResult | None = None
+
+        # Create position sizer component with resolved config
+        self._position_sizer = PositionSizer(
+            max_position_risk=self.max_position_risk,
+            max_exposure=self.max_exposure,
+            max_single_position=self.max_single_position,
+        )
+
+        # Create stop-loss calculator component with resolved config
+        self._stop_loss_calculator = StopLossCalculator(
+            enable_trailing_stop=self.enable_trailing_stop,
+            var_config=self._var_config,
+            atr_multiplier=self.ATR_MULTIPLIER,
+            default_stop_percent=self.DEFAULT_STOP_LOSS_PERCENT,
+            trailing_stop_percent=self.TRAILING_STOP_PERCENT,
+            trailing_activation_percent=self.TRAILING_ACTIVATION_PERCENT,
+        )
 
         self.audit_log_path = Path("logs/risk_audit.jsonl")
         self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,15 +162,14 @@ class RiskManagementAgent:
         """
         logger.info(f"Assessing risk for {action.value} {symbol} @ ${current_price:.2f}")
 
-        self._portfolio_cdar = None
-        self._latest_portfolio_var = None
+        context = RiskContext()
 
         if action == Signal.HOLD:
             assessment = self._hold_assessment(symbol, current_price, account_info)
         else:
-            stop_loss = self._calculate_stop_loss(current_price, market_data, action)
+            stop_loss = self._stop_loss_calculator.calculate(current_price, market_data, action, context)
 
-            position_sizing = self._calculate_position_size(
+            position_sizing = self._position_sizer.calculate(
                 current_price, stop_loss, account_info, target_portfolio_weight
             )
 
@@ -248,6 +181,7 @@ class RiskManagementAgent:
                 position_sizing,
                 account_info,
                 decision_confidence,
+                context,
                 broker_positions=broker_positions,
                 portfolio_value=portfolio_value,
                 backtest_validation=backtest_validation,
@@ -270,202 +204,12 @@ class RiskManagementAgent:
                 stop_loss=stop_loss,
                 validation=validation,
                 confidence=confidence,
-                portfolio_var=self._latest_portfolio_var,
+                portfolio_var=context.latest_portfolio_var,
             )
 
         self._audit_log(assessment)
 
         return assessment
-
-    def _calculate_stop_loss(
-        self,
-        current_price: float,
-        market_data: pd.DataFrame,
-        action: Signal,
-    ) -> StopLossCalculation:
-        """Calculate stop-loss price using ATR or fixed %.
-
-        Args:
-            current_price: Current price
-            market_data: OHLCV data
-            action: Trading action (BUY/SELL)
-
-        Returns:
-            StopLossCalculation with stop price and methodology
-        """
-        atr = self._get_atr(market_data)
-        atr_multiplier = self._get_adaptive_atr_multiplier()
-
-        if atr and atr > 0:
-            stop_distance = atr * atr_multiplier
-            if action == Signal.BUY:
-                stop_loss_price = current_price - stop_distance
-            else:
-                stop_loss_price = current_price + stop_distance
-            methodology = f"ATR-based ({atr_multiplier:.1f}x ATR)"
-            stop_loss_percent = (stop_distance / current_price) * 100
-        else:
-            stop_loss_percent = self.DEFAULT_STOP_LOSS_PERCENT
-            if action == Signal.BUY:
-                stop_loss_price = current_price * (1 - stop_loss_percent / 100)
-            else:
-                stop_loss_price = current_price * (1 + stop_loss_percent / 100)
-            methodology = f"Fixed {stop_loss_percent}%"
-
-        # Round stop loss to 2 decimals for broker API compliance
-        stop_loss_price = round(stop_loss_price, 2)
-        risk_per_share = abs(current_price - stop_loss_price)
-
-        trailing_stop = None
-        if self.enable_trailing_stop and action == Signal.BUY:
-            trailing_stop = TrailingStopConfig(
-                enabled=True,
-                trail_percent=self.TRAILING_STOP_PERCENT,
-                activation_percent=self.TRAILING_ACTIVATION_PERCENT,
-            )
-            methodology = f"{methodology} + Trailing {self.TRAILING_STOP_PERCENT}%"
-
-        return StopLossCalculation(
-            stop_loss_price=stop_loss_price,
-            stop_loss_percent=stop_loss_percent,
-            risk_per_share=risk_per_share,
-            max_loss_amount=0.0,
-            methodology=methodology,
-            trailing_stop=trailing_stop,
-        )
-
-    def _calculate_position_size(
-        self,
-        current_price: float,
-        stop_loss: StopLossCalculation,
-        account_info: AccountInfo,
-        target_portfolio_weight: float | None = None,
-    ) -> PositionSizeCalculation:
-        """Calculate position size based on risk parameters.
-
-        Args:
-            current_price: Current price
-            stop_loss: Stop-loss calculation
-            account_info: Account information
-            target_portfolio_weight: Optional target portfolio weight for allocation-based sizing
-
-        Returns:
-            PositionSizeCalculation with sizing details
-        """
-        if current_price <= 0:
-            msg = f"Invalid current_price: {current_price}. Must be positive."
-            raise ValueError(msg)
-
-        # If target weight provided, use weight-based sizing
-        if target_portfolio_weight is not None and target_portfolio_weight > 0:
-            return self._calculate_weight_based_position(
-                current_price, stop_loss, account_info, target_portfolio_weight
-            )
-
-        # Otherwise use risk-based sizing (existing logic continues...)
-        max_risk_amount = account_info.balance * (self.max_position_risk / 100)
-
-        risk_per_share = stop_loss.risk_per_share
-        min_risk_per_share = 1e-6
-        if -min_risk_per_share < risk_per_share < min_risk_per_share:
-            reasoning = (
-                "Risk per share is zero or too small to calculate a reliable position size. "
-                "Returning zero-sized position to avoid division by zero."
-            )
-            return PositionSizeCalculation(
-                recommended_shares=0,
-                position_value=0.0,
-                risk_amount=0.0,
-                risk_percent=0.0,
-                reasoning=reasoning,
-            )
-
-        recommended_shares = int(max_risk_amount / risk_per_share)
-
-        position_value = recommended_shares * current_price
-        if position_value > account_info.available_cash:
-            recommended_shares = int(account_info.available_cash / current_price)
-            position_value = recommended_shares * current_price
-
-        max_position_value = account_info.balance * (self.max_single_position / 100)
-        if position_value > max_position_value:
-            recommended_shares = int(max_position_value / current_price)
-            position_value = recommended_shares * current_price
-
-        risk_amount = recommended_shares * risk_per_share
-        risk_percent = (risk_amount / account_info.balance) * 100 if account_info.balance > 0 else 0.0
-
-        reasoning = (
-            f"Risk {risk_percent:.2f}% (${risk_amount:.2f}) on {recommended_shares} shares. "
-            f"Stop @ ${stop_loss.stop_loss_price:.2f} ({stop_loss.stop_loss_percent:.1f}% from entry)."
-        )
-
-        return PositionSizeCalculation(
-            recommended_shares=recommended_shares,
-            position_value=position_value,
-            risk_amount=risk_amount,
-            risk_percent=risk_percent,
-            reasoning=reasoning,
-        )
-
-    def _calculate_weight_based_position(
-        self,
-        current_price: float,
-        stop_loss: StopLossCalculation,
-        account_info: AccountInfo,
-        target_weight: float,
-    ) -> PositionSizeCalculation:
-        """Calculate position size based on target portfolio weight.
-
-        Args:
-            current_price: Current price
-            stop_loss: Stop-loss calculation
-            account_info: Account information
-            target_weight: Target portfolio weight (0-1)
-
-        Returns:
-            PositionSizeCalculation with sizing details
-        """
-        # Calculate target position value based on portfolio weight
-        target_position_value = account_info.balance * target_weight
-
-        # Constrain by available cash
-        target_position_value = min(target_position_value, account_info.available_cash)
-
-        # Constrain by max single position limit
-        max_position_value = account_info.balance * (self.max_single_position / 100)
-        target_position_value = min(target_position_value, max_position_value)
-
-        # Calculate shares
-        recommended_shares = int(target_position_value / current_price)
-        position_value = recommended_shares * current_price
-
-        # Treat zero shares as constraint violation
-        if recommended_shares <= 0:
-            risk_percent = 100.0
-            risk_amount = account_info.balance
-            reasoning = (
-                f"Portfolio-weighted position: {target_weight:.1%} target would result in 0 shares "
-                f"@ ${current_price:.2f}. Insufficient capital for minimum position."
-            )
-        else:
-            # Calculate risk based on stop loss
-            risk_amount = recommended_shares * stop_loss.risk_per_share
-            risk_percent = (risk_amount / account_info.balance) * 100 if account_info.balance > 0 else 0.0
-
-            reasoning = (
-                f"Portfolio-weighted position: {target_weight:.1%} target, {recommended_shares} shares "
-                f"(${position_value:.2f}). Risk {risk_percent:.2f}% (${risk_amount:.2f}) "
-                f"with stop @ ${stop_loss.stop_loss_price:.2f}."
-            )
-
-        return PositionSizeCalculation(
-            recommended_shares=recommended_shares,
-            position_value=position_value,
-            risk_amount=risk_amount,
-            risk_percent=risk_percent,
-            reasoning=reasoning,
-        )
 
     def _validate_exposure(
         self,
@@ -526,12 +270,13 @@ class RiskManagementAgent:
         position_sizing: PositionSizeCalculation,
         account_info: AccountInfo,
         decision_confidence: float,
+        context: RiskContext,
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
         backtest_validation: "BacktestValidation | None" = None,
         broker_api_failed: bool = False,
     ) -> RiskValidation:
-        """Validate risk constraints and generate approval.
+        """Validate risk constraints and generate approval (populates context).
 
         Args:
             symbol: Stock ticker
@@ -539,6 +284,7 @@ class RiskManagementAgent:
             position_sizing: Position sizing calculation
             account_info: Account information
             decision_confidence: Decision confidence score
+            context: Risk context to populate with portfolio VaR data
             broker_positions: Optional broker positions for VaR check
             portfolio_value: Optional portfolio value for VaR check
             backtest_validation: Optional pre-trade backtest validation result
@@ -593,6 +339,7 @@ class RiskManagementAgent:
                 broker_positions or {},
                 portfolio_value or account_info.balance,
                 warnings,
+                context,
             )
 
         approved = all(constraints_met.values())
@@ -634,8 +381,9 @@ class RiskManagementAgent:
         broker_positions: dict[str, BrokerPosition],
         portfolio_value: float,
         warnings: list[str],
+        context: RiskContext,
     ) -> bool:
-        """Validate portfolio-level VaR limits.
+        """Validate portfolio-level VaR limits (populates context).
 
         Args:
             symbol: Stock ticker
@@ -644,6 +392,7 @@ class RiskManagementAgent:
             broker_positions: Current broker positions
             portfolio_value: Current portfolio value
             warnings: Warning list to append to
+            context: Risk context to populate with portfolio_cdar and latest_portfolio_var
 
         Returns:
             True if within limits
@@ -658,13 +407,13 @@ class RiskManagementAgent:
             var_result = self._var_calculator.calculate_with_hypothetical(
                 broker_positions, portfolio_value, symbol, position_value, self._var_config.lookback_days
             )
-            self._latest_portfolio_var = var_result
+            context.latest_portfolio_var = var_result
 
             if not var_result.sufficient_data:
                 warnings.append("Insufficient data for portfolio VaR check, approving trade")
                 return True
 
-            self._portfolio_cdar = var_result.cdar_95
+            context.portfolio_cdar = var_result.cdar_95
 
             var_ok = var_result.var_95 <= self._var_config.max_var_95
             cvar_ok = var_result.cvar_99 <= self._var_config.max_cvar_99
@@ -683,31 +432,6 @@ class RiskManagementAgent:
             logger.error(f"Portfolio VaR validation failed: {e}")
             warnings.append(f"Portfolio VaR check failed: {e}")
             return True
-
-    def _get_adaptive_atr_multiplier(self) -> float:
-        """Get ATR multiplier, adjusted for CDaR if adaptive stops enabled.
-
-        Returns:
-            ATR multiplier (default 2.0, reduced when CDaR is high)
-        """
-        if (
-            not self._var_config.adaptive_stop_loss
-            or self._portfolio_cdar is None
-            or self._portfolio_cdar <= self._var_config.cdar_stop_threshold
-        ):
-            return self.ATR_MULTIPLIER
-
-        # Linear interpolation: as CDaR goes from threshold to 2x threshold,
-        # multiplier goes from ATR_MULTIPLIER down to atr_multiplier_min
-        cdar_ratio = min(self._portfolio_cdar / self._var_config.cdar_stop_threshold, 2.0)
-        t = cdar_ratio - 1.0  # 0.0 at threshold, 1.0 at 2x threshold
-        multiplier = self.ATR_MULTIPLIER - t * (self.ATR_MULTIPLIER - self._var_config.atr_multiplier_min)
-
-        logger.debug(
-            f"Adaptive stop: CDaR={self._portfolio_cdar:.4f}, "
-            f"threshold={self._var_config.cdar_stop_threshold:.4f}, multiplier={multiplier:.2f}"
-        )
-        return multiplier
 
     def generate_risk_report(
         self,
@@ -773,26 +497,6 @@ class RiskManagementAgent:
             cvar_limit_breached=cvar_breached,
             risk_status=risk_status,
         )
-
-    def _get_atr(self, market_data: pd.DataFrame, period: int = 14) -> float | None:
-        """Calculate ATR from market data.
-
-        Args:
-            market_data: OHLCV dataframe
-            period: ATR period
-
-        Returns:
-            ATR value or None if calculation fails
-        """
-        try:
-            df = market_data.copy()
-            df.ta.atr(length=period, append=True)
-            atr_col = f"ATRr_{period}"
-            if atr_col in df.columns:
-                return float(df[atr_col].iloc[-1])
-        except Exception as e:
-            logger.warning(f"ATR calculation failed: {e}")
-        return None
 
     def _calculate_risk_score(
         self,
