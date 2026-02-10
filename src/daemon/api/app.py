@@ -62,7 +62,7 @@ def _mask_sensitive_field(value: str | None) -> str:
 
 @asynccontextmanager
 async def get_broker_account_info_cached(
-    components: "DaemonComponents",
+    components: DaemonComponents,
 ) -> AsyncIterator[dict[str, Any] | None]:
     """Request-scoped cached broker account info.
 
@@ -99,7 +99,7 @@ async def get_broker_account_info_cached(
         _broker_cache.reset(token)
 
 
-def create_api_app(components: "DaemonComponents") -> FastAPI:  # noqa: C901, PLR0915
+def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0915
     """Create FastAPI app with components reference.
 
     Complexity acceptable for FastAPI route registration pattern.

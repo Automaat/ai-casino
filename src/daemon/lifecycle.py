@@ -5,14 +5,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import signal
-from typing import TYPE_CHECKING
 
 import uvicorn
 from loguru import logger
 from rich.console import Console
 
-if TYPE_CHECKING:
-    from src.daemon.factory import DaemonComponents
+from src.daemon.factory import DaemonComponents
 
 console = Console()
 

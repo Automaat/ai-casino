@@ -54,7 +54,7 @@ class ResultBox(Static):
     }
     """
 
-    def __init__(self, result: "TradingWorkflowResult") -> None:
+    def __init__(self, result: TradingWorkflowResult) -> None:
         """Initialize result box."""
         super().__init__()
         self._result = result

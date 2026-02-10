@@ -261,7 +261,7 @@ class StockUniverseFetcher:
         return all_data
 
     @HTTP_RETRY
-    def fetch_us_liquid(self, filters: "LiquidityFilterConfig") -> StockUniverse:
+    def fetch_us_liquid(self, filters: LiquidityFilterConfig) -> StockUniverse:
         """Fetch US liquid stocks (Russell 3000 filtered by liquidity).
 
         Args:

@@ -13,7 +13,6 @@ import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from rich.console import Console
@@ -21,11 +20,9 @@ from rich.console import Console
 from src.agents.event_triage import EventTriageAgent
 from src.cache.historical import HistoricalCache
 from src.daemon.events import BaseEvent, EventSignal, TriageResult, Urgency
+from src.di.container import AppContainer
 from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
-
-if TYPE_CHECKING:
-    from src.di.container import AppContainer
 
 console = Console()
 
@@ -44,7 +41,7 @@ class EventWatcher(ABC):
         cooldown_minutes: int,
         max_concurrent_analyses: int,
         historical_cache: HistoricalCache,
-        container: "AppContainer | None" = None,
+        container: AppContainer | None = None,
         signal_callback: Callable[[EventSignal], None] | None = None,
     ) -> None:
         """Initialize event watcher.

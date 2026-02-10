@@ -2,16 +2,13 @@
 
 import os
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from src.cache.historical import HistoricalCache
+from src.daemon.config import DaemonConfig
+from src.daemon.state import DaemonState
 from src.data.broker import AlpacaBroker
-
-if TYPE_CHECKING:
-    from src.cache.historical import HistoricalCache
-    from src.daemon.config import DaemonConfig
-    from src.daemon.state import DaemonState
 
 
 class BrokerManager:
@@ -19,9 +16,9 @@ class BrokerManager:
 
     def __init__(
         self,
-        config: "DaemonConfig",
-        state: "DaemonState",
-        historical_cache: "HistoricalCache",
+        config: DaemonConfig,
+        state: DaemonState,
+        historical_cache: HistoricalCache,
     ) -> None:
         """Initialize broker manager.
 

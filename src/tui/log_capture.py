@@ -95,7 +95,7 @@ def teardown_log_capture(handler_id: int) -> None:
 
 
 @contextlib.contextmanager
-def worker_log_context() -> Generator[None, None, None]:
+def worker_log_context() -> Generator[None]:
     """Context manager that marks all logs as coming from TUI worker.
 
     Usage:

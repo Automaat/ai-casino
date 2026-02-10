@@ -93,7 +93,7 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     return engine
 
 
-def create_analysis_repository(database_engine: DatabaseEngine) -> "AnalysisRecordRepository":
+def create_analysis_repository(database_engine: DatabaseEngine) -> AnalysisRecordRepository:
     """Create AnalysisRecordRepository with database session.
 
     Args:
@@ -108,7 +108,7 @@ def create_analysis_repository(database_engine: DatabaseEngine) -> "AnalysisReco
     return AnalysisRecordRepository(session)
 
 
-def create_position_repository(database_engine: DatabaseEngine) -> "PositionRecordRepository":
+def create_position_repository(database_engine: DatabaseEngine) -> PositionRecordRepository:
     """Create PositionRecordRepository with database session.
 
     Args:
@@ -125,7 +125,7 @@ def create_position_repository(database_engine: DatabaseEngine) -> "PositionReco
 
 def create_position_action_repository(
     database_engine: DatabaseEngine,
-) -> "PositionManagementActionRepository":
+) -> PositionManagementActionRepository:
     """Create PositionManagementActionRepository with database session.
 
     Args:
@@ -140,7 +140,7 @@ def create_position_action_repository(
     return PositionManagementActionRepository(session)
 
 
-def create_discovery_repository(database_engine: DatabaseEngine) -> "DiscoveryHistoryRepository":
+def create_discovery_repository(database_engine: DatabaseEngine) -> DiscoveryHistoryRepository:
     """Create DiscoveryHistoryRepository with database session.
 
     Args:
@@ -155,7 +155,7 @@ def create_discovery_repository(database_engine: DatabaseEngine) -> "DiscoveryHi
     return DiscoveryHistoryRepository(session)
 
 
-def create_snapshot_repository(database_engine: DatabaseEngine) -> "PortfolioSnapshotRepository":
+def create_snapshot_repository(database_engine: DatabaseEngine) -> PortfolioSnapshotRepository:
     """Create PortfolioSnapshotRepository with database session.
 
     Args:

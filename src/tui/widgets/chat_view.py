@@ -138,7 +138,7 @@ class ChatView(VerticalScroll):
             self._progress_panel.complete()
             self._progress_panel = None
 
-    def show_result_box(self, result: "TradingWorkflowResult") -> ResultBox:
+    def show_result_box(self, result: TradingWorkflowResult) -> ResultBox:
         """Show a boxed analysis result.
 
         Args:

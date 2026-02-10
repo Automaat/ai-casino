@@ -75,7 +75,7 @@ class BaseResearcher(ABC):
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
-        trump_analysis: "TrumpAnalysis | None" = None,
+        trump_analysis: TrumpAnalysis | None = None,
     ) -> BaseModel:
         """Construct thesis from all analyses.
 
@@ -175,7 +175,7 @@ class BaseResearcher(ABC):
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
-        trump_analysis: "TrumpAnalysis | None" = None,
+        trump_analysis: TrumpAnalysis | None = None,
     ) -> dict[str, str]:
         """Build LLM prompt variables from all analyses.
 

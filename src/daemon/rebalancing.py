@@ -1,14 +1,10 @@
 """Portfolio rebalancing for daemon."""
 
-from typing import TYPE_CHECKING
-
 from loguru import logger
 from pydantic import BaseModel
 
+from src.data.broker import AlpacaBroker
 from src.optimization.portfolio import OptimizedPortfolio, PortfolioOptimizer, PortfolioRebalance
-
-if TYPE_CHECKING:
-    from src.data.broker import AlpacaBroker
 
 
 class RebalancingResult(BaseModel):
@@ -26,7 +22,7 @@ class DaemonRebalancer:
     def __init__(
         self,
         optimizer: PortfolioOptimizer,
-        broker: "AlpacaBroker | None",
+        broker: AlpacaBroker | None,
         rebalance_threshold: float,
     ) -> None:
         """Initialize daemon rebalancer.

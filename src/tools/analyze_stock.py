@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AnalyzeStockTool(BaseTool):
     """Tool to run full trading analysis workflow."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -113,7 +113,7 @@ class AnalyzeStockTool(BaseTool):
 
         return self._format_result(result)
 
-    def _format_result(self, result: "TradingWorkflowResult") -> str:
+    def _format_result(self, result: TradingWorkflowResult) -> str:
         """Format workflow result as markdown summary.
 
         Args:

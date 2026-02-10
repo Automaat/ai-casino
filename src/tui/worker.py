@@ -47,9 +47,9 @@ class AnalysisParams:
 
     symbol: str
     period_days: int
-    progress_callback: "ProgressCallback | None"
-    result_callback: "ResultCallback"
-    error_callback: "ErrorCallback"
+    progress_callback: ProgressCallback | None
+    result_callback: ResultCallback
+    error_callback: ErrorCallback
     cancelled_event: threading.Event
 
 
@@ -61,9 +61,9 @@ class ScreeningParams:
     universe: str
     top_n: int
     save_to_watchlist: bool
-    progress_callback: "ProgressCallback | None"
-    result_callback: "ResultCallback"
-    error_callback: "ErrorCallback"
+    progress_callback: ProgressCallback | None
+    result_callback: ResultCallback
+    error_callback: ErrorCallback
     cancelled_event: threading.Event
 
 
@@ -104,7 +104,7 @@ def _check_cancelled(cancelled_event: threading.Event | None) -> None:
         raise asyncio.CancelledError(msg)
 
 
-def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -> "TradingWorkflow":
+def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -> TradingWorkflow:
     """Create workflow components with progress tracking."""
     # Configure torch NOW (lazy - only when analysis starts)
     from src.models.torch_config import configure_torch_runtime
@@ -120,7 +120,7 @@ def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -
     return container.workflow_meta(container=container)
 
 
-def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:
+def _patch_workflow_progress(workflow: TradingWorkflow, progress_callback: ProgressCallback | None) -> None:
     """Patch workflow methods to report progress.
 
     Note: Progress tracking currently not implemented for stage-based architecture.
@@ -546,7 +546,7 @@ async def run_screening_in_process(
     return _handle_screening_result(error_holder, result_holder)
 
 
-def _format_screening_output(output: "ScreeningOutput", analysis: "ScreeningAnalysis") -> str:
+def _format_screening_output(output: ScreeningOutput, analysis: ScreeningAnalysis) -> str:
     """Format screening output as markdown."""
     lines = [
         f"## {output.criteria.value.title()} Screening Results",

@@ -7,18 +7,15 @@ import time
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
 from pydantic import BaseModel
 
 from src.daemon.config import DaemonConfig
+from src.daemon.notifications import NotificationService
 from src.daemon.state import DaemonState
-
-if TYPE_CHECKING:
-    from src.daemon.notifications import NotificationService
-    from src.di.container import AppContainer
+from src.di.container import AppContainer
 
 
 class ServiceStatus(StrEnum):
@@ -66,8 +63,8 @@ class HealthChecker:
         self,
         config: DaemonConfig,
         state: DaemonState,
-        container: "AppContainer | None" = None,
-        notification_service: "NotificationService | None" = None,
+        container: AppContainer | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         """Initialize health checker.
 

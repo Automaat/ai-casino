@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class OptimizePortfolioTool(BaseTool):
     """Tool to optimize trading strategy parameters with Optuna."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -113,7 +113,7 @@ class OptimizePortfolioTool(BaseTool):
             logger.error(f"Optimization failed for {symbol}: {e}")
             return f"Optimization failed for {symbol}: {e}"
 
-    def _format_result(self, result: "OptimizationResult") -> str:
+    def _format_result(self, result: OptimizationResult) -> str:
         """Format optimization result as markdown.
 
         Args:

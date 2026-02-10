@@ -157,7 +157,7 @@ class BaseMetricsTracker(ABC):
     @abstractmethod
     def record_decision(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -220,7 +220,7 @@ class MetricsTracker(BaseMetricsTracker):
 
     def record_decision(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -500,7 +500,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     def __init__(
         self,
-        trade_repository: "TradeRepository",
+        trade_repository: TradeRepository,
         risk_free_rate: float | None = None,
     ) -> None:
         """Initialize database metrics tracker.
@@ -540,7 +540,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     def record_decision(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -554,7 +554,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     async def record_decision_async(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -791,7 +791,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
 
 def create_metrics_tracker(
-    trade_repository: "TradeRepository | None" = None,
+    trade_repository: TradeRepository | None = None,
     risk_free_rate: float | None = None,
 ) -> BaseMetricsTracker:
     """Factory to create appropriate metrics tracker.

@@ -76,10 +76,10 @@ class TraderAgent:
         sector_context: str | None = None,
         earnings_context: str | None = None,
         peer_analysis_context: str | None = None,
-        backtest_validation: "BacktestValidation | None" = None,
+        backtest_validation: BacktestValidation | None = None,
         game_plan_context: str | None = None,
         position_context: dict[str, object] | None = None,
-        degradation_context: "DegradationContext | None" = None,
+        degradation_context: DegradationContext | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -389,7 +389,7 @@ class TraderAgent:
 
         return self._prompts.load("section_earnings", earnings_details=earnings_context)
 
-    def _build_backtest_section(self, backtest_validation: "BacktestValidation | None") -> str:
+    def _build_backtest_section(self, backtest_validation: BacktestValidation | None) -> str:
         """Build pre-trade backtest section for prompt.
 
         Args:
@@ -537,7 +537,7 @@ class TraderAgent:
                     value = float(parts[1].strip().split()[0])
                     if 0.0 <= value <= 1.0:
                         return value
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 continue
         return None
 

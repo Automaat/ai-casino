@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pandas as pd
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from src.daemon.degradation import DegradationContext
-
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.trader import TradingDecision
+from src.daemon.degradation import DegradationContext
 from src.data.broker import BrokerPosition
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
 from src.workflows.types import BacktestValidation

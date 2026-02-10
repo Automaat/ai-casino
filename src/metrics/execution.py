@@ -14,7 +14,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 current_agent: ContextVar[str | None] = ContextVar("current_agent", default=None)
-current_collector: ContextVar["ExecutionMetricsCollector | None"] = ContextVar(
+current_collector: ContextVar[ExecutionMetricsCollector | None] = ContextVar(
     "current_collector", default=None
 )
 

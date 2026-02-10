@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class GetSocialSentimentTool(BaseTool):
     """Tool to analyze social sentiment from Reddit and Finnhub."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -97,7 +97,7 @@ class GetSocialSentimentTool(BaseTool):
 
         return self._format_result(symbol, result)
 
-    def _format_result(self, symbol: str, result: "SocialSentimentAnalysis") -> str:
+    def _format_result(self, symbol: str, result: SocialSentimentAnalysis) -> str:
         """Format social sentiment result as markdown.
 
         Args:

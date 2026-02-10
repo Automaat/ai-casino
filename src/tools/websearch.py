@@ -18,7 +18,7 @@ class WebSearchTool(BaseTool):
 
     TOOL_NAME = "web_search"
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize web search tool with optional container.
 
         Args:

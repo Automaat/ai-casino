@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 def create_llm_client(
     daemon_config: DaemonConfig,
-    metrics_collector: "ExecutionMetricsCollector | None" = None,
+    metrics_collector: ExecutionMetricsCollector | None = None,
 ) -> LLMClient:
     """Create LLMClient with resolved config.
 
@@ -71,7 +71,7 @@ def create_llm_client(
     return llm_client
 
 
-def create_finbert_sentiment(device: str | None = None) -> "FinBERTSentiment":
+def create_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
     """Create FinBERT sentiment analyzer with lazy import.
 
     Thin wrapper over existing get_finbert_sentiment() factory.
@@ -89,7 +89,7 @@ def create_finbert_sentiment(device: str | None = None) -> "FinBERTSentiment":
     return get_finbert_sentiment(device=device)
 
 
-def create_risk_metrics_calculator() -> "RiskMetricsCalculator":
+def create_risk_metrics_calculator() -> RiskMetricsCalculator:
     """Create RiskMetricsCalculator with lazy import.
 
     Returns:
@@ -101,9 +101,9 @@ def create_risk_metrics_calculator() -> "RiskMetricsCalculator":
 
 
 def create_portfolio_var_calculator(
-    risk_calculator: "RiskMetricsCalculator",
-    market_fetcher: "MarketDataFetcher",
-) -> "PortfolioVaRCalculator":
+    risk_calculator: RiskMetricsCalculator,
+    market_fetcher: MarketDataFetcher,
+) -> PortfolioVaRCalculator:
     """Create PortfolioVaRCalculator with dependencies.
 
     Args:
@@ -118,7 +118,7 @@ def create_portfolio_var_calculator(
     return PortfolioVaRCalculator(risk_calculator, market_fetcher)
 
 
-def create_web_search_tool(container: "AppContainer") -> "WebSearchTool":
+def create_web_search_tool(container: AppContainer) -> WebSearchTool:
     """Create WebSearchTool with DI container.
 
     Args:
@@ -132,7 +132,7 @@ def create_web_search_tool(container: "AppContainer") -> "WebSearchTool":
     return WebSearchTool(container)
 
 
-def create_market_regime_detector() -> "MarketRegimeDetector":
+def create_market_regime_detector() -> MarketRegimeDetector:
     """Create MarketRegimeDetector with lazy import.
 
     Returns:
@@ -143,7 +143,7 @@ def create_market_regime_detector() -> "MarketRegimeDetector":
     return MarketRegimeDetector()
 
 
-def create_backtest_runner(cash: float = 100000.0, commission: float = 0.002) -> "BacktestRunner":
+def create_backtest_runner(cash: float = 100000.0, commission: float = 0.002) -> BacktestRunner:
     """Create BacktestRunner with lazy import.
 
     Args:
@@ -158,7 +158,7 @@ def create_backtest_runner(cash: float = 100000.0, commission: float = 0.002) ->
     return BacktestRunner(cash=cash, commission=commission)
 
 
-def create_optuna_optimizer(n_trials: int = 100) -> "OptunaOptimizer":
+def create_optuna_optimizer(n_trials: int = 100) -> OptunaOptimizer:
     """Create OptunaOptimizer with lazy import.
 
     Args:
@@ -172,7 +172,7 @@ def create_optuna_optimizer(n_trials: int = 100) -> "OptunaOptimizer":
     return OptunaOptimizer(n_trials=n_trials)
 
 
-def create_metrics_tracker(risk_free_rate: float | None = None) -> "MetricsTracker":
+def create_metrics_tracker(risk_free_rate: float | None = None) -> MetricsTracker:
     """Create MetricsTracker with lazy import.
 
     Args:
@@ -186,7 +186,7 @@ def create_metrics_tracker(risk_free_rate: float | None = None) -> "MetricsTrack
     return MetricsTracker(risk_free_rate=risk_free_rate)
 
 
-def create_quantstats_reporter(risk_free_rate: float | None = None) -> "QuantStatsReporter":
+def create_quantstats_reporter(risk_free_rate: float | None = None) -> QuantStatsReporter:
     """Create QuantStatsReporter with lazy import.
 
     Args:
@@ -201,9 +201,9 @@ def create_quantstats_reporter(risk_free_rate: float | None = None) -> "QuantSta
 
 
 def create_stock_screener(
-    universe_fetcher: "StockUniverseFetcher",
+    universe_fetcher: StockUniverseFetcher,
     daemon_config: DaemonConfig,
-) -> "StockScreener":
+) -> StockScreener:
     """Create StockScreener with dependencies.
 
     Args:

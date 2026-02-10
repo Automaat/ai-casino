@@ -1,11 +1,16 @@
 """Graceful API degradation policy for trading daemon."""
 
+from __future__ import annotations
+
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from src.daemon.config import DaemonConfig
-from src.daemon.health import HealthReport, ServiceStatus
+
+if TYPE_CHECKING:
+    from src.daemon.health import HealthReport
 
 
 class DegradationTier(StrEnum):
@@ -137,6 +142,8 @@ class DegradationPolicy:
         Returns:
             DegradationContext with tier, available agents, and confidence adjustment
         """
+        from src.daemon.health import ServiceStatus
+
         if not health_report:
             return DegradationContext(
                 tier=DegradationTier.FULL,

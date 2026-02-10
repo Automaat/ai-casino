@@ -20,7 +20,7 @@ hf_logging.set_verbosity_error()
 class _FinBERTHolder:
     """Singleton holder for FinBERT instance."""
 
-    instance: "FinBERTSentiment | None" = None
+    instance: FinBERTSentiment | None = None
     lock = threading.Lock()
 
 
