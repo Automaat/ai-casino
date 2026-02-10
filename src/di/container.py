@@ -6,6 +6,7 @@ from dependency_injector import containers, providers
 
 from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
+from src.di.providers import daemon as daemon_providers
 from src.di.providers import data as data_providers
 from src.di.providers import database as database_providers
 from src.di.providers import models as model_providers
@@ -321,6 +322,22 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+    )
+
+    # Daemon component providers
+    # Note: container must be passed explicitly when calling these factories
+    # (providers.Self() doesn't work reliably with Factory providers)
+    daemon_factory = providers.Factory(
+        daemon_providers.create_daemon_factory,
+        daemon_config=daemon_config,
+    )
+
+    context_builder = providers.Factory(
+        daemon_providers.create_context_builder,
+    )
+
+    task_service = providers.Factory(
+        daemon_providers.create_task_service,
     )
 
 

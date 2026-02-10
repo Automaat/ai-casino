@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from src.daemon.config import DaemonConfig
     from src.daemon.runner import DaemonRunner
     from src.daemon.scheduler import MarketScheduler
+    from src.daemon.task_service import DaemonTaskService
 
 
 @dataclass
@@ -71,14 +72,29 @@ class ScheduledTaskRunner:
             config: Daemon configuration
             scheduler: Market scheduler for time checks
             daemon_runner: DaemonRunner instance for task delegation
+        task_service: Optional task service for extracted scheduled tasks
         """
         self.config = config
         self.scheduler = scheduler
         self._runner = daemon_runner
+        self._task_service: DaemonTaskService | None = None  # Wired later via set_task_service
         logger.info("ScheduledTaskRunner initialized")
+
+    def set_task_service(self, task_service: "DaemonTaskService") -> None:
+        """Wire task service after initialization.
+
+        Args:
+            task_service: DaemonTaskService instance
+        """
+        self._task_service = task_service
 
     async def run_scheduled_tasks(self) -> None:
         """Run all scheduled tasks based on time and config."""
+        # Early return if runner not yet wired (during initialization)
+        if self._runner is None:
+            logger.debug("Task runner not yet wired, skipping scheduled tasks")
+            return
+
         for task in self.TASKS:
             # Check if task is enabled (if it has an enabled check)
             if task.enabled_check and not self._is_task_enabled(task.enabled_check):
@@ -90,15 +106,27 @@ class ScheduledTaskRunner:
 
             # Execute the task
             logger.debug(f"Running scheduled task: {task.name}")
-            runner_method = getattr(self._runner, task.runner_method)
-            if task.is_async:
-                await runner_method()
+
+            # Map runner method names to task service method names
+            # Runner: _run_optimization -> Task Service: run_optimization
+            # Runner: _maybe_run_discovery -> Task Service: run_discovery
+            service_method_name = task.runner_method.lstrip("_").replace("maybe_run_", "run_")
+
+            # Check if task_service has this method (extracted tasks)
+            if self._task_service and hasattr(self._task_service, service_method_name):
+                task_method = getattr(self._task_service, service_method_name)
             else:
-                runner_method()
+                # Runner method (not yet extracted)
+                task_method = getattr(self._runner, task.runner_method)
+
+            if task.is_async:
+                await task_method()
+            else:
+                task_method()
 
         # Special case: daily risk report (runs when market closed)
-        if not self.scheduler.is_market_open():
-            self._runner.run_daily_risk_report()
+        if not self.scheduler.is_market_open() and self._task_service:
+            self._task_service.run_daily_risk_report()
 
     def _is_task_enabled(self, config_path: str) -> bool:
         """Check if task enabled via config path.

@@ -13,7 +13,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from src.daemon.runner import DaemonRunner
+    from src.daemon.factory import DaemonComponents
 
 _broker_cache: ContextVar[dict[str, Any] | None] = ContextVar("_broker_cache", default=None)
 
@@ -290,17 +290,17 @@ def _mask_sensitive_field(value: str | None) -> str:
 
 @asynccontextmanager
 async def get_broker_account_info_cached(
-    runner: "DaemonRunner",
+    components: "DaemonComponents",
 ) -> AsyncIterator[dict[str, Any] | None]:
     """Request-scoped cached broker account info.
 
     Args:
-        runner: DaemonRunner instance
+        components: DaemonComponents instance
 
     Yields:
         Broker account info dict or None if broker unavailable
     """
-    if not runner.broker:
+    if not components.broker:
         yield None
         return
 
@@ -313,7 +313,7 @@ async def get_broker_account_info_cached(
             try:
                 from src.data.broker import BrokerAccountInfo
 
-                account_info: BrokerAccountInfo = await asyncio.to_thread(runner.broker.get_account_info)
+                account_info: BrokerAccountInfo = await asyncio.to_thread(components.broker.get_account_info)
                 cache[cache_key] = {
                     "positions": account_info.positions,
                     "portfolio_value": account_info.portfolio_value,
@@ -327,13 +327,13 @@ async def get_broker_account_info_cached(
         _broker_cache.reset(token)
 
 
-def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
-    """Create FastAPI app with runner reference.
+def create_api_app(components: "DaemonComponents") -> FastAPI:  # noqa: C901, PLR0915
+    """Create FastAPI app with components reference.
 
     Complexity acceptable for FastAPI route registration pattern.
 
     Args:
-        runner: DaemonRunner instance
+        components: DaemonComponents instance
 
     Returns:
         FastAPI app
@@ -344,8 +344,8 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         version="0.1.0",
     )
 
-    # Store runner and start time in app state
-    app.state.runner = runner
+    # Store components and start time in app state
+    app.state.components = components
     app.state.start_time = datetime.now(UTC)
 
     # CORS middleware - only allow dashboard origin
@@ -360,60 +360,60 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         """Get daemon health status."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
         uptime = (datetime.now(UTC) - app.state.start_time).total_seconds()
 
         # Determine health status from degradation tier
         degradation_tier = "FULL"
-        if runner.state.degradation_history:
-            degradation_tier = runner.state.degradation_history[-1].tier
+        if components.state.degradation_history:
+            degradation_tier = components.state.degradation_history[-1].tier
 
         status = "healthy" if degradation_tier == "FULL" else "degraded"
 
         return HealthResponse(
             status=status,
             uptime_seconds=uptime,
-            running=runner.running,
-            last_run=runner.state.last_run.isoformat() if runner.state.last_run else None,
+            running=components.running,
+            last_run=components.state.last_run.isoformat() if components.state.last_run else None,
         )
 
     @app.get("/state/summary", response_model=StateSummaryResponse)
     async def state_summary() -> StateSummaryResponse:
         """Get daemon state summary."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
         # Get current degradation tier
         degradation_tier = "FULL"
-        if runner.state.degradation_history:
-            degradation_tier = runner.state.degradation_history[-1].tier
+        if components.state.degradation_history:
+            degradation_tier = components.state.degradation_history[-1].tier
 
         return StateSummaryResponse(
-            total_analyses=runner.state.total_analyses,
-            total_trades=runner.state.total_trades,
-            error_count=len(runner.state.errors),
+            total_analyses=components.state.total_analyses,
+            total_trades=components.state.total_trades,
+            error_count=len(components.state.errors),
             degradation_tier=degradation_tier,
-            trading_mode=runner.state.current_trading_mode,
+            trading_mode=components.state.current_trading_mode,
         )
 
     @app.get("/config", response_model=ConfigResponse)
     async def config() -> ConfigResponse:
         """Get daemon configuration (no secrets)."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
         return ConfigResponse(
-            watchlist=runner.config.watchlist,
-            interval_minutes=runner.config.interval_minutes,
-            market_hours_only=runner.config.market_hours_only,
-            auto_trade=runner.config.auto_trade,
-            trading_mode=runner.state.current_trading_mode,
-            pre_market_enabled=runner.config.schedule.enable_pre_market,
+            watchlist=components.config.watchlist,
+            interval_minutes=components.config.interval_minutes,
+            market_hours_only=components.config.market_hours_only,
+            auto_trade=components.config.auto_trade,
+            trading_mode=components.state.current_trading_mode,
+            pre_market_enabled=components.config.schedule.enable_pre_market,
         )
 
     @app.get("/config/full", response_model=FullConfigResponse)
     async def config_full() -> FullConfigResponse:
         """Get full daemon configuration with masked sensitive fields."""
-        runner: DaemonRunner = app.state.runner
-        cfg = runner.config
+        components: DaemonComponents = app.state.components
+        cfg = components.config
 
         # Mask API keys
         masked_api_keys = {
@@ -445,7 +445,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
             market_hours_only=cfg.market_hours_only,
             auto_trade=cfg.auto_trade,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
-            trading_mode=runner.state.current_trading_mode,
+            trading_mode=components.state.current_trading_mode,
             paper_trading=cfg.paper_trading.model_dump(),
             schedule=cfg.schedule.model_dump(),
             state=cfg.state.model_dump(),
@@ -480,10 +480,10 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/analyses", response_model=AnalysesResponse)
     async def get_analyses(limit: int = 50, symbol: str | None = None) -> AnalysesResponse:
         """Get analysis history."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
         limit = max(0, min(limit, 500))
 
-        analyses = list(reversed(runner.state.analyses))
+        analyses = list(reversed(components.state.analyses))
 
         if symbol:
             analyses = [a for a in analyses if a.symbol == symbol]
@@ -492,22 +492,22 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
 
         return AnalysesResponse(
             analyses=[AnalysisRecordResponse(**a.model_dump()) for a in analyses],
-            total_count=runner.state.total_analyses,
+            total_count=components.state.total_analyses,
             returned_count=len(analyses),
         )
 
     @app.get("/positions", response_model=PositionsResponse)
     async def get_positions() -> PositionsResponse:
         """Get active positions."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
         from src.daemon.positions import PositionRecord
 
-        async with get_broker_account_info_cached(runner) as account_info:
+        async with get_broker_account_info_cached(components) as account_info:
             broker_positions = account_info["positions"] if account_info else {}
 
             positions = []
-            for symbol, pos_dict in runner.state.active_positions.items():
+            for symbol, pos_dict in components.state.active_positions.items():
                 try:
                     pos = PositionRecord.model_validate(pos_dict)
 
@@ -591,14 +591,14 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/portfolio/rebalance", response_model=RebalanceResponse | None)
     async def get_rebalance() -> RebalanceResponse | None:
         """Get latest portfolio rebalance data."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        if not runner.state.portfolio_rebalancing_history:
+        if not components.state.portfolio_rebalancing_history:
             return None
 
-        latest = runner.state.portfolio_rebalancing_history[-1]
+        latest = components.state.portfolio_rebalancing_history[-1]
 
-        async with get_broker_account_info_cached(runner) as account_info:
+        async with get_broker_account_info_cached(components) as account_info:
             broker_positions = account_info["positions"] if account_info else {}
             total_portfolio_value = account_info["portfolio_value"] if account_info else 0.0
 
@@ -633,22 +633,22 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/watchlist", response_model=WatchlistResponse)
     async def get_watchlist() -> WatchlistResponse:
         """Get merged watchlist."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        symbols = runner.get_merged_watchlist()
+        symbols = components.broker_manager.get_merged_watchlist()
 
-        config_count = len([s for s in runner.config.watchlist if s in symbols])
+        config_count = len([s for s in components.config.watchlist if s in symbols])
 
         broker_count = 0
         try:
-            broker_symbols = set(runner.state.active_positions.keys())
+            broker_symbols = set(components.state.active_positions.keys())
             broker_count = len([s for s in broker_symbols if s in symbols])
         except Exception as e:
             logger.warning(f"Unable to derive broker symbols for watchlist: {e}")
 
         screening_count = 0
-        if runner.config.screening.enabled and runner.state.screening_history:
-            latest = runner.state.screening_history[-1]
+        if components.config.screening.enabled and components.state.screening_history:
+            latest = components.state.screening_history[-1]
             screening_count = len([s for s in latest.top_symbols if s in symbols])
 
         return WatchlistResponse(
@@ -664,12 +664,12 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/risk", response_model=RiskReportResponse | None)
     async def get_risk() -> RiskReportResponse | None:
         """Get latest risk report."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        if not runner.state.risk_report_history:
+        if not components.state.risk_report_history:
             return None
 
-        latest = runner.state.risk_report_history[-1]
+        latest = components.state.risk_report_history[-1]
 
         return RiskReportResponse(
             timestamp=latest.timestamp,
@@ -685,7 +685,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/risk/history", response_model=RiskHistoryResponse)
     async def get_risk_history() -> RiskHistoryResponse:
         """Get historical risk reports."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
         reports = [
             RiskReportResponse(
                 timestamp=r.timestamp,
@@ -697,17 +697,17 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                 max_drawdown=r.max_drawdown,
                 risk_status=r.risk_status,
             )
-            for r in runner.state.risk_report_history
+            for r in components.state.risk_report_history
         ]
         return RiskHistoryResponse(reports=reports, count=len(reports))
 
     @app.get("/sector-rotation/latest", response_model=SectorRotationResponse | None)
     async def get_sector_rotation() -> SectorRotationResponse | None:
         """Get latest sector rotation analysis."""
-        runner: DaemonRunner = app.state.runner
-        if not runner.state.sector_rotation_history:
+        components: DaemonComponents = app.state.components
+        if not components.state.sector_rotation_history:
             return None
-        latest = runner.state.sector_rotation_history[-1]
+        latest = components.state.sector_rotation_history[-1]
         return SectorRotationResponse(
             timestamp=latest.timestamp,
             leading_sectors=latest.leading_sectors,
@@ -726,7 +726,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         # market_fetcher=None because load_latest() only reads from disk
         auditor = CorrelationAuditor(
             market_fetcher=None,
-            output_dir=runner.config.correlation_audit.output_dir,
+            output_dir=components.config.correlation_audit.output_dir,
         )
         audit_result = auditor.load_latest()
 
@@ -746,9 +746,9 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/degradation", response_model=DegradationResponse)
     async def get_degradation() -> DegradationResponse:
         """Get current degradation status."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        if not runner.state.degradation_history:
+        if not components.state.degradation_history:
             return DegradationResponse(
                 tier="FULL",
                 unavailable_services=[],
@@ -756,7 +756,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
                 halt_reason=None,
             )
 
-        latest = runner.state.degradation_history[-1]
+        latest = components.state.degradation_history[-1]
 
         return DegradationResponse(
             tier=latest.tier,
@@ -771,13 +771,13 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         import json
         from pathlib import Path
 
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        if not runner.config.game_plan.enabled or not runner.state.game_plan_history:
+        if not components.config.game_plan.enabled or not components.state.game_plan_history:
             return None
 
-        latest = runner.state.game_plan_history[-1]
-        plan_dir = Path(runner.config.game_plan.plan_dir).expanduser()
+        latest = components.state.game_plan_history[-1]
+        plan_dir = Path(components.config.game_plan.plan_dir).expanduser()
         plan_file = plan_dir / f"{latest.timestamp.date()}.json"
 
         if not plan_file.exists():
@@ -804,14 +804,14 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/events", response_model=EventResponse)
     async def get_events(limit: int = 100) -> EventResponse:
         """Get event history."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        if not runner.event_bus:
+        if not components.event_bus:
             return EventResponse(events=[], returned_count=0)
 
         limit = max(0, min(limit, 500))
 
-        events = runner.event_bus.get_history(limit=limit)
+        events = components.event_bus.get_history(limit=limit)
 
         events_dict = [e.model_dump(mode="json") for e in events]
 
@@ -820,26 +820,28 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.get("/events/market", response_model=MarketEventsResponse)
     async def get_market_events(limit: int = 100) -> MarketEventsResponse:
         """Get market event signals (news, social, anomaly)."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
         limit = max(0, min(limit, 500))
 
         if limit <= 0:
             events = []
         else:
-            events = runner.state.market_events[-limit:] if runner.state.market_events else []
+            events = components.state.market_events[-limit:] if components.state.market_events else []
 
         return MarketEventsResponse(events=events, returned_count=len(events))
 
     @app.get("/events/degradation-history", response_model=DegradationHistoryResponse)
     async def get_degradation_history(limit: int = 50) -> DegradationHistoryResponse:
         """Get degradation history for timeline."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
         limit = max(0, min(limit, 200))
 
         if limit <= 0:
             history = []
         else:
-            history = runner.state.degradation_history[-limit:] if runner.state.degradation_history else []
+            history = (
+                components.state.degradation_history[-limit:] if components.state.degradation_history else []
+            )
 
         return DegradationHistoryResponse(
             records=[r.model_dump(mode="json") for r in history],
@@ -950,16 +952,16 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
     @app.websocket("/ws/events")
     async def websocket_events(websocket: WebSocket) -> None:
         """Stream real-time events to dashboard."""
-        runner: DaemonRunner = app.state.runner
+        components: DaemonComponents = app.state.components
 
-        if not runner.event_bus:
+        if not components.event_bus:
             await websocket.close(code=1011, reason="EventBus not available")
             return
 
         await websocket.accept()
         logger.info(f"WebSocket connected: {websocket.client}")
 
-        subscriber_id, queue = await runner.event_bus.subscribe()
+        subscriber_id, queue = await components.event_bus.subscribe()
 
         try:
             while True:
@@ -980,7 +982,7 @@ def create_api_app(runner: "DaemonRunner") -> FastAPI:  # noqa: C901, PLR0915
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
         finally:
-            await runner.event_bus.unsubscribe(subscriber_id)
+            await components.event_bus.unsubscribe(subscriber_id)
             logger.info(f"Unsubscribed: {subscriber_id}")
 
     logger.info("FastAPI app created")
