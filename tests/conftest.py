@@ -808,3 +808,63 @@ async def event_subscriber(event_bus):
     sub_id, queue = await event_bus.subscribe()
     yield sub_id, queue
     await event_bus.unsubscribe(sub_id)
+
+
+# Container-based fixtures for DI testing
+
+
+@pytest.fixture
+def test_container(tmp_path):
+    """Test container with minimal overrides: llm_client, finbert_sentiment.
+
+    Use for agent tests that only need LLM/FinBERT mocks.
+    """
+    from tests.di.container_test import create_test_container, reset_test_container
+
+    container = create_test_container(
+        temp_cache_path=tmp_path / "test.db",
+        override_llm=True,
+        override_finbert=True,
+        override_fetchers=False,
+        override_broker=False,
+    )
+    yield container
+    reset_test_container(container)
+
+
+@pytest.fixture
+def test_container_full(tmp_path):
+    """Test container with all overrides: LLM, FinBERT, fetchers, broker.
+
+    Use for workflow/tool tests that need all dependencies mocked.
+    """
+    from tests.di.container_test import create_test_container, reset_test_container
+
+    container = create_test_container(
+        temp_cache_path=tmp_path / "test.db",
+        override_llm=True,
+        override_finbert=True,
+        override_fetchers=True,
+        override_broker=True,
+    )
+    yield container
+    reset_test_container(container)
+
+
+@pytest.fixture
+def test_container_agents(tmp_path):
+    """Test container for agent integration tests: mock LLM/FinBERT, real fetchers.
+
+    Use for agent integration tests that test with real fetcher logic.
+    """
+    from tests.di.container_test import create_test_container, reset_test_container
+
+    container = create_test_container(
+        temp_cache_path=tmp_path / "test.db",
+        override_llm=True,
+        override_finbert=True,
+        override_fetchers=False,
+        override_broker=False,
+    )
+    yield container
+    reset_test_container(container)
