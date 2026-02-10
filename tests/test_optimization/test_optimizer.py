@@ -173,6 +173,77 @@ class TestOptunaOptimizer:
         assert "trials=50" in repr_str
         assert "multi_objective=False" in repr_str
 
+    def test_run_backtest_safe_expected_errors(self, mock_backtest_runner, sample_dates):
+        """Verify expected errors (ValueError, KeyError, IndexError) return None with warning."""
+        from unittest.mock import MagicMock
+
+        from src.optimization.search_space import StrategyType
+
+        optimizer = OptunaOptimizer(runner=mock_backtest_runner, n_trials=5)
+
+        # Mock backtest to raise ValueError (expected error)
+        mock_backtest_runner.run_backtest = MagicMock(side_effect=ValueError("Insufficient data"))
+
+        # Get the strategy class
+        strategy_class = optimizer._create_strategy_class(
+            StrategyType.MOMENTUM, {"rsi_period": 14, "rsi_oversold": 30.0, "rsi_overbought": 70.0}
+        )
+
+        # Should return None for expected errors
+        result = optimizer._run_backtest_safe(
+            symbol="AAPL",
+            start_date=sample_dates["start_date"],
+            end_date=sample_dates["end_date"],
+            strategy_class=strategy_class,
+        )
+
+        assert result is None
+
+        # Test KeyError
+        mock_backtest_runner.run_backtest = MagicMock(side_effect=KeyError("missing column"))
+        result = optimizer._run_backtest_safe(
+            symbol="AAPL",
+            start_date=sample_dates["start_date"],
+            end_date=sample_dates["end_date"],
+            strategy_class=strategy_class,
+        )
+        assert result is None
+
+        # Test IndexError
+        mock_backtest_runner.run_backtest = MagicMock(side_effect=IndexError("out of bounds"))
+        result = optimizer._run_backtest_safe(
+            symbol="AAPL",
+            start_date=sample_dates["start_date"],
+            end_date=sample_dates["end_date"],
+            strategy_class=strategy_class,
+        )
+        assert result is None
+
+    def test_run_backtest_safe_unexpected_errors(self, mock_backtest_runner, sample_dates):
+        """Verify unexpected errors (RuntimeError, etc.) propagate."""
+        from unittest.mock import MagicMock
+
+        from src.optimization.search_space import StrategyType
+
+        optimizer = OptunaOptimizer(runner=mock_backtest_runner, n_trials=5)
+
+        # Mock backtest to raise RuntimeError (unexpected error)
+        mock_backtest_runner.run_backtest = MagicMock(side_effect=RuntimeError("Strategy bug"))
+
+        # Get the strategy class
+        strategy_class = optimizer._create_strategy_class(
+            StrategyType.MOMENTUM, {"rsi_period": 14, "rsi_oversold": 30.0, "rsi_overbought": 70.0}
+        )
+
+        # Should propagate unexpected errors
+        with pytest.raises(RuntimeError, match="Strategy bug"):
+            optimizer._run_backtest_safe(
+                symbol="AAPL",
+                start_date=sample_dates["start_date"],
+                end_date=sample_dates["end_date"],
+                strategy_class=strategy_class,
+            )
+
 
 class TestOptimizationResult:
     """Tests for OptimizationResult."""
