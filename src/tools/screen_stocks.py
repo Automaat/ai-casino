@@ -124,12 +124,10 @@ class ScreenStocksTool(BaseTool):
         Returns:
             Formatted screening results
         """
-        from src.data.universe import StockUniverseFetcher
         from src.screening.analyzer import ScreeningAnalyzer
-        from src.screening.screener import ScreeningCriteria, StockScreener
+        from src.screening.screener import ScreeningCriteria
 
-        universe_fetcher = StockUniverseFetcher()
-        screener = StockScreener(universe_fetcher=universe_fetcher)
+        screener = self._container.stock_screener()
         llm = self._container.llm_client()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 

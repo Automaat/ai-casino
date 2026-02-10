@@ -8,10 +8,21 @@ from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
     from src.data.market import MarketData
+    from src.di.container import AppContainer
 
 
 class GetMarketDataTool(BaseTool):
     """Tool to fetch current market data for a stock."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -65,9 +76,7 @@ class GetMarketDataTool(BaseTool):
         logger.info(f"Fetching market data for {symbol} ({days} days)")
 
         try:
-            from src.data.market import MarketDataFetcher
-
-            fetcher = MarketDataFetcher()
+            fetcher = self._container.market_fetcher()
             data = fetcher.fetch_daily(symbol.upper(), days)
 
             return self._format_data(data)

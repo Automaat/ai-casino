@@ -12,10 +12,21 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from src.metrics.tracker import TearSheet
+    from src.di.container import AppContainer
 
 
 class GenerateTearsheetTool(BaseTool):
     """Tool to generate QuantStats performance tearsheet."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -99,12 +110,8 @@ class GenerateTearsheetTool(BaseTool):
         """
         from datetime import UTC, datetime, timedelta
 
-        from src.data.market import MarketDataFetcher
-        from src.metrics.quantstats_reporter import QuantStatsReporter
-        from src.metrics.tracker import create_metrics_tracker
-
         period_days = self._parse_period(period)
-        tracker = create_metrics_tracker()
+        tracker = self._container.metrics_tracker()
 
         if hasattr(tracker, "trades"):
             all_trades = tracker.trades
@@ -130,9 +137,9 @@ class GenerateTearsheetTool(BaseTool):
         if not filtered_trades:
             return f"No trades in period {period} for {symbol}"
 
-        benchmark_returns = self._fetch_benchmark(benchmark, period_days, MarketDataFetcher)
+        benchmark_returns = self._fetch_benchmark(benchmark, period_days)
 
-        reporter = QuantStatsReporter()
+        reporter = self._container.quantstats_reporter()
         tearsheet = reporter.generate_tearsheet(
             symbol=symbol,
             trades=filtered_trades,
@@ -142,13 +149,12 @@ class GenerateTearsheetTool(BaseTool):
 
         return self._format_result(tearsheet)
 
-    def _fetch_benchmark(self, benchmark: str, period_days: int, fetcher_cls: type) -> "pd.Series | None":
+    def _fetch_benchmark(self, benchmark: str, period_days: int) -> "pd.Series | None":
         """Fetch benchmark returns data.
 
         Args:
             benchmark: Benchmark symbol
             period_days: Number of days
-            fetcher_cls: MarketDataFetcher class
 
         Returns:
             Benchmark returns series or None
@@ -156,7 +162,7 @@ class GenerateTearsheetTool(BaseTool):
         if not benchmark:
             return None
         try:
-            fetcher = fetcher_cls(use_alpha_vantage=False)
+            fetcher = self._container.market_fetcher()
             fetch_days = period_days if period_days != -1 else 365 * 5
             market_data = fetcher.fetch_daily(benchmark, period_days=fetch_days)
             close = market_data.data.get("close", market_data.data.get("Close"))

@@ -92,16 +92,7 @@ class GetSocialSentimentTool(BaseTool):
         Returns:
             Formatted analysis summary
         """
-        from src.agents.social import SocialSentimentAnalyst
-        from src.data.finnhub import FinnhubFetcher
-        from src.data.reddit import RedditFetcher
-
-        llm = self._container.llm_client()
-        finnhub = FinnhubFetcher()
-        reddit = RedditFetcher()
-        finbert = self._container.finbert_sentiment()
-
-        analyst = SocialSentimentAnalyst(llm, finnhub, reddit, finbert)
+        analyst = self._container.social_sentiment_analyst()
         result = await analyst.analyze(symbol)
 
         return self._format_result(symbol, result)

@@ -1,16 +1,10 @@
 """Tests for OptimizePortfolioTool."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.tools.portfolio import OptimizePortfolioTool
-
-
-@pytest.fixture
-def tool():
-    """Create OptimizePortfolioTool."""
-    return OptimizePortfolioTool()
 
 
 @pytest.fixture
@@ -33,16 +27,19 @@ def mock_optimization_result():
 class TestOptimizePortfolioTool:
     """Tests for OptimizePortfolioTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = OptimizePortfolioTool(container=test_container_full)
         assert tool.name == "optimize_portfolio"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool requires confirmation."""
+        tool = OptimizePortfolioTool(container=test_container_full)
         assert tool.requires_confirmation is True
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
+        tool = OptimizePortfolioTool(container=test_container_full)
         definition = tool.get_tool_definition()
 
         assert definition["type"] == "function"
@@ -61,72 +58,96 @@ class TestOptimizePortfolioTool:
         assert "enum" in strategy_prop
         assert "momentum" in strategy_prop["enum"]
 
-    def test_execute_success(self, tool, mock_optimization_result):
+    def test_execute_success(self, test_container_full, mock_optimization_result):
         """Test successful execution."""
-        with patch("src.optimization.optimizer.OptunaOptimizer") as mock_optimizer_cls:
-            mock_optimizer = MagicMock()
-            mock_optimizer.optimize.return_value = mock_optimization_result
-            mock_optimizer_cls.return_value = mock_optimizer
+        from src.optimization.optimizer import OptunaOptimizer
 
-            result = tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01")
+        tool = OptimizePortfolioTool(container=test_container_full)
 
-            assert "AAPL" in result
-            assert "momentum" in result
-            assert "1.87" in result  # sharpe
-            assert "50" in result  # trials
-            assert "42.3" in result  # time
-            mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "momentum")
+        mock_optimizer = MagicMock(spec=OptunaOptimizer)
+        mock_optimizer.optimize.return_value = mock_optimization_result
+        test_container_full.optuna_optimizer.override(mock_optimizer)
 
-    def test_execute_uppercase_symbol(self, tool, mock_optimization_result):
+        result = tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01")
+
+        assert "AAPL" in result
+        assert "momentum" in result
+        assert "1.87" in result  # sharpe
+        assert "50" in result  # trials
+        assert "42.3" in result  # time
+        mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "momentum")
+
+    def test_execute_uppercase_symbol(self, test_container_full, mock_optimization_result):
         """Test that symbol is uppercased."""
-        with patch("src.optimization.optimizer.OptunaOptimizer") as mock_optimizer_cls:
-            mock_optimizer = MagicMock()
-            mock_optimizer.optimize.return_value = mock_optimization_result
-            mock_optimizer_cls.return_value = mock_optimizer
+        from src.optimization.optimizer import OptunaOptimizer
 
-            tool.execute(symbol="aapl", start_date="2023-01-01", end_date="2024-01-01")
+        tool = OptimizePortfolioTool(container=test_container_full)
 
-            mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "momentum")
+        mock_optimizer = MagicMock(spec=OptunaOptimizer)
+        mock_optimizer.optimize.return_value = mock_optimization_result
+        test_container_full.optuna_optimizer.override(mock_optimizer)
 
-    def test_execute_custom_strategy(self, tool, mock_optimization_result):
+        tool.execute(symbol="aapl", start_date="2023-01-01", end_date="2024-01-01")
+
+        mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "momentum")
+
+    def test_execute_custom_strategy(self, test_container_full, mock_optimization_result):
         """Test execution with custom strategy."""
-        with patch("src.optimization.optimizer.OptunaOptimizer") as mock_optimizer_cls:
-            mock_optimizer = MagicMock()
-            mock_optimizer.optimize.return_value = mock_optimization_result
-            mock_optimizer_cls.return_value = mock_optimizer
+        from src.optimization.optimizer import OptunaOptimizer
 
-            tool.execute(
-                symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following"
-            )
+        tool = OptimizePortfolioTool(container=test_container_full)
 
-            mock_optimizer.optimize.assert_called_once_with(
-                "AAPL", "2023-01-01", "2024-01-01", "trend_following"
-            )
+        mock_optimizer = MagicMock(spec=OptunaOptimizer)
+        mock_optimizer.optimize.return_value = mock_optimization_result
+        test_container_full.optuna_optimizer.override(mock_optimizer)
 
-    def test_execute_custom_trials(self, tool, mock_optimization_result):
+        tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", strategy="trend_following")
+
+        mock_optimizer.optimize.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01", "trend_following")
+
+    def test_execute_custom_trials(self, test_container_full, mock_optimization_result):
         """Test execution with custom trial count."""
-        with patch("src.optimization.optimizer.OptunaOptimizer") as mock_optimizer_cls:
-            mock_optimizer = MagicMock()
-            mock_optimizer.optimize.return_value = mock_optimization_result
-            mock_optimizer_cls.return_value = mock_optimizer
+        from dependency_injector import providers
+        from src.optimization.optimizer import OptunaOptimizer
 
-            tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", n_trials=100)
+        tool = OptimizePortfolioTool(container=test_container_full)
 
-            mock_optimizer_cls.assert_called_once_with(n_trials=100)
+        mock_optimizer = MagicMock(spec=OptunaOptimizer)
+        mock_optimizer.optimize.return_value = mock_optimization_result
 
-    def test_execute_error_handling(self, tool):
+        factory_called = False
+        original_trials = None
+
+        def mock_factory(n_trials=50):
+            nonlocal factory_called, original_trials
+            factory_called = True
+            original_trials = n_trials
+            return mock_optimizer
+
+        test_container_full.optuna_optimizer.override(providers.Factory(mock_factory))
+
+        tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", n_trials=100)
+
+        assert factory_called
+        assert original_trials == 100
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on failure."""
-        with patch("src.optimization.optimizer.OptunaOptimizer") as mock_optimizer_cls:
-            mock_optimizer = MagicMock()
-            mock_optimizer.optimize.side_effect = Exception("Optimization failed")
-            mock_optimizer_cls.return_value = mock_optimizer
+        from src.optimization.optimizer import OptunaOptimizer
 
-            result = tool.execute(symbol="INVALID", start_date="2023-01-01", end_date="2024-01-01")
+        tool = OptimizePortfolioTool(container=test_container_full)
 
-            assert "Optimization failed" in result
+        mock_optimizer = MagicMock(spec=OptunaOptimizer)
+        mock_optimizer.optimize.side_effect = Exception("Optimization failed")
+        test_container_full.optuna_optimizer.override(mock_optimizer)
 
-    def test_format_result_float_params(self, tool):
+        result = tool.execute(symbol="INVALID", start_date="2023-01-01", end_date="2024-01-01")
+
+        assert "Optimization failed" in result
+
+    def test_format_result_float_params(self, test_container_full):
         """Test formatting with float parameters."""
+        tool = OptimizePortfolioTool(container=test_container_full)
         result = MagicMock()
         result.symbol = "AAPL"
         result.strategy_name = "momentum"
@@ -140,7 +161,8 @@ class TestOptimizePortfolioTool:
         assert "0.0250" in formatted  # float param
         assert "14" in formatted  # int param
 
-    def test_repr(self, tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = OptimizePortfolioTool(container=test_container_full)
         repr_str = repr(tool)
         assert "OptimizePortfolioTool" in repr_str

@@ -10,10 +10,9 @@ from src.tools.websearch import WebSearchTool
 
 
 @pytest.fixture
-def mock_fetcher():
-    """Mock WebSearchFetcher."""
-    mock = MagicMock()
-    mock.search.return_value = WebSearchResponse(
+def mock_general_response():
+    """Mock general search response."""
+    return WebSearchResponse(
         query="AAPL stock",
         search_type=SearchType.GENERAL,
         results=[
@@ -30,7 +29,12 @@ def mock_fetcher():
         ],
         fetched_at=datetime.now(),
     )
-    mock.search_news.return_value = WebSearchResponse(
+
+
+@pytest.fixture
+def mock_news_response():
+    """Mock news search response."""
+    return WebSearchResponse(
         query="AAPL news",
         search_type=SearchType.NEWS,
         results=[
@@ -44,24 +48,19 @@ def mock_fetcher():
         ],
         fetched_at=datetime.now(),
     )
-    return mock
-
-
-@pytest.fixture
-def tool(mock_fetcher):
-    """Create WebSearchTool with mock fetcher."""
-    return WebSearchTool(fetcher=mock_fetcher)
 
 
 class TestWebSearchTool:
     """Tests for WebSearchTool."""
 
-    def test_tool_name(self, tool):
+    def test_tool_name(self, test_container_full):
         """Test tool name property."""
+        tool = WebSearchTool(container=test_container_full)
         assert tool.name == "web_search"
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
+        tool = WebSearchTool(container=test_container_full)
         definition = tool.get_tool_definition()
 
         assert definition["type"] == "function"
@@ -74,8 +73,14 @@ class TestWebSearchTool:
         assert "search_type" in params["properties"]
         assert params["properties"]["search_type"]["enum"] == ["general", "news"]
 
-    def test_execute_general_search(self, tool, mock_fetcher):
+    def test_execute_general_search(self, test_container_full, mock_general_response):
         """Test executing general search."""
+        mock_fetcher = MagicMock()
+        mock_fetcher.search.return_value = mock_general_response
+        test_container_full.websearch_fetcher.override(mock_fetcher)
+
+        tool = WebSearchTool(container=test_container_full)
+
         result = tool.execute(query="AAPL stock", search_type="general", max_results=5)
 
         mock_fetcher.search.assert_called_once_with("AAPL stock", max_results=5)
@@ -83,8 +88,14 @@ class TestWebSearchTool:
         assert "Apple Stock Analysis" in result
         assert "https://example.com/aapl" in result
 
-    def test_execute_news_search(self, tool, mock_fetcher):
+    def test_execute_news_search(self, test_container_full, mock_news_response):
         """Test executing news search."""
+        mock_fetcher = MagicMock()
+        mock_fetcher.search_news.return_value = mock_news_response
+        test_container_full.websearch_fetcher.override(mock_fetcher)
+
+        tool = WebSearchTool(container=test_container_full)
+
         result = tool.execute(query="AAPL news", search_type="news", max_results=5)
 
         mock_fetcher.search_news.assert_called_once_with("AAPL news", max_results=5)
@@ -92,23 +103,28 @@ class TestWebSearchTool:
         assert "Apple announces new product" in result
         assert "Reuters" in result
 
-    def test_execute_empty_results(self, tool, mock_fetcher):
+    def test_execute_empty_results(self, test_container_full):
         """Test handling empty search results."""
-        mock_fetcher.search.return_value = WebSearchResponse(
+        tool = WebSearchTool(container=test_container_full)
+
+        empty_response = WebSearchResponse(
             query="nonexistent",
             search_type=SearchType.GENERAL,
             results=[],
             fetched_at=datetime.now(),
         )
+        mock_fetcher = MagicMock()
+        mock_fetcher.search.return_value = empty_response
+        test_container_full.websearch_fetcher.override(mock_fetcher)
 
         result = tool.execute(query="nonexistent query", search_type="general")
 
         assert "No results found" in result
 
-    def test_execute_truncates_long_body(self, tool, mock_fetcher):
+    def test_execute_truncates_long_body(self, test_container_full):
         """Test that long body text is truncated."""
         long_body = "A" * 500
-        mock_fetcher.search.return_value = WebSearchResponse(
+        long_response = WebSearchResponse(
             query="test",
             search_type=SearchType.GENERAL,
             results=[
@@ -120,13 +136,19 @@ class TestWebSearchTool:
             ],
             fetched_at=datetime.now(),
         )
+        mock_fetcher = MagicMock()
+        mock_fetcher.search.return_value = long_response
+        test_container_full.websearch_fetcher.override(mock_fetcher)
+
+        tool = WebSearchTool(container=test_container_full)
 
         result = tool.execute(query="test", search_type="general")
 
         assert "..." in result
         assert len(result) < len(long_body) + 200
 
-    def test_repr(self, tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = WebSearchTool(container=test_container_full)
         repr_str = repr(tool)
         assert "WebSearchTool" in repr_str

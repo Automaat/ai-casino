@@ -92,6 +92,14 @@ def create_test_container(
     if override_broker:
         container.alpaca_broker.override(create_mock_alpaca_broker())
 
+    # Tool component overrides (always override these for tool tests)
+    if override_fetchers:  # Only override if we're in full test mode
+        container.backtest_runner.override(create_mock_backtest_runner())
+        container.optuna_optimizer.override(create_mock_optuna_optimizer())
+        container.metrics_tracker.override(create_mock_metrics_tracker())
+        container.quantstats_reporter.override(create_mock_quantstats_reporter())
+        container.stock_screener.override(create_mock_stock_screener())
+
     return container
 
 
@@ -117,6 +125,11 @@ def reset_test_container(container: AppContainer, providers: list[str] | None = 
         "earnings_fetcher",
         "comparative_fetcher",
         "alpaca_broker",
+        "backtest_runner",
+        "optuna_optimizer",
+        "metrics_tracker",
+        "quantstats_reporter",
+        "stock_screener",
     ]
 
     providers_to_reset = providers if providers else all_providers
@@ -350,6 +363,161 @@ def create_mock_alpaca_broker() -> MagicMock:
         submitted_at=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
         filled_at=datetime(2024, 1, 1, 10, 0, 5, tzinfo=UTC),
         filled_avg_price=150.0,
+    )
+
+    return mock
+
+
+def create_mock_backtest_runner() -> MagicMock:
+    """Create mock BacktestRunner.
+
+    Returns:
+        Mock with run_backtest method
+    """
+    from src.backtesting.runner import BacktestResult
+    from src.metrics.tracker import TradeRecord
+    from src.strategies.signal import Signal
+
+    mock = MagicMock()
+    mock.cash = 100000.0
+    mock.commission = 0.002
+
+    mock.run_backtest.return_value = BacktestResult(
+        symbol="AAPL",
+        start_date=datetime(2023, 1, 1, tzinfo=UTC),
+        end_date=datetime(2024, 1, 1, tzinfo=UTC),
+        total_return=0.2534,
+        sharpe_ratio=1.45,
+        max_drawdown=-0.0823,
+        win_rate=0.62,
+        total_trades=48,
+        avg_return_per_trade=0.0053,
+        trades=[
+            TradeRecord(
+                timestamp=datetime(2023, 1, 5, tzinfo=UTC),
+                symbol="AAPL",
+                action=Signal.BUY,
+                entry_price=150.0,
+                exit_price=155.0,
+                shares=10,
+                stop_loss_price=145.0,
+                confidence=0.8,
+                risk_level="LOW",
+                status="CLOSED",
+                pnl=50.0,
+                pnl_percent=0.033,
+            )
+        ],
+    )
+
+    return mock
+
+
+def create_mock_optuna_optimizer() -> MagicMock:
+    """Create mock OptunaOptimizer.
+
+    Returns:
+        Mock with optimize method
+    """
+    from src.optimization.results import OptimizationResult
+
+    mock = MagicMock()
+    mock.n_trials = 50
+
+    mock.optimize.return_value = OptimizationResult(
+        strategy_name="momentum",
+        symbol="AAPL",
+        best_params={"rsi_period": 14, "macd_fast": 12, "macd_slow": 26},
+        best_metrics={"sharpe_ratio": 1.87, "total_return": 0.3245, "max_drawdown": 0.0912},
+        total_trials=50,
+        optimization_time_seconds=42.3,
+    )
+
+    return mock
+
+
+def create_mock_metrics_tracker() -> MagicMock:
+    """Create mock MetricsTracker.
+
+    Returns:
+        Mock with trades property
+    """
+    mock = MagicMock()
+    mock.risk_free_rate = 0.02
+    mock.trades = []
+
+    return mock
+
+
+def create_mock_quantstats_reporter() -> MagicMock:
+    """Create mock QuantStatsReporter.
+
+    Returns:
+        Mock with generate_tearsheet method
+    """
+    from src.metrics.tracker import TearSheet
+
+    mock = MagicMock()
+    mock.risk_free_rate = 0.02
+
+    mock.generate_tearsheet.return_value = TearSheet(
+        symbol="AAPL",
+        start_date=datetime(2023, 1, 1, tzinfo=UTC),
+        end_date=datetime(2024, 1, 1, tzinfo=UTC),
+        cagr=0.1523,
+        sharpe_ratio=1.34,
+        sortino_ratio=1.89,
+        calmar_ratio=2.15,
+        max_drawdown=-0.0712,
+        max_drawdown_duration_days=15,
+        volatility_annual=0.1845,
+        win_rate=0.58,
+        profit_factor=1.67,
+        avg_win=0.025,
+        avg_loss=-0.018,
+        best_day=0.045,
+        worst_day=-0.038,
+        monthly_returns={"2023-01": 0.05, "2023-02": 0.03},
+        benchmark_symbol="SPY",
+        benchmark_cagr=0.1234,
+        benchmark_sharpe=1.12,
+        alpha=0.0289,
+        beta=0.85,
+        html_report_path="/home/user/.ai-casino/tearsheets/AAPL_20240101.html",
+        generated_at=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+
+    return mock
+
+
+def create_mock_stock_screener() -> MagicMock:
+    """Create mock StockScreener.
+
+    Returns:
+        Mock with screen method
+    """
+    from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
+    from src.strategies.signal import Signal
+
+    mock = MagicMock()
+
+    mock.screen.return_value = ScreeningOutput(
+        criteria=ScreeningCriteria.MOMENTUM,
+        universe="SP500",
+        results=[
+            ScreeningResult(
+                symbol="AAPL",
+                name="Apple Inc.",
+                sector="Technology",
+                score=0.85,
+                signal=Signal.BUY,
+                metrics={"rsi": 28.5, "macd_hist": 0.15},
+                reason="RSI oversold, MACD bullish",
+            )
+        ],
+        total_screened=500,
+        errors=[],
+        screened_at=datetime.now(UTC),
     )
 
     return mock
