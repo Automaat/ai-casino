@@ -425,7 +425,7 @@ class AnalysisOrchestrator:
             price = result.risk.current_price
             rsi = result.technical.rsi if result.technical else None
             macd = result.technical.macd_hist if result.technical else None
-            reasoning = result.decision.reasoning
+            reasoning = " | ".join(result.decision.reasoning)
             session = result.trading_session.value if result.trading_session else "REGULAR"
 
             message = NotificationMessage(
