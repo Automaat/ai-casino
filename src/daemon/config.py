@@ -551,6 +551,7 @@ class PositionManagementConfig(BaseModel):
     enabled: bool = False
     trailing_stop_enabled: bool = True
     trailing_stop_percent: float = Field(default=3.0, ge=0.5, le=10.0)
+    min_stop_gap_dollars: float = Field(default=0.10, ge=0.01, le=1.0)
     partial_profit_enabled: bool = True
     profit_target_1_percent: float = Field(default=5.0, ge=1.0, le=20.0)
     profit_target_1_sell_pct: float = Field(default=0.5, ge=0.1, le=1.0)
