@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class GetRiskMetricsTool(BaseTool):
     """Tool to calculate institutional-grade risk metrics."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -94,7 +94,7 @@ class GetRiskMetricsTool(BaseTool):
             logger.error(f"Risk metrics calculation failed for {symbol}: {e}")
             return f"Risk metrics calculation failed for {symbol}: {e}"
 
-    def _format_result(self, symbol: str, days: int, metrics: "RiskMetrics") -> str:
+    def _format_result(self, symbol: str, days: int, metrics: RiskMetrics) -> str:
         """Format risk metrics as markdown.
 
         Args:

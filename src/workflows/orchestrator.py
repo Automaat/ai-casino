@@ -68,16 +68,16 @@ class TradingWorkflow:
         use_meta_agent: bool = True,
         trump_mode: bool = False,
         snapshot_on_trade: bool | None = None,
-        snapshot_repository: "PortfolioSnapshotRepository | None" = None,
-        param_store: "OptimizedParamStore | None" = None,
+        snapshot_repository: PortfolioSnapshotRepository | None = None,
+        param_store: OptimizedParamStore | None = None,
         historical_cache: HistoricalCache | None = None,
-        portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
+        portfolio_var_calculator: PortfolioVaRCalculator | None = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
-        finnhub_fetcher: "FinnhubFetcher | None" = None,
+        finnhub_fetcher: FinnhubFetcher | None = None,
         pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
-        notification_service: "NotificationService | None" = None,
-        position_sizing_config: "PositionSizingConfig | None" = None,
-        container: "AppContainer | None" = None,
+        notification_service: NotificationService | None = None,
+        position_sizing_config: PositionSizingConfig | None = None,
+        container: AppContainer | None = None,
     ) -> None:
         """Initialize trading workflow.
 
@@ -238,7 +238,7 @@ class TradingWorkflow:
         trading_session: TradingSession = TradingSession.REGULAR,
         position_context: dict[str, object] | None = None,
         enable_multi_timeframe: bool = False,
-        degradation_context: "DegradationContext | None" = None,
+        degradation_context: DegradationContext | None = None,
         **context_kwargs: str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -301,7 +301,7 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
-        from src.daemon.degradation import DegradationContext, DegradationTier
+        from src.daemon.degradation import DegradationTier
 
         ctx = extra_context or {}
         degradation_context: DegradationContext | None = ctx.get("degradation_context")
@@ -507,7 +507,7 @@ class TradingWorkflow:
         risk_output: RiskAssessmentOutput,
         execution_output: TradeExecutionOutput | None,
         decision_context: DecisionContext,
-        degradation_context: "DegradationContext | None",
+        degradation_context: DegradationContext | None,
         target_weight: float | None,  # noqa: ARG002
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,

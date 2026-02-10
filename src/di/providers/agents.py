@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from src.tools.websearch import WebSearchTool
 
 
-def create_news_analyst(llm_client: LLMClient) -> "NewsAnalyst":
+def create_news_analyst(llm_client: LLMClient) -> NewsAnalyst:
     """Create NewsAnalyst with LLM client.
 
     Args:
@@ -49,7 +49,7 @@ def create_news_analyst(llm_client: LLMClient) -> "NewsAnalyst":
     return NewsAnalyst(llm_client)
 
 
-def create_sentiment_analyst(finbert_sentiment: "FinBERTSentiment") -> "SentimentAnalyst":
+def create_sentiment_analyst(finbert_sentiment: FinBERTSentiment) -> SentimentAnalyst:
     """Create SentimentAnalyst with FinBERT model.
 
     Args:
@@ -63,7 +63,7 @@ def create_sentiment_analyst(finbert_sentiment: "FinBERTSentiment") -> "Sentimen
     return SentimentAnalyst(finbert_sentiment)
 
 
-def create_trump_analyst(llm_client: LLMClient) -> "TrumpAnalyst":
+def create_trump_analyst(llm_client: LLMClient) -> TrumpAnalyst:
     """Create TrumpAnalyst with LLM client.
 
     Args:
@@ -80,7 +80,7 @@ def create_trump_analyst(llm_client: LLMClient) -> "TrumpAnalyst":
 def create_fundamental_analyst(
     llm_client: LLMClient,
     fundamental_fetcher: FundamentalDataFetcher,
-) -> "FundamentalAnalyst":
+) -> FundamentalAnalyst:
     """Create FundamentalAnalyst with LLM client and data fetcher.
 
     Args:
@@ -99,8 +99,8 @@ def create_social_sentiment_analyst(
     llm_client: LLMClient,
     finnhub_fetcher: FinnhubFetcher,
     reddit_fetcher: RedditFetcher,
-    finbert_sentiment: "FinBERTSentiment",
-) -> "SocialSentimentAnalyst":
+    finbert_sentiment: FinBERTSentiment,
+) -> SocialSentimentAnalyst:
     """Create SocialSentimentAnalyst with all dependencies.
 
     Args:
@@ -117,7 +117,7 @@ def create_social_sentiment_analyst(
     return SocialSentimentAnalyst(llm_client, finnhub_fetcher, reddit_fetcher, finbert_sentiment)
 
 
-def create_trader_agent(llm_client: LLMClient) -> "TraderAgent":
+def create_trader_agent(llm_client: LLMClient) -> TraderAgent:
     """Create TraderAgent with LLM client.
 
     Args:
@@ -131,7 +131,7 @@ def create_trader_agent(llm_client: LLMClient) -> "TraderAgent":
     return TraderAgent(llm_client)
 
 
-def create_thesis_researcher(llm_client: LLMClient, direction: "ResearchDirection") -> "ThesisResearcher":
+def create_thesis_researcher(llm_client: LLMClient, direction: ResearchDirection) -> ThesisResearcher:
     """Create ThesisResearcher with direction.
 
     Args:
@@ -146,7 +146,7 @@ def create_thesis_researcher(llm_client: LLMClient, direction: "ResearchDirectio
     return ThesisResearcher(llm_client, direction)
 
 
-def create_event_triage_agent(llm_client: LLMClient) -> "EventTriageAgent":
+def create_event_triage_agent(llm_client: LLMClient) -> EventTriageAgent:
     """Create EventTriageAgent with LLM client.
 
     Args:
@@ -163,7 +163,7 @@ def create_event_triage_agent(llm_client: LLMClient) -> "EventTriageAgent":
 def create_comparative_analyst(
     llm_client: LLMClient,
     comparative_fetcher: ComparativeDataFetcher,
-) -> "ComparativeAnalyst":
+) -> ComparativeAnalyst:
     """Create ComparativeAnalyst with LLM client and data fetcher.
 
     Args:
@@ -181,7 +181,7 @@ def create_comparative_analyst(
 def create_game_plan_agent(
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
-) -> "GamePlanAgent":
+) -> GamePlanAgent:
     """Create GamePlanAgent with LLM client and market fetcher.
 
     Args:
@@ -199,7 +199,7 @@ def create_game_plan_agent(
 def create_trade_journal_agent(
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
-) -> "TradeJournalAgent":
+) -> TradeJournalAgent:
     """Create TradeJournalAgent with LLM client and market fetcher.
 
     Args:
@@ -214,7 +214,7 @@ def create_trade_journal_agent(
     return TradeJournalAgent(llm_client, market_fetcher)
 
 
-def create_technical_analyst(llm_client: LLMClient) -> Callable[[StrategyType], "TechnicalAnalyst"]:
+def create_technical_analyst(llm_client: LLMClient) -> Callable[[StrategyType], TechnicalAnalyst]:
     """Returns factory accepting strategy parameter.
 
     TechnicalAnalyst requires a strategy selected by workflow logic (MetaAgent or default).
@@ -228,13 +228,13 @@ def create_technical_analyst(llm_client: LLMClient) -> Callable[[StrategyType], 
     """
     from src.agents.technical import TechnicalAnalyst
 
-    def factory(strategy: StrategyType) -> "TechnicalAnalyst":
+    def factory(strategy: StrategyType) -> TechnicalAnalyst:
         return TechnicalAnalyst(llm_client, strategy)
 
     return factory
 
 
-def create_web_research_agent(llm_client: LLMClient, search_tool: "WebSearchTool") -> "WebResearchAgent":
+def create_web_research_agent(llm_client: LLMClient, search_tool: WebSearchTool) -> WebResearchAgent:
     """Create WebResearchAgent with LLM client and search tool.
 
     Args:
@@ -249,7 +249,7 @@ def create_web_research_agent(llm_client: LLMClient, search_tool: "WebSearchTool
     return WebResearchAgent(llm_client, search_tool)
 
 
-def create_meta_agent(llm_client: LLMClient, regime_detector: "MarketRegimeDetector") -> "MetaAgent":
+def create_meta_agent(llm_client: LLMClient, regime_detector: MarketRegimeDetector) -> MetaAgent:
     """Create MetaAgent with LLM client and regime detector.
 
     Optional dependencies (metrics_tracker, param_store) passed as None.
@@ -269,8 +269,8 @@ def create_meta_agent(llm_client: LLMClient, regime_detector: "MarketRegimeDetec
 def create_risk_management_agent(
     llm_client: LLMClient,
     daemon_config: DaemonConfig,
-    portfolio_var_calculator: "PortfolioVaRCalculator | None" = None,
-) -> "RiskManagementAgent":
+    portfolio_var_calculator: PortfolioVaRCalculator | None = None,
+) -> RiskManagementAgent:
     """Create RiskManagementAgent with config extraction.
 
     Extracts position_sizing and portfolio_var configs from daemon_config.

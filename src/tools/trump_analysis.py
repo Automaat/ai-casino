@@ -33,7 +33,7 @@ class TrumpAnalysisTool(BaseTool):
 
     TOOL_NAME = "analyze_trump_posts"
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:

@@ -9,9 +9,12 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel
 
+from src.agents.news import NewsAnalysis
+from src.agents.sentiment import SentimentAnalysis
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.notification_helper import DaemonNotificationHelper
+from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
     from src.cache.historical import HistoricalCache
@@ -25,9 +28,6 @@ if TYPE_CHECKING:
     from src.daemon.state import DaemonState
     from src.data.broker import AlpacaBroker
     from src.workflows import TradingWorkflow
-from src.agents.news import NewsAnalysis
-from src.agents.sentiment import SentimentAnalysis
-from src.workflows.types import TradingWorkflowResult
 
 
 class AnalysisOrchestrationResult(BaseModel):

@@ -270,8 +270,8 @@ class ThesisResearcher(BaseResearcher):
         sentiment: SentimentAnalysis,
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
-        comparative: "ComparativeAnalysis | None" = None,
-        trump_analysis: "TrumpAnalysis | None" = None,
+        comparative: ComparativeAnalysis | None = None,
+        trump_analysis: TrumpAnalysis | None = None,
     ) -> ResearchAnalysis:
         """Construct thesis from all analyses.
 

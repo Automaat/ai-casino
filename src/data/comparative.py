@@ -256,7 +256,7 @@ class ComparativeDataFetcher:
             if result <= 0 or result > 1000:
                 return None
             return result
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def __repr__(self) -> str:

@@ -12,18 +12,18 @@ from loguru import logger
 from rich.console import Console
 
 from src.agents.game_plan import GamePlanAgent
+from src.daemon.config import DaemonConfig
+from src.daemon.factory import DaemonFactory
+from src.daemon.notification_helper import DaemonNotificationHelper
+from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
+    from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
-from src.daemon.analysis_orchestrator import AnalysisOrchestrator
-from src.daemon.config import DaemonConfig
-from src.daemon.factory import DaemonFactory
-from src.daemon.notification_helper import DaemonNotificationHelper
-from src.workflows import TradingWorkflow
-from src.workflows.types import TradingWorkflowResult
+    from src.workflows import TradingWorkflow
 
 console = Console()
 

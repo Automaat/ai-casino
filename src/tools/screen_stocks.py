@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class ScreenStocksTool(BaseTool):
     """Tool to screen stocks for investment opportunities."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -144,7 +144,7 @@ class ScreenStocksTool(BaseTool):
 
         return self._format_output(output, analysis)
 
-    def _format_output(self, output: "ScreeningOutput", analysis: "ScreeningAnalysis") -> str:
+    def _format_output(self, output: ScreeningOutput, analysis: ScreeningAnalysis) -> str:
         """Format screening output as markdown.
 
         Args:

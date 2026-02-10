@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class GetMarketDataTool(BaseTool):
     """Tool to fetch current market data for a stock."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -84,7 +84,7 @@ class GetMarketDataTool(BaseTool):
             logger.error(f"Failed to fetch market data for {symbol}: {e}")
             return f"Failed to fetch market data for {symbol}: {e}"
 
-    def _format_data(self, data: "MarketData") -> str:
+    def _format_data(self, data: MarketData) -> str:
         """Format market data as summary.
 
         Args:

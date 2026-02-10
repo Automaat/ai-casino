@@ -5,15 +5,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from src.daemon.factory import DaemonComponents
+from src.daemon.factory import DaemonComponents
 
 _broker_cache: ContextVar[dict[str, Any] | None] = ContextVar("_broker_cache", default=None)
 
@@ -290,7 +289,7 @@ def _mask_sensitive_field(value: str | None) -> str:
 
 @asynccontextmanager
 async def get_broker_account_info_cached(
-    components: "DaemonComponents",
+    components: DaemonComponents,
 ) -> AsyncIterator[dict[str, Any] | None]:
     """Request-scoped cached broker account info.
 
@@ -327,7 +326,7 @@ async def get_broker_account_info_cached(
         _broker_cache.reset(token)
 
 
-def create_api_app(components: "DaemonComponents") -> FastAPI:  # noqa: C901, PLR0915
+def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0915
     """Create FastAPI app with components reference.
 
     Complexity acceptable for FastAPI route registration pattern.

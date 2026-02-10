@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from src.dashboard.api_client import DaemonAPIClient
 
 
-def render(client: "DaemonAPIClient") -> list:  # noqa: ARG001
+def render(client: DaemonAPIClient) -> list:  # noqa: ARG001
     """Render Workflow tab content.
 
     Args:

@@ -85,7 +85,7 @@ class StockScreener:
     def __init__(
         self,
         universe_fetcher: StockUniverseFetcher,
-        liquidity_filters: "LiquidityFilterConfig | None" = None,
+        liquidity_filters: LiquidityFilterConfig | None = None,
         cache_dir: str | None = None,
     ) -> None:
         """Initialize stock screener.

@@ -7,17 +7,14 @@ Detects two types of events:
 
 from collections import deque
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
 from src.daemon.events import BaseEvent, SocialEvent
-from src.data.reddit import RedditFetcher
-
-if TYPE_CHECKING:
-    from src.data.reddit import TrendingTicker
+from src.data.reddit import RedditFetcher, TrendingTicker
 
 
 class SocialWatcher(EventWatcher):
@@ -125,7 +122,7 @@ class SocialWatcher(EventWatcher):
             viral_post=None,
         )
 
-    def _check_viral_posts(self, ticker: "TrendingTicker", symbol: str, now: datetime) -> list[SocialEvent]:
+    def _check_viral_posts(self, ticker: TrendingTicker, symbol: str, now: datetime) -> list[SocialEvent]:
         """Check ticker posts for viral content and return detected events."""
         events: list[SocialEvent] = []
 

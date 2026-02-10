@@ -31,7 +31,7 @@ class ScreeningConfig(BaseModel):
     watchlist_name: str = "daemon-screening"
 
     @model_validator(mode="after")
-    def validate_screen_time(self) -> "ScreeningConfig":
+    def validate_screen_time(self) -> ScreeningConfig:
         """Validate screen_time is within 16:00-20:00."""
         if not self.enabled:
             return self
@@ -123,7 +123,7 @@ class DiscoveryConfig(BaseModel):
     outcome_lookback_days: int = 90
 
     @model_validator(mode="after")
-    def validate_discovery_time(self) -> "DiscoveryConfig":
+    def validate_discovery_time(self) -> DiscoveryConfig:
         """Validate discovery_time is within 16:00-20:00."""
         if not self.enabled:
             return self
@@ -161,7 +161,7 @@ class LiquidityFilterConfig(BaseModel):
     price_range: tuple[float, float] = (10.0, 500.0)
 
     @model_validator(mode="after")
-    def validate_price_range(self) -> "LiquidityFilterConfig":
+    def validate_price_range(self) -> LiquidityFilterConfig:
         """Validate that price_range is (min_price, max_price) with 0 < min < max."""
         if self.price_range is None:
             return self
@@ -248,7 +248,7 @@ class PortfolioRebalancingConfig(BaseModel):
     lookback_days: int = Field(default=90, ge=30, le=365)
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "PortfolioRebalancingConfig":
+    def validate_run_time(self) -> PortfolioRebalancingConfig:
         """Validate run_time is in HH:MM format within 16:00-20:00."""
         if not self.enabled:
             return self
@@ -362,7 +362,7 @@ class SectorRotationConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "SectorRotationConfig":
+    def validate_run_time(self) -> SectorRotationConfig:
         """Validate run_time is in HH:MM format within 16:00-20:00."""
         if not self.enabled:
             return self
@@ -395,7 +395,7 @@ class PeerAnalysisConfig(BaseModel):
     rate_limit_sleep: float = 13.0
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "PeerAnalysisConfig":
+    def validate_run_time(self) -> PeerAnalysisConfig:
         """Validate run_time is in HH:MM format."""
         if not self.enabled:
             return self
@@ -422,7 +422,7 @@ class CorrelationAuditConfig(BaseModel):
     output_dir: str = "~/.ai-casino/correlation-audits"
 
     @model_validator(mode="after")
-    def validate_run_time(self) -> "CorrelationAuditConfig":
+    def validate_run_time(self) -> CorrelationAuditConfig:
         """Validate run_time is in HH:MM format."""
         if not self.enabled:
             return self
@@ -447,7 +447,7 @@ class ReportingConfig(BaseModel):
     retention_days: int = 30
 
     @model_validator(mode="after")
-    def validate_tearsheet_time(self) -> "ReportingConfig":
+    def validate_tearsheet_time(self) -> ReportingConfig:
         """Validate tearsheet_time is in HH:MM format within 16:00-20:00 and retention_days >= 1."""
         if not self.enabled:
             return self
@@ -493,7 +493,7 @@ class SignalTrackingConfig(BaseModel):
     tracking_time: str = "17:00"
 
     @model_validator(mode="after")
-    def validate_tracking_time(self) -> "SignalTrackingConfig":
+    def validate_tracking_time(self) -> SignalTrackingConfig:
         """Validate tracking_time is in HH:MM format within 16:00-20:00."""
         if not self.enabled:
             return self
@@ -535,7 +535,7 @@ class GamePlanConfig(BaseModel):
     lookback_hours: int = 16
 
     @model_validator(mode="after")
-    def validate_generation_time(self) -> "GamePlanConfig":
+    def validate_generation_time(self) -> GamePlanConfig:
         """Validate generation_time is in pre-market window (04:00-09:30)."""
         if not self.enabled:
             return self
@@ -580,7 +580,7 @@ class PositionSizingConfig(BaseModel):
     monte_carlo_risk_multiplier: float = Field(default=0.7, ge=0.1, le=1.0)
 
     @model_validator(mode="after")
-    def validate_blend_weights(self) -> "PositionSizingConfig":
+    def validate_blend_weights(self) -> PositionSizingConfig:
         """Validate blend weights sum to 1.0."""
         total = self.blend_weight_optimization + self.blend_weight_risk_based
         if not (0.99 <= total <= 1.01):
@@ -589,7 +589,7 @@ class PositionSizingConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def validate_confidence_thresholds(self) -> "PositionSizingConfig":
+    def validate_confidence_thresholds(self) -> PositionSizingConfig:
         """Validate confidence thresholds are properly ordered."""
         if self.confidence_low_threshold >= self.confidence_high_threshold:
             msg = (
@@ -646,7 +646,7 @@ class MonteCarloConfig(BaseModel):
     max_history_records: int = Field(default=52, ge=1, le=520)
 
     @model_validator(mode="after")
-    def validate_schedule_time(self) -> "MonteCarloConfig":
+    def validate_schedule_time(self) -> MonteCarloConfig:
         """Validate schedule_time is within 16:00-20:00 for after-hours or any time for weekends."""
         if not self.enabled:
             return self
@@ -737,7 +737,7 @@ class EarningsCalendarConfig(BaseModel):
     position_reduction_factor: float = Field(default=0.5, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
-    def validate_fetch_time(self) -> "EarningsCalendarConfig":
+    def validate_fetch_time(self) -> EarningsCalendarConfig:
         """Validate fetch_time is in HH:MM format within 16:00-20:00."""
         if not self.enabled:
             return self
@@ -863,7 +863,7 @@ class DaemonConfig(BaseModel):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "DaemonConfig":
+    def from_yaml(cls, path: Path) -> DaemonConfig:
         """Load configuration from YAML file.
 
         Args:

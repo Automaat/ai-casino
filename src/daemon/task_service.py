@@ -14,14 +14,14 @@ from rich.console import Console
 
 from src.daemon.notification_helper import DaemonNotificationHelper
 
-console = Console()
-
 if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
     from src.daemon.state import SectorRotationRecord
     from src.di.container import AppContainer
     from src.metrics.correlation import CorrelationAuditResult
     from src.metrics.sector_rotation import SectorRotationAnalysis
+
+console = Console()
 
 
 class DaemonTaskService:

@@ -140,7 +140,7 @@ class RiskManagementAgent:
         enable_trailing_stop: bool = True,
         portfolio_var_calculator: PortfolioVaRCalculator | None = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
-        position_sizing_config: "PositionSizingConfig | None" = None,
+        position_sizing_config: PositionSizingConfig | None = None,
     ) -> None:
         """Initialize risk management agent.
 
@@ -203,8 +203,8 @@ class RiskManagementAgent:
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
         target_portfolio_weight: float | None = None,
-        backtest_validation: "BacktestValidation | None" = None,
-        degradation_context: "DegradationContext | None" = None,  # noqa: ARG002
+        backtest_validation: BacktestValidation | None = None,
+        degradation_context: DegradationContext | None = None,  # noqa: ARG002
         broker_api_failed: bool = False,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
@@ -529,7 +529,7 @@ class RiskManagementAgent:
         decision_confidence: float,
         broker_positions: dict[str, BrokerPosition] | None = None,
         portfolio_value: float | None = None,
-        backtest_validation: "BacktestValidation | None" = None,
+        backtest_validation: BacktestValidation | None = None,
         broker_api_failed: bool = False,
     ) -> RiskValidation:
         """Validate risk constraints and generate approval.
@@ -800,7 +800,7 @@ class RiskManagementAgent:
         risk_percent: float,
         exposure_percent: float,
         confidence: float,
-        backtest_validation: "BacktestValidation | None" = None,
+        backtest_validation: BacktestValidation | None = None,
     ) -> float:
         """Calculate overall risk score (0.0-1.0, higher = safer).
 

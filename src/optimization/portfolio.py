@@ -71,7 +71,7 @@ class PortfolioOptimizer:
     def __init__(
         self,
         market_fetcher: MarketDataFetcher,
-        broker: "AlpacaBroker | None" = None,
+        broker: AlpacaBroker | None = None,
         period_days: int = 365,
     ) -> None:
         """Initialize portfolio optimizer.

@@ -251,7 +251,7 @@ class FundamentalAnalyst:
 
         try:
             return float(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def __repr__(self) -> str:

@@ -1,6 +1,6 @@
 # Ruff strict configuration
 line-length = 110
-target-version = "py311"
+target-version = "py314"
 
 [lint]
 select = [
@@ -59,6 +59,8 @@ ignore = [
     "TC001",   # keep application imports at top level for clarity
     "TC002",   # keep third-party imports at top level (Pydantic needs runtime types)
     "TC003",   # keep typing imports at top level (no TYPE_CHECKING blocks)
+    "UP046",   # use type params for Generic (py312+ breaking change, defer migration)
+    "UP047",   # use type params for functions (py312+ breaking change, defer migration)
 ]
 
 [lint.per-file-ignores]

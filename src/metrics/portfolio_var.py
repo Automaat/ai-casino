@@ -36,7 +36,7 @@ class PortfolioVaRCalculator:
     def __init__(
         self,
         risk_calculator: RiskMetricsCalculator,
-        market_fetcher: "MarketDataFetcher",
+        market_fetcher: MarketDataFetcher,
     ) -> None:
         """Initialize portfolio VaR calculator.
 

@@ -4,7 +4,7 @@ import asyncio
 import re
 import signal
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from loguru import logger
 from pydantic import BaseModel
@@ -12,12 +12,10 @@ from rich.console import Console
 
 from src.agents.trump import COMPANY_TICKERS, TrumpAnalysis, TrumpAnalyst
 from src.data.truth_social import TruthPost, TruthSocialFetcher
+from src.di.container import AppContainer
 from src.models.llm import LLMClient
 from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
-
-if TYPE_CHECKING:
-    from src.di.container import AppContainer
 
 console = Console()
 
@@ -51,7 +49,7 @@ class TrumpWatcher:
         self,
         poll_interval: int = 60,
         max_analyses: int = 5,
-        container: "AppContainer | None" = None,
+        container: AppContainer | None = None,
     ) -> None:
         """Initialize Trump watcher.
 

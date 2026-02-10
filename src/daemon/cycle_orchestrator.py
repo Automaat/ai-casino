@@ -13,11 +13,11 @@ from rich.console import Console
 from src.daemon.notification_helper import DaemonNotificationHelper
 from src.workflows.types import TradingWorkflowResult
 
-console = Console()
-
 if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
     from src.daemon.task_runner import ScheduledTaskRunner
+
+console = Console()
 
 
 class CycleResult(BaseModel):

@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING, ClassVar
 
 from loguru import logger
 
+from src.daemon.config import DaemonConfig
+from src.daemon.scheduler import MarketScheduler
+
 if TYPE_CHECKING:
-    from src.daemon.config import DaemonConfig
     from src.daemon.runner import DaemonRunner
-    from src.daemon.scheduler import MarketScheduler
     from src.daemon.task_service import DaemonTaskService
 
 
@@ -62,9 +63,9 @@ class ScheduledTaskRunner:
 
     def __init__(
         self,
-        config: "DaemonConfig",
-        scheduler: "MarketScheduler",
-        daemon_runner: "DaemonRunner",
+        config: DaemonConfig,
+        scheduler: MarketScheduler,
+        daemon_runner: DaemonRunner,
     ) -> None:
         """Initialize task runner.
 
@@ -79,7 +80,7 @@ class ScheduledTaskRunner:
         self._task_service: DaemonTaskService | None = None  # Wired later via set_task_service
         logger.info("ScheduledTaskRunner initialized")
 
-    def set_task_service(self, task_service: "DaemonTaskService") -> None:
+    def set_task_service(self, task_service: DaemonTaskService) -> None:
         """Wire task service after initialization.
 
         Args:

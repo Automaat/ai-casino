@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class GenerateTearsheetTool(BaseTool):
     """Tool to generate QuantStats performance tearsheet."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -149,7 +149,7 @@ class GenerateTearsheetTool(BaseTool):
 
         return self._format_result(tearsheet)
 
-    def _fetch_benchmark(self, benchmark: str, period_days: int) -> "pd.Series | None":
+    def _fetch_benchmark(self, benchmark: str, period_days: int) -> pd.Series | None:
         """Fetch benchmark returns data.
 
         Args:
@@ -190,7 +190,7 @@ class GenerateTearsheetTool(BaseTool):
             logger.warning(f"Unknown period '{period}', using 1y")
             return 365
 
-    def _format_result(self, tearsheet: "TearSheet") -> str:
+    def _format_result(self, tearsheet: TearSheet) -> str:
         """Format tearsheet as markdown.
 
         Args:
@@ -217,7 +217,7 @@ class GenerateTearsheetTool(BaseTool):
 
         return "\n".join(lines)
 
-    def _add_performance_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
+    def _add_performance_section(self, lines: list[str], tearsheet: TearSheet) -> None:
         """Add performance metrics to lines."""
         lines.append("## Performance")
         metrics = [
@@ -230,7 +230,7 @@ class GenerateTearsheetTool(BaseTool):
             if value is not None:
                 lines.append(f"- {label}: {value:{fmt}}")
 
-    def _add_risk_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
+    def _add_risk_section(self, lines: list[str], tearsheet: TearSheet) -> None:
         """Add risk metrics to lines."""
         lines.extend(["", "## Risk"])
         if tearsheet.max_drawdown is not None:
@@ -238,7 +238,7 @@ class GenerateTearsheetTool(BaseTool):
         if tearsheet.volatility_annual is not None:
             lines.append(f"- Annual Volatility: {tearsheet.volatility_annual:.2%}")
 
-    def _add_win_loss_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
+    def _add_win_loss_section(self, lines: list[str], tearsheet: TearSheet) -> None:
         """Add win/loss metrics to lines."""
         lines.extend(["", "## Win/Loss"])
         if tearsheet.win_rate is not None:
@@ -246,7 +246,7 @@ class GenerateTearsheetTool(BaseTool):
         if tearsheet.profit_factor is not None:
             lines.append(f"- Profit Factor: {tearsheet.profit_factor:.2f}")
 
-    def _add_benchmark_section(self, lines: list[str], tearsheet: "TearSheet") -> None:
+    def _add_benchmark_section(self, lines: list[str], tearsheet: TearSheet) -> None:
         """Add benchmark comparison metrics to lines."""
         if not tearsheet.benchmark_symbol:
             return

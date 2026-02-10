@@ -87,7 +87,7 @@ class VectorBTRunner:
         start_date: str | datetime,
         end_date: str | datetime,
         strategy: (
-            "MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None"
+            MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None
         ) = None,
     ) -> VectorBTResult:
         """Run vectorized backtest for symbol.
@@ -197,7 +197,7 @@ class VectorBTRunner:
         self,
         data: pd.DataFrame,
         strategy: (
-            "MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None"
+            MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None
         ),
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals based on strategy type.
@@ -227,7 +227,7 @@ class VectorBTRunner:
         return self._generate_momentum_signals(data, None)
 
     def _generate_momentum_signals(
-        self, data: pd.DataFrame, strategy: "MomentumStrategy | None" = None
+        self, data: pd.DataFrame, strategy: MomentumStrategy | None = None
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from RSI + MACD indicators (momentum strategy).
 
@@ -267,7 +267,7 @@ class VectorBTRunner:
         return entries_series, exits_series
 
     def _generate_mean_reversion_signals(
-        self, data: pd.DataFrame, strategy: "MeanReversionStrategy | None" = None
+        self, data: pd.DataFrame, strategy: MeanReversionStrategy | None = None
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from Bollinger Bands (mean reversion).
 
@@ -305,7 +305,7 @@ class VectorBTRunner:
         return entries, exits
 
     def _generate_trend_following_signals(
-        self, data: pd.DataFrame, strategy: "TrendFollowingStrategy | None" = None
+        self, data: pd.DataFrame, strategy: TrendFollowingStrategy | None = None
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from SMA crossover + ADX (trend following).
 
@@ -353,7 +353,7 @@ class VectorBTRunner:
     def _generate_ensemble_signals(
         self,
         data: pd.DataFrame,
-        strategy: "EnsembleStrategy",
+        strategy: EnsembleStrategy,
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from weighted voting of all strategies.
 

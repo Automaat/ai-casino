@@ -335,7 +335,7 @@ class AutocompleteInput(Widget):
             else:
                 self.focus()
 
-    def focus(self, scroll_visible: bool = True) -> "AutocompleteInput":
+    def focus(self, scroll_visible: bool = True) -> AutocompleteInput:
         """Focus the input."""
         self.query_one("#autocomplete-input", ChatInput).focus(scroll_visible)
         return self

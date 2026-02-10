@@ -514,7 +514,7 @@ class LLMClient:
             task = loop.create_task(self.close())
             task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
-    def __enter__(self) -> "LLMClient":
+    def __enter__(self) -> LLMClient:
         """Enter sync context manager."""
         return self
 
@@ -527,7 +527,7 @@ class LLMClient:
         """Exit sync context manager and ensure cleanup."""
         self._schedule_close()
 
-    async def __aenter__(self) -> "LLMClient":
+    async def __aenter__(self) -> LLMClient:
         """Enter async context manager."""
         return self
 

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class RunBacktestTool(BaseTool):
     """Tool to run backtest on a stock with momentum strategy."""
 
-    def __init__(self, container: "AppContainer | None" = None) -> None:
+    def __init__(self, container: AppContainer | None = None) -> None:
         """Initialize tool with optional container.
 
         Args:
@@ -100,7 +100,7 @@ class RunBacktestTool(BaseTool):
             logger.error(f"Backtest failed for {symbol}: {e}")
             return f"Backtest failed for {symbol}: {e}"
 
-    def _format_result(self, result: "BacktestResult") -> str:
+    def _format_result(self, result: BacktestResult) -> str:
         """Format backtest result as markdown.
 
         Args:
