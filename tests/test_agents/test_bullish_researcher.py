@@ -13,9 +13,9 @@ from src.strategies.signal import Signal
 
 
 @pytest.fixture
-def bullish_researcher(mock_llm_client):
+def bullish_researcher(test_container):
     """Create bullish researcher instance."""
-    return BullishResearcher(mock_llm_client)
+    return test_container.bullish_researcher()
 
 
 @pytest.fixture
@@ -91,11 +91,10 @@ def sample_llm_response():
 class TestBullishResearcher:
     """Test suite for BullishResearcher."""
 
-    def test_initialization(self, mock_llm_client):
+    def test_initialization(self, test_container):
         """Test researcher initialization."""
-        researcher = BullishResearcher(mock_llm_client)
+        researcher = test_container.bullish_researcher()
 
-        assert researcher.llm == mock_llm_client
         assert repr(researcher) == "BullishResearcher(llm=ollama/qwen3:14b)"
 
     async def test_analyze_returns_bullish_research_analysis(

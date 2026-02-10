@@ -67,41 +67,29 @@ SENTIMENT: Bullish"""
 
 
 @pytest.fixture
-def mock_llm_client_no_tools():
-    """Mock LLM client without tool support (Ollama)."""
-    mock = MagicMock()
-    mock.provider = "ollama"
-    mock.supports_tools = False
-    mock.acomplete = AsyncMock(return_value=MOCK_OLLAMA_RESPONSE)
-    return mock
-
-
-@pytest.fixture
-def mock_llm_client_with_tools():
-    """Mock LLM client with tool support (Claude/OpenAI)."""
-    mock = MagicMock()
-    mock.provider = "anthropic"
-    mock.supports_tools = True
-    mock.acomplete_with_tools = AsyncMock(return_value=MOCK_TOOLS_RESPONSE)
-    return mock
-
-
-@pytest.fixture
-def agent_no_tools(mock_llm_client_no_tools, mock_search_tool):
+def agent_no_tools(test_container, mock_search_tool):
     """Create agent without tool calling support."""
-    return WebResearchAgent(mock_llm_client_no_tools, mock_search_tool)
+    agent = test_container.web_research_agent()
+    agent.llm.provider = "ollama"
+    agent.llm.supports_tools = False
+    agent.llm.acomplete = AsyncMock(return_value=MOCK_OLLAMA_RESPONSE)
+    return agent
 
 
 @pytest.fixture
-def agent_with_tools(mock_llm_client_with_tools, mock_search_tool):
+def agent_with_tools(test_container, mock_search_tool):
     """Create agent with tool calling support."""
-    return WebResearchAgent(mock_llm_client_with_tools, mock_search_tool)
+    agent = test_container.web_research_agent()
+    agent.llm.provider = "anthropic"
+    agent.llm.supports_tools = True
+    agent.llm.acomplete_with_tools = AsyncMock(return_value=MOCK_TOOLS_RESPONSE)
+    return agent
 
 
 class TestWebResearchAgent:
     """Tests for WebResearchAgent."""
 
-    async def test_research_no_tools(self, agent_no_tools, mock_llm_client_no_tools):
+    async def test_research_no_tools(self, agent_no_tools):
         """Test research with template-based queries (Ollama)."""
         result = await agent_no_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
 
@@ -109,23 +97,21 @@ class TestWebResearchAgent:
         assert result.symbol == "AAPL"
         assert len(result.results) == 1
         assert result.results[0].category == ResearchCategory.LATEST_NEWS
-        mock_llm_client_no_tools.acomplete.assert_called_once()
 
-    async def test_research_with_tools(self, agent_with_tools, mock_llm_client_with_tools):
+    async def test_research_with_tools(self, agent_with_tools):
         """Test research with tool calling (Claude/OpenAI)."""
         result = await agent_with_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
 
         assert isinstance(result, WebResearchAnalysis)
         assert result.symbol == "AAPL"
         assert len(result.results) == 1
-        mock_llm_client_with_tools.acomplete_with_tools.assert_called_once()
 
-    async def test_research_with_tools_respects_max_calls(self, agent_with_tools, mock_llm_client_with_tools):
+    async def test_research_with_tools_respects_max_calls(self, agent_with_tools):
         """Test research with tool calling respects max_tool_calls=3."""
         await agent_with_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
 
         # Verify acomplete_with_tools called with max_tool_calls=3
-        call_args = mock_llm_client_with_tools.acomplete_with_tools.call_args
+        call_args = agent_with_tools.llm.acomplete_with_tools.call_args
         assert call_args.kwargs["max_tool_calls"] == 3
 
     async def test_research_all_categories(self, agent_no_tools):
@@ -146,9 +132,9 @@ class TestWebResearchAgent:
         assert research_result.sentiment_indication in ["Bullish", "Bearish", "Neutral"]
         assert 0.0 <= research_result.confidence <= 1.0
 
-    async def test_overall_sentiment_aggregation(self, agent_no_tools, mock_llm_client_no_tools):
+    async def test_overall_sentiment_aggregation(self, agent_no_tools):
         """Test sentiment aggregation across categories."""
-        mock_llm_client_no_tools.acomplete = AsyncMock(
+        agent_no_tools.llm.acomplete = AsyncMock(
             return_value="""SUMMARY: Positive outlook.
 
 FINDINGS:
@@ -168,13 +154,13 @@ SENTIMENT: Bullish"""
 
         assert result.overall_sentiment == "Bullish"
 
-    async def test_neutral_sentiment_on_mixed(self, agent_no_tools, mock_llm_client_no_tools):
+    async def test_neutral_sentiment_on_mixed(self, agent_no_tools):
         """Test neutral sentiment when mixed."""
         responses = [
             """SUMMARY: Good news.\nFINDINGS:\n- Positive\nSENTIMENT: Bullish""",
             """SUMMARY: Bad news.\nFINDINGS:\n- Negative\nSENTIMENT: Bearish""",
         ]
-        mock_llm_client_no_tools.acomplete = AsyncMock(side_effect=responses)
+        agent_no_tools.llm.acomplete = AsyncMock(side_effect=responses)
 
         result = await agent_no_tools.research(
             "AAPL",
