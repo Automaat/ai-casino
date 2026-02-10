@@ -3,6 +3,7 @@
 import asyncio
 import os
 import sys
+from collections.abc import Callable
 from typing import Annotated
 
 import typer
@@ -11,12 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from src.cache.historical import HistoricalCache
-from src.data.broker import AlpacaBroker
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
-from src.di.container import create_container
+from src.di.container import AppContainer, create_container
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
 from src.workflows.trading import TradingWorkflow
@@ -373,6 +369,19 @@ def _print_metrics_summary(tracker: MetricsTracker) -> None:
     console.print("[dim]Metrics saved to: logs/metrics_summary.json[/dim]\n")
 
 
+def _select_workflow_factory(
+    container: AppContainer,
+    use_meta_agent: bool,
+    trump_mode: bool,
+) -> Callable[..., TradingWorkflow]:
+    """Select workflow factory based on CLI flags."""
+    if trump_mode:
+        return container.workflow_trump
+    if use_meta_agent:
+        return container.workflow_meta
+    return container.workflow_momentum
+
+
 async def _analyze_stock(
     symbol: str,
     period_days: int,
@@ -390,35 +399,20 @@ async def _analyze_stock(
     console.print(f"\n[bold]Initializing trading system ({mode_str}{trump_str} mode)...[/bold]")
 
     container = create_container()
-    historical_cache = HistoricalCache()
 
-    llm_client = container.llm_client()
-    market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
-    news_fetcher = NewsFetcher(historical_cache=historical_cache)
-    finbert = container.finbert_sentiment()
-    fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
-
-    broker = None
+    broker = container.alpaca_broker() if enable_trading else None
     if enable_trading:
         if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            broker = AlpacaBroker(paper=True, historical_cache=historical_cache)
             console.print("[bold green]Paper trading enabled[/bold green]")
         else:
             console.print("[yellow]Warning: Trading enabled but Alpaca credentials not found[/yellow]")
 
     metrics_tracker = MetricsTracker() if show_metrics else None
 
-    workflow = TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert,
-        fundamental_fetcher,
-        broker,
-        metrics_tracker,
-        use_meta_agent=use_meta_agent,
-        trump_mode=trump_mode,
-        historical_cache=historical_cache,
+    workflow_factory = _select_workflow_factory(container, use_meta_agent, trump_mode)
+    workflow = workflow_factory(
+        broker=broker,
+        metrics_tracker=metrics_tracker,
     )
 
     console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
