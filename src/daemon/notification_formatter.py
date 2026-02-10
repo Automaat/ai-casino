@@ -147,7 +147,8 @@ class NotificationFormatter:
             Formatted markdown string
         """
         m = message.metadata
-        failed_services_obj = m["failed_services"]
+        # Handle both "failed_services" (health check) and "unavailable_services" (degradation)
+        failed_services_obj = m.get("failed_services") or m.get("unavailable_services") or []
         services = (
             ", ".join(str(s) for s in failed_services_obj)
             if isinstance(failed_services_obj, list)
