@@ -1,9 +1,14 @@
 """Web search tool for LLM function calling."""
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
-from src.data.websearch import SearchType, WebSearchFetcher
+from src.data.websearch import SearchType
 from src.tools.base import BaseTool
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 BODY_TRUNCATE_LENGTH = 300
 
@@ -13,13 +18,16 @@ class WebSearchTool(BaseTool):
 
     TOOL_NAME = "web_search"
 
-    def __init__(self, fetcher: WebSearchFetcher | None = None) -> None:
-        """Initialize web search tool.
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize web search tool with optional container.
 
         Args:
-            fetcher: WebSearchFetcher instance. Creates default if not provided.
+            container: DI container (auto-created if not provided)
         """
-        self.fetcher = fetcher or WebSearchFetcher()
+        from src.di.container import create_container
+
+        self._container = container or create_container()
+        self.fetcher = self._container.websearch_fetcher()
         logger.info("Initialized WebSearchTool")
 
     @property

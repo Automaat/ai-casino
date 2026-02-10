@@ -106,24 +106,8 @@ class AnalyzeStockTool(BaseTool):
         Returns:
             Formatted analysis summary
         """
-        from src.data.fundamental import FundamentalDataFetcher
-        from src.data.market import MarketDataFetcher
-        from src.data.news import NewsFetcher
-        from src.workflows.trading import TradingWorkflow
-
-        llm = self._container.llm_client()
-        market_fetcher = MarketDataFetcher()
-        news_fetcher = NewsFetcher()
-        finbert = self._container.finbert_sentiment()
-        fundamental_fetcher = FundamentalDataFetcher()
-
-        workflow = TradingWorkflow(
-            llm_client=llm,
-            market_fetcher=market_fetcher,
-            news_fetcher=news_fetcher,
-            finbert=finbert,
-            fundamental_fetcher=fundamental_fetcher,
-        )
+        # Use workflow from container (momentum strategy by default)
+        workflow = self._container.workflow_momentum()
 
         result = await workflow.analyze(symbol, period_days)
 

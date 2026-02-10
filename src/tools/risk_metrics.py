@@ -7,11 +7,22 @@ from loguru import logger
 from src.tools.base import BaseTool
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.metrics.risk import RiskMetrics
 
 
 class GetRiskMetricsTool(BaseTool):
     """Tool to calculate institutional-grade risk metrics."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -66,10 +77,7 @@ class GetRiskMetricsTool(BaseTool):
         logger.info(f"Calculating risk metrics for {symbol} ({days} days)")
 
         try:
-            from src.data.market import MarketDataFetcher
-            from src.metrics.risk import RiskMetricsCalculator
-
-            fetcher = MarketDataFetcher()
+            fetcher = self._container.market_fetcher()
             market_data = fetcher.fetch_daily(symbol, period_days=days)
 
             close = market_data.data.get("close", market_data.data.get("Close"))
@@ -78,7 +86,7 @@ class GetRiskMetricsTool(BaseTool):
 
             returns = close.pct_change().dropna().tolist()
 
-            calculator = RiskMetricsCalculator()
+            calculator = self._container.risk_metrics_calculator()
             metrics = calculator.calculate_all(returns)
 
             return self._format_result(symbol, days, metrics)

@@ -112,11 +112,34 @@ class AppContainer(containers.DeclarativeContainer):
 
     web_search_tool = providers.Singleton(
         model_providers.create_web_search_tool,
-        websearch_fetcher=websearch_fetcher,
+        container=providers.Self(),
     )
 
     market_regime_detector = providers.Singleton(
         model_providers.create_market_regime_detector,
+    )
+
+    backtest_runner = providers.Factory(
+        model_providers.create_backtest_runner,
+        cash=10000.0,
+    )
+
+    optuna_optimizer = providers.Factory(
+        model_providers.create_optuna_optimizer,
+        n_trials=50,
+    )
+
+    metrics_tracker = providers.Singleton(
+        model_providers.create_metrics_tracker,
+    )
+
+    quantstats_reporter = providers.Singleton(
+        model_providers.create_quantstats_reporter,
+    )
+
+    stock_screener = providers.Singleton(
+        model_providers.create_stock_screener,
+        universe_fetcher=stock_universe_fetcher,
     )
 
     # Agent providers

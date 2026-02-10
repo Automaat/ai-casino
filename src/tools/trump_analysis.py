@@ -90,9 +90,8 @@ class TrumpAnalysisTool(BaseTool):
 
         try:
             from src.agents.trump import TrumpAnalyst
-            from src.data.truth_social import TruthSocialFetcher
 
-            fetcher = TruthSocialFetcher()
+            fetcher = self._container.truth_social_fetcher()
             post_data = fetcher.fetch_recent(hours=hours)
 
             if not post_data.posts:

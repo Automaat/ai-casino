@@ -1,14 +1,29 @@
 """News tool for fetching stock news."""
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from src.tools.base import BaseTool
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 DESCRIPTION_TRUNCATE_LENGTH = 300
 
 
 class GetNewsTool(BaseTool):
     """Tool to fetch recent news for a stock."""
+
+    def __init__(self, container: "AppContainer | None" = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -62,9 +77,7 @@ class GetNewsTool(BaseTool):
         logger.info(f"Fetching news for {symbol} (limit={limit})")
 
         try:
-            from src.data.news import NewsFetcher
-
-            fetcher = NewsFetcher()
+            fetcher = self._container.news_fetcher()
             articles = fetcher.fetch_company_news(symbol.upper(), limit=limit)
 
             return self._format_articles(symbol.upper(), articles)

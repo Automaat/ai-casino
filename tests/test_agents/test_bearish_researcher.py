@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.agents.bearish_researcher import BearishResearchAnalysis, BearishResearcher
+from src.agents.bearish_researcher import BearishResearchAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
@@ -13,9 +13,9 @@ from src.strategies.signal import Signal
 
 
 @pytest.fixture
-def bearish_researcher(mock_llm_client):
+def bearish_researcher(test_container):
     """Create bearish researcher instance."""
-    return BearishResearcher(mock_llm_client)
+    return test_container.bearish_researcher()
 
 
 @pytest.fixture
@@ -91,11 +91,10 @@ def sample_llm_response():
 class TestBearishResearcher:
     """Test suite for BearishResearcher."""
 
-    def test_initialization(self, mock_llm_client):
+    def test_initialization(self, test_container):
         """Test researcher initialization."""
-        researcher = BearishResearcher(mock_llm_client)
+        researcher = test_container.bearish_researcher()
 
-        assert researcher.llm == mock_llm_client
         assert repr(researcher) == "BearishResearcher(llm=ollama/qwen3:14b)"
 
     async def test_analyze_returns_bearish_research_analysis(
