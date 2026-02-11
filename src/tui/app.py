@@ -480,14 +480,18 @@ class TradingChatApp(App):
             return self._tool_registry.execute(name, args)
 
         try:
+            from src.models.llm import ToolCallingParams
+
             response = await self._llm.acomplete_with_tools(
-                prompt=text,
-                tools=self._tool_registry.get_definitions(),
-                tool_executor=tool_executor,
-                system=self._get_agentic_prompt(),
-                temperature=0.7,
-                max_tool_calls=5,
-                on_tool_call=on_tool_call,
+                ToolCallingParams(
+                    prompt=text,
+                    tools=self._tool_registry.get_definitions(),
+                    tool_executor=tool_executor,
+                    system=self._get_agentic_prompt(),
+                    temperature=0.7,
+                    max_tool_calls=5,
+                    on_tool_call=on_tool_call,
+                )
             )
 
             chat.hide_thinking()

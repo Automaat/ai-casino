@@ -109,9 +109,10 @@ class TestWebResearchAgent:
         """Test research with tool calling respects max_tool_calls=3."""
         await agent_with_tools.research("AAPL", categories=[ResearchCategory.LATEST_NEWS])
 
-        # Verify acomplete_with_tools called with max_tool_calls=3
+        # Verify acomplete_with_tools called with max_tool_calls=3 in params
         call_args = agent_with_tools.llm.acomplete_with_tools.call_args
-        assert call_args.kwargs["max_tool_calls"] == 3
+        params = call_args.args[0]  # ToolCallingParams is first positional arg
+        assert params.max_tool_calls == 3
 
     async def test_research_all_categories(self, agent_no_tools):
         """Test research with all categories."""

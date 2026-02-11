@@ -4,7 +4,10 @@ This module provides factory functions for creating TradingWorkflow instances
 with different configurations (meta, momentum, trump, full).
 """
 
-from typing import TYPE_CHECKING
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from src.agents.risk import PortfolioVaRConfig
 from src.cache.historical import HistoricalCache
@@ -27,6 +30,26 @@ if TYPE_CHECKING:
     from src.di.container import AppContainer
 
 
+@dataclass
+class WorkflowFactoryParams:
+    """Parameters for workflow factory functions."""
+
+    llm_client: LLMClient
+    market_fetcher: MarketDataFetcher
+    news_fetcher: NewsFetcher
+    finbert_sentiment: FinBERTSentiment
+    fundamental_fetcher: FundamentalDataFetcher
+    historical_cache: HistoricalCache
+    portfolio_var_calculator: PortfolioVaRCalculator
+    daemon_config: DaemonConfig
+    container: Any  # AppContainer, typed as Any for flexibility
+    broker: AlpacaBroker | None = None
+    metrics_tracker: MetricsTracker | None = None
+    param_store: OptimizedParamStore | None = None
+    snapshot_repository: PortfolioSnapshotRepository | None = None
+    notification_service: NotificationService | None = None
+
+
 def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRConfig | None:
     """Extract PortfolioVaRConfig from daemon risk_limits config."""
     risk_config = daemon_config.risk_limits
@@ -44,26 +67,11 @@ def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRCo
     )
 
 
-def create_workflow_meta(  # noqa: PLR0913
-    llm_client: LLMClient,
-    market_fetcher: MarketDataFetcher,
-    news_fetcher: NewsFetcher,
-    finbert_sentiment: FinBERTSentiment,
-    fundamental_fetcher: FundamentalDataFetcher,
-    historical_cache: HistoricalCache,
-    portfolio_var_calculator: PortfolioVaRCalculator,
-    daemon_config: DaemonConfig,
-    container: AppContainer,
-    broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
-    param_store: OptimizedParamStore | None = None,
-    snapshot_repository: PortfolioSnapshotRepository | None = None,
-    notification_service: NotificationService | None = None,
-) -> TradingWorkflow:
+def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
     """Create TradingWorkflow with meta-agent enabled."""
-    portfolio_var_config = _extract_portfolio_var_config(daemon_config)
-    pre_trade_backtest_config = daemon_config.pre_trade_backtesting
-    position_sizing_config = daemon_config.position_sizing
+    portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
+    pre_trade_backtest_config = params.daemon_config.pre_trade_backtesting
+    position_sizing_config = params.daemon_config.position_sizing
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -74,46 +82,31 @@ def create_workflow_meta(  # noqa: PLR0913
     )
 
     components = WorkflowComponents(
-        llm_client=llm_client,
-        market_fetcher=market_fetcher,
-        news_fetcher=news_fetcher,
-        finbert=finbert_sentiment,
-        fundamental_fetcher=fundamental_fetcher,
-        container=container,
-        broker=broker,
-        metrics_tracker=metrics_tracker,
-        snapshot_repository=snapshot_repository,
-        param_store=param_store,
-        historical_cache=historical_cache,
-        portfolio_var_calculator=portfolio_var_calculator,
+        llm_client=params.llm_client,
+        market_fetcher=params.market_fetcher,
+        news_fetcher=params.news_fetcher,
+        finbert=params.finbert_sentiment,
+        fundamental_fetcher=params.fundamental_fetcher,
+        container=params.container,
+        broker=params.broker,
+        metrics_tracker=params.metrics_tracker,
+        snapshot_repository=params.snapshot_repository,
+        param_store=params.param_store,
+        historical_cache=params.historical_cache,
+        portfolio_var_calculator=params.portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        notification_service=notification_service,
+        notification_service=params.notification_service,
         position_sizing_config=position_sizing_config,
     )
 
     return TradingWorkflow(config, components)
 
 
-def create_workflow_momentum(  # noqa: PLR0913
-    llm_client: LLMClient,
-    market_fetcher: MarketDataFetcher,
-    news_fetcher: NewsFetcher,
-    finbert_sentiment: FinBERTSentiment,
-    fundamental_fetcher: FundamentalDataFetcher,
-    historical_cache: HistoricalCache,
-    portfolio_var_calculator: PortfolioVaRCalculator,
-    daemon_config: DaemonConfig,
-    container: AppContainer,
-    broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
-    param_store: OptimizedParamStore | None = None,
-    snapshot_repository: PortfolioSnapshotRepository | None = None,
-    notification_service: NotificationService | None = None,
-) -> TradingWorkflow:
+def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
     """Create TradingWorkflow with momentum strategy only."""
-    portfolio_var_config = _extract_portfolio_var_config(daemon_config)
-    pre_trade_backtest_config = daemon_config.pre_trade_backtesting
-    position_sizing_config = daemon_config.position_sizing
+    portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
+    pre_trade_backtest_config = params.daemon_config.pre_trade_backtesting
+    position_sizing_config = params.daemon_config.position_sizing
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -124,46 +117,31 @@ def create_workflow_momentum(  # noqa: PLR0913
     )
 
     components = WorkflowComponents(
-        llm_client=llm_client,
-        market_fetcher=market_fetcher,
-        news_fetcher=news_fetcher,
-        finbert=finbert_sentiment,
-        fundamental_fetcher=fundamental_fetcher,
-        container=container,
-        broker=broker,
-        metrics_tracker=metrics_tracker,
-        snapshot_repository=snapshot_repository,
-        param_store=param_store,
-        historical_cache=historical_cache,
-        portfolio_var_calculator=portfolio_var_calculator,
+        llm_client=params.llm_client,
+        market_fetcher=params.market_fetcher,
+        news_fetcher=params.news_fetcher,
+        finbert=params.finbert_sentiment,
+        fundamental_fetcher=params.fundamental_fetcher,
+        container=params.container,
+        broker=params.broker,
+        metrics_tracker=params.metrics_tracker,
+        snapshot_repository=params.snapshot_repository,
+        param_store=params.param_store,
+        historical_cache=params.historical_cache,
+        portfolio_var_calculator=params.portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        notification_service=notification_service,
+        notification_service=params.notification_service,
         position_sizing_config=position_sizing_config,
     )
 
     return TradingWorkflow(config, components)
 
 
-def create_workflow_trump(  # noqa: PLR0913
-    llm_client: LLMClient,
-    market_fetcher: MarketDataFetcher,
-    news_fetcher: NewsFetcher,
-    finbert_sentiment: FinBERTSentiment,
-    fundamental_fetcher: FundamentalDataFetcher,
-    historical_cache: HistoricalCache,
-    portfolio_var_calculator: PortfolioVaRCalculator,
-    daemon_config: DaemonConfig,
-    container: AppContainer,
-    broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
-    param_store: OptimizedParamStore | None = None,
-    snapshot_repository: PortfolioSnapshotRepository | None = None,
-    notification_service: NotificationService | None = None,
-) -> TradingWorkflow:
+def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
     """Create TradingWorkflow with meta-agent and Trump mode enabled."""
-    portfolio_var_config = _extract_portfolio_var_config(daemon_config)
-    pre_trade_backtest_config = daemon_config.pre_trade_backtesting
-    position_sizing_config = daemon_config.position_sizing
+    portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
+    pre_trade_backtest_config = params.daemon_config.pre_trade_backtesting
+    position_sizing_config = params.daemon_config.position_sizing
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -174,27 +152,37 @@ def create_workflow_trump(  # noqa: PLR0913
     )
 
     components = WorkflowComponents(
-        llm_client=llm_client,
-        market_fetcher=market_fetcher,
-        news_fetcher=news_fetcher,
-        finbert=finbert_sentiment,
-        fundamental_fetcher=fundamental_fetcher,
-        container=container,
-        broker=broker,
-        metrics_tracker=metrics_tracker,
-        snapshot_repository=snapshot_repository,
-        param_store=param_store,
-        historical_cache=historical_cache,
-        portfolio_var_calculator=portfolio_var_calculator,
+        llm_client=params.llm_client,
+        market_fetcher=params.market_fetcher,
+        news_fetcher=params.news_fetcher,
+        finbert=params.finbert_sentiment,
+        fundamental_fetcher=params.fundamental_fetcher,
+        container=params.container,
+        broker=params.broker,
+        metrics_tracker=params.metrics_tracker,
+        snapshot_repository=params.snapshot_repository,
+        param_store=params.param_store,
+        historical_cache=params.historical_cache,
+        portfolio_var_calculator=params.portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        notification_service=notification_service,
+        notification_service=params.notification_service,
         position_sizing_config=position_sizing_config,
     )
 
     return TradingWorkflow(config, components)
 
 
-def create_workflow_full(  # noqa: PLR0913
+def create_workflow_full(params: WorkflowFactoryParams) -> TradingWorkflow:
+    """Create TradingWorkflow with all features enabled (alias for trump)."""
+    return create_workflow_trump(params)
+
+
+# Wrapper factories for DI container (merge core deps with runtime params)
+# These wrappers exist solely for backward compatibility with dependency-injector Factory provider pattern
+# The core factories (create_workflow_*) use proper parameter objects
+
+
+def create_workflow_meta_wrapper(  # noqa: PLR0913 - DI adapter, delegates to clean factory
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
     news_fetcher: NewsFetcher,
@@ -203,27 +191,152 @@ def create_workflow_full(  # noqa: PLR0913
     historical_cache: HistoricalCache,
     portfolio_var_calculator: PortfolioVaRCalculator,
     daemon_config: DaemonConfig,
-    container: AppContainer,
+    container: AppContainer | None = None,
     broker: AlpacaBroker | None = None,
     metrics_tracker: MetricsTracker | None = None,
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
 ) -> TradingWorkflow:
-    """Create TradingWorkflow with all features enabled (alias for trump)."""
-    return create_workflow_trump(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert_sentiment,
-        fundamental_fetcher,
-        historical_cache,
-        portfolio_var_calculator,
-        daemon_config,
-        container,
+    """Wrapper for create_workflow_meta that accepts individual parameters."""
+    if container is None:
+        msg = "container parameter is required"
+        raise ValueError(msg)
+
+    params = WorkflowFactoryParams(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=container,
         broker=broker,
         metrics_tracker=metrics_tracker,
         param_store=param_store,
         snapshot_repository=snapshot_repository,
         notification_service=notification_service,
     )
+    return create_workflow_meta(params)
+
+
+def create_workflow_momentum_wrapper(  # noqa: PLR0913 - DI adapter, delegates to clean factory
+    llm_client: LLMClient,
+    market_fetcher: MarketDataFetcher,
+    news_fetcher: NewsFetcher,
+    finbert_sentiment: FinBERTSentiment,
+    fundamental_fetcher: FundamentalDataFetcher,
+    historical_cache: HistoricalCache,
+    portfolio_var_calculator: PortfolioVaRCalculator,
+    daemon_config: DaemonConfig,
+    container: AppContainer | None = None,
+    broker: AlpacaBroker | None = None,
+    metrics_tracker: MetricsTracker | None = None,
+    param_store: OptimizedParamStore | None = None,
+    snapshot_repository: PortfolioSnapshotRepository | None = None,
+    notification_service: NotificationService | None = None,
+) -> TradingWorkflow:
+    """Wrapper for create_workflow_momentum that accepts individual parameters."""
+    if container is None:
+        msg = "container parameter is required"
+        raise ValueError(msg)
+
+    params = WorkflowFactoryParams(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
+        param_store=param_store,
+        snapshot_repository=snapshot_repository,
+        notification_service=notification_service,
+    )
+    return create_workflow_momentum(params)
+
+
+def create_workflow_trump_wrapper(  # noqa: PLR0913 - DI adapter, delegates to clean factory
+    llm_client: LLMClient,
+    market_fetcher: MarketDataFetcher,
+    news_fetcher: NewsFetcher,
+    finbert_sentiment: FinBERTSentiment,
+    fundamental_fetcher: FundamentalDataFetcher,
+    historical_cache: HistoricalCache,
+    portfolio_var_calculator: PortfolioVaRCalculator,
+    daemon_config: DaemonConfig,
+    container: AppContainer | None = None,
+    broker: AlpacaBroker | None = None,
+    metrics_tracker: MetricsTracker | None = None,
+    param_store: OptimizedParamStore | None = None,
+    snapshot_repository: PortfolioSnapshotRepository | None = None,
+    notification_service: NotificationService | None = None,
+) -> TradingWorkflow:
+    """Wrapper for create_workflow_trump that accepts individual parameters."""
+    if container is None:
+        msg = "container parameter is required"
+        raise ValueError(msg)
+
+    params = WorkflowFactoryParams(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
+        param_store=param_store,
+        snapshot_repository=snapshot_repository,
+        notification_service=notification_service,
+    )
+    return create_workflow_trump(params)
+
+
+def create_workflow_full_wrapper(  # noqa: PLR0913 - DI adapter, delegates to clean factory
+    llm_client: LLMClient,
+    market_fetcher: MarketDataFetcher,
+    news_fetcher: NewsFetcher,
+    finbert_sentiment: FinBERTSentiment,
+    fundamental_fetcher: FundamentalDataFetcher,
+    historical_cache: HistoricalCache,
+    portfolio_var_calculator: PortfolioVaRCalculator,
+    daemon_config: DaemonConfig,
+    container: AppContainer | None = None,
+    broker: AlpacaBroker | None = None,
+    metrics_tracker: MetricsTracker | None = None,
+    param_store: OptimizedParamStore | None = None,
+    snapshot_repository: PortfolioSnapshotRepository | None = None,
+    notification_service: NotificationService | None = None,
+) -> TradingWorkflow:
+    """Wrapper for create_workflow_full that accepts individual parameters."""
+    if container is None:
+        msg = "container parameter is required"
+        raise ValueError(msg)
+
+    params = WorkflowFactoryParams(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert_sentiment=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        historical_cache=historical_cache,
+        portfolio_var_calculator=portfolio_var_calculator,
+        daemon_config=daemon_config,
+        container=container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
+        param_store=param_store,
+        snapshot_repository=snapshot_repository,
+        notification_service=notification_service,
+    )
+    return create_workflow_full(params)

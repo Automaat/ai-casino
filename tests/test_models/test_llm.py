@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import BaseModel, Field
 
-from src.models.llm import LLMClient
+from src.models.llm import LLMClient, ToolCallingParams
 from src.models.providers.base import StructuredOutputError, ToolCall
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
@@ -212,8 +212,15 @@ class TestCompleteWithTools:
         _, provider = mock_openai_provider
         provider.acomplete_with_tools = AsyncMock(return_value=("I don't need tools for this", None))
 
+        from src.models.llm import ToolCallingParams
+
         client = LLMClient()
-        result = client.complete_with_tools("Hello", sample_tools, mock_tool_executor)
+        params = ToolCallingParams(
+            prompt="Hello",
+            tools=sample_tools,
+            tool_executor=mock_tool_executor,
+        )
+        result = client.complete_with_tools(params)
 
         assert result == "I don't need tools for this"
         assert provider.acomplete_with_tools.call_count == 1
@@ -236,7 +243,10 @@ class TestCompleteWithTools:
         )
 
         client = LLMClient()
-        result = client.complete_with_tools("What's the weather in NYC?", sample_tools, mock_tool_executor)
+        params = ToolCallingParams(
+            prompt="What's the weather in NYC?", tools=sample_tools, tool_executor=mock_tool_executor
+        )
+        result = client.complete_with_tools(params)
 
         assert result == "The weather in NYC is sunny and 72°F"
         assert provider.acomplete_with_tools.call_count == 2
@@ -261,7 +271,10 @@ class TestCompleteWithTools:
         provider.acomplete = AsyncMock(return_value="Final response after max calls")
 
         client = LLMClient()
-        result = client.complete_with_tools("prompt", sample_tools, mock_tool_executor, max_tool_calls=2)
+        params = ToolCallingParams(
+            prompt="prompt", tools=sample_tools, tool_executor=mock_tool_executor, max_tool_calls=2
+        )
+        result = client.complete_with_tools(params)
 
         assert result == "Final response after max calls"
         assert provider.acomplete_with_tools.call_count == 2
@@ -306,7 +319,8 @@ class TestAcompleteWithTools:
         provider.acomplete_with_tools = AsyncMock(return_value=("No tools needed", None))
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Hello", sample_tools, mock_tool_executor)
+        params = ToolCallingParams(prompt="Hello", tools=sample_tools, tool_executor=mock_tool_executor)
+        result = await client.acomplete_with_tools(params)
 
         assert result == "No tools needed"
 
@@ -328,9 +342,10 @@ class TestAcompleteWithTools:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools(
-            "Search for python testing", sample_tools, mock_tool_executor
+        params = ToolCallingParams(
+            prompt="Search for python testing", tools=sample_tools, tool_executor=mock_tool_executor
         )
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Found results about Python testing"
 
@@ -373,7 +388,8 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Analyze AAPL", sample_tools, sync_executor)
+        params = ToolCallingParams(prompt="Analyze AAPL", tools=sample_tools, tool_executor=sync_executor)
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Analysis complete"
 
@@ -398,7 +414,8 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Analyze TSLA", sample_tools, async_executor)
+        params = ToolCallingParams(prompt="Analyze TSLA", tools=sample_tools, tool_executor=async_executor)
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Async analysis complete"
 
@@ -430,7 +447,8 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Analyze stocks", sample_tools, async_executor)
+        params = ToolCallingParams(prompt="Analyze stocks", tools=sample_tools, tool_executor=async_executor)
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Multiple analyses complete"
         assert call_count == 2
@@ -458,7 +476,10 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Analyze MSFT", sample_tools, failing_sync_executor)
+        params = ToolCallingParams(
+            prompt="Analyze MSFT", tools=sample_tools, tool_executor=failing_sync_executor
+        )
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Error handled"
 
@@ -486,7 +507,10 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Analyze GOOGL", sample_tools, failing_async_executor)
+        params = ToolCallingParams(
+            prompt="Analyze GOOGL", tools=sample_tools, tool_executor=failing_async_executor
+        )
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Async error handled"
 
@@ -516,7 +540,10 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools("Analyze AMZN", sample_tools, sync_returning_awaitable)
+        params = ToolCallingParams(
+            prompt="Analyze AMZN", tools=sample_tools, tool_executor=sync_returning_awaitable
+        )
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Awaitable handled"
 
@@ -548,9 +575,10 @@ class TestAsyncToolExecutor:
         )
 
         client = LLMClient()
-        result = await client.acomplete_with_tools(
-            "Analyze NVDA", sample_tools, async_executor, on_tool_call=on_tool_call
+        params = ToolCallingParams(
+            prompt="Analyze NVDA", tools=sample_tools, tool_executor=async_executor, on_tool_call=on_tool_call
         )
+        result = await client.acomplete_with_tools(params)
 
         assert result == "Callback test complete"
         assert len(callback_calls) == 1

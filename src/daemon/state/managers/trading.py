@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,21 @@ from src.strategies.session import TradingSession
 
 if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
+
+
+@dataclass
+class AnalysisRecordInput:
+    """Input parameters for recording an analysis."""
+
+    symbol: str
+    signal: str
+    confidence: float
+    executed: bool = False
+    trading_session: TradingSession = TradingSession.REGULAR
+    is_paper_trade: bool = True
+    rsi: float | None = None
+    macd_hist: float | None = None
+    reasoning: list[str] | None = None
 
 
 class TradingStateManager(StateManager):
@@ -40,42 +56,23 @@ class TradingStateManager(StateManager):
         self._analysis_repository = repository
         logger.debug("Analysis repository injected")
 
-    def record_analysis(  # noqa: PLR0913
-        self,
-        symbol: str,
-        signal: str,
-        confidence: float,
-        executed: bool = False,
-        trading_session: TradingSession = TradingSession.REGULAR,
-        is_paper_trade: bool = True,
-        rsi: float | None = None,
-        macd_hist: float | None = None,
-        reasoning: list[str] | None = None,
-    ) -> None:
+    def record_analysis(self, input_data: AnalysisRecordInput) -> None:
         """Record an analysis result.
 
         Args:
-            symbol: Stock ticker
-            signal: Trading signal (BUY/SELL/HOLD)
-            confidence: Signal confidence
-            executed: Whether trade was executed
-            trading_session: Trading session type (REGULAR/PRE_MARKET)
-            is_paper_trade: Whether trade was paper or live
-            rsi: RSI indicator value
-            macd_hist: MACD histogram value
-            reasoning: LLM decision reasoning
+            input_data: Analysis record input parameters
         """
         record = AnalysisRecord(
-            symbol=symbol,
+            symbol=input_data.symbol,
             timestamp=datetime.now(UTC),
-            signal=signal,
-            confidence=confidence,
-            executed_trade=executed,
-            trading_session=trading_session,
-            is_paper_trade=is_paper_trade,
-            rsi=rsi,
-            macd_hist=macd_hist,
-            reasoning=reasoning or [],
+            signal=input_data.signal,
+            confidence=input_data.confidence,
+            executed_trade=input_data.executed,
+            trading_session=input_data.trading_session,
+            is_paper_trade=input_data.is_paper_trade,
+            rsi=input_data.rsi,
+            macd_hist=input_data.macd_hist,
+            reasoning=input_data.reasoning or [],
         )
 
         # Persist to database if repository available
@@ -84,7 +81,10 @@ class TradingStateManager(StateManager):
                 task = asyncio.create_task(self._analysis_repository.create(record))  # type: ignore[bad-argument-type]
                 self._pending_tasks.add(task)
                 task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
-                logger.debug(f"Scheduled analysis record persistence to database: {symbol} {signal}")
+                logger.debug(
+                    f"Scheduled analysis record persistence to database: "
+                    f"{input_data.symbol} {input_data.signal}"
+                )
             except Exception as e:
                 logger.error(f"Failed to schedule analysis record persistence: {e}")
                 raise
@@ -92,7 +92,7 @@ class TradingStateManager(StateManager):
         # Keep in-memory list (capped for transition period)
         self.analyses.append(record)
         self.total_analyses += 1
-        if executed:
+        if input_data.executed:
             self.total_trades += 1
         self.last_run = datetime.now(UTC)
 

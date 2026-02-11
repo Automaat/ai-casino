@@ -278,16 +278,19 @@ class PeerAnalysisTask(TaskExecutor):
 
     async def execute(self) -> None:
         """Execute peer analysis logic."""
-        from src.daemon.peer_analysis import DeepPeerAnalyzer
+        from src.daemon.peer_analysis import DeepPeerAnalyzer, PeerAnalyzerConfig
 
         fundamental_fetcher = self.container.fundamental_fetcher()
         universe_fetcher = self.container.stock_universe_fetcher()
-        analyzer = DeepPeerAnalyzer(
-            fundamental_fetcher=fundamental_fetcher,
-            universe_fetcher=universe_fetcher,
+        config = PeerAnalyzerConfig(
             output_dir=self.components.config.peer_analysis.output_dir,
             max_peers=self.components.config.peer_analysis.max_peers,
             rate_limit_sleep=self.components.config.peer_analysis.rate_limit_sleep,
+        )
+        analyzer = DeepPeerAnalyzer(
+            fundamental_fetcher=fundamental_fetcher,
+            universe_fetcher=universe_fetcher,
+            config=config,
             historical_cache=self.components.historical_cache,
         )
 

@@ -4,30 +4,22 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 from pydantic import BaseModel
 
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
+from src.cache.historical import SignalOutcomeInput
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.notification_helper import DaemonNotificationHelper
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
-    from src.cache.historical import HistoricalCache
-    from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.degradation import DegradationContext
-    from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
-    from src.daemon.notifications import NotificationService
-    from src.daemon.positions import PositionManager
-    from src.daemon.scheduler import MarketScheduler
-    from src.daemon.state import DaemonState
-    from src.data.broker import AlpacaBroker
-    from src.workflows import TradingWorkflow
 
 
 class AnalysisOrchestrationResult(BaseModel):
@@ -47,49 +39,75 @@ class AnalysisOrchestrationResult(BaseModel):
 class AnalysisOrchestrator:
     """Orchestrate watchlist analysis with concurrency control."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
-        workflow: TradingWorkflow,
-        state: DaemonState,
-        scheduler: MarketScheduler,
         config: AnalysisOrchestratorConfig,
+        components: DaemonComponents,
         trading_mode: str = "paper",
-        broker: AlpacaBroker | None = None,
-        position_manager: PositionManager | None = None,
-        event_bus: EventBus | None = None,
-        historical_cache: HistoricalCache | None = None,
-        notification_service: NotificationService | None = None,
-        context_builder: DaemonContextBuilder | None = None,
-        components: DaemonComponents | None = None,
+        **deprecated_kwargs: object,
     ) -> None:
         """Initialize analysis orchestrator.
 
         Args:
-            workflow: Trading workflow instance
-            state: Daemon state
-            scheduler: Market scheduler
             config: Orchestrator configuration
+            components: Daemon components (required)
             trading_mode: Trading mode (paper/live)
-            broker: Optional broker for position fetching
-            position_manager: Optional position manager
-            event_bus: Optional event bus for publishing
-            historical_cache: Optional historical cache
-            notification_service: Optional notification service
-            context_builder: Optional context builder for analysis contexts
-            components: Optional daemon components for notification helper
+            **deprecated_kwargs: Deprecated params (workflow, state, scheduler, broker, position_manager,
+                                event_bus, historical_cache, notification_service, context_builder).
+                                Use components instead.
         """
-        self.workflow = workflow
-        self.state = state
-        self.scheduler = scheduler
         self.config = config
         self.trading_mode = trading_mode
-        self.broker = broker
-        self.position_manager = position_manager
-        self.event_bus = event_bus
-        self.historical_cache = historical_cache
-        self.notification_service = notification_service
-        self._context_builder = context_builder
         self._components = components
+
+        # Extract from components (with backward compat for deprecated kwargs)
+        workflow = deprecated_kwargs.get("workflow", components.workflow)
+        state = deprecated_kwargs.get("state", components.state)
+        scheduler = deprecated_kwargs.get("scheduler", components.scheduler)
+
+        if workflow is None:
+            msg = "workflow must be provided in components"
+            raise ValueError(msg)
+        if state is None:
+            msg = "state must be provided in components"
+            raise ValueError(msg)
+        if scheduler is None:
+            msg = "scheduler must be provided in components"
+            raise ValueError(msg)
+
+        # Type-narrow after None checks
+        from src.cache.historical import HistoricalCache
+        from src.daemon.context_builder import DaemonContextBuilder
+        from src.daemon.event_bus import EventBus
+        from src.daemon.notifications import NotificationService
+        from src.daemon.positions import PositionManager
+        from src.daemon.scheduler import MarketScheduler
+        from src.daemon.state import DaemonState
+        from src.data.broker import AlpacaBroker
+        from src.workflows import TradingWorkflow
+
+        self.workflow: TradingWorkflow = cast("TradingWorkflow", workflow)
+        self.state: DaemonState = cast("DaemonState", state)
+        self.scheduler: MarketScheduler = cast("MarketScheduler", scheduler)
+        self.broker: AlpacaBroker | None = cast(
+            "AlpacaBroker | None", deprecated_kwargs.get("broker", components.broker)
+        )
+        self.position_manager: PositionManager | None = cast(
+            "PositionManager | None", deprecated_kwargs.get("position_manager", components.position_manager)
+        )
+        self.event_bus: EventBus | None = cast(
+            "EventBus | None", deprecated_kwargs.get("event_bus", components.event_bus)
+        )
+        self.historical_cache: HistoricalCache | None = cast(
+            "HistoricalCache | None", deprecated_kwargs.get("historical_cache", components.historical_cache)
+        )
+        self.notification_service: NotificationService | None = cast(
+            "NotificationService | None",
+            deprecated_kwargs.get("notification_service", components.notification_service),
+        )
+        self._context_builder: DaemonContextBuilder | None = cast(
+            "DaemonContextBuilder | None", deprecated_kwargs.get("context_builder")
+        )
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
 
@@ -103,7 +121,8 @@ class AnalysisOrchestrator:
         Returns:
             True if sync was performed successfully, False otherwise
         """
-        if not (self.config.enable_position_sync and self.position_manager):
+        position_manager = self.position_manager
+        if not (self.config.enable_position_sync and position_manager):
             return False
 
         try:
@@ -113,7 +132,7 @@ class AnalysisOrchestrator:
                 for sym in self.state.active_positions
                 if (pos := self.state.get_position(sym)) is not None
             }
-            new_positions, updated_positions, closed_symbols = self.position_manager.sync_with_broker(
+            new_positions, updated_positions, closed_symbols = position_manager.sync_with_broker(
                 state_positions
             )
             for pos in new_positions:
@@ -133,11 +152,12 @@ class AnalysisOrchestrator:
         Returns:
             Dict of broker positions or None if unavailable
         """
-        if not (self.position_manager and self.broker):
+        broker = self.broker
+        if not (self.position_manager and broker):
             return None
 
         try:
-            broker_info = self.broker.get_account_info()
+            broker_info = broker.get_account_info()
             return broker_info.positions
         except Exception as e:
             logger.warning(f"Failed to prefetch account info: {e}")
@@ -152,7 +172,8 @@ class AnalysisOrchestrator:
         Returns:
             Number of position actions executed
         """
-        if not self.position_manager:
+        position_manager = self.position_manager
+        if not position_manager:
             return 0
 
         position_actions = 0
@@ -161,9 +182,7 @@ class AnalysisOrchestrator:
                 try:
                     pos = self.state.get_position(result.symbol)
                     if pos:
-                        actions = self.position_manager.review_position(
-                            pos, result.risk.current_price, result
-                        )
+                        actions = position_manager.review_position(pos, result.risk.current_price, result)
                         self.state.update_position(pos)
                         for action in actions:
                             self.state.record_position_action(action)
@@ -362,25 +381,31 @@ class AnalysisOrchestrator:
 
             # Build contexts via delegated method
             sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = None, None, None, None
-            if self._context_builder:
-                sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = (
-                    self._context_builder.build_analysis_contexts(symbol)
+            context_builder = self._context_builder
+            if context_builder:
+                sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = context_builder.build_analysis_contexts(
+                    symbol
                 )
 
             if target_allocations is not None:
                 self.workflow.set_target_allocations(target_allocations)
 
             try:
+                from src.workflows.types import WorkflowExtraContext
+
+                extra_context = WorkflowExtraContext(
+                    sector_rotation_context=sector_ctx,
+                    earnings_context=earnings_ctx,
+                    peer_analysis_context=peer_ctx,
+                    game_plan_context=game_plan_ctx,
+                    position_context=position_context,
+                    degradation_context=degradation_context,
+                )
                 result = await self.workflow.analyze(
                     symbol,
                     period_days=90,
                     trading_session=session,
-                    position_context=position_context,
-                    sector_context=sector_ctx,
-                    earnings_context=earnings_ctx,
-                    peer_analysis_context=peer_ctx,
-                    game_plan_context=game_plan_ctx,
-                    degradation_context=degradation_context,
+                    extra_context=extra_context,
                 )
             finally:
                 if target_allocations is not None:
@@ -407,7 +432,7 @@ class AnalysisOrchestrator:
             # Record signal outcome in historical cache
             if self.historical_cache:
                 try:
-                    self.historical_cache.record_signal_outcome(
+                    signal_input = SignalOutcomeInput(
                         symbol=symbol,
                         timestamp=datetime.now(UTC),
                         signal=result.decision.action.value,
@@ -420,6 +445,9 @@ class AnalysisOrchestrator:
                         sentiment_signal=self._extract_sentiment_signal(result.sentiment),
                         news_signal=self._extract_news_signal(result.news),
                     )
+                    historical_cache = self.historical_cache
+                    if historical_cache:
+                        historical_cache.record_signal_outcome(signal_input)
                 except Exception as e:
                     logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
 
@@ -448,9 +476,10 @@ class AnalysisOrchestrator:
             event_type: Event type
             data: Event data
         """
-        if self.event_bus:
+        event_bus = self.event_bus
+        if event_bus:
             try:
-                await self.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
+                await event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
             except Exception as e:
                 logger.warning(f"Event publish failed: {e}")
 

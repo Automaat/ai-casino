@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import zoneinfo
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -30,46 +31,63 @@ MARKET_HOURS_START = 4
 MARKET_HOURS_END = 20
 
 
+@dataclass
+class DataFetchConfig:
+    """Configuration for data fetching."""
+
+    market_fetcher: MarketDataFetcher
+    news_fetcher: NewsFetcher
+    enable_multi_timeframe: bool = False
+    trump_mode: bool = False
+    trump_fetcher: TruthSocialFetcher | None = None
+
+
 def _is_market_hours() -> bool:
     """Check if currently within market hours (4am-8pm ET)."""
     now = datetime.now(ET_TIMEZONE)
     return MARKET_HOURS_START <= now.hour < MARKET_HOURS_END
 
 
-async def _fetch_all_data(  # noqa: PLR0913
+async def _fetch_all_data(
     symbol: str,
     period_days: int,
     use_multi_timeframe: bool,
-    enable_multi_timeframe: bool,
-    market_fetcher: MarketDataFetcher,
-    news_fetcher: NewsFetcher,
-    trump_mode: bool,
-    trump_fetcher: TruthSocialFetcher | None,
+    config: DataFetchConfig,
 ) -> tuple[MarketData | MultiTimeframeData, list, TrumpPostData | None]:
-    """Fetch market, news, and Trump data in parallel."""
+    """Fetch market, news, and Trump data in parallel.
+
+    Args:
+        symbol: Stock ticker
+        period_days: Historical data period
+        use_multi_timeframe: Whether to actually use multi-timeframe (checked at market hours)
+        config: Data fetcher configuration
+
+    Returns:
+        Tuple of (market_data, news_articles, trump_data)
+    """
 
     async def fetch_market() -> MarketData | MultiTimeframeData:
         if use_multi_timeframe:
             logger.info("Multi-timeframe mode enabled (market hours)")
-            return await market_fetcher.fetch_multi_timeframe(
+            return await config.market_fetcher.fetch_multi_timeframe(
                 symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
             )
-        if enable_multi_timeframe:
+        if config.enable_multi_timeframe:
             logger.info("Multi-timeframe requested but outside market hours, using daily only")
-        return await asyncio.to_thread(market_fetcher.fetch_daily, symbol, period_days)
+        return await asyncio.to_thread(config.market_fetcher.fetch_daily, symbol, period_days)
 
     async def fetch_news_safe() -> list:
         try:
-            return await asyncio.to_thread(news_fetcher.fetch_company_news, symbol, limit=10)
+            return await asyncio.to_thread(config.news_fetcher.fetch_company_news, symbol, limit=10)
         except Exception as e:
             logger.warning(f"News fetch failed, continuing with empty news: {e}")
             return []
 
     async def fetch_trump_safe() -> TrumpPostData | None:
-        if not trump_fetcher:
+        if not config.trump_fetcher:
             return None
         try:
-            return await asyncio.to_thread(trump_fetcher.fetch_recent, hours=24)
+            return await asyncio.to_thread(config.trump_fetcher.fetch_recent, hours=24)
         except Exception as e:
             logger.warning(f"Failed to fetch Trump posts: {e}")
             return None
@@ -77,7 +95,9 @@ async def _fetch_all_data(  # noqa: PLR0913
     async with asyncio.TaskGroup() as tg:
         market_task = tg.create_task(fetch_market())
         news_task = tg.create_task(fetch_news_safe())
-        trump_task = tg.create_task(fetch_trump_safe()) if trump_mode and trump_fetcher else None
+        trump_task = (
+            tg.create_task(fetch_trump_safe()) if config.trump_mode and config.trump_fetcher else None
+        )
 
     news_result = news_task.result()
     # fetch_news_safe always returns list, no validation needed
@@ -114,15 +134,12 @@ def _process_fetch_results(
     return market_data, trump_posts
 
 
-async def fetch_data(  # noqa: PLR0913
+async def fetch_data(
     symbol: str,
     period_days: int,
     trading_session: TradingSession,
-    market_fetcher: MarketDataFetcher,
-    news_fetcher: NewsFetcher,
-    enable_multi_timeframe: bool = False,
-    trump_mode: bool = False,
-    trump_fetcher: TruthSocialFetcher | None = None,
+    config: DataFetchConfig,
+    **deprecated_kwargs: MarketDataFetcher | NewsFetcher | bool | TruthSocialFetcher | None,
 ) -> FetchDataOutput:
     """Fetch market and news data (async, parallel execution).
 
@@ -130,27 +147,39 @@ async def fetch_data(  # noqa: PLR0913
         symbol: Stock ticker
         period_days: Historical data period
         trading_session: Trading session type
-        market_fetcher: Market data fetcher
-        news_fetcher: News data fetcher
-        enable_multi_timeframe: Enable multi-timeframe data fetching
-        trump_mode: Enable Trump social media analysis
-        trump_fetcher: Trump social media fetcher (required if trump_mode=True)
+        config: Data fetch configuration
+        **deprecated_kwargs: Deprecated params (market_fetcher, news_fetcher,
+                            enable_multi_timeframe, trump_mode, trump_fetcher). Use config.
 
     Returns:
         FetchDataOutput with market and news data
     """
+    # Extract deprecated kwargs for backward compatibility (if any old-style calls exist)
+    if deprecated_kwargs:
+        market_fetcher = deprecated_kwargs.get("market_fetcher", config.market_fetcher)
+        news_fetcher = deprecated_kwargs.get("news_fetcher", config.news_fetcher)
+        enable_multi_timeframe = deprecated_kwargs.get(
+            "enable_multi_timeframe", config.enable_multi_timeframe
+        )
+        trump_mode = deprecated_kwargs.get("trump_mode", config.trump_mode)
+        trump_fetcher = deprecated_kwargs.get("trump_fetcher", config.trump_fetcher)
+
+        config = DataFetchConfig(
+            market_fetcher=market_fetcher,  # type: ignore[arg-type]
+            news_fetcher=news_fetcher,  # type: ignore[arg-type]
+            enable_multi_timeframe=bool(enable_multi_timeframe),
+            trump_mode=bool(trump_mode),
+            trump_fetcher=trump_fetcher,  # type: ignore[arg-type]
+        )
+
     logger.info("Fetching market and news data")
-    use_multi_timeframe = enable_multi_timeframe and _is_market_hours()
+    use_multi_timeframe = config.enable_multi_timeframe and _is_market_hours()
 
     market_result, news_result, trump_data = await _fetch_all_data(
         symbol,
         period_days,
         use_multi_timeframe,
-        enable_multi_timeframe,
-        market_fetcher,
-        news_fetcher,
-        trump_mode,
-        trump_fetcher,
+        config,
     )
 
     market_data, trump_posts = _process_fetch_results(market_result, trump_data, use_multi_timeframe)
@@ -161,7 +190,7 @@ async def fetch_data(  # noqa: PLR0913
         market_data=market_data,
         news_articles=news_result,
         trump_posts=trump_posts,
-        enable_multi_timeframe=enable_multi_timeframe,
+        enable_multi_timeframe=config.enable_multi_timeframe,
         warnings=[],
     )
 

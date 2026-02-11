@@ -306,7 +306,7 @@ class AppContainer(containers.DeclarativeContainer):
     # Note: container must be passed explicitly when calling these factories
     # (providers.Self() doesn't work reliably with Factory providers)
     workflow_meta = providers.Factory(
-        workflow_providers.create_workflow_meta,
+        workflow_providers.create_workflow_meta_wrapper,
         llm_client=llm_client,
         market_fetcher=market_fetcher,
         news_fetcher=news_fetcher,
@@ -318,7 +318,7 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     workflow_momentum = providers.Factory(
-        workflow_providers.create_workflow_momentum,
+        workflow_providers.create_workflow_momentum_wrapper,
         llm_client=llm_client,
         market_fetcher=market_fetcher,
         news_fetcher=news_fetcher,
@@ -330,7 +330,7 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     workflow_trump = providers.Factory(
-        workflow_providers.create_workflow_trump,
+        workflow_providers.create_workflow_trump_wrapper,
         llm_client=llm_client,
         market_fetcher=market_fetcher,
         news_fetcher=news_fetcher,
@@ -342,7 +342,7 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     workflow_full = providers.Factory(
-        workflow_providers.create_workflow_full,
+        workflow_providers.create_workflow_full_wrapper,
         llm_client=llm_client,
         market_fetcher=market_fetcher,
         news_fetcher=news_fetcher,

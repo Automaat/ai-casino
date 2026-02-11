@@ -5,11 +5,14 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
+
+# Import at module level to avoid pyrefly module path mismatch with local imports
+from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 from src.daemon.broker_manager import BrokerManager
 from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
@@ -26,7 +29,6 @@ from src.workflows import TradingWorkflow
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent
     from src.coordinator.agent import TradingCoordinator
-    from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
@@ -232,7 +234,9 @@ class DaemonFactory:
         Returns:
             MarketScheduler instance
         """
-        return MarketScheduler(
+        from src.daemon.scheduler import MarketSchedulerConfig
+
+        scheduler_config = MarketSchedulerConfig(
             start_time=self.config.schedule.start_time,
             end_time=self.config.schedule.end_time,
             timezone=self.config.schedule.timezone,
@@ -268,6 +272,7 @@ class DaemonFactory:
             monte_carlo_time=self.config.monte_carlo.schedule_time,
             monte_carlo_days=self.config.monte_carlo.schedule_days,
         )
+        return MarketScheduler(scheduler_config)
 
     def _validate_live_mode_and_get_tracker(self, state: DaemonState) -> BaseMetricsTracker | None:
         """Validate live mode readiness and initialize metrics tracker.
@@ -560,14 +565,12 @@ class DaemonFactory:
     def init_analysis_orchestrator(
         self,
         components: DaemonComponents,
-        event_bus: EventBus | None = None,
         context_builder: DaemonContextBuilder | None = None,
     ) -> AnalysisOrchestrator:
         """Initialize analysis orchestrator (lazy).
 
         Args:
             components: Daemon components
-            event_bus: Optional event bus for publishing
             context_builder: Optional context builder
 
         Returns:
@@ -576,29 +579,17 @@ class DaemonFactory:
         if components.analysis_orchestrator is not None:
             return components.analysis_orchestrator
 
-        from src.daemon.analysis_orchestrator import AnalysisOrchestrator
-        from src.daemon.positions import PositionManager
+        # Ensure workflow is initialized
+        self.init_workflow(components)
 
-        workflow = self.init_workflow(components)
-
-        # Type-narrow position_manager
-        position_manager: PositionManager | None = None
-        if isinstance(components.position_manager, PositionManager):
-            position_manager = components.position_manager
+        # Import to fix pyrefly module path resolution
+        from src.daemon.factory import DaemonComponents as DaemonComponentsType
 
         orchestrator = AnalysisOrchestrator(
-            workflow=workflow,
-            state=components.state,
-            scheduler=components.scheduler,
             config=self.config.analysis_orchestration,
+            components=cast("DaemonComponentsType", components),
             trading_mode=self.config.trading_mode.value,
-            broker=components.broker,
-            position_manager=position_manager,
-            event_bus=event_bus,
-            historical_cache=components.historical_cache,
-            notification_service=components.notification_service,
             context_builder=context_builder,
-            components=components,  # type: ignore[arg-type]  # pyrefly module resolution issue
         )
         logger.info("Analysis orchestrator initialized")
 

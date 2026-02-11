@@ -9,6 +9,7 @@ from src.daemon.analysis_orchestrator import (
     AnalysisOrchestrator,
     AnalysisOrchestratorConfig,
 )
+from src.daemon.factory import DaemonComponents
 from src.daemon.state import DaemonState
 from src.strategies.session import TradingSession
 from src.workflows.types import TradingDecision, TradingWorkflowResult
@@ -55,14 +56,27 @@ def mock_broker():
     return broker
 
 
-async def test_orchestrator_basic_flow(mock_workflow, mock_state, mock_scheduler):
+@pytest.fixture
+def mock_components(mock_workflow, mock_state, mock_scheduler):
+    """Create mock DaemonComponents."""
+    components = Mock(spec=DaemonComponents)
+    components.workflow = mock_workflow
+    components.state = mock_state
+    components.scheduler = mock_scheduler
+    components.broker = None
+    components.position_manager = None
+    components.event_bus = None
+    components.historical_cache = None
+    components.notification_service = None
+    return components
+
+
+async def test_orchestrator_basic_flow(mock_components):
     """Test basic orchestration flow."""
     config = AnalysisOrchestratorConfig()
     orchestrator = AnalysisOrchestrator(
-        workflow=mock_workflow,
-        state=mock_state,
-        scheduler=mock_scheduler,
         config=config,
+        components=mock_components,
     )
 
     # Mock workflow result
@@ -81,7 +95,7 @@ async def test_orchestrator_basic_flow(mock_workflow, mock_state, mock_scheduler
     mock_result.regime = None
     mock_result.strategy_used = "momentum"
 
-    mock_workflow.analyze.return_value = mock_result
+    mock_components.workflow.analyze.return_value = mock_result
 
     result = await orchestrator.orchestrate(["AAPL"])
 
@@ -93,18 +107,14 @@ async def test_orchestrator_basic_flow(mock_workflow, mock_state, mock_scheduler
     assert result.results[0].symbol == "AAPL"
 
 
-async def test_orchestrator_position_sync(
-    mock_workflow, mock_state, mock_scheduler, mock_position_manager, mock_broker
-):
+async def test_orchestrator_position_sync(mock_components, mock_position_manager, mock_broker):
     """Test position syncing is called when enabled."""
     config = AnalysisOrchestratorConfig(enable_position_sync=True)
+    mock_components.broker = mock_broker
+    mock_components.position_manager = mock_position_manager
     orchestrator = AnalysisOrchestrator(
-        workflow=mock_workflow,
-        state=mock_state,
-        scheduler=mock_scheduler,
         config=config,
-        broker=mock_broker,
-        position_manager=mock_position_manager,
+        components=mock_components,
     )
 
     # Mock workflow result
@@ -123,7 +133,7 @@ async def test_orchestrator_position_sync(
     mock_result.regime = None
     mock_result.strategy_used = "momentum"
 
-    mock_workflow.analyze.return_value = mock_result
+    mock_components.workflow.analyze.return_value = mock_result
 
     result = await orchestrator.orchestrate(["AAPL"])
 
@@ -131,14 +141,12 @@ async def test_orchestrator_position_sync(
     mock_position_manager.sync_with_broker.assert_called_once()
 
 
-async def test_orchestrator_concurrent_limit(mock_workflow, mock_state, mock_scheduler):
+async def test_orchestrator_concurrent_limit(mock_components):
     """Test concurrent analysis respects semaphore limit."""
     config = AnalysisOrchestratorConfig(max_concurrent_analyses=2)
     orchestrator = AnalysisOrchestrator(
-        workflow=mock_workflow,
-        state=mock_state,
-        scheduler=mock_scheduler,
         config=config,
+        components=mock_components,
     )
 
     # Track concurrent executions
@@ -170,7 +178,7 @@ async def test_orchestrator_concurrent_limit(mock_workflow, mock_state, mock_sch
         result.strategy_used = "momentum"
         return result
 
-    mock_workflow.analyze.side_effect = track_concurrent
+    mock_components.workflow.analyze.side_effect = track_concurrent
 
     result = await orchestrator.orchestrate(["AAPL", "TSLA", "MSFT", "GOOGL"])
 
@@ -178,14 +186,12 @@ async def test_orchestrator_concurrent_limit(mock_workflow, mock_state, mock_sch
     assert max_concurrent <= 2
 
 
-async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_scheduler):
+async def test_orchestrator_handles_failures(mock_components):
     """Test orchestrator handles analysis failures."""
     config = AnalysisOrchestratorConfig()
     orchestrator = AnalysisOrchestrator(
-        workflow=mock_workflow,
-        state=mock_state,
-        scheduler=mock_scheduler,
         config=config,
+        components=mock_components,
     )
 
     # Mock workflow to fail for one symbol
@@ -210,7 +216,7 @@ async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_sch
         result.strategy_used = "momentum"
         return result
 
-    mock_workflow.analyze.side_effect = mock_analyze
+    mock_components.workflow.analyze.side_effect = mock_analyze
 
     result = await orchestrator.orchestrate(["AAPL", "FAIL", "TSLA"])
 
@@ -220,14 +226,12 @@ async def test_orchestrator_handles_failures(mock_workflow, mock_state, mock_sch
     assert "FAIL" in result.failed_symbols
 
 
-async def test_orchestrator_target_allocations(mock_workflow, mock_state, mock_scheduler):
+async def test_orchestrator_target_allocations(mock_components):
     """Test orchestrator sets target allocations via workflow method."""
     config = AnalysisOrchestratorConfig()
     orchestrator = AnalysisOrchestrator(
-        workflow=mock_workflow,
-        state=mock_state,
-        scheduler=mock_scheduler,
         config=config,
+        components=mock_components,
     )
 
     target_allocations = {"AAPL": 0.3, "TSLA": 0.2}
@@ -248,12 +252,12 @@ async def test_orchestrator_target_allocations(mock_workflow, mock_state, mock_s
     mock_result.regime = None
     mock_result.strategy_used = "momentum"
 
-    mock_workflow.analyze.return_value = mock_result
-    mock_workflow.set_target_allocations = Mock()
+    mock_components.workflow.analyze.return_value = mock_result
+    mock_components.workflow.set_target_allocations = Mock()
 
     await orchestrator.orchestrate(["AAPL"], target_allocations=target_allocations)
 
     # Verify set_target_allocations was called before analyze
-    assert mock_workflow.set_target_allocations.call_count == 2
-    mock_workflow.set_target_allocations.assert_any_call(target_allocations)
-    mock_workflow.set_target_allocations.assert_any_call(None)
+    assert mock_components.workflow.set_target_allocations.call_count == 2
+    mock_components.workflow.set_target_allocations.assert_any_call(target_allocations)
+    mock_components.workflow.set_target_allocations.assert_any_call(None)

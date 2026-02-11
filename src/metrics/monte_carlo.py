@@ -1,5 +1,6 @@
 """Monte Carlo portfolio stress testing using vectorized numpy simulations."""
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 import numpy as np
@@ -17,6 +18,17 @@ class SimulationMethod(StrEnum):
     PARAMETRIC = "PARAMETRIC"  # Normal distribution (default)
     BOOTSTRAP = "BOOTSTRAP"  # Historical resampling
     GBM = "GBM"  # Geometric Brownian Motion
+
+
+@dataclass
+class SimulationConfig:
+    """Configuration for Monte Carlo simulation."""
+
+    num_simulations: int = 1000
+    horizon_days: int = 252
+    method: SimulationMethod = SimulationMethod.PARAMETRIC
+    random_seed: int | None = None
+    loss_threshold: float = 0.10
 
 
 class MonteCarloResult(BaseModel):
@@ -67,24 +79,16 @@ class MonteCarloSimulator:
         """Return string representation."""
         return f"MonteCarloSimulator(symbols={len(self.returns.columns)}, days={len(self.returns)})"
 
-    def simulate(  # noqa: PLR0913
+    def simulate(
         self,
         positions: dict[str, float],
-        num_simulations: int = 1000,
-        horizon_days: int = 252,
-        method: SimulationMethod = SimulationMethod.PARAMETRIC,
-        random_seed: int | None = None,
-        loss_threshold: float = 0.10,
+        config: SimulationConfig | None = None,
     ) -> MonteCarloResult:
         """Run Monte Carlo simulation on portfolio.
 
         Args:
             positions: {symbol: market_value}
-            num_simulations: Number of simulation paths
-            horizon_days: Simulation horizon in days (default 1 year)
-            method: Simulation method (PARAMETRIC/BOOTSTRAP/GBM)
-            random_seed: Random seed for reproducibility
-            loss_threshold: Loss threshold for probability calculation (default 0.10)
+            config: Simulation configuration (uses defaults if not provided)
 
         Returns:
             MonteCarloResult with tail risk metrics
@@ -92,6 +96,7 @@ class MonteCarloSimulator:
         Raises:
             ValueError: If positions empty or insufficient data
         """
+        cfg = config or SimulationConfig()
         if not positions:
             msg = "Portfolio positions cannot be empty"
             raise ValueError(msg)
@@ -105,13 +110,15 @@ class MonteCarloSimulator:
 
         # Check memory requirements (warn if >1GB)
         num_assets = len(positions)
-        memory_mb = (num_simulations * horizon_days * num_assets * 8) / (1024**2)
+        memory_mb = (cfg.num_simulations * cfg.horizon_days * num_assets * 8) / (1024**2)
         if memory_mb > MAX_MEMORY_MB:
             logger.warning(
                 f"Large simulation ({memory_mb:.0f} MB), consider reducing num_simulations or horizon_days"
             )
 
-        rng = np.random.default_rng(random_seed) if random_seed is not None else np.random.default_rng()
+        rng = (
+            np.random.default_rng(cfg.random_seed) if cfg.random_seed is not None else np.random.default_rng()
+        )
 
         # Align positions with returns columns
         symbols = [sym for sym in self.returns.columns if sym in positions]
@@ -125,14 +132,14 @@ class MonteCarloSimulator:
         weights = weights / weights.sum()
 
         # Generate simulations based on method
-        if method == SimulationMethod.PARAMETRIC:
-            sim_returns = self._simulate_parametric(symbols, num_simulations, horizon_days, rng)
-        elif method == SimulationMethod.BOOTSTRAP:
-            sim_returns = self._simulate_bootstrap(symbols, num_simulations, horizon_days, rng)
-        elif method == SimulationMethod.GBM:
-            sim_returns = self._simulate_gbm(symbols, num_simulations, horizon_days, rng)
+        if cfg.method == SimulationMethod.PARAMETRIC:
+            sim_returns = self._simulate_parametric(symbols, cfg.num_simulations, cfg.horizon_days, rng)
+        elif cfg.method == SimulationMethod.BOOTSTRAP:
+            sim_returns = self._simulate_bootstrap(symbols, cfg.num_simulations, cfg.horizon_days, rng)
+        elif cfg.method == SimulationMethod.GBM:
+            sim_returns = self._simulate_gbm(symbols, cfg.num_simulations, cfg.horizon_days, rng)
         else:
-            msg = f"Unknown simulation method: {method}"
+            msg = f"Unknown simulation method: {cfg.method}"
             raise ValueError(msg)
 
         # Validate simulation results
@@ -146,7 +153,7 @@ class MonteCarloSimulator:
         final_returns = cumulative_returns[:, -1]  # (num_sims,)
 
         # Calculate metrics
-        prob_loss_gt_threshold = float((final_returns < -loss_threshold).mean())
+        prob_loss_gt_threshold = float((final_returns < -cfg.loss_threshold).mean())
         var_95 = float(np.percentile(final_returns, 5))
         cvar_95 = float(final_returns[final_returns <= var_95].mean())
 
@@ -162,9 +169,9 @@ class MonteCarloSimulator:
         median_recovery_days = self._calculate_recovery_time(cumulative_returns)
 
         return MonteCarloResult(
-            simulation_method=method,
-            num_simulations=num_simulations,
-            horizon_days=horizon_days,
+            simulation_method=cfg.method,
+            num_simulations=cfg.num_simulations,
+            horizon_days=cfg.horizon_days,
             prob_loss_gt_threshold=prob_loss_gt_threshold,
             expected_worst_drawdown=expected_worst_drawdown,
             var_95=var_95,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -18,6 +19,32 @@ from src.daemon.state.models import (
     RiskReportRecord,
     SectorRotationRecord,
 )
+
+
+@dataclass
+class PortfolioRebalancingInput:
+    """Input parameters for recording portfolio rebalancing."""
+
+    method: str
+    allocations: list[PortfolioAllocationRecord]
+    expected_return: float
+    expected_volatility: float
+    sharpe_ratio: float
+    rebalances_executed: int
+    rebalances_pending: int
+
+
+@dataclass
+class CorrelationAuditInput:
+    """Input parameters for recording correlation audit."""
+
+    num_positions: int
+    num_correlated_pairs: int
+    max_correlation: float
+    avg_correlation: float
+    diversification_ratio: float
+    num_substitutions: int
+    total_duration_seconds: float
 
 
 class PortfolioStateManager(StateManager):
@@ -78,45 +105,30 @@ class PortfolioStateManager(StateManager):
         self.last_optimization = now
         self.optimization_history = self._cap_history(self.optimization_history, 10, 10)
 
-    def record_portfolio_rebalancing(  # noqa: PLR0913
-        self,
-        method: str,
-        allocations: list[PortfolioAllocationRecord],
-        expected_return: float,
-        expected_volatility: float,
-        sharpe_ratio: float,
-        rebalances_executed: int,
-        rebalances_pending: int,
-    ) -> None:
+    def record_portfolio_rebalancing(self, input_data: PortfolioRebalancingInput) -> None:
         """Record portfolio rebalancing run.
 
         Args:
-            method: Optimization method used
-            allocations: Asset allocation records
-            expected_return: Expected portfolio return
-            expected_volatility: Expected portfolio volatility
-            sharpe_ratio: Portfolio Sharpe ratio
-            rebalances_executed: Number of rebalances executed
-            rebalances_pending: Number of rebalances pending
+            input_data: Portfolio rebalancing input parameters
         """
         now = datetime.now(UTC)
 
         self.portfolio_rebalancing_history.append(
             PortfolioRebalancingRecord(
                 timestamp=now,
-                method=method,
-                allocations=allocations,
-                expected_return=expected_return,
-                expected_volatility=expected_volatility,
-                sharpe_ratio=sharpe_ratio,
-                rebalances_executed=rebalances_executed,
-                rebalances_pending=rebalances_pending,
+                method=input_data.method,
+                allocations=input_data.allocations,
+                expected_return=input_data.expected_return,
+                expected_volatility=input_data.expected_volatility,
+                sharpe_ratio=input_data.sharpe_ratio,
+                rebalances_executed=input_data.rebalances_executed,
+                rebalances_pending=input_data.rebalances_pending,
             )
         )
         self.last_portfolio_rebalancing = now
         self.portfolio_rebalancing_history = self._cap_history(self.portfolio_rebalancing_history, 30, 30)
 
-        self.active_target_allocations = {a.symbol: a.weight for a in allocations}
+        self.active_target_allocations = {a.symbol: a.weight for a in input_data.allocations}
 
     def record_sector_rotation(
         self,
@@ -182,39 +194,24 @@ class PortfolioStateManager(StateManager):
         self.last_peer_analysis = now
         self.peer_analysis_history = self._cap_history(self.peer_analysis_history, 10, 10)
 
-    def record_correlation_audit(  # noqa: PLR0913
-        self,
-        num_positions: int,
-        num_correlated_pairs: int,
-        max_correlation: float,
-        avg_correlation: float,
-        diversification_ratio: float,
-        num_substitutions: int,
-        total_duration_seconds: float,
-    ) -> None:
+    def record_correlation_audit(self, input_data: CorrelationAuditInput) -> None:
         """Record a correlation audit run.
 
         Args:
-            num_positions: Number of positions analyzed
-            num_correlated_pairs: Number of highly correlated pairs found
-            max_correlation: Maximum correlation found
-            avg_correlation: Average portfolio correlation
-            diversification_ratio: Portfolio diversification ratio
-            num_substitutions: Number of substitution suggestions
-            total_duration_seconds: Total audit duration
+            input_data: Correlation audit input parameters
         """
         now = datetime.now(UTC)
 
         self.correlation_audit_history.append(
             CorrelationAuditRecord(
                 timestamp=now,
-                num_positions=num_positions,
-                num_correlated_pairs=num_correlated_pairs,
-                max_correlation=max_correlation,
-                avg_correlation=avg_correlation,
-                diversification_ratio=diversification_ratio,
-                num_substitutions=num_substitutions,
-                total_duration_seconds=total_duration_seconds,
+                num_positions=input_data.num_positions,
+                num_correlated_pairs=input_data.num_correlated_pairs,
+                max_correlation=input_data.max_correlation,
+                avg_correlation=input_data.avg_correlation,
+                diversification_ratio=input_data.diversification_ratio,
+                num_substitutions=input_data.num_substitutions,
+                total_duration_seconds=input_data.total_duration_seconds,
             )
         )
         self.last_correlation_audit = now

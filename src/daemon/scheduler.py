@@ -1,5 +1,6 @@
 """Market hours scheduler for the trading daemon."""
 
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -13,122 +14,290 @@ AFTER_HOURS_START = (16, 0)  # 4:00 PM ET (regular market close)
 AFTER_HOURS_END = (20, 0)  # 8:00 PM ET
 
 
+@dataclass
+class MarketSchedulerConfig:
+    """Configuration for MarketScheduler."""
+
+    start_time: str = "09:30"
+    end_time: str = "16:00"
+    timezone: str = "America/New_York"
+    enable_pre_market: bool = False
+    enable_after_hours: bool = False
+    after_hours_screen_time: str = "16:30"
+    after_hours_screen_days: list[str] | None = None
+    optimization_time: str = "17:00"
+    optimization_days: list[str] | None = None
+    prefetch_time: str = "16:30"
+    pre_market_refresh_time: str = "04:00"
+    sector_rotation_time: str = "16:15"
+    sector_rotation_days: list[str] | None = None
+    enable_sector_rotation: bool = False
+    earnings_fetch_time: str = "16:45"
+    earnings_fetch_days: list[str] | None = None
+    enable_earnings_calendar: bool = False
+    peer_analysis_time: str = "17:30"
+    peer_analysis_days: list[str] | None = None
+    enable_peer_analysis: bool = False
+    correlation_audit_time: str = "17:45"
+    correlation_audit_days: list[str] | None = None
+    enable_correlation_audit: bool = False
+    tearsheet_time: str = "16:30"
+    enable_reporting: bool = False
+    rebalancing_time: str = "16:45"
+    rebalancing_days: list[str] | None = None
+    enable_rebalancing: bool = False
+    signal_tracking_time: str = "17:00"
+    enable_signal_tracking: bool = True
+    game_plan_time: str = "04:00"
+    enable_game_plan: bool = False
+    monte_carlo_time: str = "17:00"
+    monte_carlo_days: list[str] | None = None
+
+
 class MarketScheduler:
     """Scheduler that respects market hours."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913,D417 - Backward compat with tests, prefer MarketSchedulerConfig
         self,
-        start_time: str = "09:30",
-        end_time: str = "16:00",
-        timezone: str = "America/New_York",
-        enable_pre_market: bool = False,
-        enable_after_hours: bool = False,
-        after_hours_screen_time: str = "16:30",
+        config: MarketSchedulerConfig | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        timezone: str | None = None,
+        enable_pre_market: bool | None = None,
+        enable_after_hours: bool | None = None,
+        after_hours_screen_time: str | None = None,
         after_hours_screen_days: list[str] | None = None,
-        optimization_time: str = "17:00",
+        optimization_time: str | None = None,
         optimization_days: list[str] | None = None,
-        prefetch_time: str = "16:30",
-        pre_market_refresh_time: str = "04:00",
-        sector_rotation_time: str = "16:15",
+        prefetch_time: str | None = None,
+        pre_market_refresh_time: str | None = None,
+        sector_rotation_time: str | None = None,
         sector_rotation_days: list[str] | None = None,
-        enable_sector_rotation: bool = False,
-        earnings_fetch_time: str = "16:45",
+        enable_sector_rotation: bool | None = None,
+        earnings_fetch_time: str | None = None,
         earnings_fetch_days: list[str] | None = None,
-        enable_earnings_calendar: bool = False,
-        peer_analysis_time: str = "17:30",
+        enable_earnings_calendar: bool | None = None,
+        peer_analysis_time: str | None = None,
         peer_analysis_days: list[str] | None = None,
-        enable_peer_analysis: bool = False,
-        correlation_audit_time: str = "17:45",
+        enable_peer_analysis: bool | None = None,
+        correlation_audit_time: str | None = None,
         correlation_audit_days: list[str] | None = None,
-        enable_correlation_audit: bool = False,
-        tearsheet_time: str = "16:30",
-        enable_reporting: bool = False,
-        rebalancing_time: str = "16:45",
+        enable_correlation_audit: bool | None = None,
+        tearsheet_time: str | None = None,
+        enable_reporting: bool | None = None,
+        rebalancing_time: str | None = None,
         rebalancing_days: list[str] | None = None,
-        enable_rebalancing: bool = False,
-        signal_tracking_time: str = "17:00",
-        enable_signal_tracking: bool = True,
-        game_plan_time: str = "04:00",
-        enable_game_plan: bool = False,
-        monte_carlo_time: str = "17:00",
+        enable_rebalancing: bool | None = None,
+        signal_tracking_time: str | None = None,
+        enable_signal_tracking: bool | None = None,
+        game_plan_time: str | None = None,
+        enable_game_plan: bool | None = None,
+        monte_carlo_time: str | None = None,
         monte_carlo_days: list[str] | None = None,
     ) -> None:
         """Initialize market scheduler.
 
         Args:
-            start_time: Market open time (HH:MM format)
-            end_time: Market close time (HH:MM format)
-            timezone: Market timezone
-            enable_pre_market: Enable pre-market hours (4:00-9:30 AM ET)
-            enable_after_hours: Enable after-hours screening (16:00-20:00 ET)
-            after_hours_screen_time: Time to run after-hours screening (HH:MM format)
-            after_hours_screen_days: Days to run screening (e.g., ["mon", "tue", "wed", "thu", "fri"])
-            optimization_time: Time to run parameter optimization (HH:MM format)
-            optimization_days: Days to run optimization (e.g., ["sat"])
-            prefetch_time: Time to run after-hours data prefetch (HH:MM format)
-            pre_market_refresh_time: Time to run pre-market data refresh (HH:MM format)
-            sector_rotation_time: Time to run sector rotation analysis (HH:MM format)
-            sector_rotation_days: Days to run sector rotation (e.g., ["mon", ..., "fri"])
-            enable_sector_rotation: Enable sector rotation analysis
-            earnings_fetch_time: Time to fetch earnings calendar (HH:MM format)
-            earnings_fetch_days: Days to fetch earnings (e.g., ["mon"])
-            enable_earnings_calendar: Enable earnings calendar fetching
-            peer_analysis_time: Time to run deep peer analysis (HH:MM format)
-            peer_analysis_days: Days to run peer analysis (e.g., ["sun"])
-            enable_peer_analysis: Enable deep peer analysis
-            correlation_audit_time: Time to run correlation audit (HH:MM format)
-            correlation_audit_days: Days to run correlation audit (e.g., ["sun"])
-            enable_correlation_audit: Enable correlation audit
-            tearsheet_time: Time to generate tearsheets (HH:MM format)
-            enable_reporting: Enable tearsheet generation
-            rebalancing_time: Time to run portfolio rebalancing (HH:MM format)
-            rebalancing_days: Days to run rebalancing (e.g., ["mon"])
-            enable_rebalancing: Enable portfolio rebalancing
-            signal_tracking_time: Time to run signal tracking (HH:MM format)
-            enable_signal_tracking: Enable signal tracking
-            game_plan_time: Time to generate game plan (HH:MM format)
-            enable_game_plan: Enable game plan generation
-            monte_carlo_time: Time to run Monte Carlo stress test (HH:MM format)
-            monte_carlo_days: Days to run stress test (e.g., ["sun"])
+            config: Configuration (uses defaults if not provided)
+            **Individual params for backward compatibility (prefer config object)
         """
-        self.start_hour, self.start_minute = map(int, start_time.split(":"))
-        self.end_hour, self.end_minute = map(int, end_time.split(":"))
-        self.timezone = ZoneInfo(timezone)
-        self.enable_pre_market = enable_pre_market
-        self.enable_after_hours = enable_after_hours
-        self.after_hours_screen_time = after_hours_screen_time
-        self.after_hours_screen_days = after_hours_screen_days or ["mon", "tue", "wed", "thu", "fri"]
-        self.optimization_time = optimization_time
-        self.optimization_days = optimization_days or ["sat"]
-        self.prefetch_time = prefetch_time
-        self.pre_market_refresh_time = pre_market_refresh_time
-        self.sector_rotation_time = sector_rotation_time
-        self.sector_rotation_days = sector_rotation_days or ["mon", "tue", "wed", "thu", "fri"]
-        self.enable_sector_rotation = enable_sector_rotation
-        self.earnings_fetch_time = earnings_fetch_time
-        self.earnings_fetch_days = earnings_fetch_days or ["mon"]
-        self.enable_earnings_calendar = enable_earnings_calendar
-        self.peer_analysis_time = peer_analysis_time
-        self.peer_analysis_days = peer_analysis_days or ["sun"]
-        self.enable_peer_analysis = enable_peer_analysis
-        self.correlation_audit_time = correlation_audit_time
-        self.correlation_audit_days = correlation_audit_days or ["sun"]
-        self.enable_correlation_audit = enable_correlation_audit
-        self.tearsheet_time = tearsheet_time
-        self.enable_reporting = enable_reporting
-        self.rebalancing_time = rebalancing_time
-        self.rebalancing_days = rebalancing_days or ["mon"]
-        self.enable_rebalancing = enable_rebalancing
-        self.signal_tracking_time = signal_tracking_time
-        self.enable_signal_tracking = enable_signal_tracking
-        self.game_plan_time = game_plan_time
-        self.enable_game_plan = enable_game_plan
-        self.monte_carlo_time = monte_carlo_time
-        self.monte_carlo_days = monte_carlo_days or ["sun"]
+        # Backward compat: construct config from individual params if provided
+        if config is None and (
+            start_time is not None
+            or end_time is not None
+            or timezone is not None
+            or enable_pre_market is not None
+            or enable_after_hours is not None
+            or after_hours_screen_time is not None
+            or after_hours_screen_days is not None
+            or optimization_time is not None
+            or optimization_days is not None
+            or prefetch_time is not None
+            or pre_market_refresh_time is not None
+            or sector_rotation_time is not None
+            or sector_rotation_days is not None
+            or enable_sector_rotation is not None
+            or earnings_fetch_time is not None
+            or earnings_fetch_days is not None
+            or enable_earnings_calendar is not None
+            or peer_analysis_time is not None
+            or peer_analysis_days is not None
+            or enable_peer_analysis is not None
+            or correlation_audit_time is not None
+            or correlation_audit_days is not None
+            or enable_correlation_audit is not None
+            or tearsheet_time is not None
+            or enable_reporting is not None
+            or rebalancing_time is not None
+            or rebalancing_days is not None
+            or enable_rebalancing is not None
+            or signal_tracking_time is not None
+            or enable_signal_tracking is not None
+            or game_plan_time is not None
+            or enable_game_plan is not None
+            or monte_carlo_time is not None
+            or monte_carlo_days is not None
+        ):
+            # Construct config from individual params (overriding defaults)
+            defaults = MarketSchedulerConfig()
+            config = MarketSchedulerConfig(
+                start_time=start_time if start_time is not None else defaults.start_time,
+                end_time=end_time if end_time is not None else defaults.end_time,
+                timezone=timezone if timezone is not None else defaults.timezone,
+                enable_pre_market=(
+                    enable_pre_market if enable_pre_market is not None else defaults.enable_pre_market
+                ),
+                enable_after_hours=(
+                    enable_after_hours if enable_after_hours is not None else defaults.enable_after_hours
+                ),
+                after_hours_screen_time=(
+                    after_hours_screen_time
+                    if after_hours_screen_time is not None
+                    else defaults.after_hours_screen_time
+                ),
+                after_hours_screen_days=(
+                    after_hours_screen_days
+                    if after_hours_screen_days is not None
+                    else defaults.after_hours_screen_days
+                ),
+                optimization_time=(
+                    optimization_time if optimization_time is not None else defaults.optimization_time
+                ),
+                optimization_days=(
+                    optimization_days if optimization_days is not None else defaults.optimization_days
+                ),
+                prefetch_time=prefetch_time if prefetch_time is not None else defaults.prefetch_time,
+                pre_market_refresh_time=(
+                    pre_market_refresh_time
+                    if pre_market_refresh_time is not None
+                    else defaults.pre_market_refresh_time
+                ),
+                sector_rotation_time=(
+                    sector_rotation_time
+                    if sector_rotation_time is not None
+                    else defaults.sector_rotation_time
+                ),
+                sector_rotation_days=(
+                    sector_rotation_days
+                    if sector_rotation_days is not None
+                    else defaults.sector_rotation_days
+                ),
+                enable_sector_rotation=(
+                    enable_sector_rotation
+                    if enable_sector_rotation is not None
+                    else defaults.enable_sector_rotation
+                ),
+                earnings_fetch_time=(
+                    earnings_fetch_time if earnings_fetch_time is not None else defaults.earnings_fetch_time
+                ),
+                earnings_fetch_days=(
+                    earnings_fetch_days if earnings_fetch_days is not None else defaults.earnings_fetch_days
+                ),
+                enable_earnings_calendar=(
+                    enable_earnings_calendar
+                    if enable_earnings_calendar is not None
+                    else defaults.enable_earnings_calendar
+                ),
+                peer_analysis_time=(
+                    peer_analysis_time if peer_analysis_time is not None else defaults.peer_analysis_time
+                ),
+                peer_analysis_days=(
+                    peer_analysis_days if peer_analysis_days is not None else defaults.peer_analysis_days
+                ),
+                enable_peer_analysis=(
+                    enable_peer_analysis
+                    if enable_peer_analysis is not None
+                    else defaults.enable_peer_analysis
+                ),
+                correlation_audit_time=(
+                    correlation_audit_time
+                    if correlation_audit_time is not None
+                    else defaults.correlation_audit_time
+                ),
+                correlation_audit_days=(
+                    correlation_audit_days
+                    if correlation_audit_days is not None
+                    else defaults.correlation_audit_days
+                ),
+                enable_correlation_audit=(
+                    enable_correlation_audit
+                    if enable_correlation_audit is not None
+                    else defaults.enable_correlation_audit
+                ),
+                tearsheet_time=tearsheet_time if tearsheet_time is not None else defaults.tearsheet_time,
+                enable_reporting=(
+                    enable_reporting if enable_reporting is not None else defaults.enable_reporting
+                ),
+                rebalancing_time=(
+                    rebalancing_time if rebalancing_time is not None else defaults.rebalancing_time
+                ),
+                rebalancing_days=(
+                    rebalancing_days if rebalancing_days is not None else defaults.rebalancing_days
+                ),
+                enable_rebalancing=(
+                    enable_rebalancing if enable_rebalancing is not None else defaults.enable_rebalancing
+                ),
+                signal_tracking_time=(
+                    signal_tracking_time
+                    if signal_tracking_time is not None
+                    else defaults.signal_tracking_time
+                ),
+                enable_signal_tracking=(
+                    enable_signal_tracking
+                    if enable_signal_tracking is not None
+                    else defaults.enable_signal_tracking
+                ),
+                game_plan_time=game_plan_time if game_plan_time is not None else defaults.game_plan_time,
+                enable_game_plan=(
+                    enable_game_plan if enable_game_plan is not None else defaults.enable_game_plan
+                ),
+                monte_carlo_time=(
+                    monte_carlo_time if monte_carlo_time is not None else defaults.monte_carlo_time
+                ),
+                monte_carlo_days=(
+                    monte_carlo_days if monte_carlo_days is not None else defaults.monte_carlo_days
+                ),
+            )
+
+        cfg = config or MarketSchedulerConfig()
+        self.start_hour, self.start_minute = map(int, cfg.start_time.split(":"))
+        self.end_hour, self.end_minute = map(int, cfg.end_time.split(":"))
+        self.timezone = ZoneInfo(cfg.timezone)
+        self.enable_pre_market = cfg.enable_pre_market
+        self.enable_after_hours = cfg.enable_after_hours
+        self.after_hours_screen_time = cfg.after_hours_screen_time
+        self.after_hours_screen_days = cfg.after_hours_screen_days or ["mon", "tue", "wed", "thu", "fri"]
+        self.optimization_time = cfg.optimization_time
+        self.optimization_days = cfg.optimization_days or ["sat"]
+        self.prefetch_time = cfg.prefetch_time
+        self.pre_market_refresh_time = cfg.pre_market_refresh_time
+        self.sector_rotation_time = cfg.sector_rotation_time
+        self.sector_rotation_days = cfg.sector_rotation_days or ["mon", "tue", "wed", "thu", "fri"]
+        self.enable_sector_rotation = cfg.enable_sector_rotation
+        self.earnings_fetch_time = cfg.earnings_fetch_time
+        self.earnings_fetch_days = cfg.earnings_fetch_days or ["mon"]
+        self.enable_earnings_calendar = cfg.enable_earnings_calendar
+        self.peer_analysis_time = cfg.peer_analysis_time
+        self.peer_analysis_days = cfg.peer_analysis_days or ["sun"]
+        self.enable_peer_analysis = cfg.enable_peer_analysis
+        self.correlation_audit_time = cfg.correlation_audit_time
+        self.correlation_audit_days = cfg.correlation_audit_days or ["sun"]
+        self.enable_correlation_audit = cfg.enable_correlation_audit
+        self.tearsheet_time = cfg.tearsheet_time
+        self.enable_reporting = cfg.enable_reporting
+        self.rebalancing_time = cfg.rebalancing_time
+        self.rebalancing_days = cfg.rebalancing_days or ["mon"]
+        self.enable_rebalancing = cfg.enable_rebalancing
+        self.signal_tracking_time = cfg.signal_tracking_time
+        self.enable_signal_tracking = cfg.enable_signal_tracking
+        self.game_plan_time = cfg.game_plan_time
+        self.enable_game_plan = cfg.enable_game_plan
+        self.monte_carlo_time = cfg.monte_carlo_time
+        self.monte_carlo_days = cfg.monte_carlo_days or ["sun"]
         logger.info(
-            f"MarketScheduler initialized: {start_time}-{end_time} {timezone} "
-            f"(pre-market={'enabled' if enable_pre_market else 'disabled'}, "
-            f"after-hours={'enabled' if enable_after_hours else 'disabled'})"
+            f"MarketScheduler initialized: {cfg.start_time}-{cfg.end_time} {cfg.timezone} "
+            f"(pre-market={'enabled' if cfg.enable_pre_market else 'disabled'}, "
+            f"after-hours={'enabled' if cfg.enable_after_hours else 'disabled'})"
         )
 
     def get_trading_session(self) -> TradingSession | None:
