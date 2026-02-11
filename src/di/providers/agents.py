@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from src.agents.trader import TraderAgent
     from src.agents.trump import TrumpAnalyst
     from src.agents.web_researcher import WebResearchAgent
+    from src.coordinator.agent import TradingCoordinator
+    from src.daemon.state import DaemonState
+    from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.models.sentiment import FinBERTSentiment
     from src.strategies.regime import MarketRegimeDetector
@@ -301,4 +304,46 @@ def create_risk_management_agent(
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
         position_sizing_config=position_sizing_config,
+    )
+
+
+def create_trading_coordinator(
+    llm_client: LLMClient,
+    daemon_config: DaemonConfig,
+    container: AppContainer,
+    daemon_state: DaemonState | None = None,
+) -> TradingCoordinator:
+    """Create TradingCoordinator with all dependencies.
+
+    Args:
+        llm_client: LLM client for tool calling
+        daemon_config: Daemon config for coordinator settings
+        container: DI container for tool registry
+        daemon_state: Optional daemon state for analysis history
+
+    Returns:
+        Configured TradingCoordinator
+    """
+    from src.coordinator.agent import TradingCoordinator
+    from src.coordinator.memory import CoordinatorMemory
+    from src.coordinator.tools import build_coordinator_registry
+
+    # Create shared memory
+    memory = CoordinatorMemory()
+
+    # Build tool registry with shared memory
+    tool_registry = build_coordinator_registry(container, daemon_state, memory)
+
+    # Get broker for portfolio context
+    broker = container.alpaca_broker()
+
+    # Extract coordinator config
+    coordinator_config = daemon_config.coordinator
+
+    return TradingCoordinator(
+        llm_client=llm_client,
+        tool_registry=tool_registry,
+        memory=memory,
+        config=coordinator_config,
+        broker=broker,
     )

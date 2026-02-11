@@ -1,0 +1,14 @@
+## Trading Cycle
+
+**Watchlist**: {watchlist}
+
+**Last Cycle Summary**: {last_summary}
+
+**Objectives**:
+1. Analyze market conditions and generate game plan if needed
+2. Identify and analyze high-conviction trading opportunities
+3. Execute trades that meet confidence and risk criteria
+4. Monitor portfolio and manage existing positions
+5. Save key insights to memory for learning
+
+Begin your workflow using available tools. Make decisions autonomously based on data, confidence thresholds, and risk limits.

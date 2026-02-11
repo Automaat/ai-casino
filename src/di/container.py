@@ -288,6 +288,12 @@ class AppContainer(containers.DeclarativeContainer):
         portfolio_var_calculator=portfolio_var_calculator,
     )
 
+    coordinator_agent = providers.Factory(
+        agent_providers.create_trading_coordinator,
+        llm_client=llm_client,
+        daemon_config=daemon_config,
+    )
+
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides
     # Note: container must be passed explicitly when calling these factories
     # (providers.Self() doesn't work reliably with Factory providers)
