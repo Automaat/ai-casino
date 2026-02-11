@@ -136,7 +136,6 @@ class EventWatcher(ABC):
             raise RuntimeError(msg)
         logger.info(f"Analyzing {len(symbols)} symbols: {symbols}")
 
-        results: dict[str, TradingWorkflowResult] = {}
         semaphore = asyncio.Semaphore(self.max_concurrent_analyses)
         workflow = self._workflow
 
@@ -149,12 +148,40 @@ class EventWatcher(ABC):
                     logger.error(f"Failed to analyze {symbol}: {e}")
                     return symbol, None
 
-        tasks = [analyze_one(s) for s in symbols]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Wrap tasks to handle exceptions
+        async def safe_analyze(symbol: str) -> tuple[str, TradingWorkflowResult | None] | BaseException:
+            try:
+                return await analyze_one(symbol)
+            except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise
+                return e
 
+        # Run analyses in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_analyze(s)) for s in symbols]
+
+        raw_results = [task.result() for task in task_results]
+        return self._process_analysis_results(raw_results, len(symbols))
+
+    def _process_analysis_results(
+        self,
+        raw_results: list[tuple[str, TradingWorkflowResult | None] | BaseException],
+        total_symbols: int,
+    ) -> dict[str, TradingWorkflowResult]:
+        """Process raw analysis results and extract successful ones.
+
+        Args:
+            raw_results: Raw results from parallel analyses
+            total_symbols: Total number of symbols analyzed
+
+        Returns:
+            Dict mapping symbol to successful analysis results
+        """
+        results: dict[str, TradingWorkflowResult] = {}
         for entry in raw_results:
             if isinstance(entry, BaseException):
-                # Preserve cancellation/shutdown semantics
                 if isinstance(entry, (asyncio.CancelledError, KeyboardInterrupt)):
                     raise entry
                 logger.error(f"Analysis task failed: {entry}")
@@ -163,6 +190,7 @@ class EventWatcher(ABC):
             if result:
                 results[symbol] = result
 
+        logger.info(f"Analysis complete: {len(results)}/{total_symbols} successful")
         return results
 
     def _emit_signal(self, signal: EventSignal) -> None:
@@ -208,6 +236,20 @@ class EventWatcher(ABC):
             except Exception as e:
                 logger.error(f"Signal callback failed: {e}")
 
+    async def _triage_events(self, events: list[BaseEvent]) -> list[TriageResult | BaseException]:
+        """Triage events with LLM in parallel."""
+
+        async def safe_triage(event: object) -> TriageResult | BaseException:
+            try:
+                return await self._triage_agent.analyze(event)  # type: ignore[attr-defined, union-attr]
+            except BaseException as e:
+                return e
+
+        async with asyncio.TaskGroup() as tg:
+            triage_task_results = [tg.create_task(safe_triage(e)) for e in events]
+
+        return [task.result() for task in triage_task_results]
+
     def _filter_relevant_events(
         self,
         events: list[BaseEvent],
@@ -222,6 +264,17 @@ class EventWatcher(ABC):
                 relevant.append((event, triage))
         return relevant
 
+    def _extract_symbols_with_cooldown(self, relevant: list[tuple[BaseEvent, TriageResult]]) -> set[str]:
+        """Extract symbols from relevant events and check cooldowns."""
+        symbols_to_analyze = set()
+        for _, triage in relevant:
+            for symbol in triage.symbols:
+                if self._check_cooldown(symbol):
+                    symbols_to_analyze.add(symbol)
+                else:
+                    logger.debug(f"{symbol} skipped (in cooldown)")
+        return symbols_to_analyze
+
     async def _run_cycle(self) -> None:
         """Main poll cycle (template method)."""
         self._init_components()
@@ -229,19 +282,13 @@ class EventWatcher(ABC):
             msg = "Failed to initialize EventTriageAgent"
             raise RuntimeError(msg)
 
-        # 1. Fetch new events
         events = await self._fetch_events()
         if not events:
             logger.debug("No new events")
             return
 
         logger.info(f"Found {len(events)} new event(s)")
-
-        # 2. Triage events with LLM
-        triage_tasks = [self._triage_agent.analyze(e) for e in events]
-        triage_results = await asyncio.gather(*triage_tasks, return_exceptions=True)
-
-        # 3. Filter by relevance threshold and urgency (skip failed triages)
+        triage_results = await self._triage_events(events)
         relevant = self._filter_relevant_events(events, triage_results)
 
         if not relevant:
@@ -251,29 +298,18 @@ class EventWatcher(ABC):
             return
 
         logger.info(f"Found {len(relevant)} high-relevance event(s)")
-
-        # 4. Extract symbols and check cooldowns
-        symbols_to_analyze = set()
-        for _, triage in relevant:
-            for symbol in triage.symbols:
-                if self._check_cooldown(symbol):
-                    symbols_to_analyze.add(symbol)
-                else:
-                    logger.debug(f"{symbol} skipped (in cooldown)")
+        symbols_to_analyze = self._extract_symbols_with_cooldown(relevant)
 
         if not symbols_to_analyze:
             logger.info("All symbols in cooldown, skipping analysis")
             return
 
-        # 5. Run trading analysis (limit to max_concurrent_analyses)
         symbols_list = sorted(symbols_to_analyze)[: self.max_concurrent_analyses]
         analyses = await self._analyze_stocks(symbols_list)
 
-        # 6. Set cooldowns only for successfully analyzed symbols
         for symbol in analyses:
             self._set_cooldown(symbol)
 
-        # 7. Emit signal (use first relevant event as primary)
         signal = EventSignal(
             event=relevant[0][0],
             triage=relevant[0][1],

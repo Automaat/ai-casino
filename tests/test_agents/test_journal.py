@@ -54,7 +54,7 @@ class TestTradeJournalAgent:
 
         assert journal.date == date(2024, 1, 15)
         assert journal.outcomes == []
-        assert journal.overall_assessment == "No signals to evaluate"
+        assert journal.overall_assessment == "No signals to evaluate — no signals generated today"
 
     async def test_generate_journal(self, test_container_full, sample_analysis_records):
         agent = test_container_full.trade_journal_agent()

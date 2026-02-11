@@ -278,8 +278,23 @@ class AnalysisOrchestrator:
                     symbol, position_context, target_allocations, degradation_context
                 )
 
-        tasks = [analyze_with_limit(s) for s in watchlist]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Wrap tasks to handle exceptions without canceling siblings
+        async def safe_analyze(symbol: str) -> TradingWorkflowResult | BaseException | None:
+            try:
+                return await analyze_with_limit(symbol)
+            except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                    raise
+                # Return exception to be processed by _filter_analysis_results
+                return e
+
+        # Run analyses in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_analyze(s)) for s in watchlist]
+
+        # Extract results from tasks
+        raw_results = [task.result() for task in task_results]
 
         # Step 4: Filter exceptions and None results
         results, failed_symbols = self._filter_analysis_results(raw_results, watchlist)

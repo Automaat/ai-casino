@@ -26,6 +26,7 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.social import SocialSentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import ResearchAnalysis
 from src.agents.trump import TrumpAnalysis
 from src.agents.web_researcher import WebResearchAnalysis
 from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
@@ -111,6 +112,175 @@ def _handle_optional_result(
     return result
 
 
+def _validate_input_data(input_data: AnalysisInput, warnings: list[str]) -> None:
+    """Validate input data, raise on critical errors."""
+    if input_data.market_data is None:
+        msg = "market_data is None, cannot run analyses"
+        raise ValueError(msg)
+    if input_data.news_articles is None:
+        msg = "news_articles is None, cannot run sentiment/news analyses"
+        raise ValueError(msg)
+    if not input_data.news_articles:
+        logger.warning(f"No news articles available for {input_data.symbol}, analyses may be degraded")
+        warnings.append("No news articles available - sentiment and news analyses degraded")
+
+
+async def _run_analysis_group1(  # noqa: PLR0913
+    input_data: AnalysisInput,
+    technical_analyst: TechnicalAnalyst,
+    sentiment_analyst: SentimentAnalyst,
+    news_analyst: NewsAnalyst,
+    fundamental_analyst: FundamentalAnalyst,
+    comparative_analyst: ComparativeAnalyst,
+    web_researcher: WebResearchAgent,
+    social_analyst: SocialSentimentAnalyst,
+    trump_mode: bool,
+    trump_analyst: TrumpAnalyst | None,
+    collector: ExecutionMetricsCollector | None,
+) -> dict[str, Any]:
+    """Run first group of analyses in parallel."""
+    technical_task = _timed_agent_call(
+        "technical",
+        technical_analyst.analyze(
+            input_data.symbol,
+            input_data.market_data,  # type: ignore[arg-type]
+            enable_multi_timeframe=input_data.enable_multi_timeframe,
+        ),
+        collector,
+    )
+    sentiment_task = _timed_agent_call(
+        "sentiment",
+        sentiment_analyst.analyze(input_data.symbol, input_data.news_articles),  # type: ignore[arg-type]
+        collector,
+    )
+    news_task = _timed_agent_call(
+        "news",
+        news_analyst.analyze(input_data.symbol, input_data.news_articles),  # type: ignore[arg-type]
+        collector,
+    )
+    fundamental_task = _timed_agent_call(
+        "fundamental",
+        fundamental_analyst.analyze(input_data.symbol, input_data.get_current_price()),
+        collector,
+    )
+    comparative_task = _timed_agent_call(
+        "comparative", comparative_analyst.analyze(input_data.symbol), collector
+    )
+    web_research_task = _timed_agent_call(
+        "web_research", web_researcher.research(input_data.symbol), collector
+    )
+    social_task = _timed_agent_call("social", social_analyst.analyze(input_data.symbol), collector)
+
+    async def safe_optional(coro: Coroutine) -> Any:  # noqa: ANN401
+        try:
+            return await coro
+        except Exception as e:
+            return e
+
+    async with asyncio.TaskGroup() as tg:
+        technical_result = tg.create_task(technical_task)
+        sentiment_result = tg.create_task(sentiment_task)
+        news_result = tg.create_task(news_task)
+        fundamental_result = tg.create_task(safe_optional(fundamental_task))
+        comparative_result = tg.create_task(safe_optional(comparative_task))
+        web_research_result = tg.create_task(safe_optional(web_research_task))
+        social_result = tg.create_task(safe_optional(social_task))
+
+        trump_result = None
+        if trump_mode and trump_analyst and input_data.trump_posts:
+            trump_task = _timed_agent_call("trump", trump_analyst.analyze(input_data.trump_posts), collector)
+            trump_result = tg.create_task(safe_optional(trump_task))
+
+    technical = technical_result.result()
+    sentiment = sentiment_result.result()
+    news = news_result.result()
+    assert isinstance(technical, TechnicalAnalysis)  # noqa: S101
+    assert isinstance(sentiment, SentimentAnalysis)  # noqa: S101
+    assert isinstance(news, NewsAnalysis)  # noqa: S101
+
+    return {
+        "core": (technical, sentiment, news),
+        "optional": {
+            "fundamental": fundamental_result.result(),
+            "comparative": comparative_result.result(),
+            "web_research": web_research_result.result(),
+            "social": social_result.result(),
+            "trump": trump_result.result() if trump_result else None,
+        },
+    }
+
+
+def _process_optional_results(
+    optional: dict[str, Any], warnings: list[str]
+) -> tuple[
+    FundamentalAnalysis | None,
+    ComparativeAnalysis | None,
+    WebResearchAnalysis | None,
+    SocialSentimentAnalysis | None,
+    TrumpAnalysis | None,
+]:
+    """Process optional analysis results."""
+    fundamental = _handle_fundamental_result(optional["fundamental"], warnings)
+    comparative = cast(
+        "ComparativeAnalysis | None",
+        _handle_optional_result(optional["comparative"], "Comparative", warnings),
+    )
+    web_research = cast(
+        "WebResearchAnalysis | None",
+        _handle_optional_result(optional["web_research"], "Web research", warnings),
+    )
+    social = cast(
+        "SocialSentimentAnalysis | None",
+        _handle_optional_result(optional["social"], "Social sentiment", warnings),
+    )
+    trump_result = optional["trump"]
+    trump = (
+        cast("TrumpAnalysis | None", _handle_optional_result(trump_result, "Trump", warnings))
+        if trump_result
+        else None
+    )
+    return fundamental, comparative, web_research, social, trump
+
+
+async def _run_research_group(  # noqa: PLR0913
+    symbol: str,
+    technical: TechnicalAnalysis,
+    sentiment: SentimentAnalysis,
+    news: NewsAnalysis,
+    fundamental: FundamentalAnalysis | None,
+    comparative: ComparativeAnalysis | None,
+    trump: TrumpAnalysis | None,
+    bullish_researcher: ThesisResearcher,
+    bearish_researcher: ThesisResearcher,
+    collector: ExecutionMetricsCollector | None,
+) -> tuple[ResearchAnalysis | None, ResearchAnalysis | None]:
+    """Run research analyses in parallel."""
+    bullish_task = _timed_agent_call(
+        "bullish_researcher",
+        bullish_researcher.analyze(symbol, technical, sentiment, news, fundamental, comparative, trump),
+        collector,
+    )
+    bearish_task = _timed_agent_call(
+        "bearish_researcher",
+        bearish_researcher.analyze(symbol, technical, sentiment, news, fundamental, comparative, trump),
+        collector,
+    )
+
+    async def safe_research(coro: Coroutine) -> Any:  # noqa: ANN401
+        try:
+            return await coro
+        except Exception as e:
+            return e
+
+    async with asyncio.TaskGroup() as tg:
+        bullish_result = tg.create_task(safe_research(bullish_task))
+        bearish_result = tg.create_task(safe_research(bearish_task))
+
+    return _unwrap_or_log(bullish_result.result(), "Bullish research"), _unwrap_or_log(
+        bearish_result.result(), "Bearish research"
+    )
+
+
 async def run_analyses(  # noqa: PLR0913
     input_data: AnalysisInput,
     technical_analyst: TechnicalAnalyst,
@@ -147,173 +317,53 @@ async def run_analyses(  # noqa: PLR0913
         AnalysisOutput with all analyses
     """
     warnings: list[str] = []
+    _validate_input_data(input_data, warnings)
 
-    # Validate market data
-    if input_data.market_data is None:
-        msg = "market_data is None, cannot run analyses"
-        raise ValueError(msg)
-
-    # Validate and extract data using helpers
-    current_price = input_data.get_current_price()
-
-    # Validate news_articles
-    if input_data.news_articles is None:
-        msg = "news_articles is None, cannot run sentiment/news analyses"
-        raise ValueError(msg)
-
-    # Handle empty news with warning
-    if not input_data.news_articles:
-        logger.warning(f"No news articles available for {input_data.symbol}, analyses may be degraded")
-        warnings.append("No news articles available - sentiment and news analyses degraded")
-
-    # Parallel Group 1: independent analyses (comparative, web_research, social, trump are optional)
-    technical_task = _timed_agent_call(
-        "technical",
-        technical_analyst.analyze(
-            input_data.symbol,
-            input_data.market_data,
-            enable_multi_timeframe=input_data.enable_multi_timeframe,
-        ),
-        collector,
-    )
-    sentiment_task = _timed_agent_call(
-        "sentiment",
-        sentiment_analyst.analyze(input_data.symbol, input_data.news_articles),
-        collector,
-    )
-    news_task = _timed_agent_call(
-        "news",
-        news_analyst.analyze(input_data.symbol, input_data.news_articles),
-        collector,
-    )
-    fundamental_task = _timed_agent_call(
-        "fundamental",
-        fundamental_analyst.analyze(input_data.symbol, current_price),
-        collector,
-    )
-    comparative_task = _timed_agent_call(
-        "comparative",
-        comparative_analyst.analyze(input_data.symbol),
-        collector,
-    )
-    web_research_task = _timed_agent_call(
-        "web_research",
-        web_researcher.research(input_data.symbol),
-        collector,
-    )
-    social_task = _timed_agent_call(
-        "social",
-        social_analyst.analyze(input_data.symbol),
+    # Run group 1 analyses in parallel
+    group1_results = await _run_analysis_group1(
+        input_data,
+        technical_analyst,
+        sentiment_analyst,
+        news_analyst,
+        fundamental_analyst,
+        comparative_analyst,
+        web_researcher,
+        social_analyst,
+        trump_mode,
+        trump_analyst,
         collector,
     )
 
-    # Include trump analysis if enabled
-    tasks: list[Coroutine[Any, Any, Any]] = [
-        technical_task,
-        sentiment_task,
-        news_task,
-        fundamental_task,
-        comparative_task,
-        web_research_task,
-        social_task,
-    ]
+    # Process group 1 results
+    technical, sentiment, news = group1_results["core"]
+    fundamental, comparative, web_research, social_sentiment, trump_analysis = _process_optional_results(
+        group1_results["optional"], warnings
+    )
 
-    if trump_mode and trump_analyst and input_data.trump_posts:
-        trump_task = _timed_agent_call(
-            "trump",
-            trump_analyst.analyze(input_data.trump_posts),
-            collector,
-        )
-        tasks.append(trump_task)
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Core tasks count (before optional trump task)
-    core_task_count = 7
-    (
+    # Run group 2 research
+    bullish, bearish = await _run_research_group(
+        input_data.symbol,
         technical,
         sentiment,
         news,
-        fundamental_result,
-        comparative_result,
-        web_research_result,
-        social_result,
-    ) = results[:core_task_count]
-    trump_result = results[core_task_count] if len(results) > core_task_count else None
-
-    # Re-raise if core analyses failed
-    if isinstance(technical, Exception):
-        raise technical
-    if isinstance(sentiment, Exception):
-        raise sentiment
-    if isinstance(news, Exception):
-        raise news
-
-    # Type narrowing - after exception checks, these must be their proper types
-    assert isinstance(technical, TechnicalAnalysis)  # noqa: S101
-    assert isinstance(sentiment, SentimentAnalysis)  # noqa: S101
-    assert isinstance(news, NewsAnalysis)  # noqa: S101
-
-    # Process optional analyses
-    fundamental = _handle_fundamental_result(fundamental_result, warnings)
-    comparative = cast(
-        "ComparativeAnalysis | None",
-        _handle_optional_result(comparative_result, "Comparative", warnings),
-    )
-    web_research = cast(
-        "WebResearchAnalysis | None",
-        _handle_optional_result(web_research_result, "Web research", warnings),
-    )
-    social_sentiment = cast(
-        "SocialSentimentAnalysis | None",
-        _handle_optional_result(social_result, "Social sentiment", warnings),
-    )
-    trump_analysis_processed = (
-        cast("TrumpAnalysis | None", _handle_optional_result(trump_result, "Trump", warnings))
-        if trump_result
-        else None
-    )
-
-    # Parallel Group 2: research (depends on Group 1)
-    bullish_task = _timed_agent_call(
-        "bullish_researcher",
-        bullish_researcher.analyze(
-            input_data.symbol,
-            technical,
-            sentiment,
-            news,
-            fundamental,
-            comparative,
-            trump_analysis_processed,
-        ),
+        fundamental,
+        comparative,
+        trump_analysis,
+        bullish_researcher,
+        bearish_researcher,
         collector,
     )
-    bearish_task = _timed_agent_call(
-        "bearish_researcher",
-        bearish_researcher.analyze(
-            input_data.symbol,
-            technical,
-            sentiment,
-            news,
-            fundamental,
-            comparative,
-            trump_analysis_processed,
-        ),
-        collector,
-    )
-
-    bullish, bearish = await asyncio.gather(bullish_task, bearish_task, return_exceptions=True)
 
     return AnalysisOutput(
         technical_analysis=technical,
         sentiment_analysis=sentiment,
         news_analysis=news,
-        trump_analysis=trump_analysis_processed,
+        trump_analysis=trump_analysis,
         fundamental_analysis=fundamental,
         comparative_analysis=comparative,
         web_research=web_research,
         social_sentiment_analysis=social_sentiment,
-        bullish_research=_unwrap_or_log(bullish, "Bullish research"),
-        bearish_research=_unwrap_or_log(bearish, "Bearish research"),
+        bullish_research=bullish,
+        bearish_research=bearish,
         warnings=warnings,
     )

@@ -47,7 +47,7 @@ dependencies = [
     "pydantic-settings==2.12.0",
     "pyyaml==6.0.3",
     # API Server
-    "fastapi==0.128.7",
+    "fastapi==0.128.8",
     "uvicorn[standard]==0.40.0",
     # Dashboard
     "dash==4.0.0",
@@ -122,6 +122,11 @@ project-includes = [
 project-excludes = [
     "tests/**",
 ]
+
+[tool.uv]
+# Restrict dependency resolution to Unix platforms (Linux/macOS)
+# Prevents Windows resolution failures in CI for platform-specific deps like riskfolio-lib
+environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
 
 [dependency-groups]
 dev = [
