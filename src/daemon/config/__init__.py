@@ -31,6 +31,7 @@ from src.daemon.config.portfolio import (
     PeerAnalysisConfig,
     PortfolioRebalancingConfig,
 )
+from src.daemon.config.profiling import ProfilingConfig
 from src.daemon.config.reporting import HealthConfig, ReportingConfig, SignalTrackingConfig
 from src.daemon.config.risk import (
     MonteCarloConfig,
@@ -84,6 +85,7 @@ __all__ = [
     "PositionSizingConfig",
     "PreTradeBacktestingConfig",
     "PrefetchConfig",
+    "ProfilingConfig",
     "ReportingConfig",
     "RiskLimitsConfig",
     "ScheduleConfig",
@@ -141,6 +143,7 @@ class DaemonConfig(BaseModel):
     data_sources: DataSourcesConfig = Field(default_factory=DataSourcesConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     coordinator: CoordinatorConfig = Field(default_factory=CoordinatorConfig)
+    profiling: ProfilingConfig = Field(default_factory=ProfilingConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> DaemonConfig:
@@ -192,6 +195,7 @@ class DaemonConfig(BaseModel):
         data_sources_data = daemon_data.pop("data_sources", {}) or {}
         database_data = daemon_data.pop("database", {}) or {}
         coordinator_data = daemon_data.pop("coordinator", {}) or {}
+        profiling_data = daemon_data.pop("profiling", {}) or {}
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
@@ -235,6 +239,7 @@ class DaemonConfig(BaseModel):
             data_sources=DataSourcesConfig(**data_sources_data),
             database=DatabaseConfig(**database_data),
             coordinator=CoordinatorConfig(**coordinator_data),
+            profiling=ProfilingConfig(**profiling_data),
         )
 
     def __repr__(self) -> str:

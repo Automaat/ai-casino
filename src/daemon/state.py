@@ -233,6 +233,17 @@ class DegradationRecord(BaseModel):
     halt_reason: str | None = None
 
 
+class ProfilingRecord(BaseModel):
+    """Record of cycle profiling metrics."""
+
+    cycle_number: int
+    timestamp: datetime
+    duration_seconds: float
+    profiling_overhead_percent: float
+    top_function: str | None = None
+    top_function_cumtime: float | None = None
+
+
 class DaemonState(BaseModel):
     """Persistent state for the trading daemon."""
 
@@ -280,6 +291,7 @@ class DaemonState(BaseModel):
     last_discovery: datetime | None = None
     discovery_history: list[DiscoveryHistoryRecord] = Field(default_factory=list)
     active_discovery_candidates: list[DiscoveryCandidate] = Field(default_factory=list)
+    profiling_history: list[ProfilingRecord] = Field(default_factory=list)
 
     # Database repositories (private attributes - not serialized)
     _analysis_repository: AnalysisRecordRepository | None = PrivateAttr(default=None)
@@ -929,6 +941,38 @@ class DaemonState(BaseModel):
             List of active discovery symbols
         """
         return [c.symbol for c in self.active_discovery_candidates]
+
+    def record_profiling(self, metrics: object) -> None:
+        """Record profiling metrics from cycle.
+
+        Args:
+            metrics: ProfilingMetrics object (typed as object to avoid circular import)
+        """
+        from src.daemon.profiling.metrics import ProfilingMetrics
+
+        if not isinstance(metrics, ProfilingMetrics):
+            return
+
+        top_func = None
+        top_cumtime = None
+        if metrics.top_functions:
+            top_func = metrics.top_functions[0].function
+            top_cumtime = metrics.top_functions[0].cumtime
+
+        record = ProfilingRecord(
+            cycle_number=metrics.cycle_number,
+            timestamp=metrics.timestamp,
+            duration_seconds=metrics.duration_seconds,
+            profiling_overhead_percent=metrics.profiling_overhead_percent,
+            top_function=top_func,
+            top_function_cumtime=top_cumtime,
+        )
+
+        self.profiling_history.append(record)
+
+        # Keep last 100 records
+        if len(self.profiling_history) > 100:
+            self.profiling_history = self.profiling_history[-100:]
 
     def __repr__(self) -> str:
         """Return string representation."""

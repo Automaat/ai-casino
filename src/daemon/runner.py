@@ -222,10 +222,17 @@ class DaemonRunner:
         from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
 
         # Create cycle orchestrator and delegate
+        from src.daemon.profiling.profiler import CycleProfiler
+
+        profiler = self._components.profiler
+        if profiler and not isinstance(profiler, CycleProfiler):
+            profiler = None
+
         cycle_orchestrator = DaemonCycleOrchestrator(
             components=self._components,
             task_runner=self._task_runner,
             runner=self,
+            profiler=profiler,  # type: ignore[arg-type]
         )
 
         result = await cycle_orchestrator.run_cycle()
@@ -245,10 +252,17 @@ class DaemonRunner:
         self._components.running = lifecycle.running
 
         # Create cycle orchestrator
+        from src.daemon.profiling.profiler import CycleProfiler
+
+        profiler = self._components.profiler
+        if profiler and not isinstance(profiler, CycleProfiler):
+            profiler = None
+
         cycle_orchestrator = DaemonCycleOrchestrator(
             components=self._components,
             task_runner=self._task_runner,
             runner=self,
+            profiler=profiler,  # type: ignore[arg-type]
         )
 
         while lifecycle.running:
