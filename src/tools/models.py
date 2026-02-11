@@ -9,6 +9,11 @@ class ToolParameter(BaseModel):
     type: str = Field(description="Parameter type (string, number, boolean, etc.)")
     description: str = Field(description="Parameter description for LLM")
     enum: list[str] | None = Field(default=None, description="Valid enum values if applicable")
+    default: int | float | str | bool | None = Field(
+        default=None, description="Default value if parameter not provided"
+    )
+    minimum: int | float | None = Field(default=None, description="Minimum value for numeric parameters")
+    maximum: int | float | None = Field(default=None, description="Maximum value for numeric parameters")
 
     def __repr__(self) -> str:
         """String representation."""

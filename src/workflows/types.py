@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
@@ -33,10 +33,7 @@ class WorkflowExtraContext(BaseModel):
     game_plan_context: str | None = None
     position_context: dict[str, object] | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class BacktestValidation(BaseModel):
@@ -84,10 +81,7 @@ class TradingWorkflowResult(BaseModel):
     degradation_tier: str | None = None
     degradation_confidence_penalty: float | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def has_incomplete_data(self) -> bool:

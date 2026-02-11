@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.tui import formatters
 
@@ -30,10 +30,7 @@ class ScreeningProcessArgs(BaseModel):
     progress_callback: ProgressCallback | None = None
     is_cancelled: CancelledCallback | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __repr__(self) -> str:
         """String representation."""

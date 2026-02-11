@@ -474,7 +474,11 @@ class LLMClient:
             for tc in tool_calls
         ]
         message = OpenAIAssistantMessage(tool_calls=openai_tool_calls)
-        return message.model_dump(mode="json", exclude_none=True)
+        message_dict = message.model_dump(mode="json", exclude_none=True)
+        # Ensure OpenAI assistant tool-call messages always include an explicit content field
+        if "content" not in message_dict:
+            message_dict["content"] = None
+        return message_dict
 
     def _format_tool_result_message(self, tool_call: ToolCall, result: str) -> dict:
         """Format tool result for message."""
