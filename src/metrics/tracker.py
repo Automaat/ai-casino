@@ -536,7 +536,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             trades = await self._repo.get_all()
             self._trades_cache = cast("list[TradeRecord]", trades)
         # Cache guaranteed non-None after conditional fetch above
-        return self._trades_cache
+        trades = self._trades_cache
+        return trades
 
     def _invalidate_cache(self) -> None:
         """Invalidate trades cache."""
