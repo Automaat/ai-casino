@@ -6,14 +6,30 @@ maintains volume baselines and previous close cache, detects multiple anomaly ty
 
 import asyncio
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
-from src.daemon.event_watcher import EventWatcher
+from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
+
+
+@dataclass
+class AnomalyWatcherConfig:
+    """Configuration for AnomalyWatcher."""
+
+    poll_interval: int = 900
+    relevance_threshold: float = 0.7
+    cooldown_minutes: int = 15
+    volume_spike_multiplier: float = 2.0
+    price_move_threshold_pct: float = 5.0
+    gap_threshold_pct: float = 3.0
+    watchlist: list[str] = field(default_factory=list)
+    max_symbols_per_cycle: int = 5
+    max_concurrent_analyses: int = 2
 
 
 class AnomalyWatcher(EventWatcher):
@@ -23,48 +39,33 @@ class AnomalyWatcher(EventWatcher):
     Uses round-robin rotation to check full watchlist over multiple polls.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         historical_cache: HistoricalCache,
         market_fetcher: MarketDataFetcher,
-        poll_interval: int = 900,
-        relevance_threshold: float = 0.7,
-        cooldown_minutes: int = 15,
-        volume_spike_multiplier: float = 2.0,
-        price_move_threshold_pct: float = 5.0,
-        gap_threshold_pct: float = 3.0,
-        watchlist: list[str] | None = None,
-        max_symbols_per_cycle: int = 5,
-        max_concurrent_analyses: int = 2,
+        config: AnomalyWatcherConfig | None = None,
     ) -> None:
         """Initialize anomaly watcher.
 
         Args:
             historical_cache: Shared cache for market data
             market_fetcher: Market data fetcher for Alpha Vantage
-            poll_interval: Seconds between poll cycles
-            relevance_threshold: Minimum relevance score to trigger analysis
-            cooldown_minutes: Minutes to wait before re-analyzing same symbol
-            volume_spike_multiplier: Volume multiplier threshold (e.g., 2.0 = 2x avg)
-            price_move_threshold_pct: Intraday move threshold percent (e.g., 5.0 = 5%)
-            gap_threshold_pct: Gap threshold percent (e.g., 3.0 = 3%)
-            watchlist: Symbols to monitor (required)
-            max_symbols_per_cycle: Max symbols to check per poll (round-robin rotation)
-            max_concurrent_analyses: Maximum symbols to analyze per cycle
+            config: Configuration (uses defaults if not provided)
         """
-        super().__init__(
-            poll_interval,
-            relevance_threshold,
-            cooldown_minutes,
-            max_concurrent_analyses=max_concurrent_analyses,
-            historical_cache=historical_cache,
+        cfg = config or AnomalyWatcherConfig()
+        base_config = EventWatcherConfig(
+            poll_interval=cfg.poll_interval,
+            relevance_threshold=cfg.relevance_threshold,
+            cooldown_minutes=cfg.cooldown_minutes,
+            max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
+        super().__init__(base_config, historical_cache)
         self._market_fetcher = market_fetcher
-        self.volume_spike_multiplier = volume_spike_multiplier
-        self.price_move_threshold_pct = price_move_threshold_pct
-        self.gap_threshold_pct = gap_threshold_pct
-        self.watchlist = watchlist or []
-        self.max_symbols_per_cycle = max_symbols_per_cycle
+        self.volume_spike_multiplier = cfg.volume_spike_multiplier
+        self.price_move_threshold_pct = cfg.price_move_threshold_pct
+        self.gap_threshold_pct = cfg.gap_threshold_pct
+        self.watchlist = cfg.watchlist
+        self.max_symbols_per_cycle = cfg.max_symbols_per_cycle
 
         # State tracking
         self._volume_baselines: OrderedDict[str, float] = OrderedDict()  # LRU cache
@@ -73,9 +74,9 @@ class AnomalyWatcher(EventWatcher):
         self._rotation_offset = 0
 
         logger.info(
-            f"AnomalyWatcher initialized (volume_spike={volume_spike_multiplier}x, "
-            f"price_move={price_move_threshold_pct}%, gap={gap_threshold_pct}%, "
-            f"max_per_cycle={max_symbols_per_cycle}, watchlist={len(self.watchlist)} symbols)"
+            f"AnomalyWatcher initialized (volume_spike={cfg.volume_spike_multiplier}x, "
+            f"price_move={cfg.price_move_threshold_pct}%, gap={cfg.gap_threshold_pct}%, "
+            f"max_per_cycle={cfg.max_symbols_per_cycle}, watchlist={len(self.watchlist)} symbols)"
         )
 
     def _init_components(self) -> None:

@@ -236,7 +236,7 @@ class DaemonState(BaseModel):
     # Trading Manager API
     # ===================
 
-    def record_analysis(  # noqa: PLR0913
+    def record_analysis(  # noqa: PLR0913 - Facade maintains backward compat, delegates to clean manager
         self,
         symbol: str,
         signal: str,
@@ -249,9 +249,20 @@ class DaemonState(BaseModel):
         reasoning: list[str] | None = None,
     ) -> None:
         """Delegate to trading manager."""
-        self.trading.record_analysis(
-            symbol, signal, confidence, executed, trading_session, is_paper_trade, rsi, macd_hist, reasoning
+        from src.daemon.state.managers.trading import AnalysisRecordInput
+
+        input_data = AnalysisRecordInput(
+            symbol=symbol,
+            signal=signal,
+            confidence=confidence,
+            executed=executed,
+            trading_session=trading_session,
+            is_paper_trade=is_paper_trade,
+            rsi=rsi,
+            macd_hist=macd_hist,
+            reasoning=reasoning,
         )
+        self.trading.record_analysis(input_data)
 
     @property
     def last_run(self) -> datetime | None:

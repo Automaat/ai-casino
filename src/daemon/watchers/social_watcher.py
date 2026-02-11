@@ -6,15 +6,30 @@ Detects two types of events:
 """
 
 from collections import deque
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
-from src.daemon.event_watcher import EventWatcher
+from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher, TrendingTicker
+
+
+@dataclass
+class SocialWatcherConfig:
+    """Configuration for SocialWatcher."""
+
+    poll_interval: int = 900
+    relevance_threshold: float = 0.7
+    cooldown_minutes: int = 15
+    volume_spike_threshold: float = 0.5
+    viral_score_threshold: int = 1000
+    viral_upvote_ratio: float = 0.8
+    subreddits: list[str] = field(default_factory=lambda: ["wallstreetbets", "stocks"])
+    max_concurrent_analyses: int = 2
 
 
 class SocialWatcher(EventWatcher):
@@ -24,42 +39,29 @@ class SocialWatcher(EventWatcher):
     and viral posts that may signal trading opportunities.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         historical_cache: HistoricalCache,
-        poll_interval: int = 900,
-        relevance_threshold: float = 0.7,
-        cooldown_minutes: int = 15,
-        volume_spike_threshold: float = 0.5,
-        viral_score_threshold: int = 1000,
-        viral_upvote_ratio: float = 0.8,
-        subreddits: list[str] | None = None,
-        max_concurrent_analyses: int = 2,
+        config: SocialWatcherConfig | None = None,
     ) -> None:
         """Initialize social watcher.
 
         Args:
             historical_cache: Shared cache for social data
-            poll_interval: Seconds between poll cycles
-            relevance_threshold: Minimum relevance score to trigger analysis
-            cooldown_minutes: Minutes to wait before re-analyzing same symbol
-            volume_spike_threshold: Minimum % increase for volume spike (e.g., 0.5 = 50%)
-            viral_score_threshold: Minimum post score for viral detection
-            viral_upvote_ratio: Minimum upvote ratio for viral detection
-            subreddits: Subreddits to monitor (defaults to wallstreetbets, stocks)
-            max_concurrent_analyses: Maximum symbols to analyze per cycle
+            config: Configuration (uses defaults if not provided)
         """
-        super().__init__(
-            poll_interval,
-            relevance_threshold,
-            cooldown_minutes,
-            max_concurrent_analyses=max_concurrent_analyses,
-            historical_cache=historical_cache,
+        cfg = config or SocialWatcherConfig()
+        base_config = EventWatcherConfig(
+            poll_interval=cfg.poll_interval,
+            relevance_threshold=cfg.relevance_threshold,
+            cooldown_minutes=cfg.cooldown_minutes,
+            max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
-        self.volume_spike_threshold = volume_spike_threshold
-        self.viral_score_threshold = viral_score_threshold
-        self.viral_upvote_ratio = viral_upvote_ratio
-        self.subreddits = subreddits or ["wallstreetbets", "stocks"]
+        super().__init__(base_config, historical_cache)
+        self.volume_spike_threshold = cfg.volume_spike_threshold
+        self.viral_score_threshold = cfg.viral_score_threshold
+        self.viral_upvote_ratio = cfg.viral_upvote_ratio
+        self.subreddits = cfg.subreddits
 
         # State tracking (in-memory)
         self._reddit_fetcher: RedditFetcher | None = None
@@ -68,8 +70,8 @@ class SocialWatcher(EventWatcher):
         self._mention_count_order: deque[str] = deque(maxlen=300)  # LRU tracking
 
         logger.info(
-            f"SocialWatcher initialized (volume_spike={volume_spike_threshold:.0%}, "
-            f"viral_score={viral_score_threshold}, subreddits={self.subreddits})"
+            f"SocialWatcher initialized (volume_spike={cfg.volume_spike_threshold:.0%}, "
+            f"viral_score={cfg.viral_score_threshold}, subreddits={self.subreddits})"
         )
 
     def _init_components(self) -> None:
