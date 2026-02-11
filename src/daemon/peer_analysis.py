@@ -91,9 +91,7 @@ class DeepPeerAnalyzer:
         universe_fetcher: StockUniverseFetcher | None = None,
         historical_cache: HistoricalCache | None = None,
         config: PeerAnalyzerConfig | None = None,
-        output_dir: str | None = None,
-        max_peers: int | None = None,
-        rate_limit_sleep: float | None = None,
+        **deprecated_kwargs: str | int | float | None,
     ) -> None:
         """Initialize deep peer analyzer.
 
@@ -102,16 +100,18 @@ class DeepPeerAnalyzer:
             universe_fetcher: Stock universe fetcher (required for analyze_positions)
             historical_cache: Optional cache for dedup
             config: Configuration (uses defaults if not provided)
-            output_dir: Output directory (deprecated, use config)
-            max_peers: Max peers to analyze (deprecated, use config)
-            rate_limit_sleep: Rate limit sleep seconds (deprecated, use config)
+            **deprecated_kwargs: Deprecated params (output_dir, max_peers, rate_limit_sleep). Use config.
         """
         # Backward compat: construct config from individual params if provided
+        output_dir = deprecated_kwargs.get("output_dir")
+        max_peers = deprecated_kwargs.get("max_peers")
+        rate_limit_sleep = deprecated_kwargs.get("rate_limit_sleep")
+
         if config is None and output_dir is not None:
             config = PeerAnalyzerConfig(
-                output_dir=output_dir,
-                max_peers=max_peers or 10,
-                rate_limit_sleep=rate_limit_sleep or 13.0,
+                output_dir=str(output_dir),
+                max_peers=int(max_peers) if max_peers else 10,
+                rate_limit_sleep=float(rate_limit_sleep) if rate_limit_sleep else 13.0,
             )
 
         cfg = config or PeerAnalyzerConfig()

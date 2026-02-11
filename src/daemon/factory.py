@@ -561,14 +561,12 @@ class DaemonFactory:
     def init_analysis_orchestrator(
         self,
         components: DaemonComponents,
-        event_bus: EventBus | None = None,
         context_builder: DaemonContextBuilder | None = None,
     ) -> AnalysisOrchestrator:
         """Initialize analysis orchestrator (lazy).
 
         Args:
             components: Daemon components
-            event_bus: Optional event bus for publishing
             context_builder: Optional context builder
 
         Returns:
@@ -578,22 +576,14 @@ class DaemonFactory:
             return components.analysis_orchestrator
 
         from src.daemon.analysis_orchestrator import AnalysisOrchestrator
-        from src.daemon.positions import PositionManager
 
-        workflow = self.init_workflow(components)
-
-        # Type-narrow position_manager
-        position_manager: PositionManager | None = None
-        if isinstance(components.position_manager, PositionManager):
-            position_manager = components.position_manager
+        # Ensure workflow is initialized
+        self.init_workflow(components)
 
         orchestrator = AnalysisOrchestrator(
-            workflow=workflow,
-            state=components.state,
-            scheduler=components.scheduler,
             config=self.config.analysis_orchestration,
+            components=components,
             trading_mode=self.config.trading_mode.value,
-            components=components,  # type: ignore[arg-type]  # pyrefly module resolution issue
             context_builder=context_builder,
         )
         logger.info("Analysis orchestrator initialized")

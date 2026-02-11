@@ -30,7 +30,7 @@ from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvi
 from src.models.providers.base import ToolCall
 
 if TYPE_CHECKING:
-    from src.models.tools.base import ToolDefinition
+    from src.tools.models import ToolDefinition
 
 
 @dataclass

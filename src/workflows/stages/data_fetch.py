@@ -138,12 +138,8 @@ async def fetch_data(
     symbol: str,
     period_days: int,
     trading_session: TradingSession,
-    market_fetcher: MarketDataFetcher,
-    news_fetcher: NewsFetcher,
-    enable_multi_timeframe: bool = False,
-    trump_mode: bool = False,
-    trump_fetcher: TruthSocialFetcher | None = None,
-    config: DataFetchConfig | None = None,
+    config: DataFetchConfig,
+    **deprecated_kwargs: MarketDataFetcher | NewsFetcher | bool | TruthSocialFetcher | None,
 ) -> FetchDataOutput:
     """Fetch market and news data (async, parallel execution).
 
@@ -151,24 +147,29 @@ async def fetch_data(
         symbol: Stock ticker
         period_days: Historical data period
         trading_session: Trading session type
-        market_fetcher: Market data fetcher
-        news_fetcher: News data fetcher
-        enable_multi_timeframe: Enable multi-timeframe data fetching
-        trump_mode: Enable Trump social media analysis
-        trump_fetcher: Trump social media fetcher (required if trump_mode=True)
-        config: Data fetch configuration (optional, overrides individual params)
+        config: Data fetch configuration
+        **deprecated_kwargs: Deprecated params (market_fetcher, news_fetcher,
+                            enable_multi_timeframe, trump_mode, trump_fetcher). Use config.
 
     Returns:
         FetchDataOutput with market and news data
     """
-    # Use config if provided, otherwise construct from individual params
-    if config is None:
+    # Extract deprecated kwargs for backward compatibility (if any old-style calls exist)
+    if deprecated_kwargs:
+        market_fetcher = deprecated_kwargs.get("market_fetcher", config.market_fetcher)
+        news_fetcher = deprecated_kwargs.get("news_fetcher", config.news_fetcher)
+        enable_multi_timeframe = deprecated_kwargs.get(
+            "enable_multi_timeframe", config.enable_multi_timeframe
+        )
+        trump_mode = deprecated_kwargs.get("trump_mode", config.trump_mode)
+        trump_fetcher = deprecated_kwargs.get("trump_fetcher", config.trump_fetcher)
+
         config = DataFetchConfig(
-            market_fetcher=market_fetcher,
-            news_fetcher=news_fetcher,
-            enable_multi_timeframe=enable_multi_timeframe,
-            trump_mode=trump_mode,
-            trump_fetcher=trump_fetcher,
+            market_fetcher=market_fetcher,  # type: ignore[arg-type]
+            news_fetcher=news_fetcher,  # type: ignore[arg-type]
+            enable_multi_timeframe=bool(enable_multi_timeframe),
+            trump_mode=bool(trump_mode),
+            trump_fetcher=trump_fetcher,  # type: ignore[arg-type]
         )
 
     logger.info("Fetching market and news data")

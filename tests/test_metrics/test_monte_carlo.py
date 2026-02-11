@@ -31,7 +31,10 @@ def sample_positions():
 def test_parametric_simulation(sample_returns_df, sample_positions):
     """Test parametric method returns valid results."""
     simulator = MonteCarloSimulator(sample_returns_df)
-    result = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, method=SimulationMethod.PARAMETRIC, random_seed=42))
+    result = simulator.simulate(
+        positions=sample_positions,
+        config=SimulationConfig(num_simulations=1000, method=SimulationMethod.PARAMETRIC, random_seed=42),
+    )
 
     assert isinstance(result, MonteCarloResult)
     assert result.simulation_method == SimulationMethod.PARAMETRIC
@@ -46,7 +49,10 @@ def test_parametric_simulation(sample_returns_df, sample_positions):
 def test_bootstrap_simulation(sample_returns_df, sample_positions):
     """Test bootstrap method preserves correlation."""
     simulator = MonteCarloSimulator(sample_returns_df)
-    result = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, method=SimulationMethod.BOOTSTRAP, random_seed=42))
+    result = simulator.simulate(
+        positions=sample_positions,
+        config=SimulationConfig(num_simulations=1000, method=SimulationMethod.BOOTSTRAP, random_seed=42),
+    )
 
     assert isinstance(result, MonteCarloResult)
     assert result.simulation_method == SimulationMethod.BOOTSTRAP
@@ -57,7 +63,10 @@ def test_bootstrap_simulation(sample_returns_df, sample_positions):
 def test_gbm_simulation(sample_returns_df, sample_positions):
     """Test GBM method produces path-dependent results."""
     simulator = MonteCarloSimulator(sample_returns_df)
-    result = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, method=SimulationMethod.GBM, random_seed=42))
+    result = simulator.simulate(
+        positions=sample_positions,
+        config=SimulationConfig(num_simulations=1000, method=SimulationMethod.GBM, random_seed=42),
+    )
 
     assert isinstance(result, MonteCarloResult)
     assert result.simulation_method == SimulationMethod.GBM
@@ -132,7 +141,9 @@ def test_missing_symbols():
 def test_metrics_consistency(sample_returns_df, sample_positions):
     """Test that metrics are consistent and within expected ranges."""
     simulator = MonteCarloSimulator(sample_returns_df)
-    result = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=5000, random_seed=42))
+    result = simulator.simulate(
+        positions=sample_positions, config=SimulationConfig(num_simulations=5000, random_seed=42)
+    )
 
     # VaR should be negative (5th percentile of losses)
     assert result.var_95 <= 0.0
@@ -157,8 +168,12 @@ def test_reproducibility(sample_returns_df, sample_positions):
     """Test that same seed produces same results."""
     simulator = MonteCarloSimulator(sample_returns_df)
 
-    result1 = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, random_seed=123))
-    result2 = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, random_seed=123))
+    result1 = simulator.simulate(
+        positions=sample_positions, config=SimulationConfig(num_simulations=1000, random_seed=123)
+    )
+    result2 = simulator.simulate(
+        positions=sample_positions, config=SimulationConfig(num_simulations=1000, random_seed=123)
+    )
 
     assert result1.prob_loss_gt_threshold == result2.prob_loss_gt_threshold
     assert result1.var_95 == result2.var_95
@@ -170,8 +185,14 @@ def test_horizon_impact(sample_returns_df, sample_positions):
     """Test that longer horizons produce wider distribution."""
     simulator = MonteCarloSimulator(sample_returns_df)
 
-    short_horizon = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, horizon_days=30, random_seed=42))
-    long_horizon = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, horizon_days=252, random_seed=42))
+    short_horizon = simulator.simulate(
+        positions=sample_positions,
+        config=SimulationConfig(num_simulations=1000, horizon_days=30, random_seed=42),
+    )
+    long_horizon = simulator.simulate(
+        positions=sample_positions,
+        config=SimulationConfig(num_simulations=1000, horizon_days=252, random_seed=42),
+    )
 
     # Longer horizon should have higher volatility
     assert long_horizon.std_return > short_horizon.std_return
@@ -180,7 +201,9 @@ def test_horizon_impact(sample_returns_df, sample_positions):
 def test_recovery_time_calculation(sample_returns_df, sample_positions):
     """Test recovery time calculation."""
     simulator = MonteCarloSimulator(sample_returns_df)
-    result = simulator.simulate(positions=sample_positions, config=SimulationConfig(num_simulations=1000, random_seed=42))
+    result = simulator.simulate(
+        positions=sample_positions, config=SimulationConfig(num_simulations=1000, random_seed=42)
+    )
 
     # Recovery time can be None if no recovery, or positive float
     if result.median_recovery_days is not None:

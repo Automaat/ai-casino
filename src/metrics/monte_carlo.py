@@ -117,9 +117,7 @@ class MonteCarloSimulator:
             )
 
         rng = (
-            np.random.default_rng(cfg.random_seed)
-            if cfg.random_seed is not None
-            else np.random.default_rng()
+            np.random.default_rng(cfg.random_seed) if cfg.random_seed is not None else np.random.default_rng()
         )
 
         # Align positions with returns columns

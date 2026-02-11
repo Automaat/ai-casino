@@ -18,17 +18,8 @@ from src.daemon.notification_helper import DaemonNotificationHelper
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
-    from src.cache.historical import HistoricalCache
-    from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.degradation import DegradationContext
-    from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
-    from src.daemon.notifications import NotificationService
-    from src.daemon.positions import PositionManager
-    from src.daemon.scheduler import MarketScheduler
-    from src.daemon.state import DaemonState
-    from src.data.broker import AlpacaBroker
-    from src.workflows import TradingWorkflow
 
 
 class AnalysisOrchestrationResult(BaseModel):
@@ -50,61 +41,56 @@ class AnalysisOrchestrator:
 
     def __init__(
         self,
-        workflow: TradingWorkflow,
-        state: DaemonState,
-        scheduler: MarketScheduler,
         config: AnalysisOrchestratorConfig,
+        components: DaemonComponents,
         trading_mode: str = "paper",
-        components: DaemonComponents | None = None,
-        broker: AlpacaBroker | None = None,
-        position_manager: PositionManager | None = None,
-        event_bus: EventBus | None = None,
-        historical_cache: HistoricalCache | None = None,
-        notification_service: NotificationService | None = None,
-        context_builder: DaemonContextBuilder | None = None,
+        **deprecated_kwargs: object,
     ) -> None:
         """Initialize analysis orchestrator.
 
         Args:
-            workflow: Trading workflow instance
-            state: Daemon state
-            scheduler: Market scheduler
             config: Orchestrator configuration
+            components: Daemon components (required)
             trading_mode: Trading mode (paper/live)
-            components: Optional daemon components (preferred for dependency injection)
-            broker: Optional broker (deprecated, use components)
-            position_manager: Optional position manager (deprecated, use components)
-            event_bus: Optional event bus (deprecated, use components)
-            historical_cache: Optional historical cache (deprecated, use components)
-            notification_service: Optional notification service (deprecated, use components)
-            context_builder: Optional context builder (deprecated, use components)
+            **deprecated_kwargs: Deprecated params (workflow, state, scheduler, broker, position_manager,
+                                event_bus, historical_cache, notification_service, context_builder).
+                                Use components instead.
         """
-        self.workflow = workflow
-        self.state = state
-        self.scheduler = scheduler
         self.config = config
         self.trading_mode = trading_mode
-
-        # Extract dependencies from components if provided, fallback to individual params
-        self.broker = broker if broker is not None else (components.broker if components else None)
-        self.position_manager = (
-            position_manager
-            if position_manager is not None
-            else (components.position_manager if components else None)
-        )
-        self.event_bus = event_bus if event_bus is not None else (components.event_bus if components else None)
-        self.historical_cache = (
-            historical_cache
-            if historical_cache is not None
-            else (components.historical_cache if components else None)
-        )
-        self.notification_service = (
-            notification_service
-            if notification_service is not None
-            else (components.notification_service if components else None)
-        )
-        self._context_builder = context_builder
         self._components = components
+
+        # Extract from components (with backward compat for deprecated kwargs)
+        workflow = deprecated_kwargs.get("workflow", components.workflow)
+        state = deprecated_kwargs.get("state", components.state)
+        scheduler = deprecated_kwargs.get("scheduler", components.scheduler)
+
+        if workflow is None:
+            msg = "workflow must be provided in components"
+            raise ValueError(msg)
+        if state is None:
+            msg = "state must be provided in components"
+            raise ValueError(msg)
+        if scheduler is None:
+            msg = "scheduler must be provided in components"
+            raise ValueError(msg)
+
+        # Type-narrow after None checks
+        from src.daemon.scheduler import MarketScheduler
+        from src.daemon.state import DaemonState
+        from src.workflows import TradingWorkflow
+
+        self.workflow: TradingWorkflow = workflow  # type: ignore[assignment]
+        self.state: DaemonState = state  # type: ignore[assignment]
+        self.scheduler: MarketScheduler = scheduler  # type: ignore[assignment]
+        self.broker = deprecated_kwargs.get("broker", components.broker)
+        self.position_manager = deprecated_kwargs.get("position_manager", components.position_manager)
+        self.event_bus = deprecated_kwargs.get("event_bus", components.event_bus)
+        self.historical_cache = deprecated_kwargs.get("historical_cache", components.historical_cache)
+        self.notification_service = deprecated_kwargs.get(
+            "notification_service", components.notification_service
+        )
+        self._context_builder = deprecated_kwargs.get("context_builder")
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
 

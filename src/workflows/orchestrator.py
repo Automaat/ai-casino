@@ -114,10 +114,7 @@ class TradingWorkflow:
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
         extra_context: WorkflowExtraContext | None = None,
-        position_context: dict[str, object] | None = None,
-        enable_multi_timeframe: bool = False,
-        degradation_context: "DegradationContext | None" = None,
-        **context_kwargs: str | None,
+        **deprecated_kwargs: dict[str, object] | bool | DegradationContext | str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
@@ -126,10 +123,8 @@ class TradingWorkflow:
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
             extra_context: Optional workflow extra context (preferred)
-            position_context: Optional position context (deprecated, use extra_context)
-            enable_multi_timeframe: Enable multi-timeframe (deprecated, use extra_context)
-            degradation_context: Optional degradation (deprecated, use extra_context)
-            **context_kwargs: Optional context keys (deprecated, use extra_context)
+            **deprecated_kwargs: Deprecated params (position_context, enable_multi_timeframe,
+                                degradation_context, context_kwargs). Use extra_context.
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
@@ -145,21 +140,29 @@ class TradingWorkflow:
             collector_token = current_collector.set(collector)
 
         try:
+            # Extract deprecated kwargs for backward compatibility
+            position_context = deprecated_kwargs.get("position_context")
+            enable_multi_timeframe = deprecated_kwargs.get("enable_multi_timeframe", False)
+            degradation_context = deprecated_kwargs.get("degradation_context")
+
             # Backward compat: construct extra_context from individual params if needed
             if extra_context is None and (
                 position_context is not None
                 or enable_multi_timeframe
                 or degradation_context is not None
-                or context_kwargs
+                or any(
+                    k not in {"position_context", "enable_multi_timeframe", "degradation_context"}
+                    for k in deprecated_kwargs
+                )
             ):
                 extra_context = WorkflowExtraContext(
-                    sector_rotation_context=context_kwargs.get("sector_context"),
-                    earnings_context=context_kwargs.get("earnings_context"),
-                    peer_analysis_context=context_kwargs.get("peer_analysis_context"),
-                    game_plan_context=context_kwargs.get("game_plan_context"),
-                    position_context=position_context,
-                    enable_multi_timeframe=enable_multi_timeframe,
-                    degradation_context=degradation_context,
+                    sector_rotation_context=deprecated_kwargs.get("sector_context"),
+                    earnings_context=deprecated_kwargs.get("earnings_context"),
+                    peer_analysis_context=deprecated_kwargs.get("peer_analysis_context"),
+                    game_plan_context=deprecated_kwargs.get("game_plan_context"),
+                    position_context=position_context,  # type: ignore[arg-type]
+                    enable_multi_timeframe=bool(enable_multi_timeframe),
+                    degradation_context=degradation_context,  # type: ignore[arg-type]
                 )
 
             return await self._analyze_instrumented(

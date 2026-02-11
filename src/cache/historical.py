@@ -596,41 +596,40 @@ class HistoricalCache:
     def record_signal_outcome(
         self,
         input_data: SignalOutcomeInput | None = None,
-        symbol: str | None = None,
-        timestamp: datetime | None = None,
-        signal: str | None = None,
-        confidence: float | None = None,
-        price_at_signal: float | None = None,
-        strategy_used: str | None = None,
-        regime: str | None = None,
-        trading_session: str | None = None,
-        technical_signal: str | None = None,
-        sentiment_signal: str | None = None,
-        news_signal: str | None = None,
+        **kwargs: str | float | datetime | None,
     ) -> None:
         """Record a signal outcome for accuracy tracking.
 
         Args:
             input_data: Signal outcome input parameters (preferred)
-            **Individual params for backward compatibility (prefer input_data)
+            **kwargs: Individual params for backward compatibility (symbol, timestamp, signal, confidence,
+                     price_at_signal, strategy_used, regime, trading_session, technical_signal,
+                     sentiment_signal, news_signal). Prefer input_data.
         """
         # Backward compat: construct input_data from individual params if provided
-        if input_data is None and symbol is not None:
-            if timestamp is None or signal is None or confidence is None or price_at_signal is None:
+        if input_data is None and "symbol" in kwargs:
+            symbol = kwargs.get("symbol")
+            timestamp = kwargs.get("timestamp")
+            signal = kwargs.get("signal")
+            confidence = kwargs.get("confidence")
+            price_at_signal = kwargs.get("price_at_signal")
+
+            if not all([symbol, timestamp, signal, confidence is not None, price_at_signal is not None]):
                 msg = "symbol, timestamp, signal, confidence, and price_at_signal are required"
                 raise ValueError(msg)
+
             input_data = SignalOutcomeInput(
-                symbol=symbol,
-                timestamp=timestamp,
-                signal=signal,
-                confidence=confidence,
-                price_at_signal=price_at_signal,
-                strategy_used=strategy_used,
-                regime=regime,
-                trading_session=trading_session,
-                technical_signal=technical_signal,
-                sentiment_signal=sentiment_signal,
-                news_signal=news_signal,
+                symbol=str(symbol),
+                timestamp=timestamp,  # type: ignore[arg-type]
+                signal=str(signal),
+                confidence=float(confidence),  # type: ignore[arg-type]
+                price_at_signal=float(price_at_signal),  # type: ignore[arg-type]
+                strategy_used=kwargs.get("strategy_used"),  # type: ignore[arg-type]
+                regime=kwargs.get("regime"),  # type: ignore[arg-type]
+                trading_session=kwargs.get("trading_session"),  # type: ignore[arg-type]
+                technical_signal=kwargs.get("technical_signal"),  # type: ignore[arg-type]
+                sentiment_signal=kwargs.get("sentiment_signal"),  # type: ignore[arg-type]
+                news_signal=kwargs.get("news_signal"),  # type: ignore[arg-type]
             )
         if input_data is None:
             msg = "Either input_data or individual parameters must be provided"
