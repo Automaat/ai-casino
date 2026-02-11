@@ -49,7 +49,7 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run daemon with dashboard (API enabled)"
+description = "Run daemon with Dash dashboard (legacy, API enabled)"
 run = """
   trap 'pkill -P $$' EXIT
   uv run python -m src.main daemon --config daemon-dev.yaml &
@@ -99,7 +99,7 @@ description = "Open psql shell"
 run = "docker exec -it ai-casino-db psql -U postgres -d ai_casino"
 
 [tasks.prod]
-description = "Run production daemon with Docker Compose"
+description = "Run production daemon with Docker Compose (Dash UI)"
 run = "docker compose up --build"
 
 [tasks."prod:down"]
@@ -113,3 +113,32 @@ run = "docker compose logs -f"
 [tasks."prod:restart"]
 description = "Restart production daemon"
 run = "docker compose restart"
+
+[tasks."prod:svelte"]
+description = "Run daemon with Svelte frontend (local, dev config + prod build)"
+run = """
+  trap 'pkill -P $$' EXIT
+  echo "Starting daemon with dev config..."
+  uv run python -m src.main daemon --config daemon-dev.yaml &
+  DAEMON_PID=$!
+  echo "Daemon started (PID: $DAEMON_PID)"
+  sleep 3
+  echo "Building Svelte frontend..."
+  cd frontend && npm run build
+  echo "Starting Svelte frontend at http://localhost:4173"
+  npm run preview -- --host 0.0.0.0
+"""
+env = { NODE_ENV = "production" }
+
+[tasks."dev:svelte"]
+description = "Run daemon with Svelte frontend (dev mode)"
+run = """
+  trap 'pkill -P $$' EXIT
+  echo "Starting daemon with dev config..."
+  uv run python -m src.main daemon --config daemon-dev.yaml &
+  DAEMON_PID=$!
+  echo "Daemon started (PID: $DAEMON_PID)"
+  sleep 3
+  echo "Starting Svelte dev server at http://localhost:5173"
+  cd frontend && npm run dev -- --host 0.0.0.0
+"""
