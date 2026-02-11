@@ -2,10 +2,11 @@
 
 import asyncio
 import contextlib
+import inspect
 import json
 import os
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar, cast
 
@@ -392,7 +393,7 @@ class LLMClient:
         self,
         prompt: str,
         tools: list[ToolDefinition],
-        tool_executor: Callable[[str, dict], str],
+        tool_executor: Callable[[str, dict], str] | Callable[[str, dict], Awaitable[str]],
         system: str | None = None,
         temperature: float = 0.7,
         max_tool_calls: int = 5,
@@ -403,7 +404,7 @@ class LLMClient:
         Args:
             prompt: User prompt
             tools: List of tool definitions
-            tool_executor: Function to execute tools (name, args) -> result
+            tool_executor: Function to execute tools (name, args) -> result (sync or async)
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
             max_tool_calls: Maximum tool calls per completion
@@ -448,7 +449,7 @@ class LLMClient:
             # Execute tools and add results
             for tool_call in tool_calls:
                 tool_calls_made += 1
-                result = self._execute_tool(tool_call, tool_executor)
+                result = await self._execute_tool_async(tool_call, tool_executor)
 
                 if on_tool_call:
                     on_tool_call(tool_call.name, tool_call.arguments, result)
@@ -495,6 +496,40 @@ class LLMClient:
         logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
         try:
             return executor(tool_call.name, tool_call.arguments)
+        except Exception as e:
+            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            return f"Tool '{tool_call.name}' failed: {e}"
+
+    async def _execute_tool_async(
+        self,
+        tool_call: ToolCall,
+        executor: Callable[[str, dict], str] | Callable[[str, dict], Awaitable[str]],
+    ) -> str:
+        """Execute a tool call (sync or async) and handle errors.
+
+        Args:
+            tool_call: Tool call details (name, args, id)
+            executor: Sync or async executor function
+
+        Returns:
+            Tool execution result as string
+        """
+        logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
+        try:
+            # Check if executor is async function
+            if inspect.iscoroutinefunction(executor):
+                async_executor = cast("Callable[[str, dict], Awaitable[str]]", executor)
+                return await async_executor(tool_call.name, tool_call.arguments)
+
+            # Sync executor - offload to thread to avoid blocking event loop
+            sync_executor = cast("Callable[[str, dict], str]", executor)
+            result = await asyncio.to_thread(sync_executor, tool_call.name, tool_call.arguments)
+
+            # Handle edge case: sync function returns awaitable
+            if inspect.iscoroutine(result):
+                return await result
+
+            return result
         except Exception as e:
             logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
             return f"Tool '{tool_call.name}' failed: {e}"

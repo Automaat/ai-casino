@@ -1,5 +1,6 @@
 """Tests for LLM client."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -332,6 +333,230 @@ class TestAcompleteWithTools:
         )
 
         assert result == "Found results about Python testing"
+
+
+class TestAsyncToolExecutor:
+    """Tests for async tool executor support in acomplete_with_tools."""
+
+    @pytest.fixture
+    def sample_tools(self):
+        return [
+            ToolDefinition(
+                function=ToolFunction(
+                    name="analyze",
+                    description="Analyze stock",
+                    parameters=ToolParametersSchema(
+                        properties={"symbol": ToolParameter(type="string", description="Stock symbol")},
+                        required=["symbol"],
+                    ),
+                ),
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_sync_executor(self, mock_openai_provider, monkeypatch, sample_tools):
+        """Test backward compatibility with sync executor."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        def sync_executor(name: str, args: dict) -> str:
+            return f"Sync result: {name} for {args.get('symbol', 'N/A')}"
+
+        tool_call = ToolCall(id="call_123", name="analyze", arguments={"symbol": "AAPL"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Analysis complete", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Analyze AAPL", sample_tools, sync_executor)
+
+        assert result == "Analysis complete"
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_async_executor(self, mock_openai_provider, monkeypatch, sample_tools):
+        """Test new async executor support."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        async def async_executor(name: str, args: dict) -> str:
+            await asyncio.sleep(0.01)
+            return f"Async result: {name} for {args.get('symbol', 'N/A')}"
+
+        tool_call = ToolCall(id="call_456", name="analyze", arguments={"symbol": "TSLA"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Async analysis complete", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Analyze TSLA", sample_tools, async_executor)
+
+        assert result == "Async analysis complete"
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_multiple_async_calls(
+        self, mock_openai_provider, monkeypatch, sample_tools
+    ):
+        """Test multiple tool calls with async executor."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        call_count = 0
+
+        async def async_executor(name: str, args: dict) -> str:
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.01)
+            return f"Call {call_count}: {args.get('symbol', 'N/A')}"
+
+        tool_call_1 = ToolCall(id="call_1", name="analyze", arguments={"symbol": "AAPL"})
+        tool_call_2 = ToolCall(id="call_2", name="analyze", arguments={"symbol": "TSLA"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call_1, tool_call_2]),
+                ("Multiple analyses complete", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Analyze stocks", sample_tools, async_executor)
+
+        assert result == "Multiple analyses complete"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_sync_executor_error(
+        self, mock_openai_provider, monkeypatch, sample_tools
+    ):
+        """Test error handling with failing sync executor."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        def failing_sync_executor(name: str, args: dict) -> str:
+            msg = "Sync execution failed"
+            raise ValueError(msg)
+
+        tool_call = ToolCall(id="call_789", name="analyze", arguments={"symbol": "MSFT"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Error handled", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Analyze MSFT", sample_tools, failing_sync_executor)
+
+        assert result == "Error handled"
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_async_executor_error(
+        self, mock_openai_provider, monkeypatch, sample_tools
+    ):
+        """Test error handling with failing async executor."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        async def failing_async_executor(name: str, args: dict) -> str:
+            await asyncio.sleep(0.01)
+            msg = "Async execution failed"
+            raise RuntimeError(msg)
+
+        tool_call = ToolCall(id="call_abc", name="analyze", arguments={"symbol": "GOOGL"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Async error handled", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Analyze GOOGL", sample_tools, failing_async_executor)
+
+        assert result == "Async error handled"
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_sync_returning_awaitable(
+        self, mock_openai_provider, monkeypatch, sample_tools
+    ):
+        """Test sync function that returns awaitable (edge case)."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        async def inner_async(symbol: str) -> str:
+            await asyncio.sleep(0.01)
+            return f"Wrapped result: {symbol}"
+
+        def sync_returning_awaitable(name: str, args: dict) -> str:
+            return inner_async(args.get("symbol", "N/A"))
+
+        tool_call = ToolCall(id="call_xyz", name="analyze", arguments={"symbol": "AMZN"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Awaitable handled", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools("Analyze AMZN", sample_tools, sync_returning_awaitable)
+
+        assert result == "Awaitable handled"
+
+    @pytest.mark.asyncio
+    async def test_acomplete_with_tools_callback_with_async_executor(
+        self, mock_openai_provider, monkeypatch, sample_tools
+    ):
+        """Test on_tool_call callback invoked correctly with async executor."""
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
+        _, provider = mock_openai_provider
+
+        async def async_executor(name: str, args: dict) -> str:
+            await asyncio.sleep(0.01)
+            return f"Result for {args.get('symbol', 'N/A')}"
+
+        callback_calls = []
+
+        def on_tool_call(name: str, args: dict, result: str) -> None:
+            callback_calls.append((name, args, result))
+
+        tool_call = ToolCall(id="call_callback", name="analyze", arguments={"symbol": "NVDA"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Callback test complete", None),
+            ]
+        )
+
+        client = LLMClient()
+        result = await client.acomplete_with_tools(
+            "Analyze NVDA", sample_tools, async_executor, on_tool_call=on_tool_call
+        )
+
+        assert result == "Callback test complete"
+        assert len(callback_calls) == 1
+        assert callback_calls[0][0] == "analyze"
+        assert callback_calls[0][1] == {"symbol": "NVDA"}
+        assert "Result for NVDA" in callback_calls[0][2]
 
 
 class TestSupportsTools:
