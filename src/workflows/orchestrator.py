@@ -1,233 +1,110 @@
 """Trading workflow orchestrator coordinating all stages."""
 
-import time
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
-    from src.daemon.notifications import NotificationService
-    from src.data.finnhub import FinnhubFetcher
-    from src.database.repositories.snapshot import PortfolioSnapshotRepository
-    from src.di.container import AppContainer
-    from src.metrics.portfolio_var import PortfolioVaRCalculator
-    from src.optimization.param_store import OptimizedParamStore
 
 from src.agents.fundamental import FundamentalAnalyst
-from src.agents.risk import PortfolioVaRConfig
 from src.agents.sentiment import SentimentAnalyst
 from src.agents.trump import TrumpAnalyst
 from src.backtesting import VectorBTRunner
-from src.cache.historical import HistoricalCache
-from src.daemon.config import PreTradeBacktestingConfig
-from src.data.broker import AlpacaBroker
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
 from src.data.truth_social import TruthSocialFetcher
-from src.metrics.execution import (
-    ExecutionMetricsCollector,
-    current_collector,
-    is_metrics_enabled,
-    persist_jsonl,
-)
-from src.metrics.tracker import BaseMetricsTracker, DatabaseMetricsTracker
-from src.models.llm import LLMClient
-from src.models.sentiment import FinBERTSentiment
+from src.metrics.execution import ExecutionMetricsCollector, current_collector, is_metrics_enabled
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.session import TradingSession
-from src.strategies.signal import Signal
-from src.workflows.models.account import AccountInfoOutput
-from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
-from src.workflows.models.backtest import BacktestValidationOutput
-from src.workflows.models.data_fetch import FetchDataOutput
-from src.workflows.models.decision import DecisionContext, DecisionInput, DecisionOutput
-from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOutput
-from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
-from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
-from src.workflows.stages import analysis, data_fetch, decision, execution, risk, strategy_selection
+from src.workflows.config import WorkflowComponents, WorkflowConfig
+from src.workflows.models.decision import DecisionContext, DecisionInput
+from src.workflows.stages import data_fetch, decision, execution
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
-    def __init__(  # noqa: PLR0913, PLR0915, C901, PLR0912
-        self,
-        llm_client: LLMClient,
-        market_fetcher: MarketDataFetcher,
-        news_fetcher: NewsFetcher,
-        finbert: FinBERTSentiment,
-        fundamental_fetcher: FundamentalDataFetcher,
-        broker: AlpacaBroker | None = None,
-        metrics_tracker: BaseMetricsTracker | None = None,
-        use_ensemble: bool = False,
-        use_meta_agent: bool = True,
-        trump_mode: bool = False,
-        snapshot_on_trade: bool | None = None,
-        snapshot_repository: PortfolioSnapshotRepository | None = None,
-        param_store: OptimizedParamStore | None = None,
-        historical_cache: HistoricalCache | None = None,
-        portfolio_var_calculator: PortfolioVaRCalculator | None = None,
-        portfolio_var_config: PortfolioVaRConfig | None = None,
-        finnhub_fetcher: FinnhubFetcher | None = None,
-        pre_trade_backtest_config: PreTradeBacktestingConfig | None = None,
-        notification_service: NotificationService | None = None,
-        position_sizing_config: PositionSizingConfig | None = None,
-        container: AppContainer | None = None,
-    ) -> None:
+    def __init__(self, config: WorkflowConfig, components: WorkflowComponents) -> None:  # noqa: PLR0915
         """Initialize trading workflow.
 
         Args:
-            llm_client: LLM client for agents
-            market_fetcher: Market data fetcher
-            news_fetcher: News data fetcher
-            finbert: FinBERT sentiment model
-            fundamental_fetcher: Fundamental data fetcher
-            broker: Optional Alpaca broker for trade execution
-            metrics_tracker: Optional metrics tracker for performance monitoring
-            use_ensemble: Use ensemble strategy instead of momentum only (ignored if use_meta_agent=True)
-            use_meta_agent: Use meta-agent for dynamic strategy selection (default True)
-            trump_mode: Enable Trump social media analysis
-            snapshot_on_trade: Capture portfolio snapshot after trades (env: PORTFOLIO_SNAPSHOT_ON_TRADE)
-            snapshot_repository: Repository for portfolio snapshots (required if snapshot_on_trade)
-            param_store: Optional optimized parameter store for strategy tuning
-            historical_cache: Optional permanent cache for historical data
-            portfolio_var_calculator: Optional VaR calculator for portfolio-level risk limits
-            portfolio_var_config: Optional VaR limit configuration
-            finnhub_fetcher: Optional Finnhub fetcher for fundamental data
-            pre_trade_backtest_config: Optional pre-trade backtesting configuration
-            notification_service: Optional notification service for risk rejection alerts
-            position_sizing_config: Optional position sizing configuration
-            container: Optional DI container for agent instantiation (preferred over manual)
+            config: Workflow behavior configuration
+            components: Injected dependencies
         """
         import os
 
+        from src.agents.meta import MetaAgent
+        from src.agents.risk import RiskManagementAgent
+
+        # Extract config
+        self.use_ensemble = config.use_ensemble
+        self.use_meta_agent = config.use_meta_agent
+        self.trump_mode = config.trump_mode
+        snapshot_on_trade = config.snapshot_on_trade
         if snapshot_on_trade is None:
             snapshot_on_trade = os.getenv("PORTFOLIO_SNAPSHOT_ON_TRADE", "false").lower() == "true"
         self.snapshot_on_trade = snapshot_on_trade
-        self.snapshot_repository = snapshot_repository
-        self.notification_service = notification_service
-        self.llm_client = llm_client
-        self.market_fetcher = market_fetcher
-        self.news_fetcher = news_fetcher
-        self.finbert = finbert
-        self.fundamental_fetcher = fundamental_fetcher
-        self.broker = broker
-        self.metrics_tracker = metrics_tracker
-        self.use_ensemble = use_ensemble
-        self.use_meta_agent = use_meta_agent
-        self.trump_mode = trump_mode
-        self._container = container
+        self.pre_trade_backtest_config = config.pre_trade_backtest_config
+
+        # Extract components
+        self.llm_client = components.llm_client
+        self.market_fetcher = components.market_fetcher
+        self.news_fetcher = components.news_fetcher
+        self.finbert = components.finbert
+        self.fundamental_fetcher = components.fundamental_fetcher
+        self.broker = components.broker
+        self.metrics_tracker = components.metrics_tracker
+        self.snapshot_repository = components.snapshot_repository
+        self.notification_service = components.notification_service
+        self._container = components.container
 
         # Trump mode components
         self.trump_fetcher: TruthSocialFetcher | None = None
         self.trump_analyst: TrumpAnalyst | None = None
-        if trump_mode:
-            self.trump_fetcher = TruthSocialFetcher(historical_cache=historical_cache)
-            if container:
-                self.trump_analyst = container.trump_analyst()
-            else:
-                self.trump_analyst = TrumpAnalyst(llm_client)
+        if self.trump_mode:
+            self.trump_fetcher = TruthSocialFetcher(historical_cache=components.historical_cache)
+            self.trump_analyst = self._container.trump_analyst()
 
         # Meta-agent for dynamic strategy selection
-        from src.agents.meta import MetaAgent
-
         self.meta_agent: MetaAgent | None = None
-        if use_meta_agent:
-            if container:
-                self.meta_agent = container.meta_agent()
-                # Override metrics_tracker and param_store if provided
-                if metrics_tracker is not None:
-                    self.meta_agent.metrics_tracker = metrics_tracker
-                if param_store is not None:
-                    self.meta_agent.param_store = param_store
-            else:
-                from src.strategies.regime import MarketRegimeDetector
-
-                regime_detector = MarketRegimeDetector()
-                self.meta_agent = MetaAgent(
-                    llm_client, regime_detector, metrics_tracker, param_store=param_store
-                )
+        if self.use_meta_agent:
+            self.meta_agent = self._container.meta_agent()
+            # Override metrics_tracker and param_store if provided
+            if components.metrics_tracker is not None:
+                self.meta_agent.metrics_tracker = components.metrics_tracker
+            if components.param_store is not None:
+                self.meta_agent.param_store = components.param_store
 
         # Default strategy (used if meta-agent disabled)
         self._default_strategy: MomentumStrategy | EnsembleStrategy = (
-            EnsembleStrategy() if use_ensemble else MomentumStrategy()
+            EnsembleStrategy() if self.use_ensemble else MomentumStrategy()
         )
 
-        # Agents (use container if available, fallback to manual instantiation)
-        if container:
-            self.sentiment_analyst = SentimentAnalyst(finbert)
-            self.news_analyst = container.news_analyst()
-            self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
-            self.comparative_analyst = container.comparative_analyst()
-            self.web_researcher = container.web_research_agent()
-            self.social_analyst = container.social_sentiment_analyst()
-            self.bullish_researcher = container.bullish_researcher()
-            self.bearish_researcher = container.bearish_researcher()
-            self.trader = container.trader_agent()
-            # Note: we instantiate RiskManagementAgent manually here using the provided config;
-            # container.risk_management_agent() is not used, so container-based config is ignored.
-            from src.agents.risk import RiskManagementAgent
+        # Instantiate agents using container
+        self.sentiment_analyst = SentimentAnalyst(components.finbert)
+        self.news_analyst = self._container.news_analyst()
+        self.fundamental_analyst = FundamentalAnalyst(components.llm_client, components.fundamental_fetcher)
+        self.comparative_analyst = self._container.comparative_analyst()
+        self.web_researcher = self._container.web_research_agent()
+        self.social_analyst = self._container.social_sentiment_analyst()
+        self.bullish_researcher = self._container.bullish_researcher()
+        self.bearish_researcher = self._container.bearish_researcher()
+        self.trader = self._container.trader_agent()
+        self.risk_manager = RiskManagementAgent(
+            components.llm_client,
+            portfolio_var_calculator=components.portfolio_var_calculator,
+            portfolio_var_config=components.portfolio_var_config,
+            position_sizing_config=components.position_sizing_config,
+        )
 
-            self.risk_manager = RiskManagementAgent(
-                llm_client,
-                portfolio_var_calculator=portfolio_var_calculator,
-                portfolio_var_config=portfolio_var_config,
-                position_sizing_config=position_sizing_config,
-            )
-        else:
-            from src.agents.base_researcher import ResearchDirection
-            from src.agents.comparative import ComparativeAnalyst
-            from src.agents.news import NewsAnalyst
-            from src.agents.risk import RiskManagementAgent
-            from src.agents.social import SocialSentimentAnalyst
-            from src.agents.thesis_researcher import ThesisResearcher
-            from src.agents.trader import TraderAgent
-            from src.agents.web_researcher import WebResearchAgent
-            from src.data.comparative import ComparativeDataFetcher
-            from src.data.finnhub import FinnhubFetcher
-            from src.data.reddit import RedditFetcher
-
-            self.sentiment_analyst = SentimentAnalyst(finbert)
-            self.news_analyst = NewsAnalyst(llm_client)
-            self.fundamental_analyst = FundamentalAnalyst(llm_client, fundamental_fetcher)
-            self.comparative_analyst = ComparativeAnalyst(llm_client, ComparativeDataFetcher())
-            self.web_researcher = WebResearchAgent(llm_client)
-            # Get Finnhub fetcher from explicit parameter or fall back to env-var-based configuration
-            finnhub = finnhub_fetcher
-            if finnhub is None:
-                # Last resort: create without DI container (will read from env var)
-                logger.warning("Creating FinnhubFetcher without DI - falling back to env var")
-                finnhub = FinnhubFetcher()
-
-            self.social_analyst = SocialSentimentAnalyst(
-                llm_client,
-                finnhub,
-                RedditFetcher(historical_cache=historical_cache),
-                finbert,
-            )
-            self.bullish_researcher = ThesisResearcher(llm_client, ResearchDirection.BULLISH)
-            self.bearish_researcher = ThesisResearcher(llm_client, ResearchDirection.BEARISH)
-            self.trader = TraderAgent(llm_client)
-            self.risk_manager = RiskManagementAgent(
-                llm_client,
-                portfolio_var_calculator=portfolio_var_calculator,
-                portfolio_var_config=portfolio_var_config,
-                position_sizing_config=position_sizing_config,
-            )
-
-        mode = "meta-agent" if use_meta_agent else ("ensemble" if use_ensemble else "momentum")
-        trump_str = "+trump" if trump_mode else ""
+        mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
+        trump_str = "+trump" if self.trump_mode else ""
         logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
 
         self._target_allocations: dict[str, float] | None = None
-        self.pre_trade_backtest_config = pre_trade_backtest_config
         self.vectorbt_runner: VectorBTRunner | None = None
-        if pre_trade_backtest_config and pre_trade_backtest_config.enabled:
+        if self.pre_trade_backtest_config and self.pre_trade_backtest_config.enabled:
             self.vectorbt_runner = VectorBTRunner()
             logger.info("VectorBTRunner initialized for pre-trade validation")
 
@@ -301,314 +178,11 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
-        from src.daemon.degradation import DegradationTier
+        from src.workflows.stages.instrumented_analysis import run_instrumented_analysis
 
-        ctx = extra_context or WorkflowExtraContext()
-        degradation_context: DegradationContext | None = ctx.degradation_context
-
-        # Check if halted
-        if degradation_context and degradation_context.tier == DegradationTier.HALTED:
-            msg = f"Analysis halted: {degradation_context.halt_reason}"
-            raise RuntimeError(msg)
-
-        enable_multi_timeframe = bool(ctx.enable_multi_timeframe)
-
-        # Stage 1: Fetch data
-        start = time.perf_counter()
-        data_output = await data_fetch.fetch_data(
-            symbol,
-            period_days,
-            trading_session,
-            self.market_fetcher,
-            self.news_fetcher,
-            enable_multi_timeframe=enable_multi_timeframe,
-            trump_mode=self.trump_mode,
-            trump_fetcher=self.trump_fetcher,
+        return await run_instrumented_analysis(
+            self, symbol, period_days, trading_session, collector, extra_context
         )
-        self._record_stage(collector, "fetch_data", start)
-
-        # Stage 2: Fetch account info
-        start = time.perf_counter()
-        account_output = await data_fetch.fetch_account_info(self.broker)
-        self._record_stage(collector, "fetch_account_info", start)
-
-        # Stage 3: Select strategy
-        start = time.perf_counter()
-        strategy_input = StrategySelectionInput(symbol=symbol, market_data=data_output.market_data)
-        strategy_output = await strategy_selection.select_strategy(
-            strategy_input,
-            self.meta_agent,
-            self._default_strategy,
-            self.use_ensemble,
-            collector,
-        )
-        self._record_stage(collector, "strategy_selection", start)
-
-        # Stage 4: Validate strategy with backtest
-        start = time.perf_counter()
-        backtest_output = await strategy_selection.validate_strategy_with_backtest(
-            symbol,
-            strategy_output.strategy_instance,
-            strategy_output.strategy_name,
-            strategy_input,
-            self.pre_trade_backtest_config,
-            self.vectorbt_runner,
-            collector,
-        )
-        self._record_stage(collector, "backtest_validation", start)
-
-        # Create TechnicalAnalyst with selected strategy
-        if self._container:
-            technical_analyst = self._container.technical_analyst()(strategy_output.strategy_instance)
-        else:
-            from src.agents.technical import TechnicalAnalyst
-
-            technical_analyst = TechnicalAnalyst(self.llm_client, strategy_output.strategy_instance)
-
-        # Stage 5: Run analyses
-        start = time.perf_counter()
-        analysis_input = AnalysisInput(
-            symbol=symbol,
-            market_data=data_output.market_data,
-            news_articles=data_output.news_articles,
-            trump_posts=data_output.trump_posts,
-            enable_multi_timeframe=enable_multi_timeframe,
-        )
-        analysis_output = await analysis.run_analyses(
-            analysis_input,
-            technical_analyst,
-            self.sentiment_analyst,
-            self.news_analyst,
-            self.fundamental_analyst,
-            self.comparative_analyst,
-            self.web_researcher,
-            self.social_analyst,
-            self.bullish_researcher,
-            self.bearish_researcher,
-            self.trump_mode,
-            self.trump_analyst,
-            collector,
-        )
-        self._record_stage(collector, "analyses", start)
-
-        # Stage 6: Make decision
-        start = time.perf_counter()
-        decision_context = DecisionContext(
-            sector_rotation=ctx.sector_rotation_context,
-            earnings=ctx.earnings_context,
-            peer_analysis=ctx.peer_analysis_context,
-            game_plan=ctx.game_plan_context,
-            position=ctx.position_context,
-        )
-        decision_input = DecisionInput(
-            symbol=symbol,
-            technical=analysis_output.technical_analysis,
-            sentiment=analysis_output.sentiment_analysis,
-            news=analysis_output.news_analysis,
-            bullish=analysis_output.bullish_research,
-            bearish=analysis_output.bearish_research,
-            fundamental=analysis_output.fundamental_analysis,
-            comparative=analysis_output.comparative_analysis,
-            trump=analysis_output.trump_analysis,
-            account_info=account_output.account_info,
-            context=decision_context,
-            backtest_validation=backtest_output.backtest_validation,
-            degradation_context=degradation_context,
-        )
-        decision_output = await decision.make_decision(decision_input, self.trader, collector)
-        self._record_stage(collector, "decision", start)
-
-        # Stage 7: Assess risk
-        start = time.perf_counter()
-        # Get target weight from allocations if available
-        target_weight = self._target_allocations.get(symbol) if self._target_allocations else None
-        risk_input = RiskAssessmentInput(
-            symbol=symbol,
-            market_data=data_output.market_data,
-            final_decision=decision_output.final_decision,
-            account_info=account_output.account_info,
-            broker_positions=account_output.broker_positions,
-            portfolio_value=account_output.portfolio_value,
-            target_portfolio_weight=target_weight,
-            backtest_validation=backtest_output.backtest_validation,
-            degradation_context=degradation_context,
-            broker_api_failed=account_output.broker_api_failed,
-        )
-        risk_output = await risk.assess_risk(risk_input, self.risk_manager)
-        self._record_stage(collector, "risk_assessment", start)
-
-        # Notify if trade rejected by risk gate (only during regular hours when trades can execute)
-        if (
-            risk_output.risk_assessment
-            and decision_output.final_decision
-            and not risk_output.risk_assessment.validation.approved
-            and decision_output.final_decision.action != Signal.HOLD
-            and self.notification_service
-            and trading_session == TradingSession.REGULAR
-        ):
-            await execution.notify_trade_execution(
-                symbol,
-                decision_output.final_decision,
-                risk_output.risk_assessment,
-                self.notification_service,
-            )
-
-        # Stage 8: Execute trade
-        execution_output = None
-        if (
-            self.broker
-            and risk_output.risk_assessment
-            and decision_output.final_decision
-            and risk_output.risk_assessment.validation.approved
-            and decision_output.final_decision.action != Signal.HOLD
-        ):
-            execution_input = TradeExecutionInput(
-                symbol=symbol,
-                final_decision=decision_output.final_decision,
-                risk_assessment=risk_output.risk_assessment,
-                trading_session=trading_session,
-            )
-            execution_output = await execution.execute_trade(execution_input, self.broker)
-
-        # Log final result
-        logger.info(
-            f"Workflow complete: {decision_output.final_decision.action.value} "
-            f"(confidence={decision_output.final_decision.confidence:.2f}, "
-            f"risk_approved={risk_output.risk_assessment.validation.approved})"
-        )
-
-        # Build result
-        return await self._build_and_persist_result(
-            symbol,
-            data_output,
-            account_output,
-            strategy_output,
-            backtest_output,
-            analysis_output,
-            decision_output,
-            risk_output,
-            execution_output,
-            decision_context,
-            degradation_context,
-            target_weight,
-            trading_session,
-            collector,
-        )
-
-    async def _build_and_persist_result(  # noqa: PLR0913
-        self,
-        symbol: str,
-        data_output: FetchDataOutput,
-        account_output: AccountInfoOutput,
-        strategy_output: StrategySelectionOutput,
-        backtest_output: BacktestValidationOutput,
-        analysis_output: AnalysisOutput,
-        decision_output: DecisionOutput,
-        risk_output: RiskAssessmentOutput,
-        execution_output: TradeExecutionOutput | None,
-        decision_context: DecisionContext,
-        degradation_context: DegradationContext | None,
-        target_weight: float | None,  # noqa: ARG002
-        trading_session: TradingSession,
-        collector: ExecutionMetricsCollector | None,
-    ) -> TradingWorkflowResult:
-        """Build workflow result and persist metrics/snapshots.
-
-        Args:
-            symbol: Stock ticker
-            data_output: Data fetch output
-            account_output: Account info output
-            strategy_output: Strategy selection output
-            backtest_output: Backtest validation output
-            analysis_output: Analysis output
-            decision_output: Decision output
-            risk_output: Risk assessment output
-            execution_output: Execution output
-            decision_context: Decision context
-            degradation_context: Degradation context
-            target_weight: Target portfolio weight
-            trading_session: Trading session type
-            collector: Optional metrics collector
-        """
-        execution_metrics = collector.finalize() if collector else None
-
-        # Extract degradation fields
-        degradation_tier = degradation_context.tier.value if degradation_context else None
-        degradation_confidence_penalty = (
-            (1 - degradation_context.confidence_adjustment) if degradation_context else None
-        )
-
-        # Aggregate warnings
-        all_warnings = []
-        all_warnings.extend(data_output.warnings)
-        all_warnings.extend(account_output.warnings)
-        all_warnings.extend(backtest_output.warnings)
-        all_warnings.extend(analysis_output.warnings)
-        if execution_output:
-            all_warnings.extend(execution_output.warnings)
-
-        result = TradingWorkflowResult(
-            symbol=symbol,
-            trading_session=trading_session,
-            technical=analysis_output.technical_analysis,
-            sentiment=analysis_output.sentiment_analysis,
-            news=analysis_output.news_analysis,
-            trump=analysis_output.trump_analysis,
-            fundamental=analysis_output.fundamental_analysis,
-            comparative=analysis_output.comparative_analysis,
-            web_research=analysis_output.web_research,
-            social_sentiment=analysis_output.social_sentiment_analysis,
-            bullish=analysis_output.bullish_research,
-            bearish=analysis_output.bearish_research,
-            decision=decision_output.final_decision,
-            risk=risk_output.risk_assessment,
-            order=execution_output.order_status if execution_output else None,
-            regime=strategy_output.regime_analysis,
-            strategy_used=strategy_output.strategy_name,
-            warnings=all_warnings,
-            earnings_context=decision_context.earnings,
-            peer_analysis_context=decision_context.peer_analysis,
-            execution_metrics=execution_metrics,
-            backtest_validation=backtest_output.backtest_validation,
-            degradation_tier=degradation_tier,
-            degradation_confidence_penalty=degradation_confidence_penalty,
-        )
-
-        if execution_metrics:
-            try:
-                persist_jsonl(execution_metrics)
-            except Exception as e:
-                logger.error(f"Failed to persist execution metrics (continuing): {e}")
-
-        if self.metrics_tracker:
-            try:
-                is_paper = self.broker.paper if self.broker else True
-                if isinstance(self.metrics_tracker, DatabaseMetricsTracker):
-                    await self.metrics_tracker.record_decision_async(
-                        result, strategy_name=strategy_output.strategy_name, is_paper_trade=is_paper
-                    )
-                else:
-                    self.metrics_tracker.record_decision(
-                        result, strategy_name=strategy_output.strategy_name, is_paper_trade=is_paper
-                    )
-            except Exception as e:
-                logger.error(f"Failed to record metrics (continuing): {e}")
-
-        if (
-            self.snapshot_on_trade
-            and self.snapshot_repository
-            and risk_output.risk_assessment
-            and decision_output.final_decision
-            and risk_output.risk_assessment.validation.approved
-            and decision_output.final_decision.action != Signal.HOLD
-        ):
-            await execution.create_portfolio_snapshot(
-                symbol,
-                account_output.account_info,
-                self.snapshot_repository,
-            )
-
-        return result
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
         """Set target portfolio allocations for position sizing.
@@ -619,22 +193,6 @@ class TradingWorkflow:
         self._target_allocations = allocations
         if allocations:
             logger.info(f"Set target allocations for {len(allocations)} symbols")
-
-    def _record_stage(
-        self,
-        collector: ExecutionMetricsCollector | None,
-        stage: str,
-        start: float,
-    ) -> None:
-        """Record pipeline stage timing if collector is active.
-
-        Args:
-            collector: Optional metrics collector
-            stage: Stage name
-            start: perf_counter start time
-        """
-        if collector:
-            collector.record_pipeline_stage(stage, (time.perf_counter() - start) * 1000)
 
     # Backward compatibility methods for tests
     async def _fetch_data(
@@ -650,8 +208,6 @@ class TradingWorkflow:
         Returns:
             State dict with market and news data
         """
-        from src.workflows.stages import data_fetch
-
         data_output = await data_fetch.fetch_data(
             symbol=symbol,
             period_days=period_days,
@@ -682,9 +238,6 @@ class TradingWorkflow:
         Returns:
             Updated state dict with trading decision
         """
-        from src.workflows.models.decision import DecisionContext, DecisionInput
-        from src.workflows.stages import decision
-
         # Derive position_context from account_info if not explicitly provided
         position_context = state.get("position_context")
         if position_context is None and state.get("account_info"):
@@ -734,7 +287,6 @@ class TradingWorkflow:
             Updated state dict with order status
         """
         from src.workflows.models.execution import TradeExecutionInput
-        from src.workflows.stages import execution
 
         if not self.broker:
             return {**state, "order_status": None}
