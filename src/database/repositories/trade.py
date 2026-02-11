@@ -166,7 +166,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
         """
         result = await self._session.execute(
             select(TradeORM)
-            .where(TradeORM.symbol == symbol, TradeORM.status == "OPEN", TradeORM.action == "BUY")
+            .where(TradeORM.symbol == symbol, TradeORM.status == "OPEN", TradeORM.action == Signal.BUY.value)
             .order_by(TradeORM.timestamp.desc())
             .limit(1)
         )

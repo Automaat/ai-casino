@@ -223,12 +223,26 @@ class PositionManager:
             Tuple of (entry_timestamp, entry_confidence, entry_signal)
         """
         if not self._trade_repository:
-            logger.debug(f"No trade repository available, using defaults for {symbol}")
+            logger.warning(f"No trade repository available, using defaults for {symbol}")
             return datetime.now(UTC), 0.75, "BUY"
 
         try:
-            task = asyncio.create_task(self._trade_repository.get_entry_trade(symbol))
-            entry_trade = asyncio.get_event_loop().run_until_complete(task)
+            # Check if event loop is running to avoid nesting
+            try:
+                asyncio.get_running_loop()
+                loop_running = True
+            except RuntimeError:
+                loop_running = False
+
+            if loop_running:
+                logger.warning(
+                    f"Async event loop already running, cannot synchronously load entry "
+                    f"metadata for {symbol}; using defaults "
+                    f"(timestamp=now(), confidence=0.75, signal=BUY)"
+                )
+                return datetime.now(UTC), 0.75, "BUY"
+
+            entry_trade = asyncio.run(self._trade_repository.get_entry_trade(symbol))
 
             if entry_trade:
                 logger.info(
