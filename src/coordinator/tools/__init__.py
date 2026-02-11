@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from src.coordinator.memory import CoordinatorMemory
     from src.daemon.state import DaemonState
     from src.di.container import AppContainer
     from src.tools.registry import ToolRegistry
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 def build_coordinator_registry(
     container: AppContainer,
     daemon_state: DaemonState | None = None,
+    memory: CoordinatorMemory | None = None,
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
 
@@ -20,6 +22,7 @@ def build_coordinator_registry(
     Args:
         container: DI container for dependency resolution
         daemon_state: Optional daemon state for analysis history
+        memory: Optional shared memory (creates new if None)
 
     Returns:
         ToolRegistry with all coordinator tools registered
@@ -58,9 +61,11 @@ def build_coordinator_registry(
     if daemon_state is not None:
         registry.register(AnalysisHistoryTool(daemon_state))
 
-    # Create coordinator memory and register observation tool
-    coordinator_memory = CoordinatorMemory()
-    registry.register(SaveObservationTool(coordinator_memory))
+    # Use provided memory or create new
+    if memory is None:
+        memory = CoordinatorMemory()
+
+    registry.register(SaveObservationTool(memory))
 
     return registry
 
