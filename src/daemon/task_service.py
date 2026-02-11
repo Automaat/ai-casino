@@ -59,6 +59,10 @@ class DaemonTaskService:
         self._last_readiness_check: datetime | None = None
         self._notified_paper_ready = False
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "DaemonTaskService()"
+
     async def run_optimization(self) -> None:
         """Run parameter optimization task."""
         if self.components.daemon_optimizer is None:

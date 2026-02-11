@@ -34,6 +34,10 @@ class DaemonContextBuilder:
         self.components = components
         self.container = container
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "DaemonContextBuilder()"
+
     def build_analysis_contexts(
         self,
         symbol: str,

@@ -80,6 +80,10 @@ class ScheduledTaskRunner:
         self._task_service: DaemonTaskService | None = None  # Wired later via set_task_service
         logger.info("ScheduledTaskRunner initialized")
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"ScheduledTaskRunner(tasks={len(self.TASKS)})"
+
     def set_task_service(self, task_service: DaemonTaskService) -> None:
         """Wire task service after initialization.
 

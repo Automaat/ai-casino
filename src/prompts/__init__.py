@@ -31,6 +31,10 @@ class PromptLoader:
             msg = f"Prompt directory not found: {self.agent_dir}"
             raise PromptDirectoryNotFoundError(msg)
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"PromptLoader(agent={self.agent_dir.name})"
+
     def load(self, prompt_name: str, **kwargs: object) -> str:
         """Load and render prompt with f-string style variables.
 

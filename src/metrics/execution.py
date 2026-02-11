@@ -119,6 +119,13 @@ class ExecutionMetricsCollector:
         self._pipeline_stages: list[PipelineStageMetric] = []
         self._agent_call_counts: dict[str, int] = defaultdict(int)
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"ExecutionMetricsCollector(symbol={self._symbol}, provider={self._provider}, "
+            f"model={self._model})"
+        )
+
     def record_llm_call(
         self,
         method: str,

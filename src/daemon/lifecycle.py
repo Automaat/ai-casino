@@ -29,6 +29,10 @@ class DaemonLifecycle:
         self._api_server: uvicorn.Server | None = None
         self._api_task: asyncio.Task | None = None
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"DaemonLifecycle(running={self.running})"
+
     async def startup(self) -> None:
         """Execute startup sequence: DB migrations, signal handlers, API server."""
         self.running = True

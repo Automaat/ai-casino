@@ -33,6 +33,11 @@ class BrokerManager:
         self.broker: AlpacaBroker | None = None
         logger.info("BrokerManager initialized (broker not yet configured)")
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        status = "configured" if self.broker else "not_configured"
+        return f"BrokerManager(broker={status})"
+
     def initialize_broker(self) -> None:
         """Initialize Alpaca broker based on config.
 

@@ -77,6 +77,12 @@ class TradingChatApp(App):
         self._personality: str = "casino"  # "casino" or "trump"
         self._load_history()
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        model = getattr(self, "_model_name", "unknown")
+        personality = getattr(self, "_personality", "unknown")
+        return f"TradingChatApp(model={model}, personality={personality})"
+
     def _create_tool_registry(self) -> ToolRegistry:
         """Create and populate tool registry."""
         registry = ToolRegistry()

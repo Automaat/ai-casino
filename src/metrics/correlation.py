@@ -86,6 +86,12 @@ class CorrelationAuditor:
             f"lookback={lookback_days}d)"
         )
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"CorrelationAuditor(threshold={self.correlation_threshold:.2f}, lookback={self.lookback_days}d)"
+        )
+
     def audit(
         self,
         positions: dict[str, BrokerPosition],

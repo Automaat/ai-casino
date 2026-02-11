@@ -85,6 +85,10 @@ class DaemonFactory:
         self.config = config
         self._container = self._create_or_wire_container(container)
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "DaemonFactory()"
+
     def _create_or_wire_container(self, container: AppContainer | None) -> AppContainer:
         """Create container or wire existing one with config.
 

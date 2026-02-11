@@ -142,6 +142,10 @@ class BaseMetricsTracker(ABC):
         else:
             self.risk_free_rate = risk_free_rate
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"BaseMetricsTracker(risk_free_rate={self.risk_free_rate:.4f})"
+
     @property
     @abstractmethod
     def trades(self) -> list[TradeRecord]:

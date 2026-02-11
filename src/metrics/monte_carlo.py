@@ -63,6 +63,10 @@ class MonteCarloSimulator:
             logger.warning("Singular covariance matrix, adding ridge regularization")
             self.cov_matrix += 1e-6 * np.eye(len(self.cov_matrix))
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"MonteCarloSimulator(symbols={len(self.returns.columns)}, days={len(self.returns)})"
+
     def simulate(  # noqa: PLR0913
         self,
         positions: dict[str, float],
