@@ -69,9 +69,16 @@ class DaemonLifecycle:
             self._start_api_server()
 
     async def shutdown(self) -> None:
-        """Execute shutdown: stop API server, save state."""
+        """Execute shutdown: stop API server, wait for background tasks, save state."""
         # Stop API server before saving state
         await self._stop_api_server()
+
+        # Wait for position manager background tasks to complete
+        if self.components.position_manager:
+            try:
+                await self.components.position_manager.wait_for_pending_tasks(timeout_seconds=5.0)
+            except Exception as e:
+                logger.warning(f"Error waiting for position persistence tasks: {e}")
 
         # Save final state
         self.components.state.save(self.components.config.state.state_file)
