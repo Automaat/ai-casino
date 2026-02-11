@@ -70,9 +70,7 @@ class DaemonCycleOrchestrator:
 
         # Start profiling if enabled
         cycle_num = self.components.state.total_analyses
-        profiling_context = (
-            self.profiler.profile_cycle(cycle_num) if self.profiler else async_nullcontext()
-        )
+        profiling_context = self.profiler.profile_cycle(cycle_num) if self.profiler else async_nullcontext()
 
         async with profiling_context as profile_metrics:
             # Phase 1: Run scheduled tasks
