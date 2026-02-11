@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -582,9 +582,12 @@ class DaemonFactory:
         # Ensure workflow is initialized
         self.init_workflow(components)
 
+        # Import to fix pyrefly module path resolution
+        from src.daemon.factory import DaemonComponents as DaemonComponentsType
+
         orchestrator = AnalysisOrchestrator(
             config=self.config.analysis_orchestration,
-            components=components,
+            components=cast("DaemonComponentsType", components),
             trading_mode=self.config.trading_mode.value,
             context_builder=context_builder,
         )
