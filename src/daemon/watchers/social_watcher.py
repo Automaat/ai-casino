@@ -39,17 +39,67 @@ class SocialWatcher(EventWatcher):
     and viral posts that may signal trading opportunities.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913,D417 - Backward compat, prefer SocialWatcherConfig
         self,
         historical_cache: HistoricalCache,
         config: SocialWatcherConfig | None = None,
+        poll_interval: int | None = None,
+        relevance_threshold: float | None = None,
+        cooldown_minutes: int | None = None,
+        volume_spike_threshold: float | None = None,
+        viral_score_threshold: int | None = None,
+        viral_upvote_ratio: float | None = None,
+        subreddits: list[str] | None = None,
+        max_concurrent_analyses: int | None = None,
     ) -> None:
         """Initialize social watcher.
 
         Args:
             historical_cache: Shared cache for social data
             config: Configuration (uses defaults if not provided)
+            **Individual params for backward compatibility (prefer config object)
         """
+        # Backward compat: construct config from individual params if provided
+        if config is None and (
+            poll_interval is not None
+            or relevance_threshold is not None
+            or cooldown_minutes is not None
+            or volume_spike_threshold is not None
+            or viral_score_threshold is not None
+            or viral_upvote_ratio is not None
+            or subreddits is not None
+            or max_concurrent_analyses is not None
+        ):
+            defaults = SocialWatcherConfig()
+            config = SocialWatcherConfig(
+                poll_interval=poll_interval if poll_interval is not None else defaults.poll_interval,
+                relevance_threshold=(
+                    relevance_threshold if relevance_threshold is not None else defaults.relevance_threshold
+                ),
+                cooldown_minutes=(
+                    cooldown_minutes if cooldown_minutes is not None else defaults.cooldown_minutes
+                ),
+                volume_spike_threshold=(
+                    volume_spike_threshold
+                    if volume_spike_threshold is not None
+                    else defaults.volume_spike_threshold
+                ),
+                viral_score_threshold=(
+                    viral_score_threshold
+                    if viral_score_threshold is not None
+                    else defaults.viral_score_threshold
+                ),
+                viral_upvote_ratio=(
+                    viral_upvote_ratio if viral_upvote_ratio is not None else defaults.viral_upvote_ratio
+                ),
+                subreddits=subreddits if subreddits is not None else defaults.subreddits,
+                max_concurrent_analyses=(
+                    max_concurrent_analyses
+                    if max_concurrent_analyses is not None
+                    else defaults.max_concurrent_analyses
+                ),
+            )
+
         cfg = config or SocialWatcherConfig()
         base_config = EventWatcherConfig(
             poll_interval=cfg.poll_interval,

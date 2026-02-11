@@ -230,7 +230,9 @@ class DaemonFactory:
         Returns:
             MarketScheduler instance
         """
-        return MarketScheduler(
+        from src.daemon.scheduler import MarketSchedulerConfig
+
+        scheduler_config = MarketSchedulerConfig(
             start_time=self.config.schedule.start_time,
             end_time=self.config.schedule.end_time,
             timezone=self.config.schedule.timezone,
@@ -266,6 +268,7 @@ class DaemonFactory:
             monte_carlo_time=self.config.monte_carlo.schedule_time,
             monte_carlo_days=self.config.monte_carlo.schedule_days,
         )
+        return MarketScheduler(scheduler_config)
 
     def _validate_live_mode_and_get_tracker(self, state: DaemonState) -> BaseMetricsTracker | None:
         """Validate live mode readiness and initialize metrics tracker.

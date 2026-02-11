@@ -39,11 +39,20 @@ class AnomalyWatcher(EventWatcher):
     Uses round-robin rotation to check full watchlist over multiple polls.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913,D417 - Backward compat, prefer AnomalyWatcherConfig
         self,
         historical_cache: HistoricalCache,
         market_fetcher: MarketDataFetcher,
         config: AnomalyWatcherConfig | None = None,
+        poll_interval: int | None = None,
+        relevance_threshold: float | None = None,
+        cooldown_minutes: int | None = None,
+        volume_spike_multiplier: float | None = None,
+        price_move_threshold_pct: float | None = None,
+        gap_threshold_pct: float | None = None,
+        watchlist: list[str] | None = None,
+        max_symbols_per_cycle: int | None = None,
+        max_concurrent_analyses: int | None = None,
     ) -> None:
         """Initialize anomaly watcher.
 
@@ -51,7 +60,55 @@ class AnomalyWatcher(EventWatcher):
             historical_cache: Shared cache for market data
             market_fetcher: Market data fetcher for Alpha Vantage
             config: Configuration (uses defaults if not provided)
+            **Individual params for backward compatibility (prefer config object)
         """
+        # Backward compat: construct config from individual params if provided
+        if config is None and (
+            poll_interval is not None
+            or relevance_threshold is not None
+            or cooldown_minutes is not None
+            or volume_spike_multiplier is not None
+            or price_move_threshold_pct is not None
+            or gap_threshold_pct is not None
+            or watchlist is not None
+            or max_symbols_per_cycle is not None
+            or max_concurrent_analyses is not None
+        ):
+            defaults = AnomalyWatcherConfig()
+            config = AnomalyWatcherConfig(
+                poll_interval=poll_interval if poll_interval is not None else defaults.poll_interval,
+                relevance_threshold=(
+                    relevance_threshold if relevance_threshold is not None else defaults.relevance_threshold
+                ),
+                cooldown_minutes=(
+                    cooldown_minutes if cooldown_minutes is not None else defaults.cooldown_minutes
+                ),
+                volume_spike_multiplier=(
+                    volume_spike_multiplier
+                    if volume_spike_multiplier is not None
+                    else defaults.volume_spike_multiplier
+                ),
+                price_move_threshold_pct=(
+                    price_move_threshold_pct
+                    if price_move_threshold_pct is not None
+                    else defaults.price_move_threshold_pct
+                ),
+                gap_threshold_pct=(
+                    gap_threshold_pct if gap_threshold_pct is not None else defaults.gap_threshold_pct
+                ),
+                watchlist=watchlist if watchlist is not None else defaults.watchlist,
+                max_symbols_per_cycle=(
+                    max_symbols_per_cycle
+                    if max_symbols_per_cycle is not None
+                    else defaults.max_symbols_per_cycle
+                ),
+                max_concurrent_analyses=(
+                    max_concurrent_analyses
+                    if max_concurrent_analyses is not None
+                    else defaults.max_concurrent_analyses
+                ),
+            )
+
         cfg = config or AnomalyWatcherConfig()
         base_config = EventWatcherConfig(
             poll_interval=cfg.poll_interval,

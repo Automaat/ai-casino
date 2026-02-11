@@ -66,17 +66,52 @@ class NewsWatcher(EventWatcher):
         }
     )
 
-    def __init__(
+    def __init__(  # noqa: PLR0913,D417 - Backward compat, prefer NewsWatcherConfig
         self,
         historical_cache: HistoricalCache,
         config: NewsWatcherConfig | None = None,
+        poll_interval: int | None = None,
+        relevance_threshold: float | None = None,
+        cooldown_minutes: int | None = None,
+        breaking_threshold_minutes: int | None = None,
+        max_concurrent_analyses: int | None = None,
     ) -> None:
         """Initialize news watcher.
 
         Args:
             historical_cache: Shared cache for news data
             config: Configuration (uses defaults if not provided)
+            **Individual params for backward compatibility (prefer config object)
         """
+        # Backward compat: construct config from individual params if provided
+        if config is None and (
+            poll_interval is not None
+            or relevance_threshold is not None
+            or cooldown_minutes is not None
+            or breaking_threshold_minutes is not None
+            or max_concurrent_analyses is not None
+        ):
+            defaults = NewsWatcherConfig()
+            config = NewsWatcherConfig(
+                poll_interval=poll_interval if poll_interval is not None else defaults.poll_interval,
+                relevance_threshold=(
+                    relevance_threshold if relevance_threshold is not None else defaults.relevance_threshold
+                ),
+                cooldown_minutes=(
+                    cooldown_minutes if cooldown_minutes is not None else defaults.cooldown_minutes
+                ),
+                breaking_threshold_minutes=(
+                    breaking_threshold_minutes
+                    if breaking_threshold_minutes is not None
+                    else defaults.breaking_threshold_minutes
+                ),
+                max_concurrent_analyses=(
+                    max_concurrent_analyses
+                    if max_concurrent_analyses is not None
+                    else defaults.max_concurrent_analyses
+                ),
+            )
+
         cfg = config or NewsWatcherConfig()
         base_config = EventWatcherConfig(
             poll_interval=cfg.poll_interval,
