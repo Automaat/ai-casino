@@ -115,6 +115,22 @@ description = "Restart production daemon"
 run = "docker compose restart"
 
 [tasks."prod:svelte"]
+description = "Run production daemon with Svelte frontend (Docker Compose, uses ~/.ai-casino/daemon-production.yaml)"
+run = "docker compose -f docker-compose.svelte.yml up --build"
+
+[tasks."prod:svelte:down"]
+description = "Stop Svelte production stack"
+run = "docker compose -f docker-compose.svelte.yml down"
+
+[tasks."prod:svelte:logs"]
+description = "View Svelte production logs"
+run = "docker compose -f docker-compose.svelte.yml logs -f"
+
+[tasks."prod:svelte:restart"]
+description = "Restart Svelte production stack"
+run = "docker compose -f docker-compose.svelte.yml restart"
+
+[tasks."prod:svelte:local"]
 description = "Run daemon with Svelte frontend (local, dev config + prod build)"
 run = """
   trap 'pkill -P $$' EXIT
@@ -123,8 +139,10 @@ run = """
   DAEMON_PID=$!
   echo "Daemon started (PID: $DAEMON_PID)"
   sleep 3
+  echo "Installing frontend dependencies..."
+  cd frontend && npm ci
   echo "Building Svelte frontend..."
-  cd frontend && npm run build
+  npm run build
   echo "Starting Svelte frontend at http://localhost:4173"
   npm run preview -- --host 0.0.0.0
 """
@@ -139,6 +157,8 @@ run = """
   DAEMON_PID=$!
   echo "Daemon started (PID: $DAEMON_PID)"
   sleep 3
+  echo "Installing frontend dependencies..."
+  cd frontend && npm ci
   echo "Starting Svelte dev server at http://localhost:5173"
-  cd frontend && npm run dev -- --host 0.0.0.0
+  npm run dev -- --host 0.0.0.0
 """
