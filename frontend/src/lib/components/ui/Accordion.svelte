@@ -17,7 +17,11 @@
 
 	let { items, allowMultiple = true, defaultOpen = [], content, children }: Props = $props();
 
-	let openItems = $state<Set<string>>(new Set(defaultOpen));
+	let openItems = $state<Set<string>>(new Set());
+
+	$effect(() => {
+		openItems = new Set(defaultOpen);
+	});
 
 	function toggle(id: string) {
 		const newOpenItems = new Set(openItems);
