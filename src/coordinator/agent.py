@@ -403,7 +403,7 @@ class TradingCoordinator:
             return ""
 
         try:
-            with plan_file.open() as f:
+            with plan_file.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             # Build formatted section
@@ -446,7 +446,9 @@ class TradingCoordinator:
             if not account_info.positions:
                 return "No open positions"
 
-            lines = [f"{len(account_info.positions)} open positions:"]
+            count = len(account_info.positions)
+            position_label = "position" if count == 1 else "positions"
+            lines = [f"{count} open {position_label}:"]
             for symbol, pos in account_info.positions.items():
                 pnl_pct = pos.unrealized_pnl_percent
                 pnl_dollar = pos.unrealized_pnl

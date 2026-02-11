@@ -410,10 +410,57 @@ def test_get_trading_mode_manual(coordinator):
     assert "confirmation" in mode
 
 
-def test_load_game_plan_section_missing_file(coordinator):
+def test_load_game_plan_section_missing_file(coordinator, monkeypatch, tmp_path):
     """Test game plan section returns empty string when file missing."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    fake_casino_dir = fake_home / ".ai-casino"
+    fake_casino_dir.mkdir()
+    fake_plans_dir = fake_casino_dir / "game-plans"
+    fake_plans_dir.mkdir()
+
+    monkeypatch.setenv("HOME", str(fake_home))
     section = coordinator._load_game_plan_section()
     assert section == ""
+
+
+def test_load_game_plan_section_with_existing_file(coordinator, monkeypatch, tmp_path):
+    """Test game plan section formats correctly when file exists."""
+    import json
+    from datetime import UTC, datetime
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    fake_casino_dir = fake_home / ".ai-casino"
+    fake_casino_dir.mkdir()
+    fake_plans_dir = fake_casino_dir / "game-plans"
+    fake_plans_dir.mkdir()
+
+    today = datetime.now(UTC).date()
+    plan_file = fake_plans_dir / f"{today}.json"
+
+    plan_data = {
+        "risk_stance": "AGGRESSIVE",
+        "priority_symbols": ["AAPL", "TSLA"],
+        "sector_focus": ["Tech", "Energy"],
+        "confidence": 0.85,
+        "reasoning": "Strong market momentum",
+        "key_levels": {"SPY": 450.0, "AAPL": 180.5},
+    }
+    with plan_file.open("w", encoding="utf-8") as f:
+        json.dump(plan_data, f)
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    section = coordinator._load_game_plan_section()
+
+    assert "Today's Game Plan" in section
+    assert "AGGRESSIVE" in section
+    assert "AAPL" in section
+    assert "TSLA" in section
+    assert "0.85" in section or "85" in section
+    assert "Strong market momentum" in section
+    assert "450.00" in section or "$450" in section
+    assert "180.5" in section or "$180.5" in section
 
 
 @pytest.mark.asyncio
@@ -447,7 +494,7 @@ async def test_get_positions_summary_with_positions(coordinator, mock_broker):
     )
 
     summary = await coordinator._get_positions_summary()
-    assert "1 open positions" in summary
+    assert "1 open position:" in summary
     assert "AAPL" in summary
     assert "10" in summary
     assert "$150.00" in summary
@@ -469,7 +516,7 @@ async def test_build_cycle_prompt_includes_date_and_session(coordinator):
 
     prompt = await coordinator._build_cycle_prompt(["AAPL", "TSLA"], TradingSession.PRE_MARKET)
     assert "PRE_MARKET" in prompt
-    assert datetime.now().strftime("%Y-%m-%d") in prompt
+    assert datetime.now(UTC).strftime("%Y-%m-%d") in prompt
 
 
 def test_repr(coordinator):
