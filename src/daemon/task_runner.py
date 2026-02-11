@@ -38,13 +38,13 @@ class ScheduledTaskRunner:
             "prefetch.enabled",
         ),
         ScheduledTask("earnings_fetch", "is_earnings_fetch_time", "_run_earnings_fetch"),
-        ScheduledTask("sector_rotation", "is_sector_rotation_time", "_run_sector_rotation"),
+        ScheduledTask("sector_rotation", "is_sector_rotation_time", "_run_sector_rotation", is_async=True),
         ScheduledTask(
             "portfolio_rebalancing",
             "is_portfolio_rebalancing_time",
             "_run_portfolio_rebalancing",
         ),
-        ScheduledTask("peer_analysis", "is_peer_analysis_time", "_run_peer_analysis"),
+        ScheduledTask("peer_analysis", "is_peer_analysis_time", "_run_peer_analysis", is_async=True),
         ScheduledTask("correlation_audit", "is_correlation_audit_time", "_run_correlation_audit"),
         ScheduledTask(
             "monte_carlo",
