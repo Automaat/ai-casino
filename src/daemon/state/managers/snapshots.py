@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import PrivateAttr
 
-from src.daemon.state.managers.base import StateManager, _log_task_exception
+from src.daemon.state.managers.base import StateManager, _make_task_cleanup_callback
 from src.daemon.state.models import PortfolioSnapshot
 
 if TYPE_CHECKING:
@@ -50,7 +50,8 @@ class SnapshotStateManager(StateManager):
                     trigger=snapshot.trigger,
                 )
                 task = asyncio.create_task(self._snapshot_repository.create(db_snapshot))
-                task.add_done_callback(_log_task_exception)
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
                 logger.info(
                     f"Scheduled portfolio snapshot persistence: {snapshot.trigger} "
                     f"value={snapshot.portfolio_value}"

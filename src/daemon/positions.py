@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from src.database.repositories.trade import TradeRepository
 
 
-def _make_task_cleanup_callback(task_set: set[asyncio.Task]) -> Callable[[asyncio.Task[object]], None]:
+def _make_task_cleanup_callback(task_set: set[asyncio.Task[Any]]) -> Callable[[asyncio.Task[object]], None]:
     """Create callback that removes task from set and logs exceptions."""
 
     def _cleanup_and_log(task: asyncio.Task[object]) -> None:
@@ -121,7 +121,7 @@ class PositionManager:
         self.config = config
         self._database_engine = database_engine
         self._trade_repository = trade_repository
-        self._pending_tasks: set[asyncio.Task] = set()  # Track background tasks
+        self._pending_tasks: set[asyncio.Task[Any]] = set()  # Track background tasks
         logger.info(f"PositionManager initialized: {config}")
 
     def sync_with_broker(
@@ -765,6 +765,7 @@ class PositionManager:
                     task.cancel()
             # Wait briefly for cancellations to propagate
             await asyncio.sleep(0.1)
+            self._pending_tasks.clear()
 
     def __repr__(self) -> str:
         """Return string representation."""

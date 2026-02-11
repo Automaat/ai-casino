@@ -80,6 +80,25 @@ class DaemonLifecycle:
             except Exception as e:
                 logger.warning(f"Error waiting for position persistence tasks: {e}")
 
+        # Wait for other state manager background tasks to complete
+        if self.components.state.discovery:
+            try:
+                await self.components.state.discovery.wait_for_pending_tasks(timeout_seconds=5.0)
+            except Exception as e:
+                logger.warning(f"Error waiting for discovery state persistence tasks: {e}")
+
+        if self.components.state.snapshots:
+            try:
+                await self.components.state.snapshots.wait_for_pending_tasks(timeout_seconds=5.0)
+            except Exception as e:
+                logger.warning(f"Error waiting for snapshot state persistence tasks: {e}")
+
+        if self.components.state.trading:
+            try:
+                await self.components.state.trading.wait_for_pending_tasks(timeout_seconds=5.0)
+            except Exception as e:
+                logger.warning(f"Error waiting for trading state persistence tasks: {e}")
+
         # Save final state
         self.components.state.save(self.components.config.state.state_file)
 
