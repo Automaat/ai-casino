@@ -288,7 +288,7 @@ class ThesisResearcher(BaseResearcher):
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
         # _build_analysis override guarantees ResearchAnalysis type
-        return cast(ResearchAnalysis, result)
+        return cast("ResearchAnalysis", result)
 
     def _build_analysis(
         self, thesis: str, key_points: list[str], target: float | None, confidence: float

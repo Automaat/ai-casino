@@ -88,7 +88,7 @@ def _handle_fundamental_result(
     # After exception handling, result is guaranteed to be FundamentalAnalysis
     from typing import cast
 
-    return cast(FundamentalAnalysis, result)
+    return cast("FundamentalAnalysis", result)
 
 
 def _handle_optional_result(
