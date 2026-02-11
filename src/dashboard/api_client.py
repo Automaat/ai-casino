@@ -422,13 +422,37 @@ class DaemonAPIClient:
         Returns:
             Dict with keys: positions, snapshots, rebalance
         """
-        positions_task = self._async_client.get(f"{self.api_url}/positions")
-        snapshots_task = self._async_client.get(f"{self.api_url}/portfolio/snapshots", params={"days": days})
-        rebalance_task = self._async_client.get(f"{self.api_url}/portfolio/rebalance")
+        # Wrap API calls to handle exceptions
+        async def safe_get_positions() -> httpx.Response | Exception:
+            try:
+                return await self._async_client.get(f"{self.api_url}/positions")
+            except Exception as e:
+                return e
 
-        positions_resp, snapshots_resp, rebalance_resp = await asyncio.gather(
-            positions_task, snapshots_task, rebalance_task, return_exceptions=True
-        )
+        async def safe_get_snapshots() -> httpx.Response | Exception:
+            try:
+                return await self._async_client.get(
+                    f"{self.api_url}/portfolio/snapshots", params={"days": days}
+                )
+            except Exception as e:
+                return e
+
+        async def safe_get_rebalance() -> httpx.Response | Exception:
+            try:
+                return await self._async_client.get(f"{self.api_url}/portfolio/rebalance")
+            except Exception as e:
+                return e
+
+        # Fetch in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            positions_task = tg.create_task(safe_get_positions())
+            snapshots_task = tg.create_task(safe_get_snapshots())
+            rebalance_task = tg.create_task(safe_get_rebalance())
+
+        # Extract results from tasks
+        positions_resp = positions_task.result()
+        snapshots_resp = snapshots_task.result()
+        rebalance_resp = rebalance_task.result()
 
         positions = None
         if isinstance(positions_resp, httpx.Response):

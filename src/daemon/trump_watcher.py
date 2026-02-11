@@ -234,8 +234,19 @@ If no specific stocks are affected, return "NONE".
                     logger.error(f"Failed to analyze {symbol}: {e}")
                     return symbol, None
 
-        tasks = [analyze_one(s) for s in symbols]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Wrap tasks to handle exceptions
+        async def safe_analyze(symbol: str) -> tuple[str, TradingWorkflowResult | None] | BaseException:
+            try:
+                return await analyze_one(symbol)
+            except BaseException as e:
+                return e
+
+        # Run analyses in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_analyze(s)) for s in symbols]
+
+        # Extract results from tasks
+        raw_results = [task.result() for task in task_results]
 
         for entry in raw_results:
             if isinstance(entry, BaseException):

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import zoneinfo
-from collections.abc import Coroutine
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -77,20 +76,31 @@ async def fetch_data(  # noqa: PLR0913
             logger.info("Multi-timeframe requested but outside market hours, using daily only")
         market_task = asyncio.to_thread(market_fetcher.fetch_daily, symbol, period_days)
 
-    news_task = asyncio.to_thread(news_fetcher.fetch_company_news, symbol, limit=10)
-    tasks: list[Coroutine[Any, Any, Any]] = [market_task, news_task]
+    # Wrap optional tasks to handle failures gracefully
+    async def fetch_news_safe() -> list:
+        try:
+            return await asyncio.to_thread(news_fetcher.fetch_company_news, symbol, limit=10)
+        except Exception as e:
+            logger.warning(f"News fetch failed, continuing with empty news: {e}")
+            return []
 
-    if trump_mode and trump_fetcher:
-        tasks.append(asyncio.to_thread(trump_fetcher.fetch_recent, hours=24))
+    async def fetch_trump_safe() -> TrumpPostData | None:
+        if not trump_fetcher:
+            return None
+        try:
+            return await asyncio.to_thread(trump_fetcher.fetch_recent, hours=24)
+        except Exception as e:
+            logger.warning(f"Failed to fetch Trump posts: {e}")
+            return None
 
-    # Execute in parallel
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Execute in parallel using TaskGroup
+    async with asyncio.TaskGroup() as tg:
+        market_task_result = tg.create_task(market_task)
+        news_task_result = tg.create_task(fetch_news_safe())
+        trump_task_result = tg.create_task(fetch_trump_safe()) if trump_mode and trump_fetcher else None
 
-    # Extract market data
-    if isinstance(results[0], Exception):
-        logger.error(f"Market data fetch failed: {results[0]}")
-        raise results[0]
-    market_result = results[0]
+    # Extract market data (will raise if failed)
+    market_result = market_task_result.result()
     if use_multi_timeframe:
         # fetch_multi_timeframe returns MultiTimeframeData
         assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
@@ -100,23 +110,17 @@ async def fetch_data(  # noqa: PLR0913
         assert isinstance(market_result, MarketData)  # noqa: S101
         market_data = market_result.data
 
-    # Extract news data
-    if isinstance(results[1], Exception):
-        logger.warning(f"News fetch failed, continuing with empty news: {results[1]}")
-        news_result = []
-    else:
-        news_result = results[1]
-        assert isinstance(news_result, list)  # noqa: S101
+    # Extract news data (already handled exceptions, always returns list)
+    news_result = news_task_result.result()
+    assert isinstance(news_result, list)  # noqa: S101
 
     # Extract trump data
     trump_posts = None
-    if trump_mode and trump_fetcher:
-        trump_result = results[2]
-        if isinstance(trump_result, Exception):
-            logger.warning(f"Failed to fetch Trump posts: {trump_result}")
-        else:
-            assert isinstance(trump_result, TrumpPostData)  # noqa: S101
-            trump_posts = trump_result.posts
+    if trump_task_result:
+        trump_data = trump_task_result.result()
+        if trump_data:
+            assert isinstance(trump_data, TrumpPostData)  # noqa: S101
+            trump_posts = trump_data.posts
             logger.info(f"Fetched {len(trump_posts)} Trump posts")
 
     return FetchDataOutput(

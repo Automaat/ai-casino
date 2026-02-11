@@ -399,7 +399,21 @@ class MarketDataFetcher:
                 logger.warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)
 
-        results = await asyncio.gather(*[fetch_timeframe(tf) for tf in timeframes], return_exceptions=True)
+        # Wrap timeframe fetches to handle exceptions
+        async def safe_fetch_timeframe(
+            tf: Timeframe,
+        ) -> tuple[Timeframe, pd.DataFrame | None] | BaseException:
+            try:
+                return await fetch_timeframe(tf)
+            except BaseException as e:
+                return e
+
+        # Fetch timeframes in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_fetch_timeframe(tf)) for tf in timeframes]
+
+        # Extract results from tasks
+        results = [task.result() for task in task_results]
 
         timeframe_dict = _collect_timeframe_results(results)
 

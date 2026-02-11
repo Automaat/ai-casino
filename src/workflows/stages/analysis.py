@@ -207,69 +207,65 @@ async def run_analyses(  # noqa: PLR0913
         collector,
     )
 
-    # Include trump analysis if enabled
-    tasks: list[Coroutine[Any, Any, Any]] = [
-        technical_task,
-        sentiment_task,
-        news_task,
-        fundamental_task,
-        comparative_task,
-        web_research_task,
-        social_task,
-    ]
+    # Wrap optional tasks to handle exceptions without canceling siblings
+    async def safe_optional_task(coro: Coroutine) -> Any:  # noqa: ANN401
+        try:
+            return await coro
+        except Exception as e:
+            # Return exception as value - will be handled by _handle_optional_result
+            return e
 
-    if trump_mode and trump_analyst and input_data.trump_posts:
-        trump_task = _timed_agent_call(
-            "trump",
-            trump_analyst.analyze(input_data.trump_posts),
-            collector,
-        )
-        tasks.append(trump_task)
+    # Run analyses in parallel using TaskGroup for structured concurrency
+    async with asyncio.TaskGroup() as tg:
+        # Core tasks (must succeed - let them raise)
+        technical_result = tg.create_task(technical_task)
+        sentiment_result = tg.create_task(sentiment_task)
+        news_result = tg.create_task(news_task)
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Optional tasks (wrap to return exceptions as values)
+        fundamental_result = tg.create_task(safe_optional_task(fundamental_task))
+        comparative_result = tg.create_task(safe_optional_task(comparative_task))
+        web_research_result = tg.create_task(safe_optional_task(web_research_task))
+        social_result = tg.create_task(safe_optional_task(social_task))
 
-    # Core tasks count (before optional trump task)
-    core_task_count = 7
-    (
-        technical,
-        sentiment,
-        news,
-        fundamental_result,
-        comparative_result,
-        web_research_result,
-        social_result,
-    ) = results[:core_task_count]
-    trump_result = results[core_task_count] if len(results) > core_task_count else None
+        trump_result = None
+        if trump_mode and trump_analyst and input_data.trump_posts:
+            trump_task = _timed_agent_call(
+                "trump",
+                trump_analyst.analyze(input_data.trump_posts),
+                collector,
+            )
+            trump_result = tg.create_task(safe_optional_task(trump_task))
 
-    # Re-raise if core analyses failed
-    if isinstance(technical, Exception):
-        raise technical
-    if isinstance(sentiment, Exception):
-        raise sentiment
-    if isinstance(news, Exception):
-        raise news
+    # Extract results - core analyses (will raise if they failed)
+    technical = technical_result.result()
+    sentiment = sentiment_result.result()
+    news = news_result.result()
 
-    # Type narrowing - after exception checks, these must be their proper types
+    # Type narrowing
     assert isinstance(technical, TechnicalAnalysis)  # noqa: S101
     assert isinstance(sentiment, SentimentAnalysis)  # noqa: S101
     assert isinstance(news, NewsAnalysis)  # noqa: S101
 
-    # Process optional analyses
-    fundamental = _handle_fundamental_result(fundamental_result, warnings)
+    # Process optional analyses - wrapped tasks returned exceptions as values
+    fundamental = _handle_fundamental_result(fundamental_result.result(), warnings)
     comparative = cast(
         "ComparativeAnalysis | None",
-        _handle_optional_result(comparative_result, "Comparative", warnings),
+        _handle_optional_result(comparative_result.result(), "Comparative", warnings),
     )
     web_research = cast(
         "WebResearchAnalysis | None",
-        _handle_optional_result(web_research_result, "Web research", warnings),
+        _handle_optional_result(web_research_result.result(), "Web research", warnings),
     )
     social_sentiment = cast(
         "SocialSentimentAnalysis | None",
-        _handle_optional_result(social_result, "Social sentiment", warnings),
+        _handle_optional_result(social_result.result(), "Social sentiment", warnings),
     )
     trump_analysis_processed = (
-        cast("TrumpAnalysis | None", _handle_optional_result(trump_result, "Trump", warnings))
+        cast(
+            "TrumpAnalysis | None",
+            _handle_optional_result(trump_result.result(), "Trump", warnings),
+        )
         if trump_result
         else None
     )
@@ -302,7 +298,20 @@ async def run_analyses(  # noqa: PLR0913
         collector,
     )
 
-    bullish, bearish = await asyncio.gather(bullish_task, bearish_task, return_exceptions=True)
+    # Wrap research tasks to handle exceptions (these are optional)
+    async def safe_research_task(coro: Coroutine) -> Any:  # noqa: ANN401
+        try:
+            return await coro
+        except Exception as e:
+            return e
+
+    # Run research tasks in parallel using TaskGroup
+    async with asyncio.TaskGroup() as tg:
+        bullish_result = tg.create_task(safe_research_task(bullish_task))
+        bearish_result = tg.create_task(safe_research_task(bearish_task))
+
+    bullish = bullish_result.result()
+    bearish = bearish_result.result()
 
     return AnalysisOutput(
         technical_analysis=technical,

@@ -138,8 +138,24 @@ class TradeJournalAgent:
                     logger.warning(f"Failed to fetch closing price for {symbol}: {e}")
                     return None
 
-        tasks = [fetch_outcome(symbol, record) for symbol, record in latest_by_symbol.items()]
-        raw_outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        # Wrap tasks to handle exceptions
+        async def safe_fetch_outcome(
+            symbol: str, record: AnalysisRecord
+        ) -> SignalOutcome | BaseException | None:
+            try:
+                return await fetch_outcome(symbol, record)
+            except BaseException as e:
+                return e
+
+        # Run fetches in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [
+                tg.create_task(safe_fetch_outcome(symbol, record))
+                for symbol, record in latest_by_symbol.items()
+            ]
+
+        # Extract results from tasks
+        raw_outcomes = [task.result() for task in task_results]
         outcomes = _filter_outcomes(raw_outcomes)
 
         if not outcomes:

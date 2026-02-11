@@ -137,9 +137,18 @@ class NotificationService:
             logger.debug(f"Rate limit: skipping {trigger.value} notification for {symbol}")
             return
 
-        # Send to all channels
-        tasks = [self._send_to_channel(name, ch, message) for name, ch in self.channels.items()]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # Send to all channels (fire-and-forget, exceptions already handled in _send_to_channel)
+        async def safe_send(name: str, ch: NotificationChannel) -> None:
+            try:
+                await self._send_to_channel(name, ch, message)
+            except Exception as e:
+                logger.error(f"Unexpected error sending to channel {name}: {e}")
+
+        # Run sends in parallel using TaskGroup
+        if self.channels:
+            async with asyncio.TaskGroup() as tg:
+                for name, ch in self.channels.items():
+                    tg.create_task(safe_send(name, ch))
 
         if self.config.rate_limit_enabled and self.channels:
             self.rate_limiter.record_notification(symbol, trigger)

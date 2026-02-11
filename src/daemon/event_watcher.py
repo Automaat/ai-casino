@@ -149,8 +149,19 @@ class EventWatcher(ABC):
                     logger.error(f"Failed to analyze {symbol}: {e}")
                     return symbol, None
 
-        tasks = [analyze_one(s) for s in symbols]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Wrap tasks to handle exceptions
+        async def safe_analyze(symbol: str) -> tuple[str, TradingWorkflowResult | None] | BaseException:
+            try:
+                return await analyze_one(symbol)
+            except BaseException as e:
+                return e
+
+        # Run analyses in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_analyze(s)) for s in symbols]
+
+        # Extract results from tasks
+        raw_results = [task.result() for task in task_results]
 
         for entry in raw_results:
             if isinstance(entry, BaseException):
@@ -238,8 +249,18 @@ class EventWatcher(ABC):
         logger.info(f"Found {len(events)} new event(s)")
 
         # 2. Triage events with LLM
-        triage_tasks = [self._triage_agent.analyze(e) for e in events]
-        triage_results = await asyncio.gather(*triage_tasks, return_exceptions=True)
+        async def safe_triage(event: object) -> object:
+            try:
+                return await self._triage_agent.analyze(event)  # type: ignore[attr-defined]
+            except BaseException as e:
+                return e
+
+        # Run triage tasks in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            triage_task_results = [tg.create_task(safe_triage(e)) for e in events]
+
+        # Extract results from tasks
+        triage_results = [task.result() for task in triage_task_results]
 
         # 3. Filter by relevance threshold and urgency (skip failed triages)
         relevant = self._filter_relevant_events(events, triage_results)
