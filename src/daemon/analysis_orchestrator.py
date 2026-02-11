@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
+from src.cache.historical import SignalOutcomeInput
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.notification_helper import DaemonNotificationHelper
@@ -407,7 +408,7 @@ class AnalysisOrchestrator:
             # Record signal outcome in historical cache
             if self.historical_cache:
                 try:
-                    self.historical_cache.record_signal_outcome(
+                    signal_input = SignalOutcomeInput(
                         symbol=symbol,
                         timestamp=datetime.now(UTC),
                         signal=result.decision.action.value,
@@ -420,6 +421,7 @@ class AnalysisOrchestrator:
                         sentiment_signal=self._extract_sentiment_signal(result.sentiment),
                         news_signal=self._extract_news_signal(result.news),
                     )
+                    self.historical_cache.record_signal_outcome(signal_input)
                 except Exception as e:
                     logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -30,6 +31,23 @@ ALLOWED_OUTCOME_FIELDS = {
     "actual_exit_date",
     "outcome_updated_at",
 }
+
+
+@dataclass
+class SignalOutcomeInput:
+    """Input parameters for recording signal outcome."""
+
+    symbol: str
+    timestamp: datetime
+    signal: str
+    confidence: float
+    price_at_signal: float
+    strategy_used: str | None = None
+    regime: str | None = None
+    trading_session: str | None = None
+    technical_signal: str | None = None
+    sentiment_signal: str | None = None
+    news_signal: str | None = None
 
 
 class HistoricalCache:
@@ -575,13 +593,14 @@ class HistoricalCache:
         logger.debug(f"Stored {inserted} Reddit posts for {symbol}")
         return inserted
 
-    def record_signal_outcome(  # noqa: PLR0913
+    def record_signal_outcome(
         self,
-        symbol: str,
-        timestamp: datetime,
-        signal: str,
-        confidence: float,
-        price_at_signal: float,
+        input_data: SignalOutcomeInput | None = None,
+        symbol: str | None = None,
+        timestamp: datetime | None = None,
+        signal: str | None = None,
+        confidence: float | None = None,
+        price_at_signal: float | None = None,
         strategy_used: str | None = None,
         regime: str | None = None,
         trading_session: str | None = None,
@@ -592,18 +611,30 @@ class HistoricalCache:
         """Record a signal outcome for accuracy tracking.
 
         Args:
-            symbol: Stock ticker symbol
-            timestamp: Signal generation timestamp (timezone-aware)
-            signal: Trading signal (BUY/SELL/HOLD)
-            confidence: Signal confidence (0.0-1.0)
-            price_at_signal: Price when signal was generated
-            strategy_used: Strategy name (e.g., "momentum")
-            regime: Market regime (e.g., "trending_bullish")
-            trading_session: Trading session (REGULAR/PRE_MARKET)
-            technical_signal: Technical analysis signal
-            sentiment_signal: Sentiment analysis signal
-            news_signal: News analysis signal
+            input_data: Signal outcome input parameters (preferred)
+            **Individual params for backward compatibility (prefer input_data)
         """
+        # Backward compat: construct input_data from individual params if provided
+        if input_data is None and symbol is not None:
+            if timestamp is None or signal is None or confidence is None or price_at_signal is None:
+                msg = "symbol, timestamp, signal, confidence, and price_at_signal are required"
+                raise ValueError(msg)
+            input_data = SignalOutcomeInput(
+                symbol=symbol,
+                timestamp=timestamp,
+                signal=signal,
+                confidence=confidence,
+                price_at_signal=price_at_signal,
+                strategy_used=strategy_used,
+                regime=regime,
+                trading_session=trading_session,
+                technical_signal=technical_signal,
+                sentiment_signal=sentiment_signal,
+                news_signal=news_signal,
+            )
+        if input_data is None:
+            msg = "Either input_data or individual parameters must be provided"
+            raise ValueError(msg)
         with self._lock:
             self._conn.execute(
                 "INSERT OR IGNORE INTO signal_outcomes "
@@ -611,21 +642,24 @@ class HistoricalCache:
                 "strategy_used, regime, trading_session, technical_signal, sentiment_signal, news_signal) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    symbol,
-                    timestamp.isoformat(),
-                    signal,
-                    confidence,
-                    price_at_signal,
-                    strategy_used,
-                    regime,
-                    trading_session,
-                    technical_signal,
-                    sentiment_signal,
-                    news_signal,
+                    input_data.symbol,
+                    input_data.timestamp.isoformat(),
+                    input_data.signal,
+                    input_data.confidence,
+                    input_data.price_at_signal,
+                    input_data.strategy_used,
+                    input_data.regime,
+                    input_data.trading_session,
+                    input_data.technical_signal,
+                    input_data.sentiment_signal,
+                    input_data.news_signal,
                 ),
             )
             self._conn.commit()
-        logger.debug(f"Recorded signal outcome for {symbol} ({signal} @ {price_at_signal:.2f})")
+        logger.debug(
+            f"Recorded signal outcome for {input_data.symbol} "
+            f"({input_data.signal} @ {input_data.price_at_signal:.2f})"
+        )
 
     def get_signals_needing_update(self, horizon: str) -> list[SignalUpdateRecord]:
         """Get signals that need outcome price updates for a given horizon.
