@@ -33,6 +33,9 @@ if TYPE_CHECKING:
     from src.di.container import AppContainer
     from src.metrics.correlation import CorrelationAuditResult
     from src.metrics.sector_rotation import SectorRotationAnalysis
+else:
+    from src.daemon.factory import DaemonComponents
+    from src.di.container import AppContainer
 
 
 class DaemonTaskService:
@@ -414,66 +417,78 @@ class DaemonTaskService:
             logger.error(f"Discovery failed: {e}", exc_info=True)
             self.components.state.record_error(f"Discovery failed: {e}")
 
-    async def run_health_check(self) -> None:
+    async def run_health_check(self) -> None:  # noqa: C901 - nested class temporary until Phase 2 extraction
         """Run health check task."""
         if not self.components.config.health.enabled:
             return
 
-        now = datetime.now(tz=UTC)
+        from src.daemon.tasks.base import TaskExecutor
 
-        # Run on first startup or after interval elapsed
-        if self.components.state.last_health_check:
-            elapsed = (now - self.components.state.last_health_check).total_seconds()
-            if elapsed < self.components.config.health.check_interval_seconds:
-                return
+        class _HealthCheckTask(TaskExecutor):
+            def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+                super().__init__(components, container)
+                self._report = None
 
-        logger.info("Starting API health checks")
-        console.print(f"\n[bold cyan]Running Health Checks ({datetime.now(tz=UTC):%H:%M})[/bold cyan]")
+            @property
+            def task_name(self) -> str:
+                return "Health Checks"
 
-        try:
-            from src.daemon.health import HealthChecker
+            async def execute(self) -> None:
+                from src.daemon.health import HealthChecker
 
-            checker = HealthChecker(
-                self.components.config,
-                self.components.state,
-                container=self.container,
-                notification_service=self.components.notification_service,
-            )
-            report = await checker.run()
+                checker = HealthChecker(
+                    self.components.config,
+                    self.components.state,
+                    container=self.container,
+                    notification_service=self.components.notification_service,
+                )
+                self._report = await checker.run()
 
-            self.components.state.last_health_check = datetime.now(tz=self.components.scheduler.timezone)
-            self.components.state.save(self.components.config.state.state_file)
+                console.print(
+                    f"[bold cyan]Health:[/bold cyan] {self._report.overall_status} "
+                    f"({len(self._report.service_checks)} services, {self._report.total_duration_ms:.0f}ms)"
+                )
 
-            console.print(
-                f"[bold cyan]Health:[/bold cyan] {report.overall_status} "
-                f"({len(report.service_checks)} services, {report.total_duration_ms:.0f}ms)"
-            )
-            logger.info(f"Health check complete: {report.overall_status}")
+                # Publish HEALTH_CHECK event
+                if self.components.event_bus:
+                    try:
+                        from src.daemon.event_bus import DashboardEvent, EventType
 
-            # Publish HEALTH_CHECK event
-            if self.components.event_bus:
-                try:
-                    from src.daemon.event_bus import DashboardEvent, EventType
-
-                    failures = [
-                        svc.service_name for svc in report.service_checks if svc.status == "UNHEALTHY"
-                    ]
-                    await self.components.event_bus.publish(
-                        DashboardEvent(
-                            event_type=EventType.HEALTH_CHECK,
-                            data={
-                                "status": report.overall_status.value,
-                                "failures": failures,
-                                "total_duration_ms": report.total_duration_ms,
-                            },
+                        failures = [
+                            svc.service_name
+                            for svc in self._report.service_checks
+                            if svc.status == "UNHEALTHY"
+                        ]
+                        await self.components.event_bus.publish(
+                            DashboardEvent(
+                                event_type=EventType.HEALTH_CHECK,
+                                data={
+                                    "status": self._report.overall_status.value,
+                                    "failures": failures,
+                                    "total_duration_ms": self._report.total_duration_ms,
+                                },
+                            )
                         )
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to publish HEALTH_CHECK event: {e}")
+                    except Exception as e:
+                        logger.error(f"Failed to publish HEALTH_CHECK event: {e}")
 
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            self.components.state.record_error(f"Health check failed: {e}")
+            def get_last_run(self) -> datetime | None:
+                return self.components.state.last_health_check
+
+            def record_success(self, duration: float) -> None:  # noqa: ARG002
+                self.components.state.last_health_check = datetime.now(tz=self.components.scheduler.timezone)
+
+            def should_skip_today(self) -> bool:
+                # Custom dedup: check interval instead of daily
+                last_run = self.get_last_run()
+                if not last_run:
+                    return False
+
+                now = datetime.now(tz=UTC)
+                elapsed = (now - last_run).total_seconds()
+                return elapsed < self.components.config.health.check_interval_seconds
+
+        await _HealthCheckTask(self.components, self.container).run()
 
     async def run_journal(self) -> None:
         """Run trade journal task."""
@@ -1307,80 +1322,94 @@ class DaemonTaskService:
             logger.error(error_msg)
             self.components.state.record_error(error_msg)
 
-    def run_signal_tracking(self) -> None:
+    async def run_signal_tracking(self) -> None:
         """Update signal outcomes with T+1d/5d/20d prices."""
         if not self.components.config.signal_tracking.enabled:
             return
 
-        # Dedup: check if already ran today
-        now = datetime.now(self.components.scheduler.timezone)
-        if self.components.state.last_signal_tracking:
-            last_date = self.components.state.last_signal_tracking.astimezone(
-                self.components.scheduler.timezone
-            ).date()
-            if last_date == now.date():
-                logger.debug("Signal tracking already completed today")
-                return
+        from src.daemon.tasks.base import TaskExecutor
 
-        console.print(f"\n[bold cyan]Running Signal Tracking ({now:%H:%M})[/bold cyan]")
+        class _SignalTrackingTask(TaskExecutor):
+            @property
+            def task_name(self) -> str:
+                return "Signal Tracking"
 
-        try:
-            from src.daemon.signal_tracker import SignalOutcomeTracker
+            async def execute(self) -> None:
+                import asyncio
 
-            market_fetcher = self.container.yfinance_market_fetcher()
-            tracker = SignalOutcomeTracker(
-                self.components.historical_cache, market_fetcher, self.components.broker
-            )
-            stats = tracker.update_outcomes()
+                from src.daemon.signal_tracker import SignalOutcomeTracker
 
-            self.components.state.last_signal_tracking = datetime.now(UTC)
-            self.components.state.save(self.components.config.state.state_file)
-
-            console.print(f"[dim]Signal tracking: {stats}[/dim]\n")
-            logger.info(f"Signal tracking completed: {stats}")
-        except Exception as e:
-            error_msg = f"Signal tracking failed: {e}"
-            logger.error(error_msg)
-            self.components.state.record_error(error_msg)
-
-    def run_monte_carlo_stress_testing(self) -> None:
-        """Execute Monte Carlo portfolio stress testing (weekly/daily task)."""
-        logger.info("[MONTE CARLO] Starting stress test")
-
-        # Deduplication (check last run within 6 hours)
-        if self.components.state.monte_carlo_tests:
-            last_run = self.components.state.monte_carlo_tests[-1].timestamp
-            now = datetime.now(UTC)
-            if (now - last_run).total_seconds() < 6 * 3600:
-                logger.info("[MONTE CARLO] Already ran recently, skipping")
-                return
-
-        try:
-            from src.daemon.stress_testing import DaemonStressTester
-
-            if self.components.broker is None or self.components.market_fetcher is None:
-                logger.warning("[MONTE CARLO] Skipping: broker or market_fetcher not configured")
-                return
-
-            executor = DaemonStressTester(
-                broker_client=self.components.broker,
-                market_fetcher=self.components.market_fetcher,
-                config=self.components.config.monte_carlo,
-            )
-            record = executor.execute()
-
-            self.components.state.record_monte_carlo_test(
-                record, self.components.config.monte_carlo.max_history_records
-            )
-            self.components.state.save(self.components.config.state.state_file)
-
-            if record.exceeds_risk_tolerance:
-                logger.warning(f"[MONTE CARLO] ALERT: {record.alert_message}")
-            else:
-                logger.info(
-                    f"[MONTE CARLO] Test passed - P(loss>threshold)={record.prob_loss_gt_threshold:.1%}, "
-                    f"VaR95={record.var_95:.1%}"
+                market_fetcher = self.container.yfinance_market_fetcher()
+                tracker = SignalOutcomeTracker(
+                    self.components.historical_cache, market_fetcher, self.components.broker
                 )
-        except Exception as e:
-            logger.error(f"[MONTE CARLO] Stress test failed: {e}")
-            self.components.state.record_error(f"Monte Carlo stress test error: {e}")
+                stats = await asyncio.to_thread(tracker.update_outcomes)
+                console.print(f"[dim]Signal tracking: {stats}[/dim]")
+
+            def get_last_run(self) -> datetime | None:
+                return self.components.state.last_signal_tracking
+
+            def record_success(self, duration: float) -> None:  # noqa: ARG002
+                self.components.state.last_signal_tracking = datetime.now(UTC)
+
+        await _SignalTrackingTask(self.components, self.container).run()
+
+    async def run_monte_carlo_stress_testing(self) -> None:  # noqa: C901 - nested class temporary until Phase 2
+        """Execute Monte Carlo portfolio stress testing (weekly/daily task)."""
+        from src.daemon.tasks.base import TaskExecutor
+
+        class _MonteCarloTask(TaskExecutor):
+            def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+                super().__init__(components, container)
+                self._record = None
+
+            @property
+            def task_name(self) -> str:
+                return "Monte Carlo Stress Testing"
+
+            async def execute(self) -> None:
+                import asyncio
+
+                from src.daemon.stress_testing import DaemonStressTester
+
+                if self.components.broker is None or self.components.market_fetcher is None:
+                    logger.warning("Skipping: broker or market_fetcher not configured")
+                    return
+
+                executor = DaemonStressTester(
+                    broker_client=self.components.broker,
+                    market_fetcher=self.components.market_fetcher,
+                    config=self.components.config.monte_carlo,
+                )
+                self._record = await asyncio.to_thread(executor.execute)
+
+                if self._record.exceeds_risk_tolerance:
+                    logger.warning(f"ALERT: {self._record.alert_message}")
+                else:
+                    logger.info(
+                        f"Test passed - P(loss>threshold)={self._record.prob_loss_gt_threshold:.1%}, "
+                        f"VaR95={self._record.var_95:.1%}"
+                    )
+
+            def get_last_run(self) -> datetime | None:
+                if not self.components.state.monte_carlo_tests:
+                    return None
+                return self.components.state.monte_carlo_tests[-1].timestamp
+
+            def record_success(self, duration: float) -> None:  # noqa: ARG002
+                if self._record:
+                    self.components.state.record_monte_carlo_test(
+                        self._record, self.components.config.monte_carlo.max_history_records
+                    )
+
+            def should_skip_today(self) -> bool:
+                # Custom dedup: check last run within 6 hours
+                last_run = self.get_last_run()
+                if not last_run:
+                    return False
+
+                now = datetime.now(UTC)
+                elapsed = (now - last_run).total_seconds()
+                return elapsed < 6 * 3600
+
+        await _MonteCarloTask(self.components, self.container).run()
