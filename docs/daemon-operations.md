@@ -25,43 +25,97 @@ python -m src.main trump-daemon --interval 5 --max-analyses 10
 ```mermaid
 classDiagram
     class DaemonConfig {
-        +list~str~ watchlist = ["AAPL", "TSLA", "GOOGL", "MSFT"]
+        +list~str~ watchlist
         +int interval_minutes = 30
         +bool market_hours_only = true
         +bool auto_trade = false
         +int max_concurrent_analyses = 3
-        +ScheduleConfig schedule
-        +StateConfig state
-        +ScreeningConfig screening
+        +TradingMode trading_mode = PAPER
         +from_yaml(path: Path) DaemonConfig
     }
 
-    class ScheduleConfig {
-        +str start_time = "09:30"
-        +str end_time = "16:00"
-        +str timezone = "America/New_York"
-        +bool enable_pre_market = false
-        +bool enable_after_hours = false
+    class TradingConfigs {
+        <<group>>
+        +ScheduleConfig schedule
+        +StateConfig state
+        +PaperTradingConfig paper_trading
+        +JournalConfig journal
+        +OptimizationConfig optimization
     }
 
-    class StateConfig {
-        +str state_file = "~/.ai-casino/daemon-state.json"
+    class AnalysisConfigs {
+        <<group>>
+        +AnalysisOrchestratorConfig analysis_orchestration
+        +NewsWatcherConfig news_watcher
+        +SocialWatcherConfig social_watcher
+        +FilingsWatcherConfig filings_watcher
+        +AnomalyWatcherConfig anomaly_watcher
     }
 
-    class ScreeningConfig {
-        +bool enabled = false
-        +str screen_time = "16:30"
-        +list~str~ screen_days = ["mon"..."fri"]
-        +str criteria = "momentum"
-        +str universe = "COMBINED"
-        +int top_n = 10
-        +str watchlist_name = "daemon-screening"
+    class RiskConfigs {
+        <<group>>
+        +RiskLimitsConfig risk_limits
+        +PositionSizingConfig position_sizing
+        +PositionManagementConfig position_management
+        +MonteCarloConfig monte_carlo
+        +PreTradeBacktestingConfig pre_trade_backtesting
     }
 
-    DaemonConfig *-- ScheduleConfig
-    DaemonConfig *-- StateConfig
-    DaemonConfig *-- ScreeningConfig
+    class PortfolioConfigs {
+        <<group>>
+        +PortfolioRebalancingConfig rebalancing
+        +PeerAnalysisConfig peer_analysis
+        +CorrelationAuditConfig correlation_audit
+        +GamePlanConfig game_plan
+    }
+
+    class ScreeningConfigs {
+        <<group>>
+        +ScreeningConfig screening
+        +DiscoveryConfig discovery
+        +LiquidityFilterConfig liquidity_filters
+        +SectorRotationConfig sector_rotation
+        +EarningsCalendarConfig earnings_calendar
+    }
+
+    class InfraConfigs {
+        <<group>>
+        +ApiConfig api
+        +LLMConfig llm
+        +ApiKeysConfig api_keys
+        +DataSourcesConfig data_sources
+        +DatabaseConfig database
+        +PrefetchConfig prefetch
+    }
+
+    class ReportingConfigs {
+        <<group>>
+        +ReportingConfig reporting
+        +SignalTrackingConfig signal_tracking
+        +HealthConfig health
+        +NotificationsConfig notifications
+    }
+
+    DaemonConfig *-- TradingConfigs
+    DaemonConfig *-- AnalysisConfigs
+    DaemonConfig *-- RiskConfigs
+    DaemonConfig *-- PortfolioConfigs
+    DaemonConfig *-- ScreeningConfigs
+    DaemonConfig *-- InfraConfigs
+    DaemonConfig *-- ReportingConfigs
 ```
+
+**Config groups:**
+
+| Group | Configs | Purpose |
+|---|---|---|
+| **Trading** | schedule, state, paper_trading, journal, optimization | Core trading operations |
+| **Analysis** | analysis_orchestration, news/social/filings/anomaly watchers | Event-driven analysis |
+| **Risk** | risk_limits, position_sizing, position_management, monte_carlo, pre_trade_backtesting | Risk management |
+| **Portfolio** | rebalancing, peer_analysis, correlation_audit, game_plan | Portfolio optimization |
+| **Screening** | screening, discovery, liquidity_filters, sector_rotation, earnings_calendar | Stock discovery |
+| **Infrastructure** | api, llm, api_keys, data_sources, database, prefetch | External integrations |
+| **Reporting** | reporting, signal_tracking, health, notifications | Monitoring & alerts |
 
 ### Complete YAML Example
 
@@ -123,19 +177,35 @@ daemon:
 |---|---|---|---|
 | `ALPHA_VANTAGE_API_KEY` | Yes | — | Market data API key |
 | `MARKETAUX_API_KEY` | No | — | News data API key |
-| `ALPACA_API_KEY` | No | — | Broker API key (for auto_trade) |
-| `ALPACA_SECRET_KEY` | No | — | Broker secret key |
+| `FINNHUB_API_KEY` | No | — | Finnhub social sentiment API key |
+| `REDDIT_CLIENT_ID` | No | — | Reddit API client ID |
+| `REDDIT_CLIENT_SECRET` | No | — | Reddit API client secret |
+| `REDDIT_USER_AGENT` | No | `ai-casino/1.0` | Reddit API user agent |
+| `ALPACA_API_KEY` | No | — | Broker API key (live trading) |
+| `ALPACA_SECRET_KEY` | No | — | Broker secret key (live trading) |
+| `ALPACA_PAPER_API_KEY` | No | — | Broker API key (paper trading) |
+| `ALPACA_PAPER_SECRET_KEY` | No | — | Broker secret key (paper trading) |
+| `ALPACA_BASE_URL` | No | `https://paper-api.alpaca.markets` | Alpaca API base URL |
+| `DATABASE_URL` | No | — | Database connection URL (SQLite/PostgreSQL) |
 | `LLM_PROVIDER` | No | `ollama` | LLM provider (ollama/anthropic/openai) |
 | `LLM_MODEL` | No | `qwen3:14b` | LLM model name |
 | `LLM_MAX_CONCURRENT` | No | `5` | Max concurrent LLM calls (1-20) |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API key |
 | `OPENAI_API_KEY` | No | — | OpenAI API key |
-| `LOG_LEVEL` | No | `INFO` | Logging level |
+| `OPENAI_API_BASE` | No | — | Custom OpenAI API base URL |
 | `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
-| `ALPACA_BASE_URL` | No | `https://paper-api.alpaca.markets` | Alpaca API base URL |
 | `MAX_POSITION_RISK` | No | `2.0` | Max risk per trade (%) |
 | `MAX_EXPOSURE` | No | `80.0` | Max total exposure (%) |
 | `MAX_SINGLE_POSITION` | No | `20.0` | Max single position (%) |
+| `RISK_FREE_RATE` | No | `0.02` | Risk-free rate for metrics (2%) |
+| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token for notifications |
+| `TELEGRAM_CHAT_ID` | No | — | Telegram chat ID for notifications |
+| `DAEMON_API_URL` | No | `http://localhost:8484` | Daemon API URL for dashboard |
+| `DASHBOARD_HOST` | No | `127.0.0.1` | Dashboard web server host |
+| `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG/INFO/WARNING/ERROR) |
+| `EXECUTION_METRICS` | No | `true` | Enable execution metrics collection |
+| `PORTFOLIO_SNAPSHOT_ON_TRADE` | No | `false` | Snapshot portfolio state before trades |
+| `AI_CASINO_THEME` | No | — | TUI theme override |
 
 ### After-Hours Screening
 
@@ -196,18 +266,29 @@ Universe: COMBINED, Screened: 603
 ```mermaid
 classDiagram
     class DaemonState {
-        +datetime|None last_run = None
-        +list~AnalysisRecord~ analyses = []
-        +list~str~ errors = []
-        +int total_analyses = 0
-        +int total_trades = 0
-        +datetime|None last_after_hours_screening = None
-        +list~ScreeningRecord~ screening_history = []
+        +datetime|None last_run
+        +list~AnalysisRecord~ analyses
+        +list~str~ errors
+        +int total_analyses
+        +int total_trades
+        +datetime|None last_after_hours_screening
+        +list~ScreeningRecord~ screening_history
+        +list~OptimizationRecord~ optimization_history
+        +list~PrefetchRecord~ prefetch_history
+        +list~SectorRotationRecord~ sector_rotation_history
+        +list~EarningsCalendarRecord~ earnings_calendar_history
+        +list~PeerAnalysisRecord~ peer_analysis_history
+        +list~CorrelationAuditRecord~ correlation_audit_history
+        +list~PortfolioRebalancingRecord~ portfolio_rebalancing_history
+        +list~GamePlanRecord~ game_plan_history
+        +list~RiskReportRecord~ risk_report_history
+        +list~MonteCarloRecord~ monte_carlo_tests
+        +list~DegradationRecord~ degradation_history
+        +list~DiscoveryHistoryRecord~ discovery_history
+        +dict active_positions
+        +list active_discovery_candidates
         +load(path: str) DaemonState
         +save(path: str) None
-        +record_analysis(...) None
-        +record_error(error: str) None
-        +record_after_hours_screening(...) None
     }
 
     class AnalysisRecord {
@@ -215,13 +296,37 @@ classDiagram
         +datetime timestamp
         +str signal
         +float confidence
-        +bool executed_trade = false
-        +TradingSession trading_session = REGULAR
+        +bool executed_trade
+        +TradingSession trading_session
+        +bool is_paper_trade
+        +float|None rsi
+        +float|None macd_hist
+        +list~str~ reasoning
+    }
+
+    class ScreeningRecord {
+        +datetime timestamp
+        +str criteria
+        +str universe
+        +list~str~ top_symbols
+        +list~ScreeningResult~ candidates
+    }
+
+    class DiscoveryHistoryRecord {
+        +str symbol
+        +datetime discovered_at
+        +float composite_score
+        +list~DiscoverySource~ sources
+        +bool added_to_watchlist
+        +float|None outcome_7d
+        +float|None outcome_30d
     }
 
     DaemonState *-- "0..*" AnalysisRecord
+    DaemonState *-- "0..*" ScreeningRecord
+    DaemonState *-- "0..*" DiscoveryHistoryRecord
 
-    note for DaemonState "Auto-trims:\nanalyses: 1000 → 500\nerrors: 100 → 50"
+    note for DaemonState "Auto-trims:\nanalyses: 1000 → 500\nerrors: 100 → 50\nscreening_history: 30 days\nAll histories: configurable retention"
 ```
 
 **Persistence details:**
