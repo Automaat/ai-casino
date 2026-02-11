@@ -15,6 +15,7 @@ from src.models.llm import LLMClient
 if TYPE_CHECKING:
     from src.agents.base_researcher import ResearchDirection
     from src.agents.comparative import ComparativeAnalyst
+    from src.agents.critic import CriticAgent
     from src.agents.event_triage import EventTriageAgent
     from src.agents.fundamental import FundamentalAnalyst
     from src.agents.game_plan import GamePlanAgent
@@ -30,12 +31,29 @@ if TYPE_CHECKING:
     from src.agents.trump import TrumpAnalyst
     from src.agents.web_researcher import WebResearchAgent
     from src.coordinator.agent import TradingCoordinator
+    from src.coordinator.confirmation import TradeConfirmationHandler
+    from src.coordinator.pattern_analyzer import PatternAnalyzer
+    from src.daemon.notification_channels import TelegramChannel
     from src.daemon.state import DaemonState
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.models.sentiment import FinBERTSentiment
     from src.strategies.regime import MarketRegimeDetector
     from src.tools.websearch import WebSearchTool
+
+
+def create_critic_agent(llm_client: LLMClient) -> CriticAgent:
+    """Create CriticAgent with LLM client.
+
+    Args:
+        llm_client: LLM client for decision evaluation
+
+    Returns:
+        Configured CriticAgent
+    """
+    from src.agents.critic import CriticAgent
+
+    return CriticAgent(llm_client)
 
 
 def create_news_analyst(llm_client: LLMClient) -> NewsAnalyst:
@@ -307,6 +325,65 @@ def create_risk_management_agent(
     )
 
 
+def create_confirmation_handler(
+    daemon_config: DaemonConfig,
+    telegram_channel: TelegramChannel | None = None,
+) -> TradeConfirmationHandler | None:
+    """Create confirmation handler if Telegram enabled.
+
+    Args:
+        daemon_config: Daemon configuration
+        telegram_channel: Optional Telegram channel
+
+    Returns:
+        TradeConfirmationHandler if Telegram configured, None otherwise
+    """
+    if not telegram_channel or not telegram_channel.is_configured():
+        return None
+
+    from src.coordinator.confirmation import TradeConfirmationHandler
+
+    timeout = daemon_config.coordinator.approval_timeout_seconds
+    return TradeConfirmationHandler(
+        telegram_channel=telegram_channel,
+        approval_timeout_seconds=timeout,
+    )
+
+
+def create_pattern_analyzer(
+    daemon_config: DaemonConfig,
+    container: AppContainer,
+) -> PatternAnalyzer | None:
+    """Create pattern analyzer if enabled.
+
+    Args:
+        daemon_config: Daemon configuration
+        container: DI container for repositories
+
+    Returns:
+        PatternAnalyzer if pattern detection enabled, None otherwise
+    """
+    from src.coordinator.pattern_analyzer import PatternAnalyzer
+
+    if not daemon_config.coordinator.pattern_detection.enabled:
+        return None
+
+    # Get repositories from container
+    analysis_repo = container.analysis_repository()
+    trade_repo = container.trade_repository()
+
+    # Memory will be injected at runtime (not available at container build time)
+    # Pass None here and set it later when coordinator is created
+    min_sample_size = daemon_config.coordinator.pattern_detection.min_sample_size
+
+    return PatternAnalyzer(
+        analysis_repo=analysis_repo,
+        trade_repo=trade_repo,
+        memory=None,  # type: ignore[arg-type]  # Will be set by coordinator
+        min_sample_size=min_sample_size,
+    )
+
+
 def create_trading_coordinator(
     llm_client: LLMClient,
     daemon_config: DaemonConfig,
@@ -314,6 +391,9 @@ def create_trading_coordinator(
     daemon_state: DaemonState | None = None,
 ) -> TradingCoordinator:
     """Create TradingCoordinator with all dependencies.
+
+    If coordinator.model_override is set, creates dedicated LLM client with that model.
+    Otherwise uses default llm_client parameter.
 
     Args:
         llm_client: LLM client for tool calling
@@ -324,9 +404,12 @@ def create_trading_coordinator(
     Returns:
         Configured TradingCoordinator
     """
+    import os
+
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.memory import CoordinatorMemory
     from src.coordinator.tools import build_coordinator_registry
+    from src.di.config import resolve_config_or_env
 
     # Get dependencies for enhanced memory
     broker = container.alpaca_broker()
@@ -339,16 +422,56 @@ def create_trading_coordinator(
         broker=broker,
     )
 
-    # Build tool registry with enhanced memory
-    tool_registry = build_coordinator_registry(container, memory)
+    # Build temp tool registry without coordinator (for initial creation)
+    tool_registry_temp = build_coordinator_registry(container, memory, coordinator=None)
 
     # Extract coordinator config
     coordinator_config = daemon_config.coordinator
 
-    return TradingCoordinator(
-        llm_client=llm_client,
-        tool_registry=tool_registry,
+    # Apply model override if configured
+    if coordinator_config.model_override:
+        # Resolve API keys same way as create_llm_client
+        provider = daemon_config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+        api_key = None
+        if provider == "anthropic":
+            api_key = resolve_config_or_env(
+                daemon_config.api_keys.anthropic_api_key,
+                "ANTHROPIC_API_KEY",
+            )
+        elif provider == "openai":
+            api_key = resolve_config_or_env(
+                daemon_config.api_keys.openai_api_key,
+                "OPENAI_API_KEY",
+            )
+
+        coordinator_llm = LLMClient(
+            provider=provider,
+            model=coordinator_config.model_override,
+            api_key=api_key,
+            openai_base_url=resolve_config_or_env(
+                daemon_config.api_keys.openai_api_base,
+                "OPENAI_API_BASE",
+            ),
+        )
+    else:
+        coordinator_llm = llm_client
+
+    # Get critic agent
+    critic_agent = container.critic_agent()
+
+    # Create coordinator with temp registry
+    coordinator = TradingCoordinator(
+        llm_client=coordinator_llm,
+        tool_registry=tool_registry_temp,
         memory=memory,
         config=coordinator_config,
         broker=broker,
+        critic_agent=critic_agent,
     )
+
+    # Rebuild registry with coordinator reference for reflection tool
+    # Pass critic_agent to avoid creating duplicate instance
+    tool_registry = build_coordinator_registry(container, memory, coordinator, critic_agent)
+    coordinator._tools = tool_registry  # noqa: SLF001
+
+    return coordinator

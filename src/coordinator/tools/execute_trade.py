@@ -1,5 +1,6 @@
 """Execute trade tool for coordinator."""
 
+import asyncio
 from typing import TYPE_CHECKING, Final
 
 from loguru import logger
@@ -9,6 +10,7 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
+    from src.coordinator.confirmation import TradeConfirmationHandler
     from src.daemon.config import DaemonConfig
     from src.data.broker import AlpacaBroker
 
@@ -18,15 +20,22 @@ MIN_RATIONALE_LENGTH: Final[int] = 10
 class ExecuteTradeTool(BaseTool):
     """Tool to execute trades via broker."""
 
-    def __init__(self, broker: AlpacaBroker, daemon_config: DaemonConfig) -> None:
+    def __init__(
+        self,
+        broker: AlpacaBroker,
+        daemon_config: DaemonConfig,
+        confirmation_handler: TradeConfirmationHandler | None = None,
+    ) -> None:
         """Initialize tool with broker and config.
 
         Args:
             broker: Alpaca broker instance
             daemon_config: Daemon configuration for trading mode
+            confirmation_handler: Optional confirmation handler for manual mode
         """
         self._broker = broker
         self._daemon_config = daemon_config
+        self._confirmation_handler = confirmation_handler
 
     @property
     def name(self) -> str:
@@ -85,7 +94,7 @@ class ExecuteTradeTool(BaseTool):
         )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute trade order.
+        """Execute trade order (sync version).
 
         Args:
             **kwargs: Tool arguments (symbol: str, action: str, quantity: int,
@@ -138,6 +147,160 @@ class ExecuteTradeTool(BaseTool):
 
             if stop_loss_float is not None:
                 lines.append(f"**Stop Loss:** ${stop_loss_float:.2f}")
+
+            lines.extend(
+                [
+                    "",
+                    "## Rationale",
+                    rationale,
+                ]
+            )
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.error(f"Trade execution failed: {e}")
+            return f"Failed to execute trade: {e}"
+
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute trade order with async confirmation support.
+
+        Args:
+            **kwargs: Tool arguments (symbol: str, action: str, quantity: int,
+                     stop_loss_price: float | None, rationale: str)
+
+        Returns:
+            Order status with details or confirmation status
+        """
+        symbol = str(kwargs["symbol"]).upper()
+        action = str(kwargs["action"]).upper()
+        quantity = int(kwargs["quantity"])
+        stop_loss_price = kwargs.get("stop_loss_price")
+        rationale = str(kwargs["rationale"])
+
+        # Validate inputs (consolidated)
+        if validation_error := self._validate_inputs(quantity, action, rationale):
+            return validation_error
+
+        # Convert stop loss to float if provided
+        stop_loss_float = float(stop_loss_price) if stop_loss_price is not None else None
+
+        # Check if confirmation required
+        if confirmation_error := await self._handle_confirmation(
+            symbol, action, quantity, stop_loss_float, rationale
+        ):
+            return confirmation_error
+
+        # Execute trade
+        logger.info(f"Executing {action} order: {quantity} {symbol} (stop_loss={stop_loss_float})")
+        return await self._submit_order(symbol, action, quantity, stop_loss_float, rationale)
+
+    def _validate_inputs(self, quantity: int, action: str, rationale: str) -> str | None:
+        """Validate trade inputs.
+
+        Args:
+            quantity: Number of shares
+            action: Order action (BUY/SELL)
+            rationale: Trading rationale
+
+        Returns:
+            Error message if validation fails, None if valid
+        """
+        if quantity <= 0:
+            return "Error: Quantity must be positive"
+        if action not in ["BUY", "SELL"]:
+            return f"Error: Invalid action '{action}'. Must be BUY or SELL"
+        if len(rationale) < MIN_RATIONALE_LENGTH:
+            return f"Error: Rationale must be at least {MIN_RATIONALE_LENGTH} characters"
+        return None
+
+    async def _handle_confirmation(
+        self,
+        symbol: str,
+        action: str,
+        quantity: int,
+        stop_loss_price: float | None,
+        rationale: str,
+    ) -> str | None:
+        """Handle manual trade confirmation if required.
+
+        Args:
+            symbol: Stock ticker
+            action: Order action
+            quantity: Number of shares
+            stop_loss_price: Optional stop loss price
+            rationale: Trading rationale
+
+        Returns:
+            Error message if confirmation fails, None if approved or not required
+        """
+        if not (self.requires_confirmation and self._daemon_config.coordinator.confirmation_mode == "manual"):
+            return None
+
+        if not self._confirmation_handler:
+            return "Error: Manual confirmation mode enabled but no handler configured"
+
+        # Request approval via Telegram
+        logger.info(f"Requesting manual approval for {action} {quantity} {symbol}")
+        approved = await self._confirmation_handler.request_approval(
+            symbol=symbol,
+            action=action,
+            quantity=quantity,
+            stop_loss_price=stop_loss_price,
+            rationale=rationale,
+        )
+
+        if not approved:
+            logger.info(f"Trade {action} {quantity} {symbol} rejected or timed out")
+            return f"Trade {action} {quantity} {symbol} rejected by user or timed out"
+
+        logger.info(f"Trade {action} {quantity} {symbol} approved")
+        return None
+
+    async def _submit_order(
+        self,
+        symbol: str,
+        action: str,
+        quantity: int,
+        stop_loss_price: float | None,
+        rationale: str,
+    ) -> str:
+        """Submit order to broker.
+
+        Args:
+            symbol: Stock ticker
+            action: Order action
+            quantity: Number of shares
+            stop_loss_price: Optional stop loss price
+            rationale: Trading rationale
+
+        Returns:
+            Formatted order status
+        """
+        try:
+            # Submit order (offload to thread)
+            order_status = await asyncio.to_thread(
+                self._broker.submit_order,
+                symbol=symbol,
+                qty=quantity,
+                side=action.lower(),
+                stop_loss_price=stop_loss_price,
+            )
+
+            # Format output
+            lines = [
+                "# Trade Executed",
+                "",
+                f"**Order ID:** {order_status.order_id}",
+                f"**Symbol:** {order_status.symbol}",
+                f"**Action:** {order_status.side.upper()}",
+                f"**Quantity:** {order_status.qty}",
+                f"**Status:** {order_status.status}",
+                f"**Submitted:** {order_status.submitted_at.strftime('%Y-%m-%d %H:%M:%S')}",
+            ]
+
+            if stop_loss_price is not None:
+                lines.append(f"**Stop Loss:** ${stop_loss_price:.2f}")
 
             lines.extend(
                 [

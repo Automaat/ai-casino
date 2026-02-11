@@ -195,6 +195,11 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     # Agent providers
+    critic_agent = providers.Factory(
+        agent_providers.create_critic_agent,
+        llm_client=llm_client,
+    )
+
     news_analyst = providers.Factory(
         agent_providers.create_news_analyst,
         llm_client=llm_client,

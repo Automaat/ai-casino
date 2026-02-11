@@ -2,6 +2,7 @@
 
 from src.agents.base_researcher import BaseResearcher, ResearchDirection
 from src.agents.comparative import ComparativeAnalysis, ComparativeAnalyst
+from src.agents.critic import CriticAgent, CriticAnalysis
 from src.agents.fundamental import FundamentalAnalysis, FundamentalAnalyst
 from src.agents.journal import DailyJournal, TradeJournalAgent
 from src.agents.news import NewsAnalysis, NewsAnalyst
@@ -15,6 +16,8 @@ __all__ = [
     "BaseResearcher",
     "ComparativeAnalysis",
     "ComparativeAnalyst",
+    "CriticAgent",
+    "CriticAnalysis",
     "DailyJournal",
     "FundamentalAnalysis",
     "FundamentalAnalyst",

@@ -84,7 +84,15 @@ def mock_broker():
 
 
 @pytest.fixture
-def coordinator(mock_llm, mock_tool_registry, mock_memory, coordinator_config, mock_broker):
+def mock_critic_agent():
+    """Create mock critic agent."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def coordinator(
+    mock_llm, mock_tool_registry, mock_memory, coordinator_config, mock_broker, mock_critic_agent
+):
     """Create TradingCoordinator instance."""
     return TradingCoordinator(
         llm_client=mock_llm,
@@ -92,6 +100,7 @@ def coordinator(mock_llm, mock_tool_registry, mock_memory, coordinator_config, m
         memory=mock_memory,
         config=coordinator_config,
         broker=mock_broker,
+        critic_agent=mock_critic_agent,
     )
 
 
