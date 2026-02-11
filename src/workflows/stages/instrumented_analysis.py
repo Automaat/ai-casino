@@ -94,15 +94,10 @@ async def run_instrumented_analysis(  # noqa: PLR0913
     )
     _record_stage(collector, "backtest_validation", start)
 
-    # Create TechnicalAnalyst with selected strategy
-    if workflow._container:  # noqa: SLF001
-        technical_analyst = workflow._container.technical_analyst()(  # noqa: SLF001
-            strategy_output.strategy_instance
-        )
-    else:
-        from src.agents.technical import TechnicalAnalyst
-
-        technical_analyst = TechnicalAnalyst(workflow.llm_client, strategy_output.strategy_instance)
+    # Create TechnicalAnalyst with selected strategy via DI container
+    technical_analyst = workflow._container.technical_analyst()(  # noqa: SLF001
+        strategy_output.strategy_instance
+    )
 
     # Stage 5: Run analyses
     start = time.perf_counter()

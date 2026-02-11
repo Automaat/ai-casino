@@ -32,13 +32,14 @@ def create_test_workflow(
     snapshot_repository=None,
     metrics_tracker=None,
     notification_service=None,
+    snapshot_on_trade=False,
 ):
     """Helper to create TradingWorkflow with new config/components pattern."""
     config = WorkflowConfig(
         use_ensemble=use_ensemble,
         use_meta_agent=use_meta_agent,
         trump_mode=trump_mode,
-        snapshot_on_trade=None,
+        snapshot_on_trade=snapshot_on_trade,
         pre_trade_backtest_config=pre_trade_backtest_config,
     )
 

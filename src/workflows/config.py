@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from src.daemon.config import PositionSizingConfig
     from src.daemon.notifications import NotificationService
     from src.data.broker import AlpacaBroker
-    from src.data.finnhub import FinnhubFetcher
     from src.data.fundamental import FundamentalDataFetcher
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
@@ -67,7 +66,6 @@ class WorkflowComponents:
     historical_cache: HistoricalCache | None = None
     portfolio_var_calculator: PortfolioVaRCalculator | None = None
     portfolio_var_config: PortfolioVaRConfig | None = None
-    finnhub_fetcher: FinnhubFetcher | None = None
     notification_service: NotificationService | None = None
     position_sizing_config: PositionSizingConfig | None = None
 
@@ -81,8 +79,9 @@ class WorkflowComponents:
                 self.param_store is not None,
                 self.historical_cache is not None,
                 self.portfolio_var_calculator is not None,
-                self.finnhub_fetcher is not None,
+                self.portfolio_var_config is not None,
                 self.notification_service is not None,
+                self.position_sizing_config is not None,
             ]
         )
         return f"WorkflowComponents(required=6, optional={optional_count})"

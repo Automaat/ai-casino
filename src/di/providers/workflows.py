@@ -87,7 +87,6 @@ def create_workflow_meta(  # noqa: PLR0913
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        finnhub_fetcher=container.finnhub_fetcher(),
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
     )
@@ -138,7 +137,6 @@ def create_workflow_momentum(  # noqa: PLR0913
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        finnhub_fetcher=container.finnhub_fetcher(),
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
     )
@@ -189,7 +187,6 @@ def create_workflow_trump(  # noqa: PLR0913
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        finnhub_fetcher=container.finnhub_fetcher(),
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
     )
