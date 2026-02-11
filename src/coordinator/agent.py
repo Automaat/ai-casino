@@ -1,6 +1,9 @@
 """Autonomous trading coordinator using LLM tool calling."""
 
 import asyncio
+import json
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -9,6 +12,7 @@ from src.coordinator.memory import CoordinatorMemory
 from src.coordinator.models import CoordinatorConfig, CoordinatorCycleResult
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
+from src.strategies.session import TradingSession
 from src.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -64,12 +68,14 @@ class TradingCoordinator:
         self,
         watchlist: list[str],
         degradation_context: dict | None = None,
+        trading_session: TradingSession = TradingSession.REGULAR,
     ) -> CoordinatorCycleResult:
         """Run single coordinator cycle.
 
         Args:
             watchlist: List of symbols to consider
             degradation_context: Optional degradation warnings
+            trading_session: Trading session type (REGULAR or PRE_MARKET)
 
         Returns:
             CoordinatorCycleResult with summary and metrics
@@ -83,8 +89,8 @@ class TradingCoordinator:
 
         try:
             # Build prompts
-            system_prompt = await self._build_system_prompt(degradation_context)
-            user_prompt = self._build_cycle_prompt(watchlist)
+            system_prompt = await self._build_system_prompt(watchlist, degradation_context)
+            user_prompt = await self._build_cycle_prompt(watchlist, trading_session)
 
             # Get tool definitions
             tool_definitions = self._tools.get_definitions()
@@ -139,10 +145,11 @@ class TradingCoordinator:
                 game_plan_generated=self._game_plan_generated,
             )
 
-    async def _build_system_prompt(self, degradation_context: dict | None) -> str:
+    async def _build_system_prompt(self, watchlist: list[str], degradation_context: dict | None) -> str:
         """Build system prompt with context sections.
 
         Args:
+            watchlist: List of symbols to consider
             degradation_context: Optional degradation warnings
 
         Returns:
@@ -150,18 +157,21 @@ class TradingCoordinator:
         """
         # Retrieve recent memory
         recent_observations = await self._memory.retrieve_recent(limit=20)
-        memory_text = self._format_memory(recent_observations) if recent_observations else ""
+        memory_section = self._format_memory(recent_observations) if recent_observations else ""
 
         # Get portfolio context
-        portfolio_text = await self._get_portfolio_context()
+        portfolio_section = await self._get_portfolio_context()
 
         # Format degradation context
-        degradation_text = (
+        degradation_section = (
             self._format_degradation_context(degradation_context) if degradation_context else ""
         )
 
-        # Format risk limits
-        risk_text = self._format_risk_limits()
+        # Load game plan section
+        game_plan_section = self._load_game_plan_section()
+
+        # Get trading mode
+        trading_mode = self._get_trading_mode()
 
         # Load and format system prompt with all variables
         return self._prompts.load(
@@ -169,25 +179,43 @@ class TradingCoordinator:
             min_confidence_to_trade=self._config.min_confidence_to_trade,
             max_position_pct=self._config.max_position_pct,
             max_daily_trades=self._config.max_daily_trades,
-            memory_text=memory_text,
-            portfolio_text=portfolio_text,
-            degradation_text=degradation_text,
-            risk_text=risk_text,
+            max_tool_calls=self._config.max_tool_calls,
+            trading_mode=trading_mode,
+            watchlist=", ".join(watchlist),
+            memory_section=memory_section,
+            portfolio_section=portfolio_section,
+            degradation_section=degradation_section,
+            game_plan_section=game_plan_section,
         )
 
-    def _build_cycle_prompt(self, watchlist: list[str]) -> str:
-        """Build user prompt for cycle.
+    async def _build_cycle_prompt(
+        self,
+        watchlist: list[str],
+        trading_session: TradingSession = TradingSession.REGULAR,
+    ) -> str:
+        """Build cycle prompt with current context.
 
         Args:
             watchlist: List of symbols
+            trading_session: Trading session type (REGULAR or PRE_MARKET)
 
         Returns:
-            Formatted user prompt
+            Formatted cycle prompt
         """
+        positions_summary = await self._get_positions_summary()
+        current_date = datetime.now(UTC).strftime("%Y-%m-%d")
+        session_name = trading_session.value
+
         return self._prompts.load(
-            "user",
+            "cycle",
             watchlist=", ".join(watchlist),
             last_summary=self._last_cycle_summary,
+            positions_summary=positions_summary,
+            date=current_date,
+            session=session_name,
+            min_confidence_to_trade=self._config.min_confidence_to_trade,
+            max_position_pct=self._config.max_position_pct,
+            max_daily_trades=self._config.max_daily_trades,
         )
 
     async def _tool_executor(self, name: str, args: dict) -> str:
@@ -350,6 +378,89 @@ class TradingCoordinator:
             lines.append(f"\n{message}")
 
         return "\n".join(lines)
+
+    def _get_trading_mode(self) -> str:
+        """Derive trading mode from config.
+
+        Returns:
+            Trading mode description string
+        """
+        if self._config.confirmation_mode == "manual":
+            return "MANUAL (requires confirmation for trades)"
+        return "AUTO (trades execute automatically)"
+
+    def _load_game_plan_section(self) -> str:
+        """Load today's game plan and format as section.
+
+        Returns:
+            Formatted game plan section or empty string if not available
+        """
+        plan_dir = Path("~/.ai-casino/game-plans").expanduser()
+        today = datetime.now(UTC).date()
+        plan_file = plan_dir / f"{today}.json"
+
+        if not plan_file.exists():
+            return ""
+
+        try:
+            with plan_file.open() as f:
+                data = json.load(f)
+
+            # Build formatted section
+            priority = data.get("priority_symbols", [])
+            risk_stance = data.get("risk_stance", "NEUTRAL")
+            sector_focus = data.get("sector_focus", [])
+            confidence = data.get("confidence", 0.0)
+            reasoning = data.get("reasoning", "")
+            key_levels = data.get("key_levels", {})
+
+            lines = [
+                "\n## Today's Game Plan\n",
+                f"**Risk Stance:** {risk_stance}",
+                f"**Priority Symbols:** {', '.join(priority)}",
+                f"**Sector Focus:** {', '.join(sector_focus)}",
+                f"**Confidence:** {confidence:.0%}",
+                "",
+                "**Key Levels:**",
+            ]
+
+            for symbol, level in key_levels.items():
+                lines.append(f"- {symbol}: ${level:.2f}")
+
+            lines.extend(["", f"**Rationale:** {reasoning}"])
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"Failed to load game plan: {e}")
+            return ""
+
+    async def _get_positions_summary(self) -> str:
+        """Get current positions summary for cycle prompt.
+
+        Returns:
+            Formatted positions summary string
+        """
+        try:
+            account_info = await asyncio.to_thread(self._broker.get_account_info)
+
+            if not account_info.positions:
+                return "No open positions"
+
+            lines = [f"{len(account_info.positions)} open positions:"]
+            for symbol, pos in account_info.positions.items():
+                pnl_pct = pos.unrealized_pnl_percent
+                pnl_dollar = pos.unrealized_pnl
+                status = "profit" if pnl_dollar > 0 else "loss" if pnl_dollar < 0 else "flat"
+
+                lines.append(
+                    f"- {symbol}: {pos.qty} shares @ ${pos.avg_entry_price:.2f} "
+                    f"({status}: {pnl_pct:+.1f}% / ${pnl_dollar:+,.2f})"
+                )
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"Failed to get positions summary: {e}")
+            return "Positions data unavailable"
 
     def _format_risk_limits(self) -> str:
         """Format risk limits from config as markdown.

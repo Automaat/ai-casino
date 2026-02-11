@@ -366,29 +366,110 @@ async def test_build_system_prompt_complete(coordinator, mock_memory, mock_broke
 
     degradation_context = {"message": "Test degradation"}
 
-    result = await coordinator._build_system_prompt(degradation_context)
+    result = await coordinator._build_system_prompt(["AAPL", "TSLA"], degradation_context)
 
     assert "trading coordinator" in result.lower()
     assert "Test observation" in result
     assert "Test degradation" in result
     assert "$10,000.00" in result
+    assert "AAPL, TSLA" in result
 
 
-def test_build_cycle_prompt(coordinator):
+@pytest.mark.asyncio
+async def test_build_cycle_prompt(coordinator):
     """Test cycle prompt building."""
-    result = coordinator._build_cycle_prompt(["AAPL", "TSLA", "NVDA"])
+    result = await coordinator._build_cycle_prompt(["AAPL", "TSLA", "NVDA"])
 
     assert "AAPL, TSLA, NVDA" in result
     assert "No previous cycle" in result
+    assert "No open positions" in result
 
 
-def test_build_cycle_prompt_with_previous_summary(coordinator):
+@pytest.mark.asyncio
+async def test_build_cycle_prompt_with_previous_summary(coordinator):
     """Test cycle prompt with previous summary."""
     coordinator._last_cycle_summary = "Previous cycle executed 2 trades"
 
-    result = coordinator._build_cycle_prompt(["AAPL"])
+    result = await coordinator._build_cycle_prompt(["AAPL"])
 
     assert "Previous cycle executed 2 trades" in result
+
+
+def test_get_trading_mode_auto(coordinator):
+    """Test trading mode for auto confirmation."""
+    mode = coordinator._get_trading_mode()
+    assert "AUTO" in mode
+    assert "automatically" in mode
+
+
+def test_get_trading_mode_manual(coordinator):
+    """Test trading mode for manual confirmation."""
+    coordinator._config.confirmation_mode = "manual"
+    mode = coordinator._get_trading_mode()
+    assert "MANUAL" in mode
+    assert "confirmation" in mode
+
+
+def test_load_game_plan_section_missing_file(coordinator):
+    """Test game plan section returns empty string when file missing."""
+    section = coordinator._load_game_plan_section()
+    assert section == ""
+
+
+@pytest.mark.asyncio
+async def test_get_positions_summary_no_positions(coordinator, mock_broker):
+    """Test positions summary with no open positions."""
+    mock_broker.get_account_info.return_value.positions = {}
+    summary = await coordinator._get_positions_summary()
+    assert "No open positions" in summary
+
+
+@pytest.mark.asyncio
+async def test_get_positions_summary_with_positions(coordinator, mock_broker):
+    """Test positions summary with open positions."""
+    from src.data.broker import BrokerAccountInfo, BrokerPosition
+
+    mock_broker.get_account_info.return_value = BrokerAccountInfo(
+        balance=10000.0,
+        portfolio_value=12000.0,
+        available_cash=8000.0,
+        total_exposure=2000.0,
+        positions={
+            "AAPL": BrokerPosition(
+                symbol="AAPL",
+                qty=10.0,
+                market_value=1500.0,
+                avg_entry_price=150.0,
+                unrealized_pnl=100.0,
+                unrealized_pnl_percent=6.67,
+            )
+        },
+    )
+
+    summary = await coordinator._get_positions_summary()
+    assert "1 open positions" in summary
+    assert "AAPL" in summary
+    assert "10" in summary
+    assert "$150.00" in summary
+    assert "profit" in summary
+
+
+@pytest.mark.asyncio
+async def test_get_positions_summary_error(coordinator, mock_broker):
+    """Test positions summary error handling."""
+    mock_broker.get_account_info.side_effect = ValueError("Broker error")
+    summary = await coordinator._get_positions_summary()
+    assert "unavailable" in summary
+
+
+@pytest.mark.asyncio
+async def test_build_cycle_prompt_includes_date_and_session(coordinator):
+    """Test cycle prompt includes date and session context."""
+    from src.strategies.session import TradingSession
+
+    prompt = await coordinator._build_cycle_prompt(["AAPL", "TSLA"], TradingSession.PRE_MARKET)
+    assert "PRE_MARKET" in prompt
+    assert datetime.now().strftime("%Y-%m-%d") in prompt
 
 
 def test_repr(coordinator):
