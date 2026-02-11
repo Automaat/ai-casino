@@ -25,6 +25,7 @@ from src.workflows import TradingWorkflow
 
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent
+    from src.coordinator.agent import TradingCoordinator
     from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.event_bus import EventBus
@@ -72,7 +73,7 @@ class DaemonComponents:
     market_fetcher: MarketDataFetcher | None = None
     param_store: OptimizedParamStore | None = None
     profiler: CycleProfiler | None = None
-    coordinator: object | None = None  # TradingCoordinator (None if disabled)
+    coordinator: TradingCoordinator | None = None
 
 
 class DaemonFactory:
@@ -603,7 +604,7 @@ class DaemonFactory:
         components.analysis_orchestrator = orchestrator
         return orchestrator
 
-    def init_coordinator(self, components: DaemonComponents) -> object:
+    def init_coordinator(self, components: DaemonComponents) -> TradingCoordinator:
         """Initialize trading coordinator (lazy).
 
         Args:

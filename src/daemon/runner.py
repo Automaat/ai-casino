@@ -18,11 +18,14 @@ from src.daemon.notification_helper import DaemonNotificationHelper
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
+    from src.coordinator.agent import TradingCoordinator
+    from src.coordinator.models import CoordinatorCycleResult
     from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
+    from src.strategies.session import TradingSession
     from src.workflows import TradingWorkflow
 
 console = Console()
@@ -104,7 +107,7 @@ class DaemonRunner:
             self._components.game_plan_agent = self._game_plan_agent
         return self._components.game_plan_agent
 
-    def _init_coordinator(self) -> object:
+    def _init_coordinator(self) -> TradingCoordinator:
         """Initialize coordinator (lazy).
 
         Returns:
@@ -119,8 +122,8 @@ class DaemonRunner:
         self,
         watchlist: list[str],
         degradation_context: DegradationContext,
-        trading_session: object,
-    ) -> object:
+        trading_session: TradingSession,
+    ) -> CoordinatorCycleResult:
         """Run coordinator-driven cycle.
 
         Args:
@@ -147,7 +150,7 @@ class DaemonRunner:
                 ],
             }
 
-        return await coordinator.run_cycle(watchlist, degradation_dict, trading_session)  # type: ignore[attr-defined]
+        return await coordinator.run_cycle(watchlist, degradation_dict, trading_session)
 
     def _init_analysis_orchestrator(self) -> AnalysisOrchestrator:
         """Initialize analysis orchestrator (lazy)."""
