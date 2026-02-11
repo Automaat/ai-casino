@@ -123,6 +123,11 @@ project-excludes = [
     "tests/**",
 ]
 
+[tool.uv]
+# Restrict dependency resolution to Unix platforms (Linux/macOS)
+# Prevents Windows resolution failures in CI for platform-specific deps like riskfolio-lib
+environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
+
 [dependency-groups]
 dev = [
     "pip-audit>=2.10.0",
