@@ -125,6 +125,7 @@ class WebResearchAgent:
         Returns:
             List of WebResearchResult
         """
+
         # Wrap tasks to handle exceptions
         async def safe_research(cat: ResearchCategory) -> WebResearchResult | Exception:
             try:
@@ -204,6 +205,7 @@ class WebResearchAgent:
         Returns:
             List of WebResearchResult
         """
+
         # Wrap tasks to handle exceptions
         async def safe_research_template(cat: ResearchCategory) -> WebResearchResult | BaseException:
             try:

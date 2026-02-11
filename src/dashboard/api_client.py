@@ -422,7 +422,7 @@ class DaemonAPIClient:
         Returns:
             Dict with keys: positions, snapshots, rebalance
         """
-        # Wrap API calls to handle exceptions
+
         async def safe_get_positions() -> httpx.Response | Exception:
             try:
                 return await self._async_client.get(f"{self.api_url}/positions")
@@ -443,47 +443,14 @@ class DaemonAPIClient:
             except Exception as e:
                 return e
 
-        # Fetch in parallel using TaskGroup
         async with asyncio.TaskGroup() as tg:
             positions_task = tg.create_task(safe_get_positions())
             snapshots_task = tg.create_task(safe_get_snapshots())
             rebalance_task = tg.create_task(safe_get_rebalance())
 
-        # Extract results from tasks
-        positions_resp = positions_task.result()
-        snapshots_resp = snapshots_task.result()
-        rebalance_resp = rebalance_task.result()
-
-        positions = None
-        if isinstance(positions_resp, httpx.Response):
-            try:
-                positions_resp.raise_for_status()
-                positions = PositionsResponse.model_validate(positions_resp.json())
-            except Exception as e:
-                logger.warning(f"Failed to parse positions: {e}")
-        elif isinstance(positions_resp, Exception):
-            logger.warning(f"Failed to fetch positions: {positions_resp}")
-
-        snapshots = None
-        if isinstance(snapshots_resp, httpx.Response):
-            try:
-                snapshots_resp.raise_for_status()
-                snapshots = SnapshotsResponse.model_validate(snapshots_resp.json())
-            except Exception as e:
-                logger.warning(f"Failed to parse snapshots: {e}")
-        elif isinstance(snapshots_resp, Exception):
-            logger.warning(f"Failed to fetch snapshots: {snapshots_resp}")
-
-        rebalance = None
-        if isinstance(rebalance_resp, httpx.Response):
-            try:
-                rebalance_resp.raise_for_status()
-                data = rebalance_resp.json()
-                rebalance = RebalanceResponse.model_validate(data) if data else None
-            except Exception as e:
-                logger.warning(f"Failed to parse rebalance: {e}")
-        elif isinstance(rebalance_resp, Exception):
-            logger.warning(f"Failed to fetch rebalance: {rebalance_resp}")
+        positions = self._parse_positions(positions_task.result())
+        snapshots = self._parse_snapshots(snapshots_task.result())
+        rebalance = self._parse_rebalance(rebalance_task.result())
 
         return {"positions": positions, "snapshots": snapshots, "rebalance": rebalance}
 
@@ -531,6 +498,43 @@ class DaemonAPIClient:
                 _ = task
             else:
                 loop.run_until_complete(self._async_client.aclose())
+
+    def _parse_positions(self, response: httpx.Response | Exception) -> PositionsResponse | None:
+        """Parse positions response, handle errors."""
+        if isinstance(response, httpx.Response):
+            try:
+                response.raise_for_status()
+                return PositionsResponse.model_validate(response.json())
+            except Exception as e:
+                logger.warning(f"Failed to parse positions: {e}")
+        elif isinstance(response, Exception):
+            logger.warning(f"Failed to fetch positions: {response}")
+        return None
+
+    def _parse_snapshots(self, response: httpx.Response | Exception) -> SnapshotsResponse | None:
+        """Parse snapshots response, handle errors."""
+        if isinstance(response, httpx.Response):
+            try:
+                response.raise_for_status()
+                return SnapshotsResponse.model_validate(response.json())
+            except Exception as e:
+                logger.warning(f"Failed to parse snapshots: {e}")
+        elif isinstance(response, Exception):
+            logger.warning(f"Failed to fetch snapshots: {response}")
+        return None
+
+    def _parse_rebalance(self, response: httpx.Response | Exception) -> RebalanceResponse | None:
+        """Parse rebalance response, handle errors."""
+        if isinstance(response, httpx.Response):
+            try:
+                response.raise_for_status()
+                data = response.json()
+                return RebalanceResponse.model_validate(data) if data else None
+            except Exception as e:
+                logger.warning(f"Failed to parse rebalance: {e}")
+        elif isinstance(response, Exception):
+            logger.warning(f"Failed to fetch rebalance: {response}")
+        return None
 
     def __repr__(self) -> str:
         """String representation."""

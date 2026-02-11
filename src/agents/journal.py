@@ -3,6 +3,7 @@
 import asyncio
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -88,129 +89,22 @@ class TradeJournalAgent:
             DailyJournal with outcomes and LLM assessment
         """
         if not records:
-            logger.warning("No analysis records for journal generation")
-            return DailyJournal(
-                date=journal_date,
-                outcomes=[],
-                winners=[],
-                losers=[],
-                lessons=["No signals generated today"],
-                tomorrows_focus=["Generate trading signals"],
-                overall_assessment="No signals to evaluate",
-            )
+            return self._create_empty_journal(journal_date, "No signals generated today")
 
-        # Deduplicate: keep latest signal per symbol
-        latest_by_symbol: dict[str, AnalysisRecord] = {}
-        for record in records:
-            if (
-                record.symbol not in latest_by_symbol
-                or record.timestamp > latest_by_symbol[record.symbol].timestamp
-            ):
-                latest_by_symbol[record.symbol] = record
-
-        # Build outcomes by fetching closing prices (async with concurrency limit)
-        outcomes: list[SignalOutcome] = []
-        semaphore = asyncio.Semaphore(5)  # Limit concurrent fetches
-
-        async def fetch_outcome(symbol: str, record: AnalysisRecord) -> SignalOutcome | None:
-            async with semaphore:
-                try:
-                    market_data = await asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, 1)
-                    df = market_data.data
-                    if df.empty:
-                        logger.warning(f"No market data for {symbol}, skipping")
-                        return None
-
-                    price_open = float(df["Open"].iloc[-1])
-                    price_close = float(df["Close"].iloc[-1])
-                    price_change_pct = ((price_close - price_open) / price_open) * 100
-
-                    return SignalOutcome(
-                        symbol=symbol,
-                        signal=record.signal,
-                        confidence=record.confidence,
-                        price_open=price_open,
-                        price_close=price_close,
-                        price_change_pct=round(price_change_pct, 2),
-                        signal_correct=self._evaluate_signal(record.signal, price_change_pct),
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to fetch closing price for {symbol}: {e}")
-                    return None
-
-        # Wrap tasks to handle exceptions
-        async def safe_fetch_outcome(
-            symbol: str, record: AnalysisRecord
-        ) -> SignalOutcome | BaseException | None:
-            try:
-                return await fetch_outcome(symbol, record)
-            except BaseException as e:
-                return e
-
-        # Run fetches in parallel using TaskGroup
-        async with asyncio.TaskGroup() as tg:
-            task_results = [
-                tg.create_task(safe_fetch_outcome(symbol, record))
-                for symbol, record in latest_by_symbol.items()
-            ]
-
-        # Extract results from tasks
-        raw_outcomes = [task.result() for task in task_results]
-        outcomes = _filter_outcomes(raw_outcomes)
+        latest_by_symbol = self._deduplicate_records(records)
+        outcomes = await self._build_outcomes(latest_by_symbol)
 
         if not outcomes:
-            return DailyJournal(
-                date=journal_date,
-                outcomes=[],
-                winners=[],
-                losers=[],
-                lessons=["Could not fetch market data for any symbols"],
-                tomorrows_focus=["Check market data availability"],
-                overall_assessment="Unable to evaluate signals — no market data available",
-            )
+            return self._create_empty_journal(journal_date, "Could not fetch market data for any symbols")
 
-        # Build prompt
         correct_count = sum(1 for o in outcomes if o.signal_correct)
         accuracy_pct = round((correct_count / len(outcomes)) * 100, 1)
-        outcomes_text = self._format_outcomes(outcomes)
 
-        prompt = self._prompts.load(
-            "user",
-            date=str(journal_date),
-            outcomes_text=outcomes_text,
-            accuracy_pct=str(accuracy_pct),
-        )
-        system_prompt = self._prompts.load("system")
-
-        try:
-            llm_response = await self.llm.astructured(
-                prompt, JournalLLMResponse, system=system_prompt, temperature=0.5
-            )
-            winners = llm_response.winners
-            losers = llm_response.losers
-            lessons = llm_response.lessons
-            tomorrows_focus = llm_response.tomorrows_focus
-            overall_assessment = llm_response.overall_assessment
-        except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text: {e}")
-            response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
-            winners = [o.symbol for o in outcomes if o.signal_correct]
-            losers = [o.symbol for o in outcomes if not o.signal_correct]
-            lessons = [response[:500]]
-            tomorrows_focus = [o.symbol for o in outcomes if not o.signal_correct]
-            overall_assessment = response[:300]
+        journal_data = await self._get_llm_assessment(journal_date, outcomes, accuracy_pct)
 
         logger.info(f"Journal generated: {accuracy_pct}% accuracy across {len(outcomes)} symbols")
 
-        return DailyJournal(
-            date=journal_date,
-            outcomes=outcomes,
-            winners=winners,
-            losers=losers,
-            lessons=lessons,
-            tomorrows_focus=tomorrows_focus,
-            overall_assessment=overall_assessment,
-        )
+        return DailyJournal(date=journal_date, outcomes=outcomes, **journal_data)
 
     def _evaluate_signal(self, signal: str, price_change_pct: float) -> bool:
         """Evaluate if signal direction matched actual price movement.
@@ -315,6 +209,109 @@ class TradeJournalAgent:
         lines.append("")
 
         return "\n".join(lines)
+
+    def _create_empty_journal(self, journal_date: date, reason: str) -> DailyJournal:
+        """Create empty journal when no data available."""
+        logger.warning(f"Creating empty journal: {reason}")
+        return DailyJournal(
+            date=journal_date,
+            outcomes=[],
+            winners=[],
+            losers=[],
+            lessons=[reason],
+            tomorrows_focus=["Generate trading signals" if "signals" in reason else "Check market data"],
+            overall_assessment=f"No signals to evaluate — {reason.lower()}",
+        )
+
+    def _deduplicate_records(self, records: list[AnalysisRecord]) -> dict[str, AnalysisRecord]:
+        """Keep latest signal per symbol."""
+        latest_by_symbol: dict[str, AnalysisRecord] = {}
+        for record in records:
+            if (
+                record.symbol not in latest_by_symbol
+                or record.timestamp > latest_by_symbol[record.symbol].timestamp
+            ):
+                latest_by_symbol[record.symbol] = record
+        return latest_by_symbol
+
+    async def _build_outcomes(self, latest_by_symbol: dict[str, AnalysisRecord]) -> list[SignalOutcome]:
+        """Build outcomes by fetching closing prices (async with concurrency limit)."""
+        semaphore = asyncio.Semaphore(5)
+
+        async def fetch_outcome(symbol: str, record: AnalysisRecord) -> SignalOutcome | None:
+            async with semaphore:
+                try:
+                    market_data = await asyncio.to_thread(self.market_fetcher.fetch_daily, symbol, 1)
+                    df = market_data.data
+                    if df.empty:
+                        logger.warning(f"No market data for {symbol}, skipping")
+                        return None
+
+                    price_open = float(df["Open"].iloc[-1])
+                    price_close = float(df["Close"].iloc[-1])
+                    price_change_pct = ((price_close - price_open) / price_open) * 100
+
+                    return SignalOutcome(
+                        symbol=symbol,
+                        signal=record.signal,
+                        confidence=record.confidence,
+                        price_open=price_open,
+                        price_close=price_close,
+                        price_change_pct=round(price_change_pct, 2),
+                        signal_correct=self._evaluate_signal(record.signal, price_change_pct),
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to fetch closing price for {symbol}: {e}")
+                    return None
+
+        async def safe_fetch_outcome(
+            symbol: str, record: AnalysisRecord
+        ) -> SignalOutcome | BaseException | None:
+            try:
+                return await fetch_outcome(symbol, record)
+            except BaseException as e:
+                return e
+
+        async with asyncio.TaskGroup() as tg:
+            task_results = [
+                tg.create_task(safe_fetch_outcome(symbol, record))
+                for symbol, record in latest_by_symbol.items()
+            ]
+
+        raw_outcomes = [task.result() for task in task_results]
+        return _filter_outcomes(raw_outcomes)
+
+    async def _get_llm_assessment(
+        self, journal_date: date, outcomes: list[SignalOutcome], accuracy_pct: float
+    ) -> dict[str, Any]:
+        """Get LLM assessment of outcomes."""
+        outcomes_text = self._format_outcomes(outcomes)
+        prompt = self._prompts.load(
+            "user", date=str(journal_date), outcomes_text=outcomes_text, accuracy_pct=str(accuracy_pct)
+        )
+        system_prompt = self._prompts.load("system")
+
+        try:
+            llm_response = await self.llm.astructured(
+                prompt, JournalLLMResponse, system=system_prompt, temperature=0.5
+            )
+            return {
+                "winners": llm_response.winners,
+                "losers": llm_response.losers,
+                "lessons": llm_response.lessons,
+                "tomorrows_focus": llm_response.tomorrows_focus,
+                "overall_assessment": llm_response.overall_assessment,
+            }
+        except StructuredOutputError as e:
+            logger.warning(f"Structured output failed, falling back to text: {e}")
+            response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
+            return {
+                "winners": [o.symbol for o in outcomes if o.signal_correct],
+                "losers": [o.symbol for o in outcomes if not o.signal_correct],
+                "lessons": [response[:500]],
+                "tomorrows_focus": [o.symbol for o in outcomes if not o.signal_correct],
+                "overall_assessment": response[:300],
+            }
 
     def __repr__(self) -> str:
         """String representation."""

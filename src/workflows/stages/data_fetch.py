@@ -7,6 +7,7 @@ import zoneinfo
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import pandas as pd
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 from src.agents.risk import AccountInfo
 from src.data.broker import BrokerAccountInfo, BrokerAPIError
 from src.data.market import MarketData
-from src.data.truth_social import TrumpPostData
+from src.data.truth_social import TrumpPostData, TruthPost
 from src.strategies.session import TradingSession
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
 from src.workflows.models.account import AccountInfoOutput
@@ -33,6 +34,78 @@ def _is_market_hours() -> bool:
     """Check if currently within market hours (4am-8pm ET)."""
     now = datetime.now(ET_TIMEZONE)
     return MARKET_HOURS_START <= now.hour < MARKET_HOURS_END
+
+
+async def _fetch_all_data(  # noqa: PLR0913
+    symbol: str,
+    period_days: int,
+    use_multi_timeframe: bool,
+    enable_multi_timeframe: bool,
+    market_fetcher: MarketDataFetcher,
+    news_fetcher: NewsFetcher,
+    trump_mode: bool,
+    trump_fetcher: TruthSocialFetcher | None,
+) -> tuple[MarketData | MultiTimeframeData, list, TrumpPostData | None]:
+    """Fetch market, news, and Trump data in parallel."""
+
+    async def fetch_market() -> MarketData | MultiTimeframeData:
+        if use_multi_timeframe:
+            logger.info("Multi-timeframe mode enabled (market hours)")
+            return await market_fetcher.fetch_multi_timeframe(
+                symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
+            )
+        if enable_multi_timeframe:
+            logger.info("Multi-timeframe requested but outside market hours, using daily only")
+        return await asyncio.to_thread(market_fetcher.fetch_daily, symbol, period_days)
+
+    async def fetch_news_safe() -> list:
+        try:
+            return await asyncio.to_thread(news_fetcher.fetch_company_news, symbol, limit=10)
+        except Exception as e:
+            logger.warning(f"News fetch failed, continuing with empty news: {e}")
+            return []
+
+    async def fetch_trump_safe() -> TrumpPostData | None:
+        if not trump_fetcher:
+            return None
+        try:
+            return await asyncio.to_thread(trump_fetcher.fetch_recent, hours=24)
+        except Exception as e:
+            logger.warning(f"Failed to fetch Trump posts: {e}")
+            return None
+
+    async with asyncio.TaskGroup() as tg:
+        market_task = tg.create_task(fetch_market())
+        news_task = tg.create_task(fetch_news_safe())
+        trump_task = tg.create_task(fetch_trump_safe()) if trump_mode and trump_fetcher else None
+
+    news_result = news_task.result()
+    assert isinstance(news_result, list)  # noqa: S101
+    trump_data = trump_task.result() if trump_task else None
+
+    return market_task.result(), news_result, trump_data
+
+
+def _process_fetch_results(
+    market_result: MarketData | MultiTimeframeData,
+    trump_data: TrumpPostData | None,
+    use_multi_timeframe: bool,
+) -> tuple[pd.DataFrame | MultiTimeframeData, list[TruthPost] | None]:
+    """Process fetched data and extract relevant fields."""
+    if use_multi_timeframe:
+        assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
+        market_data: pd.DataFrame | MultiTimeframeData = market_result
+    else:
+        assert isinstance(market_result, MarketData)  # noqa: S101
+        market_data = market_result.data
+
+    trump_posts = None
+    if trump_data:
+        assert isinstance(trump_data, TrumpPostData)  # noqa: S101
+        trump_posts = trump_data.posts
+        logger.info(f"Fetched {len(trump_posts)} Trump posts")
+
+    return market_data, trump_posts
 
 
 async def fetch_data(  # noqa: PLR0913
@@ -61,67 +134,20 @@ async def fetch_data(  # noqa: PLR0913
         FetchDataOutput with market and news data
     """
     logger.info("Fetching market and news data")
-
-    # Capture market hours decision once to avoid race condition
     use_multi_timeframe = enable_multi_timeframe and _is_market_hours()
 
-    # Prepare parallel tasks
-    if use_multi_timeframe:
-        logger.info("Multi-timeframe mode enabled (market hours)")
-        market_task = market_fetcher.fetch_multi_timeframe(
-            symbol, [Timeframe.DAILY, Timeframe.HOURLY], period_days
-        )
-    else:
-        if enable_multi_timeframe and not use_multi_timeframe:
-            logger.info("Multi-timeframe requested but outside market hours, using daily only")
-        market_task = asyncio.to_thread(market_fetcher.fetch_daily, symbol, period_days)
+    market_result, news_result, trump_data = await _fetch_all_data(
+        symbol,
+        period_days,
+        use_multi_timeframe,
+        enable_multi_timeframe,
+        market_fetcher,
+        news_fetcher,
+        trump_mode,
+        trump_fetcher,
+    )
 
-    # Wrap optional tasks to handle failures gracefully
-    async def fetch_news_safe() -> list:
-        try:
-            return await asyncio.to_thread(news_fetcher.fetch_company_news, symbol, limit=10)
-        except Exception as e:
-            logger.warning(f"News fetch failed, continuing with empty news: {e}")
-            return []
-
-    async def fetch_trump_safe() -> TrumpPostData | None:
-        if not trump_fetcher:
-            return None
-        try:
-            return await asyncio.to_thread(trump_fetcher.fetch_recent, hours=24)
-        except Exception as e:
-            logger.warning(f"Failed to fetch Trump posts: {e}")
-            return None
-
-    # Execute in parallel using TaskGroup
-    async with asyncio.TaskGroup() as tg:
-        market_task_result = tg.create_task(market_task)
-        news_task_result = tg.create_task(fetch_news_safe())
-        trump_task_result = tg.create_task(fetch_trump_safe()) if trump_mode and trump_fetcher else None
-
-    # Extract market data (will raise if failed)
-    market_result = market_task_result.result()
-    if use_multi_timeframe:
-        # fetch_multi_timeframe returns MultiTimeframeData
-        assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
-        market_data = market_result
-    else:
-        # fetch_daily returns MarketData with .data attribute
-        assert isinstance(market_result, MarketData)  # noqa: S101
-        market_data = market_result.data
-
-    # Extract news data (already handled exceptions, always returns list)
-    news_result = news_task_result.result()
-    assert isinstance(news_result, list)  # noqa: S101
-
-    # Extract trump data
-    trump_posts = None
-    if trump_task_result:
-        trump_data = trump_task_result.result()
-        if trump_data:
-            assert isinstance(trump_data, TrumpPostData)  # noqa: S101
-            trump_posts = trump_data.posts
-            logger.info(f"Fetched {len(trump_posts)} Trump posts")
+    market_data, trump_posts = _process_fetch_results(market_result, trump_data, use_multi_timeframe)
 
     return FetchDataOutput(
         symbol=symbol,
