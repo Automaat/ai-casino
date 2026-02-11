@@ -51,6 +51,17 @@ def mock_memory():
     """Create mock coordinator memory."""
     mock = AsyncMock()
     mock.retrieve_recent = AsyncMock(return_value=[])
+    mock.get_today_summary = AsyncMock(return_value="No analyses today")
+    mock.get_today_game_plan = AsyncMock(return_value="Game plan unavailable")
+    mock.get_portfolio_summary = AsyncMock(
+        return_value=(
+            "## Current Portfolio\n"
+            "- **Balance**: $10,000.00\n"
+            "- **Portfolio Value**: $10,000.00\n"
+            "- **Available Cash**: $10,000.00\n"
+            "- **Total Exposure**: $0.00 (0.0%)"
+        )
+    )
     return mock
 
 

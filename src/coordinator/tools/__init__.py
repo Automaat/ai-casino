@@ -4,24 +4,20 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.coordinator.memory import CoordinatorMemory
-    from src.daemon.state import DaemonState
     from src.di.container import AppContainer
     from src.tools.registry import ToolRegistry
 
 
 def build_coordinator_registry(
     container: AppContainer,
-    daemon_state: DaemonState | None = None,
     memory: CoordinatorMemory | None = None,
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
 
-    Includes 7 coordinator-specific tools + 2 reused tools from src/tools.
-    AnalysisHistoryTool is only registered if daemon_state is provided.
+    Includes 8 coordinator-specific tools + 2 reused tools from src/tools.
 
     Args:
         container: DI container for dependency resolution
-        daemon_state: Optional daemon state for analysis history
         memory: Optional shared memory (creates new if None)
 
     Returns:
@@ -57,14 +53,12 @@ def build_coordinator_registry(
     registry.register(PortfolioStatusTool(broker))
     registry.register(ExecuteTradeTool(broker, daemon_config))
 
-    # Register analysis history tool only if daemon_state is available
-    if daemon_state is not None:
-        registry.register(AnalysisHistoryTool(daemon_state))
-
     # Use provided memory or create new
     if memory is None:
         memory = CoordinatorMemory()
 
+    # Register analysis history tool with memory (always registered)
+    registry.register(AnalysisHistoryTool(memory))
     registry.register(SaveObservationTool(memory))
 
     return registry

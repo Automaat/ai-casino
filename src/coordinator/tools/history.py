@@ -1,5 +1,6 @@
 """Analysis history tool for coordinator."""
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -8,19 +9,19 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
-    from src.daemon.state import DaemonState
+    from src.coordinator.memory import CoordinatorMemory
 
 
 class AnalysisHistoryTool(BaseTool):
-    """Tool to retrieve recent analysis history."""
+    """Tool to retrieve historical analysis from database via memory layer."""
 
-    def __init__(self, daemon_state: DaemonState) -> None:
-        """Initialize tool with daemon state.
+    def __init__(self, memory: CoordinatorMemory) -> None:
+        """Initialize tool with coordinator memory.
 
         Args:
-            daemon_state: Daemon state instance
+            memory: Coordinator memory instance
         """
-        self._state = daemon_state
+        self._memory = memory
 
     @property
     def name(self) -> str:
@@ -37,79 +38,50 @@ class AnalysisHistoryTool(BaseTool):
             function=ToolFunction(
                 name=self.name,
                 description=(
-                    "Retrieve recent analysis history with signals, confidence, execution status, "
-                    "and technical indicators (RSI/MACD). Useful for understanding recent trading activity."
+                    "Retrieve historical analysis for a specific symbol from database. "
+                    "Shows signals, confidence, execution status, and technical indicators (RSI/MACD). "
+                    "Useful for understanding past trading decisions and patterns for a symbol."
                 ),
                 parameters=ToolParametersSchema(
                     properties={
-                        "limit": ToolParameter(
-                            type="integer",
-                            description="Maximum number of records to retrieve (default: 10, max: 50)",
-                        ),
-                        "symbol_filter": ToolParameter(
+                        "symbol": ToolParameter(
                             type="string",
-                            description="Optional symbol filter (e.g., AAPL)",
+                            description="Stock ticker symbol (required, e.g., AAPL)",
+                        ),
+                        "days": ToolParameter(
+                            type="integer",
+                            description="Number of days to look back (default: 7, max: 30)",
                         ),
                     },
-                    required=[],
+                    required=["symbol"],
                 ),
             ),
         )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute analysis history retrieval.
+        """Execute analysis history retrieval for specific symbol.
 
         Args:
-            **kwargs: Tool arguments (limit: int = 10, symbol_filter: str = None)
+            **kwargs: Tool arguments (symbol: str required, days: int = 7)
 
         Returns:
             Formatted analysis history
         """
-        limit = min(int(kwargs.get("limit", 10)), 50)
-        symbol_filter = kwargs.get("symbol_filter")
+        symbol = kwargs.get("symbol")
+        if not symbol or not isinstance(symbol, str):
+            return "Error: symbol parameter is required"
 
-        logger.info(f"Retrieving analysis history (limit={limit}, symbol={symbol_filter})")
+        days = min(int(kwargs.get("days", 7)), 30)  # Cap at 30 days
+
+        logger.info(f"Retrieving analysis history for {symbol} (last {days} days)")
 
         try:
-            # Filter and limit records
-            records = self._state.analyses
-            if symbol_filter:
-                records = [r for r in records if r.symbol.upper() == str(symbol_filter).upper()]
-
-            # Get most recent records
-            recent = records[-limit:] if len(records) > limit else records
-            recent.reverse()  # Most recent first
-
-            if not recent:
-                return "No analysis history found"
-
-            lines = [
-                "# Analysis History",
-                "",
-            ]
-
-            for i, record in enumerate(recent, 1):
-                executed = "✓" if record.executed_trade else "✗"
-                rsi_text = f"RSI: {record.rsi:.1f}" if record.rsi is not None else "RSI: N/A"
-                macd_text = f"MACD: {record.macd_hist:.4f}" if record.macd_hist is not None else "MACD: N/A"
-
-                lines.extend(
-                    [
-                        f"## {i}. {record.symbol} - {record.signal}",
-                        f"- **Timestamp:** {record.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
-                        f"- **Confidence:** {record.confidence:.0%}",
-                        f"- **Executed:** {executed}",
-                        f"- **Session:** {record.trading_session.value}",
-                        f"- **Indicators:** {rsi_text} | {macd_text}",
-                        "",
-                    ]
-                )
-
-            return "\n".join(lines)
+            # Delegate to memory layer (handles async to sync conversion)
+            return asyncio.run(self._memory.get_analysis_history(symbol, days=days))
 
         except Exception as e:
-            logger.error(f"Analysis history retrieval failed: {e}")
-            return f"Failed to retrieve analysis history: {e}"
+            logger.error(f"Analysis history retrieval failed for {symbol}: {e}")
+            return f"Failed to retrieve analysis history for {symbol}: {e}"
 
     def __repr__(self) -> str:
         """String representation."""

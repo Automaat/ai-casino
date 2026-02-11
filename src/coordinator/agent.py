@@ -159,16 +159,15 @@ class TradingCoordinator:
         recent_observations = await self._memory.retrieve_recent(limit=20)
         memory_section = self._format_memory(recent_observations) if recent_observations else ""
 
-        # Get portfolio context
-        portfolio_section = await self._get_portfolio_context()
+        # Get medium-term memory context from memory layer
+        today_summary_section = await self._memory.get_today_summary(max_tokens=500)
+        today_game_plan_section = await self._memory.get_today_game_plan(max_tokens=300)
+        portfolio_section = await self._memory.get_portfolio_summary(max_tokens=400)
 
         # Format degradation context
         degradation_section = (
             self._format_degradation_context(degradation_context) if degradation_context else ""
         )
-
-        # Load game plan section
-        game_plan_section = self._load_game_plan_section()
 
         # Get trading mode
         trading_mode = self._get_trading_mode()
@@ -183,9 +182,10 @@ class TradingCoordinator:
             trading_mode=trading_mode,
             watchlist=", ".join(watchlist),
             memory_section=memory_section,
+            today_summary_section=today_summary_section,
+            today_game_plan_section=today_game_plan_section,
             portfolio_section=portfolio_section,
             degradation_section=degradation_section,
-            game_plan_section=game_plan_section,
         )
 
     async def _build_cycle_prompt(
