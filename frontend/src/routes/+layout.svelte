@@ -8,14 +8,16 @@
 		{ id: 'overview', label: 'Overview', href: '/' },
 		{ id: 'portfolio', label: 'Portfolio', href: '/portfolio' },
 		{ id: 'signals', label: 'Signals', href: '/signals' },
-		{ id: 'risk', label: 'Risk', href: '/risk' }
+		{ id: 'risk', label: 'Risk', href: '/risk' },
+		{ id: 'config', label: 'Config', href: '/config' }
 	];
 
 	$: currentPath = $page.url.pathname;
-	$: activeTab = currentPath === '/' ? 'overview' 
+	$: activeTab = currentPath === '/' ? 'overview'
 		: currentPath.startsWith('/portfolio') ? 'portfolio'
 		: currentPath.startsWith('/signals') ? 'signals'
 		: currentPath.startsWith('/risk') ? 'risk'
+		: currentPath.startsWith('/config') ? 'config'
 		: 'overview';
 
 	$: daemonStatus = $health?.daemon_running ? 'Running' : 'Stopped';
