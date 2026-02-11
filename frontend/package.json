@@ -32,8 +32,7 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
-		"echarts": "^5.6.0",
-		"lightweight-charts": "^5.1.0",
-		"svelte-echarts": "^1.0.0"
+		"echarts": "^6.0.0",
+		"lightweight-charts": "^5.1.0"
 	}
 }
