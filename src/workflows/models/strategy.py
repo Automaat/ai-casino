@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.agents.meta import StrategySelection
 from src.strategies.regime import RegimeAnalysis
@@ -18,10 +18,7 @@ class StrategySelectionInput(BaseModel):
     symbol: str
     market_data: pd.DataFrame | MultiTimeframeData | None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def get_daily_data(self) -> pd.DataFrame:
         """Extract daily timeframe data from market data.
@@ -52,7 +49,4 @@ class StrategySelectionOutput(BaseModel):
     regime_analysis: RegimeAnalysis | None
     strategy_selection: StrategySelection | None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

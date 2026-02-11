@@ -132,12 +132,11 @@ class ScreeningTask(TaskExecutor):
 
     async def execute(self) -> None:
         """Execute screening logic."""
-        from src.data.universe import StockUniverseFetcher
         from src.screening.exporter import ScreeningExporter
         from src.screening.screener import ScreeningCriteria, StockScreener
 
         # Initialize screener
-        universe_fetcher = StockUniverseFetcher()
+        universe_fetcher = self.components.container.stock_universe_fetcher()
         screener = StockScreener(universe_fetcher)
 
         # Parse criteria

@@ -275,8 +275,8 @@ async def _build_and_persist_result(  # noqa: PLR0913
         trading_session: Trading session type
         collector: Optional metrics collector
     """
+    from src.metrics.db_tracker import DatabaseMetricsTracker
     from src.metrics.execution import persist_jsonl
-    from src.metrics.tracker import DatabaseMetricsTracker
 
     execution_metrics = collector.finalize() if collector else None
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
@@ -22,7 +22,4 @@ class FetchDataOutput(BaseModel):
     enable_multi_timeframe: bool
     warnings: list[str] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

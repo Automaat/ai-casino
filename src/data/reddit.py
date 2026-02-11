@@ -195,6 +195,9 @@ class RedditFetcher:
 
         self._cache_dir = Path(cache_dir or "data/cache/reddit")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
+        # Dual caching design (intentional):
+        # - Cache (diskcache): API responses with 5-15min TTL for volatility
+        # - HistoricalCache (SQLite): Parsed posts, permanent cross-session deduplication
         self._cache = Cache(str(self._cache_dir))
         self._historical_cache = historical_cache
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.risk import RiskAssessment
 from src.agents.trader import TradingDecision
@@ -18,10 +18,7 @@ class TradeExecutionInput(BaseModel):
     risk_assessment: RiskAssessment
     trading_session: TradingSession
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class TradeExecutionOutput(BaseModel):
@@ -30,7 +27,4 @@ class TradeExecutionOutput(BaseModel):
     order_status: OrderStatus | None
     warnings: list[str] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
