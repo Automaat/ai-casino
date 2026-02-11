@@ -83,9 +83,9 @@ class TradingStateManager(StateManager):
             try:
                 task = asyncio.create_task(self._analysis_repository.create(record))  # type: ignore[bad-argument-type]
                 task.add_done_callback(_log_task_exception)
-                logger.debug(f"Persisted analysis record to database: {symbol} {signal}")
+                logger.debug(f"Scheduled analysis record persistence to database: {symbol} {signal}")
             except Exception as e:
-                logger.error(f"Failed to persist analysis record to database: {e}")
+                logger.error(f"Failed to schedule analysis record persistence: {e}")
                 raise
 
         # Keep in-memory list (capped for transition period)

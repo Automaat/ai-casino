@@ -52,7 +52,8 @@ class SnapshotStateManager(StateManager):
                 task = asyncio.create_task(self._snapshot_repository.create(db_snapshot))
                 task.add_done_callback(_log_task_exception)
                 logger.info(
-                    f"Created portfolio snapshot: {snapshot.trigger} value={snapshot.portfolio_value}"
+                    f"Scheduled portfolio snapshot persistence: {snapshot.trigger} "
+                    f"value={snapshot.portfolio_value}"
                 )
             except Exception as e:
                 logger.error(f"Failed to persist portfolio snapshot to database: {e}")

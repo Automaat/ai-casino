@@ -58,9 +58,9 @@ class DiscoveryStateManager(StateManager):
                 try:
                     task = asyncio.create_task(self._discovery_repository.create(history_record))  # type: ignore[bad-argument-type]
                     task.add_done_callback(_log_task_exception)
-                    logger.debug(f"Persisted discovery history to database: {candidate.symbol}")
+                    logger.debug(f"Scheduled discovery history persistence to database: {candidate.symbol}")
                 except Exception as e:
-                    logger.error(f"Failed to persist discovery history to database: {e}")
+                    logger.error(f"Failed to schedule discovery history persistence: {e}")
                     raise
 
             # Keep in-memory list (capped for transition period)
