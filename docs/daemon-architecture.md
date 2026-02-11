@@ -6,12 +6,29 @@ System-level architecture of the AI Casino daemon mode: component relationships,
 
 ```mermaid
 graph TD
+    subgraph DI Container
+        Container[AppContainer]
+    end
+
     subgraph Daemon Layer
         DR[DaemonRunner]
+        DCO[DaemonCycleOrchestrator]
         TW[TrumpWatcher]
         MS[MarketScheduler]
         DS[DaemonState]
         DC[DaemonConfig]
+        CB[DaemonContextBuilder]
+    end
+
+    subgraph Data Layer
+        Cache[HistoricalCache]
+        DB[Database]
+        MF[MarketDataFetcher]
+        NF[NewsFetcher]
+        FF[FinnhubFetcher]
+        RF[RedditFetcher]
+        TSF[TruthSocialFetcher]
+        FDF[FundamentalDataFetcher]
     end
 
     subgraph Orchestration
@@ -37,22 +54,35 @@ graph TD
         RM[RiskManagementAgent]
     end
 
-    subgraph Execution
+    subgraph Execution & Tracking
         AB[AlpacaBroker]
         MT[MetricsTracker]
         PSR[PortfolioSnapshotRepository]
+        AR[AnalysisRepository]
+        PR[PositionRepository]
     end
+
+    Container --> DR
+    Container --> TradingWorkflow
+    Container --> Cache
+    Container --> DB
 
     DR --> DC
     DR --> MS
     DR --> DS
-    DR --> TradingWorkflow
+    DR --> DCO
+    DR --> CB
 
+    DCO --> TradingWorkflow
     TW --> TradingWorkflow
     TW --> TRA
 
     MS --> DC
 
+    TradingWorkflow --> Cache
+    TradingWorkflow --> MF
+    TradingWorkflow --> NF
+    TradingWorkflow --> TSF
     TradingWorkflow --> MetaAgent
     TradingWorkflow --> TA
     TradingWorkflow --> SA
@@ -69,6 +99,18 @@ graph TD
     TradingWorkflow --> AB
     TradingWorkflow --> MT
     TradingWorkflow --> PSR
+    TradingWorkflow --> AR
+
+    MF --> Cache
+    NF --> Cache
+    SSA --> FF
+    SSA --> RF
+    FA --> FDF
+    CA --> FDF
+
+    PSR --> DB
+    AR --> DB
+    PR --> DB
 ```
 
 ## DaemonRunner Lifecycle
@@ -176,20 +218,37 @@ graph LR
         LS --> L5[LLM Call 5]
     end
 
+    subgraph Data Layer
+        Cache[HistoricalCache<br/>threading.Lock]
+        DBPool[Database Pool<br/>async sessions]
+    end
+
     S1 --> LS
     S2 --> LS
     S3 --> LS
     T1 --> LS
     T2 --> LS
+
+    S1 --> Cache
+    S2 --> Cache
+    S3 --> Cache
+    T1 --> Cache
+    T2 --> Cache
+
+    S1 --> DBPool
+    S2 --> DBPool
+    S3 --> DBPool
 ```
 
-| Semaphore | Default Limit | Configurable | Source |
+| Semaphore/Lock | Default Limit | Configurable | Source |
 |---|---|---|---|
 | Daemon concurrent analyses | 3 | `max_concurrent_analyses` in config | `runner.py` |
 | Trump concurrent analyses | 2 | No (hardcoded) | `trump_watcher.py` |
 | LLM concurrent calls | 5 | `LLM_MAX_CONCURRENT` env var (1-20) | `models/llm.py` |
+| HistoricalCache | threading.Lock (shared singleton) | No | `data/cache.py` |
+| Database sessions | async pool (per-request sessions) | No | `database/engine.py` |
 
-All semaphores use `asyncio.Semaphore`; concurrency is async, with blocking market/news (and optional Truth Social) fetches offloaded to a thread pool via `asyncio.to_thread(...)`.
+All semaphores use `asyncio.Semaphore`; concurrency is async, with blocking market/news (and optional Truth Social) fetches offloaded to a thread pool via `asyncio.to_thread(...)`. HistoricalCache uses `threading.Lock` for thread-safe access. Database uses async sessions from connection pool.
 
 ## Trading Sessions Timeline
 
