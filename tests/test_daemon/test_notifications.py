@@ -250,7 +250,7 @@ class TestNotificationFormatter:
 
         result = NotificationFormatter.format_for_telegram(message)
         assert "⚠️" in result
-        assert "alpha_vantage" in result
+        assert "alpha\\_vantage" in result
         assert "marketaux" in result
 
     def test_format_health_failure_degradation(self) -> None:
@@ -271,5 +271,5 @@ class TestNotificationFormatter:
 
         result = NotificationFormatter.format_for_telegram(message)
         assert "⚠️" in result
-        assert "alpha_vantage" in result
+        assert "alpha\\_vantage" in result
         assert "marketaux" in result
