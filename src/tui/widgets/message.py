@@ -86,7 +86,7 @@ class AssistantMessage(SelectionSafeMixin, Static):
     def _update_display(self) -> None:
         """Update displayed content with markdown rendering."""
         try:
-            content = self.message_content if self.message_content else "..."
+            content = self.message_content or "..."
             # Render markdown content with Rich
             rendered = RichMarkdown(content)
             self.update(rendered)

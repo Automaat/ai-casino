@@ -600,20 +600,24 @@ Type freely to chat about markets or ask questions."""
             /candidates add SYM...   - add candidates to watchlist
             /candidates clear        - clear old candidates
         """
+        import asyncio
         from pathlib import Path
 
         from src.daemon.config import DaemonConfig
         from src.daemon.state import DaemonState
 
         # Load daemon state
-        config_path = Path("~/.ai-casino/daemon.yaml").expanduser()
-        if config_path.exists():
-            config = DaemonConfig.from_yaml(config_path)
-            state_file = config.state.state_file
-        else:
-            state_file = "~/.ai-casino/daemon-state.json"
+        def _load_state() -> tuple[DaemonState, str]:
+            config_path = Path("~/.ai-casino/daemon.yaml").expanduser()
+            if config_path.exists():
+                config = DaemonConfig.from_yaml(config_path)
+                state_file = config.state.state_file
+            else:
+                state_file = "~/.ai-casino/daemon-state.json"
+            state = DaemonState.load(state_file)
+            return state, state_file
 
-        state = DaemonState.load(state_file)
+        state, state_file = await asyncio.to_thread(_load_state)
 
         # Handle subcommands
         if args and args[0].lower() == "add":

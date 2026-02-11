@@ -540,6 +540,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     @app.get("/game-plan", response_model=GamePlanResponse | None)
     async def get_game_plan() -> GamePlanResponse | None:
         """Get latest game plan (if enabled and generated)."""
+        import asyncio
         import json
         from pathlib import Path
 
@@ -549,16 +550,22 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             return None
 
         latest = components.state.game_plan_history[-1]
-        plan_dir = Path(components.config.game_plan.plan_dir).expanduser()
-        plan_file = plan_dir / f"{latest.timestamp.date()}.json"
 
-        if not plan_file.exists():
-            logger.warning(f"Game plan file not found: {plan_file}")
-            return None
+        def _load_plan_file() -> dict | None:
+            plan_dir = Path(components.config.game_plan.plan_dir).expanduser()
+            plan_file = plan_dir / f"{latest.timestamp.date()}.json"
+
+            if not plan_file.exists():
+                logger.warning(f"Game plan file not found: {plan_file}")
+                return None
+
+            with plan_file.open() as f:
+                return json.load(f)
 
         try:
-            with plan_file.open() as f:
-                plan_data = json.load(f)
+            plan_data = await asyncio.to_thread(_load_plan_file)
+            if not plan_data:
+                return None
 
             return GamePlanResponse(
                 date=plan_data["date"],
@@ -630,23 +637,25 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         Returns:
             ExecutionMetricsListResponse with list of metrics
         """
+        import asyncio
         import json
         from pathlib import Path
 
         limit = max(1, min(limit, 500))
-        metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
 
-        if not metrics_file.exists():
-            return ExecutionMetricsListResponse(metrics=[], count=0)
+        def _read_metrics() -> list[dict]:
+            metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
 
-        metrics = []
-        try:
+            if not metrics_file.exists():
+                return []
+
+            metrics = []
             # Read last N lines efficiently (read backwards)
             with metrics_file.open("rb") as f:
                 f.seek(0, 2)
                 file_size = f.tell()
                 if file_size == 0:
-                    return ExecutionMetricsListResponse(metrics=[], count=0)
+                    return []
 
                 # Read file in chunks from end
                 buffer_size = 8192
@@ -679,6 +688,10 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 # Reverse to get newest first
                 metrics.reverse()
 
+            return metrics
+
+        try:
+            metrics = await asyncio.to_thread(_read_metrics)
         except Exception as e:
             logger.error(f"Failed to read execution metrics: {e}")
             raise HTTPException(status_code=500, detail="Failed to read execution metrics") from e
@@ -695,26 +708,38 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         Returns:
             WorkflowExecutionMetrics as dict
         """
+        import asyncio
         import json
         from pathlib import Path
 
-        metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
+        def _find_metric() -> tuple[dict | None, bool]:
+            """Find metric and return (metric, file_exists)."""
+            metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
 
-        if not metrics_file.exists():
-            raise HTTPException(status_code=404, detail="Execution metrics file not found")
+            if not metrics_file.exists():
+                return None, False
 
-        try:
             with metrics_file.open() as f:
                 for line in f:
                     try:
                         metric = json.loads(line)
                         if metric.get("workflow_id") == workflow_id:
-                            return metric
+                            return metric, True
                     except json.JSONDecodeError:
                         continue
 
-            raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+            return None, True
 
+        try:
+            result, file_exists = await asyncio.to_thread(_find_metric)
+            if result is None:
+                detail = (
+                    "Execution metrics file not found"
+                    if not file_exists
+                    else f"Workflow {workflow_id} not found"
+                )
+                raise HTTPException(status_code=404, detail=detail)
+            return result
         except HTTPException:
             raise
         except Exception as e:

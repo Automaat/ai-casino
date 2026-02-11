@@ -176,11 +176,15 @@ class RiskReportTask(TaskExecutor):
         )
 
         # Persist to JSON file
-        report_dir = Path(self.components.config.risk_limits.report_dir).expanduser()
-        report_dir.mkdir(parents=True, exist_ok=True)
-        report_path = report_dir / f"risk-report-{report.date}.json"
-        with report_path.open("w") as f:
-            json.dump(report.model_dump(), f, indent=2)
+        def _write_report() -> Path:
+            report_dir = Path(self.components.config.risk_limits.report_dir).expanduser()
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_path = report_dir / f"risk-report-{report.date}.json"
+            with report_path.open("w") as f:
+                json.dump(report.model_dump(), f, indent=2)
+            return report_path
+
+        report_path = await asyncio.to_thread(_write_report)
 
         # Record in state
         self.components.state.record_risk_report(

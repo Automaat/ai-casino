@@ -378,6 +378,8 @@ class TestFullRun:
         assert report.total_duration_ms >= 0
 
     async def test_run_persists_report(self, checker: HealthChecker):
+        import asyncio
+
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
 
@@ -390,11 +392,13 @@ class TestFullRun:
             mock_client.return_value.get = AsyncMock(return_value=mock_response)
             await checker.run()
 
-        health_dir = Path(checker.config.health.health_dir).expanduser()
-        report_files = list(health_dir.glob("health-*.json"))
-        assert len(report_files) == 1
+        def _check_report() -> dict:
+            health_dir = Path(checker.config.health.health_dir).expanduser()
+            report_files = list(health_dir.glob("health-*.json"))
+            assert len(report_files) == 1
+            return json.loads(report_files[0].read_text())
 
-        loaded = json.loads(report_files[0].read_text())
+        loaded = await asyncio.to_thread(_check_report)
         assert loaded["overall_status"] == "HEALTHY"
 
     async def test_run_with_unhealthy_service(self, checker: HealthChecker):

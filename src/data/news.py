@@ -123,9 +123,7 @@ class NewsFetcher:
                                 title=item.get("title", ""),
                                 description=item.get("description", ""),
                                 url=item.get("url", ""),
-                                published_at=datetime.fromisoformat(
-                                    item.get("published_at", "").replace("Z", "+00:00")
-                                ),
+                                published_at=datetime.fromisoformat(item.get("published_at", "")),
                                 source=item.get("source", ""),
                             )
                         )
@@ -180,9 +178,7 @@ class NewsFetcher:
                             title=item.get("title", ""),
                             description=item.get("description", ""),
                             url=item.get("url", ""),
-                            published_at=datetime.fromisoformat(
-                                item.get("published_at", "").replace("Z", "+00:00")
-                            ),
+                            published_at=datetime.fromisoformat(item.get("published_at", "")),
                             source=item.get("source", ""),
                         )
                     )
