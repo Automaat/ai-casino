@@ -15,8 +15,8 @@
 	let chartContainer: HTMLElement;
 	let chart: ECharts | null = null;
 
-	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+	function updateChart() {
+		if (!chart || symbols.length === 0 || matrix.length === 0) return;
 
 		// Convert matrix to ECharts format: [x, y, value]
 		const data: [number, number, number][] = [];
@@ -90,6 +90,11 @@
 		};
 
 		chart.setOption(option);
+	}
+
+	onMount(() => {
+		chart = echarts.init(chartContainer, 'dark');
+		updateChart();
 
 		const resizeObserver = new ResizeObserver(() => {
 			chart?.resize();
@@ -100,6 +105,11 @@
 			resizeObserver.disconnect();
 			chart?.dispose();
 		};
+	});
+
+	// Update chart when symbols or matrix changes
+	$effect(() => {
+		updateChart();
 	});
 </script>
 

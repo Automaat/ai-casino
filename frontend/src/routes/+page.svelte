@@ -1,7 +1,6 @@
 <script lang="ts">
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import { stateSummary } from '$lib/stores/dashboard';

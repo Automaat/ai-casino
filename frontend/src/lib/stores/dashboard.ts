@@ -3,7 +3,7 @@
  */
 
 import { writable, derived, readable } from 'svelte/store';
-import { api, APIError } from '$lib/api/client';
+import { api } from '$lib/api/client';
 import type * as T from '$lib/types/api';
 
 // Auto-refresh interval (5 seconds)
@@ -11,53 +11,56 @@ const REFRESH_INTERVAL = 5000;
 
 // Health store
 function createHealthStore() {
-	const { subscribe, set } = writable<T.HealthResponse | null>(null);
-
-	async function fetch() {
-		try {
-			const data = await api.getHealth();
-			set(data);
-		} catch (error) {
-			console.error('Failed to fetch health:', error);
-			set(null);
+	return readable<T.HealthResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getHealth();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch health:', error);
+				set(null);
+			}
 		}
-	}
 
-	// Auto-refresh
-	if (typeof window !== 'undefined') {
-		setInterval(fetch, REFRESH_INTERVAL);
-		fetch(); // Initial fetch
-	}
+		// Initial fetch
+		fetch();
 
-	return { subscribe, fetch };
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function - clears interval when no subscribers
+		return () => clearInterval(interval);
+	});
 }
 
 // State summary store
 function createStateSummaryStore() {
-	const { subscribe, set } = writable<T.StateSummaryResponse | null>(null);
-	let loading = false;
+	return readable<T.StateSummaryResponse | null>(null, (set) => {
+		let loading = false;
 
-	async function fetch() {
-		if (loading) return;
-		loading = true;
-		try {
-			const data = await api.getStateSummary();
-			set(data);
-		} catch (error) {
-			console.error('Failed to fetch state summary:', error);
-			set(null);
-		} finally {
-			loading = false;
+		async function fetch() {
+			if (loading) return;
+			loading = true;
+			try {
+				const data = await api.getStateSummary();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch state summary:', error);
+				set(null);
+			} finally {
+				loading = false;
+			}
 		}
-	}
 
-	// Auto-refresh
-	if (typeof window !== 'undefined') {
-		setInterval(fetch, REFRESH_INTERVAL);
+		// Initial fetch
 		fetch();
-	}
 
-	return { subscribe, fetch };
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
 }
 
 // Analyses store
@@ -80,25 +83,26 @@ function createAnalysesStore() {
 
 // Positions store
 function createPositionsStore() {
-	const { subscribe, set } = writable<T.PositionsResponse | null>(null);
-
-	async function fetch() {
-		try {
-			const data = await api.getPositions();
-			set(data);
-		} catch (error) {
-			console.error('Failed to fetch positions:', error);
-			set(null);
+	return readable<T.PositionsResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getPositions();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch positions:', error);
+				set(null);
+			}
 		}
-	}
 
-	// Auto-refresh
-	if (typeof window !== 'undefined') {
-		setInterval(fetch, REFRESH_INTERVAL);
+		// Initial fetch
 		fetch();
-	}
 
-	return { subscribe, fetch };
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
 }
 
 // Risk store

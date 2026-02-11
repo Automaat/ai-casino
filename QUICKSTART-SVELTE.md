@@ -5,7 +5,7 @@ Get the new Svelte trading dashboard running in 2 minutes.
 ## Prerequisites
 
 - Python 3.12+
-- Node.js 18+ (for frontend)
+- Node.js 20.19+ (for frontend)
 - mise installed (`curl https://mise.run | sh`)
 - API keys configured (see main README)
 

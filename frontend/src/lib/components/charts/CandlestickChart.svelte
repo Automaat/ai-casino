@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { createChart, type IChartApi, ColorType } from 'lightweight-charts';
+	import { createChart, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 
 	interface CandlestickData {
 		time: string;
@@ -20,6 +20,7 @@
 
 	let chartContainer: HTMLElement;
 	let chart: IChartApi | null = null;
+	let candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
 
 	onMount(() => {
 		chart = createChart(chartContainer, {
@@ -39,7 +40,7 @@
 			}
 		});
 
-		const candlestickSeries = (chart as any).addCandlestickSeries({
+		candlestickSeries = chart.addCandlestickSeries({
 			upColor: '#10b981',
 			downColor: '#ef4444',
 			borderVisible: false,
@@ -48,7 +49,7 @@
 		});
 
 		if (data.length > 0) {
-			candlestickSeries.setData(data as any);
+			candlestickSeries.setData(data);
 		}
 
 		// Auto-resize
@@ -62,6 +63,13 @@
 		return () => {
 			resizeObserver.disconnect();
 		};
+	});
+
+	// Update series when data changes
+	$effect(() => {
+		if (candlestickSeries && data.length > 0) {
+			candlestickSeries.setData(data);
+		}
 	});
 
 	onDestroy(() => {

@@ -19,8 +19,8 @@
 	let chartContainer: HTMLElement;
 	let chart: ECharts | null = null;
 
-	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+	function updateChart() {
+		if (!chart || data.length === 0) return;
 
 		const option: EChartsOption = {
 			backgroundColor: 'transparent',
@@ -72,6 +72,11 @@
 		};
 
 		chart.setOption(option);
+	}
+
+	onMount(() => {
+		chart = echarts.init(chartContainer, 'dark');
+		updateChart();
 
 		const resizeObserver = new ResizeObserver(() => {
 			chart?.resize();
@@ -82,6 +87,11 @@
 			resizeObserver.disconnect();
 			chart?.dispose();
 		};
+	});
+
+	// Update chart when data or title changes
+	$effect(() => {
+		updateChart();
 	});
 </script>
 
