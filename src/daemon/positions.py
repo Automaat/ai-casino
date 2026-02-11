@@ -678,7 +678,8 @@ class PositionManager:
                 self.broker.cancel_order(position.stop_loss_order_id)
                 logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
             except Exception as e:
-                logger.warning(f"Failed to cancel old stop-loss order: {e}")
+                logger.error(f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}")
+                return None
 
         # Verify position still exists and get current price
         broker_info = self.broker.get_account_info()
