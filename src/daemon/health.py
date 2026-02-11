@@ -293,7 +293,8 @@ class HealthChecker:
                     response.raise_for_status()
             else:
                 llm = self._container.llm_client()
-                await llm.acomplete("Reply with OK", temperature=0.0)
+                # GPT-5-nano only supports default temperature (1.0), so omit temperature param
+                await llm.acomplete("Reply with OK")
                 await llm.close()
 
             duration = (time.perf_counter() - start) * 1000

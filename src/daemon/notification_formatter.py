@@ -149,15 +149,17 @@ class NotificationFormatter:
         m = message.metadata
         # Handle both "failed_services" (health check) and "unavailable_services" (degradation)
         services_obj = m.get("failed_services") or m.get("unavailable_services") or []
-        services = (
+        services_raw = (
             ", ".join(str(s) for s in services_obj) if isinstance(services_obj, list) else str(services_obj)
         )
+        # Escape markdown special chars (e.g., underscores in "llm_anthropic")
+        services = NotificationFormatter._escape_markdown(services_raw)
         # Use message.title to reflect originating context (health check vs degradation)
-        title = message.title
+        title = NotificationFormatter._escape_markdown(message.title)
         return (
             f"⚠️ *{title}*\n\n"
             f"*Services Down:* {services}\n\n"
-            f"Analysis quality may be affected. Check health report."
+            f"Analysis quality may be affected\\. Check health report\\."
         )
 
     @staticmethod
