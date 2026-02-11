@@ -47,11 +47,30 @@ def build_coordinator_registry(
     broker = container.alpaca_broker()
     daemon_config = container.daemon_config()
 
+    # Create confirmation handler if Telegram configured
+    confirmation_handler = None
+    if daemon_config.coordinator.confirmation_mode == "manual":
+        from src.coordinator.confirmation import TradeConfirmationHandler
+        from src.daemon.notification_channels import TelegramChannel
+
+        # Create Telegram channel if configured
+        telegram_channel = TelegramChannel(daemon_config.notifications.telegram)
+        if telegram_channel.is_configured():
+            confirmation_handler = TradeConfirmationHandler(
+                telegram_channel=telegram_channel,
+                approval_timeout_seconds=daemon_config.coordinator.approval_timeout_seconds,
+            )
+        else:
+            # Log warning if manual mode but no Telegram
+            from loguru import logger
+
+            logger.warning("Manual confirmation mode enabled but Telegram not configured")
+
     registry.register(GenerateGamePlanTool(game_plan_agent))
     registry.register(MarketOverviewTool(market_fetcher))
     registry.register(AnalyzeSymbolTool(container))
     registry.register(PortfolioStatusTool(broker))
-    registry.register(ExecuteTradeTool(broker, daemon_config))
+    registry.register(ExecuteTradeTool(broker, daemon_config, confirmation_handler))
 
     # Use provided memory or create new
     if memory is None:
