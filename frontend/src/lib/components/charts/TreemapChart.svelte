@@ -16,7 +16,7 @@
 
 	let { data, title = 'Portfolio Allocation', height = 400 }: Props = $props();
 
-	let chartContainer: HTMLElement = undefined as unknown as HTMLElement;
+	let chartContainer = null as unknown as HTMLElement;
 	let chart: ECharts | null = null;
 
 	function updateChart() {

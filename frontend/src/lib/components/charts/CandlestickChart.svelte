@@ -18,12 +18,12 @@
 
 	let { data, symbol = '', height = 400 }: Props = $props();
 
-	let chartContainer: HTMLElement = undefined as unknown as HTMLElement;
+	let chartContainer = null as unknown as HTMLElement;
 	let chart: IChartApi | null = null;
 	let candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
 
 	onMount(() => {
-		chart = createChart(chartContainer, {
+		const chartInstance = createChart(chartContainer, {
 			layout: {
 				background: { type: ColorType.Solid, color: 'transparent' },
 				textColor: '#94a3b8'
@@ -39,8 +39,9 @@
 				secondsVisible: false
 			}
 		});
+		chart = chartInstance;
 
-		candlestickSeries = chart.addCandlestickSeries({
+		candlestickSeries = (chartInstance as any).addCandlestickSeries({
 			upColor: '#10b981',
 			downColor: '#ef4444',
 			borderVisible: false,
@@ -48,7 +49,7 @@
 			wickDownColor: '#ef4444'
 		});
 
-		if (data.length > 0) {
+		if (data.length > 0 && candlestickSeries) {
 			candlestickSeries.setData(data);
 		}
 

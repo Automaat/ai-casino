@@ -4,12 +4,18 @@
 	import Accordion from '$lib/components/ui/Accordion.svelte';
 	import { config } from '$lib/stores/dashboard';
 	import { formatConfigValue, getSectionEnabled, sortConfigKeys } from '$lib/utils/config';
+	import type * as T from '$lib/types/api';
 
 	$: cfg = $config;
 
 	interface SectionInfo {
 		key: string;
 		title: string;
+	}
+
+	interface AccordionContentData {
+		category: { title: string; sections: SectionInfo[] };
+		config: T.FullConfigResponse;
 	}
 
 	const categories: Array<{ title: string; sections: SectionInfo[] }> = [
@@ -164,12 +170,14 @@
 		<div>
 			<h2 class="text-2xl font-bold text-slate-100 mb-4">Configuration Sections</h2>
 			<Accordion items={accordionItems} defaultOpen={['trading-&-execution']}>
-				{#snippet content(data)}
+				{#snippet content(rawData)}
+					{@const data = rawData as AccordionContentData}
 					<div class="space-y-4 mt-4">
 						{#each data.category.sections as section}
-							{@const sectionData = data.config[section.key]}
-							{@const enabled = getSectionEnabled(sectionData)}
-							{@const sortedEntries = sortConfigKeys(sectionData)}
+							{@const sectionData = data.config[section.key as keyof T.FullConfigResponse]}
+							{@const sectionDataRecord = typeof sectionData === 'object' && sectionData !== null && !Array.isArray(sectionData) ? sectionData as Record<string, unknown> : {}}
+							{@const enabled = getSectionEnabled(sectionDataRecord)}
+							{@const sortedEntries = sortConfigKeys(sectionDataRecord)}
 							{@const borderColor = enabled ? 'border-l-green-500' : 'border-l-slate-600'}
 
 							<div class="bg-slate-800/50 rounded-lg border border-slate-700 border-l-4 {borderColor} overflow-hidden">
