@@ -5,11 +5,14 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
+
+# Import at module level to avoid pyrefly module path mismatch with local imports
+from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 from src.daemon.broker_manager import BrokerManager
 from src.daemon.config import DaemonConfig, TradingMode
 from src.daemon.prefetch import DataPrefetcher
@@ -22,9 +25,6 @@ from src.database.connection import get_db_engine
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
-
-# Import at module level to avoid pyrefly module path mismatch with local imports
-from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent

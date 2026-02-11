@@ -120,8 +120,8 @@ async def test_run_cycle_tracks_tool_calls(coordinator, mock_llm):
     """Test tool call tracking."""
 
     # Simulate tool calls via callback
-    def tool_call_side_effect(prompt, tools, tool_executor, **kwargs):
-        callback = kwargs.get("on_tool_call")
+    def tool_call_side_effect(params):
+        callback = params.on_tool_call
         if callback:
             # Simulate analyze_symbol call
             callback("analyze_symbol", {"symbol": "AAPL"}, "Analysis result")

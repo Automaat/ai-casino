@@ -42,7 +42,7 @@ class AnalysisOrchestrator:
     def __init__(
         self,
         config: AnalysisOrchestratorConfig,
-        components: "DaemonComponents",
+        components: DaemonComponents,
         trading_mode: str = "paper",
         **deprecated_kwargs: object,
     ) -> None:
@@ -86,27 +86,27 @@ class AnalysisOrchestrator:
         from src.data.broker import AlpacaBroker
         from src.workflows import TradingWorkflow
 
-        self.workflow: TradingWorkflow = cast(TradingWorkflow, workflow)
-        self.state: DaemonState = cast(DaemonState, state)
-        self.scheduler: MarketScheduler = cast(MarketScheduler, scheduler)
+        self.workflow: TradingWorkflow = cast("TradingWorkflow", workflow)
+        self.state: DaemonState = cast("DaemonState", state)
+        self.scheduler: MarketScheduler = cast("MarketScheduler", scheduler)
         self.broker: AlpacaBroker | None = cast(
-            AlpacaBroker | None, deprecated_kwargs.get("broker", components.broker)
+            "AlpacaBroker | None", deprecated_kwargs.get("broker", components.broker)
         )
         self.position_manager: PositionManager | None = cast(
-            PositionManager | None, deprecated_kwargs.get("position_manager", components.position_manager)
+            "PositionManager | None", deprecated_kwargs.get("position_manager", components.position_manager)
         )
         self.event_bus: EventBus | None = cast(
-            EventBus | None, deprecated_kwargs.get("event_bus", components.event_bus)
+            "EventBus | None", deprecated_kwargs.get("event_bus", components.event_bus)
         )
         self.historical_cache: HistoricalCache | None = cast(
-            HistoricalCache | None, deprecated_kwargs.get("historical_cache", components.historical_cache)
+            "HistoricalCache | None", deprecated_kwargs.get("historical_cache", components.historical_cache)
         )
         self.notification_service: NotificationService | None = cast(
-            NotificationService | None,
+            "NotificationService | None",
             deprecated_kwargs.get("notification_service", components.notification_service),
         )
         self._context_builder: DaemonContextBuilder | None = cast(
-            DaemonContextBuilder | None, deprecated_kwargs.get("context_builder")
+            "DaemonContextBuilder | None", deprecated_kwargs.get("context_builder")
         )
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
