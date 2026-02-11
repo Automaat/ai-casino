@@ -1,5 +1,7 @@
 """LLM abstraction using custom provider implementations."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import inspect
@@ -45,9 +47,6 @@ class ToolCallingParams:
     max_tool_calls: int = 5
     on_tool_call: Callable[[str, dict, str], None] | None = None
 
-
-if TYPE_CHECKING:
-    from src.tools.models import ToolDefinition
 
 T = TypeVar("T", bound=BaseModel)
 
