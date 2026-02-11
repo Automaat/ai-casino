@@ -1,5 +1,27 @@
 """Performance metrics tracking and calculation module."""
 
+from src.metrics.execution import (
+    ExecutionMetricsCollector,
+    LLMCallMetric,
+    LLMUsageStats,
+    SubOperationMetric,
+    WorkflowExecutionMetrics,
+    is_metrics_enabled,
+    persist_jsonl,
+    timed_operation,
+)
+from src.metrics.performance import (
+    calculate_max_drawdown,
+    calculate_returns_from_trades,
+    calculate_risk_adjusted_returns,
+    calculate_sharpe_ratio,
+    calculate_win_rate,
+)
+from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
+from src.metrics.risk import DrawdownMetrics, RiskMetrics, RiskMetricsCalculator, VaRMetrics
+from src.metrics.sector_rotation import SectorRotationAnalysis, SectorRotationAnalyzer, SectorStrength
+from src.metrics.tracker import MetricsTracker, PerformanceMetrics, TradeRecord
+
 __all__ = [
     "DrawdownMetrics",
     "ExecutionMetricsCollector",
