@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from src.database.repositories.position import PositionRecordRepository
     from src.database.repositories.position_action import PositionManagementActionRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.database.repositories.trade import TradeRepository
 
 
 def resolve_config_or_env(config_value: str | None, env_var: str) -> str | None:
@@ -168,3 +169,18 @@ def create_snapshot_repository(database_engine: DatabaseEngine) -> PortfolioSnap
 
     session = database_engine.session()
     return PortfolioSnapshotRepository(session)
+
+
+def create_trade_repository(database_engine: DatabaseEngine) -> TradeRepository:
+    """Create TradeRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        TradeRepository instance
+    """
+    from src.database.repositories.trade import TradeRepository
+
+    session = database_engine.session()
+    return TradeRepository(session)
