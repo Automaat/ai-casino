@@ -113,7 +113,6 @@ class DaemonRunner:
             )
             orchestrator = self._factory.init_analysis_orchestrator(
                 self._components,
-                event_bus=self.event_bus,
                 context_builder=context_builder,
             )
             self._analysis_orchestrator = orchestrator

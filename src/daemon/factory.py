@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -23,9 +23,11 @@ from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
 
+# Import at module level to avoid pyrefly module path mismatch with local imports
+from src.daemon.analysis_orchestrator import AnalysisOrchestrator
+
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent
-    from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
@@ -574,8 +576,6 @@ class DaemonFactory:
         """
         if components.analysis_orchestrator is not None:
             return components.analysis_orchestrator
-
-        from src.daemon.analysis_orchestrator import AnalysisOrchestrator
 
         # Ensure workflow is initialized
         self.init_workflow(components)

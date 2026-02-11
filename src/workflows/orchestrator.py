@@ -155,14 +155,28 @@ class TradingWorkflow:
                     for k in deprecated_kwargs
                 )
             ):
+                from src.daemon.degradation import DegradationContext
+
+                # Extract context values with type narrowing
+                sector_ctx = deprecated_kwargs.get("sector_context")
+                earnings_ctx = deprecated_kwargs.get("earnings_context")
+                peer_ctx = deprecated_kwargs.get("peer_analysis_context")
+                game_plan_ctx = deprecated_kwargs.get("game_plan_context")
+
+                # Narrow position_context type
+                pos_ctx = position_context if isinstance(position_context, dict) else None
+
+                # Narrow degradation_context type
+                deg_ctx = degradation_context if isinstance(degradation_context, DegradationContext) else None
+
                 extra_context = WorkflowExtraContext(
-                    sector_rotation_context=deprecated_kwargs.get("sector_context"),
-                    earnings_context=deprecated_kwargs.get("earnings_context"),
-                    peer_analysis_context=deprecated_kwargs.get("peer_analysis_context"),
-                    game_plan_context=deprecated_kwargs.get("game_plan_context"),
-                    position_context=position_context,  # type: ignore[arg-type]
+                    sector_rotation_context=sector_ctx if isinstance(sector_ctx, str) else None,
+                    earnings_context=earnings_ctx if isinstance(earnings_ctx, str) else None,
+                    peer_analysis_context=peer_ctx if isinstance(peer_ctx, str) else None,
+                    game_plan_context=game_plan_ctx if isinstance(game_plan_ctx, str) else None,
+                    position_context=pos_ctx,
                     enable_multi_timeframe=bool(enable_multi_timeframe),
-                    degradation_context=degradation_context,  # type: ignore[arg-type]
+                    degradation_context=deg_ctx,
                 )
 
             return await self._analyze_instrumented(
@@ -220,15 +234,20 @@ class TradingWorkflow:
         Returns:
             State dict with market and news data
         """
-        data_output = await data_fetch.fetch_data(
-            symbol=symbol,
-            period_days=period_days,
-            trading_session=trading_session,
+        from src.workflows.stages.data_fetch import DataFetchConfig
+
+        data_fetch_config = DataFetchConfig(
             market_fetcher=self.market_fetcher,
             news_fetcher=self.news_fetcher,
             enable_multi_timeframe=False,
             trump_mode=self.trump_mode,
             trump_fetcher=self.trump_fetcher if self.trump_mode else None,
+        )
+        data_output = await data_fetch.fetch_data(
+            symbol=symbol,
+            period_days=period_days,
+            trading_session=trading_session,
+            config=data_fetch_config,
         )
 
         return {
