@@ -655,12 +655,12 @@ async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_
 
         await runner._run_cycle()
 
-    cycle_start = await asyncio.wait_for(queue.get(), timeout=2.0)
+    cycle_start = queue.get_nowait()
     assert cycle_start.event_type.value == "CYCLE_START"
     assert "watchlist_size" in cycle_start.data
     assert "degradation_tier" in cycle_start.data
 
-    cycle_complete = await asyncio.wait_for(queue.get(), timeout=2.0)
+    cycle_complete = queue.get_nowait()
     assert cycle_complete.event_type.value == "CYCLE_COMPLETE"
     assert "results_count" in cycle_complete.data
     assert "errors_count" in cycle_complete.data
@@ -699,12 +699,12 @@ async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, eve
 
     assert result is not None
 
-    analysis_start = await asyncio.wait_for(queue.get(), timeout=2.0)
+    analysis_start = queue.get_nowait()
     assert analysis_start.event_type.value == "ANALYSIS_START"
     assert analysis_start.data["symbol"] == "AAPL"
     assert "trading_session" in analysis_start.data
 
-    analysis_complete = await asyncio.wait_for(queue.get(), timeout=2.0)
+    analysis_complete = queue.get_nowait()
     assert analysis_complete.event_type.value == "ANALYSIS_COMPLETE"
     assert analysis_complete.data["symbol"] == "AAPL"
     assert analysis_complete.data["signal"] == "BUY"
@@ -729,10 +729,10 @@ async def test_runner_publishes_analysis_error(sample_config: DaemonConfig, even
 
     assert result is None
 
-    analysis_start = await asyncio.wait_for(queue.get(), timeout=2.0)
+    analysis_start = queue.get_nowait()
     assert analysis_start.event_type.value == "ANALYSIS_START"
 
-    analysis_error = await asyncio.wait_for(queue.get(), timeout=2.0)
+    analysis_error = queue.get_nowait()
     assert analysis_error.event_type.value == "ANALYSIS_ERROR"
     assert analysis_error.data["symbol"] == "AAPL"
     assert "error" in analysis_error.data

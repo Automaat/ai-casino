@@ -1,6 +1,7 @@
 """FastAPI application factory for daemon monitoring API."""
 
 import asyncio
+import queue
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -281,7 +282,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             broker_positions = account_info["positions"] if account_info else {}
 
             positions = []
-            for symbol, pos_dict in components.state.active_positions.items():
+            for symbol, pos_dict in dict(components.state.active_positions).items():
                 try:
                     pos = PositionRecord.model_validate(pos_dict)
 
@@ -415,7 +416,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         broker_count = 0
         try:
-            broker_symbols = set(components.state.active_positions.keys())
+            broker_symbols = set(dict(components.state.active_positions).keys())
             broker_count = len([s for s in broker_symbols if s in symbols])
         except Exception as e:
             logger.warning(f"Unable to derive broker symbols for watchlist: {e}")
@@ -812,15 +813,15 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         await websocket.accept()
         logger.info(f"WebSocket connected: {websocket.client}")
 
-        subscriber_id, queue = await components.event_bus.subscribe()
+        subscriber_id, event_queue = await components.event_bus.subscribe()
 
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    event = await asyncio.to_thread(event_queue.get, block=True, timeout=30.0)
                     event_dict = event.model_dump(mode="json")
                     await websocket.send_json(event_dict)
-                except TimeoutError:
+                except queue.Empty:
                     # Ping client to detect disconnect
                     try:
                         await websocket.send_json({"type": "ping"})

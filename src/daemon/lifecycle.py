@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import signal
 
-import uvicorn
 from loguru import logger
 from rich.console import Console
 
+from src.daemon.api.server import ThreadedApiServer
 from src.daemon.factory import DaemonComponents
 
 console = Console()
@@ -26,8 +25,7 @@ class DaemonLifecycle:
         """
         self.components = components
         self.running = False
-        self._api_server: uvicorn.Server | None = None
-        self._api_task: asyncio.Task | None = None
+        self._api_server: ThreadedApiServer | None = None
         self._watcher_tasks: list[asyncio.Task] = []
 
     def __repr__(self) -> str:
@@ -119,31 +117,17 @@ class DaemonLifecycle:
             self._api_server.should_exit = True
 
     def _start_api_server(self) -> None:
-        """Start embedded API server as background task."""
+        """Start embedded API server in a dedicated thread."""
         try:
             from src.daemon.api import create_api_app
 
             app = create_api_app(self.components)
-            config = uvicorn.Config(
+            self._api_server = ThreadedApiServer(
                 app,
                 host=self.components.config.api.host,
                 port=self.components.config.api.port,
-                log_level="info",
-                access_log=False,
             )
-            self._api_server = uvicorn.Server(config)
-
-            def _log_api_task_result(t: asyncio.Task) -> None:
-                if t.cancelled():
-                    # Task was cancelled as part of shutdown; no error to log.
-                    return
-                exc = t.exception()
-                if exc is not None:
-                    # Log real server crashes with traceback.
-                    logger.opt(exception=exc).error("API server crashed")
-
-            self._api_task = asyncio.create_task(self._api_server.serve())
-            self._api_task.add_done_callback(_log_api_task_result)
+            self._api_server.start()
 
             logger.info(
                 f"API server started at http://{self.components.config.api.host}:"
@@ -156,21 +140,17 @@ class DaemonLifecycle:
         except Exception as e:
             logger.error(f"Failed to start API server: {e}")
             self._api_server = None
-            self._api_task = None
 
     async def _stop_api_server(self) -> None:
         """Stop embedded API server gracefully."""
-        if self._api_server and self._api_task:
+        if self._api_server:
             try:
                 logger.info("Stopping API server...")
-                self._api_server.should_exit = True
-                await asyncio.wait_for(self._api_task, timeout=5.0)
-                logger.info("API server stopped")
-            except TimeoutError:
-                logger.warning("API server shutdown timed out, cancelling task")
-                self._api_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._api_task
+                stopped = await asyncio.to_thread(self._api_server.stop, 5.0)
+                if stopped:
+                    logger.info("API server stopped")
+                else:
+                    logger.error("API server thread did not exit cleanly")
             except Exception as e:
                 logger.error(f"Error stopping API server: {e}")
 
