@@ -14,7 +14,9 @@ from src.strategies.session import TradingSession
 from src.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
+    from src.agents.critic import CriticAgent
     from src.data.broker import AlpacaBroker
+    from src.workflows.types import TradingWorkflowResult
 
 
 class TradingCoordinator:
@@ -28,13 +30,14 @@ class TradingCoordinator:
     - Learns from outcomes via persistent memory
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         llm_client: LLMClient,
         tool_registry: ToolRegistry,
         memory: CoordinatorMemory,
         config: CoordinatorConfig,
         broker: AlpacaBroker,
+        critic_agent: CriticAgent,
     ) -> None:
         """Initialize coordinator.
 
@@ -44,12 +47,14 @@ class TradingCoordinator:
             memory: Persistent memory for observations
             config: Coordinator configuration
             broker: Broker for portfolio context
+            critic_agent: Critic agent for decision evaluation
         """
         self._llm = llm_client
         self._tools = tool_registry
         self._memory = memory
         self._config = config
         self._broker = broker
+        self._critic_agent = critic_agent  # Used by ReflectOnDecisionTool
         self._prompts = PromptLoader("coordinator")
         self._last_cycle_summary = "No previous cycle"
 
@@ -59,6 +64,11 @@ class TradingCoordinator:
         self._trades_proposed = 0
         self._trades_executed = 0
         self._game_plan_generated = False
+
+        # Reflection tracking (reset per cycle)
+        self._reflection_counters: dict[str, int] = {}
+        self._last_analysis_results: dict[str, TradingWorkflowResult] = {}
+        self._game_plan_context: str | None = None
 
         logger.info("Initialized TradingCoordinator")
 
@@ -95,6 +105,11 @@ class TradingCoordinator:
         self._trades_proposed = 0
         self._trades_executed = 0
         self._game_plan_generated = False
+
+        # Reset reflection tracking
+        self._reflection_counters.clear()
+        self._last_analysis_results.clear()
+        self._game_plan_context = None
 
         # Track cycle duration
         cycle_start = time.time()
@@ -287,6 +302,7 @@ class TradingCoordinator:
         # Track game plan generation
         if name == "generate_game_plan":
             self._game_plan_generated = True
+            self._game_plan_context = result
 
         logger.debug(f"Tool callback: {name} (total calls: {self._tool_calls_count})")
 

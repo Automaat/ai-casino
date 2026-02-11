@@ -3,6 +3,8 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from src.agents.critic import CriticAgent
+    from src.coordinator.agent import TradingCoordinator
     from src.coordinator.memory import CoordinatorMemory
     from src.di.container import AppContainer
     from src.tools.registry import ToolRegistry
@@ -11,6 +13,8 @@ if TYPE_CHECKING:
 def build_coordinator_registry(
     container: AppContainer,
     memory: CoordinatorMemory | None = None,
+    coordinator: TradingCoordinator | None = None,
+    critic_agent: CriticAgent | None = None,
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
 
@@ -19,6 +23,8 @@ def build_coordinator_registry(
     Args:
         container: DI container for dependency resolution
         memory: Optional shared memory (creates new if None)
+        coordinator: Optional coordinator for reflection tool
+        critic_agent: Optional critic agent to reuse (avoids duplicate instances)
 
     Returns:
         ToolRegistry with all coordinator tools registered
@@ -68,7 +74,7 @@ def build_coordinator_registry(
 
     registry.register(GenerateGamePlanTool(game_plan_agent))
     registry.register(MarketOverviewTool(market_fetcher))
-    registry.register(AnalyzeSymbolTool(container))
+    registry.register(AnalyzeSymbolTool(container, coordinator))
     registry.register(PortfolioStatusTool(broker))
     registry.register(ExecuteTradeTool(broker, daemon_config, confirmation_handler))
 
@@ -79,6 +85,15 @@ def build_coordinator_registry(
     # Register analysis history tool with memory (always registered)
     registry.register(AnalysisHistoryTool(memory))
     registry.register(SaveObservationTool(memory))
+
+    # Register reflection tool if coordinator provided
+    if coordinator:
+        from src.coordinator.tools.reflect import ReflectOnDecisionTool
+
+        # Reuse provided critic_agent to avoid creating duplicate instance
+        if critic_agent is None:
+            critic_agent = container.critic_agent()
+        registry.register(ReflectOnDecisionTool(coordinator, critic_agent))
 
     return registry
 

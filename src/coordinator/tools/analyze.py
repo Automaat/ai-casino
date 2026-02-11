@@ -11,6 +11,7 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
+    from src.coordinator.agent import TradingCoordinator
     from src.di.container import AppContainer
     from src.workflows.types import TradingWorkflowResult
 
@@ -28,13 +29,19 @@ class PositionContext(BaseModel):
 class AnalyzeSymbolTool(BaseTool):
     """Tool to run full trading analysis workflow."""
 
-    def __init__(self, container: AppContainer) -> None:
+    def __init__(
+        self,
+        container: AppContainer,
+        coordinator: TradingCoordinator | None = None,
+    ) -> None:
         """Initialize tool with DI container.
 
         Args:
             container: DI container for workflow creation
+            coordinator: Optional coordinator for result storage
         """
         self._container = container
+        self._coordinator = coordinator
 
     @property
     def name(self) -> str:
@@ -139,6 +146,10 @@ class AnalyzeSymbolTool(BaseTool):
 
         # Run analysis
         result = await workflow.analyze(symbol, period_days, position_context=position_ctx)
+
+        # Store structured result in coordinator for reflection tool access
+        if self._coordinator:
+            self._coordinator._last_analysis_results[symbol] = result  # noqa: SLF001
 
         return self._format_result(result)
 
