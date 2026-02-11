@@ -57,6 +57,7 @@ class DaemonCycleOrchestrator:
         self.runner = runner  # For delegating to runner methods
         self.profiler = profiler
         self._notification_helper = DaemonNotificationHelper()
+        self._cycle_counter = 0
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -219,6 +220,13 @@ class DaemonCycleOrchestrator:
 
         cycle_duration = time_mod.time() - cycle_start_time
 
+        # Pattern detection (every Nth cycle if enabled)
+        self._cycle_counter += 1
+        patterns_detected = await self._run_pattern_detection()
+
+        # Save metrics
+        await self._save_coordinator_metrics(coordinator_result, patterns_detected)
+
         # Log coordinator-specific results
         console.print(
             f"\n[bold cyan]Coordinator Cycle Results ({datetime.now(tz=UTC):%Y-%m-%d %H:%M})[/bold cyan]"
@@ -230,6 +238,8 @@ class DaemonCycleOrchestrator:
         )
         console.print(f"Tool calls made: {coordinator_result.tool_calls_made}")
         console.print(f"Game plan generated: {coordinator_result.game_plan_generated}")
+        if patterns_detected > 0:
+            console.print(f"Patterns detected: {patterns_detected}")
         console.print(f"Summary: {coordinator_result.summary}")
         console.print("-" * 50 + "\n")
 
@@ -243,6 +253,7 @@ class DaemonCycleOrchestrator:
                 "mode": "coordinator",
                 "tool_calls": coordinator_result.tool_calls_made,
                 "trades_executed": coordinator_result.trades_executed,
+                "patterns_detected": patterns_detected,
             },
         )
 
@@ -335,6 +346,87 @@ class DaemonCycleOrchestrator:
 
         console.print("-" * 50)
         console.print(f"Total: {len(results)} symbols analyzed\n")
+
+    async def _save_coordinator_metrics(
+        self,
+        result: CoordinatorCycleResult,
+        patterns_detected: int,
+    ) -> None:
+        """Save coordinator cycle metrics to JSONL.
+
+        Args:
+            result: Coordinator cycle result
+            patterns_detected: Number of patterns detected
+        """
+        try:
+            from pathlib import Path
+
+            from src.coordinator.metrics import CoordinatorCycleMetrics, save_metrics_jsonl
+
+            # Create metrics record
+            metrics = CoordinatorCycleMetrics(
+                cycle_num=self._cycle_counter,
+                timestamp=datetime.now(UTC),
+                symbols_analyzed=result.symbols_analyzed,
+                tool_calls_made=result.tool_calls_made,
+                trades_proposed=result.trades_proposed,
+                trades_executed=result.trades_executed,
+                game_plan_generated=result.game_plan_generated,
+                cycle_duration_seconds=result.cycle_duration_seconds,
+                patterns_detected=patterns_detected,
+            )
+
+            # Save to JSONL file
+            metrics_file = Path.home() / ".ai-casino" / "coordinator-metrics.jsonl"
+            save_metrics_jsonl(metrics, metrics_file)
+
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to save coordinator metrics: {e}")
+
+    async def _run_pattern_detection(self) -> int:
+        """Run pattern detection if enabled and on schedule.
+
+        Returns:
+            Number of patterns detected
+        """
+        if not self.components.coordinator:
+            return 0
+
+        pattern_config = self.components.config.coordinator.pattern_detection
+        if not pattern_config.enabled:
+            return 0
+
+        # Check if this cycle should run pattern detection
+        if self._cycle_counter % pattern_config.detection_frequency != 0:
+            return 0
+
+        try:
+            from src.coordinator.pattern_analyzer import PatternAnalyzer
+
+            # Create pattern analyzer with coordinator's memory
+            pattern_analyzer = PatternAnalyzer(
+                analysis_repo=self.components.container.analysis_repository(),
+                trade_repo=self.components.container.trade_repository(),
+                memory=self.components.coordinator.memory,
+                min_sample_size=pattern_config.min_sample_size,
+            )
+
+            # Run pattern detection
+            insights = await pattern_analyzer.analyze_patterns(lookback_days=pattern_config.lookback_days)
+
+            # Save insights to coordinator memory
+            for insight in insights:
+                await self.components.coordinator.memory.save(
+                    observation=f"{insight.insight_text} (Recommendation: {insight.recommendation})",
+                    category="pattern",
+                )
+
+            logger.info(f"Pattern detection complete: {len(insights)} insights")
+            return len(insights)
+
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Pattern detection failed: {e}")
+            return 0
 
     async def _publish_event(self, event_type: str, data: dict[str, object]) -> None:
         """Publish event to event bus.

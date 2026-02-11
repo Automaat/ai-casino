@@ -5,6 +5,19 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class PatternDetectionConfig(BaseModel):
+    """Pattern detection configuration."""
+
+    enabled: bool = True
+    detection_frequency: int = Field(default=5, ge=1, description="Run every Nth cycle")
+    lookback_days: int = Field(default=30, ge=7, le=90)
+    min_sample_size: int = Field(default=10, ge=5, le=50)
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"PatternDetectionConfig(enabled={self.enabled}, frequency={self.detection_frequency})"
+
+
 class CoordinatorConfig(BaseModel):
     """Configuration for the coordinator agent."""
 
@@ -17,6 +30,12 @@ class CoordinatorConfig(BaseModel):
     confirmation_mode: Literal["auto", "manual"] = Field(
         default="auto", description="Trade confirmation mode: auto or manual"
     )
+    approval_timeout_seconds: int = Field(
+        default=60,
+        ge=30,
+        le=300,
+        description="Timeout for manual trade approvals (seconds)",
+    )
     cycle_timeout_seconds: int = Field(
         default=600, ge=60, le=3600, description="Maximum cycle duration in seconds before timeout"
     )
@@ -27,6 +46,7 @@ class CoordinatorConfig(BaseModel):
     min_confidence_to_trade: float = Field(
         default=0.7, ge=0.0, le=1.0, description="Minimum signal confidence required to execute trade"
     )
+    pattern_detection: PatternDetectionConfig = Field(default_factory=PatternDetectionConfig)
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -45,6 +65,7 @@ class CoordinatorCycleResult(BaseModel):
     trades_executed: int = Field(default=0, ge=0, description="Number of trades successfully executed")
     tool_calls_made: int = Field(default=0, ge=0, description="Total tool calls made by coordinator")
     game_plan_generated: bool = Field(default=False, description="Whether a game plan was generated")
+    cycle_duration_seconds: float = Field(default=0.0, ge=0.0, description="Cycle duration in seconds")
 
     def __repr__(self) -> str:
         """Return string representation."""
