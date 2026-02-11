@@ -47,7 +47,7 @@ async def async_engine():
         echo=False,
     )
 
-    event.listens_for(Base.metadata, "before_create")(_adapt_types_for_sqlite)
+    event.listens_for(Base.metadata, "before_create", once=True)(_adapt_types_for_sqlite)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -67,7 +67,6 @@ async def async_session(async_engine) -> AsyncSession:
     )
 
     # Convert UUID objects to strings before flush for SQLite compatibility
-    @event.listens_for(Session, "before_flush")
     def _convert_uuids_to_strings(session, flush_context, instances):
         """Convert UUID values to strings for SQLite."""
         for obj in session.new | session.dirty:
@@ -79,5 +78,12 @@ async def async_session(async_engine) -> AsyncSession:
                         setattr(obj, column.key, str(value))
 
     async with session_maker() as session:
+        # Attach listener to sync session for this specific async session instance
+        sync_session = session.sync_session
+        event.listen(sync_session, "before_flush", _convert_uuids_to_strings)
+
         yield session
+
+        # Remove listener to prevent cross-test side effects
+        event.remove(sync_session, "before_flush", _convert_uuids_to_strings)
         await session.rollback()

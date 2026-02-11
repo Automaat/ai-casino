@@ -50,10 +50,13 @@ async def test_update_position_record(async_session, position_record: PositionRe
 
     position_record.current_qty = 5.0
     position_record.current_stop_loss = 245.00
-    result = await repo.update(position_record)
+    await repo.update(position_record)
 
-    assert result.current_qty == 5.0
-    assert result.current_stop_loss == 245.00
+    # Verify UPDATE was persisted by re-fetching from database
+    persisted = await repo.get_by_symbol("TSLA")
+    assert persisted is not None
+    assert persisted.current_qty == 5.0
+    assert persisted.current_stop_loss == 245.00
 
 
 @pytest.mark.asyncio
