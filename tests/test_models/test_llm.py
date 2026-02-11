@@ -504,7 +504,7 @@ class TestAsyncToolExecutor:
             await asyncio.sleep(0.01)
             return f"Wrapped result: {symbol}"
 
-        def sync_returning_awaitable(name: str, args: dict) -> str:
+        def sync_returning_awaitable(name: str, args: dict):
             return inner_async(args.get("symbol", "N/A"))
 
         tool_call = ToolCall(id="call_xyz", name="analyze", arguments={"symbol": "AMZN"})

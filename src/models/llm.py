@@ -525,8 +525,8 @@ class LLMClient:
             sync_executor = cast("Callable[[str, dict], str]", executor)
             result = await asyncio.to_thread(sync_executor, tool_call.name, tool_call.arguments)
 
-            # Handle edge case: sync function returns awaitable
-            if inspect.iscoroutine(result):
+            # Handle edge case: sync function returns awaitable (e.g., coroutine, Future, Task)
+            if inspect.isawaitable(result):
                 return await result
 
             return result
