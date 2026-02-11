@@ -139,6 +139,30 @@ function createCorrelationStore() {
 	return { subscribe, fetch };
 }
 
+// Config store
+function createConfigStore() {
+	return readable<T.FullConfigResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getFullConfig();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch config:', error);
+				set(null);
+			}
+		}
+
+		// Initial fetch
+		fetch();
+
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
+}
+
 // Export stores
 export const health = createHealthStore();
 export const stateSummary = createStateSummaryStore();
@@ -146,6 +170,7 @@ export const analyses = createAnalysesStore();
 export const positions = createPositionsStore();
 export const risk = createRiskStore();
 export const correlation = createCorrelationStore();
+export const config = createConfigStore();
 
 // Derived stores
 export const isDaemonRunning = derived(health, ($health) => $health?.daemon_running ?? false);
