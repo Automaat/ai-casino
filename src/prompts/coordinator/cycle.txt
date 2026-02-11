@@ -1,0 +1,30 @@
+## Trading Cycle - {date} ({session})
+
+**Watchlist:** {watchlist}
+
+**Current Positions:**
+{positions_summary}
+
+**Last Cycle Summary:**
+{last_summary}
+
+---
+
+**Cycle Objectives:**
+
+1. **Market Assessment:** Run `market_overview` to gauge overnight action and pre-market sentiment
+2. **Game Plan:** Generate or review daily game plan for strategic guidance
+3. **Opportunity Discovery:** Screen for high-conviction setups meeting technical + sentiment criteria
+4. **Deep Analysis:** Analyze 2-3 top candidates via `analyze_symbol` (selective use - expensive)
+5. **Trade Execution:** Execute trades meeting confidence ({min_confidence_to_trade:.0%}) and risk thresholds
+6. **Position Management:** Review open positions for stop-loss, take-profit, or exit signals
+7. **Learning:** Save key observations for continuous improvement
+
+**Decision Framework:**
+- Only execute trades with confidence ≥ {min_confidence_to_trade:.0%}
+- Respect position sizing limits ({max_position_pct}% max per symbol)
+- Stay within daily trade cap ({max_daily_trades} max)
+- Favor LOW/MEDIUM risk over HIGH risk
+- Consider game plan priorities and sector focus
+
+Begin your autonomous workflow. Make data-driven decisions based on conviction, confidence thresholds, and risk constraints.

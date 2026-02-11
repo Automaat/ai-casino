@@ -39,18 +39,11 @@ HTTP_RETRY = retry(
 
 
 def _collect_timeframe_results(
-    results: list[tuple[Timeframe, pd.DataFrame | None] | BaseException],
+    results: list[tuple[Timeframe, pd.DataFrame | None]],
 ) -> dict[Timeframe, pd.DataFrame]:
     """Collect successful timeframe results, logging failures."""
     timeframe_dict: dict[Timeframe, pd.DataFrame] = {}
-    for result in results:
-        if isinstance(result, BaseException):
-            # Re-raise cancellation/shutdown exceptions
-            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
-                raise result
-            logger.error(f"Timeframe fetch failed: {result}")
-            continue
-        tf, data = result
+    for tf, data in results:
         if data is not None and not data.empty:
             timeframe_dict[tf] = data
         else:
@@ -399,7 +392,12 @@ class MarketDataFetcher:
                 logger.warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)
 
-        results = await asyncio.gather(*[fetch_timeframe(tf) for tf in timeframes], return_exceptions=True)
+        # Fetch timeframes in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(fetch_timeframe(tf)) for tf in timeframes]
+
+        # Extract results from tasks
+        results = [task.result() for task in task_results]
 
         timeframe_dict = _collect_timeframe_results(results)
 

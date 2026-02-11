@@ -219,8 +219,23 @@ async def _run_watchers(watchers: list[EventWatcher]) -> None:
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
 
-    tasks = [w.run() for w in watchers]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Wrap watcher tasks to handle exceptions
+    async def safe_run_watcher(watcher: object) -> BaseException | None:
+        try:
+            await watcher.run()  # type: ignore[attr-defined]
+            return None
+        except BaseException as e:
+            # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+            if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise
+            return e
+
+    # Run watchers in parallel using TaskGroup
+    async with asyncio.TaskGroup() as tg:
+        task_results = [tg.create_task(safe_run_watcher(w)) for w in watchers]
+
+    # Extract results and handle exceptions
+    results = [task.result() for task in task_results]
 
     # Log failures and re-raise cancellation/shutdown exceptions
     for i, result in enumerate(results):

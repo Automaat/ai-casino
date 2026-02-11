@@ -194,14 +194,17 @@ class SocialSentimentAnalyst:
                 logger.warning(f"Reddit fetch failed: {e}")
                 return None
 
-        results = await asyncio.gather(
-            fetch_finnhub_social(), fetch_finnhub_news(), fetch_reddit(), return_exceptions=True
-        )
+        # Run fetches in parallel using TaskGroup (exceptions handled within fetch functions)
+        async with asyncio.TaskGroup() as tg:
+            social_task = tg.create_task(fetch_finnhub_social())
+            news_task = tg.create_task(fetch_finnhub_news())
+            reddit_task = tg.create_task(fetch_reddit())
 
-        # Re-raise cancellation/shutdown exceptions
-        for result in results:
-            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
-                raise result
+        # Extract results (TaskGroup propagates exceptions, fetch functions return None on failure)
+        social_result = social_task.result()
+        news_result = news_task.result()
+        reddit_result = reddit_task.result()
+        results = (social_result, news_result, reddit_result)
 
         return self._process_fetch_results(results)
 
