@@ -149,6 +149,44 @@ export interface ConfigResponse {
 	trading_mode: string;
 }
 
+export interface FullConfigResponse {
+	watchlist: string[];
+	interval_minutes: number;
+	market_hours_only: boolean;
+	auto_trade: boolean;
+	max_concurrent_analyses: number;
+	trading_mode: string;
+	paper_trading: Record<string, any>;
+	schedule: Record<string, any>;
+	state: Record<string, any>;
+	journal: Record<string, any>;
+	health: Record<string, any>;
+	optimization: Record<string, any>;
+	screening: Record<string, any>;
+	prefetch: Record<string, any>;
+	sector_rotation: Record<string, any>;
+	earnings_calendar: Record<string, any>;
+	peer_analysis: Record<string, any>;
+	correlation_audit: Record<string, any>;
+	reporting: Record<string, any>;
+	risk_limits: Record<string, any>;
+	rebalancing: Record<string, any>;
+	signal_tracking: Record<string, any>;
+	pre_trade_backtesting: Record<string, any>;
+	game_plan: Record<string, any>;
+	position_management: Record<string, any>;
+	monte_carlo: Record<string, any>;
+	notifications: Record<string, any>;
+	analysis_orchestration: Record<string, any>;
+	news_watcher: Record<string, any>;
+	social_watcher: Record<string, any>;
+	filings_watcher: Record<string, any>;
+	anomaly_watcher: Record<string, any>;
+	api: Record<string, any>;
+	llm: Record<string, any>;
+	api_keys: Record<string, any>;
+}
+
 export interface ExecutionMetric {
 	workflow_id: string;
 	symbol: string;
