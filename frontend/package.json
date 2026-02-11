@@ -1,0 +1,35 @@
+{
+	"name": "ai-casino-frontend",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "oxlint --deny-warnings src",
+		"generate-api": "openapi --input http://localhost:8484/openapi.json --output ./src/lib/api --client fetch"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/kit": "^2.50.2",
+		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@tailwindcss/typography": "^0.5.19",
+		"autoprefixer": "^10.4.24",
+		"openapi-typescript-codegen": "^0.30.0",
+		"oxlint": "^1.46.0",
+		"postcss": "^8.5.6",
+		"svelte": "^5.49.2",
+		"svelte-check": "^4.3.6",
+		"tailwindcss": "^4.1.18",
+		"typescript": "^5.9.3",
+		"vite": "^7.3.1"
+	},
+	"dependencies": {
+		"echarts": "^5.6.0",
+		"lightweight-charts": "^5.1.0",
+		"svelte-echarts": "^1.0.0"
+	}
+}
