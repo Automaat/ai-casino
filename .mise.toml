@@ -115,11 +115,11 @@ description = "Restart production daemon"
 run = "docker compose restart"
 
 [tasks."prod:svelte"]
-description = "Run daemon with Svelte frontend (local, production config)"
+description = "Run daemon with Svelte frontend (local, dev config + prod build)"
 run = """
   trap 'pkill -P $$' EXIT
-  echo "Starting daemon with production config..."
-  uv run python -m src.main daemon --config ~/.ai-casino/daemon-production.yaml &
+  echo "Starting daemon with dev config..."
+  uv run python -m src.main daemon --config daemon-dev.yaml &
   DAEMON_PID=$!
   echo "Daemon started (PID: $DAEMON_PID)"
   sleep 3
@@ -142,4 +142,3 @@ run = """
   echo "Starting Svelte dev server at http://localhost:5173"
   cd frontend && npm run dev -- --host 0.0.0.0
 """
-env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }

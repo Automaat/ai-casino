@@ -10,4 +10,15 @@ daemon:
     enabled: true
     host: "127.0.0.1"
     port: 8484
-    cors_origins: ["http://localhost:8050"]
+    cors_origins: ["http://localhost:8050", "http://localhost:5173", "http://localhost:4173"]
+
+  # Disable database for local dev (use JSON file instead)
+  database:
+    enabled: false
+
+# LLM Configuration (dev uses Ollama for free local inference)
+llm:
+  provider: "ollama"
+  model: "qwen3:14b"
+  base_url: "http://localhost:11434"
+  max_concurrent: 5
