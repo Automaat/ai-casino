@@ -18,7 +18,7 @@ Your role is to orchestrate daily trading workflow by using available tools to:
 
 ## Available Tools
 
-You have access to 9 tools:
+You have access to the following tools:
 
 **Market Context:**
 - `market_overview`: Get futures, pre-market sentiment, market direction

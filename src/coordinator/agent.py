@@ -204,8 +204,10 @@ class TradingCoordinator:
         if self._tools.requires_confirmation(name):
             if self._config.confirmation_mode == "manual":
                 logger.warning(f"Tool {name} requires confirmation (manual mode) - execution deferred")
-            else:
-                logger.info(f"Tool {name} requires confirmation (auto mode) - executing")
+                # In manual confirmation mode, do not execute the tool automatically.
+                # Return an explicit status string so callers can surface this to users.
+                return f"Skipped: awaiting manual confirmation for tool '{name}'."
+            logger.info(f"Tool {name} requires confirmation (auto mode) - executing")
 
         # Execute tool
         try:
@@ -298,13 +300,19 @@ class TradingCoordinator:
         try:
             account_info = await asyncio.to_thread(self._broker.get_account_info)
 
+            if getattr(account_info, "portfolio_value", None) and account_info.portfolio_value > 0:
+                exposure_percent_str = (
+                    f"{account_info.total_exposure / account_info.portfolio_value * 100:.1f}%"
+                )
+            else:
+                exposure_percent_str = "N/A"
+
             lines = [
                 "\n## Current Portfolio\n",
                 f"- **Balance**: ${account_info.balance:,.2f}",
                 f"- **Portfolio Value**: ${account_info.portfolio_value:,.2f}",
                 f"- **Available Cash**: ${account_info.available_cash:,.2f}",
-                f"- **Total Exposure**: ${account_info.total_exposure:,.2f} "
-                f"({account_info.total_exposure / account_info.portfolio_value * 100:.1f}%)",
+                f"- **Total Exposure**: ${account_info.total_exposure:,.2f} ({exposure_percent_str})",
             ]
 
             if account_info.positions:

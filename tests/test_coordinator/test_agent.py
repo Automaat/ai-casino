@@ -176,8 +176,9 @@ async def test_tool_executor_confirmation(coordinator, mock_tool_registry, coord
 
     result = await coordinator._tool_executor("execute_trade", {"symbol": "AAPL"})
 
-    assert result == "Tool executed"
-    mock_tool_registry.aexecute.assert_called_once_with("execute_trade", {"symbol": "AAPL"})
+    # In manual confirmation mode, execution should be deferred/awaiting confirmation
+    assert "await" in str(result).lower()
+    mock_tool_registry.aexecute.assert_not_called()
 
 
 @pytest.mark.asyncio

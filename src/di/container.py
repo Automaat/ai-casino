@@ -288,6 +288,9 @@ class AppContainer(containers.DeclarativeContainer):
         portfolio_var_calculator=portfolio_var_calculator,
     )
 
+    # Coordinator agent - Factory pattern to support runtime daemon_state override
+    # Note: container must be passed explicitly when calling this factory
+    # (providers.Self() doesn't work reliably with Factory providers)
     coordinator_agent = providers.Factory(
         agent_providers.create_trading_coordinator,
         llm_client=llm_client,
