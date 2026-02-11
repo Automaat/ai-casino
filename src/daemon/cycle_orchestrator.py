@@ -407,7 +407,7 @@ class DaemonCycleOrchestrator:
             pattern_analyzer = PatternAnalyzer(
                 analysis_repo=self.components.container.analysis_repository(),
                 trade_repo=self.components.container.trade_repository(),
-                memory=self.components.coordinator._memory,  # type: ignore[attr-defined]  # noqa: SLF001
+                memory=self.components.coordinator.memory,
                 min_sample_size=pattern_config.min_sample_size,
             )
 
@@ -416,7 +416,7 @@ class DaemonCycleOrchestrator:
 
             # Save insights to coordinator memory
             for insight in insights:
-                await self.components.coordinator._memory.save(  # type: ignore[attr-defined]  # noqa: SLF001
+                await self.components.coordinator.memory.save(
                     observation=f"{insight.insight_text} (Recommendation: {insight.recommendation})",
                     category="pattern",
                 )

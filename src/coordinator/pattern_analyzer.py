@@ -78,9 +78,8 @@ class PatternAnalyzer:
         try:
             start_date = datetime.now(UTC) - timedelta(days=days)
 
-            # Get all trades and filter by date
-            all_trades = await self._trade_repo.get_all()
-            trades = [t for t in all_trades if t.timestamp >= start_date]
+            # Get closed trades since start_date (efficient SQL filtering)
+            trades = await self._trade_repo.get_closed_since(start_date)
 
             if not trades:
                 return []
@@ -107,16 +106,26 @@ class PatternAnalyzer:
         symbol_metrics: dict[str, dict] = {}
         for trade in trades:
             symbol = trade.symbol
+
+            # Only count CLOSED trades with exit_price for accurate metrics
+            if not (trade.exit_price and trade.entry_price):
+                continue
+
             if symbol not in symbol_metrics:
                 symbol_metrics[symbol] = {"wins": 0, "losses": 0, "total": 0}
 
             symbol_metrics[symbol]["total"] += 1
-            if trade.exit_price and trade.entry_price:
-                pnl = (trade.exit_price - trade.entry_price) * trade.quantity
-                if pnl > 0:
-                    symbol_metrics[symbol]["wins"] += 1
-                else:
-                    symbol_metrics[symbol]["losses"] += 1
+
+            # Use trade.pnl if available, otherwise compute from prices
+            pnl = getattr(trade, "pnl", None)
+            if pnl is None:
+                # TradeRecord uses shares field
+                pnl = (trade.exit_price - trade.entry_price) * trade.shares
+
+            if pnl > 0:
+                symbol_metrics[symbol]["wins"] += 1
+            else:
+                symbol_metrics[symbol]["losses"] += 1
 
         return symbol_metrics
 

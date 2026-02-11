@@ -86,7 +86,13 @@ class TradeConfirmationHandler:
 
         # Send Telegram notification
         message = self._format_approval_message(request)
-        await self._telegram.send(message)
+        sent = await self._telegram.send(message)
+
+        # Fail fast if Telegram send failed
+        if not sent:
+            logger.error(f"Failed to send approval request for {symbol} via Telegram")
+            del self._pending[trade_id]
+            return False
 
         # Poll for response
         deadline = request.expires_at
@@ -128,7 +134,15 @@ class TradeConfirmationHandler:
             trigger=NotificationTrigger.SIGNAL,
             title="Trade Approval",
             body=text,
-            metadata={"symbol": request.symbol, "action": request.action},
+            metadata={
+                "symbol": request.symbol,
+                "signal": request.action,
+                "price": None,
+                "confidence": None,
+                "rsi": None,
+                "macd": None,
+                "reasoning": request.rationale,
+            },
             timestamp=datetime.now(UTC),
         )
 

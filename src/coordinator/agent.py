@@ -62,6 +62,15 @@ class TradingCoordinator:
 
         logger.info("Initialized TradingCoordinator")
 
+    @property
+    def memory(self) -> CoordinatorMemory:
+        """Access coordinator memory for saving observations.
+
+        Returns:
+            CoordinatorMemory instance
+        """
+        return self._memory
+
     async def run_cycle(
         self,
         watchlist: list[str],

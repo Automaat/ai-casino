@@ -433,6 +433,10 @@ def create_trading_coordinator(
             provider=provider,
             model=coordinator_config.model_override,
             api_key=api_key,
+            openai_base_url=resolve_config_or_env(
+                daemon_config.api_keys.openai_api_base,
+                "OPENAI_API_BASE",
+            ),
         )
     else:
         coordinator_llm = llm_client
