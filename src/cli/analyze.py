@@ -15,6 +15,7 @@ from rich.table import Table
 from src.di.container import AppContainer, create_container
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
+from src.utils.logging import sanitize_log_record
 from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
@@ -447,6 +448,7 @@ def analyze(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:

@@ -10,6 +10,7 @@ from rich.console import Console
 from src.dashboard.api_client import DaemonAPIClient
 from src.dashboard.app import create_dash_app
 from src.dashboard.config import DashboardConfig
+from src.utils.logging import sanitize_log_record
 
 console = Console()
 
@@ -68,6 +69,7 @@ def dashboard(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=log_level,
+        filter=sanitize_log_record,
     )
 
     try:

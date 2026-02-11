@@ -19,6 +19,7 @@ from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
 from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher
 from src.di.container import create_container
+from src.utils.logging import sanitize_log_record
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -41,6 +42,7 @@ def daemon(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:
@@ -82,6 +84,7 @@ def trump_daemon(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:
@@ -249,6 +252,7 @@ def events_daemon(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:
