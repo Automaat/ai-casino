@@ -6,7 +6,6 @@ with different configurations (meta, momentum, trump, full).
 
 from typing import TYPE_CHECKING
 
-# ruff: noqa: PLR0913
 from src.agents.risk import PortfolioVaRConfig
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
@@ -22,6 +21,7 @@ from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
+from src.workflows.config import WorkflowComponents, WorkflowConfig
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -44,7 +44,7 @@ def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRCo
     )
 
 
-def create_workflow_meta(
+def create_workflow_meta(  # noqa: PLR0913
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
     news_fetcher: NewsFetcher,
@@ -65,32 +65,37 @@ def create_workflow_meta(
     pre_trade_backtest_config = daemon_config.pre_trade_backtesting
     position_sizing_config = daemon_config.position_sizing
 
-    return TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert_sentiment,
-        fundamental_fetcher,
-        broker=broker,
-        metrics_tracker=metrics_tracker,
+    config = WorkflowConfig(
         use_ensemble=False,
         use_meta_agent=True,
         trump_mode=False,
         snapshot_on_trade=None,
+        pre_trade_backtest_config=pre_trade_backtest_config,
+    )
+
+    components = WorkflowComponents(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        container=container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
         snapshot_repository=snapshot_repository,
         param_store=param_store,
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        pre_trade_backtest_config=pre_trade_backtest_config,
+        finnhub_fetcher=container.finnhub_fetcher(),
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
-        finnhub_fetcher=container.finnhub_fetcher() if container else None,
-        container=container,
     )
 
+    return TradingWorkflow(config, components)
 
-def create_workflow_momentum(
+
+def create_workflow_momentum(  # noqa: PLR0913
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
     news_fetcher: NewsFetcher,
@@ -111,32 +116,37 @@ def create_workflow_momentum(
     pre_trade_backtest_config = daemon_config.pre_trade_backtesting
     position_sizing_config = daemon_config.position_sizing
 
-    return TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert_sentiment,
-        fundamental_fetcher,
-        broker=broker,
-        metrics_tracker=metrics_tracker,
+    config = WorkflowConfig(
         use_ensemble=False,
         use_meta_agent=False,
         trump_mode=False,
         snapshot_on_trade=None,
+        pre_trade_backtest_config=pre_trade_backtest_config,
+    )
+
+    components = WorkflowComponents(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        container=container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
         snapshot_repository=snapshot_repository,
         param_store=param_store,
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        pre_trade_backtest_config=pre_trade_backtest_config,
+        finnhub_fetcher=container.finnhub_fetcher(),
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
-        finnhub_fetcher=container.finnhub_fetcher() if container else None,
-        container=container,
     )
 
+    return TradingWorkflow(config, components)
 
-def create_workflow_trump(
+
+def create_workflow_trump(  # noqa: PLR0913
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
     news_fetcher: NewsFetcher,
@@ -157,32 +167,37 @@ def create_workflow_trump(
     pre_trade_backtest_config = daemon_config.pre_trade_backtesting
     position_sizing_config = daemon_config.position_sizing
 
-    return TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert_sentiment,
-        fundamental_fetcher,
-        broker=broker,
-        metrics_tracker=metrics_tracker,
+    config = WorkflowConfig(
         use_ensemble=False,
         use_meta_agent=True,
         trump_mode=True,
         snapshot_on_trade=None,
+        pre_trade_backtest_config=pre_trade_backtest_config,
+    )
+
+    components = WorkflowComponents(
+        llm_client=llm_client,
+        market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
+        finbert=finbert_sentiment,
+        fundamental_fetcher=fundamental_fetcher,
+        container=container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
         snapshot_repository=snapshot_repository,
         param_store=param_store,
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        pre_trade_backtest_config=pre_trade_backtest_config,
+        finnhub_fetcher=container.finnhub_fetcher(),
         notification_service=notification_service,
         position_sizing_config=position_sizing_config,
-        finnhub_fetcher=container.finnhub_fetcher() if container else None,
-        container=container,
     )
 
+    return TradingWorkflow(config, components)
 
-def create_workflow_full(
+
+def create_workflow_full(  # noqa: PLR0913
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
     news_fetcher: NewsFetcher,

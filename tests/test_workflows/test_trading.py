@@ -18,7 +18,44 @@ from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
 from src.workflows import TradingWorkflow
+from src.workflows.config import WorkflowComponents, WorkflowConfig
 from src.workflows.types import TradingWorkflowResult
+
+
+def create_test_workflow(
+    test_container,
+    use_ensemble=False,
+    use_meta_agent=False,
+    trump_mode=False,
+    broker=None,
+    pre_trade_backtest_config=None,
+    snapshot_repository=None,
+    metrics_tracker=None,
+    notification_service=None,
+):
+    """Helper to create TradingWorkflow with new config/components pattern."""
+    config = WorkflowConfig(
+        use_ensemble=use_ensemble,
+        use_meta_agent=use_meta_agent,
+        trump_mode=trump_mode,
+        snapshot_on_trade=None,
+        pre_trade_backtest_config=pre_trade_backtest_config,
+    )
+
+    components = WorkflowComponents(
+        llm_client=test_container.llm_client(),
+        market_fetcher=test_container.market_fetcher(),
+        news_fetcher=test_container.news_fetcher(),
+        finbert=test_container.finbert_sentiment(),
+        fundamental_fetcher=test_container.fundamental_fetcher(),
+        container=test_container,
+        broker=broker,
+        metrics_tracker=metrics_tracker,
+        snapshot_repository=snapshot_repository,
+        notification_service=notification_service,
+    )
+
+    return TradingWorkflow(config, components)
 
 
 def test_trading_workflow_init(test_container):
@@ -38,15 +75,7 @@ def test_trading_workflow_init(test_container):
 
 def test_trading_workflow_init_ensemble(test_container):
     """Test workflow initialization with ensemble strategy."""
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        use_ensemble=True,
-        use_meta_agent=False,
-    )
+    workflow = create_test_workflow(test_container, use_ensemble=True, use_meta_agent=False)
 
     assert workflow.use_ensemble is True
     assert isinstance(workflow._default_strategy, EnsembleStrategy)
@@ -56,14 +85,7 @@ def test_trading_workflow_init_ensemble(test_container):
 def test_trading_workflow_init_meta_agent(test_container):
     """Test workflow initialization with meta-agent."""
     # Create workflow with meta-agent enabled
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        use_meta_agent=True,
-    )
+    workflow = create_test_workflow(test_container, use_meta_agent=True)
 
     assert workflow.use_meta_agent is True
     assert workflow.meta_agent is not None
@@ -90,14 +112,7 @@ async def test_trading_workflow_analyze(test_container_full):
 
 async def test_trading_workflow_analyze_with_meta_agent(test_container_full):
     """Test full analyze flow with meta-agent enabled."""
-    workflow = TradingWorkflow(
-        llm_client=test_container_full.llm_client(),
-        market_fetcher=test_container_full.market_fetcher(),
-        news_fetcher=test_container_full.news_fetcher(),
-        finbert=test_container_full.finbert_sentiment(),
-        fundamental_fetcher=test_container_full.fundamental_fetcher(),
-        use_meta_agent=True,
-    )
+    workflow = create_test_workflow(test_container_full, use_meta_agent=True)
 
     result = await workflow.analyze("AAPL", period_days=90)
 
@@ -258,15 +273,7 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
     )
     mock_broker.submit_order.return_value = mock_order
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        broker=mock_broker,
-        use_meta_agent=False,
-    )
+    workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
 
     account_info = AccountInfo(balance=100000.0, available_cash=90000.0, positions={}, total_exposure=0.0)
     risk_assessment = RiskAssessment(
@@ -357,15 +364,7 @@ async def test_execute_trade_error_handling(test_container, sample_ohlcv_data):
     mock_broker = MagicMock()
     mock_broker.submit_order.side_effect = Exception("API error")
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        broker=mock_broker,
-        use_meta_agent=False,
-    )
+    workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
 
     account_info = AccountInfo(balance=100000.0, available_cash=90000.0, positions={}, total_exposure=0.0)
     risk_assessment = RiskAssessment(
@@ -550,15 +549,7 @@ async def test_backtest_validation_pass(test_container):
         confidence_penalty_multiplier=0.7,
     )
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        use_meta_agent=False,
-        pre_trade_backtest_config=config,
-    )
+    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
 
     mock_backtest_result = VectorBTResult(
         sharpe_ratio=1.2,
@@ -597,15 +588,7 @@ async def test_backtest_validation_fail_sharpe(test_container):
         confidence_penalty_multiplier=0.7,
     )
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        use_meta_agent=False,
-        pre_trade_backtest_config=config,
-    )
+    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
 
     mock_backtest_result = VectorBTResult(
         sharpe_ratio=0.2,
@@ -639,15 +622,7 @@ async def test_backtest_validation_disabled(test_container):
     """Test backtest validation disabled - no validation runs."""
     config = PreTradeBacktestingConfig(enabled=False)
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        use_meta_agent=False,
-        pre_trade_backtest_config=config,
-    )
+    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
 
     result = await workflow.analyze("AAPL", period_days=90)
 
@@ -664,15 +639,7 @@ async def test_backtest_validation_error(test_container):
         max_drawdown_threshold=0.25,
     )
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        use_meta_agent=False,
-        pre_trade_backtest_config=config,
-    )
+    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
 
     with patch.object(workflow.vectorbt_runner, "run_backtest", side_effect=ValueError("Insufficient data")):
         result = await workflow.analyze("AAPL", period_days=90)
@@ -688,15 +655,7 @@ async def test_broker_api_failure_blocks_trade(test_container):
     mock_broker = MagicMock()
     mock_broker.get_account_info.side_effect = BrokerAPIError("API timeout")
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        broker=mock_broker,
-        use_meta_agent=False,
-    )
+    workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
 
     # Mock trader to force BUY signal
     mock_decision = TradingDecision(
@@ -719,15 +678,7 @@ async def test_broker_api_failure_blocks_trade(test_container):
 
 async def test_paper_trading_unaffected(test_container):
     """Paper trading (broker=None) still uses mock data."""
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        broker=None,
-        use_meta_agent=False,
-    )
+    workflow = create_test_workflow(test_container, broker=None, use_meta_agent=False)
 
     result = await workflow.analyze("AAPL")
 
@@ -749,15 +700,7 @@ async def test_order_submission_failure_handled(test_container):
     )
     mock_broker.submit_order.side_effect = BrokerAPIError("Order rejected")
 
-    workflow = TradingWorkflow(
-        llm_client=test_container.llm_client(),
-        market_fetcher=test_container.market_fetcher(),
-        news_fetcher=test_container.news_fetcher(),
-        finbert=test_container.finbert_sentiment(),
-        fundamental_fetcher=test_container.fundamental_fetcher(),
-        broker=mock_broker,
-        use_meta_agent=False,
-    )
+    workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
 
     # Mock trader to force BUY signal
     mock_decision = TradingDecision(
@@ -782,14 +725,8 @@ async def test_risk_rejection_notification_suppressed_pre_market(test_container_
     from src.agents.risk import AccountInfo, RiskValidation
 
     mock_notification_service = MagicMock()
-    workflow = TradingWorkflow(
-        test_container_full.llm_client(),
-        test_container_full.market_fetcher(),
-        test_container_full.news_fetcher(),
-        test_container_full.finbert_sentiment(),
-        test_container_full.fundamental_fetcher(),
-        notification_service=mock_notification_service,
-        use_meta_agent=False,
+    workflow = create_test_workflow(
+        test_container_full, notification_service=mock_notification_service, use_meta_agent=False
     )
 
     # Mock trader to force BUY signal that will be rejected by risk
@@ -859,14 +796,8 @@ async def test_risk_rejection_notification_sent_regular_hours(test_container_ful
 
     mock_notification_service = MagicMock()
     mock_notification_service.notify = AsyncMock()
-    workflow = TradingWorkflow(
-        test_container_full.llm_client(),
-        test_container_full.market_fetcher(),
-        test_container_full.news_fetcher(),
-        test_container_full.finbert_sentiment(),
-        test_container_full.fundamental_fetcher(),
-        notification_service=mock_notification_service,
-        use_meta_agent=False,
+    workflow = create_test_workflow(
+        test_container_full, notification_service=mock_notification_service, use_meta_agent=False
     )
 
     # Mock trader to force BUY signal that will be rejected by risk
