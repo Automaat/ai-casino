@@ -137,7 +137,7 @@ class NotificationService:
             logger.debug(f"Rate limit: skipping {trigger.value} notification for {symbol}")
             return
 
-        # Send to all channels (fire-and-forget, exceptions already handled in _send_to_channel)
+        # Send to all channels concurrently (exceptions already handled in _send_to_channel)
         async def safe_send(name: str, ch: NotificationChannel) -> None:
             try:
                 await self._send_to_channel(name, ch, message)

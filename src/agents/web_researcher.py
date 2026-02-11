@@ -211,6 +211,9 @@ class WebResearchAgent:
             try:
                 return await self._research_category_with_template(symbol, cat)
             except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise
                 return e
 
         # Run research tasks in parallel using TaskGroup

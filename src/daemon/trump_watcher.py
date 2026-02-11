@@ -239,6 +239,9 @@ If no specific stocks are affected, return "NONE".
             try:
                 return await analyze_one(symbol)
             except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise
                 return e
 
         # Run analyses in parallel using TaskGroup

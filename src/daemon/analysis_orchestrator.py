@@ -283,6 +283,9 @@ class AnalysisOrchestrator:
             try:
                 return await analyze_with_limit(symbol)
             except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                    raise
                 # Return exception to be processed by _filter_analysis_results
                 return e
 

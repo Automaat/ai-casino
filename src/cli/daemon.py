@@ -225,6 +225,9 @@ async def _run_watchers(watchers: list[EventWatcher]) -> None:
             await watcher.run()  # type: ignore[attr-defined]
             return None
         except BaseException as e:
+            # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+            if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise
             return e
 
     # Run watchers in parallel using TaskGroup

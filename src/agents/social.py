@@ -200,16 +200,11 @@ class SocialSentimentAnalyst:
             news_task = tg.create_task(fetch_finnhub_news())
             reddit_task = tg.create_task(fetch_reddit())
 
-        # Extract results (check for exceptions first, then get result)
-        social_result = social_task.exception() or social_task.result()
-        news_result = news_task.exception() or news_task.result()
-        reddit_result = reddit_task.exception() or reddit_task.result()
+        # Extract results (TaskGroup propagates exceptions, fetch functions return None on failure)
+        social_result = social_task.result()
+        news_result = news_task.result()
+        reddit_result = reddit_task.result()
         results = (social_result, news_result, reddit_result)
-
-        # Re-raise cancellation/shutdown exceptions
-        for result in results:
-            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
-                raise result
 
         return self._process_fetch_results(results)
 
