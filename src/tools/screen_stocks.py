@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -37,54 +38,48 @@ class ScreenStocksTool(BaseTool):
         """Requires confirmation due to expensive operations."""
         return True
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Screen stocks for investment opportunities using technical criteria. "
                     "Supports momentum (oversold with bullish reversal), value (low P/E and P/B), "
                     "and breakout (near 52-week high with volume) strategies. "
                     "Returns top matching stocks with scores and LLM analysis. "
                     "This is an expensive operation that fetches data for many stocks."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "criteria": {
-                            "type": "string",
-                            "enum": ["momentum", "value", "breakout"],
-                            "description": (
+                parameters=ToolParametersSchema(
+                    properties={
+                        "criteria": ToolParameter(
+                            type="string",
+                            enum=["momentum", "value", "breakout"],
+                            description=(
                                 "Screening criteria: "
                                 "momentum (RSI oversold + MACD bullish), "
                                 "value (low P/E + P/B), "
                                 "breakout (near 52-week high + volume spike)"
                             ),
-                        },
-                        "universe": {
-                            "type": "string",
-                            "enum": ["SP500", "NASDAQ100", "COMBINED"],
-                            "description": "Stock universe to screen (default: COMBINED)",
-                            "default": "COMBINED",
-                        },
-                        "top_n": {
-                            "type": "integer",
-                            "description": "Number of top results to return (default: 10)",
-                            "default": 10,
-                            "minimum": 1,
-                            "maximum": 50,
-                        },
+                        ),
+                        "universe": ToolParameter(
+                            type="string",
+                            enum=["SP500", "NASDAQ100", "COMBINED"],
+                            description="Stock universe to screen (default: COMBINED)",
+                        ),
+                        "top_n": ToolParameter(
+                            type="integer",
+                            description="Number of top results to return (default: 10)",
+                        ),
                     },
-                    "required": ["criteria"],
-                },
-            },
-        }
+                    required=["criteria"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute stock screening.

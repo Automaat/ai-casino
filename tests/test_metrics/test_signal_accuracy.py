@@ -62,7 +62,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(signal_ids["AAPL"], price_at_1d=105.0, outcome_updated_at=now.isoformat())
         cache.update_signal_outcome(signal_ids["TSLA"], price_at_1d=195.0, outcome_updated_at=now.isoformat())
@@ -103,7 +103,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(signal_ids["AAPL"], price_at_1d=105.0, outcome_updated_at=now.isoformat())
         cache.update_signal_outcome(signal_ids["TSLA"], price_at_1d=205.0, outcome_updated_at=now.isoformat())
@@ -132,7 +132,7 @@ class TestSignalAccuracyCalculator:
             price_at_signal=100.0,
         )
         signals = cache.get_signal_outcomes(window="all")
-        cache.update_signal_outcome(signals[0]["id"], price_at_1d=95.0, outcome_updated_at=now.isoformat())
+        cache.update_signal_outcome(signals[0].id, price_at_1d=95.0, outcome_updated_at=now.isoformat())
 
         metrics = calculator.calculate(window="all")
 
@@ -179,7 +179,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(signal_ids["A"], price_at_5d=105.0, outcome_updated_at=now.isoformat())
         cache.update_signal_outcome(signal_ids["B"], price_at_5d=95.0, outcome_updated_at=now.isoformat())
@@ -238,7 +238,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(signal_ids["A"], price_at_5d=105.0, outcome_updated_at=now.isoformat())
         cache.update_signal_outcome(signal_ids["B"], price_at_5d=95.0, outcome_updated_at=now.isoformat())
@@ -297,7 +297,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(signal_ids["A"], price_at_5d=105.0, outcome_updated_at=now.isoformat())
         cache.update_signal_outcome(signal_ids["B"], price_at_5d=110.0, outcome_updated_at=now.isoformat())
@@ -336,7 +336,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(signal_ids["AAPL"], price_at_1d=105.0, outcome_updated_at=now.isoformat())
         cache.update_signal_outcome(
@@ -382,7 +382,7 @@ class TestSignalAccuracyCalculator:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_ids = {s["symbol"]: s["id"] for s in signals}
+        signal_ids = {s.symbol: s.id for s in signals}
 
         cache.update_signal_outcome(
             signal_ids["AAPL"],

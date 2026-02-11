@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -36,39 +37,36 @@ class AnalyzeStockTool(BaseTool):
         """Requires confirmation due to expensive LLM calls."""
         return True
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Run comprehensive trading analysis on a stock. Includes technical analysis "
                     "(RSI, MACD), sentiment analysis (FinBERT), news analysis, fundamental analysis, "
                     "and generates a trading recommendation (BUY/SELL/HOLD) with confidence score. "
                     "This is an expensive operation that makes multiple API calls."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "period_days": {
-                            "type": "integer",
-                            "description": "Number of days of historical data to analyze (default: 90)",
-                            "default": 90,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "period_days": ToolParameter(
+                            type="integer",
+                            description="Number of days of historical data to analyze (default: 90)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute full trading analysis.

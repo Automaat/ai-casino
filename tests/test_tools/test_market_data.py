@@ -49,7 +49,7 @@ class TestGetMarketDataTool:
     def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
         tool = GetMarketDataTool(container=test_container_full)
-        definition = tool.get_tool_definition()
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "get_market_data"

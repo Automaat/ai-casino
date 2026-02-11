@@ -6,6 +6,7 @@ from loguru import logger
 
 from src.data.websearch import SearchType
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -35,37 +36,35 @@ class WebSearchTool(BaseTool):
         """Tool name."""
         return "web_search"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Search the web for information. Use 'news' search_type for recent news "
                     "and events, 'general' for broader information and company details."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query",
-                        },
-                        "search_type": {
-                            "type": "string",
-                            "enum": ["general", "news"],
-                            "description": "Type of search: 'general' for broad info, 'news' for recent news",
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "query": ToolParameter(
+                            type="string",
+                            description="The search query",
+                        ),
+                        "search_type": ToolParameter(
+                            type="string",
+                            enum=["general", "news"],
+                            description="Type of search: 'general' for broad info, 'news' for recent news",
+                        ),
                     },
-                    "required": ["query"],
-                },
-            },
-        }
+                    required=["query"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute web search and return formatted results.

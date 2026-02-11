@@ -105,12 +105,11 @@ class TestToolDefinitions:
 
             assert len(definitions) == 11
             for definition in definitions:
-                assert "type" in definition
-                assert definition["type"] == "function"
-                assert "function" in definition
-                assert "name" in definition["function"]
-                assert "description" in definition["function"]
-                assert "parameters" in definition["function"]
+                # ToolDefinition is now a Pydantic model, check its attributes
+                assert definition.type == "function"
+                assert definition.function.name is not None
+                assert definition.function.description is not None
+                assert definition.function.parameters is not None
 
     def test_tool_definitions_have_required_fields(self):
         """Test that tool definitions have proper parameter structure."""
@@ -120,7 +119,6 @@ class TestToolDefinitions:
             definitions = app._tool_registry.get_definitions()
 
             for definition in definitions:
-                params = definition["function"]["parameters"]
-                assert "type" in params
-                assert params["type"] == "object"
-                assert "properties" in params
+                params = definition.function.parameters
+                assert params.type == "object"
+                assert params.properties is not None

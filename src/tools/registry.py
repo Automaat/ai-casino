@@ -3,6 +3,7 @@
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition
 
 
 class ToolRegistry:
@@ -35,11 +36,11 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
-    def get_definitions(self) -> list[dict]:
+    def get_definitions(self) -> list[ToolDefinition]:
         """Get all tool definitions for LLM.
 
         Returns:
-            List of tool definition dicts
+            List of tool definitions
         """
         return [tool.get_tool_definition() for tool in self._tools.values()]
 

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.daemon.config import PositionManagementConfig
 from src.data.broker import AlpacaBroker, BrokerPosition
@@ -25,6 +25,36 @@ def _log_task_exception(task: asyncio.Task[object]) -> None:
     exc = task.exception()
     if exc is not None:
         logger.opt(exception=exc).error("Background task failed")
+
+
+class PositionContext(BaseModel):
+    """Position context for trader decisions."""
+
+    entry_price: float = Field(gt=0.0, description="Entry price for the position")
+    days_held: int = Field(ge=0, description="Number of days position has been held")
+    current_stop_loss: float = Field(gt=0.0, description="Current stop loss price")
+    profit_targets: list[float] = Field(default_factory=list, description="Profit target prices")
+    trailing_activated: bool = Field(default=False, description="Whether trailing stop is activated")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"PositionContext(entry={self.entry_price:.2f}, "
+            f"days={self.days_held}, stop={self.current_stop_loss:.2f})"
+        )
+
+
+class MarketEvent(BaseModel):
+    """Market event record."""
+
+    timestamp: datetime = Field(description="Event timestamp")
+    event_type: str = Field(description="Event type (HALT, NEWS, EARNINGS)")
+    symbol: str = Field(description="Stock ticker symbol")
+    description: str = Field(description="Event description")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"MarketEvent(type={self.event_type}, symbol={self.symbol})"
 
 
 class PositionRecord(BaseModel):

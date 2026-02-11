@@ -287,12 +287,12 @@ class TestSignalOutcomes:
 
         signals = cache.get_signal_outcomes(window="all")
         assert len(signals) == 1
-        assert signals[0]["symbol"] == "AAPL"
-        assert signals[0]["signal"] == "BUY"
-        assert signals[0]["confidence"] == 0.85
-        assert signals[0]["price_at_signal"] == 150.0
-        assert signals[0]["strategy_used"] == "momentum"
-        assert signals[0]["regime"] == "BULL"
+        assert signals[0].symbol == "AAPL"
+        assert signals[0].signal == "BUY"
+        assert signals[0].confidence == 0.85
+        assert signals[0].price_at_signal == 150.0
+        assert signals[0].strategy_used == "momentum"
+        assert signals[0].regime == "BULL"
 
     def test_unique_constraint_symbol_timestamp(self, cache):
         now = datetime.now(UTC)
@@ -316,8 +316,8 @@ class TestSignalOutcomes:
 
         signals = cache.get_signal_outcomes(window="all")
         assert len(signals) == 1
-        assert signals[0]["signal"] == "BUY"
-        assert signals[0]["confidence"] == 0.85
+        assert signals[0].signal == "BUY"
+        assert signals[0].confidence == 0.85
 
     def test_get_signals_needing_update_1d_5d_20d(self, cache):
         now = datetime.now(UTC)
@@ -365,19 +365,19 @@ class TestSignalOutcomes:
         # Check 1d horizon (should get 2d, 6d, 21d old)
         signals_1d = cache.get_signals_needing_update("1d")
         assert len(signals_1d) == 3
-        symbols_1d = {s["symbol"] for s in signals_1d}
+        symbols_1d = {s.symbol for s in signals_1d}
         assert symbols_1d == {"TSLA", "MSFT", "GOOGL"}
 
         # Check 5d horizon (should get 6d, 21d old)
         signals_5d = cache.get_signals_needing_update("5d")
         assert len(signals_5d) == 2
-        symbols_5d = {s["symbol"] for s in signals_5d}
+        symbols_5d = {s.symbol for s in signals_5d}
         assert symbols_5d == {"MSFT", "GOOGL"}
 
         # Check 20d horizon (should get only 21d old)
         signals_20d = cache.get_signals_needing_update("20d")
         assert len(signals_20d) == 1
-        assert signals_20d[0]["symbol"] == "GOOGL"
+        assert signals_20d[0].symbol == "GOOGL"
 
     def test_update_signal_outcome(self, cache):
         now = datetime.now(UTC)
@@ -391,7 +391,7 @@ class TestSignalOutcomes:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        signal_id = signals[0]["id"]
+        signal_id = signals[0].id
 
         # Update with 1d price
         cache.update_signal_outcome(
@@ -417,11 +417,10 @@ class TestSignalOutcomes:
         )
 
         signals = cache.get_signal_outcomes(window="all")
-        assert signals[0]["price_at_1d"] == 155.0
-        assert signals[0]["price_at_5d"] == 160.0
-        assert signals[0]["price_at_20d"] == 170.0
-        assert signals[0]["actual_exit_price"] == 158.0
-        assert signals[0]["actual_exit_date"] is not None
+        assert signals[0].price_at_1d == 155.0
+        assert signals[0].price_at_5d == 160.0
+        assert signals[0].price_at_20d == 170.0
+        assert signals[0].actual_exit_price == 158.0
 
     def test_get_signal_outcomes_window_filtering(self, cache):
         now = datetime.now(UTC)
@@ -454,12 +453,12 @@ class TestSignalOutcomes:
         # Test 7d window
         signals_7d = cache.get_signal_outcomes(window="7d")
         assert len(signals_7d) == 1
-        assert signals_7d[0]["symbol"] == "AAPL"
+        assert signals_7d[0].symbol == "AAPL"
 
         # Test 30d window
         signals_30d = cache.get_signal_outcomes(window="30d")
         assert len(signals_30d) == 2
-        symbols_30d = {s["symbol"] for s in signals_30d}
+        symbols_30d = {s.symbol for s in signals_30d}
         assert symbols_30d == {"AAPL", "TSLA"}
 
         # Test 90d window

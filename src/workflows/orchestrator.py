@@ -267,15 +267,15 @@ class TradingWorkflow:
             collector_token = current_collector.set(collector)
 
         try:
-            extra_context: WorkflowExtraContext = {
-                "sector_rotation_context": context_kwargs.get("sector_context"),
-                "earnings_context": context_kwargs.get("earnings_context"),
-                "peer_analysis_context": context_kwargs.get("peer_analysis_context"),
-                "game_plan_context": context_kwargs.get("game_plan_context"),
-                "position_context": position_context,
-                "enable_multi_timeframe": enable_multi_timeframe,
-                "degradation_context": degradation_context,
-            }
+            extra_context = WorkflowExtraContext(
+                sector_rotation_context=context_kwargs.get("sector_context"),
+                earnings_context=context_kwargs.get("earnings_context"),
+                peer_analysis_context=context_kwargs.get("peer_analysis_context"),
+                game_plan_context=context_kwargs.get("game_plan_context"),
+                position_context=position_context,
+                enable_multi_timeframe=enable_multi_timeframe,
+                degradation_context=degradation_context,
+            )
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
             )
@@ -303,15 +303,15 @@ class TradingWorkflow:
         """
         from src.daemon.degradation import DegradationTier
 
-        ctx = extra_context or {}
-        degradation_context: DegradationContext | None = ctx.get("degradation_context")
+        ctx = extra_context or WorkflowExtraContext()
+        degradation_context: DegradationContext | None = ctx.degradation_context
 
         # Check if halted
         if degradation_context and degradation_context.tier == DegradationTier.HALTED:
             msg = f"Analysis halted: {degradation_context.halt_reason}"
             raise RuntimeError(msg)
 
-        enable_multi_timeframe = bool(ctx.get("enable_multi_timeframe", False))
+        enable_multi_timeframe = bool(ctx.enable_multi_timeframe)
 
         # Stage 1: Fetch data
         start = time.perf_counter()
@@ -394,11 +394,11 @@ class TradingWorkflow:
         # Stage 6: Make decision
         start = time.perf_counter()
         decision_context = DecisionContext(
-            sector_rotation=ctx.get("sector_rotation_context"),
-            earnings=ctx.get("earnings_context"),
-            peer_analysis=ctx.get("peer_analysis_context"),
-            game_plan=ctx.get("game_plan_context"),
-            position=ctx.get("position_context"),
+            sector_rotation=ctx.sector_rotation_context,
+            earnings=ctx.earnings_context,
+            peer_analysis=ctx.peer_analysis_context,
+            game_plan=ctx.game_plan_context,
+            position=ctx.position_context,
         )
         decision_input = DecisionInput(
             symbol=symbol,

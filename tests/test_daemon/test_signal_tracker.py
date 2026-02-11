@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.daemon.signal_tracker import SignalOutcomeTracker
+from src.metrics.models import SignalUpdateRecord
 
 
 @pytest.fixture
@@ -39,8 +40,20 @@ class TestSignalOutcomeTracker:
     def test_get_early_exits_skips_implementation(self, signal_tracker):
         """Verify early exit detection returns empty dict (not implemented)."""
         signals = [
-            {"symbol": "AAPL", "signal": "BUY", "confidence": 0.8},
-            {"symbol": "MSFT", "signal": "SELL", "confidence": 0.7},
+            SignalUpdateRecord(
+                id=1,
+                symbol="AAPL",
+                timestamp="2024-01-01T00:00:00",
+                signal="BUY",
+                price_at_signal=150.0,
+            ),
+            SignalUpdateRecord(
+                id=2,
+                symbol="MSFT",
+                timestamp="2024-01-01T00:00:00",
+                signal="SELL",
+                price_at_signal=200.0,
+            ),
         ]
 
         result = signal_tracker._get_early_exits(signals)

@@ -377,6 +377,150 @@ def analyze(self, request: AnalysisRequest) -> AnalysisResult:
 
 **Exceptions:** Only use dicts for truly dynamic key-value stores (e.g., JSON from external API that you immediately parse into types)
 
+### Dict vs Typed Class Decision Matrix
+
+**ALWAYS create typed classes (Pydantic/dataclasses) instead of dicts/kwargs for structured data.**
+
+#### ✅ When Dict/Kwargs is Acceptable
+
+1. **Framework Requirements**
+   - LLM tool execution: `execute(**kwargs)` - Required for function calling interface
+   - Decorators: `wrapper(*args, **kwargs)` with ParamSpec - Preserves signatures
+   - UI frameworks: `super().__init__(**kwargs)` - Framework inheritance requirement
+
+2. **Dynamic Key-Value Storage**
+   - Caches: `_cache: dict[str, tuple[datetime, Any]]` - Truly dynamic keys
+   - Registries: `_tools: dict[str, BaseTool]` - Runtime registration
+   - Lookups: `STRATEGY_MAP: dict[MarketRegime, str]` - Enum mappings
+
+3. **Template Interpolation**
+   - Prompt loading: `load("user", **variables)` - f-string format() requires kwargs
+   - Must be typed: `**kwargs: str | int | float | list | dict` (not `Any`)
+
+4. **External API Intermediate**
+   - Alpha Vantage raw response: Parse immediately into typed model
+   - Keep dict only during validation/parsing step
+
+#### ❌ When to Use Typed Class
+
+1. **Function Return Values**
+   ```python
+   # ❌ Bad
+   def get_earnings_flags(...) -> dict:
+       return {"upcoming_earnings": True, "days_until_earnings": 5}
+
+   # ✅ Good
+   class EarningsFlags(BaseModel):
+       upcoming_earnings: bool
+       days_until_earnings: int | None
+
+   def get_earnings_flags(...) -> EarningsFlags:
+       return EarningsFlags(upcoming_earnings=True, days_until_earnings=5)
+   ```
+
+2. **Function Parameters**
+   ```python
+   # ❌ Bad
+   def analyze(self, metrics: dict[str, float | None]) -> Analysis:
+
+   # ✅ Good
+   class FundamentalMetrics(BaseModel):
+       pe_ratio: float | None = None
+       eps: float | None = None
+
+   def analyze(self, metrics: FundamentalMetrics) -> Analysis:
+   ```
+
+3. **State Objects**
+   ```python
+   # ❌ Bad
+   state = {**state, "final_decision": decision}
+
+   # ✅ Good
+   class DecisionState(BaseModel):
+       final_decision: TradingDecision
+
+   state = DecisionState(final_decision=decision)
+   ```
+
+4. **Configuration**
+   ```python
+   # ❌ Bad
+   kwargs = {"universe": "sp500", "top_n": 10}
+   screen(**kwargs)
+
+   # ✅ Good
+   class ScreeningArgs(BaseModel):
+       universe: str
+       top_n: int
+
+   args = ScreeningArgs(universe="sp500", top_n=10)
+   screen(args)
+   ```
+
+5. **API Schemas**
+   ```python
+   # ❌ Bad
+   def get_tool_definition(self) -> dict:
+       return {"type": "function", "function": {...}}
+
+   # ✅ Good
+   class ToolDefinition(BaseModel):
+       type: str = "function"
+       function: ToolFunction
+
+   def get_tool_definition(self) -> ToolDefinition:
+       return ToolDefinition(function=ToolFunction(...))
+   ```
+
+#### Model Creation Checklist
+
+When creating a new Pydantic model:
+
+1. ✅ Use descriptive name: `{Component}{Purpose}` (e.g., `EarningsFlags`, `FundamentalMetrics`)
+2. ✅ Add docstring: One-line description
+3. ✅ Use `Field()` for validation: `Field(ge=0.0, le=1.0, description="...")`
+4. ✅ Use `Field(default_factory=list)` for mutable defaults
+5. ✅ Add `class Config: arbitrary_types_allowed = True` if using DataFrame/datetime
+6. ✅ Use `| None` for optional fields (not `Optional[T]`)
+7. ✅ Use StrEnum for fixed string values
+8. ✅ Add `@property` for computed fields (not extra model fields)
+9. ✅ Implement `__repr__()` for debugging
+
+Example:
+```python
+class TechnicalMetrics(BaseModel):
+    """Technical analysis metrics."""
+
+    rsi: float = Field(ge=0.0, le=100.0, description="RSI indicator")
+    macd_hist: float
+    interpretation: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    warnings: list[str] = Field(default_factory=list)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    @property
+    def is_oversold(self) -> bool:
+        """Check if RSI indicates oversold."""
+        return self.rsi < 30.0
+
+    def __repr__(self) -> str:
+        return f"TechnicalMetrics(rsi={self.rsi:.1f}, confidence={self.confidence:.2f})"
+```
+
+#### Migration Pattern
+
+When refactoring dict → typed class:
+
+1. Create model in appropriate location (`src/{module}/models.py`)
+2. Update function signature: `-> dict` → `-> ModelName`
+3. Replace dict construction: `return {...}` → `return ModelName(...)`
+4. Update consumers: Access via attributes not keys
+5. Add `.model_dump()` at API boundaries if needed temporarily
+6. Run `mise typecheck` to verify
+
 ---
 
 ## Architecture Patterns

@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel
-from typing_extensions import TypedDict
-
-if TYPE_CHECKING:
-    from src.daemon.degradation import DegradationContext
 
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
@@ -21,22 +15,28 @@ from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearc
 from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis
 from src.agents.web_researcher import WebResearchAnalysis
+from src.daemon.degradation import DegradationContext
 from src.data.broker import OrderStatus
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
 
 
-class WorkflowExtraContext(TypedDict, total=False):
+class WorkflowExtraContext(BaseModel):
     """Optional context passed to workflow pipeline."""
 
-    degradation_context: DegradationContext | None
-    enable_multi_timeframe: bool
-    sector_rotation_context: str | None
-    earnings_context: str | None
-    peer_analysis_context: str | None
-    game_plan_context: str | None
-    position_context: dict[str, object] | None
+    degradation_context: DegradationContext | None = None
+    enable_multi_timeframe: bool = False
+    sector_rotation_context: str | None = None
+    earnings_context: str | None = None
+    peer_analysis_context: str | None = None
+    game_plan_context: str | None = None
+    position_context: dict[str, object] | None = None
+
+    class Config:
+        """Pydantic config."""
+
+        arbitrary_types_allowed = True
 
 
 class BacktestValidation(BaseModel):

@@ -13,6 +13,8 @@ import pandas as pd
 from loguru import logger
 from pandas.tseries.offsets import BDay
 
+from src.metrics.models import SignalRecord, SignalUpdateRecord
+
 if TYPE_CHECKING:
     from src.data.broker import OrderStatus
 
@@ -615,7 +617,7 @@ class HistoricalCache:
             self._conn.commit()
         logger.debug(f"Recorded signal outcome for {symbol} ({signal} @ {price_at_signal:.2f})")
 
-    def get_signals_needing_update(self, horizon: str) -> list[dict]:
+    def get_signals_needing_update(self, horizon: str) -> list[SignalUpdateRecord]:
         """Get signals that need outcome price updates for a given horizon.
 
         Args:
@@ -639,14 +641,14 @@ class HistoricalCache:
             ).fetchall()
 
         return [
-            {
-                "id": r[0],
-                "symbol": r[1],
-                "timestamp": r[2],
-                "signal": r[3],
-                "price_at_signal": r[4],
-                "actual_exit_price": r[5],
-            }
+            SignalUpdateRecord(
+                id=int(r[0]),
+                symbol=str(r[1]),
+                timestamp=str(r[2]),
+                signal=str(r[3]),
+                price_at_signal=float(r[4]),
+                actual_exit_price=float(r[5]) if r[5] is not None else None,
+            )
             for r in rows
         ]
 
@@ -675,7 +677,7 @@ class HistoricalCache:
         self,
         window: str = "all",
         signal_type: str | None = None,
-    ) -> list[dict]:
+    ) -> list[SignalRecord]:
         """Get signal outcomes for metrics calculation.
 
         Args:
@@ -724,7 +726,35 @@ class HistoricalCache:
             "outcome_updated_at",
         ]
 
-        return [dict(zip(cols, row, strict=False)) for row in rows]
+        # Convert rows to SignalRecord instances
+        records: list[SignalRecord] = []
+        for row in rows:
+            record_dict = dict(zip(cols, row, strict=False))
+            records.append(
+                SignalRecord(
+                    id=int(record_dict["id"]),
+                    symbol=str(record_dict["symbol"]),
+                    timestamp=str(record_dict["timestamp"]),
+                    signal=str(record_dict["signal"]),
+                    confidence=float(record_dict["confidence"]),
+                    price_at_signal=float(record_dict["price_at_signal"]),
+                    strategy_used=str(record_dict["strategy_used"])
+                    if record_dict.get("strategy_used")
+                    else None,
+                    price_at_1d=float(record_dict["price_at_1d"]) if record_dict.get("price_at_1d") else None,
+                    price_at_5d=float(record_dict["price_at_5d"]) if record_dict.get("price_at_5d") else None,
+                    price_at_20d=float(record_dict["price_at_20d"])
+                    if record_dict.get("price_at_20d")
+                    else None,
+                    actual_exit_price=(
+                        float(record_dict["actual_exit_price"])
+                        if record_dict.get("actual_exit_price")
+                        else None
+                    ),
+                    regime=str(record_dict["regime"]) if record_dict.get("regime") else None,
+                ),
+            )
+        return records
 
     def stats(self) -> dict[str, int]:
         """Get row counts for all tables.

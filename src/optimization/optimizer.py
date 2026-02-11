@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import optuna
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from src.backtesting.runner import BacktestRunner
 from src.backtesting.strategies import (
@@ -17,6 +18,19 @@ from src.backtesting.strategies import (
 from src.optimization.results import OptimizationResult
 from src.optimization.search_space import SearchSpace, StrategyType, get_search_space
 from src.optimization.validation import WalkForwardValidator
+
+
+class OptimizationMetrics(BaseModel):
+    """Optimization metrics result."""
+
+    sharpe_ratio: float = Field(description="Sharpe ratio")
+    total_return: float = Field(description="Total return")
+    max_drawdown: float = Field(description="Maximum drawdown")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"OptimizationMetrics(sharpe={self.sharpe_ratio:.2f}, return={self.total_return:.2%})"
+
 
 STRATEGY_CLASSES = {
     StrategyType.MOMENTUM: MomentumBacktestStrategy,
@@ -219,11 +233,11 @@ class OptunaOptimizer:
             ]
             best_trial = max(study.best_trials, key=lambda t: t.values[0])
             best_params = best_trial.params
-            best_metrics = {
-                "sharpe_ratio": best_trial.values[0],
-                "total_return": best_trial.values[1],
-                "max_drawdown": best_trial.values[2],
-            }
+            best_metrics = OptimizationMetrics(
+                sharpe_ratio=best_trial.values[0],
+                total_return=best_trial.values[1],
+                max_drawdown=best_trial.values[2],
+            ).model_dump()
             return best_params, best_metrics, pareto_front
 
         best_params = study.best_params
@@ -234,11 +248,11 @@ class OptunaOptimizer:
             end_date=ctx.end_date,
             strategy_class=strategy_class,
         )
-        best_metrics = {
-            "sharpe_ratio": final_result.sharpe_ratio,
-            "total_return": final_result.total_return,
-            "max_drawdown": abs(final_result.max_drawdown),
-        }
+        best_metrics = OptimizationMetrics(
+            sharpe_ratio=final_result.sharpe_ratio,
+            total_return=final_result.total_return,
+            max_drawdown=abs(final_result.max_drawdown),
+        ).model_dump()
         return best_params, best_metrics, None
 
     def optimize(
