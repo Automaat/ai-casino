@@ -221,7 +221,6 @@ If no specific stocks are affected, return "NONE".
             f"confidence={trump_analysis.confidence:.2f}"
         )
 
-        results: dict[str, TradingWorkflowResult] = {}
         semaphore = asyncio.Semaphore(2)  # Limit concurrent analyses
         workflow = self._workflow
 
@@ -248,12 +247,26 @@ If no specific stocks are affected, return "NONE".
         async with asyncio.TaskGroup() as tg:
             task_results = [tg.create_task(safe_analyze(s)) for s in symbols]
 
-        # Extract results from tasks
         raw_results = [task.result() for task in task_results]
+        return self._process_analysis_results(raw_results, len(symbols))
 
+    def _process_analysis_results(
+        self,
+        raw_results: list[tuple[str, TradingWorkflowResult | None] | BaseException],
+        total_symbols: int,
+    ) -> dict[str, TradingWorkflowResult]:
+        """Process raw analysis results and extract successful ones.
+
+        Args:
+            raw_results: Raw results from parallel analyses
+            total_symbols: Total number of symbols analyzed
+
+        Returns:
+            Dict mapping symbol to successful analysis results
+        """
+        results: dict[str, TradingWorkflowResult] = {}
         for entry in raw_results:
             if isinstance(entry, BaseException):
-                # Preserve cancellation/shutdown semantics
                 if isinstance(entry, (asyncio.CancelledError, KeyboardInterrupt)):
                     raise entry
                 logger.error(f"Analysis task failed: {entry}")
@@ -262,6 +275,7 @@ If no specific stocks are affected, return "NONE".
             if result:
                 results[symbol] = result
 
+        logger.debug(f"Analysis complete: {len(results)}/{total_symbols} successful")
         return results
 
     def _emit_signal(self, signal: TrumpSignal) -> None:
