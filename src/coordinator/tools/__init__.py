@@ -32,6 +32,7 @@ def build_coordinator_registry(
     # Lazy imports to avoid circular dependencies
     from src.coordinator.memory import CoordinatorMemory
     from src.coordinator.tools.analyze import AnalyzeSymbolTool
+    from src.coordinator.tools.decision_history import QueryPastDecisionsTool
     from src.coordinator.tools.execute_trade import ExecuteTradeTool
     from src.coordinator.tools.generate_game_plan import GenerateGamePlanTool
     from src.coordinator.tools.history import AnalysisHistoryTool
@@ -84,6 +85,7 @@ def build_coordinator_registry(
 
     # Register analysis history tool with memory (always registered)
     registry.register(AnalysisHistoryTool(memory))
+    registry.register(QueryPastDecisionsTool(memory))
     registry.register(SaveObservationTool(memory))
 
     # Register reflection tool if coordinator provided

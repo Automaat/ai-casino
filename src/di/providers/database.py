@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from src.database.repositories.discovery import DiscoveryHistoryRepository
     from src.database.repositories.position import PositionRecordRepository
     from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.repositories.signal_outcome import SignalOutcomeRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
     from src.database.repositories.trade import TradeRepository
 
@@ -184,3 +185,18 @@ def create_trade_repository(database_engine: DatabaseEngine) -> TradeRepository:
 
     session = database_engine.session()
     return TradeRepository(session)
+
+
+def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalOutcomeRepository:
+    """Create SignalOutcomeRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        SignalOutcomeRepository instance
+    """
+    from src.database.repositories.signal_outcome import SignalOutcomeRepository
+
+    session = database_engine.session()
+    return SignalOutcomeRepository(session)

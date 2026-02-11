@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from src.daemon.scheduler import MarketScheduler
     from src.daemon.state import DaemonState
     from src.data.broker import AlpacaBroker
+    from src.database.repositories.signal_outcome import SignalOutcomeRepository
     from src.workflows import TradingWorkflow
 
 
@@ -58,6 +59,7 @@ class AnalysisOrchestrator:
         position_manager: PositionManager | None = None,
         event_bus: EventBus | None = None,
         historical_cache: HistoricalCache | None = None,
+        signal_outcome_repository: SignalOutcomeRepository | None = None,
         notification_service: NotificationService | None = None,
         context_builder: DaemonContextBuilder | None = None,
         components: DaemonComponents | None = None,
@@ -73,7 +75,8 @@ class AnalysisOrchestrator:
             broker: Optional broker for position fetching
             position_manager: Optional position manager
             event_bus: Optional event bus for publishing
-            historical_cache: Optional historical cache
+            historical_cache: Optional historical cache (deprecated, use signal_outcome_repository)
+            signal_outcome_repository: PostgreSQL repository for signal outcomes
             notification_service: Optional notification service
             context_builder: Optional context builder for analysis contexts
             components: Optional daemon components for notification helper
@@ -87,6 +90,7 @@ class AnalysisOrchestrator:
         self.position_manager = position_manager
         self.event_bus = event_bus
         self.historical_cache = historical_cache
+        self._signal_outcome_repo = signal_outcome_repository
         self.notification_service = notification_service
         self._context_builder = context_builder
         self._components = components
@@ -404,8 +408,25 @@ class AnalysisOrchestrator:
                 reasoning=result.decision.reasoning,
             )
 
-            # Record signal outcome in historical cache
-            if self.historical_cache:
+            # Record signal outcome in PostgreSQL (preferred) or SQLite (fallback)
+            if self._signal_outcome_repo:
+                try:
+                    await self._signal_outcome_repo.record_signal(
+                        symbol=symbol,
+                        timestamp=datetime.now(UTC),
+                        signal=result.decision.action.value,
+                        confidence=result.decision.confidence,
+                        price_at_signal=result.risk.current_price,
+                        strategy_used=result.strategy_used,
+                        regime=result.regime.regime.value if result.regime else None,
+                        trading_session=result.trading_session.value,
+                        technical_signal=result.technical.signal.value,
+                        sentiment_signal=self._extract_sentiment_signal(result.sentiment),
+                        news_signal=self._extract_news_signal(result.news),
+                    )
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Failed to record signal outcome: {e}")
+            elif self.historical_cache:
                 try:
                     self.historical_cache.record_signal_outcome(
                         symbol=symbol,

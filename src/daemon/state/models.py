@@ -221,3 +221,34 @@ class ProfilingRecord(BaseModel):
     profiling_overhead_percent: float
     top_function: str | None = None
     top_function_cumtime: float | None = None
+
+
+class SignalOutcome(BaseModel):
+    """Signal outcome record for persistent learning."""
+
+    symbol: str
+    timestamp: datetime
+    signal: str
+    confidence: float
+    price_at_signal: float
+    strategy_used: str | None = None
+    regime: str | None = None
+    trading_session: str = "REGULAR"
+    technical_signal: str | None = None
+    sentiment_signal: str | None = None
+    news_signal: str | None = None
+    price_at_1d: float | None = None
+    price_at_5d: float | None = None
+    price_at_20d: float | None = None
+    actual_exit_price: float | None = None
+    actual_exit_date: datetime | None = None
+    outcome_updated_at: datetime | None = None
+
+
+class SignalUpdateRecord(BaseModel):
+    """Record representing a signal that needs outcome price update."""
+
+    id: str
+    symbol: str
+    timestamp: datetime
+    target_date: datetime

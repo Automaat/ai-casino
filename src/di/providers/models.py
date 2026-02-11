@@ -244,9 +244,22 @@ def create_coordinator_tool_registry(
     if daemon_state is not None:
         broker = container.alpaca_broker()
         analysis_repo = container.analysis_repository()
+
+        # Get signal outcome repository if database enabled
+        signal_outcome_repo = None
+        daemon_config = container.daemon_config()
+        if daemon_config.database.enable_persistence:
+            try:
+                signal_outcome_repo = container.signal_outcome_repository()
+            except Exception as e:
+                from loguru import logger
+
+                logger.warning(f"Failed to create signal_outcome_repository for memory: {e}")
+
         memory = CoordinatorMemory(
             daemon_state=daemon_state,
             analysis_repo=analysis_repo,
+            signal_outcome_repo=signal_outcome_repo,
             broker=broker,
         )
 

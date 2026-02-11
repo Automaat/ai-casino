@@ -71,6 +71,11 @@ class AppContainer(containers.DeclarativeContainer):
         database_engine=database_engine,
     )
 
+    signal_outcome_repository = providers.Factory(
+        database_providers.create_signal_outcome_repository,
+        database_engine=database_engine,
+    )
+
     # Data fetchers - all Singleton
     market_fetcher = providers.Singleton(
         data_providers.create_market_fetcher,

@@ -586,6 +586,14 @@ class DaemonFactory:
         if isinstance(components.position_manager, PositionManager):
             position_manager = components.position_manager
 
+        # Get signal outcome repository from container if database enabled
+        signal_outcome_repo = None
+        if self.config.database.enable_persistence:
+            try:
+                signal_outcome_repo = components.container.signal_outcome_repository()
+            except Exception as e:
+                logger.warning(f"Failed to create signal_outcome_repository: {e}")
+
         orchestrator = AnalysisOrchestrator(
             workflow=workflow,
             state=components.state,
@@ -596,6 +604,7 @@ class DaemonFactory:
             position_manager=position_manager,
             event_bus=event_bus,
             historical_cache=components.historical_cache,
+            signal_outcome_repository=signal_outcome_repo,
             notification_service=components.notification_service,
             context_builder=context_builder,
             components=components,  # type: ignore[arg-type]  # pyrefly module resolution issue

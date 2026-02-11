@@ -1,0 +1,442 @@
+"""Signal outcome repository for persistent learning database operations."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from loguru import logger
+from sqlalchemy import and_, select
+
+from src.daemon.state.models import SignalOutcome, SignalUpdateRecord
+from src.database.models import SignalOutcomeORM
+from src.database.repositories.base import BaseRepository
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
+    """Repository for signal outcome persistence and learning queries."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with database session.
+
+        Args:
+            session: SQLAlchemy async session
+        """
+        super().__init__(session)
+        logger.debug("Initialized SignalOutcomeRepository")
+
+    async def record_signal(
+        self,
+        symbol: str,
+        timestamp: datetime,
+        signal: str,
+        confidence: float,
+        price_at_signal: float,
+        strategy_used: str | None = None,
+        regime: str | None = None,
+        trading_session: str = "REGULAR",
+        technical_signal: str | None = None,
+        sentiment_signal: str | None = None,
+        news_signal: str | None = None,
+    ) -> SignalOutcome:
+        """Record a new trading signal for outcome tracking.
+
+        Args:
+            symbol: Stock ticker symbol
+            timestamp: Signal timestamp
+            signal: BUY/SELL/HOLD
+            confidence: Confidence score (0.0-1.0)
+            price_at_signal: Price when signal was generated
+            strategy_used: Strategy name (optional)
+            regime: Market regime (optional)
+            trading_session: REGULAR or PRE_MARKET
+            technical_signal: Technical analysis signal (optional)
+            sentiment_signal: Sentiment analysis signal (optional)
+            news_signal: News analysis signal (optional)
+
+        Returns:
+            Created SignalOutcome
+        """
+        orm = SignalOutcomeORM(
+            id=uuid.uuid4(),
+            symbol=symbol,
+            timestamp=timestamp,
+            signal=signal,
+            confidence=Decimal(str(confidence)),
+            price_at_signal=Decimal(str(price_at_signal)),
+            strategy_used=strategy_used,
+            regime=regime,
+            trading_session=trading_session,
+            technical_signal=technical_signal,
+            sentiment_signal=sentiment_signal,
+            news_signal=news_signal,
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(orm)
+        await self._session.commit()
+
+        logger.info(f"Recorded signal outcome: {symbol} {signal} @ {timestamp} (conf={confidence:.2f})")
+        return self._to_domain(orm)
+
+    async def get_by_id(self, entity_id: str) -> SignalOutcome | None:
+        """Get signal outcome by ID.
+
+        Args:
+            entity_id: Signal outcome UUID string
+
+        Returns:
+            SignalOutcome if found, None otherwise
+        """
+        result = await self._session.execute(
+            select(SignalOutcomeORM).where(SignalOutcomeORM.id == uuid.UUID(entity_id))
+        )
+        orm = result.scalar_one_or_none()
+        return self._to_domain(orm) if orm else None
+
+    async def get_by_symbol(
+        self,
+        symbol: str,
+        limit: int = 50,
+        start_date: datetime | None = None,
+    ) -> list[SignalOutcome]:
+        """Get signal outcomes for specific symbol.
+
+        Args:
+            symbol: Stock ticker symbol
+            limit: Maximum number of records to return
+            start_date: Optional start date filter (inclusive)
+
+        Returns:
+            List of SignalOutcomes for symbol
+        """
+        stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.symbol == symbol)
+
+        if start_date:
+            stmt = stmt.where(SignalOutcomeORM.timestamp >= start_date)
+
+        stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc()).limit(limit)
+
+        result = await self._session.execute(stmt)
+        return [self._to_domain(orm) for orm in result.scalars().all()]
+
+    async def get_signals_needing_update(self, horizon: str) -> list[SignalUpdateRecord]:
+        """Get signals that need outcome price updates for given horizon.
+
+        Args:
+            horizon: Time horizon - "1d", "5d", or "20d"
+
+        Returns:
+            List of SignalUpdateRecords needing updates
+        """
+        horizon_days = {"1d": 1, "5d": 5, "20d": 20}
+        days = horizon_days.get(horizon, 1)
+        price_field = f"price_at_{horizon}"
+
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(days=days + 2)  # +2 buffer for weekends
+
+        stmt = (
+            select(SignalOutcomeORM.id, SignalOutcomeORM.symbol, SignalOutcomeORM.timestamp)
+            .where(
+                and_(
+                    SignalOutcomeORM.timestamp <= cutoff,
+                    getattr(SignalOutcomeORM, price_field).is_(None),
+                )
+            )
+            .order_by(SignalOutcomeORM.timestamp.desc())
+            .limit(100)
+        )
+
+        result = await self._session.execute(stmt)
+        records = []
+        for row in result.all():
+            target_date = row.timestamp + timedelta(days=days)
+            records.append(
+                SignalUpdateRecord(
+                    id=str(row.id),
+                    symbol=row.symbol,
+                    timestamp=row.timestamp,
+                    target_date=target_date,
+                )
+            )
+        return records
+
+    async def update_outcome_prices(
+        self,
+        signal_id: str,
+        price_at_1d: float | None = None,
+        price_at_5d: float | None = None,
+        price_at_20d: float | None = None,
+    ) -> None:
+        """Update outcome prices for a signal.
+
+        Args:
+            signal_id: Signal outcome UUID string
+            price_at_1d: Price at 1 day (optional)
+            price_at_5d: Price at 5 days (optional)
+            price_at_20d: Price at 20 days (optional)
+        """
+        result = await self._session.execute(
+            select(SignalOutcomeORM).where(SignalOutcomeORM.id == uuid.UUID(signal_id))
+        )
+        orm = result.scalar_one_or_none()
+
+        if not orm:
+            logger.warning(f"Signal outcome {signal_id} not found for update")
+            return
+
+        if price_at_1d is not None:
+            orm.price_at_1d = Decimal(str(price_at_1d))
+        if price_at_5d is not None:
+            orm.price_at_5d = Decimal(str(price_at_5d))
+        if price_at_20d is not None:
+            orm.price_at_20d = Decimal(str(price_at_20d))
+
+        orm.outcome_updated_at = datetime.now(UTC)
+        await self._session.commit()
+        logger.debug(f"Updated outcome prices for signal {signal_id}")
+
+    async def get_success_rate_by_regime(
+        self,
+        regime: str,
+        horizon: str = "5d",
+        min_confidence: float | None = None,
+        days_back: int = 90,
+        signal_type: str | None = None,
+    ) -> dict[str, float]:
+        """Calculate success rate by regime.
+
+        Args:
+            regime: Market regime filter
+            horizon: Time horizon - "1d", "5d", or "20d"
+            min_confidence: Minimum confidence filter (optional)
+            days_back: Number of days to look back
+            signal_type: BUY/SELL filter (optional)
+
+        Returns:
+            Dict with success_rate, total_decisions, hit_count, miss_count
+        """
+        price_field = f"price_at_{horizon}"
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
+
+        stmt = select(
+            SignalOutcomeORM.signal,
+            SignalOutcomeORM.price_at_signal,
+            getattr(SignalOutcomeORM, price_field),
+        ).where(
+            and_(
+                SignalOutcomeORM.regime == regime,
+                SignalOutcomeORM.timestamp >= cutoff,
+                getattr(SignalOutcomeORM, price_field).is_not(None),
+            )
+        )
+
+        if min_confidence is not None:
+            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+
+        if signal_type:
+            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+
+        result = await self._session.execute(stmt)
+        rows = result.all()
+
+        if not rows:
+            return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
+
+        hit_count = 0
+        miss_count = 0
+
+        for row in rows:
+            signal = row[0]
+            entry_price = float(row[1])
+            exit_price = float(row[2])
+
+            if signal == "BUY":
+                is_hit = exit_price > entry_price
+            elif signal == "SELL":
+                is_hit = exit_price < entry_price
+            else:  # HOLD
+                continue
+
+            if is_hit:
+                hit_count += 1
+            else:
+                miss_count += 1
+
+        total = hit_count + miss_count
+        success_rate = hit_count / total if total > 0 else 0.0
+
+        return {
+            "success_rate": success_rate,
+            "total_decisions": total,
+            "hit_count": hit_count,
+            "miss_count": miss_count,
+        }
+
+    async def get_success_rate_by_strategy(
+        self,
+        strategy: str,
+        horizon: str = "5d",
+        min_confidence: float | None = None,
+        days_back: int = 90,
+        signal_type: str | None = None,
+    ) -> dict[str, float]:
+        """Calculate success rate by strategy.
+
+        Args:
+            strategy: Strategy name filter
+            horizon: Time horizon - "1d", "5d", or "20d"
+            min_confidence: Minimum confidence filter (optional)
+            days_back: Number of days to look back
+            signal_type: BUY/SELL filter (optional)
+
+        Returns:
+            Dict with success_rate, total_decisions, hit_count, miss_count
+        """
+        price_field = f"price_at_{horizon}"
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
+
+        stmt = select(
+            SignalOutcomeORM.signal,
+            SignalOutcomeORM.price_at_signal,
+            getattr(SignalOutcomeORM, price_field),
+        ).where(
+            and_(
+                SignalOutcomeORM.strategy_used == strategy,
+                SignalOutcomeORM.timestamp >= cutoff,
+                getattr(SignalOutcomeORM, price_field).is_not(None),
+            )
+        )
+
+        if min_confidence is not None:
+            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+
+        if signal_type:
+            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+
+        result = await self._session.execute(stmt)
+        rows = result.all()
+
+        if not rows:
+            return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
+
+        hit_count = 0
+        miss_count = 0
+
+        for row in rows:
+            signal = row[0]
+            entry_price = float(row[1])
+            exit_price = float(row[2])
+
+            if signal == "BUY":
+                is_hit = exit_price > entry_price
+            elif signal == "SELL":
+                is_hit = exit_price < entry_price
+            else:  # HOLD
+                continue
+
+            if is_hit:
+                hit_count += 1
+            else:
+                miss_count += 1
+
+        total = hit_count + miss_count
+        success_rate = hit_count / total if total > 0 else 0.0
+
+        return {
+            "success_rate": success_rate,
+            "total_decisions": total,
+            "hit_count": hit_count,
+            "miss_count": miss_count,
+        }
+
+    async def get_recent_outcomes(
+        self,
+        window: int = 90,
+        signal_type: str | None = None,
+        min_confidence: float | None = None,
+    ) -> list[SignalOutcome]:
+        """Get recent signal outcomes within time window.
+
+        Args:
+            window: Number of days to look back
+            signal_type: BUY/SELL/HOLD filter (optional)
+            min_confidence: Minimum confidence filter (optional)
+
+        Returns:
+            List of SignalOutcomes
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=window)
+        stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.timestamp >= cutoff)
+
+        if signal_type:
+            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+
+        if min_confidence is not None:
+            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+
+        stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc())
+
+        result = await self._session.execute(stmt)
+        return [self._to_domain(orm) for orm in result.scalars().all()]
+
+    async def create(self, entity: SignalOutcome) -> SignalOutcome:
+        """Create new signal outcome (alternative to record_signal).
+
+        Args:
+            entity: SignalOutcome to persist
+
+        Returns:
+            Created SignalOutcome
+        """
+        return await self.record_signal(
+            symbol=entity.symbol,
+            timestamp=entity.timestamp,
+            signal=entity.signal,
+            confidence=entity.confidence,
+            price_at_signal=entity.price_at_signal,
+            strategy_used=entity.strategy_used,
+            regime=entity.regime,
+            trading_session=entity.trading_session,
+            technical_signal=entity.technical_signal,
+            sentiment_signal=entity.sentiment_signal,
+            news_signal=entity.news_signal,
+        )
+
+    def _to_domain(self, orm: SignalOutcomeORM) -> SignalOutcome:
+        """Convert ORM model to SignalOutcome domain model.
+
+        Args:
+            orm: SignalOutcomeORM instance
+
+        Returns:
+            SignalOutcome
+        """
+        return SignalOutcome(
+            symbol=orm.symbol,
+            timestamp=orm.timestamp,
+            signal=orm.signal,
+            confidence=float(orm.confidence),
+            price_at_signal=float(orm.price_at_signal),
+            strategy_used=orm.strategy_used,
+            regime=orm.regime,
+            trading_session=orm.trading_session,
+            technical_signal=orm.technical_signal,
+            sentiment_signal=orm.sentiment_signal,
+            news_signal=orm.news_signal,
+            price_at_1d=float(orm.price_at_1d) if orm.price_at_1d is not None else None,
+            price_at_5d=float(orm.price_at_5d) if orm.price_at_5d is not None else None,
+            price_at_20d=float(orm.price_at_20d) if orm.price_at_20d is not None else None,
+            actual_exit_price=float(orm.actual_exit_price) if orm.actual_exit_price is not None else None,
+            actual_exit_date=orm.actual_exit_date,
+            outcome_updated_at=orm.outcome_updated_at,
+        )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "SignalOutcomeRepository()"
