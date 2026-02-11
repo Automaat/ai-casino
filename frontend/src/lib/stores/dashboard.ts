@@ -163,6 +163,102 @@ function createConfigStore() {
 	});
 }
 
+// Service health store
+function createServiceHealthStore() {
+	return readable<T.ServiceHealthResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getServiceHealth();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch service health:', error);
+				set(null);
+			}
+		}
+
+		// Initial fetch
+		fetch();
+
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
+}
+
+// Game plan store
+function createGamePlanStore() {
+	return readable<T.GamePlanResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getGamePlan();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch game plan:', error);
+				set(null);
+			}
+		}
+
+		// Initial fetch
+		fetch();
+
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
+}
+
+// Watchlist store
+function createWatchlistStore() {
+	return readable<T.WatchlistResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getWatchlist();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch watchlist:', error);
+				set(null);
+			}
+		}
+
+		// Initial fetch
+		fetch();
+
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
+}
+
+// Degradation store
+function createDegradationStore() {
+	return readable<T.DegradationResponse | null>(null, (set) => {
+		async function fetch() {
+			try {
+				const data = await api.getDegradation();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch degradation:', error);
+				set(null);
+			}
+		}
+
+		// Initial fetch
+		fetch();
+
+		// Auto-refresh
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+
+		// Cleanup function
+		return () => clearInterval(interval);
+	});
+}
+
 // Export stores
 export const health = createHealthStore();
 export const stateSummary = createStateSummaryStore();
@@ -171,6 +267,10 @@ export const positions = createPositionsStore();
 export const risk = createRiskStore();
 export const correlation = createCorrelationStore();
 export const config = createConfigStore();
+export const serviceHealth = createServiceHealthStore();
+export const gamePlan = createGamePlanStore();
+export const watchlist = createWatchlistStore();
+export const degradation = createDegradationStore();
 
 // Derived stores
 export const isDaemonRunning = derived(health, ($health) => $health?.daemon_running ?? false);

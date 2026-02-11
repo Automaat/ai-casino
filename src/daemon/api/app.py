@@ -31,6 +31,8 @@ from src.daemon.api.models import (
     RiskHistoryResponse,
     RiskReportResponse,
     SectorRotationResponse,
+    ServiceCheck,
+    ServiceHealthResponse,
     SnapshotRecord,
     SnapshotsResponse,
     StateSummaryResponse,
@@ -535,6 +537,42 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             unavailable_services=latest.unavailable_services,
             confidence_adjustment=latest.confidence_adjustment,
             halt_reason=latest.halt_reason,
+        )
+
+    @app.get("/health/services", response_model=ServiceHealthResponse)
+    async def get_service_health() -> ServiceHealthResponse:
+        """Get individual service health checks."""
+        import json
+        from pathlib import Path
+
+        components: DaemonComponents = app.state.components
+
+        def _read_health_report() -> dict[str, Any]:
+            health_dir = Path(components.config.health.health_dir).expanduser()
+            reports = sorted(health_dir.glob("health-*.json"))
+            if not reports:
+                return {"overall_status": "HEALTHY", "service_checks": []}
+            latest_file = reports[-1]
+            return json.loads(latest_file.read_text())
+
+        # Read health report in thread to avoid blocking
+        report_data = await asyncio.to_thread(_read_health_report)
+
+        # Convert ServiceCheckResult to ServiceCheck models
+        service_checks = [
+            ServiceCheck(
+                service=check["service"],
+                status=check["status"],
+                message=check["message"],
+                duration_ms=check["duration_ms"],
+                checked_at=check["checked_at"],
+            )
+            for check in report_data["service_checks"]
+        ]
+
+        return ServiceHealthResponse(
+            overall_status=report_data["overall_status"],
+            service_checks=service_checks,
         )
 
     @app.get("/game-plan", response_model=GamePlanResponse | None)

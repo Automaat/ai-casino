@@ -150,6 +150,23 @@ class DegradationResponse(BaseModel):
     halt_reason: str | None
 
 
+class ServiceCheck(BaseModel):
+    """Individual service health check result."""
+
+    service: str = Field(description="Service name")
+    status: str = Field(description="Health status (HEALTHY/DEGRADED/UNHEALTHY/SKIPPED)")
+    message: str = Field(description="Health check message")
+    duration_ms: float = Field(description="Check duration in milliseconds")
+    checked_at: str = Field(description="ISO timestamp of check")
+
+
+class ServiceHealthResponse(BaseModel):
+    """Service health endpoint response."""
+
+    overall_status: str = Field(description="Overall health (HEALTHY/DEGRADED/UNHEALTHY)")
+    service_checks: list[ServiceCheck] = Field(description="Individual service checks")
+
+
 class MarketEventsResponse(BaseModel):
     """Market events endpoint response."""
 
@@ -279,6 +296,8 @@ __all__ = [
     "RiskHistoryResponse",
     "RiskReportResponse",
     "SectorRotationResponse",
+    "ServiceCheck",
+    "ServiceHealthResponse",
     "SnapshotRecord",
     "SnapshotsResponse",
     "StateSummaryResponse",
