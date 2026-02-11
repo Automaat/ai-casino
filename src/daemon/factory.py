@@ -72,6 +72,7 @@ class DaemonComponents:
     market_fetcher: MarketDataFetcher | None = None
     param_store: OptimizedParamStore | None = None
     profiler: CycleProfiler | None = None
+    coordinator: object | None = None  # TradingCoordinator (None if disabled)
 
 
 class DaemonFactory:
@@ -601,3 +602,32 @@ class DaemonFactory:
 
         components.analysis_orchestrator = orchestrator
         return orchestrator
+
+    def init_coordinator(self, components: DaemonComponents) -> object:
+        """Initialize trading coordinator (lazy).
+
+        Args:
+            components: Daemon components
+
+        Returns:
+            TradingCoordinator instance
+
+        Raises:
+            ValueError: If coordinator not enabled
+        """
+        if components.coordinator is not None:
+            return components.coordinator
+
+        if not components.config.coordinator.enabled:
+            msg = "Coordinator not enabled in config"
+            raise ValueError(msg)
+
+        # Create via DI container (CRITICAL: pass container explicitly)
+        coordinator = self._container.coordinator_agent(
+            daemon_state=components.state,
+            container=self._container,  # Explicit pass (providers.Self() doesn't work)
+        )
+
+        logger.info("Trading coordinator initialized")
+        components.coordinator = coordinator
+        return coordinator

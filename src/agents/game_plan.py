@@ -20,7 +20,9 @@ class GamePlanLLMResponse(BaseModel):
     priority_symbols: list[str] = Field(description="3-5 priority symbols")
     risk_stance: Literal["AGGRESSIVE", "DEFENSIVE", "NEUTRAL"]
     sector_focus: list[str] = Field(description="1-3 sectors to focus on")
-    key_levels: dict[str, float] = Field(description="Symbol->price mappings")
+    key_levels: dict[str, float] = Field(
+        default_factory=dict, description="Symbol->price mappings (optional)"
+    )
     reasoning: str = Field(description="Strategic rationale (2-3 sentences)")
     confidence: float = Field(ge=0.0, le=1.0)
 

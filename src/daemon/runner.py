@@ -104,6 +104,51 @@ class DaemonRunner:
             self._components.game_plan_agent = self._game_plan_agent
         return self._components.game_plan_agent
 
+    def _init_coordinator(self) -> object:
+        """Initialize coordinator (lazy).
+
+        Returns:
+            TradingCoordinator instance
+        """
+        if self._components.coordinator is not None:
+            return self._components.coordinator
+
+        return self._factory.init_coordinator(self._components)
+
+    async def _run_coordinator_cycle(
+        self,
+        watchlist: list[str],
+        degradation_context: DegradationContext,
+        trading_session: object,
+    ) -> object:
+        """Run coordinator-driven cycle.
+
+        Args:
+            watchlist: Symbols to analyze
+            degradation_context: Degradation context for cycle
+            trading_session: Trading session type (REGULAR or PRE_MARKET)
+
+        Returns:
+            CoordinatorCycleResult from coordinator
+        """
+        from src.daemon.degradation import AgentType, DegradationTier
+
+        coordinator = self._init_coordinator()
+
+        # Convert DegradationContext to dict for coordinator API
+        degradation_dict = None
+        if degradation_context.tier != DegradationTier.FULL:
+            degradation_dict = {
+                "tier": degradation_context.tier.value,
+                "unavailable_services": degradation_context.unavailable_services,
+                "confidence_adjustment": degradation_context.confidence_adjustment,
+                "disabled_agents": [
+                    str(agent) for agent in AgentType if agent not in degradation_context.available_agents
+                ],
+            }
+
+        return await coordinator.run_cycle(watchlist, degradation_dict, trading_session)  # type: ignore[attr-defined]
+
     def _init_analysis_orchestrator(self) -> AnalysisOrchestrator:
         """Initialize analysis orchestrator (lazy)."""
         if self._components.analysis_orchestrator is None:

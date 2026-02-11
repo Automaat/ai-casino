@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from src.daemon.notification_helper import DaemonNotificationHelper
+from src.strategies.session import TradingSession
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
@@ -65,7 +66,6 @@ class DaemonCycleOrchestrator:
         Returns:
             CycleResult with sleep time and cycle info
         """
-        from src.daemon.degradation import DegradationTier
         from src.daemon.profiling.profiler import async_nullcontext
 
         # Start profiling if enabled
@@ -85,39 +85,10 @@ class DaemonCycleOrchestrator:
             # Phase 4: Evaluate degradation before analysis
             degradation_context = self.runner._evaluate_degradation()  # type: ignore[attr-defined]  # noqa: SLF001
 
-            if degradation_context.tier == DegradationTier.HALTED:
-                logger.warning(f"Analysis HALTED: {degradation_context.halt_reason}")
-                console.print(f"[red]HALTED: {degradation_context.halt_reason}[/red]")
-
-                # Notify on every halted cycle
-                if self.components.notification_service:
-                    await self._notification_helper.notify_degradation(degradation_context, self.components)
-
-                # Record in state
-                self.components.state.record_degradation(degradation_context)
-                self.components.state.save(self.components.config.state.state_file)
-
-                return CycleResult(
-                    sleep_seconds=60,
-                    analysis_performed=False,
-                    halted=True,
-                    degradation_tier=degradation_context.tier.value,
-                    results_count=0,
-                )
-
-            # Log degradation status if not FULL
-            if degradation_context.tier != DegradationTier.FULL:
-                logger.warning(
-                    f"Degraded mode: {degradation_context.tier}, "
-                    f"unavailable: {degradation_context.unavailable_services}"
-                )
-                console.print(f"[yellow]DEGRADED: {degradation_context.tier}[/yellow]")
-
-                # Notify on every degraded cycle
-                if self.components.notification_service:
-                    await self._notification_helper.notify_degradation(degradation_context, self.components)
-
-                self.components.state.record_degradation(degradation_context)
+            # Check for halted state (returns early if halted)
+            halted_result = await self._handle_degradation_state(degradation_context)
+            if halted_result:
+                return halted_result
 
             # Phase 5: Check market hours
             if self.components.config.market_hours_only and not self.components.scheduler.is_market_open():
@@ -137,46 +108,202 @@ class DaemonCycleOrchestrator:
             logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
             console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now(tz=UTC):%H:%M:%S})")
 
-            await self._publish_event(
-                "CYCLE_START",
-                {"watchlist_size": len(watchlist), "degradation_tier": str(degradation_context.tier)},
-            )
+            # Route based on coordinator feature flag
+            cycle_result = None
+            if self.components.config.coordinator.enabled:
+                try:
+                    cycle_result = await self._run_coordinator_cycle(watchlist, degradation_context)
+                except ValueError as e:
+                    logger.error(f"Coordinator initialization failed: {e}, falling back to legacy")
+                    # Fall through to legacy cycle
 
-            cycle_start_time = time_mod.time()
-            results = await self.runner._analyze_watchlist(watchlist, degradation_context)  # type: ignore[attr-defined]  # noqa: SLF001
-            cycle_duration = time_mod.time() - cycle_start_time
+            if cycle_result is None:
+                logger.debug("Using legacy cycle (coordinator disabled or failed)")
+                cycle_result = await self._run_legacy_cycle(watchlist, degradation_context)
 
-            # Phase 7: Log results
-            self._log_results(results)
-
-            # Count results with warnings as potential errors
-            error_count = sum(1 for r in results if r.warnings)
-            await self._publish_event(
-                "CYCLE_COMPLETE",
-                {
-                    "results_count": len(results),
-                    "errors_count": error_count,
-                    "duration_seconds": round(cycle_duration, 2),
-                },
-            )
-
-            # Phase 8: Run journal and paper readiness check
-            # These are now handled by task service via scheduled tasks
+            # Phase 7-8: Handled by coordinator/legacy cycle methods
 
             # Record profiling metrics to state
             if profile_metrics:
                 self.components.state.record_profiling(profile_metrics)
 
-            # Phase 10: Save state
+            return cycle_result
+
+    async def _handle_degradation_state(
+        self,
+        degradation_context: object,
+    ) -> CycleResult | None:
+        """Handle degradation state (halted or degraded).
+
+        Args:
+            degradation_context: Degradation context
+
+        Returns:
+            CycleResult if halted, None otherwise
+        """
+        from src.daemon.degradation import DegradationTier
+
+        if degradation_context.tier == DegradationTier.HALTED:  # type: ignore[attr-defined]
+            logger.warning(f"Analysis HALTED: {degradation_context.halt_reason}")  # type: ignore[attr-defined]
+            console.print(f"[red]HALTED: {degradation_context.halt_reason}[/red]")  # type: ignore[attr-defined]
+
+            # Notify on every halted cycle
+            if self.components.notification_service:
+                await self._notification_helper.notify_degradation(degradation_context, self.components)  # type: ignore[arg-type]
+
+            # Record in state
+            self.components.state.record_degradation(degradation_context)  # type: ignore[arg-type]
             self.components.state.save(self.components.config.state.state_file)
 
             return CycleResult(
-                sleep_seconds=self.components.config.interval_minutes * 60,
-                analysis_performed=True,
-                halted=False,
-                degradation_tier=degradation_context.tier.value,
-                results_count=len(results),
+                sleep_seconds=60,
+                analysis_performed=False,
+                halted=True,
+                degradation_tier=degradation_context.tier.value,  # type: ignore[attr-defined]
+                results_count=0,
             )
+
+        # Log degradation status if not FULL
+        if degradation_context.tier != DegradationTier.FULL:  # type: ignore[attr-defined]
+            logger.warning(
+                f"Degraded mode: {degradation_context.tier}, "  # type: ignore[attr-defined]
+                f"unavailable: {degradation_context.unavailable_services}"  # type: ignore[attr-defined]
+            )
+            console.print(f"[yellow]DEGRADED: {degradation_context.tier}[/yellow]")  # type: ignore[attr-defined]
+
+            # Notify on every degraded cycle
+            if self.components.notification_service:
+                await self._notification_helper.notify_degradation(degradation_context, self.components)  # type: ignore[arg-type]
+
+            self.components.state.record_degradation(degradation_context)  # type: ignore[arg-type]
+
+        return None
+
+    async def _run_coordinator_cycle(
+        self,
+        watchlist: list[str],
+        degradation_context: object,
+    ) -> CycleResult:
+        """Run coordinator-driven analysis cycle.
+
+        Args:
+            watchlist: Symbols to analyze
+            degradation_context: Degradation context
+
+        Returns:
+            CycleResult with coordinator metrics
+        """
+        # Get current trading session
+        trading_session = self.components.scheduler.get_trading_session()
+        if trading_session is None:
+            trading_session = TradingSession.REGULAR  # Default fallback
+
+        # Publish cycle start event
+        await self._publish_event(
+            "CYCLE_START",
+            {
+                "watchlist_size": len(watchlist),
+                "degradation_tier": str(degradation_context.tier),  # type: ignore[attr-defined]
+                "mode": "coordinator",
+            },
+        )
+
+        cycle_start_time = time_mod.time()
+
+        # Run coordinator cycle
+        coordinator_result = await self.runner._run_coordinator_cycle(  # type: ignore[attr-defined]  # noqa: SLF001
+            watchlist, degradation_context, trading_session
+        )
+
+        cycle_duration = time_mod.time() - cycle_start_time
+
+        # Log coordinator-specific results
+        console.print(
+            f"\n[bold cyan]Coordinator Cycle Results ({datetime.now(tz=UTC):%Y-%m-%d %H:%M})[/bold cyan]"
+        )
+        console.print("-" * 50)
+        console.print(f"Symbols analyzed: {len(coordinator_result.symbols_analyzed)}")  # type: ignore[attr-defined]
+        console.print(
+            f"Trades executed: {coordinator_result.trades_executed}/{coordinator_result.trades_proposed}"
+        )  # type: ignore[attr-defined]
+        console.print(f"Tool calls made: {coordinator_result.tool_calls_made}")  # type: ignore[attr-defined]
+        console.print(f"Game plan generated: {coordinator_result.game_plan_generated}")  # type: ignore[attr-defined]
+        console.print(f"Summary: {coordinator_result.summary}")  # type: ignore[attr-defined]
+        console.print("-" * 50 + "\n")
+
+        # Publish cycle complete event with coordinator metrics
+        await self._publish_event(
+            "CYCLE_COMPLETE",
+            {
+                "results_count": len(coordinator_result.symbols_analyzed),  # type: ignore[attr-defined]
+                "errors_count": 0,
+                "duration_seconds": round(cycle_duration, 2),
+                "mode": "coordinator",
+                "tool_calls": coordinator_result.tool_calls_made,  # type: ignore[attr-defined]
+                "trades_executed": coordinator_result.trades_executed,  # type: ignore[attr-defined]
+            },
+        )
+
+        # Save state (coordinator memory auto-saves observations)
+        self.components.state.save(self.components.config.state.state_file)
+
+        # Convert to CycleResult
+        return CycleResult(
+            sleep_seconds=self.components.config.interval_minutes * 60,
+            analysis_performed=True,
+            halted=False,
+            degradation_tier=degradation_context.tier.value,  # type: ignore[attr-defined]
+            results_count=len(coordinator_result.symbols_analyzed),  # type: ignore[attr-defined]
+        )
+
+    async def _run_legacy_cycle(
+        self,
+        watchlist: list[str],
+        degradation_context: object,
+    ) -> CycleResult:
+        """Run legacy watchlist-driven analysis cycle.
+
+        Args:
+            watchlist: Symbols to analyze
+            degradation_context: Degradation context
+
+        Returns:
+            CycleResult with legacy metrics
+        """
+        # Publish cycle start event
+        await self._publish_event(
+            "CYCLE_START",
+            {"watchlist_size": len(watchlist), "degradation_tier": str(degradation_context.tier)},  # type: ignore[attr-defined]
+        )
+
+        cycle_start_time = time_mod.time()
+        results = await self.runner._analyze_watchlist(watchlist, degradation_context)  # type: ignore[attr-defined]  # noqa: SLF001
+        cycle_duration = time_mod.time() - cycle_start_time
+
+        # Log results
+        self._log_results(results)
+
+        # Count results with warnings as potential errors
+        error_count = sum(1 for r in results if r.warnings)
+        await self._publish_event(
+            "CYCLE_COMPLETE",
+            {
+                "results_count": len(results),
+                "errors_count": error_count,
+                "duration_seconds": round(cycle_duration, 2),
+            },
+        )
+
+        # Save state
+        self.components.state.save(self.components.config.state.state_file)
+
+        return CycleResult(
+            sleep_seconds=self.components.config.interval_minutes * 60,
+            analysis_performed=True,
+            halted=False,
+            degradation_tier=degradation_context.tier.value,  # type: ignore[attr-defined]
+            results_count=len(results),
+        )
 
     def _log_results(self, results: list[TradingWorkflowResult]) -> None:
         """Log analysis results to console.
