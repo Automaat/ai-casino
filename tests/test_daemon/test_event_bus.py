@@ -1,6 +1,6 @@
 """Tests for EventBus real-time event streaming."""
 
-import asyncio
+import queue
 
 from src.daemon.event_bus import DashboardEvent, EventBus, EventType
 
@@ -14,7 +14,7 @@ async def test_eventbus_subscribe_unsubscribe():
     sub1_id, sub1_queue = await bus.subscribe()
     assert bus.get_subscriber_count() == 1
     assert isinstance(sub1_id, str)
-    assert isinstance(sub1_queue, asyncio.Queue)
+    assert isinstance(sub1_queue, queue.Queue)
 
     sub2_id, _sub2_queue = await bus.subscribe()
     assert bus.get_subscriber_count() == 2
@@ -42,9 +42,9 @@ async def test_eventbus_publish_fanout():
 
     await bus.publish(event)
 
-    event1 = await asyncio.wait_for(sub1_queue.get(), timeout=1.0)
-    event2 = await asyncio.wait_for(sub2_queue.get(), timeout=1.0)
-    event3 = await asyncio.wait_for(sub3_queue.get(), timeout=1.0)
+    event1 = sub1_queue.get_nowait()
+    event2 = sub2_queue.get_nowait()
+    event3 = sub3_queue.get_nowait()
 
     assert event1.event_type == EventType.CYCLE_START
     assert event2.event_type == EventType.CYCLE_START
@@ -76,9 +76,9 @@ async def test_eventbus_queue_full_drops():
     received_count = 0
     try:
         while True:
-            await asyncio.wait_for(sub_queue.get(), timeout=0.1)
+            sub_queue.get_nowait()
             received_count += 1
-    except TimeoutError:
+    except queue.Empty:
         pass
 
     assert received_count == 5
@@ -146,7 +146,7 @@ async def test_eventbus_concurrent_subscribers():
     for _sub_id, sub_queue in subscribers:
         received = []
         for _ in range(event_count):
-            event = await asyncio.wait_for(sub_queue.get(), timeout=1.0)
+            event = sub_queue.get_nowait()
             received.append(event)
 
         assert len(received) == event_count
@@ -177,7 +177,7 @@ async def test_eventbus_different_event_types():
 
     received = []
     for _ in range(len(events)):
-        event = await asyncio.wait_for(sub_queue.get(), timeout=1.0)
+        event = sub_queue.get_nowait()
         received.append(event)
 
     assert len(received) == len(events)
