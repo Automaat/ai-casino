@@ -49,12 +49,17 @@
 				<button
 					on:click={toggleExpanded}
 					class="w-full text-left text-sm text-blue-600 dark:text-blue-400 hover:underline"
+					aria-expanded={expanded}
+					aria-controls="watchlist-symbols"
 				>
 					{expanded ? '▼ Hide symbols' : '▶ Show symbols'}
 				</button>
 
 				{#if expanded}
-					<div class="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-900/50 rounded">
+					<div
+						id="watchlist-symbols"
+						class="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-900/50 rounded"
+					>
 						{#each watchlist.symbols as symbol}
 							<span class="px-2 py-1 bg-white dark:bg-gray-800 text-xs font-mono rounded border border-gray-200 dark:border-gray-700">
 								{symbol}

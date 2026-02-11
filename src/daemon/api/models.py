@@ -157,7 +157,7 @@ class ServiceCheck(BaseModel):
     status: str = Field(description="Health status (HEALTHY/DEGRADED/UNHEALTHY/SKIPPED)")
     message: str = Field(description="Health check message")
     duration_ms: float = Field(description="Check duration in milliseconds")
-    checked_at: str = Field(description="ISO timestamp of check")
+    checked_at: datetime = Field(description="ISO timestamp of check")
 
 
 class ServiceHealthResponse(BaseModel):

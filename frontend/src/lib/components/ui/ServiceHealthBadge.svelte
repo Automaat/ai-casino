@@ -31,13 +31,15 @@
 	$: displayName = serviceNames[check.service] || check.service;
 	$: colorClass = statusColors[check.status] || statusColors.SKIPPED;
 	$: icon = statusIcons[check.status] || '';
+	$: statusLabel = check.status.toLowerCase().replace(/_/g, ' ');
 </script>
 
 <div
 	class="flex items-center gap-2 px-3 py-2 rounded-lg border {colorClass} transition-all"
 	title={check.message}
 >
-	<span class="text-sm">{icon}</span>
+	<span class="text-sm" aria-hidden="true">{icon}</span>
+	<span class="sr-only">{statusLabel}</span>
 	<div class="flex flex-col">
 		<span class="text-xs font-medium">{displayName}</span>
 		<span class="text-[10px] opacity-75">{check.duration_ms.toFixed(0)}ms</span>
