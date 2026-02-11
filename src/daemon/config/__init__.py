@@ -5,6 +5,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
+from src.coordinator import CoordinatorConfig
+
 # Re-export all config classes (backward compatibility)
 from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
@@ -57,6 +59,7 @@ __all__ = [
     "AnomalyWatcherConfig",
     "ApiConfig",
     "ApiKeysConfig",
+    "CoordinatorConfig",
     "CorrelationAuditConfig",
     "DaemonConfig",
     "DataSourcesConfig",
@@ -137,6 +140,7 @@ class DaemonConfig(BaseModel):
     api_keys: ApiKeysConfig = Field(default_factory=ApiKeysConfig)
     data_sources: DataSourcesConfig = Field(default_factory=DataSourcesConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    coordinator: CoordinatorConfig = Field(default_factory=CoordinatorConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> DaemonConfig:
@@ -187,6 +191,7 @@ class DaemonConfig(BaseModel):
         api_keys_data = daemon_data.pop("api_keys", {}) or {}
         data_sources_data = daemon_data.pop("data_sources", {}) or {}
         database_data = daemon_data.pop("database", {}) or {}
+        coordinator_data = daemon_data.pop("coordinator", {}) or {}
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
@@ -229,6 +234,7 @@ class DaemonConfig(BaseModel):
             api_keys=ApiKeysConfig(**api_keys_data),
             data_sources=DataSourcesConfig(**data_sources_data),
             database=DatabaseConfig(**database_data),
+            coordinator=CoordinatorConfig(**coordinator_data),
         )
 
     def __repr__(self) -> str:

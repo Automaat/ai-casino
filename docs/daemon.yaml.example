@@ -610,6 +610,81 @@ daemon:
     # Enable position syncing with broker before analysis
     enable_position_sync: true
 
+  # ========================================
+  # COORDINATOR AGENT (EXPERIMENTAL)
+  # ========================================
+  coordinator:
+    # Enable coordinator agent (autonomous multi-step trading cycles)
+    # Coordinator orchestrates analysis, tool calls, and trade execution
+    # WARNING: Experimental feature - test thoroughly in paper mode
+    enabled: false
+
+    # Maximum tool calls per coordinator cycle (5-50)
+    # Controls how many actions (fetch data, analyze, execute) the agent can take
+    # Higher values allow more complex workflows but increase latency
+    # Example: 25 = coordinator can make up to 25 tool calls before cycle ends
+    max_tool_calls: 25
+
+    # LLM temperature for coordinator reasoning (0.0-1.0)
+    # Lower = more deterministic decisions, higher = more exploratory
+    # Recommended: 0.3-0.5 for trading (balance creativity and consistency)
+    temperature: 0.5
+
+    # Optional LLM model override for coordinator (uses daemon llm config if null)
+    # Example: "claude-sonnet-4" for high-quality reasoning
+    # Set to null to inherit from daemon.llm.model
+    model_override: null
+
+    # Trade confirmation mode
+    # - "auto": Execute trades automatically within risk limits
+    # - "manual": Require human approval before executing each trade
+    confirmation_mode: "auto"
+
+    # Maximum cycle duration in seconds before timeout (60-3600)
+    # Prevents runaway cycles that take too long
+    # Example: 600 = 10 minute timeout per cycle
+    cycle_timeout_seconds: 600
+
+    # Maximum trades executed per day (1-100)
+    # Safety limit to prevent excessive trading
+    # Resets at market close
+    max_daily_trades: 10
+
+    # Maximum position size as % of portfolio (1.0-100.0)
+    # Overrides position_sizing config for coordinator-initiated trades
+    # Example: 10.0 = max 10% of portfolio in single position
+    max_position_pct: 10.0
+
+    # Minimum signal confidence required to execute trade (0.0-1.0)
+    # Lower confidence signals are flagged but not executed
+    # Example: 0.7 = only execute trades with ≥70% confidence
+    min_confidence_to_trade: 0.7
+
+    # ===== EXAMPLES =====
+    #
+    # CONSERVATIVE (manual approval):
+    #   enabled: true
+    #   confirmation_mode: "manual"
+    #   max_daily_trades: 5
+    #   max_position_pct: 5.0
+    #   min_confidence_to_trade: 0.8
+    #
+    # AGGRESSIVE (auto execution):
+    #   enabled: true
+    #   confirmation_mode: "auto"
+    #   max_daily_trades: 20
+    #   max_position_pct: 15.0
+    #   min_confidence_to_trade: 0.6
+    #   temperature: 0.7
+    #
+    # BALANCED (default):
+    #   enabled: false
+    #   confirmation_mode: "auto"
+    #   max_daily_trades: 10
+    #   max_position_pct: 10.0
+    #   min_confidence_to_trade: 0.7
+    #   temperature: 0.5
+
   api:
     # Embedded API server for daemon state/control
     enabled: false
