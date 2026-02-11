@@ -637,8 +637,15 @@ daemon:
 
     # Trade confirmation mode
     # - "auto": Execute trades automatically within risk limits
-    # - "manual": Require human approval before executing each trade
+    # - "manual": Require human approval before executing each trade (requires Telegram)
     confirmation_mode: "auto"
+
+    # Timeout for manual trade approvals in seconds (30-300)
+    # Only applies when confirmation_mode is "manual"
+    # If user doesn't respond within timeout, trade is auto-rejected
+    # Requires Telegram bot configured (daemon.notifications.telegram)
+    # Example: 60 = user has 1 minute to approve or reject trade
+    approval_timeout_seconds: 60
 
     # Maximum cycle duration in seconds before timeout (60-3600)
     # Prevents runaway cycles that take too long
@@ -659,6 +666,20 @@ daemon:
     # Lower confidence signals are flagged but not executed
     # Example: 0.7 = only execute trades with ≥70% confidence
     min_confidence_to_trade: 0.7
+
+    # Automated pattern detection (learning from outcomes)
+    pattern_detection:
+      # Enable pattern detection
+      enabled: true
+      # Run every Nth cycle (1 = every cycle, 5 = every 5th cycle)
+      # Higher frequency = more analysis overhead
+      detection_frequency: 5
+      # Historical lookback window in days (7-90)
+      # Longer lookback = more data but less responsive to recent changes
+      lookback_days: 30
+      # Minimum observations for pattern confidence (5-50)
+      # Higher threshold = more reliable patterns but fewer insights
+      min_sample_size: 10
 
     # ===== EXAMPLES =====
     #

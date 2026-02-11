@@ -133,6 +133,11 @@ export const api = {
 	// Execution Metrics
 	async getExecutionMetrics(): Promise<T.ExecutionMetricsListResponse> {
 		return fetchAPI<T.ExecutionMetricsListResponse>('/api/execution-metrics');
+	},
+
+	// Full Config
+	async getFullConfig(): Promise<T.FullConfigResponse> {
+		return fetchAPI<T.FullConfigResponse>('/config/full');
 	}
 };
 

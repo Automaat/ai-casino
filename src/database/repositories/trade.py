@@ -155,6 +155,22 @@ class TradeRepository(BaseRepository[TradeRecord]):
         result = await self._session.execute(select(TradeORM).order_by(TradeORM.timestamp.desc()))
         return [self._to_record(orm) for orm in result.scalars().all()]
 
+    async def get_closed_since(self, start_date: datetime) -> list[TradeRecord]:
+        """Get closed trades since start date.
+
+        Args:
+            start_date: Start date for filtering
+
+        Returns:
+            List of closed TradeRecords since start_date
+        """
+        result = await self._session.execute(
+            select(TradeORM)
+            .where(TradeORM.timestamp >= start_date, TradeORM.status == "CLOSED")
+            .order_by(TradeORM.timestamp.desc())
+        )
+        return [self._to_record(orm) for orm in result.scalars().all()]
+
     async def get_entry_trade(self, symbol: str) -> TradeRecord | None:
         """Get most recent entry trade for symbol (OPEN BUY).
 

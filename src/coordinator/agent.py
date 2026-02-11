@@ -72,6 +72,15 @@ class TradingCoordinator:
 
         logger.info("Initialized TradingCoordinator")
 
+    @property
+    def memory(self) -> CoordinatorMemory:
+        """Access coordinator memory for saving observations.
+
+        Returns:
+            CoordinatorMemory instance
+        """
+        return self._memory
+
     async def run_cycle(
         self,
         watchlist: list[str],
@@ -88,6 +97,8 @@ class TradingCoordinator:
         Returns:
             CoordinatorCycleResult with summary and metrics
         """
+        import time
+
         # Reset tracking variables
         self._tool_calls_count = 0
         self._symbols_analyzed = set()
@@ -99,6 +110,9 @@ class TradingCoordinator:
         self._reflection_counters.clear()
         self._last_analysis_results.clear()
         self._game_plan_context = None
+
+        # Track cycle duration
+        cycle_start = time.time()
 
         try:
             # Build prompts
@@ -132,6 +146,9 @@ class TradingCoordinator:
             # Parse result
             result = await self._parse_cycle_result(final_response)
 
+            # Add cycle duration
+            result.cycle_duration_seconds = time.time() - cycle_start
+
             # Update last summary for next cycle
             self._last_cycle_summary = result.summary
 
@@ -146,6 +163,7 @@ class TradingCoordinator:
                 trades_executed=self._trades_executed,
                 tool_calls_made=self._tool_calls_count,
                 game_plan_generated=self._game_plan_generated,
+                cycle_duration_seconds=time.time() - cycle_start,
             )
         except Exception as e:
             logger.error(f"Coordinator cycle failed: {e}")
@@ -156,6 +174,7 @@ class TradingCoordinator:
                 trades_executed=self._trades_executed,
                 tool_calls_made=self._tool_calls_count,
                 game_plan_generated=self._game_plan_generated,
+                cycle_duration_seconds=time.time() - cycle_start,
             )
 
     async def _build_system_prompt(self, watchlist: list[str], degradation_context: dict | None) -> str:
