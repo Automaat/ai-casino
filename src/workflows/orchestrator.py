@@ -108,14 +108,15 @@ class TradingWorkflow:
             self.vectorbt_runner = VectorBTRunner()
             logger.info("VectorBTRunner initialized for pre-trade validation")
 
-    async def analyze(  # noqa: PLR0913
+    async def analyze(
         self,
         symbol: str,
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
+        extra_context: WorkflowExtraContext | None = None,
         position_context: dict[str, object] | None = None,
         enable_multi_timeframe: bool = False,
-        degradation_context: DegradationContext | None = None,
+        degradation_context: "DegradationContext | None" = None,
         **context_kwargs: str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
@@ -124,11 +125,11 @@ class TradingWorkflow:
             symbol: Stock ticker symbol
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
-            position_context: Optional position context (entry price, P&L, days held)
-            enable_multi_timeframe: Enable multi-timeframe analysis (requires market hours)
-            degradation_context: Optional degradation context
-            **context_kwargs: Optional context keys: sector_context, earnings_context,
-                peer_analysis_context, game_plan_context
+            extra_context: Optional workflow extra context (preferred)
+            position_context: Optional position context (deprecated, use extra_context)
+            enable_multi_timeframe: Enable multi-timeframe (deprecated, use extra_context)
+            degradation_context: Optional degradation (deprecated, use extra_context)
+            **context_kwargs: Optional context keys (deprecated, use extra_context)
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
@@ -144,15 +145,23 @@ class TradingWorkflow:
             collector_token = current_collector.set(collector)
 
         try:
-            extra_context = WorkflowExtraContext(
-                sector_rotation_context=context_kwargs.get("sector_context"),
-                earnings_context=context_kwargs.get("earnings_context"),
-                peer_analysis_context=context_kwargs.get("peer_analysis_context"),
-                game_plan_context=context_kwargs.get("game_plan_context"),
-                position_context=position_context,
-                enable_multi_timeframe=enable_multi_timeframe,
-                degradation_context=degradation_context,
-            )
+            # Backward compat: construct extra_context from individual params if needed
+            if extra_context is None and (
+                position_context is not None
+                or enable_multi_timeframe
+                or degradation_context is not None
+                or context_kwargs
+            ):
+                extra_context = WorkflowExtraContext(
+                    sector_rotation_context=context_kwargs.get("sector_context"),
+                    earnings_context=context_kwargs.get("earnings_context"),
+                    peer_analysis_context=context_kwargs.get("peer_analysis_context"),
+                    game_plan_context=context_kwargs.get("game_plan_context"),
+                    position_context=position_context,
+                    enable_multi_timeframe=enable_multi_timeframe,
+                    degradation_context=degradation_context,
+                )
+
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
             )

@@ -372,16 +372,21 @@ class AnalysisOrchestrator:
                 self.workflow.set_target_allocations(target_allocations)
 
             try:
+                from src.workflows.types import WorkflowExtraContext
+
+                extra_context = WorkflowExtraContext(
+                    sector_rotation_context=sector_ctx,
+                    earnings_context=earnings_ctx,
+                    peer_analysis_context=peer_ctx,
+                    game_plan_context=game_plan_ctx,
+                    position_context=position_context,
+                    degradation_context=degradation_context,
+                )
                 result = await self.workflow.analyze(
                     symbol,
                     period_days=90,
                     trading_session=session,
-                    position_context=position_context,
-                    sector_context=sector_ctx,
-                    earnings_context=earnings_ctx,
-                    peer_analysis_context=peer_ctx,
-                    game_plan_context=game_plan_ctx,
-                    degradation_context=degradation_context,
+                    extra_context=extra_context,
                 )
             finally:
                 if target_allocations is not None:
