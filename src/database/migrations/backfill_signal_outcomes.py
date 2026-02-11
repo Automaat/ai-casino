@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
 
 from src.cache.historical import HistoricalCache
 from src.daemon.state.models import SignalOutcome
@@ -78,21 +79,14 @@ async def backfill_signal_outcomes(
                 outcome_updated_at=datetime.now(UTC) if record.price_at_1d else None,
             )
 
-            # Check if record already exists (by symbol + timestamp)
-            existing = await repository.get_by_symbol(
-                symbol=record.symbol,
-                limit=1,
-                start_date=timestamp,
-            )
-
-            if existing and any(e.timestamp == timestamp for e in existing):
+            # Insert into PostgreSQL - handle duplicates via IntegrityError
+            try:
+                await repository.create(signal_outcome)
+                stats["migrated"] += 1
+            except IntegrityError:
                 logger.debug(f"Skipping duplicate: {record.symbol} @ {timestamp}")
                 stats["skipped"] += 1
                 continue
-
-            # Insert into PostgreSQL
-            await repository.create(signal_outcome)
-            stats["migrated"] += 1
 
             if stats["migrated"] % 50 == 0:
                 logger.info(f"Migration progress: {stats['migrated']}/{stats['total']}")

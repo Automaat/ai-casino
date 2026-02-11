@@ -110,7 +110,7 @@ class QueryPastDecisionsTool(BaseTool):
         if signal and not isinstance(signal, str):
             signal = str(signal)
 
-        lookback_days = min(int(kwargs.get("lookback_days", 90)), 365)
+        lookback_days = max(7, min(int(kwargs.get("lookback_days", 90)), 365))
         min_confidence = kwargs.get("min_confidence")
         if min_confidence is not None:
             min_confidence = float(min_confidence)

@@ -130,8 +130,11 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             List of SignalUpdateRecords needing updates
         """
+        if horizon not in ["1d", "5d", "20d"]:
+            msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
+            raise ValueError(msg)
         horizon_days = {"1d": 1, "5d": 5, "20d": 20}
-        days = horizon_days.get(horizon, 1)
+        days = horizon_days[horizon]
         price_field = f"price_at_{horizon}"
 
         now = datetime.now(UTC)
@@ -218,6 +221,9 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             Dict with success_rate, total_decisions, hit_count, miss_count
         """
+        if horizon not in ["1d", "5d", "20d"]:
+            msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
+            raise ValueError(msg)
         price_field = f"price_at_{horizon}"
         cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
@@ -295,6 +301,9 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             Dict with success_rate, total_decisions, hit_count, miss_count
         """
+        if horizon not in ["1d", "5d", "20d"]:
+            msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
+            raise ValueError(msg)
         price_field = f"price_at_{horizon}"
         cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
