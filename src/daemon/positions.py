@@ -14,8 +14,7 @@ from src.data.broker import AlpacaBroker, BrokerPosition
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
-    from src.database.repositories.position import PositionRecordRepository
-    from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.engine import DatabaseEngine
     from src.database.repositories.trade import TradeRepository
 
 
@@ -100,8 +99,7 @@ class PositionManager:
         self,
         broker: AlpacaBroker,
         config: PositionManagementConfig,
-        position_repository: PositionRecordRepository | None = None,
-        position_action_repository: PositionManagementActionRepository | None = None,
+        database_engine: DatabaseEngine | None = None,
         trade_repository: TradeRepository | None = None,
     ) -> None:
         """Initialize position manager.
@@ -109,14 +107,12 @@ class PositionManager:
         Args:
             broker: Alpaca broker for order execution
             config: Position management configuration
-            position_repository: Optional position record repository
-            position_action_repository: Optional position action repository
+            database_engine: Optional database engine for creating per-task sessions
             trade_repository: Optional trade repository for loading entry metadata
         """
         self.broker = broker
         self.config = config
-        self._position_repository = position_repository
-        self._position_action_repository = position_action_repository
+        self._database_engine = database_engine
         self._trade_repository = trade_repository
         logger.info(f"PositionManager initialized: {config}")
 
@@ -185,33 +181,66 @@ class PositionManager:
 
     def _persist_position_create(self, position: PositionRecord) -> None:
         """Persist new position to database."""
-        if self._position_repository:
+        if self._database_engine:
             try:
-                task = asyncio.create_task(self._position_repository.create(position))  # type: ignore[bad-argument-type]
+                task = asyncio.create_task(self._async_persist_position_create(position))
                 task.add_done_callback(_log_task_exception)
             except Exception as e:
                 logger.error(f"Failed to persist new position to database: {e}")
                 raise
 
+    async def _async_persist_position_create(self, position: PositionRecord) -> None:
+        """Async helper to persist position with fresh session."""
+        from src.database.repositories.position import PositionRecordRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionRecordRepository(session)
+            await repository.create(position)  # type: ignore[bad-argument-type]
+        finally:
+            await session.close()
+
     def _persist_position_update(self, position: PositionRecord) -> None:
         """Persist position update to database."""
-        if self._position_repository:
+        if self._database_engine:
             try:
-                task = asyncio.create_task(self._position_repository.update(position))  # type: ignore[bad-argument-type]
+                task = asyncio.create_task(self._async_persist_position_update(position))
                 task.add_done_callback(_log_task_exception)
             except Exception as e:
                 logger.error(f"Failed to update position in database: {e}")
                 raise
 
+    async def _async_persist_position_update(self, position: PositionRecord) -> None:
+        """Async helper to persist position update with fresh session."""
+        from src.database.repositories.position import PositionRecordRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionRecordRepository(session)
+            await repository.update(position)  # type: ignore[bad-argument-type]
+        finally:
+            await session.close()
+
     def _persist_position_delete(self, symbol: str) -> None:
         """Delete position from database."""
-        if self._position_repository:
+        if self._database_engine:
             try:
-                task = asyncio.create_task(self._position_repository.delete_by_symbol(symbol))
+                task = asyncio.create_task(self._async_persist_position_delete(symbol))
                 task.add_done_callback(_log_task_exception)
             except Exception as e:
                 logger.error(f"Failed to delete position from database: {e}")
                 raise
+
+    async def _async_persist_position_delete(self, symbol: str) -> None:
+        """Async helper to delete position with fresh session."""
+        from src.database.repositories.position import PositionRecordRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionRecordRepository(session)
+            await repository.delete_by_symbol(symbol)
+        finally:
+            await session.close()
 
     def _create_position_from_broker(self, symbol: str, broker_pos: BrokerPosition) -> PositionRecord:
         """Create PositionRecord from broker position.
@@ -356,12 +385,10 @@ class PositionManager:
             elif action.action_type in ("PARTIAL_PROFIT", "TIME_EXIT", "CONVICTION_SCALE"):
                 self._execute_sell_action(position, action)
 
-            # Persist action to database if repository available
-            if self._position_action_repository:
+            # Persist action to database if database engine available
+            if self._database_engine:
                 try:
-                    import asyncio
-
-                    task = asyncio.create_task(self._position_action_repository.create(action))  # type: ignore[bad-argument-type]
+                    task = asyncio.create_task(self._async_persist_action(action))
                     task.add_done_callback(_log_task_exception)
                     logger.debug(
                         f"Persisted position action to database: {action.symbol} {action.action_type}"
@@ -369,6 +396,17 @@ class PositionManager:
                 except Exception as e:
                     logger.error(f"Failed to persist position action to database: {e}")
                     raise  # Fail fast per user requirement
+
+    async def _async_persist_action(self, action: PositionManagementAction) -> None:
+        """Async helper to persist action with fresh session."""
+        from src.database.repositories.position_action import PositionManagementActionRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionManagementActionRepository(session)
+            await repository.create(action)  # type: ignore[bad-argument-type]
+        finally:
+            await session.close()
 
     def review_position(
         self,
