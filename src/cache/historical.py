@@ -444,7 +444,7 @@ class HistoricalCache:
             self._conn.commit()
         logger.debug(f"Stored fundamentals for {symbol}")
 
-    def store_order_fill(self, order: "OrderStatus") -> None:
+    def store_order_fill(self, order: OrderStatus) -> None:
         """Store an order fill (INSERT OR IGNORE).
 
         Args:
