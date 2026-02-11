@@ -36,6 +36,24 @@ npm run build
 npm run preview
 ```
 
+## Quick Start with mise
+
+**Development (with hot reload):**
+```bash
+# From project root
+mise dev:svelte
+# Opens: http://localhost:5173
+```
+
+**Production (optimized build):**
+```bash
+# From project root
+mise prod:svelte
+# Opens: http://localhost:4173
+```
+
+These tasks automatically start both the daemon and frontend in one command.
+
 ## Architecture
 
 ```
