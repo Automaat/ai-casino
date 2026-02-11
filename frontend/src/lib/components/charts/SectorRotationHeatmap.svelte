@@ -4,11 +4,11 @@
 	import type { ECharts, EChartsOption } from 'echarts';
 
 	interface Props {
-		sectorStrengths: Record<string, number>;
-		sectorMomenta: Record<string, string>;
-		leadingSectors: string[];
-		laggingSectors: string[];
-		flaggedPositions: string[];
+		sectorStrengths?: Record<string, number>;
+		sectorMomenta?: Record<string, string>;
+		leadingSectors?: string[];
+		laggingSectors?: string[];
+		flaggedPositions?: string[];
 	}
 
 	let { sectorStrengths, sectorMomenta, leadingSectors, laggingSectors, flaggedPositions }: Props = $props();
@@ -32,10 +32,10 @@
 	let chart: ECharts | null = null;
 
 	function updateChart() {
-		if (!chart || Object.keys(sectorStrengths).length === 0) return;
+		if (!chart || !sectorStrengths || Object.keys(sectorStrengths).length === 0) return;
 
 		// Sort sectors by strength (descending)
-		const sortedSectors = Object.entries(sectorStrengths)
+		const sortedSectors = Object.entries(sectorStrengths || {})
 			.sort(([, a], [, b]) => b - a)
 			.map(([ticker]) => ticker);
 
@@ -43,21 +43,21 @@
 		const data: [number, number, number][] = sortedSectors.map((ticker, idx) => [
 			0, // x-axis (single column)
 			idx, // y-axis (sector index)
-			sectorStrengths[ticker] * 100 // Convert to percentage
+			(sectorStrengths?.[ticker] ?? 0) * 100 // Convert to percentage
 		]);
 
 		// Y-axis labels with sector names and momentum indicators
 		const yAxisLabels = sortedSectors.map((ticker) => {
 			const name = SECTOR_NAMES[ticker] || ticker;
-			const momentum = sectorMomenta[ticker] || 'NEUTRAL';
+			const momentum = sectorMomenta?.[ticker] || 'NEUTRAL';
 			const momentumIcon = momentum === 'ACCELERATING' ? '▲' : momentum === 'DECELERATING' ? '▼' : '─';
-			const isLeading = leadingSectors.includes(ticker);
+			const isLeading = leadingSectors?.includes(ticker) ?? false;
 			const prefix = isLeading ? '★ ' : '';
 			return `${prefix}${name} ${momentumIcon}`;
 		});
 
 		// Build title with leading sectors
-		const leadingNames = leadingSectors.map(ticker => SECTOR_NAMES[ticker] || ticker).join(', ');
+		const leadingNames = (leadingSectors ?? []).map(ticker => SECTOR_NAMES[ticker] || ticker).join(', ');
 		const chartTitle = `Sector Rotation${leadingNames ? ` (Leading: ${leadingNames})` : ''}`;
 
 		const option: EChartsOption = {
@@ -77,11 +77,11 @@
 					const ticker = sortedSectors[sectorIdx];
 					const name = SECTOR_NAMES[ticker] || ticker;
 					const strength = params.data[2].toFixed(1);
-					const momentum = sectorMomenta[ticker] || 'NEUTRAL';
-					const isLeading = leadingSectors.includes(ticker);
-					const isLagging = laggingSectors.includes(ticker);
+					const momentum = sectorMomenta?.[ticker] || 'NEUTRAL';
+					const isLeading = leadingSectors?.includes(ticker) ?? false;
+					const isLagging = laggingSectors?.includes(ticker) ?? false;
 					const status = isLeading ? '(Leading)' : isLagging ? '(Lagging)' : '';
-					const flagged = flaggedPositions.filter(pos => pos.includes(ticker));
+					const flagged = (flaggedPositions ?? []).filter(pos => pos.includes(ticker));
 					const flaggedText = flagged.length > 0 ? `<br/>Flagged: ${flagged.join(', ')}` : '';
 					return `<b>${name}</b> ${status}<br/>Strength: ${strength}%<br/>Momentum: ${momentum}${flaggedText}`;
 				}
@@ -140,12 +140,12 @@
 						borderColor: ((params: any) => {
 							const sectorIdx = params.data[1];
 							const ticker = sortedSectors[sectorIdx];
-							return leadingSectors.includes(ticker) ? '#fbbf24' : '#334155';
+							return (leadingSectors?.includes(ticker) ?? false) ? '#fbbf24' : '#334155';
 						}) as any,
 						borderWidth: ((params: any) => {
 							const sectorIdx = params.data[1];
 							const ticker = sortedSectors[sectorIdx];
-							return leadingSectors.includes(ticker) ? 2 : 0.5;
+							return (leadingSectors?.includes(ticker) ?? false) ? 2 : 0.5;
 						}) as any
 					}
 				}

@@ -112,11 +112,11 @@ export interface CorrelationMatrixResponse {
 
 export interface SectorRotationResponse {
 	timestamp: string;
-	leading_sectors: string[];
-	lagging_sectors: string[];
-	sector_strengths: Record<string, number>;
-	sector_momenta: Record<string, string>;
-	flagged_positions: string[];
+	leading_sectors?: string[];
+	lagging_sectors?: string[];
+	sector_strengths?: Record<string, number>;
+	sector_momenta?: Record<string, string>;
+	flagged_positions?: string[];
 }
 
 export interface DegradationResponse {

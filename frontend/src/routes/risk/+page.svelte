@@ -132,7 +132,7 @@
 
 	<!-- Sector Rotation Heatmap -->
 	<Card title="Sector Rotation">
-		{#if sectorRotationData && Object.keys(sectorRotationData.sector_strengths).length > 0}
+		{#if sectorRotationData?.sector_strengths && Object.keys(sectorRotationData.sector_strengths).length > 0}
 			<SectorRotationHeatmap
 				sectorStrengths={sectorRotationData.sector_strengths}
 				sectorMomenta={sectorRotationData.sector_momenta}
