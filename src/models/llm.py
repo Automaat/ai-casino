@@ -9,7 +9,6 @@ from collections.abc import AsyncIterator, Callable
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar, cast
 
-import sniffio
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
@@ -34,15 +33,6 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound=BaseModel)
 
 load_dotenv()
-
-
-def _set_asyncio_context() -> None:
-    """Set sniffio context to asyncio for httpx/httpcore compatibility.
-
-    httpx/httpcore uses sniffio to detect the async library. This explicitly
-    sets it to asyncio to ensure proper detection in CLI and daemon contexts.
-    """
-    sniffio.current_async_library_cvar.set("asyncio")  # type: ignore[bad-argument-type]
 
 
 _DEFAULT_CONCURRENT_REQUESTS = 5
@@ -210,7 +200,6 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        _set_asyncio_context()
         messages = self._build_messages(prompt, system)
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
@@ -252,7 +241,6 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        _set_asyncio_context()
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
         try:
@@ -284,7 +272,6 @@ class LLMClient:
         Yields:
             Individual tokens as they're generated
         """
-        _set_asyncio_context()
         messages = self._build_messages(prompt, system)
         async with _get_semaphore():
             async for token in self._provider.astream(messages, temperature):
@@ -352,7 +339,6 @@ class LLMClient:
         Raises:
             StructuredOutputError: If response cannot be parsed or validated
         """
-        _set_asyncio_context()
         messages = self._build_messages(prompt, system)
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
@@ -426,7 +412,6 @@ class LLMClient:
         Returns:
             Final text response after tool execution
         """
-        _set_asyncio_context()
         messages: list[dict] = self._build_messages(prompt, system)
         tool_calls_made = 0
 

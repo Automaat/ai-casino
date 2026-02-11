@@ -658,6 +658,83 @@ class TestCORS:
         assert response.status_code == 200
         assert response.headers["access-control-allow-credentials"] == "true"
 
+    def test_cors_custom_origins_config(self) -> None:
+        """Test ApiConfig accepts custom CORS origins."""
+        config = ApiConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=8484,
+            cors_origins=["http://localhost:3000", "http://dashboard.example.com"],
+        )
+
+        assert config.cors_origins == [
+            "http://localhost:3000",
+            "http://dashboard.example.com",
+        ]
+        assert len(config.cors_origins) == 2
+
+    def test_cors_custom_origins_daemon_config(self) -> None:
+        """Test DaemonConfig propagates custom CORS origins."""
+        config = DaemonConfig(
+            watchlist=["AAPL"],
+            interval_minutes=30,
+            market_hours_only=True,
+            auto_trade=False,
+            schedule=ScheduleConfig(enable_pre_market=False),
+            api=ApiConfig(
+                enabled=True,
+                host="127.0.0.1",
+                port=8484,
+                cors_origins=["http://localhost:3000", "http://dashboard.example.com"],
+            ),
+        )
+
+        assert config.api.cors_origins == [
+            "http://localhost:3000",
+            "http://dashboard.example.com",
+        ]
+
+    def test_cors_custom_origins_applied_to_middleware(self) -> None:
+        """Test custom CORS origins are applied to CORS middleware."""
+        # Create config with custom origins
+        config = DaemonConfig(
+            watchlist=["AAPL"],
+            interval_minutes=30,
+            api=ApiConfig(
+                enabled=True,
+                cors_origins=["http://localhost:3000", "http://custom.example.com"],
+            ),
+        )
+
+        # Create mock components
+        components = Mock(spec=DaemonComponents)
+        components.config = config
+        components.state = DaemonState()
+        components.running = True
+        components.broker = None
+        components.broker_manager = Mock()
+        components.event_bus = None
+
+        # Create app with custom origins
+        app = create_api_app(components)
+        client = TestClient(app)
+
+        # Test custom origin is allowed
+        response = client.get("/health", headers={"Origin": "http://localhost:3000"})
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+        # Test another custom origin is allowed
+        response = client.get("/health", headers={"Origin": "http://custom.example.com"})
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "http://custom.example.com"
+
+        # Test default origin is NOT allowed (not in custom list)
+        response = client.get("/health", headers={"Origin": "http://localhost:8050"})
+        assert response.status_code == 200
+        # Default origin should not be in allowed list since we specified custom origins
+        assert "access-control-allow-origin" not in response.headers
+
 
 class TestWebSocketEvents:
     """Test /ws/events WebSocket endpoint."""

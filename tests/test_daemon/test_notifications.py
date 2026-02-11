@@ -252,3 +252,24 @@ class TestNotificationFormatter:
         assert "⚠️" in result
         assert "alpha_vantage" in result
         assert "marketaux" in result
+
+    def test_format_health_failure_degradation(self) -> None:
+        """Health failure notification formatted correctly for degradation (unavailable_services)."""
+        from src.daemon.notification_formatter import NotificationFormatter
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.HEALTH_FAILURE,
+            title="Trading System DEGRADED",
+            body="APIs down: alpha_vantage, marketaux",
+            metadata={
+                "tier": "DEGRADED",
+                "unavailable_services": ["alpha_vantage", "marketaux"],
+                "confidence_adjustment": -0.2,
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        result = NotificationFormatter.format_for_telegram(message)
+        assert "⚠️" in result
+        assert "alpha_vantage" in result
+        assert "marketaux" in result

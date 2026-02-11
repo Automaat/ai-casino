@@ -71,7 +71,7 @@ graph TD
 |---|---|---|---|
 | 1. Data Fetch | Yes | — | Symbol input |
 | 2. Strategy Selection | Yes | MetaAgent | Market data |
-| 3. Group 1 | Parallel | 7 core + optional Trump analysis | Data + strategy |
+| 3. Group 1 | Parallel | 7 core (optional Trump when enabled) | Data + strategy |
 | 4. Group 2 | Parallel | 2 agents | Group 1 results |
 | 5. Decision | Sequential | TraderAgent | All analyses |
 | 6. Risk Gate | Sequential | RiskManagementAgent | Decision + account |

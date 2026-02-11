@@ -454,6 +454,38 @@ class TestSignalOutcomes:
         signals = cache.get_signal_outcomes(window="all")
         assert signals[0].price_at_1d == 155.0
 
+    def test_update_signal_outcome_rejects_invalid_fields(self, cache):
+        now = datetime.now(UTC)
+
+        cache.record_signal_outcome(
+            symbol="AAPL",
+            timestamp=now,
+            signal="BUY",
+            confidence=0.85,
+            price_at_signal=150.0,
+        )
+
+        signals = cache.get_signal_outcomes(window="all")
+        signal_id = signals[0]["id"]
+
+        # Attempt to update with invalid field name (SQL injection attempt)
+        with pytest.raises(ValueError, match=r"Invalid signal outcome fields: .*malicious_field"):
+            cache.update_signal_outcome(signal_id, malicious_field="DROP TABLE signal_outcomes")
+
+        # Attempt with multiple invalid fields
+        with pytest.raises(ValueError, match="Invalid signal outcome fields:"):
+            cache.update_signal_outcome(
+                signal_id,
+                price_at_1d=155.0,
+                invalid_field="value",
+                another_bad_field=123,
+            )
+
+        # Valid fields should still work
+        cache.update_signal_outcome(signal_id, price_at_1d=155.0, outcome_updated_at=now.isoformat())
+        signals = cache.get_signal_outcomes(window="all")
+        assert signals[0]["price_at_1d"] == 155.0
+
     def test_get_signal_outcomes_window_filtering(self, cache):
         now = datetime.now(UTC)
 
