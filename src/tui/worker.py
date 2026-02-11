@@ -322,14 +322,13 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
     try:
         _update_progress("fetch_universe", "Fetching stock universe...", params.progress_callback)
 
-        from src.data.universe import StockUniverseFetcher
         from src.di.container import create_container
         from src.screening.analyzer import ScreeningAnalyzer
         from src.screening.exporter import ScreeningExporter
         from src.screening.screener import ScreeningCriteria, StockScreener
 
         container = create_container()
-        universe_fetcher = StockUniverseFetcher()
+        universe_fetcher = container.stock_universe_fetcher()
 
         _update_progress(
             "screening", f"Screening {params.universe} for {params.criteria}...", params.progress_callback

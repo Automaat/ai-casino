@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
@@ -28,10 +28,7 @@ class AnalysisInput(BaseModel):
     trump_posts: list[TruthPost] | None
     enable_multi_timeframe: bool
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def get_daily_data(self) -> pd.DataFrame:
         """Extract daily timeframe data from market data.
@@ -83,7 +80,4 @@ class AnalysisOutput(BaseModel):
     bearish_research: BearishResearchAnalysis | None
     warnings: list[str] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

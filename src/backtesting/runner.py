@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 import yfinance as yf
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from backtesting import Backtest  # type: ignore[import-untyped]
 from src.backtesting.strategies import MomentumBacktestStrategy
@@ -27,10 +27,7 @@ class BacktestResult(BaseModel):
     avg_return_per_trade: float
     trades: list[TradeRecord]
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class BacktestRunner:

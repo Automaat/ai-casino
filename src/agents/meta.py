@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
@@ -44,7 +44,7 @@ WIN_RATE_THRESHOLD = 0.5
 class StrategySelection(BaseModel):
     """Result of meta-agent strategy selection."""
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     strategy_name: str
     strategy_instance: StrategyType

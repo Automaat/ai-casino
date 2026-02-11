@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.strategies.signal import Signal
 
@@ -62,10 +62,7 @@ class MultiTimeframeData(BaseModel):
     timeframes: dict[Timeframe, pd.DataFrame]
     last_updated: datetime
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __repr__(self) -> str:
         """String representation."""

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
@@ -44,10 +44,7 @@ class DecisionInput(BaseModel):
     backtest_validation: BacktestValidation | None
     degradation_context: DegradationContext | None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def owns_position(self) -> bool:
@@ -70,7 +67,4 @@ class DecisionOutput(BaseModel):
 
     final_decision: TradingDecision
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

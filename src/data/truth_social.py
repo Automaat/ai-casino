@@ -71,6 +71,9 @@ class TruthSocialFetcher:
         """
         self._cache_dir = Path(cache_dir or "data/cache/truth_social")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
+        # Dual caching design (intentional):
+        # - Cache (diskcache): API responses with 5-15min TTL for volatility
+        # - HistoricalCache (SQLite): Parsed posts, permanent cross-session deduplication
         self._cache = Cache(str(self._cache_dir))
         self._historical_cache = historical_cache
         logger.info(f"Initialized TruthSocialFetcher (cache_dir={self._cache_dir})")

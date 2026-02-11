@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.risk import AccountInfo
 from src.data.broker import BrokerPosition
@@ -17,7 +17,4 @@ class AccountInfoOutput(BaseModel):
     broker_api_failed: bool = False
     warnings: list[str] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

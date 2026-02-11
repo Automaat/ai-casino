@@ -10,7 +10,7 @@ import yfinance as yf
 from alpha_vantage.timeseries import TimeSeries
 from dotenv import load_dotenv
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -58,10 +58,7 @@ class MarketData(BaseModel):
     data: pd.DataFrame
     last_updated: datetime
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def latest_close(self) -> float:

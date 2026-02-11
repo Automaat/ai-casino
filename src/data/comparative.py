@@ -6,7 +6,7 @@ from enum import StrEnum
 
 import yfinance as yf
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -94,10 +94,7 @@ class ComparativeData(BaseModel):
     market_performance: PerformanceData
     fetched_at: datetime
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class ComparativeDataFetcher:

@@ -399,7 +399,6 @@ class DaemonFactory:
         Returns:
             Tuple of (StockDiscoveryEngine, MarketDataFetcher)
         """
-        from src.data.universe import StockUniverseFetcher
         from src.discovery.engine import (
             CoreDependencies,
             DiscoveryEngineConfig,
@@ -452,7 +451,7 @@ class DaemonFactory:
 
         # Create screener
         screener = StockScreener(
-            universe_fetcher=StockUniverseFetcher(),
+            universe_fetcher=self._container.stock_universe_fetcher(),
             liquidity_filters=self.config.liquidity_filters,
             cache_dir="data/cache/screening",
         )
@@ -471,7 +470,7 @@ class DaemonFactory:
         deps = CoreDependencies(
             screener=screener,
             market_fetcher=market_fetcher,
-            universe_fetcher=StockUniverseFetcher(),
+            universe_fetcher=self._container.stock_universe_fetcher(),
             trigger_detector=trigger_detector,
         )
 
