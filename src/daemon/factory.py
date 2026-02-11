@@ -593,13 +593,8 @@ class DaemonFactory:
             scheduler=components.scheduler,
             config=self.config.analysis_orchestration,
             trading_mode=self.config.trading_mode.value,
-            broker=components.broker,
-            position_manager=position_manager,
-            event_bus=event_bus,
-            historical_cache=components.historical_cache,
-            notification_service=components.notification_service,
-            context_builder=context_builder,
             components=components,  # type: ignore[arg-type]  # pyrefly module resolution issue
+            context_builder=context_builder,
         )
         logger.info("Analysis orchestrator initialized")
 

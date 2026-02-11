@@ -48,20 +48,20 @@ class AnalysisOrchestrationResult(BaseModel):
 class AnalysisOrchestrator:
     """Orchestrate watchlist analysis with concurrency control."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         workflow: TradingWorkflow,
         state: DaemonState,
         scheduler: MarketScheduler,
         config: AnalysisOrchestratorConfig,
         trading_mode: str = "paper",
+        components: DaemonComponents | None = None,
         broker: AlpacaBroker | None = None,
         position_manager: PositionManager | None = None,
         event_bus: EventBus | None = None,
         historical_cache: HistoricalCache | None = None,
         notification_service: NotificationService | None = None,
         context_builder: DaemonContextBuilder | None = None,
-        components: DaemonComponents | None = None,
     ) -> None:
         """Initialize analysis orchestrator.
 
@@ -71,24 +71,38 @@ class AnalysisOrchestrator:
             scheduler: Market scheduler
             config: Orchestrator configuration
             trading_mode: Trading mode (paper/live)
-            broker: Optional broker for position fetching
-            position_manager: Optional position manager
-            event_bus: Optional event bus for publishing
-            historical_cache: Optional historical cache
-            notification_service: Optional notification service
-            context_builder: Optional context builder for analysis contexts
-            components: Optional daemon components for notification helper
+            components: Optional daemon components (preferred for dependency injection)
+            broker: Optional broker (deprecated, use components)
+            position_manager: Optional position manager (deprecated, use components)
+            event_bus: Optional event bus (deprecated, use components)
+            historical_cache: Optional historical cache (deprecated, use components)
+            notification_service: Optional notification service (deprecated, use components)
+            context_builder: Optional context builder (deprecated, use components)
         """
         self.workflow = workflow
         self.state = state
         self.scheduler = scheduler
         self.config = config
         self.trading_mode = trading_mode
-        self.broker = broker
-        self.position_manager = position_manager
-        self.event_bus = event_bus
-        self.historical_cache = historical_cache
-        self.notification_service = notification_service
+
+        # Extract dependencies from components if provided, fallback to individual params
+        self.broker = broker if broker is not None else (components.broker if components else None)
+        self.position_manager = (
+            position_manager
+            if position_manager is not None
+            else (components.position_manager if components else None)
+        )
+        self.event_bus = event_bus if event_bus is not None else (components.event_bus if components else None)
+        self.historical_cache = (
+            historical_cache
+            if historical_cache is not None
+            else (components.historical_cache if components else None)
+        )
+        self.notification_service = (
+            notification_service
+            if notification_service is not None
+            else (components.notification_service if components else None)
+        )
         self._context_builder = context_builder
         self._components = components
         self._notification_helper = DaemonNotificationHelper()
