@@ -155,6 +155,24 @@ class TradeRepository(BaseRepository[TradeRecord]):
         result = await self._session.execute(select(TradeORM).order_by(TradeORM.timestamp.desc()))
         return [self._to_record(orm) for orm in result.scalars().all()]
 
+    async def get_entry_trade(self, symbol: str) -> TradeRecord | None:
+        """Get most recent entry trade for symbol (OPEN BUY).
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            TradeRecord if found, None otherwise
+        """
+        result = await self._session.execute(
+            select(TradeORM)
+            .where(TradeORM.symbol == symbol, TradeORM.status == "OPEN", TradeORM.action == "BUY")
+            .order_by(TradeORM.timestamp.desc())
+            .limit(1)
+        )
+        orm = result.scalar_one_or_none()
+        return self._to_record(orm) if orm else None
+
     def _to_record(self, orm: TradeORM) -> TradeRecord:
         """Convert ORM model to TradeRecord.
 

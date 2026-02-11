@@ -352,7 +352,27 @@ class DaemonFactory:
 
         from src.daemon.positions import PositionManager
 
-        position_manager = PositionManager(broker, self.config.position_management)
+        # Get repositories from container if database is available
+        position_repository = None
+        position_action_repository = None
+        trade_repository = None
+
+        if os.getenv("DATABASE_URL") or self.config.database.database_url:
+            try:
+                position_repository = self._container.position_repository()
+                position_action_repository = self._container.position_action_repository()
+                trade_repository = self._container.trade_repository()
+                logger.debug("Position manager initialized with database repositories")
+            except Exception as e:
+                logger.warning(f"Failed to initialize position manager repositories: {e}")
+
+        position_manager = PositionManager(
+            broker,
+            self.config.position_management,
+            position_repository=position_repository,
+            position_action_repository=position_action_repository,
+            trade_repository=trade_repository,
+        )
         logger.info("Position management enabled")
         return position_manager
 

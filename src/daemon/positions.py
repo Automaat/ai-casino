@@ -16,6 +16,7 @@ from src.workflows.types import TradingWorkflowResult
 if TYPE_CHECKING:
     from src.database.repositories.position import PositionRecordRepository
     from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.repositories.trade import TradeRepository
 
 
 def _log_task_exception(task: asyncio.Task[object]) -> None:
@@ -71,6 +72,7 @@ class PositionManager:
         config: PositionManagementConfig,
         position_repository: PositionRecordRepository | None = None,
         position_action_repository: PositionManagementActionRepository | None = None,
+        trade_repository: TradeRepository | None = None,
     ) -> None:
         """Initialize position manager.
 
@@ -79,11 +81,13 @@ class PositionManager:
             config: Position management configuration
             position_repository: Optional position record repository
             position_action_repository: Optional position action repository
+            trade_repository: Optional trade repository for loading entry metadata
         """
         self.broker = broker
         self.config = config
         self._position_repository = position_repository
         self._position_action_repository = position_action_repository
+        self._trade_repository = trade_repository
         logger.info(f"PositionManager initialized: {config}")
 
     def sync_with_broker(
@@ -193,19 +197,56 @@ class PositionManager:
         profit_targets = self._calculate_profit_targets(entry_price)
         initial_stop = self._calculate_initial_stop_loss(entry_price)
 
-        # Using defaults: timestamp=now(), confidence=0.75 (#272)
+        # Load entry metadata from trades table if available (#272)
+        entry_timestamp, entry_confidence, entry_signal = self._load_entry_metadata(symbol)
+
         return PositionRecord(
             symbol=symbol,
-            entry_timestamp=datetime.now(UTC),
+            entry_timestamp=entry_timestamp,
             entry_price=entry_price,
-            entry_signal="BUY",
-            entry_confidence=0.75,
+            entry_signal=entry_signal,
+            entry_confidence=entry_confidence,
             current_qty=broker_pos.qty,
             current_stop_loss=initial_stop,
             initial_stop_loss=initial_stop,
             profit_targets=profit_targets,
             last_updated=datetime.now(UTC),
         )
+
+    def _load_entry_metadata(self, symbol: str) -> tuple[datetime, float, str]:
+        """Load entry metadata from trades table.
+
+        Args:
+            symbol: Stock ticker
+
+        Returns:
+            Tuple of (entry_timestamp, entry_confidence, entry_signal)
+        """
+        if not self._trade_repository:
+            logger.debug(f"No trade repository available, using defaults for {symbol}")
+            return datetime.now(UTC), 0.75, "BUY"
+
+        try:
+            task = asyncio.create_task(self._trade_repository.get_entry_trade(symbol))
+            entry_trade = asyncio.get_event_loop().run_until_complete(task)
+
+            if entry_trade:
+                logger.info(
+                    f"Loaded entry metadata for {symbol}: "
+                    f"timestamp={entry_trade.timestamp}, "
+                    f"confidence={entry_trade.confidence:.2f}, "
+                    f"signal={entry_trade.action.value}"
+                )
+                return entry_trade.timestamp, entry_trade.confidence, entry_trade.action.value
+
+            logger.warning(
+                f"No entry trade found for {symbol} in trades table, using defaults "
+                f"(timestamp=now(), confidence=0.75, signal=BUY)"
+            )
+            return datetime.now(UTC), 0.75, "BUY"
+        except Exception as e:
+            logger.error(f"Failed to load entry metadata for {symbol}: {e}, using defaults")
+            return datetime.now(UTC), 0.75, "BUY"
 
     def _calculate_profit_targets(self, entry_price: float) -> list[float]:
         """Calculate profit target prices.
