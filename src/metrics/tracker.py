@@ -525,7 +525,7 @@ def create_metrics_tracker(
 
     if database_url and trade_repository:
         logger.info("Using DatabaseMetricsTracker (DATABASE_URL detected)")
-        return cast(BaseMetricsTracker, DatabaseMetricsTracker(trade_repository, risk_free_rate))
+        return cast("BaseMetricsTracker", DatabaseMetricsTracker(trade_repository, risk_free_rate))
 
     logger.info("Using MetricsTracker (JSONL mode)")
     return MetricsTracker(risk_free_rate)
