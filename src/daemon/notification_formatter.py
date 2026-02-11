@@ -9,7 +9,7 @@ class NotificationFormatter:
 
     @staticmethod
     def _escape_markdown(text: str) -> str:
-        """Escape markdown special characters.
+        """Escape markdown special characters for Telegram Markdown (legacy) mode.
 
         Args:
             text: Raw text with potential markdown chars
@@ -17,6 +17,8 @@ class NotificationFormatter:
         Returns:
             Escaped text safe for Telegram Markdown
         """
+        # For Markdown (not MarkdownV2), only escape these chars:
+        # Periods don't need escaping in legacy Markdown mode
         special_chars = [
             "_",
             "*",
@@ -34,7 +36,6 @@ class NotificationFormatter:
             "|",
             "{",
             "}",
-            ".",
             "!",
         ]
         for char in special_chars:
@@ -159,7 +160,7 @@ class NotificationFormatter:
         return (
             f"⚠️ *{title}*\n\n"
             f"*Services Down:* {services}\n\n"
-            f"Analysis quality may be affected\\. Check health report\\."
+            f"Analysis quality may be affected. Check health report."
         )
 
     @staticmethod
