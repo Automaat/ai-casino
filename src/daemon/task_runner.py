@@ -30,14 +30,15 @@ class ScheduledTaskRunner:
     # Task registry (explicit, not dynamic)
     TASKS: ClassVar[list[ScheduledTask]] = [
         ScheduledTask("game_plan", "is_game_plan_time", "_run_game_plan", is_async=True),
-        ScheduledTask("prefetch", "is_prefetch_time", "_run_prefetch", "prefetch.enabled"),
+        ScheduledTask("prefetch", "is_prefetch_time", "_run_prefetch", "prefetch.enabled", is_async=True),
         ScheduledTask(
             "pre_market_refresh",
             "is_pre_market_refresh_time",
             "_run_pre_market_refresh",
             "prefetch.enabled",
+            is_async=True,
         ),
-        ScheduledTask("earnings_fetch", "is_earnings_fetch_time", "_run_earnings_fetch"),
+        ScheduledTask("earnings_fetch", "is_earnings_fetch_time", "_run_earnings_fetch", is_async=True),
         ScheduledTask("sector_rotation", "is_sector_rotation_time", "_run_sector_rotation", is_async=True),
         ScheduledTask(
             "portfolio_rebalancing",
@@ -56,6 +57,7 @@ class ScheduledTaskRunner:
             "after_hours_screening",
             "is_after_hours_screening_time",
             "_run_after_hours_screening",
+            is_async=True,
         ),
         ScheduledTask("optimization", "is_optimization_time", "_run_optimization", "optimization.enabled"),
         ScheduledTask("signal_tracking", "is_signal_tracking_time", "_run_signal_tracking"),
