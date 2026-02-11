@@ -282,11 +282,13 @@ class ThesisResearcher(BaseResearcher):
         Returns:
             ResearchAnalysis with thesis, key points, target, confidence
         """
+        from typing import cast
+
         result = await super().analyze(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
-        assert isinstance(result, ResearchAnalysis)  # noqa: S101
-        return result
+        # _build_analysis override guarantees ResearchAnalysis type
+        return cast(ResearchAnalysis, result)
 
     def _build_analysis(
         self, thesis: str, key_points: list[str], target: float | None, confidence: float

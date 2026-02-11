@@ -98,6 +98,12 @@ class BaseResearcher(ABC):
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
 
+        def validate_llm_response(response: object) -> None:
+            """Validate LLM response has required thesis attribute."""
+            if not hasattr(response, "thesis"):
+                msg = "LLM response missing required thesis attribute"
+                raise AttributeError(msg)
+
         prompt = self._prompts.load("user", **prompt_vars)
         system_prompt = self._prompts.load("system")
 
@@ -106,11 +112,11 @@ class BaseResearcher(ABC):
                 prompt, self.llm_response_model, system=system_prompt, temperature=0.5
             )
             # Access dynamic attributes - type checker sees BaseModel but runtime has specific fields
-            assert hasattr(llm_response, "thesis"), "LLM response missing thesis attribute"  # noqa: S101
+            validate_llm_response(llm_response)
             thesis = llm_response.thesis  # type: ignore[attr-defined]
             key_points = getattr(llm_response, self._get_key_points_field())
             target = getattr(llm_response, self._get_target_field())
-        except StructuredOutputError as e:
+        except (StructuredOutputError, AttributeError) as e:
             logger.warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
             thesis = self._extract_thesis(response)

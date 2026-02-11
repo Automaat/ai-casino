@@ -535,7 +535,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         if self._trades_cache is None:
             trades = await self._repo.get_all()
             self._trades_cache = cast("list[TradeRecord]", trades)
-        assert self._trades_cache is not None  # noqa: S101
+        # Cache guaranteed non-None after conditional fetch above
         return self._trades_cache
 
     def _invalidate_cache(self) -> None:
@@ -597,8 +597,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        created_trade = await self._repo.create(trade)  # type: ignore[arg-type]
-        assert isinstance(created_trade, TradeRecord)  # noqa: S101
+        await self._repo.create(trade)  # type: ignore[arg-type]
         self._invalidate_cache()
         return trade
 
