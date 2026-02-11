@@ -1,6 +1,7 @@
 """Coordinator memory for persistent learning observations."""
 
 import asyncio
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -89,26 +90,24 @@ class CoordinatorMemory:
             return []
 
         try:
+            # Use deque to keep only last N matching records, bounded memory
+            records: deque[ObservationRecord] = deque(maxlen=limit)
+
             with self._memory_file.open() as f:
-                lines = f.readlines()
+                for line in f:
+                    if not line.strip():
+                        continue
 
-            # Parse records
-            records: list[ObservationRecord] = []
-            for line in reversed(lines):  # Read from end
-                if not line.strip():
-                    continue
+                    try:
+                        record = ObservationRecord.model_validate_json(line)
+                        if category is None or record.category == category:
+                            records.append(record)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse observation record: {e}")
+                        continue
 
-                try:
-                    record = ObservationRecord.model_validate_json(line)
-                    if category is None or record.category == category:
-                        records.append(record)
-                        if len(records) >= limit:
-                            break
-                except Exception as e:
-                    logger.warning(f"Failed to parse observation record: {e}")
-                    continue
-
-            return records
+            # Return in reverse order (most recent first)
+            return list(reversed(records))
 
         except Exception as e:
             logger.error(f"Failed to read observations: {e}")

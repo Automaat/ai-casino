@@ -1,6 +1,7 @@
 """Save observation tool for coordinator."""
 
 import asyncio
+import concurrent.futures
 from typing import TYPE_CHECKING, ClassVar, Final
 
 from loguru import logger
@@ -82,7 +83,8 @@ class SaveObservationTool(BaseTool):
 
         # Validate category
         if category not in self.VALID_CATEGORIES:
-            return f"Error: Invalid category '{category}'. Must be one of: {', '.join(self.VALID_CATEGORIES)}"
+            valid_categories = ", ".join(sorted(self.VALID_CATEGORIES))
+            return f"Error: Invalid category '{category}'. Must be one of: {valid_categories}"
 
         logger.info(f"Saving observation (category={category})")
 
@@ -107,7 +109,14 @@ class SaveObservationTool(BaseTool):
         Returns:
             Confirmation message
         """
-        return asyncio.run(self.aexecute(**kwargs))
+
+        def run_in_thread() -> str:
+            return asyncio.run(self.aexecute(**kwargs))
+
+        # Run in thread to avoid nested event loop issues
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_in_thread)
+            return future.result()
 
     def __repr__(self) -> str:
         """String representation."""

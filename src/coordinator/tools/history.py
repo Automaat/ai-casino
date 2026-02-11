@@ -90,8 +90,8 @@ class AnalysisHistoryTool(BaseTool):
 
             for i, record in enumerate(recent, 1):
                 executed = "✓" if record.executed_trade else "✗"
-                rsi_text = f"RSI: {record.rsi:.1f}" if record.rsi else "RSI: N/A"
-                macd_text = f"MACD: {record.macd_hist:.4f}" if record.macd_hist else "MACD: N/A"
+                rsi_text = f"RSI: {record.rsi:.1f}" if record.rsi is not None else "RSI: N/A"
+                macd_text = f"MACD: {record.macd_hist:.4f}" if record.macd_hist is not None else "MACD: N/A"
 
                 lines.extend(
                     [

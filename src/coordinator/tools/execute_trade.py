@@ -111,7 +111,7 @@ class ExecuteTradeTool(BaseTool):
             return f"Error: Rationale must be at least {MIN_RATIONALE_LENGTH} characters"
 
         # Convert stop loss to float if provided
-        stop_loss_float = float(stop_loss_price) if stop_loss_price else None
+        stop_loss_float = float(stop_loss_price) if stop_loss_price is not None else None
 
         logger.info(f"Executing {action} order: {quantity} {symbol} (stop_loss={stop_loss_float})")
 
@@ -136,7 +136,7 @@ class ExecuteTradeTool(BaseTool):
                 f"**Submitted:** {order_status.submitted_at.strftime('%Y-%m-%d %H:%M:%S')}",
             ]
 
-            if stop_loss_float:
+            if stop_loss_float is not None:
                 lines.append(f"**Stop Loss:** ${stop_loss_float:.2f}")
 
             lines.extend(

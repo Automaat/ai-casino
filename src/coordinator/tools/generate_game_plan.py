@@ -1,6 +1,7 @@
 """Generate game plan tool for coordinator."""
 
 import asyncio
+import concurrent.futures
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -107,7 +108,14 @@ class GenerateGamePlanTool(BaseTool):
         Returns:
             Formatted game plan
         """
-        return asyncio.run(self.aexecute(**kwargs))
+
+        def run_in_thread() -> str:
+            return asyncio.run(self.aexecute(**kwargs))
+
+        # Run in thread to avoid nested event loop issues
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_in_thread)
+            return future.result()
 
     def _format_result(self, plan: GamePlan) -> str:
         """Format game plan as markdown.
