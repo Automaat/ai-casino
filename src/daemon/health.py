@@ -293,8 +293,11 @@ class HealthChecker:
                     response.raise_for_status()
             else:
                 llm = self._container.llm_client()
-                await llm.acomplete("Reply with OK", temperature=0.0)
-                await llm.close()
+                try:
+                    # Use default temperature (0.7) - no explicit override for health check
+                    await llm.acomplete("Reply with OK")
+                finally:
+                    await llm.close()
 
             duration = (time.perf_counter() - start) * 1000
             return ServiceCheckResult(
