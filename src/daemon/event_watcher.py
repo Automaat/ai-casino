@@ -9,6 +9,8 @@ Base pattern generalized from TrumpWatcher:
 - Async throughout with concurrent analysis
 """
 
+from __future__ import annotations
+
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable

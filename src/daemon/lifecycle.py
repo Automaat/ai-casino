@@ -218,14 +218,15 @@ class DaemonLifecycle:
                 self.components.social_watcher.running = False
 
             # Wait for tasks to complete (up to 5 seconds)
-            _, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)
+            done, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)
             if pending:
-                logger.warning(f"{len(pending)} watcher tasks did not complete in time")
+                logger.warning(f"{len(pending)} watcher tasks did not complete in time, cancelling them")
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
             logger.info("Event watchers stopped")
-        except TimeoutError:
-            logger.warning("Watcher shutdown timed out, cancelling tasks")
-            for task in self._watcher_tasks:
-                task.cancel()
-            await asyncio.gather(*self._watcher_tasks, return_exceptions=True)
         except Exception as e:
             logger.error(f"Error stopping watchers: {e}")
+        finally:
+            # Clear references to watcher tasks after shutdown attempt
+            self._watcher_tasks.clear()
