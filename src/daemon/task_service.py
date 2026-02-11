@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time as time_mod
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -71,151 +70,18 @@ class DaemonTaskService:
         if self.components.daemon_optimizer is None:
             return
 
-        now = datetime.now(self.components.scheduler.timezone)
-        if self.components.state.last_optimization:
-            last_date = self.components.state.last_optimization.astimezone(
-                self.components.scheduler.timezone
-            ).date()
-            if last_date == now.date():
-                logger.debug("Optimization already completed today")
-                return
+        from src.daemon.tasks.portfolio_tasks import OptimizationTask
 
-        logger.info("Starting after-hours parameter optimization")
-        console.print(f"\n[bold cyan]Parameter Optimization ({now:%H:%M})[/bold cyan]")
-        console.print("-" * 50)
-
-        self._publish_event_sync("SCHEDULED_TASK", {"task_name": "optimization", "status": "started"})
-
-        try:
-            start_time = time_mod.time()
-            watchlist = self.components.broker_manager.get_merged_watchlist()
-
-            optimized, skipped, failed = self.components.daemon_optimizer.optimize_watchlist(
-                watchlist=watchlist,
-                strategies=self.components.config.optimization.strategies,
-                refresh_days=self.components.config.optimization.refresh_days,
-            )
-
-            total_time = time_mod.time() - start_time
-
-            self.components.state.record_optimization(
-                symbols_optimized=optimized,
-                symbols_skipped=skipped,
-                total_time_seconds=total_time,
-            )
-            self.components.state.save(self.components.config.state.state_file)
-
-            if failed:
-                for symbol, strategies_str in failed:
-                    logger.warning(f"Failed to optimize {symbol}: {strategies_str}")
-
-            console.print(
-                f"\n[dim]Optimization complete: {len(optimized)} symbols optimized, "
-                f"{len(skipped)} skipped ({total_time:.0f}s)[/dim]\n"
-            )
-            logger.info(f"Parameter optimization completed in {total_time:.0f}s")
-
-            self._publish_event_sync("SCHEDULED_TASK", {"task_name": "optimization", "status": "completed"})
-
-        except Exception as e:
-            error_msg = f"Parameter optimization failed: {e}"
-            logger.error(error_msg)
-            self.components.state.record_error(error_msg)
+        await OptimizationTask(self.components, self.container).run()
 
     async def run_portfolio_rebalancing(self) -> None:
         """Run portfolio rebalancing task."""
         if self.components.daemon_rebalancer is None:
             return
 
-        # Check if already rebalanced today
-        now = datetime.now(self.components.scheduler.timezone)
-        if self.components.state.last_portfolio_rebalancing:
-            last_date = self.components.state.last_portfolio_rebalancing.astimezone(
-                self.components.scheduler.timezone
-            ).date()
-            if last_date == now.date():
-                logger.debug("Portfolio rebalancing already completed today")
-                return
+        from src.daemon.tasks.portfolio_tasks import RebalancingTask
 
-        logger.info("Starting portfolio rebalancing")
-        console.print(f"\n[bold cyan]Portfolio Rebalancing ({now:%H:%M})[/bold cyan]")
-        console.print("-" * 50)
-
-        try:
-            watchlist = self.components.broker_manager.get_merged_watchlist()
-            method = self.components.config.rebalancing.method
-            auto_execute = self.components.config.auto_trade
-
-            console.print(f"[dim]Method: {method}, Universe: {len(watchlist)} symbols[/dim]")
-
-            result = self.components.daemon_rebalancer.run(watchlist, method, auto_execute)
-
-            # Convert to state records
-            from src.daemon.state import PortfolioAllocationRecord
-
-            allocations = [
-                PortfolioAllocationRecord(symbol=alloc.symbol, weight=alloc.weight, action="HOLD", delta=0.0)
-                for alloc in result.optimized_portfolio.allocations
-            ]
-
-            # Update allocations with rebalance actions
-            rebalance_map = {r.symbol: r for r in result.rebalance_instructions}
-            for alloc in allocations:
-                if alloc.symbol in rebalance_map:
-                    rebalance = rebalance_map[alloc.symbol]
-                    alloc.action = rebalance.action
-                    alloc.delta = rebalance.delta
-
-            self.components.state.record_portfolio_rebalancing(
-                method=method,
-                allocations=allocations,
-                expected_return=result.optimized_portfolio.expected_return,
-                expected_volatility=result.optimized_portfolio.expected_volatility,
-                sharpe_ratio=result.optimized_portfolio.sharpe_ratio,
-                rebalances_executed=result.executed_count,
-                rebalances_pending=result.pending_count,
-            )
-            self.components.state.save(self.components.config.state.state_file)
-
-            # Display summary
-            console.print("\n[bold]Portfolio Metrics:[/bold]")
-            console.print(f"  Expected Return: {result.optimized_portfolio.expected_return:.2%}")
-            console.print(f"  Volatility: {result.optimized_portfolio.expected_volatility:.2%}")
-            console.print(f"  Sharpe Ratio: {result.optimized_portfolio.sharpe_ratio:.2f}")
-
-            if result.rebalance_instructions:
-                console.print("\n[bold]Rebalancing Instructions:[/bold]")
-                for rebalance in result.rebalance_instructions[:10]:
-                    action_color = (
-                        "green"
-                        if rebalance.action == "BUY"
-                        else "red"
-                        if rebalance.action == "SELL"
-                        else "dim"
-                    )
-                    console.print(
-                        f"  [{action_color}]{rebalance.action:4}[/{action_color}] "
-                        f"{rebalance.symbol:6} "
-                        f"{rebalance.target_weight:6.2%} "
-                        f"({rebalance.delta:+.2%})"
-                    )
-
-                if len(result.rebalance_instructions) > 10:
-                    console.print(f"  [dim]... and {len(result.rebalance_instructions) - 10} more[/dim]")
-
-            console.print(
-                f"\n[dim]Rebalancing complete: {result.executed_count} executed, "
-                f"{result.pending_count} pending[/dim]\n"
-            )
-            logger.info(
-                f"Portfolio rebalancing completed: {result.executed_count}/"
-                f"{len(result.rebalance_instructions)} executed"
-            )
-
-        except Exception as e:
-            error_msg = f"Portfolio rebalancing failed: {e}"
-            logger.error(error_msg)
-            self.components.state.record_error(error_msg)
+        await RebalancingTask(self.components, self.container).run()
 
     async def run_game_plan(self) -> None:
         """Run game plan generation task."""
@@ -1028,72 +894,11 @@ class DaemonTaskService:
 
         console.print(f"\n[dim]Complete in {duration:.1f}s[/dim]\n")
 
-    def run_correlation_audit(self) -> None:
+    async def run_correlation_audit(self) -> None:
         """Run portfolio correlation audit."""
-        from src.metrics.correlation import CorrelationAuditor
+        from src.daemon.tasks.portfolio_tasks import CorrelationAuditTask
 
-        now = datetime.now(self.components.scheduler.timezone)
-        if self._should_skip_correlation_audit(now):
-            logger.debug("Correlation audit already run today")
-            return
-
-        logger.info("Starting portfolio correlation audit")
-        console.print(f"\n[bold cyan]Portfolio Correlation Audit ({now:%H:%M})[/bold cyan]")
-        console.print("-" * 50)
-
-        try:
-            if not self.components.broker:
-                logger.warning("No broker configured")
-                return
-
-            account_info = self.components.broker.get_account_info()
-            positions = account_info.positions
-
-            if len(positions) < 2:
-                logger.info(f"Insufficient positions ({len(positions)}), need ≥2")
-                console.print("[dim]Insufficient positions[/dim]\n")
-                self.components.state.last_correlation_audit = now
-                return
-
-            screening_results = (
-                self.components.state.screening_history[-1].candidates
-                if self.components.state.screening_history
-                else None
-            )
-
-            workflow = self.components.workflow
-            if not workflow:
-                logger.warning("Workflow not initialized")
-                return
-
-            auditor = CorrelationAuditor(
-                market_fetcher=workflow.market_fetcher,
-                correlation_threshold=self.components.config.correlation_audit.correlation_threshold,
-                lookback_days=self.components.config.correlation_audit.lookback_days,
-                output_dir=self.components.config.correlation_audit.output_dir,
-            )
-
-            start = time_mod.time()
-            result = auditor.audit(positions, screening_results)
-            duration = time_mod.time() - start
-
-            self.components.state.record_correlation_audit(
-                num_positions=result.num_positions,
-                num_correlated_pairs=len(result.highly_correlated_pairs),
-                max_correlation=result.max_correlation,
-                avg_correlation=result.avg_correlation,
-                diversification_ratio=result.diversification_ratio,
-                num_substitutions=len(result.substitution_suggestions),
-                total_duration_seconds=duration,
-            )
-            self.components.state.save(self.components.config.state.state_file)
-
-            self._print_correlation_audit_results(result, duration)
-
-        except Exception as e:
-            error_msg = f"Correlation audit failed: {e}"
-            logger.error(error_msg)
-            self.components.state.record_error(error_msg)
+        await CorrelationAuditTask(self.components, self.container).run()
 
     def run_tearsheet_generation(self) -> None:
         """Generate performance tearsheet from analysis history."""
