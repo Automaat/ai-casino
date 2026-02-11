@@ -427,7 +427,7 @@ class StockUniverseFetcher:
                     StockInfo(
                         symbol=symbol,
                         name=name,
-                        sector=sector if sector else "Unknown",
+                        sector=sector or "Unknown",
                         industry="",  # Not available in iShares CSV
                     )
                 )

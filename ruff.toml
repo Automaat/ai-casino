@@ -21,6 +21,7 @@ select = [
     "S",      # flake8-bandit
     "BLE",    # flake8-blind-except
     "FBT",    # flake8-boolean-trap
+    "FURB",   # refurb (modernization)
     "B",      # flake8-bugbear
     "A",      # flake8-builtins
     "COM",    # flake8-commas
@@ -42,6 +43,7 @@ select = [
     "TID",    # flake8-tidy-imports
     "TCH",    # flake8-type-checking
     "ARG",    # flake8-unused-arguments
+    "ASYNC",  # flake8-async (blocking calls in async)
     "PTH",    # flake8-use-pathlib
     "ERA",    # eradicate
     "PL",     # Pylint

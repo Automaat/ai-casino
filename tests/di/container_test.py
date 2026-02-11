@@ -134,7 +134,7 @@ def reset_test_container(container: AppContainer, providers: list[str] | None = 
         "stock_screener",
     ]
 
-    providers_to_reset = providers if providers else all_providers
+    providers_to_reset = providers or all_providers
 
     for provider_name in providers_to_reset:
         if hasattr(container, provider_name):

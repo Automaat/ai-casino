@@ -172,7 +172,7 @@ class WebSearchFetcher:
                 published_at = None
                 if date_str := r.get("date"):
                     with contextlib.suppress(ValueError):
-                        published_at = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                        published_at = datetime.fromisoformat(date_str)
 
                 results.append(
                     WebSearchResult(

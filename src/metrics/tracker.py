@@ -768,6 +768,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         Args:
             path: Output path for JSON report
         """
+        import asyncio
+
         logger.info(f"Generating metrics report to {path}")
 
         report = {
@@ -778,13 +780,15 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             "last_7_days": (await self.calculate_metrics_async("7d")).model_dump(),
         }
 
-        report_path = Path(path)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
+        def _write_report() -> None:
+            report_path = Path(path)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
             with report_path.open("w") as f:
                 json.dump(report, f, indent=2, default=str)
-            logger.info(f"Saved metrics report to {report_path}")
+
+        try:
+            await asyncio.to_thread(_write_report)
+            logger.info(f"Saved metrics report to {path}")
         except Exception as e:
             logger.error(f"Failed to save report: {e}")
             raise

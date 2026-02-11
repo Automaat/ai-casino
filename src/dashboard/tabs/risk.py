@@ -115,7 +115,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             }
         except Exception as e:
             logger.error(f"Risk refresh failed: {e}")
-            return current_data if current_data else {}
+            return current_data or {}
 
     @app.callback(
         Output("risk-timestamp", "children"),

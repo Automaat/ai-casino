@@ -151,7 +151,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
         except Exception as e:
             logger.error(f"Events refresh failed: {e}")
             fallback = {"timestamp": datetime.now(UTC).isoformat(), "events": []}
-            return current_data if current_data else fallback
+            return current_data or fallback
 
     @app.callback(
         Output("events-filter-type", "options"),
@@ -305,8 +305,7 @@ def _apply_event_filters(events: list, event_types: list, start_date: str, end_d
         filtered = [
             e
             for e in filtered
-            if e.get("timestamp")
-            and start_dt <= datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")) <= end_dt
+            if e.get("timestamp") and start_dt <= datetime.fromisoformat(e["timestamp"]) <= end_dt
         ]
 
     return filtered
@@ -376,7 +375,7 @@ def _build_degradation_timeline(records: list[dict]) -> dcc.Graph | dbc.Alert:
     tier_order = ["FULL", "DEGRADED", "MINIMAL", "HALTED"]
     tier_colors = {"FULL": "#22c55e", "DEGRADED": "#fbbf24", "MINIMAL": "#f97316", "HALTED": "#ef4444"}
 
-    timestamps = [datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00")) for r in records]
+    timestamps = [datetime.fromisoformat(r["timestamp"]) for r in records]
     tiers = [r["tier"] for r in records]
     services = [", ".join(r["unavailable_services"]) or "All healthy" for r in records]
 
@@ -534,7 +533,7 @@ def _build_event_table(all_events: list[dict]) -> dbc.Table:
         timestamp = event.get("timestamp")
         if timestamp:
             try:
-                ts_obj = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                ts_obj = datetime.fromisoformat(timestamp)
                 timestamp_str = ts_obj.strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 timestamp_str = str(timestamp)
