@@ -85,9 +85,7 @@ class TestCoordinatorMemoryDecisionQueries:
         assert isinstance(decisions[0], DecisionQueryResult)
         mock_signal_outcome_repo.get_recent_outcomes.assert_called_once()
 
-    async def test_query_decisions_with_symbol_filter(
-        self, mock_signal_outcome_repo, sample_signal_outcomes
-    ):
+    async def test_query_decisions_with_symbol_filter(self, mock_signal_outcome_repo, sample_signal_outcomes):
         """Test querying decisions for specific symbol."""
         mock_signal_outcome_repo.get_by_symbol.return_value = [sample_signal_outcomes[0]]
 
@@ -126,9 +124,7 @@ class TestCoordinatorMemoryDecisionQueries:
         assert tsla_decision.hit_miss == "PENDING"  # No outcome yet
         assert tsla_decision.return_pct is None
 
-    async def test_query_decisions_return_calculation(
-        self, mock_signal_outcome_repo, sample_signal_outcomes
-    ):
+    async def test_query_decisions_return_calculation(self, mock_signal_outcome_repo, sample_signal_outcomes):
         """Test return percentage calculation."""
         mock_signal_outcome_repo.get_recent_outcomes.return_value = [sample_signal_outcomes[0]]
 
@@ -143,9 +139,7 @@ class TestCoordinatorMemoryDecisionQueries:
         expected_return = ((155.0 - 150.0) / 150.0) * 100
         assert abs(decision.return_pct - expected_return) < 0.01
 
-    async def test_query_decisions_horizon_selection(
-        self, mock_signal_outcome_repo, sample_signal_outcomes
-    ):
+    async def test_query_decisions_horizon_selection(self, mock_signal_outcome_repo, sample_signal_outcomes):
         """Test selecting different outcome horizons."""
         outcome_with_multiple_horizons = SignalOutcome(
             symbol="AAPL",
@@ -224,9 +218,7 @@ class TestCoordinatorMemoryDecisionQueries:
 
         assert len(bullish_decisions) >= 1
 
-    async def test_get_success_rate_average_return(
-        self, mock_signal_outcome_repo, sample_signal_outcomes
-    ):
+    async def test_get_success_rate_average_return(self, mock_signal_outcome_repo, sample_signal_outcomes):
         """Test average return calculation in success rate stats."""
         completed_signals = [s for s in sample_signal_outcomes if s.price_at_5d is not None]
         mock_signal_outcome_repo.get_recent_outcomes.return_value = completed_signals

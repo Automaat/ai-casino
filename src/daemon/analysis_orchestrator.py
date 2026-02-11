@@ -108,6 +108,18 @@ class AnalysisOrchestrator:
         self._context_builder: DaemonContextBuilder | None = cast(
             "DaemonContextBuilder | None", deprecated_kwargs.get("context_builder")
         )
+
+        # Extract signal_outcome_repo from components (not in deprecated_kwargs)
+        from contextlib import suppress
+
+        from src.database.repositories.signal_outcome import SignalOutcomeRepository
+
+        self._signal_outcome_repo: SignalOutcomeRepository | None = None
+        if hasattr(components, "container") and components.container:
+            with suppress(Exception):
+                # Repository creation may fail if database not enabled
+                self._signal_outcome_repo = components.container.signal_outcome_repository()
+
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
 

@@ -585,13 +585,8 @@ class DaemonFactory:
         # Import to fix pyrefly module path resolution
         from src.daemon.factory import DaemonComponents as DaemonComponentsType
 
-        # Get signal outcome repository from container if database enabled
-        signal_outcome_repo = None
-        if self.config.database.enable_persistence:
-            try:
-                signal_outcome_repo = components.container.signal_outcome_repository()
-            except Exception as e:
-                logger.warning(f"Failed to create signal_outcome_repository: {e}")
+        # Signal outcome repository is extracted by AnalysisOrchestrator from components.container
+        # No need to pass it explicitly
 
         orchestrator = AnalysisOrchestrator(
             config=self.config.analysis_orchestration,

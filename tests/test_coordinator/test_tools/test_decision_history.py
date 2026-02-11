@@ -109,9 +109,7 @@ class TestQueryPastDecisionsTool:
         assert "lookback_days" in definition.function.parameters.properties
         assert definition.function.parameters.required == []
 
-    def test_execute_basic(
-        self, mock_coordinator_memory, sample_decision_results, sample_success_stats
-    ):
+    def test_execute_basic(self, mock_coordinator_memory, sample_decision_results, sample_success_stats):
         """Test basic tool execution without filters."""
         mock_coordinator_memory.query_decisions.return_value = sample_decision_results
         mock_coordinator_memory.get_success_rate.return_value = sample_success_stats
@@ -257,9 +255,7 @@ class TestQueryPastDecisionsTool:
         assert "Total Decisions:" in result
         assert "Average Confidence:" in result
 
-    def test_format_results_no_decisions(
-        self, mock_coordinator_memory, sample_success_stats
-    ):
+    def test_format_results_no_decisions(self, mock_coordinator_memory, sample_success_stats):
         """Test formatting when no decisions found."""
         mock_coordinator_memory.query_decisions.return_value = []
         mock_coordinator_memory.get_success_rate.return_value = sample_success_stats
