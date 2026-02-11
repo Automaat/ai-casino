@@ -3,6 +3,7 @@
 import asyncio
 import os
 import sys
+from collections.abc import Callable
 from typing import Annotated
 
 import typer
@@ -11,16 +12,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from src.cache.historical import HistoricalCache
-from src.data.broker import AlpacaBroker
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
+from src.di.container import AppContainer, create_container
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
-from src.models.llm import LLMClient
-from src.models.sentiment import get_finbert_sentiment
-from src.workflows.trading import TradingWorkflow
+from src.utils.logging import sanitize_log_record
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 console = Console()
@@ -77,6 +73,8 @@ def _print_momentum_technical(result: TradingWorkflowResult) -> None:
 def _print_ensemble_technical(result: TradingWorkflowResult) -> None:
     """Print ensemble strategy technical analysis."""
     ensemble = result.technical.ensemble_result
+    if not ensemble:
+        return
 
     tech_table = Table(title="Technical Analysis (Ensemble)", show_header=True)
     tech_table.add_column("Metric", style="cyan")
@@ -372,6 +370,19 @@ def _print_metrics_summary(tracker: MetricsTracker) -> None:
     console.print("[dim]Metrics saved to: logs/metrics_summary.json[/dim]\n")
 
 
+def _select_workflow_factory(
+    container: AppContainer,
+    use_meta_agent: bool,
+    trump_mode: bool,
+) -> Callable[..., TradingWorkflow]:
+    """Select workflow factory based on CLI flags."""
+    if trump_mode:
+        return container.workflow_trump
+    if use_meta_agent:
+        return container.workflow_meta
+    return container.workflow_momentum
+
+
 async def _analyze_stock(
     symbol: str,
     period_days: int,
@@ -388,35 +399,21 @@ async def _analyze_stock(
     trump_str = "+trump" if trump_mode else ""
     console.print(f"\n[bold]Initializing trading system ({mode_str}{trump_str} mode)...[/bold]")
 
-    historical_cache = HistoricalCache()
+    container = create_container()
 
-    llm_client = LLMClient()
-    market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
-    news_fetcher = NewsFetcher(historical_cache=historical_cache)
-    finbert = get_finbert_sentiment()
-    fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
-
-    broker = None
+    broker = container.alpaca_broker() if enable_trading else None
     if enable_trading:
         if os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            broker = AlpacaBroker(paper=True, historical_cache=historical_cache)
             console.print("[bold green]Paper trading enabled[/bold green]")
         else:
             console.print("[yellow]Warning: Trading enabled but Alpaca credentials not found[/yellow]")
 
     metrics_tracker = MetricsTracker() if show_metrics else None
 
-    workflow = TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert,
-        fundamental_fetcher,
-        broker,
-        metrics_tracker,
-        use_meta_agent=use_meta_agent,
-        trump_mode=trump_mode,
-        historical_cache=historical_cache,
+    workflow_factory = _select_workflow_factory(container, use_meta_agent, trump_mode)
+    workflow = workflow_factory(
+        broker=broker,
+        metrics_tracker=metrics_tracker,
     )
 
     console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")
@@ -451,6 +448,7 @@ def analyze(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:

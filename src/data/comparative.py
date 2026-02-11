@@ -141,12 +141,12 @@ class ComparativeDataFetcher:
 
         return ComparativeData(
             stock_info=stock_info,
-            stock_performance=results["stock_performance"],
+            stock_performance=results["stock_performance"],  # type: ignore[arg-type]
             sector_etf=sector_etf,
-            sector_pe=results["sector_pe"],
-            sector_performance=results["sector_performance"],
-            market_pe=results["market_pe"],
-            market_performance=results["market_performance"],
+            sector_pe=results["sector_pe"],  # type: ignore[arg-type]
+            sector_performance=results["sector_performance"],  # type: ignore[arg-type]
+            market_pe=results["market_pe"],  # type: ignore[arg-type]
+            market_performance=results["market_performance"],  # type: ignore[arg-type]
             fetched_at=datetime.now(UTC),
         )
 
@@ -256,7 +256,7 @@ class ComparativeDataFetcher:
             if result <= 0 or result > 1000:
                 return None
             return result
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def __repr__(self) -> str:

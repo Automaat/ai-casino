@@ -1,18 +1,12 @@
 """Tests for GetMarketDataTool."""
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
 from src.tools.market_data import GetMarketDataTool
-
-
-@pytest.fixture
-def tool():
-    """Create GetMarketDataTool."""
-    return GetMarketDataTool()
 
 
 @pytest.fixture
@@ -42,17 +36,20 @@ def sample_market_data():
 class TestGetMarketDataTool:
     """Tests for GetMarketDataTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = GetMarketDataTool(container=test_container_full)
         assert tool.name == "get_market_data"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool doesn't require confirmation."""
+        tool = GetMarketDataTool(container=test_container_full)
         assert tool.requires_confirmation is False
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
-        definition = tool.get_tool_definition()
+        tool = GetMarketDataTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "get_market_data"
@@ -63,56 +60,61 @@ class TestGetMarketDataTool:
         assert "days" in params["properties"]
         assert "symbol" in params["required"]
 
-    def test_execute_success(self, tool, sample_market_data):
+    def test_execute_success(self, test_container_full, sample_market_data):
         """Test successful execution."""
-        with patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_daily.return_value = sample_market_data
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetMarketDataTool(container=test_container_full)
 
-            result = tool.execute("AAPL", days=30)
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.return_value = sample_market_data
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            assert "AAPL" in result
-            assert "Current Price:" in result
-            assert "Change:" in result
-            mock_instance.fetch_daily.assert_called_once_with("AAPL", 30)
+        result = tool.execute(symbol="AAPL", days=30)
 
-    def test_execute_default_days(self, tool, sample_market_data):
+        assert "AAPL" in result
+        assert "Current Price:" in result
+        assert "Change:" in result
+        mock_fetcher.fetch_daily.assert_called_once_with("AAPL", 30)
+
+    def test_execute_default_days(self, test_container_full, sample_market_data):
         """Test execution with default days."""
-        with patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_daily.return_value = sample_market_data
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetMarketDataTool(container=test_container_full)
 
-            tool.execute("AAPL")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.return_value = sample_market_data
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            mock_instance.fetch_daily.assert_called_once_with("AAPL", 30)
+        tool.execute(symbol="AAPL")
 
-    def test_execute_uppercase_symbol(self, tool, sample_market_data):
+        mock_fetcher.fetch_daily.assert_called_once_with("AAPL", 30)
+
+    def test_execute_uppercase_symbol(self, test_container_full, sample_market_data):
         """Test that symbol is uppercased."""
-        with patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_daily.return_value = sample_market_data
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetMarketDataTool(container=test_container_full)
 
-            tool.execute("aapl", days=30)
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.return_value = sample_market_data
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            mock_instance.fetch_daily.assert_called_once_with("AAPL", 30)
+        tool.execute(symbol="aapl", days=30)
 
-    def test_execute_error_handling(self, tool):
+        mock_fetcher.fetch_daily.assert_called_once_with("AAPL", 30)
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on fetch failure."""
-        with patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch_daily.side_effect = Exception("API error")
-            mock_fetcher_cls.return_value = mock_instance
+        tool = GetMarketDataTool(container=test_container_full)
 
-            result = tool.execute("INVALID")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.side_effect = Exception("API error")
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            assert "Failed to fetch market data" in result
-            assert "API error" in result
+        result = tool.execute(symbol="INVALID")
 
-    def test_format_data_content(self, tool, sample_market_data):
+        assert "Failed to fetch market data" in result
+        assert "API error" in result
+
+    def test_format_data_content(self, test_container_full, sample_market_data):
         """Test formatted data content."""
+        tool = GetMarketDataTool(container=test_container_full)
         result = tool._format_data(sample_market_data)
 
         assert "# AAPL Market Data" in result
@@ -126,7 +128,8 @@ class TestGetMarketDataTool:
         assert "-Day Summary" in result
         assert "Last updated:" in result
 
-    def test_repr(self, tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = GetMarketDataTool(container=test_container_full)
         repr_str = repr(tool)
         assert "GetMarketDataTool" in repr_str

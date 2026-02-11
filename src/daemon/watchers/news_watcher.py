@@ -6,13 +6,13 @@ deduplicates via URL tracking, and triggers LLM triage + analysis for relevant e
 
 from collections import deque
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
-from src.daemon.events import NewsEvent
+from src.daemon.events import BaseEvent, NewsEvent
 from src.data.news import NewsFetcher
 
 
@@ -95,19 +95,22 @@ class NewsWatcher(EventWatcher):
         if self._news_fetcher is None:
             self._news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
 
-    async def _fetch_events(self) -> list[NewsEvent]:
+    async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch breaking news from Marketaux.
 
         Returns:
             List of NewsEvent objects for breaking news
         """
         self._init_components()
+        if self._news_fetcher is None:
+            msg = "Failed to initialize NewsFetcher"
+            raise RuntimeError(msg)
 
         # Fetch recent news (no symbol filter)
         articles = self._news_fetcher.fetch_market_news(limit=50)
 
         # Filter: breaking (published <N min ago + keywords)
-        breaking = []
+        breaking: list[BaseEvent] = []
         now = datetime.now(UTC)
 
         for article in articles:
@@ -127,12 +130,15 @@ class NewsWatcher(EventWatcher):
 
             if any(kw in combined_text for kw in self.BREAKING_KEYWORDS):
                 breaking.append(
-                    NewsEvent(
-                        event_id=article.url,
-                        event_type="news",
-                        timestamp=article.published_at,
-                        source="marketaux",
-                        article=article,
+                    cast(
+                        "BaseEvent",
+                        NewsEvent(
+                            event_id=article.url,
+                            event_type="news",
+                            timestamp=article.published_at,
+                            source="marketaux",
+                            article=article,
+                        ),
                     )
                 )
                 self._seen_urls.append(article.url)  # Auto-evicts oldest when maxlen reached

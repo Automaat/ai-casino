@@ -63,6 +63,10 @@ class MonteCarloSimulator:
             logger.warning("Singular covariance matrix, adding ridge regularization")
             self.cov_matrix += 1e-6 * np.eye(len(self.cov_matrix))
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"MonteCarloSimulator(symbols={len(self.returns.columns)}, days={len(self.returns)})"
+
     def simulate(  # noqa: PLR0913
         self,
         positions: dict[str, float],
@@ -185,7 +189,8 @@ class MonteCarloSimulator:
         cov = self.cov_matrix.loc[symbols, symbols].values
 
         # Generate random returns: (num_sims, horizon_days, num_assets)
-        return rng.multivariate_normal(mean=mean, cov=cov, size=(num_simulations, horizon_days))
+        mean_array = np.asarray(mean)
+        return rng.multivariate_normal(mean=mean_array, cov=cov, size=(num_simulations, horizon_days))
 
     def _simulate_bootstrap(
         self, symbols: list[str], num_simulations: int, horizon_days: int, rng: np.random.Generator
@@ -220,7 +225,8 @@ class MonteCarloSimulator:
 
         # GBM returns using drift-diffusion formula
         sigma = np.sqrt(np.diag(cov))
-        drift = (mean - 0.5 * sigma**2) * dt
+        mean_array = np.asarray(mean)
+        drift = (mean_array - 0.5 * sigma**2) * dt
         diffusion = sigma * np.sqrt(dt) * z
 
         return np.exp(drift + diffusion) - 1  # (num_sims, horizon_days, num_assets)

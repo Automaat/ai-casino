@@ -2,9 +2,11 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 from loguru import logger
+from pandas import DatetimeIndex
 
 from src.daemon.state import AnalysisRecord
 from src.data.broker import AlpacaBroker
@@ -220,18 +222,24 @@ class DaemonTearsheetGenerator:
 
             # Try exact date match
             if target_date in df.index:
-                return float(df.loc[target_date, "close"])
+                close_val = df.loc[pd.Timestamp(target_date), "close"]
+                return float(close_val)  # type: ignore[arg-type]
 
             # Fall back to nearest date (handles weekends/holidays)
             import numpy as np
 
             target_timestamp = pd.Timestamp(target_date)
-            time_diffs = (df.index - target_timestamp).total_seconds()
-            df["date_diff"] = np.abs(time_diffs)
-            nearest_idx = df["date_diff"].idxmin()
-            price = float(df.loc[nearest_idx, "close"])
+            # Type narrowing for Index subtraction
+            time_diffs_td = cast("DatetimeIndex", df.index) - target_timestamp  # TimedeltaIndex
+            time_diffs = time_diffs_td.total_seconds()  # type: ignore[union-attr]
+            date_diff_array = np.abs(time_diffs)
+            df["date_diff"] = date_diff_array
+            nearest_idx = cast("pd.Series", df["date_diff"]).idxmin()
+            price_val = df.loc[nearest_idx, "close"]
+            price = float(price_val)  # type: ignore[arg-type]
 
-            logger.debug(f"Fetched {symbol} price {price} for {target_date} (nearest: {nearest_idx.date()})")
+            nearest_date = nearest_idx.date() if hasattr(nearest_idx, "date") else nearest_idx
+            logger.debug(f"Fetched {symbol} price {price} for {target_date} (nearest: {nearest_date})")
             return price
 
         except Exception as e:

@@ -1,8 +1,11 @@
 """Tests for ToolRegistry."""
 
+import asyncio
+
 import pytest
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 from src.tools.registry import ToolRegistry
 
 
@@ -24,19 +27,22 @@ class MockTool(BaseTool):
         """Requires confirmation."""
         return self._confirms
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": f"Mock tool: {self.name}",
-                "parameters": {"type": "object", "properties": {"arg1": {"type": "string"}}},
-            },
-        }
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=f"Mock tool: {self.name}",
+                parameters=ToolParametersSchema(
+                    properties={"arg1": ToolParameter(type="string", description="Argument 1")},
+                    required=[],
+                ),
+            )
+        )
 
-    def execute(self, arg1: str = "default") -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute tool."""
+        arg1 = str(kwargs.get("arg1", "default"))
         return f"mock result: {arg1}"
 
 
@@ -104,7 +110,7 @@ class TestToolRegistry:
         definitions = registry.get_definitions()
 
         assert len(definitions) == 2
-        names = [d["function"]["name"] for d in definitions]
+        names = [d.function.name for d in definitions]
         assert "tool_one" in names
         assert "tool_two" in names
 
@@ -171,3 +177,33 @@ class TestToolRegistry:
 
         assert "ToolRegistry" in repr_str
         assert "my_tool" in repr_str
+
+    @pytest.mark.asyncio
+    async def test_aexecute_tool(self):
+        """Test executing a tool asynchronously."""
+        registry = ToolRegistry()
+        registry.register(MockTool())
+        result = await registry.aexecute("mock_tool", {"arg1": "test_value"})
+        assert "mock result: test_value" in result
+
+    @pytest.mark.asyncio
+    async def test_aexecute_nonexistent_raises(self):
+        """Test executing nonexistent tool asynchronously raises KeyError."""
+        registry = ToolRegistry()
+        with pytest.raises(KeyError, match="Tool not found"):
+            await registry.aexecute("nonexistent", {})
+
+    @pytest.mark.asyncio
+    async def test_aexecute_with_custom_async_tool(self):
+        """Test executing tool with custom async implementation."""
+
+        class AsyncMockTool(MockTool):
+            async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+                await asyncio.sleep(0.01)
+                arg1 = str(kwargs.get("arg1", "default"))
+                return f"async mock result: {arg1}"
+
+        registry = ToolRegistry()
+        registry.register(AsyncMockTool())
+        result = await registry.aexecute("mock_tool", {"arg1": "async_test"})
+        assert "async mock result: async_test" in result

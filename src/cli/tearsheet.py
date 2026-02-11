@@ -50,6 +50,8 @@ async def _tearsheet_async(
         period: Time period specification
         benchmark: Benchmark symbol or None
     """
+    from src.di.container import create_container
+
     console.print(f"\n[bold cyan]Generating tearsheet for {symbol}[/bold cyan]")
 
     period_days = _parse_period(period)
@@ -89,7 +91,9 @@ async def _tearsheet_async(
     if benchmark:
         console.print(f"Fetching benchmark data for {benchmark}...")
         try:
-            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days)
+            container = create_container()
+            fetcher = container.yfinance_market_fetcher()
+            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, fetcher)
             console.print(f"[green]Benchmark data fetched ({len(benchmark_returns)} days)[/green]")
         except Exception as e:
             logger.warning(f"Failed to fetch benchmark data: {e}")
@@ -147,18 +151,17 @@ def _parse_period(period: str) -> int:
         return 365
 
 
-async def _fetch_benchmark_returns(benchmark: str, period_days: int) -> pd.Series:
+async def _fetch_benchmark_returns(benchmark: str, period_days: int, fetcher: MarketDataFetcher) -> pd.Series:
     """Fetch benchmark returns data.
 
     Args:
         benchmark: Benchmark ticker symbol
         period_days: Number of days (-1 for all available)
+        fetcher: Market data fetcher for benchmark data
 
     Returns:
         pandas Series with daily returns
     """
-    fetcher = MarketDataFetcher(use_alpha_vantage=False)
-
     fetch_days = period_days if period_days != -1 else 365 * 5
 
     market_data = fetcher.fetch_daily(benchmark, period_days=fetch_days)

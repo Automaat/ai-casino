@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
@@ -13,13 +11,29 @@ from src.agents.risk import RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.social import SocialSentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis
 from src.agents.web_researcher import WebResearchAnalysis
+from src.daemon.degradation import DegradationContext
 from src.data.broker import OrderStatus
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
+
+
+class WorkflowExtraContext(BaseModel):
+    """Optional context passed to workflow pipeline."""
+
+    degradation_context: DegradationContext | None = None
+    enable_multi_timeframe: bool = False
+    sector_rotation_context: str | None = None
+    earnings_context: str | None = None
+    peer_analysis_context: str | None = None
+    game_plan_context: str | None = None
+    position_context: dict[str, object] | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class BacktestValidation(BaseModel):
@@ -67,10 +81,7 @@ class TradingWorkflowResult(BaseModel):
     degradation_tier: str | None = None
     degradation_confidence_penalty: float | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def has_incomplete_data(self) -> bool:

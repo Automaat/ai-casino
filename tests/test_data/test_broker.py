@@ -20,9 +20,9 @@ def mock_trading_client():
 def mock_account():
     """Mock account object."""
     account = Mock()
-    account.equity = 100000.0
-    account.buying_power = 50000.0
-    account.portfolio_value = 100000.0
+    account.equity = "100000.0"
+    account.buying_power = "50000.0"
+    account.portfolio_value = "100000.0"
     return account
 
 
@@ -31,19 +31,19 @@ def mock_positions():
     """Mock positions list."""
     pos1 = Mock()
     pos1.symbol = "AAPL"
-    pos1.qty = 10
-    pos1.market_value = 1500.0
-    pos1.avg_entry_price = 150.0
-    pos1.unrealized_pnl = 50.0
-    pos1.unrealized_plpc = 0.033
+    pos1.qty = "10"
+    pos1.market_value = "1500.0"
+    pos1.avg_entry_price = "150.0"
+    pos1.unrealized_pl = "50.0"
+    pos1.unrealized_plpc = "0.033"
 
     pos2 = Mock()
     pos2.symbol = "TSLA"
-    pos2.qty = 5
-    pos2.market_value = 1000.0
-    pos2.avg_entry_price = 200.0
-    pos2.unrealized_pnl = -50.0
-    pos2.unrealized_plpc = -0.05
+    pos2.qty = "5"
+    pos2.market_value = "1000.0"
+    pos2.avg_entry_price = "200.0"
+    pos2.unrealized_pl = "-50.0"
+    pos2.unrealized_plpc = "-0.05"
 
     return [pos1, pos2]
 
@@ -321,3 +321,153 @@ def test_submit_order_invalid_qty(mock_trading_client, monkeypatch):
 
     with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
         broker.submit_order("AAPL", -5, "buy")
+
+
+def test_submit_stop_order(mock_trading_client, mock_order, monkeypatch):
+    """Test submitting stop order."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    mock_order.side = Mock(value="sell")
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.return_value = mock_order
+
+    broker = AlpacaBroker()
+    order_status = broker.submit_stop_order("AAPL", 10, 140.0)
+
+    assert isinstance(order_status, OrderStatus)
+    assert order_status.order_id == "order-123"
+    assert order_status.symbol == "AAPL"
+    assert order_status.qty == 10.0
+    assert order_status.side == "sell"
+
+    client_instance.submit_order.assert_called_once()
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.symbol == "AAPL"
+    assert order_data.qty == 10
+    assert order_data.stop_price == 140.0
+
+
+def test_submit_stop_order_invalid_qty(mock_trading_client, monkeypatch):
+    """Test submitting stop order with invalid quantity."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(ValueError, match="Order quantity must be positive, got 0"):
+        broker.submit_stop_order("AAPL", 0, 140.0)
+
+    with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
+        broker.submit_stop_order("AAPL", -5, 140.0)
+
+
+def test_submit_stop_order_invalid_price(mock_trading_client, monkeypatch):
+    """Test submitting stop order with invalid stop price."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(ValueError, match=r"Stop price must be positive, got 0"):
+        broker.submit_stop_order("AAPL", 10, 0.0)
+
+    with pytest.raises(ValueError, match=r"Stop price must be positive, got -10\.5"):
+        broker.submit_stop_order("AAPL", 10, -10.5)
+
+
+def test_submit_stop_order_error(mock_trading_client, monkeypatch):
+    """Test error handling in stop order submission."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.side_effect = Exception("Stop order failed")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(Exception, match="Stop order failed"):
+        broker.submit_stop_order("AAPL", 10, 140.0)
+
+
+def test_submit_stop_order_rounds_price_above_dollar(mock_trading_client, mock_order, monkeypatch):
+    """Test stop order rounds price to 2 decimals for stocks >= $1.00."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    mock_order.side = Mock(value="sell")
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.return_value = mock_order
+
+    broker = AlpacaBroker()
+    broker.submit_stop_order("AAPL", 10, 266.3813952636719)
+
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.stop_price == 266.38  # Rounded to 2 decimals
+
+
+def test_submit_stop_order_rounds_price_below_dollar(mock_trading_client, mock_order, monkeypatch):
+    """Test stop order rounds price to 4 decimals for stocks < $1.00."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    mock_order.side = Mock(value="sell")
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.return_value = mock_order
+
+    broker = AlpacaBroker()
+    broker.submit_stop_order("PENNY", 100, 0.8765432109)
+
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.stop_price == 0.8765  # Rounded to 4 decimals
+
+
+def test_submit_order_with_stop_loss_rounds_above_dollar(mock_trading_client, mock_order, monkeypatch):
+    """Test order with stop_loss_price rounds to 2 decimals for >= $1.00."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.return_value = mock_order
+
+    broker = AlpacaBroker()
+    broker.submit_order("AAPL", 10, "buy", stop_loss_price=145.6789123)
+
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.stop_loss.stop_price == 145.68  # Rounded to 2 decimals
+
+
+def test_submit_order_with_stop_loss_rounds_below_dollar(mock_trading_client, mock_order, monkeypatch):
+    """Test order with stop_loss_price rounds to 4 decimals for < $1.00."""
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    client_instance = mock_trading_client.return_value
+    client_instance.submit_order.return_value = mock_order
+
+    broker = AlpacaBroker()
+    broker.submit_order("PENNY", 100, "buy", stop_loss_price=0.5432198765)
+
+    call_args = client_instance.submit_order.call_args
+    order_data = call_args.kwargs["order_data"]
+    assert order_data.stop_loss.stop_price == 0.5432  # Rounded to 4 decimals
+
+
+def test_submit_order_validates_stop_loss_price(mock_trading_client, monkeypatch):
+    """Test order with invalid stop_loss_price raises error."""
+    from src.data.broker import BrokerAPIError
+
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+
+    broker = AlpacaBroker()
+
+    with pytest.raises(BrokerAPIError, match=r"Stop loss price must be positive, got 0"):
+        broker.submit_order("AAPL", 10, "buy", stop_loss_price=0.0)
+
+    with pytest.raises(BrokerAPIError, match=r"Stop loss price must be positive, got -10\.5"):
+        broker.submit_order("AAPL", 10, "buy", stop_loss_price=-10.5)

@@ -97,9 +97,9 @@ class TestGetEarningsFlags:
         daemon = DaemonEarningsCalendar()
         flags = daemon.get_earnings_flags(events, "AAPL")
 
-        assert flags["upcoming_earnings"] is True
-        assert flags["days_until_earnings"] == 2
-        assert flags["pre_earnings_zone"] == "T-3"
+        assert flags.upcoming_earnings is True
+        assert flags.days_until_earnings == 2
+        assert flags.pre_earnings_zone == "T-3"
 
     def test_symbol_t1_zone(self, mock_dt):
         mock_dt.now.return_value = MagicMock(date=MagicMock(return_value=date(2024, 7, 20)))
@@ -109,7 +109,7 @@ class TestGetEarningsFlags:
         daemon = DaemonEarningsCalendar()
         flags = daemon.get_earnings_flags(events, "AAPL")
 
-        assert flags["pre_earnings_zone"] == "T-1"
+        assert flags.pre_earnings_zone == "T-1"
 
     def test_symbol_no_upcoming(self, mock_dt):
         mock_dt.now.return_value = MagicMock(date=MagicMock(return_value=date(2024, 7, 20)))
@@ -119,9 +119,9 @@ class TestGetEarningsFlags:
         daemon = DaemonEarningsCalendar()
         flags = daemon.get_earnings_flags(events, "AAPL")
 
-        assert flags["upcoming_earnings"] is False
-        assert flags["days_until_earnings"] is None
-        assert flags["pre_earnings_zone"] is None
+        assert flags.upcoming_earnings is False
+        assert flags.days_until_earnings is None
+        assert flags.pre_earnings_zone is None
 
     def test_symbol_far_future(self, mock_dt):
         mock_dt.now.return_value = MagicMock(date=MagicMock(return_value=date(2024, 7, 20)))
@@ -131,9 +131,9 @@ class TestGetEarningsFlags:
         daemon = DaemonEarningsCalendar()
         flags = daemon.get_earnings_flags(events, "AAPL")
 
-        assert flags["upcoming_earnings"] is True
-        assert flags["days_until_earnings"] > 3
-        assert flags["pre_earnings_zone"] is None
+        assert flags.upcoming_earnings is True
+        assert flags.days_until_earnings > 3
+        assert flags.pre_earnings_zone is None
 
     def test_past_earnings_ignored(self, mock_dt):
         mock_dt.now.return_value = MagicMock(date=MagicMock(return_value=date(2024, 7, 20)))
@@ -143,7 +143,7 @@ class TestGetEarningsFlags:
         daemon = DaemonEarningsCalendar()
         flags = daemon.get_earnings_flags(events, "AAPL")
 
-        assert flags["upcoming_earnings"] is False
+        assert flags.upcoming_earnings is False
 
 
 class TestRepr:

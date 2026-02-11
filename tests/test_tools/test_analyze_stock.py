@@ -1,17 +1,11 @@
 """Tests for AnalyzeStockTool."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.strategies.signal import Signal
 from src.tools.analyze_stock import AnalyzeStockTool
-
-
-@pytest.fixture
-def tool():
-    """Create AnalyzeStockTool."""
-    return AnalyzeStockTool()
 
 
 @pytest.fixture
@@ -21,17 +15,20 @@ def mock_workflow_result():
     result.symbol = "AAPL"
     result.decision.action = Signal.BUY
     result.decision.confidence = 0.85
-    result.decision.rationale = "Strong technical and sentiment signals."
+    result.decision.reasoning = ["Strong technical signals", "Positive sentiment"]
     result.risk.validation.risk_level = "LOW"
     result.technical.signal = Signal.BUY
     result.technical.rsi = 45.5
     result.technical.macd_hist = 0.25
     result.technical.interpretation = "Bullish momentum"
-    result.sentiment.sentiment = "positive"
-    result.sentiment.score = 0.72
-    result.sentiment.confidence = 0.88
-    result.news.overall_sentiment = "positive"
+    result.sentiment.overall_sentiment = "positive"
+    result.sentiment.sentiment_score = 0.72
+    result.sentiment.positive_ratio = 0.65
+    result.sentiment.negative_ratio = 0.15
+    result.sentiment.neutral_ratio = 0.20
     result.news.key_themes = ["earnings beat", "product launch"]
+    result.news.impact_assessment = "Strong positive impact expected"
+    result.news.recommendation = "Consider buying on positive momentum"
     result.warnings = []
     return result
 
@@ -39,17 +36,20 @@ def mock_workflow_result():
 class TestAnalyzeStockTool:
     """Tests for AnalyzeStockTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = AnalyzeStockTool(container=test_container_full)
         assert tool.name == "analyze_stock"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool requires confirmation."""
+        tool = AnalyzeStockTool(container=test_container_full)
         assert tool.requires_confirmation is True
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
-        definition = tool.get_tool_definition()
+        tool = AnalyzeStockTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "analyze_stock"
@@ -61,84 +61,92 @@ class TestAnalyzeStockTool:
         assert "period_days" in params["properties"]
         assert "symbol" in params["required"]
 
-    def test_execute_success(self, tool, mock_workflow_result):
+    def test_execute_success(self, test_container_full, mock_workflow_result):
         """Test successful execution."""
-        with (
-            patch("src.models.llm.LLMClient"),
-            patch("src.data.market.MarketDataFetcher"),
-            patch("src.data.news.NewsFetcher"),
-            patch("src.models.sentiment.FinBERTSentiment"),
-            patch("src.data.fundamental.FundamentalDataFetcher"),
-            patch("src.workflows.trading.TradingWorkflow") as mock_workflow_cls,
-        ):
-            mock_workflow = MagicMock()
-            mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
-            mock_workflow_cls.return_value = mock_workflow
+        from dependency_injector import providers
 
-            result = tool.execute("AAPL", period_days=90)
+        tool = AnalyzeStockTool(container=test_container_full)
 
-            assert "AAPL" in result
-            assert "BUY" in result
-            assert "Technical Analysis" in result
-            mock_workflow.analyze.assert_called_once_with("AAPL", 90)
+        mock_workflow = MagicMock()
 
-    def test_execute_default_period(self, tool, mock_workflow_result):
+        async def mock_analyze(symbol: str, period_days: int):
+            return mock_workflow_result
+
+        mock_workflow.analyze = mock_analyze
+
+        # Override workflow_momentum provider (used by analyze_stock)
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
+
+        result = tool.execute(symbol="AAPL", period_days=90)
+
+        assert "AAPL" in result
+        assert "BUY" in result
+        assert "Technical Analysis" in result
+
+    def test_execute_default_period(self, test_container_full, mock_workflow_result):
         """Test execution with default period."""
-        with (
-            patch("src.models.llm.LLMClient"),
-            patch("src.data.market.MarketDataFetcher"),
-            patch("src.data.news.NewsFetcher"),
-            patch("src.models.sentiment.FinBERTSentiment"),
-            patch("src.data.fundamental.FundamentalDataFetcher"),
-            patch("src.workflows.trading.TradingWorkflow") as mock_workflow_cls,
-        ):
-            mock_workflow = MagicMock()
-            mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
-            mock_workflow_cls.return_value = mock_workflow
+        from dependency_injector import providers
 
-            tool.execute("AAPL")
+        tool = AnalyzeStockTool(container=test_container_full)
 
-            mock_workflow.analyze.assert_called_once_with("AAPL", 90)
+        mock_workflow = MagicMock()
 
-    def test_execute_uppercase_symbol(self, tool, mock_workflow_result):
+        async def mock_analyze(symbol: str, period_days: int):
+            return mock_workflow_result
+
+        mock_workflow.analyze = mock_analyze
+
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
+
+        result = tool.execute(symbol="AAPL")
+
+        assert "AAPL" in result
+
+    def test_execute_uppercase_symbol(self, test_container_full, mock_workflow_result):
         """Test that symbol is uppercased."""
-        with (
-            patch("src.models.llm.LLMClient"),
-            patch("src.data.market.MarketDataFetcher"),
-            patch("src.data.news.NewsFetcher"),
-            patch("src.models.sentiment.FinBERTSentiment"),
-            patch("src.data.fundamental.FundamentalDataFetcher"),
-            patch("src.workflows.trading.TradingWorkflow") as mock_workflow_cls,
-        ):
-            mock_workflow = MagicMock()
-            mock_workflow.analyze = AsyncMock(return_value=mock_workflow_result)
-            mock_workflow_cls.return_value = mock_workflow
+        from dependency_injector import providers
 
-            tool.execute("aapl", period_days=90)
+        tool = AnalyzeStockTool(container=test_container_full)
 
-            mock_workflow.analyze.assert_called_once_with("AAPL", 90)
+        mock_workflow = MagicMock()
 
-    def test_execute_error_handling(self, tool):
+        async def mock_analyze(symbol: str, period_days: int):
+            # Verify symbol is uppercased
+            assert symbol == "AAPL"
+            return mock_workflow_result
+
+        mock_workflow.analyze = mock_analyze
+
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
+
+        result = tool.execute(symbol="aapl", period_days=90)
+
+        assert "AAPL" in result
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on workflow failure."""
-        with (
-            patch("src.models.llm.LLMClient"),
-            patch("src.data.market.MarketDataFetcher"),
-            patch("src.data.news.NewsFetcher"),
-            patch("src.models.sentiment.FinBERTSentiment"),
-            patch("src.data.fundamental.FundamentalDataFetcher"),
-            patch("src.workflows.trading.TradingWorkflow") as mock_workflow_cls,
-        ):
-            mock_workflow = MagicMock()
-            mock_workflow.analyze = AsyncMock(side_effect=Exception("Workflow error"))
-            mock_workflow_cls.return_value = mock_workflow
+        from dependency_injector import providers
 
-            result = tool.execute("INVALID")
+        tool = AnalyzeStockTool(container=test_container_full)
 
-            assert "Analysis failed" in result
-            assert "Workflow error" in result
+        mock_workflow = MagicMock()
 
-    def test_format_result_content(self, tool, mock_workflow_result):
+        async def mock_analyze(symbol: str, period_days: int):
+            msg = "Workflow error"
+            raise RuntimeError(msg)
+
+        mock_workflow.analyze = mock_analyze
+
+        test_container_full.workflow_momentum.override(providers.Factory(lambda **_kwargs: mock_workflow))
+
+        result = tool.execute(symbol="INVALID")
+
+        assert "Analysis failed" in result
+        assert "Workflow error" in result
+
+    def test_format_result_content(self, test_container_full, mock_workflow_result):
         """Test formatted result content."""
+        tool = AnalyzeStockTool(container=test_container_full)
         result = tool._format_result(mock_workflow_result)
 
         assert "# AAPL Trading Analysis" in result
@@ -151,8 +159,22 @@ class TestAnalyzeStockTool:
         assert "## News Analysis" in result
         assert "## Decision Rationale" in result
 
-    def test_format_result_with_warnings(self, tool, mock_workflow_result):
+        # Sentiment ratios
+        assert "65%" in result  # positive_ratio
+        assert "15%" in result  # negative_ratio
+        assert "20%" in result  # neutral_ratio
+
+        # News fields
+        assert "Strong positive impact expected" in result  # impact_assessment
+        assert "Consider buying on positive momentum" in result  # recommendation
+
+        # Decision reasoning bullets
+        assert "Strong technical signals" in result  # reasoning[0]
+        assert "Positive sentiment" in result  # reasoning[1]
+
+    def test_format_result_with_warnings(self, test_container_full, mock_workflow_result):
         """Test formatted result includes warnings."""
+        tool = AnalyzeStockTool(container=test_container_full)
         mock_workflow_result.warnings = ["Fundamental data unavailable", "Rate limit hit"]
 
         result = tool._format_result(mock_workflow_result)
@@ -161,7 +183,8 @@ class TestAnalyzeStockTool:
         assert "Fundamental data unavailable" in result
         assert "Rate limit hit" in result
 
-    def test_repr(self, tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = AnalyzeStockTool(container=test_container_full)
         repr_str = repr(tool)
         assert "AnalyzeStockTool" in repr_str

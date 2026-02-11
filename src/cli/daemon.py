@@ -1,10 +1,12 @@
 """Daemon subcommand for autonomous trading mode."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from loguru import logger
@@ -16,6 +18,11 @@ from src.daemon.event_watcher import EventWatcher
 from src.daemon.runner import DaemonRunner
 from src.daemon.trump_watcher import TrumpWatcher
 from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher
+from src.di.container import create_container
+from src.utils.logging import sanitize_log_record
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 console = Console()
 
@@ -35,6 +42,7 @@ def daemon(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:
@@ -76,10 +84,12 @@ def trump_daemon(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:
-        watcher = TrumpWatcher(poll_interval=poll_interval, max_analyses=max_analyses)
+        container = create_container()
+        watcher = TrumpWatcher(poll_interval=poll_interval, max_analyses=max_analyses, container=container)
         asyncio.run(watcher.run())
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Trump watcher interrupted[/bold yellow]")
@@ -100,10 +110,16 @@ def _load_daemon_config(config: Path | None) -> DaemonConfig:
 
 
 def _init_event_watchers(
-    daemon_config: DaemonConfig, historical_cache: HistoricalCache
+    daemon_config: DaemonConfig, historical_cache: HistoricalCache, container: AppContainer
 ) -> list[EventWatcher]:
-    """Initialize enabled event watchers."""
-    watchers = []
+    """Initialize enabled event watchers.
+
+    Args:
+        daemon_config: Daemon configuration
+        historical_cache: Shared historical data cache
+        container: DI container for resolving dependencies
+    """
+    watchers: list[EventWatcher] = []
 
     if daemon_config.news_watcher.enabled:
         watchers.append(
@@ -138,6 +154,7 @@ def _init_event_watchers(
         watchers.append(
             AnomalyWatcher(
                 historical_cache=historical_cache,
+                market_fetcher=container.market_fetcher(),
                 poll_interval=daemon_config.anomaly_watcher.poll_interval_minutes * 60,
                 relevance_threshold=daemon_config.anomaly_watcher.relevance_threshold,
                 cooldown_minutes=daemon_config.anomaly_watcher.cooldown_minutes,
@@ -152,6 +169,83 @@ def _init_event_watchers(
         console.print("[green]✓[/green] AnomalyWatcher enabled")
 
     return watchers
+
+
+def _validate_watchers_config(daemon_config: DaemonConfig) -> None:
+    """Validate watcher configuration and exit if invalid.
+
+    Args:
+        daemon_config: Daemon configuration to validate
+
+    Raises:
+        typer.Exit: If configuration is invalid
+    """
+    # Check only implemented watchers
+    implemented_enabled = (
+        daemon_config.news_watcher.enabled
+        or daemon_config.social_watcher.enabled
+        or daemon_config.anomaly_watcher.enabled
+    )
+
+    # Check unimplemented watchers
+    unimplemented_enabled = daemon_config.filings_watcher.enabled
+
+    if unimplemented_enabled:
+        console.print("[bold red]Error:[/bold red] Unsupported event watchers enabled")
+        console.print("The following watchers are not yet implemented:")
+        if daemon_config.filings_watcher.enabled:
+            console.print("  - filings_watcher")
+        console.print("\nAvailable watchers: news_watcher, social_watcher, anomaly_watcher")
+        raise typer.Exit(1)
+
+    if not implemented_enabled:
+        console.print("[bold red]Error:[/bold red] No event watchers enabled in config")
+        console.print("Enable at least one watcher in daemon.yaml:")
+        console.print("  [daemon.news_watcher]")
+        console.print("  enabled = true")
+        raise typer.Exit(1)
+
+
+async def _run_watchers(watchers: list[EventWatcher]) -> None:
+    """Run all watchers with graceful shutdown.
+
+    Args:
+        watchers: List of watcher instances to run
+    """
+    import signal
+
+    def shutdown_handler(sig: int, _frame: object) -> None:
+        logger.info(f"Received signal {sig}, shutting down watchers...")
+        for w in watchers:
+            w.running = False
+
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, shutdown_handler)
+
+    # Wrap watcher tasks to handle exceptions
+    async def safe_run_watcher(watcher: object) -> BaseException | None:
+        try:
+            await watcher.run()  # type: ignore[attr-defined]
+            return None
+        except BaseException as e:
+            # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+            if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise
+            return e
+
+    # Run watchers in parallel using TaskGroup
+    async with asyncio.TaskGroup() as tg:
+        task_results = [tg.create_task(safe_run_watcher(w)) for w in watchers]
+
+    # Extract results and handle exceptions
+    results = [task.result() for task in task_results]
+
+    # Log failures and re-raise cancellation/shutdown exceptions
+    for i, result in enumerate(results):
+        if isinstance(result, BaseException):
+            if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+                raise result
+            logger.error(f"Watcher {i} failed: {result}")
 
 
 def events_daemon(
@@ -173,57 +267,21 @@ def events_daemon(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     try:
         daemon_config = _load_daemon_config(config)
+        _validate_watchers_config(daemon_config)
 
-        # Check only implemented watchers
-        implemented_enabled = (
-            daemon_config.news_watcher.enabled
-            or daemon_config.social_watcher.enabled
-            or daemon_config.anomaly_watcher.enabled
-        )
-
-        # Check unimplemented watchers
-        unimplemented_enabled = daemon_config.filings_watcher.enabled
-
-        if unimplemented_enabled:
-            console.print("[bold red]Error:[/bold red] Unsupported event watchers enabled")
-            console.print("The following watchers are not yet implemented:")
-            if daemon_config.filings_watcher.enabled:
-                console.print("  - filings_watcher")
-            console.print("\nAvailable watchers: news_watcher, social_watcher, anomaly_watcher")
-            raise typer.Exit(1)
-
-        if not implemented_enabled:
-            console.print("[bold red]Error:[/bold red] No event watchers enabled in config")
-            console.print("Enable at least one watcher in daemon.yaml:")
-            console.print("  [daemon.news_watcher]")
-            console.print("  enabled = true")
-            raise typer.Exit(1)
-
-        historical_cache = HistoricalCache()
-        watchers = _init_event_watchers(daemon_config, historical_cache)
-
-        async def run_all() -> None:
-            """Run all enabled watchers with graceful shutdown."""
-            import signal
-
-            def shutdown_handler(sig: int, _frame: object) -> None:
-                logger.info(f"Received signal {sig}, shutting down watchers...")
-                for w in watchers:
-                    w.running = False
-
-            signal.signal(signal.SIGINT, shutdown_handler)
-            signal.signal(signal.SIGTERM, shutdown_handler)
-
-            tasks = [w.run() for w in watchers]
-            await asyncio.gather(*tasks)
+        container = create_container()
+        container.daemon_config.override(daemon_config)
+        historical_cache = container.historical_cache()
+        watchers = _init_event_watchers(daemon_config, historical_cache, container)
 
         console.print()
         console.print(f"[bold green]Starting {len(watchers)} event watcher(s)...[/bold green]")
-        asyncio.run(run_all())
+        asyncio.run(_run_watchers(watchers))
 
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Event daemon interrupted[/bold yellow]")

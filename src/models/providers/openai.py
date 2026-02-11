@@ -58,7 +58,7 @@ class OpenAIProvider(BaseLLMProvider):
     @retry(max_attempts=3, delay=1.0)
     async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
         """Generate completion from messages."""
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
@@ -72,10 +72,9 @@ class OpenAIProvider(BaseLLMProvider):
         logger.debug(f"OpenAI response length: {len(content)} chars")
         return content
 
-    @retry(max_attempts=3, delay=1.0)
     async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
         """Stream completion tokens."""
-        stream = await self._client.chat.completions.create(
+        stream = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
@@ -93,7 +92,7 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.7,
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Generate completion with tool calling support."""
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             tools=tools,
@@ -149,6 +148,23 @@ class OpenAIProvider(BaseLLMProvider):
             for item_schema in items:
                 self._ensure_additional_properties_false(item_schema, visited)
 
+    def _ensure_all_properties_required(self, schema: dict) -> dict:
+        """Ensure all properties are in the required array (OpenAI strict mode requirement).
+
+        Args:
+            schema: JSON schema dictionary
+
+        Returns:
+            Modified schema with all properties in required array
+        """
+        # If schema has properties, ensure all are in required array
+        if "properties" in schema and isinstance(schema["properties"], dict):
+            all_props = list(schema["properties"].keys())
+            if all_props:
+                schema["required"] = all_props
+
+        return schema
+
     def _ensure_additional_properties_false(self, schema: dict, visited: set[int] | None = None) -> dict:
         """Recursively ensure additionalProperties is false in schema (required by OpenAI strict mode).
 
@@ -174,6 +190,8 @@ class OpenAIProvider(BaseLLMProvider):
         # Set additionalProperties: false for objects
         if schema.get("type") == "object" or "properties" in schema:
             schema["additionalProperties"] = False
+            # Also ensure all properties are required (OpenAI strict mode)
+            self._ensure_all_properties_required(schema)
 
         # Process nested schemas
         if "properties" in schema and isinstance(schema["properties"], dict):
@@ -204,7 +222,7 @@ class OpenAIProvider(BaseLLMProvider):
         # OpenAI strict mode requires additionalProperties: false
         schema = self._ensure_additional_properties_false(schema)
 
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),

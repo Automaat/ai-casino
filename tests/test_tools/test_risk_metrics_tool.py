@@ -1,16 +1,10 @@
 """Tests for GetRiskMetricsTool."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.tools.risk_metrics import GetRiskMetricsTool
-
-
-@pytest.fixture
-def tool():
-    """Create GetRiskMetricsTool."""
-    return GetRiskMetricsTool()
 
 
 @pytest.fixture
@@ -50,17 +44,20 @@ def mock_market_data():
 class TestGetRiskMetricsTool:
     """Tests for GetRiskMetricsTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = GetRiskMetricsTool(container=test_container_full)
         assert tool.name == "get_risk_metrics"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool doesn't require confirmation."""
+        tool = GetRiskMetricsTool(container=test_container_full)
         assert tool.requires_confirmation is False
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
-        definition = tool.get_tool_definition()
+        tool = GetRiskMetricsTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "get_risk_metrics"
@@ -71,59 +68,61 @@ class TestGetRiskMetricsTool:
         assert "days" in params["properties"]
         assert "symbol" in params["required"]
 
-    def test_execute_success(self, tool, mock_risk_metrics, mock_market_data):
+    def test_execute_success(self, test_container_full, mock_risk_metrics, mock_market_data):
         """Test successful execution."""
-        with (
-            patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls,
-            patch("src.metrics.risk.RiskMetricsCalculator") as mock_calc_cls,
-        ):
-            mock_fetcher = MagicMock()
-            mock_fetcher.fetch_daily.return_value = mock_market_data
-            mock_fetcher_cls.return_value = mock_fetcher
+        from src.metrics.risk import RiskMetricsCalculator
 
-            mock_calc = MagicMock()
-            mock_calc.calculate_all.return_value = mock_risk_metrics
-            mock_calc_cls.return_value = mock_calc
+        tool = GetRiskMetricsTool(container=test_container_full)
 
-            result = tool.execute("AAPL", days=90)
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.return_value = mock_market_data
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            assert "AAPL" in result
-            assert "0.0234" in result  # VaR 95
-            assert "0.1523" in result  # Max drawdown
-            assert "0.2345" in result  # Volatility
-            mock_fetcher.fetch_daily.assert_called_once_with("AAPL", period_days=90)
+        mock_calc = MagicMock(spec=RiskMetricsCalculator)
+        mock_calc.calculate_all.return_value = mock_risk_metrics
+        test_container_full.risk_metrics_calculator.override(mock_calc)
 
-    def test_execute_uppercase_symbol(self, tool, mock_risk_metrics, mock_market_data):
+        result = tool.execute(symbol="AAPL", days=90)
+
+        assert "AAPL" in result
+        assert "0.0234" in result  # VaR 95
+        assert "0.1523" in result  # Max drawdown
+        assert "0.2345" in result  # Volatility
+        mock_fetcher.fetch_daily.assert_called_once_with("AAPL", period_days=90)
+
+    def test_execute_uppercase_symbol(self, test_container_full, mock_risk_metrics, mock_market_data):
         """Test that symbol is uppercased."""
-        with (
-            patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls,
-            patch("src.metrics.risk.RiskMetricsCalculator") as mock_calc_cls,
-        ):
-            mock_fetcher = MagicMock()
-            mock_fetcher.fetch_daily.return_value = mock_market_data
-            mock_fetcher_cls.return_value = mock_fetcher
+        from src.metrics.risk import RiskMetricsCalculator
 
-            mock_calc = MagicMock()
-            mock_calc.calculate_all.return_value = mock_risk_metrics
-            mock_calc_cls.return_value = mock_calc
+        tool = GetRiskMetricsTool(container=test_container_full)
 
-            tool.execute("aapl")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.return_value = mock_market_data
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            mock_fetcher.fetch_daily.assert_called_once_with("AAPL", period_days=90)
+        mock_calc = MagicMock(spec=RiskMetricsCalculator)
+        mock_calc.calculate_all.return_value = mock_risk_metrics
+        test_container_full.risk_metrics_calculator.override(mock_calc)
 
-    def test_execute_error_handling(self, tool):
+        tool.execute(symbol="aapl")
+
+        mock_fetcher.fetch_daily.assert_called_once_with("AAPL", period_days=90)
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on failure."""
-        with patch("src.data.market.MarketDataFetcher") as mock_fetcher_cls:
-            mock_fetcher = MagicMock()
-            mock_fetcher.fetch_daily.side_effect = Exception("No data")
-            mock_fetcher_cls.return_value = mock_fetcher
+        tool = GetRiskMetricsTool(container=test_container_full)
 
-            result = tool.execute("INVALID")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_daily.side_effect = Exception("No data")
+        test_container_full.market_fetcher.override(mock_fetcher)
 
-            assert "Risk metrics calculation failed" in result
-            assert "No data" in result
+        result = tool.execute(symbol="INVALID")
 
-    def test_repr(self, tool):
+        assert "Risk metrics calculation failed" in result
+        assert "No data" in result
+
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = GetRiskMetricsTool(container=test_container_full)
         repr_str = repr(tool)
         assert "GetRiskMetricsTool" in repr_str

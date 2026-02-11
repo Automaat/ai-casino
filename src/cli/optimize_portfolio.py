@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from src.data.broker import AlpacaBroker
-from src.data.market import MarketDataFetcher
+from src.di.container import create_container
 from src.optimization.portfolio import OptimizedPortfolio, PortfolioOptimizer
 
 console = Console()
@@ -101,7 +101,8 @@ def optimize_portfolio(
     console.print(f"Period: {period} days\n")
 
     try:
-        market_fetcher = MarketDataFetcher(use_alpha_vantage=False)
+        container = create_container()
+        market_fetcher = container.yfinance_market_fetcher()
         broker = _initialize_broker(rebalance, rebalance_from)
         optimizer = PortfolioOptimizer(market_fetcher, broker=broker, period_days=period)
 

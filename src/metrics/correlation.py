@@ -60,7 +60,7 @@ class CorrelationAuditor:
 
     def __init__(
         self,
-        market_fetcher: MarketDataFetcher,
+        market_fetcher: MarketDataFetcher | None = None,
         correlation_threshold: float = 0.8,
         lookback_days: int = 90,
         output_dir: str = "~/.ai-casino/correlation-audits",
@@ -68,7 +68,7 @@ class CorrelationAuditor:
         """Initialize correlation auditor.
 
         Args:
-            market_fetcher: Market data fetcher
+            market_fetcher: Market data fetcher (optional for load_latest)
             correlation_threshold: Minimum correlation to flag (0.5-0.95)
             lookback_days: Historical period for correlation (30-180 days)
             output_dir: Directory for persisting audit results
@@ -86,6 +86,12 @@ class CorrelationAuditor:
             f"lookback={lookback_days}d)"
         )
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"CorrelationAuditor(threshold={self.correlation_threshold:.2f}, lookback={self.lookback_days}d)"
+        )
+
     def audit(
         self,
         positions: dict[str, BrokerPosition],
@@ -100,6 +106,10 @@ class CorrelationAuditor:
         Returns:
             Correlation audit result with pairs, diversification ratio, substitutions
         """
+        if self.market_fetcher is None:
+            msg = "market_fetcher required for audit()"
+            raise ValueError(msg)
+
         warnings = []
         symbols = list(positions.keys())
 
@@ -240,6 +250,10 @@ class CorrelationAuditor:
         Returns:
             DataFrame with aligned returns (symbols as columns, dates as index)
         """
+        if not self.market_fetcher:
+            warnings.append("Market fetcher not available")
+            return pd.DataFrame()
+
         returns_data = {}
 
         for symbol in symbols:
@@ -368,7 +382,11 @@ class CorrelationAuditor:
         # Portfolio volatility
         cov_matrix = returns_df.cov() * 252  # Annualized
         portfolio_variance = weight_array @ cov_matrix @ weight_array
-        portfolio_vol = portfolio_variance**0.5
+        # Ensure scalar result from matrix multiplication
+        import numpy as np
+
+        portfolio_var_scalar = float(np.asarray(portfolio_variance).item())
+        portfolio_vol = portfolio_var_scalar**0.5
 
         diversification_ratio = portfolio_vol / weighted_avg_vol
 
@@ -488,6 +506,9 @@ class CorrelationAuditor:
         """
         if symbol in self._returns_cache:
             return self._returns_cache[symbol]
+
+        if not self.market_fetcher:
+            return None
 
         try:
             market_data = self.market_fetcher.fetch_daily(symbol, period_days=self.lookback_days)

@@ -4,8 +4,10 @@ import json
 import os
 from functools import cached_property
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
+from pydantic import BaseModel
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -13,6 +15,7 @@ from textual.events import Click
 from textual.widgets import Static
 from textual.worker import Worker, get_current_worker
 
+from src.di.container import create_container
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 from src.tools import (
@@ -39,6 +42,13 @@ from src.tui.widgets.status_bar import StatusBar
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
 
+class PendingToolConfirmation(BaseModel):
+    """Structure for pending tool confirmation."""
+
+    name: str
+    args: dict[str, Any]
+
+
 class TradingChatApp(App):
     """Interactive TUI for AI Casino."""
 
@@ -55,16 +65,23 @@ class TradingChatApp(App):
     def __init__(self) -> None:
         """Initialize the app."""
         super().__init__()
+        self._container = create_container()
         self._command_handler = CommandHandler()
         self._llm: LLMClient | None = None
         self._history: list[dict[str, str]] = []
         self._model_name = self._get_model_name()
         self._analysis_worker: Worker | None = None
         self._tool_registry = self._create_tool_registry()
-        self._pending_tool_confirmation: dict | None = None
+        self._pending_tool_confirmation: PendingToolConfirmation | None = None
         self._quit_pending = False
         self._personality: str = "casino"  # "casino" or "trump"
         self._load_history()
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        model = getattr(self, "_model_name", "unknown")
+        personality = getattr(self, "_personality", "unknown")
+        return f"TradingChatApp(model={model}, personality={personality})"
 
     def _create_tool_registry(self) -> ToolRegistry:
         """Create and populate tool registry."""
@@ -72,10 +89,10 @@ class TradingChatApp(App):
         registry.register(WebSearchTool())
         registry.register(GetMarketDataTool())
         registry.register(GetNewsTool())
-        registry.register(AnalyzeStockTool())
-        registry.register(ScreenStocksTool())
-        registry.register(TrumpAnalysisTool())
-        registry.register(GetSocialSentimentTool())
+        registry.register(AnalyzeStockTool(container=self._container))
+        registry.register(ScreenStocksTool(container=self._container))
+        registry.register(TrumpAnalysisTool(container=self._container))
+        registry.register(GetSocialSentimentTool(container=self._container))
         registry.register(GetRiskMetricsTool())
         registry.register(RunBacktestTool())
         registry.register(GenerateTearsheetTool())
@@ -247,14 +264,14 @@ class TradingChatApp(App):
         tool_widgets = chat.query("ToolCallWidget")
         tool_widget = tool_widgets.last() if tool_widgets else None
 
-        if text.lower() in ("yes", "y"):
-            result = self._tool_registry.execute(pending["name"], pending["args"])
+        if pending and text.lower() in ("yes", "y"):
+            result = self._tool_registry.execute(pending.name, pending.args)
             result_preview = result[:100] + "..." if len(result) > 100 else result
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete(result_preview)
             chat.add_assistant_message(f"Tool result:\n\n{result}")
         else:
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete("Skipped")
             chat.add_assistant_message("Tool execution skipped.")
 
@@ -361,7 +378,7 @@ class TradingChatApp(App):
 
         if event.result.success:
             chat.complete_progress()
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete("Complete")
 
             # Show specialized result or full workflow result
@@ -374,7 +391,7 @@ class TradingChatApp(App):
                 chat.add_assistant_message(event.result.message)
         else:
             chat.complete_progress()
-            if tool_widget:
+            if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete("Failed")
             chat.add_assistant_message(event.result.message)
 
@@ -386,7 +403,7 @@ class TradingChatApp(App):
     async def _handle_chat(self, text: str) -> None:
         """Handle free-form chat - dispatch to agentic or streaming mode."""
         if self._llm is None:
-            self._llm = LLMClient()
+            self._llm = self._container.llm_client()
 
         if self._llm.supports_tools:
             await self._handle_agentic_chat(text)
@@ -395,6 +412,8 @@ class TradingChatApp(App):
 
     async def _handle_streaming_chat(self, text: str) -> None:
         """Handle chat with streaming (Ollama fallback)."""
+        if not self._llm:
+            return
         chat = self.query_one(ChatView)
         status_bar = self.query_one(StatusBar)
 
@@ -424,6 +443,8 @@ class TradingChatApp(App):
 
     async def _handle_agentic_chat(self, text: str) -> None:
         """Handle chat with tool calling (Anthropic/OpenAI)."""
+        if not self._llm:
+            return
         chat = self.query_one(ChatView)
         status_bar = self.query_one(StatusBar)
 
@@ -454,7 +475,7 @@ class TradingChatApp(App):
                 chat.add_assistant_message(
                     f"Tool `{name}` requires confirmation. Type 'yes' to proceed or anything else to skip."
                 )
-                self._pending_tool_confirmation = {"name": name, "args": args}
+                self._pending_tool_confirmation = PendingToolConfirmation(name=name, args=args)
                 return f"[Awaiting user confirmation for {name}]"
             return self._tool_registry.execute(name, args)
 
@@ -504,7 +525,7 @@ class TradingChatApp(App):
         tool_widget = tool_widgets.last() if tool_widgets else None
 
         chat.complete_progress()
-        if tool_widget:
+        if tool_widget and hasattr(tool_widget, "set_complete"):
             tool_widget.set_complete("Cancelled")
         chat.add_assistant_message("Analysis cancelled.")
         self._history.append({"role": "assistant", "content": "Analysis cancelled."})
@@ -520,7 +541,7 @@ class TradingChatApp(App):
         """Keep focus on input after any click."""
         self.query_one(AutocompleteInput).focus()
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         """Handle Ctrl+C - require double-press to quit."""
         if self._quit_pending:
             self.exit()
@@ -532,7 +553,8 @@ class TradingChatApp(App):
     def _show_quit_bar(self) -> None:
         """Show quit confirmation bar with auto-hide timer."""
         quit_bar = self.query_one("#quit-bar")
-        quit_bar.update("Press Ctrl+C again to quit")
+        if hasattr(quit_bar, "update"):
+            quit_bar.update("Press Ctrl+C again to quit")
         quit_bar.display = True
         self.set_timer(1.0, self._hide_quit_bar)
 

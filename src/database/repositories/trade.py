@@ -1,17 +1,22 @@
 """Trade repository for database operations."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import TradeORM
 from src.database.repositories.base import BaseRepository
 from src.metrics.tracker import TradeRecord
 from src.strategies.signal import Signal
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TradeRepository(BaseRepository[TradeRecord]):
@@ -26,53 +31,54 @@ class TradeRepository(BaseRepository[TradeRecord]):
         super().__init__(session)
         logger.debug("Initialized TradeRepository")
 
-    async def create(self, trade: TradeRecord) -> TradeRecord:
+    async def create(self, entity: TradeRecord) -> TradeRecord:
         """Create new trade record.
 
         Args:
-            trade: TradeRecord to persist
+            entity: TradeRecord to persist
 
         Returns:
             Created TradeRecord with ID
         """
         orm = TradeORM(
             id=uuid.uuid4(),
-            timestamp=trade.timestamp,
-            symbol=trade.symbol,
-            action=trade.action.value,
-            entry_price=Decimal(str(trade.entry_price)),
-            exit_price=Decimal(str(trade.exit_price)) if trade.exit_price else None,
-            shares=trade.shares,
-            stop_loss_price=Decimal(str(trade.stop_loss_price)),
-            confidence=Decimal(str(trade.confidence)),
-            risk_level=trade.risk_level,
-            status=trade.status,
-            pnl=Decimal(str(trade.pnl)) if trade.pnl else None,
-            pnl_percent=Decimal(str(trade.pnl_percent)) if trade.pnl_percent else None,
-            strategy_name=trade.strategy_name,
-            is_paper_trade=trade.is_paper_trade,
-            closed_at=trade.closed_at,
+            timestamp=entity.timestamp,
+            symbol=entity.symbol,
+            action=entity.action.value,
+            entry_price=Decimal(str(entity.entry_price)),
+            exit_price=Decimal(str(entity.exit_price)) if entity.exit_price else None,
+            shares=entity.shares,
+            stop_loss_price=Decimal(str(entity.stop_loss_price)),
+            confidence=Decimal(str(entity.confidence)),
+            risk_level=entity.risk_level,
+            status=entity.status,
+            pnl=Decimal(str(entity.pnl)) if entity.pnl else None,
+            pnl_percent=Decimal(str(entity.pnl_percent)) if entity.pnl_percent else None,
+            strategy_name=entity.strategy_name,
+            is_paper_trade=entity.is_paper_trade,
+            closed_at=entity.closed_at,
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
         await self._session.commit()
-        logger.info(f"Created trade: {orm.id} ({trade.symbol} {trade.action.value})")
-        return trade
+        logger.info(f"Created trade: {orm.id} ({entity.symbol} {entity.action.value})")
+        entity.id = str(orm.id)
+        return entity
 
-    async def get_by_id(self, trade_id: str) -> TradeRecord | None:
+    async def get_by_id(self, entity_id: str) -> TradeRecord | None:
         """Get trade by ID.
 
         Args:
-            trade_id: Trade UUID string
+            entity_id: Trade UUID string
 
         Returns:
             TradeRecord if found, None otherwise
         """
-        result = await self._session.execute(select(TradeORM).where(TradeORM.id == uuid.UUID(trade_id)))
+        result = await self._session.execute(select(TradeORM).where(TradeORM.id == uuid.UUID(entity_id)))
         orm = result.scalar_one_or_none()
         return self._to_record(orm) if orm else None
 
-    async def update(self, trade_id: str, **updates: dict) -> TradeRecord | None:
+    async def update(self, trade_id: str, **updates: object) -> TradeRecord | None:
         """Update trade record.
 
         Args:
@@ -82,7 +88,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
         Returns:
             Updated TradeRecord if found, None otherwise
         """
-        converted = {}
+        converted: dict[str, object] = {}
         for key, value in updates.items():
             if isinstance(value, float):
                 converted[key] = Decimal(str(value))
@@ -148,6 +154,24 @@ class TradeRepository(BaseRepository[TradeRecord]):
         """
         result = await self._session.execute(select(TradeORM).order_by(TradeORM.timestamp.desc()))
         return [self._to_record(orm) for orm in result.scalars().all()]
+
+    async def get_entry_trade(self, symbol: str) -> TradeRecord | None:
+        """Get most recent entry trade for symbol (OPEN BUY).
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            TradeRecord if found, None otherwise
+        """
+        result = await self._session.execute(
+            select(TradeORM)
+            .where(TradeORM.symbol == symbol, TradeORM.status == "OPEN", TradeORM.action == Signal.BUY.value)
+            .order_by(TradeORM.timestamp.desc())
+            .limit(1)
+        )
+        orm = result.scalar_one_or_none()
+        return self._to_record(orm) if orm else None
 
     def _to_record(self, orm: TradeORM) -> TradeRecord:
         """Convert ORM model to TradeRecord.

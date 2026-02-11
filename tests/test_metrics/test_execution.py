@@ -81,6 +81,7 @@ class TestSubOperationMetric:
             metadata={"source": "yfinance", "rows": 90},
         )
         assert metric.name == "market_data_fetch"
+        assert metric.metadata is not None
         assert metric.metadata["source"] == "yfinance"
 
     def test_without_metadata(self):
@@ -162,6 +163,7 @@ class TestExecutionMetricsCollector:
         result = collector.finalize()
         assert len(result.sub_operations) == 2
         assert result.sub_operations[0].name == "finbert_inference"
+        assert result.sub_operations[0].metadata is not None
         assert result.sub_operations[0].metadata["batch_size"] == 10
         assert result.sub_operations[1].name == "pandas_ta_indicators"
 
@@ -201,9 +203,9 @@ class TestPersistJsonl:
 class TestIsMetricsEnabled:
     """Tests for is_metrics_enabled()."""
 
-    def test_disabled_by_default(self, monkeypatch):
+    def test_enabled_by_default(self, monkeypatch):
         monkeypatch.delenv("EXECUTION_METRICS", raising=False)
-        assert is_metrics_enabled() is False
+        assert is_metrics_enabled() is True
 
     def test_enabled_true(self, monkeypatch):
         monkeypatch.setenv("EXECUTION_METRICS", "true")
@@ -249,6 +251,7 @@ class TestTimedOperation:
         assert len(result.sub_operations) == 1
         assert result.sub_operations[0].name == "test_op"
         assert result.sub_operations[0].latency_ms >= 0
+        assert result.sub_operations[0].metadata is not None
         assert result.sub_operations[0].metadata["source"] == "test"
 
     def test_records_timing(self):
@@ -285,10 +288,9 @@ class TestContextVarPropagation:
             finally:
                 current_agent.reset(token)
 
-        await asyncio.gather(
-            simulate_agent("technical"),
-            simulate_agent("news"),
-        )
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(simulate_agent("technical"))
+            tg.create_task(simulate_agent("news"))
 
         result = collector.finalize()
         agent_names = {call.agent_name for call in result.llm_calls}

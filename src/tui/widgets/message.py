@@ -57,13 +57,13 @@ class AssistantMessage(SelectionSafeMixin, Static):
     }
     """
 
-    content: reactive[str] = reactive("")
+    message_content: reactive[str] = reactive("")
     is_streaming: reactive[bool] = reactive(default=False)
 
     def __init__(self, content: str = "", streaming: bool = False) -> None:
         """Initialize assistant message."""
         super().__init__()
-        self.content = content
+        self.message_content = content
         self.is_streaming = streaming
         if streaming:
             self.add_class("streaming")
@@ -72,7 +72,7 @@ class AssistantMessage(SelectionSafeMixin, Static):
         """Update display on mount."""
         self._update_display()
 
-    def watch_content(self, _content: str) -> None:
+    def watch_message_content(self, _content: str) -> None:
         """React to content changes."""
         self._update_display()
 
@@ -86,18 +86,18 @@ class AssistantMessage(SelectionSafeMixin, Static):
     def _update_display(self) -> None:
         """Update displayed content with markdown rendering."""
         try:
-            content = self.content if self.content else "..."
+            content = self.message_content or "..."
             # Render markdown content with Rich
             rendered = RichMarkdown(content)
             self.update(rendered)
-            if self.parent:
+            if self.parent and hasattr(self.parent, "scroll_end"):
                 self.parent.scroll_end(animate=False)
         except Exception as e:
             logger.debug(f"Message update skipped: {e}")
 
     def append_token(self, token: str) -> None:
         """Append a token to the message."""
-        self.content += token
+        self.message_content += token
 
     def finish_streaming(self) -> None:
         """Mark streaming as complete."""

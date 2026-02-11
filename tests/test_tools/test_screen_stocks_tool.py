@@ -1,7 +1,7 @@
 """Tests for screen stocks tool."""
 
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -58,26 +58,23 @@ def sample_screening_analysis():
     )
 
 
-@pytest.fixture
-def screen_stocks_tool():
-    """Create ScreenStocksTool instance."""
-    return ScreenStocksTool()
-
-
 class TestScreenStocksTool:
     """Tests for ScreenStocksTool."""
 
-    def test_name(self, screen_stocks_tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
-        assert screen_stocks_tool.name == "screen_stocks"
+        tool = ScreenStocksTool(container=test_container_full)
+        assert tool.name == "screen_stocks"
 
-    def test_requires_confirmation(self, screen_stocks_tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test confirmation requirement."""
-        assert screen_stocks_tool.requires_confirmation is True
+        tool = ScreenStocksTool(container=test_container_full)
+        assert tool.requires_confirmation is True
 
-    def test_get_tool_definition(self, screen_stocks_tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition structure."""
-        definition = screen_stocks_tool.get_tool_definition()
+        tool = ScreenStocksTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "screen_stocks"
@@ -89,18 +86,20 @@ class TestScreenStocksTool:
         assert "top_n" in params["properties"]
         assert "criteria" in params["required"]
 
-    def test_repr(self, screen_stocks_tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
-        assert "ScreenStocksTool" in repr(screen_stocks_tool)
+        tool = ScreenStocksTool(container=test_container_full)
+        assert "ScreenStocksTool" in repr(tool)
 
     def test_execute_integration(
         self,
-        screen_stocks_tool,
+        test_container_full,
         sample_screening_output,
         sample_screening_analysis,
     ):
         """Test _format_output produces correct markdown."""
-        result = screen_stocks_tool._format_output(sample_screening_output, sample_screening_analysis)
+        tool = ScreenStocksTool(container=test_container_full)
+        result = tool._format_output(sample_screening_output, sample_screening_analysis)
 
         assert "AAPL" in result
         assert "Momentum Screening Results" in result
@@ -108,13 +107,13 @@ class TestScreenStocksTool:
 
     def test_run_screening_integration(
         self,
-        screen_stocks_tool,
+        test_container_full,
         sample_screening_output,
         sample_screening_analysis,
     ):
         """Test _run_screening formats output correctly."""
-        # Test that format_output works correctly (unit test the formatter)
-        result = screen_stocks_tool._format_output(sample_screening_output, sample_screening_analysis)
+        tool = ScreenStocksTool(container=test_container_full)
+        result = tool._format_output(sample_screening_output, sample_screening_analysis)
 
         assert "AAPL" in result
         assert "Momentum Screening Results" in result
@@ -122,7 +121,6 @@ class TestScreenStocksTool:
 
     def test_run_screening_no_results_message(self):
         """Test no results message format."""
-        # Verify the message format by checking the method logic
         empty_output = ScreeningOutput(
             criteria=ScreeningCriteria.VALUE,
             universe="SP500",
@@ -132,7 +130,6 @@ class TestScreenStocksTool:
             screened_at=datetime.now(),
         )
 
-        # Verify expected message format
         criteria = empty_output.criteria.value
         universe = empty_output.universe
         total = empty_output.total_screened
@@ -141,9 +138,10 @@ class TestScreenStocksTool:
         assert "value" in message
         assert "500" in message
 
-    def test_format_output(self, screen_stocks_tool, sample_screening_output, sample_screening_analysis):
+    def test_format_output(self, test_container_full, sample_screening_output, sample_screening_analysis):
         """Test output formatting."""
-        result = screen_stocks_tool._format_output(sample_screening_output, sample_screening_analysis)
+        tool = ScreenStocksTool(container=test_container_full)
+        result = tool._format_output(sample_screening_output, sample_screening_analysis)
 
         assert "# Momentum Screening Results" in result
         assert "**Universe:** SP500" in result
@@ -153,12 +151,15 @@ class TestScreenStocksTool:
         assert "rsi=28.5" in result
         assert "1 symbols failed" in result
 
-    @patch("src.data.universe.StockUniverseFetcher")
-    async def test_execute_error_handling(self, mock_fetcher, screen_stocks_tool):
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling in execute."""
-        mock_fetcher.side_effect = RuntimeError("Test error")
+        tool = ScreenStocksTool(container=test_container_full)
 
-        result = await screen_stocks_tool.execute("momentum", "SP500", 10)
+        mock_screener = MagicMock()
+        mock_screener.screen.side_effect = RuntimeError("Test error")
+        test_container_full.stock_screener.override(mock_screener)
+
+        result = tool.execute(criteria="momentum", universe="SP500", top_n=10)
 
         assert "Screening failed" in result
         assert "Test error" in result

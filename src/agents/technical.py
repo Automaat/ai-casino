@@ -88,7 +88,15 @@ class TechnicalAnalyst:
 
         logger.info(f"Analyzing {symbol} technicals with {self._strategy_type}")
 
-        signal, indicators = self.strategy.generate_signal(daily_data)
+        # Offload CPU-intensive indicator calculation to thread
+        import asyncio
+        from collections.abc import Callable
+
+        generate_signal = cast(
+            "Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]]",
+            self.strategy.generate_signal,
+        )
+        signal, indicators = await asyncio.to_thread(generate_signal, daily_data)
         latest_close = float(daily_data["Close"].iloc[-1])
 
         prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
@@ -134,8 +142,17 @@ class TechnicalAnalyst:
 
         timeframe_results: dict[Timeframe, TimeframeResult] = {}
 
+        import asyncio
+        from collections.abc import Callable
+
+        generate_signal = cast(
+            "Callable[[pd.DataFrame], tuple[Signal, IndicatorsType]]",
+            self.strategy.generate_signal,
+        )
+
         for timeframe, data in multi_data.timeframes.items():
-            signal, indicators = self.strategy.generate_signal(data)
+            # Offload CPU-intensive indicator calculation to thread
+            signal, indicators = await asyncio.to_thread(generate_signal, data)
             latest_close = float(data["Close"].iloc[-1])
 
             prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
@@ -262,18 +279,25 @@ class TechnicalAnalyst:
         self, symbol: str, latest_close: float, signal: Signal, indicators: IndicatorsType
     ) -> tuple[str, str]:
         """Build appropriate prompt based on strategy type."""
-        if isinstance(self.strategy, EnsembleStrategy):
+        if isinstance(self.strategy, EnsembleStrategy) and isinstance(indicators, EnsembleResult):
             prompt_type = "ensemble"
             prompt_vars = self._build_ensemble_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(self.strategy, TrendFollowingStrategy):
+        elif isinstance(self.strategy, TrendFollowingStrategy) and isinstance(
+            indicators, TrendFollowingIndicators
+        ):
             prompt_type = "trend_following"
             prompt_vars = self._build_trend_following_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(self.strategy, MeanReversionStrategy):
+        elif isinstance(self.strategy, MeanReversionStrategy) and isinstance(
+            indicators, MeanReversionIndicators
+        ):
             prompt_type = "mean_reversion"
             prompt_vars = self._build_mean_reversion_vars(symbol, latest_close, signal, indicators)
-        else:
+        elif isinstance(self.strategy, MomentumStrategy) and isinstance(indicators, MomentumIndicators):
             prompt_type = "momentum"
             prompt_vars = self._build_momentum_vars(symbol, latest_close, signal, indicators)
+        else:
+            msg = f"Unexpected indicators type: {type(indicators)}"
+            raise TypeError(msg)
 
         system = self._prompt_loader.load(f"system_{prompt_type}")
         user = self._prompt_loader.load(f"user_{prompt_type}", **prompt_vars)
@@ -286,7 +310,7 @@ class TechnicalAnalyst:
         if isinstance(indicators, EnsembleResult):
             rsi, macd_hist = None, None
             for sr in indicators.strategy_results:
-                if sr.name == "momentum":
+                if sr.name == "momentum" and isinstance(sr.indicators, MomentumIndicators):
                     rsi = sr.indicators.rsi
                     macd_hist = sr.indicators.macd_hist
                     break

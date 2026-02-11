@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import PortfolioSnapshotORM
@@ -38,11 +38,11 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
         super().__init__(session)
         logger.debug("Initialized PortfolioSnapshotRepository")
 
-    async def create(self, snapshot: PortfolioSnapshot) -> PortfolioSnapshot:
+    async def create(self, entity: PortfolioSnapshot) -> PortfolioSnapshot:
         """Create new portfolio snapshot.
 
         Args:
-            snapshot: PortfolioSnapshot to persist
+            entity: PortfolioSnapshot to persist
 
         Returns:
             Created PortfolioSnapshot with ID
@@ -50,31 +50,31 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
         snapshot_id = uuid.uuid4()
         orm = PortfolioSnapshotORM(
             id=snapshot_id,
-            timestamp=snapshot.timestamp,
-            balance=Decimal(str(snapshot.balance)),
-            available_cash=Decimal(str(snapshot.available_cash)),
-            total_exposure=Decimal(str(snapshot.total_exposure)),
-            portfolio_value=Decimal(str(snapshot.portfolio_value)),
-            positions=snapshot.positions,
-            trigger=snapshot.trigger,
+            timestamp=entity.timestamp,
+            balance=Decimal(str(entity.balance)),
+            available_cash=Decimal(str(entity.available_cash)),
+            total_exposure=Decimal(str(entity.total_exposure)),
+            portfolio_value=Decimal(str(entity.portfolio_value)),
+            positions=entity.positions,
+            trigger=entity.trigger,
         )
         self._session.add(orm)
         await self._session.commit()
         logger.info(f"Created portfolio snapshot: {snapshot_id}")
-        snapshot.id = str(snapshot_id)
-        return snapshot
+        entity.id = str(snapshot_id)
+        return entity
 
-    async def get_by_id(self, snapshot_id: str) -> PortfolioSnapshot | None:
+    async def get_by_id(self, entity_id: str) -> PortfolioSnapshot | None:
         """Get snapshot by ID.
 
         Args:
-            snapshot_id: Snapshot UUID string
+            entity_id: Snapshot UUID string
 
         Returns:
             PortfolioSnapshot if found, None otherwise
         """
         result = await self._session.execute(
-            select(PortfolioSnapshotORM).where(PortfolioSnapshotORM.id == uuid.UUID(snapshot_id))
+            select(PortfolioSnapshotORM).where(PortfolioSnapshotORM.id == uuid.UUID(entity_id))
         )
         orm = result.scalar_one_or_none()
         return self._to_snapshot(orm) if orm else None
@@ -108,6 +108,47 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
             .order_by(PortfolioSnapshotORM.timestamp.asc())
         )
         return [self._to_snapshot(orm) for orm in result.scalars().all()]
+
+    async def get_by_date_range_sampled(
+        self, start: datetime, end: datetime, max_points: int = 100
+    ) -> list[PortfolioSnapshot]:
+        """Get snapshots with downsampling for large ranges.
+
+        Args:
+            start: Start datetime (inclusive)
+            end: End datetime (inclusive)
+            max_points: Maximum number of points to return
+
+        Returns:
+            List of PortfolioSnapshots (downsampled if needed)
+        """
+        count_result = await self._session.execute(
+            select(func.count(PortfolioSnapshotORM.id))
+            .where(PortfolioSnapshotORM.timestamp >= start)
+            .where(PortfolioSnapshotORM.timestamp <= end)
+        )
+        total_count = count_result.scalar_one()
+
+        if total_count <= max_points:
+            return await self.get_by_date_range(start, end)
+
+        result = await self._session.execute(
+            select(PortfolioSnapshotORM)
+            .where(PortfolioSnapshotORM.timestamp >= start)
+            .where(PortfolioSnapshotORM.timestamp <= end)
+            .order_by(PortfolioSnapshotORM.timestamp.asc())
+        )
+        all_snapshots = result.scalars().all()
+
+        # Compute evenly spaced indices including first and last snapshots
+        if max_points <= 1:
+            indices = [total_count - 1]
+        else:
+            indices = [round(i * (total_count - 1) / (max_points - 1)) for i in range(max_points)]
+
+        sampled = [all_snapshots[i] for i in indices]
+
+        return [self._to_snapshot(orm) for orm in sampled]
 
     async def get_by_trigger(self, trigger: str) -> list[PortfolioSnapshot]:
         """Get snapshots by trigger type.

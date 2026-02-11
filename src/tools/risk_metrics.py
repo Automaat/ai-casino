@@ -5,70 +5,77 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.metrics.risk import RiskMetrics
 
 
 class GetRiskMetricsTool(BaseTool):
     """Tool to calculate institutional-grade risk metrics."""
 
+    def __init__(self, container: AppContainer | None = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
+
     @property
     def name(self) -> str:
         """Tool name."""
         return "get_risk_metrics"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Calculate risk metrics for a stock including Value at Risk (VaR), "
                     "Conditional VaR (CVaR), maximum drawdown, CDaR, volatility, "
                     "and downside deviation."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "days": {
-                            "type": "integer",
-                            "description": "Number of days of historical data (default: 90)",
-                            "default": 90,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "days": ToolParameter(
+                            type="integer",
+                            description="Number of days of historical data (default: 90)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
-    def execute(self, symbol: str, days: int = 90) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Calculate risk metrics for a stock.
 
         Args:
-            symbol: Stock ticker symbol
-            days: Days of historical data
+            **kwargs: Tool arguments (symbol: str, days: int = 90)
 
         Returns:
             Formatted risk metrics summary
         """
-        symbol = symbol.upper()
+        symbol = str(kwargs["symbol"]).upper()
+        days = int(kwargs.get("days", 90))
+
         logger.info(f"Calculating risk metrics for {symbol} ({days} days)")
 
         try:
-            from src.data.market import MarketDataFetcher
-            from src.metrics.risk import RiskMetricsCalculator
-
-            fetcher = MarketDataFetcher()
+            fetcher = self._container.market_fetcher()
             market_data = fetcher.fetch_daily(symbol, period_days=days)
 
             close = market_data.data.get("close", market_data.data.get("Close"))
@@ -77,7 +84,7 @@ class GetRiskMetricsTool(BaseTool):
 
             returns = close.pct_change().dropna().tolist()
 
-            calculator = RiskMetricsCalculator()
+            calculator = self._container.risk_metrics_calculator()
             metrics = calculator.calculate_all(returns)
 
             return self._format_result(symbol, days, metrics)
@@ -85,7 +92,7 @@ class GetRiskMetricsTool(BaseTool):
             logger.error(f"Risk metrics calculation failed for {symbol}: {e}")
             return f"Risk metrics calculation failed for {symbol}: {e}"
 
-    def _format_result(self, symbol: str, days: int, metrics: "RiskMetrics") -> str:
+    def _format_result(self, symbol: str, days: int, metrics: RiskMetrics) -> str:
         """Format risk metrics as markdown.
 
         Args:

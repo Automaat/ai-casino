@@ -62,6 +62,21 @@ class NewsFetcher:
         if not self.api_key:
             logger.warning("MARKETAUX_API_KEY not set - API calls may be limited")
 
+    def _log_rate_limit_headers(self, response: httpx.Response, symbol: str = "") -> None:
+        """Log Marketaux rate limit headers.
+
+        Args:
+            response: httpx Response object
+            symbol: Stock symbol (for context)
+        """
+        usage_limit = response.headers.get("X-UsageLimit-Limit")
+        rate_limit = response.headers.get("X-RateLimit-Limit")
+
+        if usage_limit:
+            logger.warning(f"Marketaux usage limit header (symbol={symbol}): {usage_limit}")
+        if rate_limit:
+            logger.info(f"Marketaux rate limit header (symbol={symbol}): {rate_limit}")
+
     @HTTP_RETRY
     def fetch_company_news(
         self,
@@ -93,6 +108,10 @@ class NewsFetcher:
             try:
                 with httpx.Client(timeout=30.0) as client:
                     response = client.get(self.BASE_URL, params=params)
+
+                    # Log rate limit headers before raising
+                    self._log_rate_limit_headers(response, symbol)
+
                     response.raise_for_status()
 
                     data = response.json()
@@ -104,9 +123,7 @@ class NewsFetcher:
                                 title=item.get("title", ""),
                                 description=item.get("description", ""),
                                 url=item.get("url", ""),
-                                published_at=datetime.fromisoformat(
-                                    item.get("published_at", "").replace("Z", "+00:00")
-                                ),
+                                published_at=datetime.fromisoformat(item.get("published_at", "")),
                                 source=item.get("source", ""),
                             )
                         )
@@ -118,6 +135,10 @@ class NewsFetcher:
 
                     return articles
 
+            except httpx.HTTPStatusError as e:
+                self._log_rate_limit_headers(e.response, symbol)
+                logger.error(f"News fetch failed: {e}")
+                raise
             except httpx.HTTPError as e:
                 logger.error(f"News fetch failed: {e}")
                 raise
@@ -157,9 +178,7 @@ class NewsFetcher:
                             title=item.get("title", ""),
                             description=item.get("description", ""),
                             url=item.get("url", ""),
-                            published_at=datetime.fromisoformat(
-                                item.get("published_at", "").replace("Z", "+00:00")
-                            ),
+                            published_at=datetime.fromisoformat(item.get("published_at", "")),
                             source=item.get("source", ""),
                         )
                     )

@@ -5,13 +5,25 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.optimization.results import OptimizationResult
 
 
 class OptimizePortfolioTool(BaseTool):
     """Tool to optimize trading strategy parameters with Optuna."""
+
+    def __init__(self, container: AppContainer | None = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -23,66 +35,55 @@ class OptimizePortfolioTool(BaseTool):
         """Requires confirmation due to expensive computation."""
         return True
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Optimize trading strategy parameters using Optuna hyperparameter search. "
                     "Tests different parameter combinations to find optimal Sharpe ratio. "
                     "This is an expensive operation that runs many backtests."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "start_date": {
-                            "type": "string",
-                            "description": "Optimization start date in YYYY-MM-DD format",
-                        },
-                        "end_date": {
-                            "type": "string",
-                            "description": "Optimization end date in YYYY-MM-DD format",
-                        },
-                        "strategy": {
-                            "type": "string",
-                            "description": "Strategy to optimize (default: momentum)",
-                            "enum": ["momentum", "trend_following", "mean_reversion", "ensemble"],
-                            "default": "momentum",
-                        },
-                        "n_trials": {
-                            "type": "integer",
-                            "description": "Number of optimization trials (default: 50)",
-                            "default": 50,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "start_date": ToolParameter(
+                            type="string",
+                            description="Optimization start date in YYYY-MM-DD format",
+                        ),
+                        "end_date": ToolParameter(
+                            type="string",
+                            description="Optimization end date in YYYY-MM-DD format",
+                        ),
+                        "strategy": ToolParameter(
+                            type="string",
+                            description="Strategy to optimize (default: momentum)",
+                            enum=["momentum", "trend_following", "mean_reversion", "ensemble"],
+                        ),
+                        "n_trials": ToolParameter(
+                            type="integer",
+                            description="Number of optimization trials (default: 50)",
+                        ),
                     },
-                    "required": ["symbol", "start_date", "end_date"],
-                },
-            },
-        }
+                    required=["symbol", "start_date", "end_date"],
+                ),
+            ),
+        )
 
-    def execute(
-        self,
-        symbol: str,
-        start_date: str,
-        end_date: str,
-        strategy: str = "momentum",
-        n_trials: int = 50,
-    ) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Run portfolio optimization.
 
         Args:
-            symbol: Stock ticker symbol
-            start_date: Start date (YYYY-MM-DD)
+            **kwargs: Tool arguments (symbol: str, start_date: str, end_date: str,
+                     strategy: str = "momentum", n_trials: int = 50)
             end_date: End date (YYYY-MM-DD)
             strategy: Strategy name
             n_trials: Number of trials
@@ -90,15 +91,18 @@ class OptimizePortfolioTool(BaseTool):
         Returns:
             Formatted optimization results
         """
-        symbol = symbol.upper()
+        symbol = str(kwargs["symbol"]).upper()
+        start_date = str(kwargs["start_date"])
+        end_date = str(kwargs["end_date"])
+        strategy = str(kwargs.get("strategy", "momentum"))
+        n_trials = int(kwargs.get("n_trials", 50))
+
         logger.info(
             f"Optimizing {strategy} strategy for {symbol} ({start_date} to {end_date}, {n_trials} trials)"
         )
 
         try:
-            from src.optimization.optimizer import OptunaOptimizer
-
-            optimizer = OptunaOptimizer(n_trials=n_trials)
+            optimizer = self._container.optuna_optimizer(n_trials=n_trials)
             result = optimizer.optimize(symbol, start_date, end_date, strategy)
 
             return self._format_result(result)
@@ -106,7 +110,7 @@ class OptimizePortfolioTool(BaseTool):
             logger.error(f"Optimization failed for {symbol}: {e}")
             return f"Optimization failed for {symbol}: {e}"
 
-    def _format_result(self, result: "OptimizationResult") -> str:
+    def _format_result(self, result: OptimizationResult) -> str:
         """Format optimization result as markdown.
 
         Args:

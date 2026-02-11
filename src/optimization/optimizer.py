@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import optuna
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from src.backtesting.runner import BacktestRunner
 from src.backtesting.strategies import (
@@ -17,6 +18,19 @@ from src.backtesting.strategies import (
 from src.optimization.results import OptimizationResult
 from src.optimization.search_space import SearchSpace, StrategyType, get_search_space
 from src.optimization.validation import WalkForwardValidator
+
+
+class OptimizationMetrics(BaseModel):
+    """Optimization metrics result."""
+
+    sharpe_ratio: float = Field(description="Sharpe ratio")
+    total_return: float = Field(description="Total return")
+    max_drawdown: float = Field(description="Maximum drawdown")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"OptimizationMetrics(sharpe={self.sharpe_ratio:.2f}, return={self.total_return:.2%})"
+
 
 STRATEGY_CLASSES = {
     StrategyType.MOMENTUM: MomentumBacktestStrategy,
@@ -121,7 +135,11 @@ class OptunaOptimizer:
     def _run_backtest_safe(
         self, symbol: str, start_date: str, end_date: str, strategy_class: type
     ) -> tuple[float, float, float] | None:
-        """Run backtest and return metrics or None on failure."""
+        """Run backtest and return metrics or None on failure.
+
+        Returns None for expected failures (insufficient data, invalid params).
+        Re-raises unexpected errors (bugs in strategy logic).
+        """
         try:
             result = self.runner.run_backtest(
                 symbol=symbol,
@@ -130,9 +148,14 @@ class OptunaOptimizer:
                 strategy_class=strategy_class,
             )
             return result.sharpe_ratio, result.total_return, abs(result.max_drawdown)
-        except Exception:
-            logger.exception("Backtest failed")
+        except (ValueError, KeyError, IndexError) as e:
+            # Expected: insufficient data, invalid params, missing OHLCV columns
+            logger.opt(exception=True).warning(f"Backtest skipped - invalid params/data: {e}")
             return None
+        except Exception:
+            # Unexpected: strategy bugs, computation errors - should be investigated
+            logger.exception("Backtest failed unexpectedly")
+            raise
 
     def _objective(self, trial: optuna.Trial, ctx: _OptimizationContext) -> float | tuple[float, ...]:
         """Objective function for optimization."""
@@ -210,11 +233,11 @@ class OptunaOptimizer:
             ]
             best_trial = max(study.best_trials, key=lambda t: t.values[0])
             best_params = best_trial.params
-            best_metrics = {
-                "sharpe_ratio": best_trial.values[0],
-                "total_return": best_trial.values[1],
-                "max_drawdown": best_trial.values[2],
-            }
+            best_metrics = OptimizationMetrics(
+                sharpe_ratio=best_trial.values[0],
+                total_return=best_trial.values[1],
+                max_drawdown=best_trial.values[2],
+            ).model_dump()
             return best_params, best_metrics, pareto_front
 
         best_params = study.best_params
@@ -225,11 +248,11 @@ class OptunaOptimizer:
             end_date=ctx.end_date,
             strategy_class=strategy_class,
         )
-        best_metrics = {
-            "sharpe_ratio": final_result.sharpe_ratio,
-            "total_return": final_result.total_return,
-            "max_drawdown": abs(final_result.max_drawdown),
-        }
+        best_metrics = OptimizationMetrics(
+            sharpe_ratio=final_result.sharpe_ratio,
+            total_return=final_result.total_return,
+            max_drawdown=abs(final_result.max_drawdown),
+        ).model_dump()
         return best_params, best_metrics, None
 
     def optimize(

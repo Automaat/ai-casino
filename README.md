@@ -233,6 +233,12 @@ mise test:cov
 mise lint
 ```
 
+### Type Check
+
+```bash
+mise typecheck
+```
+
 ### Format Code
 
 ```bash
@@ -242,6 +248,7 @@ mise format
 ### Run All Checks
 
 ```bash
+# Runs format, lint, typecheck, and test
 mise check
 ```
 
@@ -305,6 +312,7 @@ tests/               # Full test suite
 - **News**: Marketaux API
 - **Testing**: pytest
 - **Linting**: ruff (strict mode)
+- **Type Checking**: pyrefly
 - **Tools**: mise, uv
 
 ## License

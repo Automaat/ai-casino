@@ -10,7 +10,7 @@ def test_dashboard_config_defaults() -> None:
     """Test default configuration values."""
     config = DashboardConfig()
 
-    assert config.api_url == "http://localhost:8001"
+    assert config.api_url == "http://localhost:8484"
     assert config.refresh_interval == 5000
     assert config.port == 8050
     assert config.host == "127.0.0.1"
@@ -33,11 +33,15 @@ def test_dashboard_config_custom_values() -> None:
 
 def test_dashboard_config_refresh_interval_validation() -> None:
     """Test refresh_interval must be 1000-60000."""
-    with pytest.raises(ValidationError):
-        DashboardConfig(refresh_interval=500)
+    # Use variables to bypass type checker for validation tests
+    invalid_refresh_low = 500
+    invalid_refresh_high = 70000
 
     with pytest.raises(ValidationError):
-        DashboardConfig(refresh_interval=70000)
+        DashboardConfig(refresh_interval=invalid_refresh_low)  # type: ignore[arg-type]
+
+    with pytest.raises(ValidationError):
+        DashboardConfig(refresh_interval=invalid_refresh_high)  # type: ignore[arg-type]
 
     # Valid boundaries
     config_min = DashboardConfig(refresh_interval=1000)
@@ -49,11 +53,15 @@ def test_dashboard_config_refresh_interval_validation() -> None:
 
 def test_dashboard_config_port_validation() -> None:
     """Test port must be 1-65535."""
-    with pytest.raises(ValidationError):
-        DashboardConfig(port=0)
+    # Use variables to bypass type checker for validation tests
+    invalid_port_low = 0
+    invalid_port_high = 70000
 
     with pytest.raises(ValidationError):
-        DashboardConfig(port=70000)
+        DashboardConfig(port=invalid_port_low)  # type: ignore[arg-type]
+
+    with pytest.raises(ValidationError):
+        DashboardConfig(port=invalid_port_high)  # type: ignore[arg-type]
 
     # Valid boundaries
     config_min = DashboardConfig(port=1)
@@ -69,6 +77,6 @@ def test_dashboard_config_repr() -> None:
     repr_str = repr(config)
 
     assert "DashboardConfig" in repr_str
-    assert "http://localhost:8001" in repr_str
+    assert "http://localhost:8484" in repr_str
     assert "8050" in repr_str
     assert "5000ms" in repr_str

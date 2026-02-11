@@ -33,6 +33,7 @@ class NotificationChannel(ABC):
         Returns:
             True if sent successfully, False otherwise
         """
+        ...
 
     @abstractmethod
     def is_configured(self) -> bool:
@@ -41,6 +42,7 @@ class NotificationChannel(ABC):
         Returns:
             True if configured, False otherwise
         """
+        ...
 
 
 class NotificationRateLimiter:
@@ -54,6 +56,10 @@ class NotificationRateLimiter:
         """
         self.limit_minutes = limit_minutes
         self._last_notified: dict[str, datetime] = {}
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"NotificationRateLimiter(limit_minutes={self.limit_minutes})"
 
     def can_notify(self, symbol: str, trigger: NotificationTrigger) -> bool:
         """Check if notification is allowed by rate limit.
@@ -111,7 +117,7 @@ class NotificationService:
         if "telegram" in self.config.channels:
             channel = TelegramChannel(self.config.telegram)
             if channel.is_configured():
-                self.channels["telegram"] = channel
+                self.channels["telegram"] = channel  # type: ignore[unsupported-operation]
                 logger.info("Enabled telegram notification channel")
             else:
                 logger.warning("Telegram channel not configured (missing bot_token or chat_id)")
@@ -131,9 +137,18 @@ class NotificationService:
             logger.debug(f"Rate limit: skipping {trigger.value} notification for {symbol}")
             return
 
-        # Send to all channels
-        tasks = [self._send_to_channel(name, ch, message) for name, ch in self.channels.items()]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # Send to all channels concurrently (exceptions already handled in _send_to_channel)
+        async def safe_send(name: str, ch: NotificationChannel) -> None:
+            try:
+                await self._send_to_channel(name, ch, message)
+            except Exception as e:
+                logger.error(f"Unexpected error sending to channel {name}: {e}")
+
+        # Run sends in parallel using TaskGroup
+        if self.channels:
+            async with asyncio.TaskGroup() as tg:
+                for name, ch in self.channels.items():
+                    tg.create_task(safe_send(name, ch))
 
         if self.config.rate_limit_enabled and self.channels:
             self.rate_limiter.record_notification(symbol, trigger)

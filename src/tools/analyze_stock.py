@@ -7,13 +7,25 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
+    from src.di.container import AppContainer
     from src.workflows.types import TradingWorkflowResult
 
 
 class AnalyzeStockTool(BaseTool):
     """Tool to run full trading analysis workflow."""
+
+    def __init__(self, container: AppContainer | None = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
@@ -25,50 +37,49 @@ class AnalyzeStockTool(BaseTool):
         """Requires confirmation due to expensive LLM calls."""
         return True
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Run comprehensive trading analysis on a stock. Includes technical analysis "
                     "(RSI, MACD), sentiment analysis (FinBERT), news analysis, fundamental analysis, "
                     "and generates a trading recommendation (BUY/SELL/HOLD) with confidence score. "
                     "This is an expensive operation that makes multiple API calls."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "period_days": {
-                            "type": "integer",
-                            "description": "Number of days of historical data to analyze (default: 90)",
-                            "default": 90,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "period_days": ToolParameter(
+                            type="integer",
+                            description="Number of days of historical data to analyze (default: 90)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
-    def execute(self, symbol: str, period_days: int = 90) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute full trading analysis.
 
         Args:
-            symbol: Stock ticker symbol
-            period_days: Days of historical data
+            **kwargs: Tool arguments (symbol: str, period_days: int = 90)
 
         Returns:
             Formatted analysis summary
         """
+        symbol = str(kwargs["symbol"])
+        period_days = int(kwargs.get("period_days", 90))
+
         logger.info(f"Running full analysis for {symbol} ({period_days} days)")
 
         def run_in_thread() -> str:
@@ -93,32 +104,14 @@ class AnalyzeStockTool(BaseTool):
         Returns:
             Formatted analysis summary
         """
-        from src.data.fundamental import FundamentalDataFetcher
-        from src.data.market import MarketDataFetcher
-        from src.data.news import NewsFetcher
-        from src.models.llm import LLMClient
-        from src.models.sentiment import get_finbert_sentiment
-        from src.workflows.trading import TradingWorkflow
-
-        llm = LLMClient()
-        market_fetcher = MarketDataFetcher()
-        news_fetcher = NewsFetcher()
-        finbert = get_finbert_sentiment()
-        fundamental_fetcher = FundamentalDataFetcher()
-
-        workflow = TradingWorkflow(
-            llm_client=llm,
-            market_fetcher=market_fetcher,
-            news_fetcher=news_fetcher,
-            finbert=finbert,
-            fundamental_fetcher=fundamental_fetcher,
-        )
+        # Use workflow from container (momentum strategy by default)
+        workflow = self._container.workflow_momentum(container=self._container)
 
         result = await workflow.analyze(symbol, period_days)
 
         return self._format_result(result)
 
-    def _format_result(self, result: "TradingWorkflowResult") -> str:
+    def _format_result(self, result: TradingWorkflowResult) -> str:
         """Format workflow result as markdown summary.
 
         Args:
@@ -141,16 +134,19 @@ class AnalyzeStockTool(BaseTool):
             f"- Interpretation: {result.technical.interpretation}",
             "",
             "## Sentiment Analysis",
-            f"- Sentiment: {result.sentiment.sentiment}",
-            f"- Score: {result.sentiment.score:.2f}",
-            f"- Confidence: {result.sentiment.confidence:.0%}",
+            f"- Sentiment: {result.sentiment.overall_sentiment}",
+            f"- Score: {result.sentiment.sentiment_score:.2f}",
+            f"- Positive: {result.sentiment.positive_ratio:.0%} | "
+            f"Negative: {result.sentiment.negative_ratio:.0%} | "
+            f"Neutral: {result.sentiment.neutral_ratio:.0%}",
             "",
             "## News Analysis",
-            f"- Overall Sentiment: {result.news.overall_sentiment}",
             f"- Key Themes: {', '.join(result.news.key_themes)}",
+            f"- Impact: {result.news.impact_assessment}",
+            f"- Recommendation: {result.news.recommendation}",
             "",
             "## Decision Rationale",
-            result.decision.rationale,
+            "\n".join(f"- {r}" for r in result.decision.reasoning),
         ]
 
         if result.warnings:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.coordinator.models import CoordinatorConfig
 from src.daemon.config import (
     DaemonConfig,
     EarningsCalendarConfig,
@@ -12,6 +13,7 @@ from src.daemon.config import (
     PaperTradingConfig,
     PeerAnalysisConfig,
     PortfolioRebalancingConfig,
+    PositionSizingConfig,
     ReportingConfig,
     RiskLimitsConfig,
     ScheduleConfig,
@@ -229,7 +231,7 @@ class TestHealthConfig:
         config = HealthConfig()
 
         assert config.enabled is True
-        assert config.run_time == "17:00"
+        assert config.check_interval_seconds == 5
         assert config.archive_days == 30
         assert config.log_max_size_mb == 5
         assert config.health_dir == "~/.ai-casino/health"
@@ -238,13 +240,13 @@ class TestHealthConfig:
     def test_custom_values(self):
         config = HealthConfig(
             enabled=False,
-            run_time="18:00",
+            check_interval_seconds=10,
             archive_days=60,
             log_max_size_mb=10,
         )
 
         assert config.enabled is False
-        assert config.run_time == "18:00"
+        assert config.check_interval_seconds == 10
         assert config.archive_days == 60
         assert config.log_max_size_mb == 10
 
@@ -259,7 +261,7 @@ daemon:
   watchlist: ["AAPL"]
   health:
     enabled: false
-    run_time: "18:30"
+    check_interval_seconds: 10
     archive_days: 14
     log_max_size_mb: 2
 """
@@ -271,7 +273,7 @@ daemon:
         config = DaemonConfig.from_yaml(path)
 
         assert config.health.enabled is False
-        assert config.health.run_time == "18:30"
+        assert config.health.check_interval_seconds == 10
         assert config.health.archive_days == 14
         assert config.health.log_max_size_mb == 2
 
@@ -290,7 +292,7 @@ daemon:
         config = DaemonConfig.from_yaml(path)
 
         assert config.health.enabled is True
-        assert config.health.run_time == "17:00"
+        assert config.health.check_interval_seconds == 5
 
         path.unlink()
 
@@ -693,16 +695,23 @@ class TestRiskLimitsConfig:
         assert config.report_dir == "~/.ai-casino/custom-reports"
 
     def test_validation_bounds(self):
+        # Use variables to bypass type checker for validation tests
+        invalid_max_var_low = 0.0
+        invalid_max_var_high = 0.25
+        invalid_lookback_low = 5
+        invalid_lookback_high = 400
+        invalid_atr_multiplier = 0.1
+
         with pytest.raises(ValueError, match=r"greater than or equal to 0\.001"):
-            RiskLimitsConfig(max_var_95=0.0)
+            RiskLimitsConfig(max_var_95=invalid_max_var_low)
         with pytest.raises(ValueError, match=r"less than or equal to 0\.2"):
-            RiskLimitsConfig(max_var_95=0.25)
+            RiskLimitsConfig(max_var_95=invalid_max_var_high)
         with pytest.raises(ValueError, match=r"greater than or equal to 20"):
-            RiskLimitsConfig(lookback_days=5)
+            RiskLimitsConfig(lookback_days=invalid_lookback_low)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match=r"less than or equal to 365"):
-            RiskLimitsConfig(lookback_days=400)
+            RiskLimitsConfig(lookback_days=invalid_lookback_high)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match=r"greater than or equal to 0\.5"):
-            RiskLimitsConfig(atr_multiplier_min=0.1)
+            RiskLimitsConfig(atr_multiplier_min=invalid_atr_multiplier)
 
     def test_daemon_config_has_risk_limits(self):
         config = DaemonConfig()
@@ -823,11 +832,15 @@ class TestPortfolioRebalancingConfig:
             PortfolioRebalancingConfig(rebalance_threshold=0.25)
 
     def test_lookback_days_bounds(self):
-        with pytest.raises(ValueError, match="lookback_days"):
-            PortfolioRebalancingConfig(lookback_days=20)
+        # Use variables to bypass type checker for validation tests
+        invalid_lookback_low = 20
+        invalid_lookback_high = 400
 
         with pytest.raises(ValueError, match="lookback_days"):
-            PortfolioRebalancingConfig(lookback_days=400)
+            PortfolioRebalancingConfig(lookback_days=invalid_lookback_low)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="lookback_days"):
+            PortfolioRebalancingConfig(lookback_days=invalid_lookback_high)  # type: ignore[arg-type]
 
     def test_daemon_config_has_rebalancing(self):
         config = DaemonConfig()
@@ -899,3 +912,182 @@ daemon:
         config = DaemonConfig()
         assert isinstance(config.paper_trading, PaperTradingConfig)
         assert config.paper_trading.min_duration_days == 30
+
+    def test_from_yaml_with_position_sizing(self):
+        """Test loading position sizing config from YAML."""
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  position_sizing:
+    primary_goal: "maximize_returns"
+    risk_tolerance: "aggressive"
+    complexity: "advanced"
+    max_risk_per_trade_pct: 3.0
+    max_single_position_pct: 25.0
+    max_total_exposure_pct: 90.0
+    blend_weight_optimization: 0.7
+    blend_weight_risk_based: 0.3
+    confidence_scaling_enabled: true
+    confidence_high_threshold: 0.85
+    confidence_low_threshold: 0.65
+    confidence_low_reduction_factor: 0.6
+    use_monte_carlo_adjustment: true
+    monte_carlo_risk_multiplier: 0.8
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+        assert isinstance(config.position_sizing, PositionSizingConfig)
+        assert config.position_sizing.primary_goal == "maximize_returns"
+        assert config.position_sizing.risk_tolerance == "aggressive"
+        assert config.position_sizing.complexity == "advanced"
+        assert config.position_sizing.max_risk_per_trade_pct == 3.0
+        assert config.position_sizing.max_single_position_pct == 25.0
+        assert config.position_sizing.max_total_exposure_pct == 90.0
+        assert config.position_sizing.blend_weight_optimization == 0.7
+        assert config.position_sizing.blend_weight_risk_based == 0.3
+        assert config.position_sizing.confidence_scaling_enabled is True
+        assert config.position_sizing.confidence_high_threshold == 0.85
+        assert config.position_sizing.confidence_low_threshold == 0.65
+        assert config.position_sizing.confidence_low_reduction_factor == 0.6
+        assert config.position_sizing.use_monte_carlo_adjustment is True
+        assert config.position_sizing.monte_carlo_risk_multiplier == 0.8
+
+        path.unlink()
+
+    def test_position_sizing_blend_weights_validation(self):
+        """Test blend weights validation."""
+        # Valid: weights sum to 1.0
+        config = PositionSizingConfig(
+            blend_weight_optimization=0.6,
+            blend_weight_risk_based=0.4,
+        )
+        assert config.blend_weight_optimization == 0.6
+        assert config.blend_weight_risk_based == 0.4
+
+        # Invalid: weights sum to 0.9
+        with pytest.raises(ValueError, match=r"Blend weights must sum to 1\.0"):
+            PositionSizingConfig(
+                blend_weight_optimization=0.6,
+                blend_weight_risk_based=0.3,
+            )
+
+
+class TestCoordinatorConfig:
+    def test_defaults(self):
+        config = CoordinatorConfig()
+
+        assert config.enabled is False
+        assert config.max_tool_calls == 25
+        assert config.temperature == 0.5
+        assert config.model_override is None
+        assert config.confirmation_mode == "auto"
+        assert config.cycle_timeout_seconds == 600
+        assert config.max_daily_trades == 10
+        assert config.max_position_pct == 10.0
+        assert config.min_confidence_to_trade == 0.7
+
+    def test_custom(self):
+        config = CoordinatorConfig(
+            enabled=True,
+            max_tool_calls=30,
+            temperature=0.7,
+            model_override="claude-sonnet-4",
+            confirmation_mode="manual",
+            cycle_timeout_seconds=900,
+            max_daily_trades=20,
+            max_position_pct=15.0,
+            min_confidence_to_trade=0.8,
+        )
+
+        assert config.enabled is True
+        assert config.max_tool_calls == 30
+        assert config.temperature == 0.7
+        assert config.model_override == "claude-sonnet-4"
+        assert config.confirmation_mode == "manual"
+        assert config.cycle_timeout_seconds == 900
+        assert config.max_daily_trades == 20
+        assert config.max_position_pct == 15.0
+        assert config.min_confidence_to_trade == 0.8
+
+    def test_validation_bounds(self):
+        # Use variables to bypass type checker for validation tests
+        invalid_tool_calls_low = 3
+        invalid_tool_calls_high = 60
+        invalid_timeout_low = 30
+        invalid_timeout_high = 4000
+        invalid_trades_low = 0
+        invalid_trades_high = 150
+
+        with pytest.raises(ValueError, match=r"greater than or equal to 5"):
+            CoordinatorConfig(max_tool_calls=invalid_tool_calls_low)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"less than or equal to 50"):
+            CoordinatorConfig(max_tool_calls=invalid_tool_calls_high)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"greater than or equal to 60"):
+            CoordinatorConfig(cycle_timeout_seconds=invalid_timeout_low)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"less than or equal to 3600"):
+            CoordinatorConfig(cycle_timeout_seconds=invalid_timeout_high)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"greater than or equal to 1"):
+            CoordinatorConfig(max_daily_trades=invalid_trades_low)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"less than or equal to 100"):
+            CoordinatorConfig(max_daily_trades=invalid_trades_high)  # type: ignore[arg-type]
+
+    def test_daemon_config_has_coordinator(self):
+        config = DaemonConfig()
+        assert isinstance(config.coordinator, CoordinatorConfig)
+        assert config.coordinator.enabled is False
+
+    def test_from_yaml_with_coordinator(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  coordinator:
+    enabled: true
+    max_tool_calls: 30
+    temperature: 0.7
+    model_override: "claude-sonnet-4"
+    confirmation_mode: "manual"
+    cycle_timeout_seconds: 900
+    max_daily_trades: 20
+    max_position_pct: 15.0
+    min_confidence_to_trade: 0.8
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+
+        assert config.coordinator.enabled is True
+        assert config.coordinator.max_tool_calls == 30
+        assert config.coordinator.temperature == 0.7
+        assert config.coordinator.model_override == "claude-sonnet-4"
+        assert config.coordinator.confirmation_mode == "manual"
+        assert config.coordinator.cycle_timeout_seconds == 900
+        assert config.coordinator.max_daily_trades == 20
+        assert config.coordinator.max_position_pct == 15.0
+        assert config.coordinator.min_confidence_to_trade == 0.8
+
+        path.unlink()
+
+    def test_from_yaml_without_coordinator_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+
+        assert config.coordinator.enabled is False
+        assert config.coordinator.max_tool_calls == 25
+        assert config.coordinator.temperature == 0.5
+
+        path.unlink()

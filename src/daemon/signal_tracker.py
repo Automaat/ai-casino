@@ -8,24 +8,28 @@ from pandas.tseries.offsets import BDay
 from src.cache.historical import HistoricalCache
 from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
+from src.metrics.models import SignalUpdateRecord
 
 
 class SignalOutcomeTracker:
     """Track price outcomes after signals for accuracy metrics."""
 
-    def __init__(self, historical_cache: HistoricalCache, broker: AlpacaBroker | None = None) -> None:
+    def __init__(
+        self,
+        historical_cache: HistoricalCache,
+        market_fetcher: MarketDataFetcher,
+        broker: AlpacaBroker | None = None,
+    ) -> None:
         """Initialize signal outcome tracker.
 
         Args:
             historical_cache: Historical cache for signal storage and OHLCV
+            market_fetcher: MarketDataFetcher for price lookups
             broker: Optional broker for early exit detection
         """
         self._cache = historical_cache
         self._broker = broker
-        self._market_fetcher = MarketDataFetcher(
-            historical_cache=historical_cache,
-            use_alpha_vantage=False,
-        )
+        self._market_fetcher = market_fetcher
 
     def update_outcomes(self) -> dict[str, int]:
         """Batch update outcomes for signals needing T+1d/5d/20d prices.
@@ -49,12 +53,12 @@ class SignalOutcomeTracker:
 
             # Update outcomes
             for signal in signals:
-                exit_price = exit_prices.get(signal["id"])
+                exit_price = exit_prices.get(signal.id)
 
                 if exit_price is not None:
                     # Early exit: write both actual_exit_price and price_at_{horizon}
                     self._cache.update_signal_outcome(
-                        signal["id"],
+                        signal.id,
                         actual_exit_price=exit_price,
                         **{f"price_at_{horizon}": exit_price},
                         outcome_updated_at=now.isoformat(),
@@ -66,18 +70,18 @@ class SignalOutcomeTracker:
 
                     if target_price is not None:
                         self._cache.update_signal_outcome(
-                            signal["id"],
+                            signal.id,
                             **{f"price_at_{horizon}": target_price},
                             outcome_updated_at=now.isoformat(),
                         )
                         stats[f"updated_{horizon}"] += 1
                     else:
-                        logger.warning(f"No price available for {signal['symbol']} at {horizon}")
+                        logger.warning(f"No price available for {signal.symbol} at {horizon}")
 
         logger.info(f"Signal tracking complete: {stats}")
         return stats
 
-    def _fetch_price_at_target_date(self, signal: dict, horizon: str) -> float | None:
+    def _fetch_price_at_target_date(self, signal: SignalUpdateRecord, horizon: str) -> float | None:
         """Fetch close price at target trading date for a signal.
 
         Args:
@@ -88,7 +92,7 @@ class SignalOutcomeTracker:
             Close price at target date or None if unavailable
         """
         trading_days = {"1d": 1, "5d": 5, "20d": 20}[horizon]
-        signal_timestamp = datetime.fromisoformat(signal["timestamp"])
+        signal_timestamp = datetime.fromisoformat(signal.timestamp)
 
         # Calculate target trading date (signal date + N business days)
         target_date = signal_timestamp + BDay(trading_days)
@@ -98,15 +102,19 @@ class SignalOutcomeTracker:
             # Add buffer days to account for market closures
             lookback_days = trading_days + 10
 
-            market_data = self._market_fetcher.fetch_daily(signal["symbol"], period_days=lookback_days)
+            market_data = self._market_fetcher.fetch_daily(signal.symbol, period_days=lookback_days)
 
             if market_data.data.empty:
                 return None
 
             # Find close at target date (or nearest prior trading day)
+            import pandas as pd
+
             df = market_data.data
-            df.index = df.index.tz_localize(None)  # Remove timezone for comparison
-            target_date_normalized = target_date.normalize()
+            if isinstance(df.index, pd.DatetimeIndex):
+                df.index = df.index.tz_localize(None)  # Remove timezone for comparison
+            target_ts = pd.Timestamp(target_date)
+            target_date_normalized = target_ts.normalize()
 
             # Get closest date on or before target
             valid_dates = df.index[df.index <= target_date_normalized]
@@ -118,16 +126,16 @@ class SignalOutcomeTracker:
             close_price = float(df.loc[closest_date, "Close"])
 
             logger.debug(
-                f"Fetched {horizon} price for {signal['symbol']}: {close_price:.2f} at {closest_date.date()}"
+                f"Fetched {horizon} price for {signal.symbol}: {close_price:.2f} at {closest_date.date()}"
             )
 
             return close_price
 
         except Exception as e:
-            logger.warning(f"Failed to fetch {horizon} price for {signal['symbol']}: {e}")
+            logger.warning(f"Failed to fetch {horizon} price for {signal.symbol}: {e}")
             return None
 
-    def _get_early_exits(self, signals: list[dict]) -> dict[int, float]:
+    def _get_early_exits(self, signals: list[SignalUpdateRecord]) -> dict[int, float]:
         """Get actual exit prices for signals with closed trades.
 
         Args:
@@ -139,34 +147,10 @@ class SignalOutcomeTracker:
         if not self._broker:
             return {}
 
-        exit_prices = {}
-
-        try:
-            # Query historical order fills for symbols with signals
-            symbols = {s["symbol"] for s in signals}
-
-            # TODO: Match signal timestamps to specific trade sequences in order_fills table
-            # to detect early exits and populate exit_prices dict
-            self._raise_not_implemented(len(symbols))
-
-        except NotImplementedError:
-            raise
-        except Exception as e:
-            logger.warning(f"Failed to check early exits: {e}")
-
-        return exit_prices
-
-    def _raise_not_implemented(self, symbol_count: int) -> None:
-        """Raise NotImplementedError for early exit detection.
-
-        Args:
-            symbol_count: Number of symbols being processed
-        """
-        msg = (
-            "Early exit detection not implemented - requires matching signals "
-            f"to closed positions in order_fills for {symbol_count} symbols"
-        )
-        raise NotImplementedError(msg)
+        # Early exit detection not yet implemented
+        symbol_count = len({s.symbol for s in signals})
+        logger.debug(f"Early exit detection skipped (not implemented) for {symbol_count} symbols")
+        return {}
 
     def __repr__(self) -> str:
         """Return string representation."""

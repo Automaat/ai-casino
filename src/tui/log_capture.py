@@ -5,14 +5,21 @@ The step context is stored in a threading.local() since contextualize()
 can't be dynamically updated from outside the context manager.
 """
 
+from __future__ import annotations
+
 import contextlib
 import threading
 from collections.abc import Generator
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from src.tui.types import ProgressCallback
+from src.utils.logging import sanitize_log_record
+
+if TYPE_CHECKING:
+    from loguru import Record
 
 # Thread-local storage for current step (updated dynamically within context)
 _step_context = threading.local()
@@ -36,6 +43,8 @@ class LogCaptureSink:
         if not _state.progress_callback:
             return
 
+        if not hasattr(message, "record"):
+            return
         record = message.record
         extra = record.get("extra", {})
 
@@ -77,11 +86,16 @@ def setup_log_capture(progress_callback: ProgressCallback) -> int:
     """
     _state.progress_callback = progress_callback
 
+    def combined_filter(record: Record) -> bool:
+        """Combined filter: sanitize tokens then check TUI worker flag."""
+        sanitize_log_record(record)  # Always sanitize
+        return record["extra"].get("tui_worker", False)
+
     return logger.add(
         LogCaptureSink(),
         level="INFO",
         format="{message}",
-        filter=lambda r: r["extra"].get("tui_worker", False),
+        filter=combined_filter,
     )
 
 
@@ -93,7 +107,7 @@ def teardown_log_capture(handler_id: int) -> None:
 
 
 @contextlib.contextmanager
-def worker_log_context() -> Generator[None, None, None]:
+def worker_log_context() -> Generator[None]:
     """Context manager that marks all logs as coming from TUI worker.
 
     Usage:

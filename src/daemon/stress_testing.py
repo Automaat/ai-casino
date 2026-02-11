@@ -1,18 +1,15 @@
 """Monte Carlo stress testing executor for daemon integration."""
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
 
 from src.daemon.config import MonteCarloConfig
 from src.daemon.state import MonteCarloRecord
+from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.metrics.monte_carlo import MonteCarloSimulator, SimulationMethod
-
-if TYPE_CHECKING:
-    from src.data.broker import AlpacaBroker
 
 
 class DaemonStressTester:
@@ -20,7 +17,7 @@ class DaemonStressTester:
 
     def __init__(
         self,
-        broker_client: "AlpacaBroker",
+        broker_client: AlpacaBroker,
         market_fetcher: MarketDataFetcher,
         config: MonteCarloConfig,
     ) -> None:
@@ -35,6 +32,10 @@ class DaemonStressTester:
         self.market = market_fetcher
         self.config = config
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"DaemonStressTester(simulations={self.config.num_simulations})"
+
     def execute(self) -> MonteCarloRecord:
         """Run Monte Carlo simulation on current portfolio.
 
@@ -45,7 +46,8 @@ class DaemonStressTester:
             ValueError: If no positions or insufficient historical data
         """
         logger.info("[STRESS TEST] Fetching current positions")
-        positions = self.broker.get_positions()
+        account_info = self.broker.get_account_info()
+        positions = list(account_info.positions.values())
 
         if not positions:
             msg = "No positions in portfolio for stress testing"
@@ -148,7 +150,7 @@ class DaemonStressTester:
                         f"{symbol}: Only {len(returns)} return days available "
                         f"(minimum {self.config.min_historical_days})"
                     )
-                    raise ValueError(msg)  # noqa: TRY301
+                    raise ValueError(msg)
 
                 returns_dict[symbol] = returns
 

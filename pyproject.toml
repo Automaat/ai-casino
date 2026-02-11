@@ -13,11 +13,11 @@ dependencies = [
     "transformers==5.1.0",
     "torch==2.10.0",
     # LLM & Agents
-    "openai==2.17.0",
+    "openai==2.20.0",
     "anthropic==0.79.0",
     "httpx==0.28.1",
     "langgraph==1.0.8",
-    "langchain-core==1.2.9",
+    "langchain-core==1.2.11",
     # Market Data
     "yfinance==1.1.0",
     "alpha-vantage==3.0.0",
@@ -44,16 +44,18 @@ dependencies = [
     "rich==14.3.2",
     "loguru==0.7.3",
     "pydantic==2.12.5",
+    "pydantic-settings==2.12.0",
     "pyyaml==6.0.3",
     # API Server
-    "fastapi==0.128.5",
+    "fastapi==0.128.8",
     "uvicorn[standard]==0.40.0",
     # Dashboard
     "dash==4.0.0",
     "dash-bootstrap-components==2.0.4",
     # CLI & TUI
-    "typer==0.21.1",
+    "typer==0.23.0",
     "textual==7.5.0",
+    "dependency-injector==4.48.3",  # DI container infrastructure
 ]
 
 [project.optional-dependencies]
@@ -63,6 +65,11 @@ dev = [
     "pytest-cov==7.0.0",
     "pytest-mock==3.15.1",
     "ruff==0.15.0",
+    "aiosqlite==0.22.1",
+]
+profiling = [
+    "yappi>=1.6.0",
+    "snakeviz>=2.2.0",
 ]
 
 [project.scripts]
@@ -109,7 +116,24 @@ exclude_lines = [
     "if TYPE_CHECKING:",
 ]
 
+[tool.pyrefly]
+# Pyrefly uses strict type checking by default
+# Configuration is minimal - strictness comes from complete type annotations + ANN rules
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+project-excludes = [
+    "tests/**",
+]
+
+[tool.uv]
+# Restrict dependency resolution to Unix platforms (Linux/macOS)
+# Prevents Windows resolution failures in CI for platform-specific deps like riskfolio-lib
+environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
+
 [dependency-groups]
 dev = [
     "pip-audit>=2.10.0",
+    "pyrefly==0.52.0",
 ]

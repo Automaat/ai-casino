@@ -4,16 +4,40 @@ This module provides a thin wrapper around the Alpaca API for executing
 paper trades and fetching account information.
 """
 
+from __future__ import annotations
+
 import os
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest, StopLossRequest
+from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, StopOrderRequest
 from loguru import logger
 from pydantic import BaseModel
 
-from src.cache.historical import HistoricalCache
+if TYPE_CHECKING:
+    from alpaca.trading.models import Clock, Order, Position, TradeAccount
+
+    from src.cache.historical import HistoricalCache
+
+
+def round_price_for_broker(price: float) -> float:
+    """Round price to valid broker increment.
+
+    Alpaca requires:
+    - Stocks >= $1.00: $0.01 increment (2 decimals)
+    - Stocks < $1.00: $0.0001 increment (4 decimals)
+
+    Args:
+        price: Price to round
+
+    Returns:
+        Rounded price compliant with broker API
+    """
+    if price >= 1.0:
+        return round(price, 2)
+    return round(price, 4)
 
 
 class BrokerAPIError(Exception):
@@ -117,29 +141,33 @@ class AlpacaBroker:
             BrokerAccountInfo with balance, cash, positions, and exposure
         """
         try:
-            account = self.client.get_account()
-            positions_raw = self.client.get_all_positions()
+            account: TradeAccount = self.client.get_account()  # type: ignore[assignment]
+            positions_raw: list[Position] = self.client.get_all_positions()  # type: ignore[assignment]
 
             positions = {}
             total_exposure = 0.0
 
             for pos in positions_raw:
+                market_value = float(pos.market_value) if pos.market_value else 0.0
+                unrealized_pl = float(pos.unrealized_pl) if pos.unrealized_pl else 0.0
+                unrealized_plpc = float(pos.unrealized_plpc) if pos.unrealized_plpc else 0.0
+
                 positions[pos.symbol] = BrokerPosition(
                     symbol=pos.symbol,
-                    qty=float(pos.qty),
-                    market_value=float(pos.market_value),
-                    avg_entry_price=float(pos.avg_entry_price),
-                    unrealized_pnl=float(pos.unrealized_pnl),
-                    unrealized_pnl_percent=float(pos.unrealized_plpc),
+                    qty=float(pos.qty or 0),
+                    market_value=market_value,
+                    avg_entry_price=float(pos.avg_entry_price or 0.0),
+                    unrealized_pnl=unrealized_pl,
+                    unrealized_pnl_percent=unrealized_plpc,
                 )
-                total_exposure += float(pos.market_value)
+                total_exposure += market_value
 
             return BrokerAccountInfo(
-                balance=float(account.equity),
-                available_cash=float(account.buying_power),
+                balance=float(account.equity) if account.equity else 0.0,
+                available_cash=float(account.buying_power) if account.buying_power else 0.0,
                 positions=positions,
                 total_exposure=total_exposure,
-                portfolio_value=float(account.portfolio_value),
+                portfolio_value=float(account.portfolio_value) if account.portfolio_value else 0.0,
             )
         except Exception as e:
             msg = f"Failed to fetch account info: {e}"
@@ -182,19 +210,24 @@ class AlpacaBroker:
             )
 
             if stop_loss_price is not None:
+                if stop_loss_price <= 0:
+                    msg = f"Stop loss price must be positive, got {stop_loss_price}"
+                    raise ValueError(msg)
+                # Round stop loss price to valid broker increment
+                stop_loss_price = round_price_for_broker(stop_loss_price)
                 order_data.order_class = OrderClass.OTO
                 order_data.stop_loss = StopLossRequest(stop_price=stop_loss_price)
 
-            order = self.client.submit_order(order_data=order_data)
+            order: Order = self.client.submit_order(order_data=order_data)  # type: ignore[assignment]
 
             logger.info(f"Submitted order: {side.upper()} {qty} {symbol}")
 
             order_status = OrderStatus(
                 order_id=str(order.id),
-                symbol=order.symbol,
-                qty=float(order.qty),
+                symbol=order.symbol or "",
+                qty=float(order.qty or 0),
                 filled_qty=float(order.filled_qty or 0),
-                side=order.side.value,
+                side=order.side.value if order.side else "unknown",
                 status=order.status.value,
                 submitted_at=order.submitted_at,
                 filled_at=order.filled_at,
@@ -202,7 +235,7 @@ class AlpacaBroker:
             )
 
             if self._cache:
-                self._cache.store_order_fill(order_status)
+                self._cache.store_order_fill(order_status)  # type: ignore[arg-type]
 
             return order_status
         except Exception as e:
@@ -220,14 +253,14 @@ class AlpacaBroker:
             OrderStatus with current order details
         """
         try:
-            order = self.client.get_order_by_id(order_id=order_id)
+            order: Order = self.client.get_order_by_id(order_id=order_id)  # type: ignore[assignment]
 
             return OrderStatus(
                 order_id=str(order.id),
-                symbol=order.symbol,
-                qty=float(order.qty),
+                symbol=order.symbol or "",
+                qty=float(order.qty or 0),
                 filled_qty=float(order.filled_qty or 0),
-                side=order.side.value,
+                side=order.side.value if order.side else "unknown",
                 status=order.status.value,
                 submitted_at=order.submitted_at,
                 filled_at=order.filled_at,
@@ -236,6 +269,58 @@ class AlpacaBroker:
         except Exception as e:
             logger.error(f"Failed to get order status: {e}")
             raise
+
+    def submit_stop_order(self, symbol: str, qty: int, stop_price: float) -> OrderStatus:
+        """Submit stop order to protect existing long position.
+
+        Args:
+            symbol: Stock ticker symbol
+            qty: Number of shares to sell
+            stop_price: Price to trigger sell order
+
+        Returns:
+            OrderStatus with order details
+        """
+        if qty <= 0:
+            msg = f"Order quantity must be positive, got {qty}"
+            raise ValueError(msg)
+
+        if stop_price <= 0:
+            msg = f"Stop price must be positive, got {stop_price}"
+            raise ValueError(msg)
+
+        # Round stop price to valid broker increment
+        stop_price = round_price_for_broker(stop_price)
+
+        try:
+            order_data = StopOrderRequest(
+                symbol=symbol,
+                qty=qty,
+                side=OrderSide.SELL,
+                time_in_force=TimeInForce.GTC,
+                stop_price=stop_price,
+            )
+
+            order: Order = self.client.submit_order(order_data=order_data)  # type: ignore[assignment]
+
+            price_fmt = f"${stop_price:.4f}" if stop_price < 1.0 else f"${stop_price:.2f}"
+            logger.info(f"Submitted stop order: SELL {qty} {symbol} @ {price_fmt}")
+
+            return OrderStatus(
+                order_id=str(order.id),
+                symbol=order.symbol or "",
+                qty=float(order.qty or 0),
+                filled_qty=float(order.filled_qty or 0),
+                side=order.side.value if order.side else "unknown",
+                status=order.status.value,
+                submitted_at=order.submitted_at,
+                filled_at=order.filled_at,
+                filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
+            )
+        except Exception as e:
+            msg = f"Failed to submit order: {e}"
+            logger.error(msg)
+            raise BrokerAPIError(msg) from e
 
     def cancel_order(self, order_id: str) -> None:
         """Cancel an existing order.
@@ -257,7 +342,7 @@ class AlpacaBroker:
             True if market is open for trading
         """
         try:
-            clock = self.client.get_clock()
+            clock: Clock = self.client.get_clock()  # type: ignore[assignment]
             return clock.is_open
         except Exception as e:
             logger.warning(f"Failed to check market status: {e}")

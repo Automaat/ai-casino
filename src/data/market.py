@@ -20,7 +20,6 @@ from tenacity import (
 )
 
 from src.cache.historical import HistoricalCache
-from src.metrics.execution import timed_operation
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
 
 load_dotenv()
@@ -37,6 +36,19 @@ HTTP_RETRY = retry(
         f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"
     ),
 )
+
+
+def _collect_timeframe_results(
+    results: list[tuple[Timeframe, pd.DataFrame | None]],
+) -> dict[Timeframe, pd.DataFrame]:
+    """Collect successful timeframe results, logging failures."""
+    timeframe_dict: dict[Timeframe, pd.DataFrame] = {}
+    for tf, data in results:
+        if data is not None and not data.empty:
+            timeframe_dict[tf] = data
+        else:
+            logger.warning(f"No data available for {tf}, skipping")
+    return timeframe_dict
 
 
 class MarketData(BaseModel):
@@ -158,6 +170,8 @@ class MarketDataFetcher:
         Returns:
             MarketData with OHLCV dataframe
         """
+        from src.metrics.execution import timed_operation
+
         logger.info(f"Fetching {period_days} days of data for {symbol}")
 
         cached = self._try_cache(symbol, period_days)
@@ -178,7 +192,11 @@ class MarketDataFetcher:
     def _fetch_alpha_vantage(self, symbol: str) -> MarketData:
         """Fetch from Alpha Vantage API."""
         try:
-            data, _ = self.ts.get_daily(symbol=symbol, outputsize="compact")
+            result = self.ts.get_daily(symbol=symbol, outputsize="compact")
+            if result is None:
+                msg = f"No data returned for {symbol}"
+                raise ValueError(msg)
+            data, _ = result
 
             data = data.sort_index()
             data.columns = ["Open", "High", "Low", "Close", "Volume"]
@@ -309,7 +327,11 @@ class MarketDataFetcher:
         logger.info(f"Fetching intraday data for {symbol} ({interval})")
 
         try:
-            data, _ = self.ts.get_intraday(symbol=symbol, interval=interval, outputsize="compact")
+            result = self.ts.get_intraday(symbol=symbol, interval=interval, outputsize="compact")
+            if result is None:
+                msg = f"No intraday data returned for {symbol}"
+                raise ValueError(msg)
+            data, _ = result
 
             data = data.sort_index()
             data.columns = ["Open", "High", "Low", "Close", "Volume"]
@@ -370,14 +392,14 @@ class MarketDataFetcher:
                 logger.warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)
 
-        results = await asyncio.gather(*[fetch_timeframe(tf) for tf in timeframes])
+        # Fetch timeframes in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(fetch_timeframe(tf)) for tf in timeframes]
 
-        timeframe_dict = {}
-        for tf, data in results:
-            if data is not None and not data.empty:
-                timeframe_dict[tf] = data
-            else:
-                logger.warning(f"No data available for {tf}, skipping")
+        # Extract results from tasks
+        results = [task.result() for task in task_results]
+
+        timeframe_dict = _collect_timeframe_results(results)
 
         if not timeframe_dict:
             msg = f"No timeframe data could be fetched for {symbol}"

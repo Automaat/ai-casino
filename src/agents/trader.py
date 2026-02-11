@@ -9,13 +9,12 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.workflows.types import BacktestValidation
 
-from src.agents.bearish_researcher import BearishResearchAnalysis
-from src.agents.bullish_researcher import BullishResearchAnalysis
 from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -77,10 +76,10 @@ class TraderAgent:
         sector_context: str | None = None,
         earnings_context: str | None = None,
         peer_analysis_context: str | None = None,
-        backtest_validation: "BacktestValidation | None" = None,
+        backtest_validation: BacktestValidation | None = None,
         game_plan_context: str | None = None,
         position_context: dict[str, object] | None = None,
-        degradation_context: "DegradationContext | None" = None,
+        degradation_context: DegradationContext | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -144,14 +143,12 @@ class TraderAgent:
             news_recommendation=news.recommendation,
             fundamental_section=fundamental_section,
             bullish_thesis=bullish.thesis,
-            bullish_strengths=", ".join(bullish.key_strengths),
-            bullish_upside=f"{bullish.target_upside:.1f}%" if bullish.target_upside is not None else "N/A",
+            bullish_strengths=", ".join(bullish.key_points),
+            bullish_upside=f"{bullish.target:.1f}%" if bullish.target is not None else "N/A",
             bullish_confidence=f"{bullish.confidence:.2f}",
             bearish_thesis=bearish.thesis,
-            bearish_weaknesses=", ".join(bearish.key_weaknesses),
-            bearish_downside=f"{bearish.target_downside:.1f}%"
-            if bearish.target_downside is not None
-            else "N/A",
+            bearish_weaknesses=", ".join(bearish.key_points),
+            bearish_downside=f"{bearish.target:.1f}%" if bearish.target is not None else "N/A",
             bearish_confidence=f"{bearish.confidence:.2f}",
             comparative_section=comparative_section,
             sector_rotation_section=sector_rotation_section,
@@ -392,7 +389,7 @@ class TraderAgent:
 
         return self._prompts.load("section_earnings", earnings_details=earnings_context)
 
-    def _build_backtest_section(self, backtest_validation: "BacktestValidation | None") -> str:
+    def _build_backtest_section(self, backtest_validation: BacktestValidation | None) -> str:
         """Build pre-trade backtest section for prompt.
 
         Args:
@@ -540,7 +537,7 @@ class TraderAgent:
                     value = float(parts[1].strip().split()[0])
                     if 0.0 <= value <= 1.0:
                         return value
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 continue
         return None
 

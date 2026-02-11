@@ -1,4 +1,28 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: ai-casino-postgres
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      # IMPORTANT: Set POSTGRES_PASSWORD env var in production (or pass via .env file)
+      # The daemon's DATABASE_URL password must match this postgres container password
+      - POSTGRES_DB=ai_casino
+      - POSTGRES_USER=ai_casino
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGE_ME_INSECURE_DEFAULT}
+    volumes:
+      # Persistent storage on host machine
+      - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+    networks:
+      - ai-casino-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_casino"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   daemon:
     build: .
     container_name: ai-casino-daemon
@@ -7,16 +31,16 @@ services:
       # Mount production config from host
       - ${HOME}/.ai-casino:/root/.ai-casino
     environment:
-      # LLM provider (config takes priority, these are fallbacks)
-      - LLM_PROVIDER=openai
-      - LLM_MODEL=gpt-5-nano
-      # Log level
+      # Log level (can override in config)
       - LOG_LEVEL=INFO
     ports:
       # Expose API for dashboard
       - "8484:8484"
     networks:
       - ai-casino-net
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8484/health"]
       interval: 5s

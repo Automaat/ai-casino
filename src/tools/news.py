@@ -1,8 +1,14 @@
 """News tool for fetching stock news."""
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 DESCRIPTION_TRUNCATE_LENGTH = 300
 
@@ -10,59 +16,66 @@ DESCRIPTION_TRUNCATE_LENGTH = 300
 class GetNewsTool(BaseTool):
     """Tool to fetch recent news for a stock."""
 
+    def __init__(self, container: AppContainer | None = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
+
     @property
     def name(self) -> str:
         """Tool name."""
         return "get_news"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Get recent news articles for a stock. Returns headlines, sources, and dates. "
                     "Use this to understand recent events and news sentiment for a company."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of articles to return (default: 5)",
-                            "default": 5,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "limit": ToolParameter(
+                            type="integer",
+                            description="Maximum number of articles to return (default: 5)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
-    def execute(self, symbol: str, limit: int = 5) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Fetch news for a stock.
 
         Args:
-            symbol: Stock ticker symbol
-            limit: Maximum number of articles
+            **kwargs: Tool arguments (symbol: str, limit: int = 5)
 
         Returns:
             Formatted news summary
         """
+        symbol = str(kwargs["symbol"])
+        limit = int(kwargs.get("limit", 5))
+
         logger.info(f"Fetching news for {symbol} (limit={limit})")
 
         try:
-            from src.data.news import NewsFetcher
-
-            fetcher = NewsFetcher()
+            fetcher = self._container.news_fetcher()
             articles = fetcher.fetch_company_news(symbol.upper(), limit=limit)
 
             return self._format_articles(symbol.upper(), articles)

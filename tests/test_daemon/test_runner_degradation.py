@@ -30,7 +30,7 @@ def daemon_config_with_health(tmp_path, temp_health_dir):
         "auto_trade": False,
         "health": {
             "enabled": True,
-            "run_time": "17:00",
+            "check_interval_seconds": 5,
             "health_dir": str(temp_health_dir),
             "archive_dir": str(tmp_path / "archive"),
         },
@@ -79,8 +79,11 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    # Mock workflow to avoid actual analysis
-    with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
+    # Mock to avoid overwriting fake report and analyzing
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
         sleep_time = await runner._run_cycle()
 
         # Should halt and return 60s retry
@@ -90,7 +93,9 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
         # Verify degradation recorded in state
         assert runner.state.degradation_history
         assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
-        assert "market data" in runner.state.degradation_history[-1].halt_reason.lower()
+        halt_reason = runner.state.degradation_history[-1].halt_reason
+        assert halt_reason is not None
+        assert "market data" in halt_reason.lower()
 
 
 async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_dir):
@@ -118,7 +123,10 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
         sleep_time = await runner._run_cycle()
 
         assert sleep_time == 60
@@ -126,7 +134,9 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
 
         assert runner.state.degradation_history
         assert runner.state.degradation_history[-1].tier == DegradationTier.HALTED.value
-        assert "llm" in runner.state.degradation_history[-1].halt_reason.lower()
+        halt_reason = runner.state.degradation_history[-1].halt_reason
+        assert halt_reason is not None
+        assert "llm" in halt_reason.lower()
 
 
 async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp_health_dir):
@@ -161,7 +171,10 @@ async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
         mock_analyze.return_value = []
 
         sleep_time = await runner._run_cycle()
@@ -207,11 +220,17 @@ async def test_notification_sent_on_degradation(daemon_config_with_health, temp_
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    # Mock notification service
+    # Mock notification service (both on components and runner property)
+    # Cycle orchestrator checks components.notification_service
+    # _notify_degradation checks runner.notification_service
     mock_notification_service = AsyncMock()
+    runner._components.notification_service = mock_notification_service
     runner.notification_service = mock_notification_service
 
-    with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
         mock_analyze.return_value = []
 
         await runner._run_cycle()
@@ -255,7 +274,10 @@ async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_h
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    with patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze:
+    with (
+        patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
+        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+    ):
         mock_analyze.return_value = []
 
         sleep_time = await runner._run_cycle()

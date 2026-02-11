@@ -40,8 +40,20 @@ def daemon_state() -> DaemonState:
 
 
 @pytest.fixture
-def checker(daemon_config: DaemonConfig, daemon_state: DaemonState) -> HealthChecker:
-    return HealthChecker(daemon_config, daemon_state)
+def mock_container():
+    from unittest.mock import AsyncMock, Mock
+
+    container = Mock()
+    mock_llm = AsyncMock()
+    mock_llm.acomplete = AsyncMock(return_value="OK")
+    mock_llm.close = AsyncMock()
+    container.llm_client = Mock(return_value=mock_llm)
+    return container
+
+
+@pytest.fixture
+def checker(daemon_config: DaemonConfig, daemon_state: DaemonState, mock_container) -> HealthChecker:
+    return HealthChecker(daemon_config, daemon_state, container=mock_container)
 
 
 class TestServiceStatus:
@@ -186,14 +198,7 @@ class TestCheckLLM:
         assert result.status == ServiceStatus.UNHEALTHY
 
     async def test_anthropic_healthy(self, checker: HealthChecker):
-        mock_llm = AsyncMock()
-        mock_llm.acomplete = AsyncMock(return_value="OK")
-        mock_llm.close = AsyncMock()
-
-        with (
-            patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}),
-            patch("src.models.llm.LLMClient", return_value=mock_llm),
-        ):
+        with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}):
             result = await checker._check_llm()
 
         assert result.status == ServiceStatus.HEALTHY
@@ -264,7 +269,10 @@ class TestArchiveOldAnalyses:
 
 
 class TestPruneStaleCache:
-    def test_no_cache_dir(self, checker: HealthChecker):
+    def test_no_cache_dir(self, checker: HealthChecker, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        # Run from tmp_path so "data/cache" doesn't resolve to project cache
+        monkeypatch.chdir(tmp_path)
+
         result = checker._prune_stale_cache()
 
         assert result.files_affected == 0
@@ -370,6 +378,8 @@ class TestFullRun:
         assert report.total_duration_ms >= 0
 
     async def test_run_persists_report(self, checker: HealthChecker):
+        import asyncio
+
         mock_response = AsyncMock()
         mock_response.raise_for_status = Mock()
 
@@ -382,11 +392,13 @@ class TestFullRun:
             mock_client.return_value.get = AsyncMock(return_value=mock_response)
             await checker.run()
 
-        health_dir = Path(checker.config.health.health_dir).expanduser()
-        report_files = list(health_dir.glob("health-*.json"))
-        assert len(report_files) == 1
+        def _check_report() -> dict:
+            health_dir = Path(checker.config.health.health_dir).expanduser()
+            report_files = list(health_dir.glob("health-*.json"))
+            assert len(report_files) == 1
+            return json.loads(report_files[0].read_text())
 
-        loaded = json.loads(report_files[0].read_text())
+        loaded = await asyncio.to_thread(_check_report)
         assert loaded["overall_status"] == "HEALTHY"
 
     async def test_run_with_unhealthy_service(self, checker: HealthChecker):

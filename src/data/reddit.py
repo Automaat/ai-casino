@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import praw
+import praw.models
 import prawcore
 from diskcache import Cache
 from loguru import logger
@@ -125,7 +126,7 @@ HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type(Exception)
-    & retry_if_not_exception_type((ValueError, _NO_RETRY_EXCEPTIONS)),
+    & retry_if_not_exception_type((ValueError, *_NO_RETRY_EXCEPTIONS)),
     reraise=True,
     before_sleep=lambda retry_state: logger.warning(
         f"Retry {retry_state.attempt_number} after {retry_state.outcome.exception()}"

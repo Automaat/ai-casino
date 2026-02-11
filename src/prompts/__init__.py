@@ -31,12 +31,16 @@ class PromptLoader:
             msg = f"Prompt directory not found: {self.agent_dir}"
             raise PromptDirectoryNotFoundError(msg)
 
-    def load(self, prompt_name: str, **kwargs: str) -> str:
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"PromptLoader(agent={self.agent_dir.name})"
+
+    def load(self, prompt_name: str, **kwargs: object) -> str:
         """Load and render prompt with f-string style variables.
 
         Args:
             prompt_name: Filename without .txt extension
-            **kwargs: Variables to interpolate into template
+            **kwargs: Variables to interpolate into template (accepts str, int, float, list, etc.)
 
         Returns:
             Rendered prompt string
@@ -60,13 +64,13 @@ class PromptLoader:
             raise PromptVariableMissingError(msg) from e
 
 
-def load_prompt(agent_name: str, prompt_name: str, **kwargs: str) -> str:
+def load_prompt(agent_name: str, prompt_name: str, **kwargs: object) -> str:
     """Convenience function to load and render a prompt.
 
     Args:
         agent_name: Name of the agent
         prompt_name: Filename without .txt extension
-        **kwargs: Variables to interpolate
+        **kwargs: Variables to interpolate (accepts str, int, float, list, etc.)
 
     Returns:
         Rendered prompt string

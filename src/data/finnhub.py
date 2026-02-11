@@ -151,7 +151,7 @@ class FinnhubFetcher:
 
             reddit_entries = [
                 SocialSentimentEntry(
-                    at_time=datetime.fromisoformat(entry["atTime"].replace("Z", "+00:00")),
+                    at_time=datetime.fromisoformat(entry["atTime"]),
                     mention=entry["mention"],
                     score=entry["score"],
                 )
@@ -160,7 +160,7 @@ class FinnhubFetcher:
 
             twitter_entries = [
                 SocialSentimentEntry(
-                    at_time=datetime.fromisoformat(entry["atTime"].replace("Z", "+00:00")),
+                    at_time=datetime.fromisoformat(entry["atTime"]),
                     mention=entry["mention"],
                     score=entry["score"],
                 )

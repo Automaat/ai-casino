@@ -7,17 +7,15 @@ import time
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
 from pydantic import BaseModel
 
 from src.daemon.config import DaemonConfig
+from src.daemon.notifications import NotificationService
 from src.daemon.state import DaemonState
-
-if TYPE_CHECKING:
-    from src.daemon.notifications import NotificationService
+from src.di.container import AppContainer
 
 
 class ServiceStatus(StrEnum):
@@ -65,17 +63,22 @@ class HealthChecker:
         self,
         config: DaemonConfig,
         state: DaemonState,
-        notification_service: "NotificationService | None" = None,
+        container: AppContainer | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         """Initialize health checker.
 
         Args:
             config: Daemon configuration
             state: Current daemon state
+            container: Optional DI container (auto-created if not provided)
             notification_service: Optional notification service for health alerts
         """
+        from src.di.container import create_container
+
         self.config = config
         self.state = state
+        self._container = container or create_container()
         self.notification_service = notification_service
         self._health_dir = Path(config.health.health_dir).expanduser()
         self._archive_dir = Path(config.health.archive_dir).expanduser()
@@ -256,10 +259,15 @@ class HealthChecker:
 
     async def _check_llm(self) -> ServiceCheckResult:
         """Check LLM provider connectivity."""
-        provider = os.getenv("LLM_PROVIDER", "ollama")
+        # Use config provider if set, fallback to env var
+        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+
+        # Check API keys from config first, then env vars
+        anthropic_key = self.config.api_keys.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
+        openai_key = self.config.api_keys.openai_api_key or os.getenv("OPENAI_API_KEY")
 
         # Check API keys for non-Ollama providers
-        if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
+        if provider == "anthropic" and not anthropic_key:
             return ServiceCheckResult(
                 service=f"llm_{provider}",
                 status=ServiceStatus.SKIPPED,
@@ -267,7 +275,7 @@ class HealthChecker:
                 duration_ms=0,
                 checked_at=datetime.now(UTC),
             )
-        if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+        if provider == "openai" and not openai_key:
             return ServiceCheckResult(
                 service=f"llm_{provider}",
                 status=ServiceStatus.SKIPPED,
@@ -284,11 +292,12 @@ class HealthChecker:
                     response = await client.get(f"{base_url}/api/tags")
                     response.raise_for_status()
             else:
-                from src.models.llm import LLMClient
-
-                llm = LLMClient()
-                await llm.acomplete("Reply with OK", temperature=0.0)
-                await llm.close()
+                llm = self._container.llm_client()
+                try:
+                    # Use default temperature (0.7) - no explicit override for health check
+                    await llm.acomplete("Reply with OK")
+                finally:
+                    await llm.close()
 
             duration = (time.perf_counter() - start) * 1000
             return ServiceCheckResult(
@@ -310,12 +319,12 @@ class HealthChecker:
 
     async def _check_finnhub(self) -> ServiceCheckResult:
         """Check Finnhub API connectivity."""
-        api_key = os.getenv("FINNHUB_API_KEY")
+        api_key = self.config.api_keys.finnhub_api_key or os.getenv("FINNHUB_API_KEY")
         if not api_key:
             return ServiceCheckResult(
                 service="finnhub",
                 status=ServiceStatus.SKIPPED,
-                message="FINNHUB_API_KEY not configured",
+                message="Finnhub API key not configured",
                 duration_ms=0,
                 checked_at=datetime.now(UTC),
             )
@@ -517,6 +526,9 @@ class HealthChecker:
         """
         from src.daemon.config import NotificationTrigger
         from src.daemon.notifications import NotificationMessage
+
+        if not self.notification_service:
+            return
 
         services = ", ".join([f.service for f in failed])
 

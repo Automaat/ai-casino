@@ -1,6 +1,9 @@
 """Base tool interface for LLM function calling."""
 
+import asyncio
 from abc import ABC, abstractmethod
+
+from src.tools.models import ToolDefinition
 
 
 class BaseTool(ABC):
@@ -25,11 +28,11 @@ class BaseTool(ABC):
         return False
 
     @abstractmethod
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
 
     @abstractmethod
@@ -42,6 +45,28 @@ class BaseTool(ABC):
         Returns:
             Tool execution result as string
         """
+
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute the tool asynchronously.
+
+        Default implementation offloads sync execute() to thread pool.
+        Subclasses can override for native async implementations.
+
+        Args:
+            **kwargs: Tool-specific arguments
+
+        Returns:
+            Tool execution result as string
+
+        Examples:
+            # Default: thread offloading
+            result = await tool.aexecute(symbol="AAPL")
+
+            # Native async override in subclass:
+            async def aexecute(self, **kwargs):
+                return await self._async_operation(**kwargs)
+        """
+        return await asyncio.to_thread(self.execute, **kwargs)
 
     def __repr__(self) -> str:
         """String representation."""

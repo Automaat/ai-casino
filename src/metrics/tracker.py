@@ -5,7 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 from pydantic import BaseModel
@@ -142,10 +142,26 @@ class BaseMetricsTracker(ABC):
         else:
             self.risk_free_rate = risk_free_rate
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"BaseMetricsTracker(risk_free_rate={self.risk_free_rate:.4f})"
+
+    @property
+    @abstractmethod
+    def trades(self) -> list[TradeRecord]:
+        """List of all trade records."""
+        ...
+
+    @trades.setter
+    @abstractmethod
+    def trades(self, value: list[TradeRecord]) -> None:
+        """Set trade records."""
+        ...
+
     @abstractmethod
     def record_decision(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -174,9 +190,19 @@ class MetricsTracker(BaseMetricsTracker):
             risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
         """
         super().__init__(risk_free_rate)
-        self.trades: list[TradeRecord] = []
+        self._trades: list[TradeRecord] = []
         self._load_trades()
         logger.info(f"Initialized MetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
+
+    @property
+    def trades(self) -> list[TradeRecord]:
+        """List of all trade records."""
+        return self._trades
+
+    @trades.setter
+    def trades(self, value: list[TradeRecord]) -> None:
+        """Set trade records."""
+        self._trades = value
 
     def _load_trades(self) -> None:
         """Load trades from JSONL file."""
@@ -190,15 +216,15 @@ class MetricsTracker(BaseMetricsTracker):
                 for line in f:
                     if line.strip():
                         data = json.loads(line)
-                        self.trades.append(TradeRecord(**data))
-            logger.info(f"Loaded {len(self.trades)} trades from {trades_path}")
+                        self._trades.append(TradeRecord(**data))
+            logger.info(f"Loaded {len(self._trades)} trades from {trades_path}")
         except Exception as e:
             logger.error(f"Failed to load trades: {e}")
             raise
 
     def record_decision(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -237,7 +263,7 @@ class MetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        self.trades.append(trade)
+        self._trades.append(trade)
         self._append_to_jsonl(trade)
 
         return trade
@@ -320,8 +346,8 @@ class MetricsTracker(BaseMetricsTracker):
         losing = [t for t in closed if t.pnl and t.pnl < 0]
 
         total_pnl = sum(t.pnl for t in closed if t.pnl is not None)
-        avg_win = sum(t.pnl for t in winning) / len(winning) if winning else 0.0
-        avg_loss = sum(t.pnl for t in losing) / len(losing) if losing else 0.0
+        avg_win = sum(t.pnl for t in winning if t.pnl is not None) / len(winning) if winning else 0.0
+        avg_loss = sum(t.pnl for t in losing if t.pnl is not None) / len(losing) if losing else 0.0
         profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0.0
 
         win_rate = calculate_win_rate(closed)
@@ -478,7 +504,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     def __init__(
         self,
-        trade_repository: "TradeRepository",
+        trade_repository: TradeRepository,
         risk_free_rate: float | None = None,
     ) -> None:
         """Initialize database metrics tracker.
@@ -492,10 +518,24 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         self._trades_cache: list[TradeRecord] | None = None
         logger.info(f"Initialized DatabaseMetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
 
+    @property
+    def trades(self) -> list[TradeRecord]:
+        """List of all trade records (cached)."""
+        if self._trades_cache is None:
+            return []
+        return self._trades_cache
+
+    @trades.setter
+    def trades(self, value: list[TradeRecord]) -> None:
+        """Set trade records (updates cache)."""
+        self._trades_cache = value
+
     async def _get_trades(self) -> list[TradeRecord]:
         """Get all trades from database (cached)."""
         if self._trades_cache is None:
-            self._trades_cache = await self._repo.get_all()
+            trades = await self._repo.get_all()
+            self._trades_cache = cast("list[TradeRecord]", trades)
+        # Cache guaranteed non-None after conditional fetch above
         return self._trades_cache
 
     def _invalidate_cache(self) -> None:
@@ -504,7 +544,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     def record_decision(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -518,7 +558,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     async def record_decision_async(
         self,
-        result: "TradingWorkflowResult",
+        result: TradingWorkflowResult,
         strategy_name: str | None = None,
         is_paper_trade: bool = True,
     ) -> TradeRecord:
@@ -557,7 +597,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        await self._repo.create(trade)
+        await self._repo.create(trade)  # type: ignore[arg-type]
         self._invalidate_cache()
         return trade
 
@@ -614,7 +654,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
                     )
 
         self._invalidate_cache()
-        return closed_trades
+        return cast("list[TradeRecord]", closed_trades)
 
     def calculate_metrics(self, window: str = "all") -> PerformanceMetrics:
         """Calculate metrics (sync wrapper)."""
@@ -656,8 +696,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         losing = [t for t in closed if t.pnl and t.pnl < 0]
 
         total_pnl = sum(t.pnl for t in closed if t.pnl is not None)
-        avg_win = sum(t.pnl for t in winning) / len(winning) if winning else 0.0
-        avg_loss = sum(t.pnl for t in losing) / len(losing) if losing else 0.0
+        avg_win = sum(t.pnl for t in winning if t.pnl is not None) / len(winning) if winning else 0.0
+        avg_loss = sum(t.pnl for t in losing if t.pnl is not None) / len(losing) if losing else 0.0
         profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0.0
 
         win_rate = calculate_win_rate(closed)
@@ -727,6 +767,8 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         Args:
             path: Output path for JSON report
         """
+        import asyncio
+
         logger.info(f"Generating metrics report to {path}")
 
         report = {
@@ -737,13 +779,15 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             "last_7_days": (await self.calculate_metrics_async("7d")).model_dump(),
         }
 
-        report_path = Path(path)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
+        def _write_report() -> None:
+            report_path = Path(path)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
             with report_path.open("w") as f:
                 json.dump(report, f, indent=2, default=str)
-            logger.info(f"Saved metrics report to {report_path}")
+
+        try:
+            await asyncio.to_thread(_write_report)
+            logger.info(f"Saved metrics report to {path}")
         except Exception as e:
             logger.error(f"Failed to save report: {e}")
             raise
@@ -754,7 +798,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
 
 def create_metrics_tracker(
-    trade_repository: "TradeRepository | None" = None,
+    trade_repository: TradeRepository | None = None,
     risk_free_rate: float | None = None,
 ) -> BaseMetricsTracker:
     """Factory to create appropriate metrics tracker.

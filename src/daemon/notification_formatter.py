@@ -7,9 +7,13 @@ from src.daemon.notifications import NotificationMessage
 class NotificationFormatter:
     """Format notification messages for different channels."""
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "NotificationFormatter()"
+
     @staticmethod
     def _escape_markdown(text: str) -> str:
-        """Escape markdown special characters.
+        """Escape markdown special characters for Telegram Markdown (legacy) mode.
 
         Args:
             text: Raw text with potential markdown chars
@@ -17,6 +21,8 @@ class NotificationFormatter:
         Returns:
             Escaped text safe for Telegram Markdown
         """
+        # For Markdown (not MarkdownV2), only escape these chars:
+        # Periods don't need escaping in legacy Markdown mode
         special_chars = [
             "_",
             "*",
@@ -34,7 +40,6 @@ class NotificationFormatter:
             "|",
             "{",
             "}",
-            ".",
             "!",
         ]
         for char in special_chars:
@@ -84,7 +89,8 @@ class NotificationFormatter:
             f"{m.get('macd'):.2f}" if isinstance(m.get("macd"), (int, float)) else str(m.get("macd", "N/A"))
         )
 
-        reasoning = NotificationFormatter._escape_markdown(m.get("reasoning", "No reasoning provided"))
+        reasoning_obj = m.get("reasoning", "No reasoning provided")
+        reasoning = NotificationFormatter._escape_markdown(str(reasoning_obj))
         return (
             f"{signal_emoji} *{m['signal']} {m['symbol']}* at ${m['price']:.2f}{session_tag}\n\n"
             f"*Confidence:* {m['confidence']:.1%} | *Risk:* {m['risk_level']}\n"
@@ -107,7 +113,7 @@ class NotificationFormatter:
             f"{m.get('risk_score'):.2f}" if isinstance(m.get("risk_score"), (int, float)) else "N/A"
         )
 
-        rejection_reason = NotificationFormatter._escape_markdown(m["rejection_reason"])
+        rejection_reason = NotificationFormatter._escape_markdown(str(m["rejection_reason"]))
         return (
             f"⛔ *Trade Blocked: {m['symbol']}*\n\n"
             f"*Action:* {m['signal']} at ${m['price']:.2f}\n"
@@ -146,9 +152,17 @@ class NotificationFormatter:
             Formatted markdown string
         """
         m = message.metadata
-        services = ", ".join(m["failed_services"])
+        # Handle both "failed_services" (health check) and "unavailable_services" (degradation)
+        services_obj = m.get("failed_services") or m.get("unavailable_services") or []
+        services_raw = (
+            ", ".join(str(s) for s in services_obj) if isinstance(services_obj, list) else str(services_obj)
+        )
+        # Escape markdown special chars (e.g., underscores in "llm_anthropic")
+        services = NotificationFormatter._escape_markdown(services_raw)
+        # Use message.title to reflect originating context (health check vs degradation)
+        title = NotificationFormatter._escape_markdown(message.title)
         return (
-            f"⚠️ *API Health Check Failed*\n\n"
+            f"⚠️ *{title}*\n\n"
             f"*Services Down:* {services}\n\n"
             f"Analysis quality may be affected. Check health report."
         )

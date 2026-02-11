@@ -2,35 +2,38 @@
 
 import asyncio
 import contextlib
+import inspect
 import json
 import os
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from types import TracebackType
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
 
-import sniffio
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
 
 from src.metrics.execution import ExecutionMetricsCollector
+from src.models.message_models import (
+    AnthropicAssistantMessage,
+    AnthropicToolResultMessage,
+    OpenAIAssistantMessage,
+    OpenAIToolCall,
+    OpenAIToolFunction,
+    OpenAIToolResultMessage,
+    ToolResultContent,
+    ToolUseContent,
+)
 from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvider, OpenAIProvider
 from src.models.providers.base import ToolCall
+
+if TYPE_CHECKING:
+    from src.tools.models import ToolDefinition
 
 T = TypeVar("T", bound=BaseModel)
 
 load_dotenv()
-
-
-def _set_asyncio_context() -> None:
-    """Set sniffio context to asyncio to fix detection issues with nest_asyncio.
-
-    httpx/httpcore uses sniffio to detect the async library. When running under
-    nest_asyncio (used by CLI with asyncio.run), sniffio sometimes fails to detect
-    the context properly. This explicitly sets it to asyncio.
-    """
-    sniffio.current_async_library_cvar.set("asyncio")
 
 
 _DEFAULT_CONCURRENT_REQUESTS = 5
@@ -86,7 +89,7 @@ def _parse_max_concurrent_requests() -> int:
 # With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
 # OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
 MAX_CONCURRENT_REQUESTS = _parse_max_concurrent_requests()
-_semaphore_holder: dict[str, asyncio.Semaphore | int] = {}
+_semaphore_holder: dict[str, asyncio.Semaphore | int | None] = {}
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -103,7 +106,7 @@ def _get_semaphore() -> asyncio.Semaphore:
         _semaphore_holder["semaphore"] = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
         _semaphore_holder["loop_id"] = current_loop_id
 
-    return _semaphore_holder["semaphore"]
+    return cast("asyncio.Semaphore", _semaphore_holder["semaphore"])
 
 
 class ToolResult(BaseModel):
@@ -198,7 +201,6 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        _set_asyncio_context()
         messages = self._build_messages(prompt, system)
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
@@ -240,7 +242,6 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        _set_asyncio_context()
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
         try:
@@ -272,7 +273,6 @@ class LLMClient:
         Yields:
             Individual tokens as they're generated
         """
-        _set_asyncio_context()
         messages = self._build_messages(prompt, system)
         async with _get_semaphore():
             async for token in self._provider.astream(messages, temperature):
@@ -340,7 +340,6 @@ class LLMClient:
         Raises:
             StructuredOutputError: If response cannot be parsed or validated
         """
-        _set_asyncio_context()
         messages = self._build_messages(prompt, system)
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
@@ -363,7 +362,7 @@ class LLMClient:
     def complete_with_tools(  # noqa: PLR0913
         self,
         prompt: str,
-        tools: list[dict],
+        tools: list[ToolDefinition],
         tool_executor: Callable[[str, dict], str],
         system: str | None = None,
         temperature: float = 0.7,
@@ -374,7 +373,7 @@ class LLMClient:
 
         Args:
             prompt: User prompt
-            tools: List of tool definitions in OpenAI format
+            tools: List of tool definitions
             tool_executor: Function to execute tools (name, args) -> result
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
@@ -393,8 +392,8 @@ class LLMClient:
     async def acomplete_with_tools(  # noqa: PLR0913
         self,
         prompt: str,
-        tools: list[dict],
-        tool_executor: Callable[[str, dict], str],
+        tools: list[ToolDefinition],
+        tool_executor: Callable[[str, dict], str] | Callable[[str, dict], Awaitable[str]],
         system: str | None = None,
         temperature: float = 0.7,
         max_tool_calls: int = 5,
@@ -404,8 +403,8 @@ class LLMClient:
 
         Args:
             prompt: User prompt
-            tools: List of tool definitions in OpenAI format
-            tool_executor: Function to execute tools (name, args) -> result
+            tools: List of tool definitions
+            tool_executor: Function to execute tools (name, args) -> result (sync or async)
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
             max_tool_calls: Maximum tool calls per completion
@@ -414,9 +413,11 @@ class LLMClient:
         Returns:
             Final text response after tool execution
         """
-        _set_asyncio_context()
         messages: list[dict] = self._build_messages(prompt, system)
         tool_calls_made = 0
+
+        # Convert ToolDefinition models to dicts for provider
+        tools_dict = [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in tools]
 
         while tool_calls_made < max_tool_calls:
             start = time.perf_counter() if self._metrics_collector else None
@@ -424,7 +425,7 @@ class LLMClient:
             try:
                 async with _get_semaphore():
                     text_response, tool_calls = await self._provider.acomplete_with_tools(
-                        messages, tools, temperature
+                        messages, tools_dict, temperature
                     )
             except Exception as e:
                 error_msg = str(e)
@@ -448,7 +449,7 @@ class LLMClient:
             # Execute tools and add results
             for tool_call in tool_calls:
                 tool_calls_made += 1
-                result = self._execute_tool(tool_call, tool_executor)
+                result = await self._execute_tool_async(tool_call, tool_executor)
 
                 if on_tool_call:
                     on_tool_call(tool_call.name, tool_call.arguments, result)
@@ -462,39 +463,73 @@ class LLMClient:
     def _format_tool_call_message(self, tool_calls: list[ToolCall]) -> dict:
         """Format tool calls for assistant message."""
         if self.provider == "anthropic":
-            content = []
-            for tc in tool_calls:
-                content.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.arguments})
-            return {"role": "assistant", "content": content}
+            content = [ToolUseContent(id=tc.id, name=tc.name, input=tc.arguments) for tc in tool_calls]
+            message = AnthropicAssistantMessage(content=content)
+            return message.model_dump(mode="json", exclude_none=True)
         # OpenAI format
-        return {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
-                }
-                for tc in tool_calls
-            ],
-        }
+        openai_tool_calls = [
+            OpenAIToolCall(
+                id=tc.id,
+                function=OpenAIToolFunction(name=tc.name, arguments=json.dumps(tc.arguments)),
+            )
+            for tc in tool_calls
+        ]
+        message = OpenAIAssistantMessage(tool_calls=openai_tool_calls)
+        message_dict = message.model_dump(mode="json", exclude_none=True)
+        # Ensure OpenAI assistant tool-call messages always include an explicit content field
+        if "content" not in message_dict:
+            message_dict["content"] = None
+        return message_dict
 
     def _format_tool_result_message(self, tool_call: ToolCall, result: str) -> dict:
         """Format tool result for message."""
         if self.provider == "anthropic":
-            return {
-                "role": "user",
-                "content": [{"type": "tool_result", "tool_use_id": tool_call.id, "content": result}],
-            }
+            content = [ToolResultContent(tool_use_id=tool_call.id, content=result)]
+            message = AnthropicToolResultMessage(content=content)
+            return message.model_dump(mode="json", exclude_none=True)
         # OpenAI format
-        return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+        message = OpenAIToolResultMessage(tool_call_id=tool_call.id, content=result)
+        return message.model_dump(mode="json", exclude_none=True)
 
     def _execute_tool(self, tool_call: ToolCall, executor: Callable[[str, dict], str]) -> str:
         """Execute a tool call and handle errors."""
         logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
         try:
             return executor(tool_call.name, tool_call.arguments)
+        except Exception as e:
+            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            return f"Tool '{tool_call.name}' failed: {e}"
+
+    async def _execute_tool_async(
+        self,
+        tool_call: ToolCall,
+        executor: Callable[[str, dict], str] | Callable[[str, dict], Awaitable[str]],
+    ) -> str:
+        """Execute a tool call (sync or async) and handle errors.
+
+        Args:
+            tool_call: Tool call details (name, args, id)
+            executor: Sync or async executor function
+
+        Returns:
+            Tool execution result as string
+        """
+        logger.debug(f"Executing tool: {tool_call.name} with args: {tool_call.arguments}")
+        try:
+            # Check if executor is async function
+            if inspect.iscoroutinefunction(executor):
+                async_executor = cast("Callable[[str, dict], Awaitable[str]]", executor)
+                return await async_executor(tool_call.name, tool_call.arguments)
+
+            # Sync executor - offload to thread to avoid blocking event loop
+            sync_executor = cast("Callable[[str, dict], str]", executor)
+            result = await asyncio.to_thread(sync_executor, tool_call.name, tool_call.arguments)
+
+            # Handle edge case: sync function returns awaitable (e.g., coroutine, Future, Task)
+            if inspect.isawaitable(result):
+                return await result
+
+            return result
         except Exception as e:
             logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
             return f"Tool '{tool_call.name}' failed: {e}"
@@ -514,7 +549,7 @@ class LLMClient:
             task = loop.create_task(self.close())
             task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
-    def __enter__(self) -> "LLMClient":
+    def __enter__(self) -> LLMClient:
         """Enter sync context manager."""
         return self
 
@@ -527,7 +562,7 @@ class LLMClient:
         """Exit sync context manager and ensure cleanup."""
         self._schedule_close()
 
-    async def __aenter__(self) -> "LLMClient":
+    async def __aenter__(self) -> LLMClient:
         """Enter async context manager."""
         return self
 

@@ -314,6 +314,7 @@ class TestCandidatesCommands:
             result = handler._handle_candidates_add(["AAPL"], state, "")
 
             assert result.success is True
+            assert result.data is not None, "Expected data dict on success"
             assert "AAPL" in result.data["added"]
             mock_exporter.save_to_watchlist.assert_called_once()
 

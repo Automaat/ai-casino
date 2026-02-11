@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, State, dcc, html
+from dash import MATCH, Dash, Input, Output, State, dcc, html
 
 if TYPE_CHECKING:
     from src.dashboard.api_client import DaemonAPIClient
 
 
-def render(client: "DaemonAPIClient") -> list:
+def render(client: DaemonAPIClient) -> list:  # noqa: ARG001
     """Render Signals tab content.
 
     Args:
@@ -20,28 +20,8 @@ def render(client: "DaemonAPIClient") -> list:
     Returns:
         Tab content components
     """
-    analyses_resp = client.get_analyses(limit=200)
-
-    if analyses_resp.returned_count == 0:
-        return [dbc.Alert("No analyses yet", color="info")]
-
-    # Serialize analyses for dcc.Store
-    analyses_data = [
-        {
-            "timestamp": a.timestamp.isoformat(),
-            "symbol": a.symbol,
-            "signal": a.signal,
-            "confidence": a.confidence,
-            "rsi": a.rsi,
-            "macd_hist": a.macd_hist,
-            "executed_trade": a.executed_trade,
-            "is_paper_trade": a.is_paper_trade,
-            "trading_session": a.trading_session,
-        }
-        for a in analyses_resp.analyses
-    ]
-
-    unique_symbols = sorted({a.symbol for a in analyses_resp.analyses})
+    # Initial data loaded by interval callback
+    unique_symbols = []  # Will be populated dynamically
 
     filter_controls = dbc.Card(
         dbc.CardBody(
@@ -83,8 +63,8 @@ def render(client: "DaemonAPIClient") -> list:
                                 html.Label("Date Range"),
                                 dcc.DatePickerRange(
                                     id="signals-filter-date-range",
-                                    start_date=(datetime.now(UTC) - timedelta(days=7)).date(),
-                                    end_date=datetime.now(UTC).date(),
+                                    start_date=datetime.now(UTC) - timedelta(days=7),
+                                    end_date=datetime.now(UTC),
                                     display_format="YYYY-MM-DD",
                                 ),
                             ],
@@ -98,32 +78,141 @@ def render(client: "DaemonAPIClient") -> list:
     )
 
     return [
-        dcc.Store(id="signals-data-store", data=analyses_data),
-        html.H4(f"Signal History ({analyses_resp.returned_count}/{analyses_resp.total_count})"),
+        dcc.Store(id="signals-data-store", data=None),
+        html.Div(id="signals-timestamp", className="text-muted small mb-3", children="Last updated: -"),
+        html.Div(id="signals-header"),
         filter_controls,
         html.Div(id="signals-filtered-content"),
     ]
 
 
-def register_callbacks(app: Dash) -> None:
+def register_callbacks(app: Dash) -> None:  # noqa: C901
     """Register Signals tab filter callbacks.
 
     Args:
         app: Dash app instance
     """
+    client = app.api_client  # type: ignore[attr-defined]
+
+    @app.callback(
+        Output("signals-data-store", "data"),
+        Input("interval-component", "n_intervals"),
+        State("tabs", "active_tab"),
+        State("signals-data-store", "data"),
+    )
+    def update_signals_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
+        """Update Signals store when tab active.
+
+        Args:
+            n_intervals: Interval counter
+            active_tab: Active tab ID
+            current_data: Current store data
+
+        Returns:
+            Serialized analyses data with timestamp
+        """
+        from datetime import UTC, datetime
+
+        from dash.exceptions import PreventUpdate
+        from loguru import logger
+
+        if active_tab != "signals":
+            raise PreventUpdate
+
+        try:
+            analyses_resp = client.get_analyses(limit=200)
+
+            return {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "returned_count": analyses_resp.returned_count,
+                "total_count": analyses_resp.total_count,
+                "analyses": [
+                    {
+                        "timestamp": a.timestamp.isoformat(),
+                        "symbol": a.symbol,
+                        "signal": a.signal,
+                        "confidence": a.confidence,
+                        "rsi": a.rsi,
+                        "macd_hist": a.macd_hist,
+                        "executed_trade": a.executed_trade,
+                        "is_paper_trade": a.is_paper_trade,
+                        "trading_session": a.trading_session,
+                        "reasoning": a.reasoning,
+                    }
+                    for a in analyses_resp.analyses
+                ],
+            }
+        except Exception as e:
+            logger.error(f"Signals refresh failed: {e}")
+            return current_data or {}
+
+    @app.callback(
+        Output("signals-filter-symbol", "options"),
+        Input("signals-data-store", "data"),
+    )
+    def update_symbol_options(data: dict | None) -> list[dict]:
+        """Update symbol filter options from store.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Symbol options list
+        """
+        if not data or not data.get("analyses"):
+            return []
+        symbols = sorted({a["symbol"] for a in data["analyses"]})
+        return [{"label": s, "value": s} for s in symbols]
+
+    @app.callback(
+        Output("signals-timestamp", "children"),
+        Input("signals-data-store", "data"),
+    )
+    def update_signals_timestamp(data: dict | None) -> str:
+        """Update timestamp display.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Timestamp text
+        """
+        from datetime import datetime
+
+        if not data or "timestamp" not in data:
+            return "Last updated: -"
+        ts = datetime.fromisoformat(data["timestamp"])
+        return f"Last updated: {ts.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    @app.callback(
+        Output("signals-header", "children"),
+        Input("signals-data-store", "data"),
+    )
+    def update_signals_header(data: dict | None) -> str | html.H4:
+        """Update signals header.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Header text
+        """
+        if not data:
+            return ""
+        return html.H4(f"Signal History ({data.get('returned_count', 0)}/{data.get('total_count', 0)})")
 
     @app.callback(
         Output("signals-filtered-content", "children"),
         [
+            Input("signals-data-store", "data"),
             Input("signals-filter-symbol", "value"),
             Input("signals-filter-signal-type", "value"),
             Input("signals-filter-date-range", "start_date"),
             Input("signals-filter-date-range", "end_date"),
         ],
-        State("signals-data-store", "data"),
     )
     def filter_signals(
-        symbols: list, signal_types: list, start_date: str, end_date: str, analyses_data: list
+        store_data: dict | None, symbols: list, signal_types: list, start_date: str, end_date: str
     ) -> list:
         """Filter signals based on user selection.
 
@@ -132,13 +221,15 @@ def register_callbacks(app: Dash) -> None:
             signal_types: Selected signal types list
             start_date: Start date string
             end_date: End date string
-            analyses_data: Cached analyses from dcc.Store
+            store_data: Cached data from dcc.Store
 
         Returns:
             Filtered content (charts + table)
         """
-        if not analyses_data:
+        if not store_data or not store_data.get("analyses"):
             return [dbc.Alert("No data available", color="info")]
+
+        analyses_data = store_data["analyses"]
 
         # Apply filters
         filtered = _apply_filters(analyses_data, symbols, signal_types, start_date, end_date)
@@ -166,9 +257,10 @@ def register_callbacks(app: Dash) -> None:
             html.Hr(),
         ]
 
-        # Build table
+        # Build table with collapsible rows
         table_rows = []
-        for analysis in filtered[:50]:
+
+        for idx, analysis in enumerate(filtered[:50]):
             signal_color = (
                 "success"
                 if analysis["signal"] == "BUY"
@@ -182,17 +274,24 @@ def register_callbacks(app: Dash) -> None:
 
             rsi_str = f"{analysis['rsi']:.1f}" if analysis["rsi"] is not None else "-"
             macd_str = f"{analysis['macd_hist']:.3f}" if analysis["macd_hist"] is not None else "-"
-
             timestamp_obj = datetime.fromisoformat(analysis["timestamp"])
 
+            # Main row (clickable to expand)
             table_rows.append(
                 html.Tr(
                     [
                         html.Td(
                             [
+                                html.Span(
+                                    "▶ ",
+                                    id={"type": "expand-icon", "index": idx},
+                                    style={"cursor": "pointer", "user-select": "none"},
+                                ),
                                 timestamp_obj.strftime("%Y-%m-%d %H:%M:%S"),
                                 session_badge,
-                            ]
+                            ],
+                            id={"type": "expand-trigger", "index": idx},
+                            style={"cursor": "pointer"},
                         ),
                         html.Td(analysis["symbol"]),
                         html.Td(html.Span(analysis["signal"], className=f"badge bg-{signal_color}")),
@@ -201,7 +300,41 @@ def register_callbacks(app: Dash) -> None:
                         html.Td(macd_str),
                         html.Td("✓" if analysis["executed_trade"] else "✗"),
                         html.Td("📄" if analysis["is_paper_trade"] else "💵"),
-                    ]
+                    ],
+                    id={"type": "table-row", "index": idx},
+                )
+            )
+
+            # Reasoning collapse row (hidden by default)
+            reasoning_content = (
+                html.Ul([html.Li(r) for r in analysis.get("reasoning", [])])
+                if analysis.get("reasoning")
+                else html.P("No reasoning available", className="text-muted fst-italic")
+            )
+
+            table_rows.append(
+                html.Tr(
+                    [
+                        html.Td(
+                            dbc.Collapse(
+                                dbc.Card(
+                                    dbc.CardBody(
+                                        [
+                                            html.Strong("Decision Reasoning:"),
+                                            reasoning_content,
+                                        ],
+                                        className="bg-light",
+                                    ),
+                                    className="border-0",
+                                ),
+                                id={"type": "collapse", "index": idx},
+                                is_open=False,
+                            ),
+                            colSpan=8,
+                            className="p-0",
+                        )
+                    ],
+                    id={"type": "collapse-row", "index": idx},
                 )
             )
 
@@ -233,6 +366,29 @@ def register_callbacks(app: Dash) -> None:
             html.H5(f"Recent Signals ({len(filtered)} filtered, showing {min(50, len(filtered))})"),
             table,
         ]
+
+    @app.callback(
+        Output({"type": "collapse", "index": MATCH}, "is_open"),
+        Output({"type": "expand-icon", "index": MATCH}, "children"),
+        Input({"type": "expand-trigger", "index": MATCH}, "n_clicks"),
+        State({"type": "collapse", "index": MATCH}, "is_open"),
+        prevent_initial_call=True,
+    )
+    def toggle_reasoning(n_clicks: int, is_open: bool) -> tuple[bool, str]:
+        """Toggle reasoning collapse on row click.
+
+        Args:
+            n_clicks: Number of clicks on trigger
+            is_open: Current collapse state
+
+        Returns:
+            Tuple of (new_is_open, icon_text)
+        """
+        if n_clicks:
+            new_state = not is_open
+            icon = "▼ " if new_state else "▶ "
+            return new_state, icon
+        return is_open, "▶ "
 
 
 def _apply_filters(analyses: list, symbols: list, signal_types: list, start_date: str, end_date: str) -> list:

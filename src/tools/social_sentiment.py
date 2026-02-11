@@ -7,56 +7,68 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.agents.social import SocialSentimentAnalysis
+    from src.di.container import AppContainer
 
 
 class GetSocialSentimentTool(BaseTool):
     """Tool to analyze social sentiment from Reddit and Finnhub."""
+
+    def __init__(self, container: AppContainer | None = None) -> None:
+        """Initialize tool with optional container.
+
+        Args:
+            container: DI container (auto-created if not provided)
+        """
+        from src.di.container import create_container
+
+        self._container = container or create_container()
 
     @property
     def name(self) -> str:
         """Tool name."""
         return "get_social_sentiment"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Analyze social sentiment for a stock from Reddit (WSB, r/stocks, r/investing) "
                     "and Finnhub social data. Returns social score, momentum, WSB mentions, "
                     "and sentiment breakdown."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
-    def execute(self, symbol: str) -> str:
+    def execute(self, **kwargs: str | int | float | bool) -> str:
         """Analyze social sentiment for a stock.
 
         Args:
-            symbol: Stock ticker symbol
+            **kwargs: Tool arguments (symbol: str)
 
         Returns:
             Formatted social sentiment summary
         """
+        symbol = str(kwargs["symbol"])
+
         logger.info(f"Analyzing social sentiment for {symbol}")
 
         def run_in_thread() -> str:
@@ -79,23 +91,12 @@ class GetSocialSentimentTool(BaseTool):
         Returns:
             Formatted analysis summary
         """
-        from src.agents.social import SocialSentimentAnalyst
-        from src.data.finnhub import FinnhubFetcher
-        from src.data.reddit import RedditFetcher
-        from src.models.llm import LLMClient
-        from src.models.sentiment import get_finbert_sentiment
-
-        llm = LLMClient()
-        finnhub = FinnhubFetcher()
-        reddit = RedditFetcher()
-        finbert = get_finbert_sentiment()
-
-        analyst = SocialSentimentAnalyst(llm, finnhub, reddit, finbert)
+        analyst = self._container.social_sentiment_analyst()
         result = await analyst.analyze(symbol)
 
         return self._format_result(symbol, result)
 
-    def _format_result(self, symbol: str, result: "SocialSentimentAnalysis") -> str:
+    def _format_result(self, symbol: str, result: SocialSentimentAnalysis) -> str:
         """Format social sentiment result as markdown.
 
         Args:

@@ -116,7 +116,6 @@ class AnthropicProvider(BaseLLMProvider):
         logger.debug(f"Anthropic response length: {len(content)} chars")
         return content
 
-    @retry(max_attempts=3, delay=1.0)
     async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
         """Stream completion tokens."""
         system, chat_messages = self._extract_system(messages)

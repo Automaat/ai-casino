@@ -1,16 +1,10 @@
 """Tests for GetSocialSentimentTool."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.tools.social_sentiment import GetSocialSentimentTool
-
-
-@pytest.fixture
-def tool():
-    """Create GetSocialSentimentTool."""
-    return GetSocialSentimentTool()
 
 
 @pytest.fixture
@@ -31,17 +25,20 @@ def mock_analysis():
 class TestGetSocialSentimentTool:
     """Tests for GetSocialSentimentTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = GetSocialSentimentTool(container=test_container_full)
         assert tool.name == "get_social_sentiment"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool doesn't require confirmation."""
+        tool = GetSocialSentimentTool(container=test_container_full)
         assert tool.requires_confirmation is False
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
-        definition = tool.get_tool_definition()
+        tool = GetSocialSentimentTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "get_social_sentiment"
@@ -51,57 +48,63 @@ class TestGetSocialSentimentTool:
         assert "symbol" in params["properties"]
         assert "symbol" in params["required"]
 
-    def test_execute_success(self, tool, mock_analysis):
+    def test_execute_success(self, test_container_full, mock_analysis):
         """Test successful execution."""
-        with (
-            patch("src.models.llm.LLMClient"),
-            patch("src.data.finnhub.FinnhubFetcher"),
-            patch("src.data.reddit.RedditFetcher"),
-            patch("src.models.sentiment.get_finbert_sentiment"),
-            patch("src.agents.social.SocialSentimentAnalyst") as mock_analyst_cls,
-        ):
-            mock_instance = MagicMock()
-            mock_instance.analyze = AsyncMock(return_value=mock_analysis)
-            mock_analyst_cls.return_value = mock_instance
+        from dependency_injector import providers
 
-            result = tool.execute("AAPL")
+        from src.agents.social import SocialSentimentAnalyst
 
-            assert "AAPL" in result
-            assert "BULLISH" in result
-            assert "0.65" in result
-            assert "rising" in result
-            assert "42" in result
-            mock_instance.analyze.assert_called_once_with("AAPL")
+        tool = GetSocialSentimentTool(container=test_container_full)
 
-    def test_execute_uppercase_symbol(self, tool, mock_analysis):
+        mock_analyst = MagicMock(spec=SocialSentimentAnalyst)
+        mock_analyst.analyze = AsyncMock(return_value=mock_analysis)
+        test_container_full.social_sentiment_analyst.override(providers.Factory(lambda: mock_analyst))
+
+        result = tool.execute(symbol="AAPL")
+
+        assert "AAPL" in result
+        assert "BULLISH" in result
+        assert "0.65" in result
+        assert "rising" in result
+        assert "42" in result
+        mock_analyst.analyze.assert_called_once_with("AAPL")
+
+    def test_execute_uppercase_symbol(self, test_container_full, mock_analysis):
         """Test that symbol is uppercased."""
-        with (
-            patch("src.models.llm.LLMClient"),
-            patch("src.data.finnhub.FinnhubFetcher"),
-            patch("src.data.reddit.RedditFetcher"),
-            patch("src.models.sentiment.get_finbert_sentiment"),
-            patch("src.agents.social.SocialSentimentAnalyst") as mock_analyst_cls,
-        ):
-            mock_instance = MagicMock()
-            mock_instance.analyze = AsyncMock(return_value=mock_analysis)
-            mock_analyst_cls.return_value = mock_instance
+        from dependency_injector import providers
 
-            tool.execute("aapl")
+        from src.agents.social import SocialSentimentAnalyst
 
-            mock_instance.analyze.assert_called_once_with("AAPL")
+        tool = GetSocialSentimentTool(container=test_container_full)
 
-    def test_execute_error_handling(self, tool):
+        mock_analyst = MagicMock(spec=SocialSentimentAnalyst)
+        mock_analyst.analyze = AsyncMock(return_value=mock_analysis)
+        test_container_full.social_sentiment_analyst.override(providers.Factory(lambda: mock_analyst))
+
+        tool.execute(symbol="aapl")
+
+        mock_analyst.analyze.assert_called_once_with("AAPL")
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on failure."""
-        with (
-            patch("src.models.llm.LLMClient", side_effect=Exception("API error")),
-        ):
-            result = tool.execute("INVALID")
+        from dependency_injector import providers
 
-            assert "Social sentiment analysis failed" in result
-            assert "API error" in result
+        from src.agents.social import SocialSentimentAnalyst
 
-    def test_format_result_none_sentiments(self, tool):
+        tool = GetSocialSentimentTool(container=test_container_full)
+
+        mock_analyst = MagicMock(spec=SocialSentimentAnalyst)
+        mock_analyst.analyze = AsyncMock(side_effect=Exception("API error"))
+        test_container_full.social_sentiment_analyst.override(providers.Factory(lambda: mock_analyst))
+
+        result = tool.execute(symbol="INVALID")
+
+        assert "Social sentiment analysis failed" in result
+        assert "API error" in result
+
+    def test_format_result_none_sentiments(self, test_container_full):
         """Test formatting with None sentiment values."""
+        tool = GetSocialSentimentTool(container=test_container_full)
         analysis = MagicMock()
         analysis.sentiment_label = "NEUTRAL"
         analysis.overall_social_score = 0.0
@@ -117,7 +120,8 @@ class TestGetSocialSentimentTool:
         assert "N/A" in result
         assert "NEUTRAL" in result
 
-    def test_repr(self, tool):
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = GetSocialSentimentTool(container=test_container_full)
         repr_str = repr(tool)
         assert "GetSocialSentimentTool" in repr_str

@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher
-from src.daemon.events import AnomalyEvent, Gap, PriceMove, VolumeSpike
+from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
 
 
@@ -26,6 +26,7 @@ class AnomalyWatcher(EventWatcher):
     def __init__(  # noqa: PLR0913
         self,
         historical_cache: HistoricalCache,
+        market_fetcher: MarketDataFetcher,
         poll_interval: int = 900,
         relevance_threshold: float = 0.7,
         cooldown_minutes: int = 15,
@@ -40,6 +41,7 @@ class AnomalyWatcher(EventWatcher):
 
         Args:
             historical_cache: Shared cache for market data
+            market_fetcher: Market data fetcher for Alpha Vantage
             poll_interval: Seconds between poll cycles
             relevance_threshold: Minimum relevance score to trigger analysis
             cooldown_minutes: Minutes to wait before re-analyzing same symbol
@@ -57,6 +59,7 @@ class AnomalyWatcher(EventWatcher):
             max_concurrent_analyses=max_concurrent_analyses,
             historical_cache=historical_cache,
         )
+        self._market_fetcher = market_fetcher
         self.volume_spike_multiplier = volume_spike_multiplier
         self.price_move_threshold_pct = price_move_threshold_pct
         self.gap_threshold_pct = gap_threshold_pct
@@ -64,7 +67,6 @@ class AnomalyWatcher(EventWatcher):
         self.max_symbols_per_cycle = max_symbols_per_cycle
 
         # State tracking
-        self._market_fetcher: MarketDataFetcher | None = None
         self._volume_baselines: OrderedDict[str, float] = OrderedDict()  # LRU cache
         self._previous_close_cache: dict[str, float] = {}
         self._last_cache_refresh_date: datetime | None = None
@@ -77,12 +79,8 @@ class AnomalyWatcher(EventWatcher):
         )
 
     def _init_components(self) -> None:
-        """Lazy initialization including market fetcher."""
+        """Lazy initialization of parent components."""
         super()._init_components()
-        if self._market_fetcher is None:
-            self._market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=True, historical_cache=self._historical_cache
-            )
 
     def _get_next_symbols(self) -> list[str]:
         """Get next batch of symbols using round-robin rotation.
@@ -144,6 +142,9 @@ class AnomalyWatcher(EventWatcher):
 
     async def _detect_volume_spike(self, symbol: str, current_volume: float) -> VolumeSpike | None:
         """Detect volume spike for symbol."""
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         if symbol not in self._volume_baselines:
             # Establish baseline from daily data
             try:
@@ -194,6 +195,9 @@ class AnomalyWatcher(EventWatcher):
 
     async def _detect_gap(self, symbol: str, open_price: float) -> Gap | None:
         """Detect gap for symbol."""
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         if symbol not in self._previous_close_cache:
             # Fetch prev close from daily data
             try:
@@ -234,6 +238,9 @@ class AnomalyWatcher(EventWatcher):
         Returns:
             AnomalyEvent if anomalies detected, None otherwise
         """
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         # Fetch intraday data
         try:
             intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
@@ -248,7 +255,12 @@ class AnomalyWatcher(EventWatcher):
         # Aggregate current trading day bars
         latest_ts = intraday.data.index[-1]
         current_date = latest_ts.date()
-        day_bars = intraday.data[intraday.data.index.date == current_date]
+        index = intraday.data.index
+        if hasattr(index, "date"):
+            same_day_mask = index.date == current_date
+        else:
+            same_day_mask = index.map(lambda x: x.date()) == current_date
+        day_bars = intraday.data[same_day_mask]
 
         if day_bars.empty:
             day_bars = intraday.data.iloc[[-1]]
@@ -292,9 +304,12 @@ class AnomalyWatcher(EventWatcher):
 
         return None
 
-    async def _fetch_events(self) -> list[AnomalyEvent]:
+    async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
         self._init_components()
+        if self._market_fetcher is None:
+            msg = "Market fetcher not initialized"
+            raise RuntimeError(msg)
         self._refresh_previous_close_if_needed()
 
         if not self.watchlist:
@@ -305,12 +320,14 @@ class AnomalyWatcher(EventWatcher):
         if not symbols_to_check:
             return []
 
-        events: list[AnomalyEvent] = []
+        from typing import cast
+
+        events: list[BaseEvent] = []
         for symbol in symbols_to_check:
             try:
                 event = await self._process_symbol_for_anomalies(symbol)
                 if event:
-                    events.append(event)
+                    events.append(cast("BaseEvent", event))
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {e}")
                 continue

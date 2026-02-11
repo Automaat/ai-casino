@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel
 
-from src.metrics.tracker import MetricsTracker
+from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
@@ -63,7 +63,7 @@ class MetaAgent:
         self,
         llm_client: LLMClient,
         regime_detector: MarketRegimeDetector,
-        metrics_tracker: MetricsTracker | None = None,
+        metrics_tracker: BaseMetricsTracker | None = None,
         param_store: OptimizedParamStore | None = None,
     ) -> None:
         """Initialize meta-agent.
@@ -156,6 +156,8 @@ class MetaAgent:
         Args:
             weights: Current weights dict (modified in place)
         """
+        if not self.metrics_tracker:
+            return
         try:
             metrics = self.metrics_tracker.calculate_metrics("30d")
             if metrics.total_decisions == 0:
@@ -194,10 +196,24 @@ class MetaAgent:
         # Low confidence -> use ensemble with adjusted weights
         if regime_confidence < LOW_CONFIDENCE_THRESHOLD:
             weights = self._calculate_ensemble_weights(regime)
+            momentum_strategy = self._create_strategy("momentum", symbol)
+            mean_reversion_strategy = self._create_strategy("mean_reversion", symbol)
+            trend_following_strategy = self._create_strategy("trend_following", symbol)
+
+            if not isinstance(momentum_strategy, MomentumStrategy):
+                msg = f"Expected MomentumStrategy, got {type(momentum_strategy)}"
+                raise TypeError(msg)
+            if not isinstance(mean_reversion_strategy, MeanReversionStrategy):
+                msg = f"Expected MeanReversionStrategy, got {type(mean_reversion_strategy)}"
+                raise TypeError(msg)
+            if not isinstance(trend_following_strategy, TrendFollowingStrategy):
+                msg = f"Expected TrendFollowingStrategy, got {type(trend_following_strategy)}"
+                raise TypeError(msg)
+
             strategy = EnsembleStrategy(
-                momentum=self._create_strategy("momentum", symbol),
-                mean_reversion=self._create_strategy("mean_reversion", symbol),
-                trend_following=self._create_strategy("trend_following", symbol),
+                momentum=momentum_strategy,
+                mean_reversion=mean_reversion_strategy,
+                trend_following=trend_following_strategy,
                 weights=weights,
             )
             reasoning = (

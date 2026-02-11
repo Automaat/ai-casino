@@ -11,14 +11,10 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from src.agents.trump import COMPANY_TICKERS, TrumpAnalysis, TrumpAnalyst
-from src.cache.historical import HistoricalCache
-from src.data.fundamental import FundamentalDataFetcher
-from src.data.market import MarketDataFetcher
-from src.data.news import NewsFetcher
 from src.data.truth_social import TruthPost, TruthSocialFetcher
+from src.di.container import AppContainer
 from src.models.llm import LLMClient
-from src.models.sentiment import get_finbert_sentiment
-from src.workflows.trading import TradingWorkflow
+from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 console = Console()
@@ -53,25 +49,30 @@ class TrumpWatcher:
         self,
         poll_interval: int = 60,
         max_analyses: int = 5,
+        container: AppContainer | None = None,
     ) -> None:
         """Initialize Trump watcher.
 
         Args:
             poll_interval: Seconds between poll cycles
             max_analyses: Maximum stocks to analyze per cycle
+            container: Optional DI container (auto-created if not provided)
         """
+        from src.di.container import create_container
+
         self.poll_interval = poll_interval
         self.max_analyses = max_analyses
         self.running = False
         self._last_post_id: str | None = None
         self._last_check: datetime | None = None
+        self._container = container or create_container()
 
         # Lazy init
-        self._historical_cache = HistoricalCache()
+        self._historical_cache = self._container.historical_cache()
         self._fetcher: TruthSocialFetcher | None = None
         self._analyst: TrumpAnalyst | None = None
         self._workflow: TradingWorkflow | None = None
-        self._llm: LLMClient | None = None
+        self._llm: LLMClient | None = None  # Lazy init via container
 
         logger.info(f"TrumpWatcher initialized (poll_interval={poll_interval}s)")
 
@@ -81,36 +82,21 @@ class TrumpWatcher:
             self._fetcher = TruthSocialFetcher(historical_cache=self._historical_cache)
 
         if self._llm is None:
-            self._llm = LLMClient()
+            self._llm = self._container.llm_client()
 
         if self._analyst is None:
             self._analyst = TrumpAnalyst(self._llm)
 
         if self._workflow is None:
-            market_fetcher = MarketDataFetcher(
-                use_alpha_vantage=False, historical_cache=self._historical_cache
-            )
-            news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
-            finbert = get_finbert_sentiment()
-            fundamental_fetcher = FundamentalDataFetcher(historical_cache=self._historical_cache)
-
-            self._workflow = TradingWorkflow(
-                self._llm,
-                market_fetcher,
-                news_fetcher,
-                finbert,
-                fundamental_fetcher,
-                broker=None,
-                metrics_tracker=None,
-                use_meta_agent=True,
-                trump_mode=True,
-                historical_cache=self._historical_cache,
-            )
+            self._workflow = self._container.workflow_trump(historical_cache=self._historical_cache)
             logger.info("TrumpWatcher workflow initialized")
 
     async def _check_new_posts(self) -> list[TruthPost]:
         """Check for new posts since last check."""
         self._init_components()
+        if self._fetcher is None:
+            msg = "Failed to initialize TruthSocialFetcher"
+            raise RuntimeError(msg)
 
         if self._last_check is None:
             # First run: get posts from last hour
@@ -183,6 +169,10 @@ class TrumpWatcher:
 
     async def _llm_identify_stocks(self, posts: list[TruthPost]) -> list[str]:
         """Use LLM to identify affected stocks."""
+        if self._llm is None:
+            msg = "LLM client not initialized"
+            raise RuntimeError(msg)
+
         posts_text = "\n".join(f"- {self._sanitize_post_content(p.content)}" for p in posts[:5])
 
         prompt = f"""Based on these Truth Social posts from Donald Trump, identify up to 5 stock \
@@ -222,30 +212,70 @@ If no specific stocks are affected, return "NONE".
             trump_analysis: Trump analysis with market context
         """
         self._init_components()
+        if self._workflow is None:
+            msg = "Trading workflow not initialized"
+            raise RuntimeError(msg)
+
         logger.debug(
             f"Analyzing stocks with trump context: signal={trump_analysis.signal}, "
             f"confidence={trump_analysis.confidence:.2f}"
         )
 
-        results: dict[str, TradingWorkflowResult] = {}
         semaphore = asyncio.Semaphore(2)  # Limit concurrent analyses
+        workflow = self._workflow
 
         async def analyze_one(symbol: str) -> tuple[str, TradingWorkflowResult | None]:
             async with semaphore:
                 try:
-                    result = await self._workflow.analyze(symbol, period_days=30)
+                    result = await workflow.analyze(symbol, period_days=30)
                     return symbol, result
                 except Exception as e:
                     logger.error(f"Failed to analyze {symbol}: {e}")
                     return symbol, None
 
-        tasks = [analyze_one(s) for s in symbols]
-        raw_results = await asyncio.gather(*tasks)
+        # Wrap tasks to handle exceptions
+        async def safe_analyze(symbol: str) -> tuple[str, TradingWorkflowResult | None] | BaseException:
+            try:
+                return await analyze_one(symbol)
+            except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise
+                return e
 
-        for symbol, result in raw_results:
+        # Run analyses in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_analyze(s)) for s in symbols]
+
+        raw_results = [task.result() for task in task_results]
+        return self._process_analysis_results(raw_results, len(symbols))
+
+    def _process_analysis_results(
+        self,
+        raw_results: list[tuple[str, TradingWorkflowResult | None] | BaseException],
+        total_symbols: int,
+    ) -> dict[str, TradingWorkflowResult]:
+        """Process raw analysis results and extract successful ones.
+
+        Args:
+            raw_results: Raw results from parallel analyses
+            total_symbols: Total number of symbols analyzed
+
+        Returns:
+            Dict mapping symbol to successful analysis results
+        """
+        results: dict[str, TradingWorkflowResult] = {}
+        for entry in raw_results:
+            if isinstance(entry, BaseException):
+                if isinstance(entry, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise entry
+                logger.error(f"Analysis task failed: {entry}")
+                continue
+            symbol, result = entry
             if result:
                 results[symbol] = result
 
+        logger.debug(f"Analysis complete: {len(results)}/{total_symbols} successful")
         return results
 
     def _emit_signal(self, signal: TrumpSignal) -> None:
@@ -294,11 +324,15 @@ If no specific stocks are affected, return "NONE".
 
             logger.info(f"Found {len(new_posts)} new post(s)")
 
-            # Analyze trump posts
-            trump_analysis = await self._analyst.analyze(new_posts)
-
-            # Identify affected stocks
+            # Identify affected stocks (_identify_affected_stocks initializes components including _analyst)
             affected = await self._identify_affected_stocks(new_posts)
+
+            # Analyze trump posts (analyst guaranteed initialized by _identify_affected_stocks)
+            analyst = self._analyst
+            if analyst is None:
+                msg = "TrumpAnalyst not initialized after _identify_affected_stocks"
+                raise RuntimeError(msg)
+            trump_analysis = await analyst.analyze(new_posts)
 
             if not affected:
                 console.print("[dim]New post detected but no affected stocks identified[/dim]")

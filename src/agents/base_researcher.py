@@ -3,7 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from loguru import logger
 from pydantic import BaseModel
@@ -19,6 +19,8 @@ from src.prompts import PromptLoader
 
 if TYPE_CHECKING:
     from src.agents.trump import TrumpAnalysis
+
+TAnalysis = TypeVar("TAnalysis", bound=BaseModel)
 
 
 class ResearchDirection(StrEnum):
@@ -73,7 +75,7 @@ class BaseResearcher(ABC):
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
-        trump_analysis: "TrumpAnalysis | None" = None,
+        trump_analysis: TrumpAnalysis | None = None,
     ) -> BaseModel:
         """Construct thesis from all analyses.
 
@@ -96,6 +98,12 @@ class BaseResearcher(ABC):
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
 
+        def validate_llm_response(response: object) -> None:
+            """Validate LLM response has required thesis attribute."""
+            if not hasattr(response, "thesis"):
+                msg = "LLM response missing required thesis attribute"
+                raise AttributeError(msg)
+
         prompt = self._prompts.load("user", **prompt_vars)
         system_prompt = self._prompts.load("system")
 
@@ -103,10 +111,12 @@ class BaseResearcher(ABC):
             llm_response = await self.llm.astructured(
                 prompt, self.llm_response_model, system=system_prompt, temperature=0.5
             )
-            thesis = llm_response.thesis
+            # Access dynamic attributes - type checker sees BaseModel but runtime has specific fields
+            validate_llm_response(llm_response)
+            thesis = llm_response.thesis  # type: ignore[attr-defined]
             key_points = getattr(llm_response, self._get_key_points_field())
             target = getattr(llm_response, self._get_target_field())
-        except StructuredOutputError as e:
+        except (StructuredOutputError, AttributeError) as e:
             logger.warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
             thesis = self._extract_thesis(response)
@@ -171,7 +181,7 @@ class BaseResearcher(ABC):
         news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
-        trump_analysis: "TrumpAnalysis | None" = None,
+        trump_analysis: TrumpAnalysis | None = None,
     ) -> dict[str, str]:
         """Build LLM prompt variables from all analyses.
 

@@ -2,7 +2,7 @@
 
 import math
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import numpy as np
 import pandas as pd
@@ -59,7 +59,7 @@ class PortfolioRebalance(BaseModel):
     shares_to_trade: int | None = Field(default=None, description="Shares to buy/sell if broker available")
 
 
-def _raise_optimization_error(message: str) -> None:
+def _raise_optimization_error(message: str) -> NoReturn:
     """Raise optimization error with formatted message."""
     msg = f"Optimization failed: {message}"
     raise ValueError(msg)
@@ -71,7 +71,7 @@ class PortfolioOptimizer:
     def __init__(
         self,
         market_fetcher: MarketDataFetcher,
-        broker: "AlpacaBroker | None" = None,
+        broker: AlpacaBroker | None = None,
         period_days: int = 365,
     ) -> None:
         """Initialize portfolio optimizer.
@@ -100,6 +100,12 @@ class PortfolioOptimizer:
         logger.info(f"Optimizing max Sharpe for {len(symbols)} symbols")
         returns_df = self._fetch_returns_data(symbols)
 
+        # Initialize variables with defaults for type checker
+        cleaned_weights: dict[str, float] = {}
+        expected_return: float = 0.0
+        volatility: float = 0.0
+        sharpe: float = 0.0
+
         try:
             # Calculate mean returns and covariance
             mu = returns_df.mean() * 252  # Annualize
@@ -121,7 +127,7 @@ class PortfolioOptimizer:
 
             result = minimize(neg_sharpe, initial, method="SLSQP", bounds=bounds, constraints=constraints)
 
-            if result.success:
+            if result is not None and result.success:
                 weights = result.x
                 expected_return = np.dot(weights, mu)
                 volatility = np.sqrt(np.dot(weights, np.dot(cov, weights)))
@@ -129,7 +135,8 @@ class PortfolioOptimizer:
 
                 cleaned_weights = dict(zip(symbols, weights, strict=True))
             else:
-                _raise_optimization_error(result.message)
+                message = result.message if result is not None else "Optimization returned None"
+                _raise_optimization_error(message)
 
         except Exception as e:
             logger.warning(f"Optimization failed, falling back to equal weights: {e}")
@@ -163,6 +170,12 @@ class PortfolioOptimizer:
         logger.info(f"Optimizing min volatility for {len(symbols)} symbols")
         returns_df = self._fetch_returns_data(symbols)
 
+        # Initialize variables with defaults for type checker
+        cleaned_weights: dict[str, float] = {}
+        expected_return: float = 0.0
+        volatility: float = 0.0
+        sharpe: float = 0.0
+
         try:
             # Calculate mean returns and covariance
             mu = returns_df.mean() * 252
@@ -183,7 +196,7 @@ class PortfolioOptimizer:
                 portfolio_volatility, initial, method="SLSQP", bounds=bounds, constraints=constraints
             )
 
-            if result.success:
+            if result is not None and result.success:
                 weights = result.x
                 expected_return = np.dot(weights, mu)
                 volatility = np.sqrt(np.dot(weights, np.dot(cov, weights)))
@@ -191,7 +204,8 @@ class PortfolioOptimizer:
 
                 cleaned_weights = dict(zip(symbols, weights, strict=True))
             else:
-                _raise_optimization_error(result.message)
+                message = result.message if result is not None else "Optimization returned None"
+                _raise_optimization_error(message)
 
         except Exception as e:
             logger.warning(f"Optimization failed, falling back to equal weights: {e}")
@@ -363,6 +377,10 @@ class PortfolioOptimizer:
 
     def _calculate_shares_to_trade(self, rebalances: list[PortfolioRebalance]) -> None:
         """Calculate shares to trade for rebalancing (mutates rebalances list)."""
+        if self.broker is None:
+            logger.warning("Broker not configured, cannot calculate shares to trade")
+            return
+
         account_info = self.broker.get_account_info()
         portfolio_value = account_info.portfolio_value
 
@@ -406,7 +424,7 @@ class PortfolioOptimizer:
 
     def _validate_rebalance_action(self, rebalance: PortfolioRebalance, symbol: str) -> None:
         """Validate rebalance action matches share direction (mutates rebalance)."""
-        if rebalance.shares_to_trade == 0:
+        if rebalance.shares_to_trade is None or rebalance.shares_to_trade == 0:
             rebalance.action = "HOLD"
         elif rebalance.shares_to_trade < 0 and rebalance.action != "SELL":
             logger.warning(f"{symbol}: shares negative but action {rebalance.action}, correcting to SELL")

@@ -1,14 +1,10 @@
 """Portfolio rebalancing for daemon."""
 
-from typing import TYPE_CHECKING
-
 from loguru import logger
 from pydantic import BaseModel
 
+from src.data.broker import AlpacaBroker
 from src.optimization.portfolio import OptimizedPortfolio, PortfolioOptimizer, PortfolioRebalance
-
-if TYPE_CHECKING:
-    from src.data.broker import AlpacaBroker
 
 
 class RebalancingResult(BaseModel):
@@ -26,7 +22,7 @@ class DaemonRebalancer:
     def __init__(
         self,
         optimizer: PortfolioOptimizer,
-        broker: "AlpacaBroker | None",
+        broker: AlpacaBroker | None,
         rebalance_threshold: float,
     ) -> None:
         """Initialize daemon rebalancer.
@@ -43,6 +39,10 @@ class DaemonRebalancer:
             f"Initialized DaemonRebalancer (threshold={rebalance_threshold:.2%}, "
             f"auto_execute={'yes' if broker else 'no'})"
         )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"DaemonRebalancer(threshold={self.rebalance_threshold:.2%})"
 
     def run(self, watchlist: list[str], method: str, auto_execute: bool) -> RebalancingResult:
         """Run portfolio rebalancing.
@@ -144,11 +144,11 @@ class DaemonRebalancer:
                     symbol=rebalance.symbol, qty=shares, side=side, stop_loss_price=None
                 )
 
-                if order_status.filled:
+                if order_status.filled_at is not None and order_status.filled_avg_price is not None:
                     executed += 1
                     logger.info(
                         f"Executed {side.upper()} {shares} shares of {rebalance.symbol} "
-                        f"at ${order_status.avg_fill_price:.2f}"
+                        f"at ${order_status.filled_avg_price:.2f}"
                     )
                 else:
                     logger.warning(f"Order not filled: {rebalance.symbol} {side} {shares}")

@@ -114,12 +114,12 @@ class EarningsCalendarFetcher:
 
         # DataFrame format
         try:
-            if "Earnings Date" in calendar.index:
+            if hasattr(calendar, "index") and hasattr(calendar, "loc") and "Earnings Date" in calendar.index:
                 raw = calendar.loc["Earnings Date"]
                 if hasattr(raw, "iloc"):
                     return self._parse_date(raw.iloc[0])
                 return self._parse_date(raw)
-        except (KeyError, IndexError):
+        except KeyError, IndexError:
             # Missing or malformed earnings date entry; treat as no earnings date.
             logger.debug("Earnings date not found or malformed in calendar data; returning None.")
 
@@ -139,19 +139,19 @@ class EarningsCalendarFetcher:
             if eps is not None:
                 try:
                     return float(eps)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     return None
             return None
 
         # DataFrame format
         for key in ("Earnings Average", "EPS Estimate"):
             try:
-                if key in calendar.index:
+                if hasattr(calendar, "index") and hasattr(calendar, "loc") and key in calendar.index:
                     val = calendar.loc[key]
                     if hasattr(val, "iloc"):
                         val = val.iloc[0]
                     return float(val)
-            except (KeyError, IndexError, TypeError, ValueError):
+            except KeyError, IndexError, TypeError, ValueError:
                 continue
 
         return None

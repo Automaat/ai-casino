@@ -1,13 +1,67 @@
 """Position lifecycle management for daemon."""
 
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.daemon.config import PositionManagementConfig
-from src.data.broker import AlpacaBroker
+from src.data.broker import AlpacaBroker, BrokerPosition
 from src.workflows.types import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.database.engine import DatabaseEngine
+    from src.database.repositories.trade import TradeRepository
+
+
+def _make_task_cleanup_callback(task_set: set[asyncio.Task[Any]]) -> Callable[[asyncio.Task[object]], None]:
+    """Create callback that removes task from set and logs exceptions."""
+
+    def _cleanup_and_log(task: asyncio.Task[object]) -> None:
+        """Log exceptions and remove task from tracking set."""
+        task_set.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.opt(exception=exc).error("Background task failed")
+
+    return _cleanup_and_log
+
+
+class PositionContext(BaseModel):
+    """Position context for trader decisions."""
+
+    entry_price: float = Field(gt=0.0, description="Entry price for the position")
+    days_held: int = Field(ge=0, description="Number of days position has been held")
+    current_stop_loss: float = Field(gt=0.0, description="Current stop loss price")
+    profit_targets: list[float] = Field(default_factory=list, description="Profit target prices")
+    trailing_activated: bool = Field(default=False, description="Whether trailing stop is activated")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"PositionContext(entry={self.entry_price:.2f}, "
+            f"days={self.days_held}, stop={self.current_stop_loss:.2f})"
+        )
+
+
+class MarketEvent(BaseModel):
+    """Market event record."""
+
+    timestamp: datetime = Field(description="Event timestamp")
+    event_type: str = Field(description="Event type (HALT, NEWS, EARNINGS)")
+    symbol: str = Field(description="Stock ticker symbol")
+    description: str = Field(description="Event description")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"MarketEvent(type={self.event_type}, symbol={self.symbol})"
 
 
 class PositionRecord(BaseModel):
@@ -48,15 +102,26 @@ class PositionManagementAction(BaseModel):
 class PositionManager:
     """Manage position lifecycle (trailing stops, profit-taking, time exits, conviction scaling)."""
 
-    def __init__(self, broker: AlpacaBroker, config: PositionManagementConfig) -> None:
+    def __init__(
+        self,
+        broker: AlpacaBroker,
+        config: PositionManagementConfig,
+        database_engine: DatabaseEngine | None = None,
+        trade_repository: TradeRepository | None = None,
+    ) -> None:
         """Initialize position manager.
 
         Args:
             broker: Alpaca broker for order execution
             config: Position management configuration
+            database_engine: Optional database engine for creating per-task sessions
+            trade_repository: Optional trade repository for loading entry metadata
         """
         self.broker = broker
         self.config = config
+        self._database_engine = database_engine
+        self._trade_repository = trade_repository
+        self._pending_tasks: set[asyncio.Task[Any]] = set()  # Track background tasks
         logger.info(f"PositionManager initialized: {config}")
 
     def sync_with_broker(
@@ -75,60 +140,197 @@ class PositionManager:
         broker_info = self.broker.get_account_info()
         broker_positions = broker_info.positions
 
-        new_positions: list[PositionRecord] = []
-        updated_positions: list[PositionRecord] = []
-        closed_symbols: list[str] = []
+        new_positions = self._find_new_positions(state_positions, broker_positions)
+        updated_positions = self._find_updated_positions(state_positions, broker_positions)
+        closed_symbols = self._find_closed_positions(state_positions, broker_positions)
 
-        # Find new positions
+        return new_positions, updated_positions, closed_symbols
+
+    def _find_new_positions(
+        self, state_positions: dict[str, PositionRecord], broker_positions: dict[str, BrokerPosition]
+    ) -> list[PositionRecord]:
+        """Find new positions not in state."""
+        new_positions: list[PositionRecord] = []
         for symbol, broker_pos in broker_positions.items():
             if symbol not in state_positions:
                 logger.info(f"New position detected: {symbol}")
                 new_pos = self._create_position_from_broker(symbol, broker_pos)
                 new_positions.append(new_pos)
-            else:
-                # Update quantity if changed
+                self._persist_position_create(new_pos)
+        return new_positions
+
+    def _find_updated_positions(
+        self, state_positions: dict[str, PositionRecord], broker_positions: dict[str, BrokerPosition]
+    ) -> list[PositionRecord]:
+        """Find positions with updated quantities."""
+        updated_positions: list[PositionRecord] = []
+        for symbol, broker_pos in broker_positions.items():
+            if symbol in state_positions:
                 existing = state_positions[symbol]
                 if existing.current_qty != broker_pos.qty:
                     logger.info(f"Position qty changed: {symbol} {existing.current_qty} → {broker_pos.qty}")
                     existing.current_qty = broker_pos.qty
                     existing.last_updated = datetime.now(UTC)
                     updated_positions.append(existing)
+                    self._persist_position_update(existing)
+        return updated_positions
 
-        # Find closed positions
+    def _find_closed_positions(
+        self, state_positions: dict[str, PositionRecord], broker_positions: dict[str, BrokerPosition]
+    ) -> list[str]:
+        """Find positions closed at broker."""
+        closed_symbols: list[str] = []
         for symbol in state_positions:
             if symbol not in broker_positions:
                 logger.info(f"Position closed: {symbol}")
                 closed_symbols.append(symbol)
+                self._persist_position_delete(symbol)
+        return closed_symbols
 
-        return new_positions, updated_positions, closed_symbols
+    def _persist_position_create(self, position: PositionRecord) -> None:
+        """Persist new position to database."""
+        if self._database_engine:
+            try:
+                task = asyncio.create_task(self._async_persist_position_create(position))
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
+            except Exception as e:
+                logger.error(f"Failed to persist new position to database: {e}")
+                raise
 
-    def _create_position_from_broker(self, symbol: str, broker_pos: object) -> PositionRecord:
+    async def _async_persist_position_create(self, position: PositionRecord) -> None:
+        """Async helper to persist position with fresh session."""
+        from src.database.repositories.position import PositionRecordRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionRecordRepository(session)
+            await repository.create(position)  # type: ignore[bad-argument-type]
+        finally:
+            await session.close()
+
+    def _persist_position_update(self, position: PositionRecord) -> None:
+        """Persist position update to database."""
+        if self._database_engine:
+            try:
+                task = asyncio.create_task(self._async_persist_position_update(position))
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
+            except Exception as e:
+                logger.error(f"Failed to update position in database: {e}")
+                raise
+
+    async def _async_persist_position_update(self, position: PositionRecord) -> None:
+        """Async helper to persist position update with fresh session."""
+        from src.database.repositories.position import PositionRecordRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionRecordRepository(session)
+            await repository.update(position)  # type: ignore[bad-argument-type]
+        finally:
+            await session.close()
+
+    def _persist_position_delete(self, symbol: str) -> None:
+        """Delete position from database."""
+        if self._database_engine:
+            try:
+                task = asyncio.create_task(self._async_persist_position_delete(symbol))
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
+            except Exception as e:
+                logger.error(f"Failed to delete position from database: {e}")
+                raise
+
+    async def _async_persist_position_delete(self, symbol: str) -> None:
+        """Async helper to delete position with fresh session."""
+        from src.database.repositories.position import PositionRecordRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionRecordRepository(session)
+            await repository.delete_by_symbol(symbol)
+        finally:
+            await session.close()
+
+    def _create_position_from_broker(self, symbol: str, broker_pos: BrokerPosition) -> PositionRecord:
         """Create PositionRecord from broker position.
 
         Args:
             symbol: Stock ticker
-            broker_pos: BrokerPosition from Alpaca
+            broker_pos: BrokerPosition from broker API
 
         Returns:
             New PositionRecord
         """
-        entry_price = broker_pos.avg_entry_price
+        entry_price = float(broker_pos.avg_entry_price)
         profit_targets = self._calculate_profit_targets(entry_price)
         initial_stop = self._calculate_initial_stop_loss(entry_price)
 
-        # Using defaults: timestamp=now(), confidence=0.75 (#272)
+        # Load entry metadata from trades table if available (#272)
+        entry_timestamp, entry_confidence, entry_signal = self._load_entry_metadata(symbol)
+
         return PositionRecord(
             symbol=symbol,
-            entry_timestamp=datetime.now(UTC),
+            entry_timestamp=entry_timestamp,
             entry_price=entry_price,
-            entry_signal="BUY",
-            entry_confidence=0.75,
+            entry_signal=entry_signal,
+            entry_confidence=entry_confidence,
             current_qty=broker_pos.qty,
             current_stop_loss=initial_stop,
             initial_stop_loss=initial_stop,
             profit_targets=profit_targets,
             last_updated=datetime.now(UTC),
         )
+
+    def _load_entry_metadata(self, symbol: str) -> tuple[datetime, float, str]:
+        """Load entry metadata from trades table.
+
+        Args:
+            symbol: Stock ticker
+
+        Returns:
+            Tuple of (entry_timestamp, entry_confidence, entry_signal)
+        """
+        if not self._trade_repository:
+            logger.warning(f"No trade repository available, using defaults for {symbol}")
+            return datetime.now(UTC), 0.75, "BUY"
+
+        try:
+            # Check if event loop is running to avoid nesting
+            try:
+                asyncio.get_running_loop()
+                loop_running = True
+            except RuntimeError:
+                loop_running = False
+
+            if loop_running:
+                logger.warning(
+                    f"Async event loop already running, cannot synchronously load entry "
+                    f"metadata for {symbol}; using defaults "
+                    f"(timestamp=now(), confidence=0.75, signal=BUY)"
+                )
+                return datetime.now(UTC), 0.75, "BUY"
+
+            entry_trade = asyncio.run(self._trade_repository.get_entry_trade(symbol))
+
+            if entry_trade:
+                logger.info(
+                    f"Loaded entry metadata for {symbol}: "
+                    f"timestamp={entry_trade.timestamp}, "
+                    f"confidence={entry_trade.confidence:.2f}, "
+                    f"signal={entry_trade.action.value}"
+                )
+                return entry_trade.timestamp, entry_trade.confidence, entry_trade.action.value
+
+            logger.warning(
+                f"No entry trade found for {symbol} in trades table, using defaults "
+                f"(timestamp=now(), confidence=0.75, signal=BUY)"
+            )
+            return datetime.now(UTC), 0.75, "BUY"
+        except Exception as e:
+            logger.error(f"Failed to load entry metadata for {symbol}: {e}, using defaults")
+            return datetime.now(UTC), 0.75, "BUY"
 
     def _calculate_profit_targets(self, entry_price: float) -> list[float]:
         """Calculate profit target prices.
@@ -158,6 +360,9 @@ class PositionManager:
 
     def _execute_stop_loss_action(self, position: PositionRecord, action: PositionManagementAction) -> None:
         """Execute stop-loss update action."""
+        if action.new_stop_loss is None:
+            action.executed = False
+            return
         order_id = self._update_stop_loss(position, action.new_stop_loss)
         if order_id:
             action.executed = True
@@ -167,6 +372,9 @@ class PositionManager:
 
     def _execute_sell_action(self, position: PositionRecord, action: PositionManagementAction) -> None:
         """Execute sell order action."""
+        if action.qty_sold is None:
+            action.executed = False
+            return
         try:
             order = self.broker.submit_order(
                 symbol=position.symbol,
@@ -187,6 +395,30 @@ class PositionManager:
                 self._execute_stop_loss_action(position, action)
             elif action.action_type in ("PARTIAL_PROFIT", "TIME_EXIT", "CONVICTION_SCALE"):
                 self._execute_sell_action(position, action)
+
+            # Persist action to database if database engine available
+            if self._database_engine:
+                try:
+                    task = asyncio.create_task(self._async_persist_action(action))
+                    self._pending_tasks.add(task)
+                    task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
+                    logger.debug(
+                        f"Persisted position action to database: {action.symbol} {action.action_type}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to persist position action to database: {e}")
+                    raise  # Fail fast per user requirement
+
+    async def _async_persist_action(self, action: PositionManagementAction) -> None:
+        """Async helper to persist action with fresh session."""
+        from src.database.repositories.position_action import PositionManagementActionRepository
+
+        session = self._database_engine.session()  # type: ignore[missing-attribute]
+        try:
+            repository = PositionManagementActionRepository(session)
+            await repository.create(action)  # type: ignore[bad-argument-type]
+        finally:
+            await session.close()
 
     def review_position(
         self,
@@ -458,21 +690,47 @@ class PositionManager:
                 self.broker.cancel_order(position.stop_loss_order_id)
                 logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
             except Exception as e:
-                logger.warning(f"Failed to cancel old stop-loss order: {e}")
+                logger.error(f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}")
+                return None
 
-        # Verify position still exists
+        # Verify position still exists and get current price
         broker_info = self.broker.get_account_info()
         if position.symbol not in broker_info.positions:
             logger.warning(f"Position closed during stop update: {position.symbol}")
             return None
 
+        broker_pos = broker_info.positions[position.symbol]
+        current_price = broker_pos.market_value / broker_pos.qty if broker_pos.qty > 0 else 0.0
+
+        if current_price <= 0:
+            logger.warning(f"Invalid current price for {position.symbol}: {current_price}")
+            return None
+
+        # Enforce minimum gap between stop and current price
+        min_gap = self.config.min_stop_gap_dollars
+        max_allowed_stop = current_price - min_gap
+
+        if new_stop_loss > max_allowed_stop:
+            logger.warning(
+                f"Stop price ${new_stop_loss:.2f} too close to current ${current_price:.2f} "
+                f"(min gap ${min_gap:.2f}). Adjusting to ${max_allowed_stop:.2f}"
+            )
+            new_stop_loss = max_allowed_stop
+
+        # Verify adjusted stop is still higher than current stop
+        if new_stop_loss <= position.current_stop_loss:
+            logger.debug(
+                f"Adjusted stop ${new_stop_loss:.2f} not higher than current "
+                f"${position.current_stop_loss:.2f}, skipping update"
+            )
+            return None
+
         # Submit new stop-loss order
         try:
-            order = self.broker.submit_order(
+            order = self.broker.submit_stop_order(
                 symbol=position.symbol,
                 qty=int(position.current_qty),
-                side="sell",
-                stop_loss_price=new_stop_loss,
+                stop_price=new_stop_loss,
             )
             position.stop_loss_order_id = order.order_id
             position.current_stop_loss = new_stop_loss
@@ -482,6 +740,33 @@ class PositionManager:
         except Exception as e:
             logger.error(f"Failed to submit new stop-loss: {e}")
             return None
+
+    async def wait_for_pending_tasks(self, timeout_seconds: float = 5.0) -> None:
+        """Wait for all pending background tasks to complete.
+
+        Args:
+            timeout_seconds: Maximum seconds to wait for tasks
+
+        Called during daemon shutdown to ensure database operations complete cleanly.
+        """
+        if not self._pending_tasks:
+            return
+
+        logger.info(f"Waiting for {len(self._pending_tasks)} pending position persistence tasks...")
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*self._pending_tasks, return_exceptions=True),  # type: ignore[bad-argument-type]
+                timeout_seconds,
+            )
+            logger.info("All pending position persistence tasks completed")
+        except TimeoutError:
+            logger.warning(f"Position persistence tasks timed out after {timeout_seconds}s, cancelling...")
+            for task in self._pending_tasks:
+                if not task.done():
+                    task.cancel()
+            # Wait briefly for cancellations to propagate
+            await asyncio.sleep(0.1)
+            self._pending_tasks.clear()
 
     def __repr__(self) -> str:
         """Return string representation."""

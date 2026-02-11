@@ -228,6 +228,15 @@ class DataPrefetcher:
         try:
             from io import StringIO
 
+            if not isinstance(cached, dict):
+                msg = f"Expected dict, got {type(cached).__name__}"
+                raise TypeError(msg)
+            required_fields = ["data", "symbol", "last_updated"]
+            missing = [f for f in required_fields if f not in cached]
+            if missing:
+                msg = f"Missing required fields: {missing}"
+                raise TypeError(msg)
+
             df = pd.read_json(StringIO(cached["data"]), orient="split")
             return MarketData(
                 symbol=cached["symbol"],
@@ -253,6 +262,9 @@ class DataPrefetcher:
             return None
 
         try:
+            if not isinstance(cached, list):
+                msg = f"Expected list, got {type(cached).__name__}"
+                raise TypeError(msg)
             return [NewsArticle.model_validate(a) for a in cached]
         except Exception as e:
             logger.warning(f"Failed to deserialize cached news for {symbol}: {e}")
@@ -271,7 +283,14 @@ class DataPrefetcher:
         cached = self._cache.get(key)
         if cached is None:
             return None
-        return cached
+        try:
+            if not isinstance(cached, dict):
+                msg = f"Expected dict, got {type(cached).__name__}"
+                raise TypeError(msg)
+            return cached
+        except Exception as e:
+            logger.warning(f"Failed to deserialize cached fundamentals for {symbol}: {e}")
+            return None
 
     def clear_cache(self) -> None:
         """Clear all prefetch cache data."""

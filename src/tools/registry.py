@@ -3,6 +3,7 @@
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition
 
 
 class ToolRegistry:
@@ -35,11 +36,11 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
-    def get_definitions(self) -> list[dict]:
+    def get_definitions(self) -> list[ToolDefinition]:
         """Get all tool definitions for LLM.
 
         Returns:
-            List of tool definition dicts
+            List of tool definitions
         """
         return [tool.get_tool_definition() for tool in self._tools.values()]
 
@@ -63,6 +64,27 @@ class ToolRegistry:
 
         logger.info(f"Executing tool: {name} with args: {args}")
         return tool.execute(**args)
+
+    async def aexecute(self, name: str, args: dict) -> str:
+        """Execute a tool asynchronously by name.
+
+        Args:
+            name: Tool name
+            args: Arguments to pass to tool
+
+        Returns:
+            Tool execution result
+
+        Raises:
+            KeyError: If tool not found
+        """
+        tool = self._tools.get(name)
+        if not tool:
+            msg = f"Tool not found: {name}"
+            raise KeyError(msg)
+
+        logger.info(f"Executing tool: {name} with args: {args}")
+        return await tool.aexecute(**args)
 
     def requires_confirmation(self, name: str) -> bool:
         """Check if tool requires user confirmation.

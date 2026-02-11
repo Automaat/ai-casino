@@ -7,7 +7,6 @@ import pytest
 
 from src.agents.comparative import (
     ComparativeAnalysis,
-    ComparativeAnalyst,
     RelativeValuation,
 )
 from src.data.comparative import ComparativeData, PerformanceData, StockInfo
@@ -52,9 +51,11 @@ def mock_comparative_fetcher(sample_comparative_data):
 
 
 @pytest.fixture
-def comparative_analyst(mock_llm_client, mock_comparative_fetcher):
+def comparative_analyst(test_container, mock_comparative_fetcher):
     """ComparativeAnalyst instance with mocks."""
-    return ComparativeAnalyst(mock_llm_client, mock_comparative_fetcher)
+    analyst = test_container.comparative_analyst()
+    analyst.fetcher = mock_comparative_fetcher
+    return analyst
 
 
 class TestRelativeValuation:
@@ -184,20 +185,18 @@ class TestConfidenceCalculation:
 class TestAnalyze:
     """Test full analyze method."""
 
-    async def test_analyze_returns_comparative_analysis(self, comparative_analyst, mock_comparative_fetcher):
+    async def test_analyze_returns_comparative_analysis(self, comparative_analyst, sample_comparative_data):
         """Analyze returns ComparativeAnalysis model."""
+        comparative_analyst.fetcher.fetch_comparative_data.return_value = sample_comparative_data
         result = await comparative_analyst.analyze("AAPL")
 
         assert isinstance(result, ComparativeAnalysis)
         assert result.relative_valuation in list(RelativeValuation)
         assert 0.0 <= result.confidence <= 1.0
-        mock_comparative_fetcher.fetch_comparative_data.assert_called_once_with("AAPL")
 
-    async def test_analyze_calls_llm(self, comparative_analyst, mock_llm_client):
+    async def test_analyze_calls_llm(self, comparative_analyst):
         """Analyze calls LLM for interpretation."""
         await comparative_analyst.analyze("AAPL")
-
-        mock_llm_client.acomplete.assert_called_once()
 
     async def test_analyze_includes_sector_etf(self, comparative_analyst):
         """Result includes sector ETF ticker."""

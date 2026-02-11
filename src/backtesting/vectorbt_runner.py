@@ -87,7 +87,7 @@ class VectorBTRunner:
         start_date: str | datetime,
         end_date: str | datetime,
         strategy: (
-            "MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None"
+            MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None
         ) = None,
     ) -> VectorBTResult:
         """Run vectorized backtest for symbol.
@@ -160,7 +160,12 @@ class VectorBTRunner:
         }
 
         equal_weight_returns = returns_df.mean(axis=1)
-        portfolio_return = float((1 + equal_weight_returns).prod() - 1)
+        # .prod() on Series returns scalar, but type checker sees Series | float
+        prod_result = (1 + equal_weight_returns).prod()
+        if isinstance(prod_result, pd.Series):
+            portfolio_return = float(prod_result.iloc[0]) - 1.0
+        else:
+            portfolio_return = float(prod_result) - 1.0  # type: ignore[arg-type]
         portfolio_sharpe = self._calc_sharpe(equal_weight_returns)
         portfolio_max_dd = self._calc_max_drawdown_from_returns(equal_weight_returns)
 
@@ -192,7 +197,7 @@ class VectorBTRunner:
         self,
         data: pd.DataFrame,
         strategy: (
-            "MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None"
+            MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None
         ),
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals based on strategy type.
@@ -222,7 +227,7 @@ class VectorBTRunner:
         return self._generate_momentum_signals(data, None)
 
     def _generate_momentum_signals(
-        self, data: pd.DataFrame, strategy: "MomentumStrategy | None" = None
+        self, data: pd.DataFrame, strategy: MomentumStrategy | None = None
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from RSI + MACD indicators (momentum strategy).
 
@@ -250,16 +255,19 @@ class VectorBTRunner:
         else:
             macd_hist = pd.Series(0.0, index=close.index)
 
-        rsi = rsi.fillna(50.0)
+        rsi = rsi.fillna(50.0) if rsi is not None else pd.Series(50.0, index=close.index)
         macd_hist = macd_hist.fillna(0.0)
 
         entries = (rsi < rsi_oversold) & (macd_hist > 0)
         exits = (rsi > rsi_overbought) & (macd_hist < 0)
 
-        return entries, exits
+        # Type narrowing: ensure Series return type
+        entries_series = entries if isinstance(entries, pd.Series) else entries.iloc[:, 0]
+        exits_series = exits if isinstance(exits, pd.Series) else exits.iloc[:, 0]
+        return entries_series, exits_series
 
     def _generate_mean_reversion_signals(
-        self, data: pd.DataFrame, strategy: "MeanReversionStrategy | None" = None
+        self, data: pd.DataFrame, strategy: MeanReversionStrategy | None = None
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from Bollinger Bands (mean reversion).
 
@@ -297,7 +305,7 @@ class VectorBTRunner:
         return entries, exits
 
     def _generate_trend_following_signals(
-        self, data: pd.DataFrame, strategy: "TrendFollowingStrategy | None" = None
+        self, data: pd.DataFrame, strategy: TrendFollowingStrategy | None = None
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from SMA crossover + ADX (trend following).
 
@@ -333,8 +341,8 @@ class VectorBTRunner:
         adx_col = f"ADX_{adx_length}"
         adx_val = adx[adx_col] if adx is not None and adx_col in adx else pd.Series(0.0, index=close.index)
 
-        sma_fast = sma_fast.fillna(close)
-        sma_slow = sma_slow.fillna(close)
+        sma_fast = sma_fast.fillna(close) if sma_fast is not None else close.copy()
+        sma_slow = sma_slow.fillna(close) if sma_slow is not None else close.copy()
         adx_val = adx_val.fillna(0.0)
 
         entries = (sma_fast > sma_slow) & (adx_val > adx_strong_threshold)
@@ -345,7 +353,7 @@ class VectorBTRunner:
     def _generate_ensemble_signals(
         self,
         data: pd.DataFrame,
-        strategy: "EnsembleStrategy",
+        strategy: EnsembleStrategy,
     ) -> tuple[pd.Series, pd.Series]:
         """Generate entry/exit signals from weighted voting of all strategies.
 
@@ -414,15 +422,16 @@ class VectorBTRunner:
     def _simulate(self, sim: _SimulationInput) -> VectorBTResult:
         """Simulate portfolio from entry/exit signals using vectorized ops."""
         close = sim.data["Close"].values
-        dates = sim.data.index.to_pydatetime().tolist()
-        entries_arr = sim.entries.values.astype(bool)
-        exits_arr = sim.exits.values.astype(bool)
+        dates = [dt.to_pydatetime() for dt in sim.data.index]
+        entries_arr = np.asarray(sim.entries.values, dtype=bool)
+        exits_arr = np.asarray(sim.exits.values, dtype=bool)
         n = len(close)
 
         position, trade_entries, trade_exits = self._build_positions(entries_arr, exits_arr, n)
 
         # Compute equity curve
-        daily_returns = np.diff(close) / close[:-1]
+        close_arr = np.asarray(close, dtype=float)
+        daily_returns = np.diff(close_arr) / close_arr[:-1]
         strategy_returns = np.zeros(n)
         strategy_returns[1:] = daily_returns * position[:-1]
 
@@ -450,7 +459,7 @@ class VectorBTRunner:
         win_rate = len(wins) / total_trades if total_trades > 0 else 0.0
 
         gross_profit = sum(wins) if wins else 0.0
-        gross_loss = abs(sum(losses)) if losses else 0.0
+        gross_loss = float(abs(sum(losses))) if losses else 0.0
         if gross_loss > 0:
             profit_factor = gross_profit / gross_loss
         elif gross_profit > 0:

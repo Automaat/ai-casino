@@ -109,6 +109,43 @@ class SocialSentimentAnalyst:
             confidence=confidence,
         )
 
+    def _process_fetch_results(
+        self,
+        results: tuple[
+            BaseException | SocialSentimentData | None,
+            BaseException | NewsSentimentData | None,
+            BaseException | RedditSentimentData | None,
+        ],
+    ) -> tuple[SocialSentimentData | None, NewsSentimentData | None, RedditSentimentData | None]:
+        """Process gather results, handling exceptions and logging errors.
+
+        Args:
+            results: Results from asyncio.gather with return_exceptions=True
+
+        Returns:
+            Tuple of (finnhub_social, finnhub_news, reddit_data)
+        """
+        finnhub_social: SocialSentimentData | None = None
+        finnhub_news: NewsSentimentData | None = None
+        reddit_data: RedditSentimentData | None = None
+
+        if isinstance(results[0], BaseException):
+            logger.error(f"Finnhub social fetch failed: {results[0]}")
+        else:
+            finnhub_social = results[0]
+
+        if isinstance(results[1], BaseException):
+            logger.error(f"Finnhub news fetch failed: {results[1]}")
+        else:
+            finnhub_news = results[1]
+
+        if isinstance(results[2], BaseException):
+            logger.error(f"Reddit fetch failed: {results[2]}")
+        else:
+            reddit_data = results[2]
+
+        return finnhub_social, finnhub_news, reddit_data
+
     async def _fetch_all_sources(
         self, symbol: str
     ) -> tuple[SocialSentimentData | None, NewsSentimentData | None, RedditSentimentData | None]:
@@ -157,11 +194,19 @@ class SocialSentimentAnalyst:
                 logger.warning(f"Reddit fetch failed: {e}")
                 return None
 
-        finnhub_social, finnhub_news, reddit_data = await asyncio.gather(
-            fetch_finnhub_social(), fetch_finnhub_news(), fetch_reddit()
-        )
+        # Run fetches in parallel using TaskGroup (exceptions handled within fetch functions)
+        async with asyncio.TaskGroup() as tg:
+            social_task = tg.create_task(fetch_finnhub_social())
+            news_task = tg.create_task(fetch_finnhub_news())
+            reddit_task = tg.create_task(fetch_reddit())
 
-        return finnhub_social, finnhub_news, reddit_data
+        # Extract results (TaskGroup propagates exceptions, fetch functions return None on failure)
+        social_result = social_task.result()
+        news_result = news_task.result()
+        reddit_result = reddit_task.result()
+        results = (social_result, news_result, reddit_result)
+
+        return self._process_fetch_results(results)
 
     def _compute_finnhub_sentiment(self, data: SocialSentimentData | None) -> float | None:
         """Compute average Finnhub sentiment from Reddit and Twitter.

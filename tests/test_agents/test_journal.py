@@ -34,30 +34,30 @@ class TestEvaluateSignal:
 
 
 class TestTradeJournalAgent:
-    def test_init(self, mock_llm_client):
+    def test_init(self, test_container):
         market_fetcher = MagicMock()
-        agent = TradeJournalAgent(mock_llm_client, market_fetcher)
+        agent = TradeJournalAgent(test_container.llm_client(), market_fetcher)
 
-        assert agent.llm == mock_llm_client
+        assert agent.llm == test_container.llm_client()
         assert agent.market_fetcher == market_fetcher
 
-    def test_repr(self, mock_llm_client):
-        agent = TradeJournalAgent(mock_llm_client, MagicMock())
+    def test_repr(self, test_container):
+        agent = test_container.trade_journal_agent()
         repr_str = repr(agent)
 
         assert "TradeJournalAgent" in repr_str
         assert "ollama" in repr_str
 
-    async def test_generate_empty_records(self, mock_llm_client):
-        agent = TradeJournalAgent(mock_llm_client, MagicMock())
+    async def test_generate_empty_records(self, test_container_full):
+        agent = test_container_full.trade_journal_agent()
         journal = await agent.generate(date(2024, 1, 15), [])
 
         assert journal.date == date(2024, 1, 15)
         assert journal.outcomes == []
-        assert journal.overall_assessment == "No signals to evaluate"
+        assert journal.overall_assessment == "No signals to evaluate — no signals generated today"
 
-    async def test_generate_journal(self, mock_llm_client, sample_analysis_records, mock_market_fetcher):
-        agent = TradeJournalAgent(mock_llm_client, mock_market_fetcher)
+    async def test_generate_journal(self, test_container_full, sample_analysis_records):
+        agent = test_container_full.trade_journal_agent()
         journal = await agent.generate(date(2024, 1, 15), sample_analysis_records)
 
         assert isinstance(journal, DailyJournal)
@@ -69,7 +69,7 @@ class TestTradeJournalAgent:
             assert outcome.price_open > 0
             assert outcome.price_close > 0
 
-    async def test_generate_deduplicates_symbols(self, mock_llm_client, mock_market_fetcher):
+    async def test_generate_deduplicates_symbols(self, test_container_full):
         """Latest signal per symbol is used when duplicates exist."""
         records = [
             AnalysisRecord(
@@ -86,7 +86,7 @@ class TestTradeJournalAgent:
             ),
         ]
 
-        agent = TradeJournalAgent(mock_llm_client, mock_market_fetcher)
+        agent = test_container_full.trade_journal_agent()
         journal = await agent.generate(date(2024, 1, 15), records)
 
         # Should have 1 outcome for AAPL (latest signal SELL)

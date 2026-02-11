@@ -14,7 +14,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 current_agent: ContextVar[str | None] = ContextVar("current_agent", default=None)
-current_collector: ContextVar["ExecutionMetricsCollector | None"] = ContextVar(
+current_collector: ContextVar[ExecutionMetricsCollector | None] = ContextVar(
     "current_collector", default=None
 )
 
@@ -30,7 +30,7 @@ _PRICING: dict[str, tuple[float, float]] = {
 
 def is_metrics_enabled() -> bool:
     """Check EXECUTION_METRICS env var."""
-    return os.getenv("EXECUTION_METRICS", "false").lower() == "true"
+    return os.getenv("EXECUTION_METRICS", "true").lower() == "true"
 
 
 class LLMUsageStats(BaseModel):
@@ -118,6 +118,13 @@ class ExecutionMetricsCollector:
         self._agent_timings: list[AgentTimingMetric] = []
         self._pipeline_stages: list[PipelineStageMetric] = []
         self._agent_call_counts: dict[str, int] = defaultdict(int)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"ExecutionMetricsCollector(symbol={self._symbol}, provider={self._provider}, "
+            f"model={self._model})"
+        )
 
     def record_llm_call(
         self,

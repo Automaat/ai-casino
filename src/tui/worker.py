@@ -19,10 +19,9 @@ from loguru import logger
 from src.tui.types import ProgressCallback
 
 if TYPE_CHECKING:
-    from src.agents.technical import TechnicalAnalyst
     from src.screening.analyzer import ScreeningAnalysis
     from src.screening.screener import ScreeningOutput
-    from src.workflows.trading import TradingWorkflow
+    from src.workflows import TradingWorkflow
 
 from src.models.torch_config import configure_torch_env
 
@@ -48,9 +47,9 @@ class AnalysisParams:
 
     symbol: str
     period_days: int
-    progress_callback: "ProgressCallback | None"
-    result_callback: "ResultCallback"
-    error_callback: "ErrorCallback"
+    progress_callback: ProgressCallback | None
+    result_callback: ResultCallback
+    error_callback: ErrorCallback
     cancelled_event: threading.Event
 
 
@@ -62,9 +61,9 @@ class ScreeningParams:
     universe: str
     top_n: int
     save_to_watchlist: bool
-    progress_callback: "ProgressCallback | None"
-    result_callback: "ResultCallback"
-    error_callback: "ErrorCallback"
+    progress_callback: ProgressCallback | None
+    result_callback: ResultCallback
+    error_callback: ErrorCallback
     cancelled_event: threading.Event
 
 
@@ -105,71 +104,27 @@ def _check_cancelled(cancelled_event: threading.Event | None) -> None:
         raise asyncio.CancelledError(msg)
 
 
-def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -> "TradingWorkflow":
+def _create_workflow_with_progress(progress_callback: ProgressCallback | None) -> TradingWorkflow:
     """Create workflow components with progress tracking."""
     # Configure torch NOW (lazy - only when analysis starts)
     from src.models.torch_config import configure_torch_runtime
 
     configure_torch_runtime()
 
-    from src.cache.historical import HistoricalCache
-    from src.data.fundamental import FundamentalDataFetcher
-    from src.data.market import MarketDataFetcher
-    from src.data.news import NewsFetcher
-    from src.models.llm import LLMClient
-    from src.models.sentiment import get_finbert_sentiment
-    from src.workflows.trading import TradingWorkflow
+    from src.di.container import create_container
 
-    historical_cache = HistoricalCache()
-
-    llm_client = LLMClient()
-    market_fetcher = MarketDataFetcher(use_alpha_vantage=False, historical_cache=historical_cache)
-    news_fetcher = NewsFetcher(historical_cache=historical_cache)
+    container = create_container()
 
     _update_progress("fetch_data", "Loading FinBERT model...", progress_callback)
-    finbert = get_finbert_sentiment()
-    fundamental_fetcher = FundamentalDataFetcher(historical_cache=historical_cache)
 
-    return TradingWorkflow(
-        llm_client,
-        market_fetcher,
-        news_fetcher,
-        finbert,
-        fundamental_fetcher,
-        broker=None,
-        metrics_tracker=None,
-        use_meta_agent=True,
-        historical_cache=historical_cache,
-    )
+    return container.workflow_meta(container=container)
 
 
-def _patch_workflow_progress(workflow: "TradingWorkflow", progress_callback: ProgressCallback | None) -> None:
-    """Patch workflow methods to report progress."""
-    from src.tui.log_capture import clear_active_step
+def _patch_workflow_progress(workflow: TradingWorkflow, progress_callback: ProgressCallback | None) -> None:
+    """Patch workflow methods to report progress.
 
-    original_run_analyses = workflow.run_analyses
-
-    async def patched_run_analyses(
-        state: dict,
-        technical_analyst: "TechnicalAnalyst",
-        collector: object = None,
-    ) -> dict:
-        _update_progress("technical", "Running technical analysis...", progress_callback)
-        result = await original_run_analyses(state, technical_analyst, collector)
-        clear_active_step()  # Clear after analyses complete
-        return result
-
-    workflow.run_analyses = patched_run_analyses
-
-    original_make_decision = workflow.make_decision
-
-    async def patched_make_decision(state: dict) -> dict:
-        _update_progress("decision", "Synthesizing trading decision...", progress_callback)
-        result = await original_make_decision(state)
-        clear_active_step()  # Clear after decision complete
-        return result
-
-    workflow.make_decision = patched_make_decision
+    Note: Progress tracking currently not implemented for stage-based architecture.
+    """
 
 
 def _setup_isolated_event_loop() -> asyncio.AbstractEventLoop:
@@ -199,7 +154,7 @@ def _cleanup_event_loop(loop: asyncio.AbstractEventLoop) -> None:
 
     if pending:
         with contextlib.suppress(Exception):
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))  # type: ignore[arg-type]
 
     loop.close()
 
@@ -368,11 +323,12 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         _update_progress("fetch_universe", "Fetching stock universe...", params.progress_callback)
 
         from src.data.universe import StockUniverseFetcher
-        from src.models.llm import LLMClient
+        from src.di.container import create_container
         from src.screening.analyzer import ScreeningAnalyzer
         from src.screening.exporter import ScreeningExporter
         from src.screening.screener import ScreeningCriteria, StockScreener
 
+        container = create_container()
         universe_fetcher = StockUniverseFetcher()
 
         _update_progress(
@@ -386,7 +342,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         _check_cancelled(params.cancelled_event)
 
         _update_progress("analyzing", "Analyzing results with LLM...", params.progress_callback)
-        llm = LLMClient()
+        llm = container.llm_client()
         analyzer = ScreeningAnalyzer(llm_client=llm)
 
         analysis = await analyzer.analyze(output)
@@ -590,7 +546,7 @@ async def run_screening_in_process(
     return _handle_screening_result(error_holder, result_holder)
 
 
-def _format_screening_output(output: "ScreeningOutput", analysis: "ScreeningAnalysis") -> str:
+def _format_screening_output(output: ScreeningOutput, analysis: ScreeningAnalysis) -> str:
     """Format screening output as markdown."""
     lines = [
         f"## {output.criteria.value.title()} Screening Results",

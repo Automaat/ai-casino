@@ -77,7 +77,7 @@ tests/               # Full mirror of src structure
 ### Pre-Commit (MANDATORY)
 
 ```bash
-mise check  # Must pass: format, lint, test
+mise check  # Must pass: format, lint, typecheck, test
 mise audit  # Check for CVEs (optional locally, enforced in CI)
 ```
 
@@ -112,10 +112,19 @@ Fixes #<issue-number>
 
 ### Code Style
 
-**Formatter/Linter:** ruff (45+ rule categories)
+**Formatter:** ruff (fast formatter)
+**Linter:** ruff (45+ rule categories)
+**Type Checker:** pyrefly (high-performance type checker, faster than mypy/pyright)
 **Line length:** 110 | **Quotes:** Double | **Docstrings:** Google style | **Type hints:** Mandatory
+**File length:** Max 400 lines per file - split into logical modules if exceeded
+**Method length:** Max 60 lines per method/function - extract helper methods if exceeded
 
-**Linter errors:** Fix properly (research if needed), NEVER skip/disable (`# noqa`, `# type: ignore`). If stuck after research, ASK.
+**Linter/type errors:** Fix properly (research if needed), NEVER skip/disable (`# noqa`, `# type: ignore`). If stuck after research, ASK.
+
+**When `# type: ignore` is acceptable:**
+- Third-party library missing type stubs (use `# type: ignore[import-untyped]`)
+- Complex generic patterns pyrefly can't infer (add comment explaining why)
+- Interfacing with untyped external APIs (prefer typed wrapper when possible)
 
 ### Import Organization
 
@@ -161,7 +170,16 @@ def fetch_daily(self, symbol: str, period_days: int = 90) -> MarketData:
 def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
 ```
 
-**Use Python 3.10+ syntax:** `list[str]`, `dict[str, int]`, `int | None` (not `Optional[int]`)
+**Syntax:** Python 3.10+ - `list[str]`, `dict[str, int]`, `int | None` (not `Optional[int]`)
+
+**Best Practices:**
+- Type all function parameters and return values (no `Any` unless truly dynamic)
+- Use `TypedDict` for structured dicts with known keys
+- Prefer concrete types over `Any`: `object` for truly unknown, protocol types for duck-typed interfaces
+- Use `collections.abc` types for parameters (`Sequence`, `Mapping`) for broader compatibility
+- Annotate class attributes in `__init__` or at class level
+- Use `Final` for constants: `TIMEOUT: Final[int] = 30`
+- Use string annotations for forward references: `def process(self, result: "TradingWorkflowResult") -> None:`
 
 ### Docstrings (Google Style)
 
@@ -192,6 +210,42 @@ except Exception as e:
     logger.error(f"LLM completion failed: {e}")
     raise
 ```
+
+**Critical vs Non-Critical:**
+- **Critical** (always propagate): data fetchers, LLM calls, broker API, database writes, user-facing operations
+- **Non-Critical** (may swallow): batch processing (screening 500+ stocks, optimization 100+ trials), cache, metrics
+
+**Swallowing Exceptions (Non-Critical Only):**
+```python
+# ALWAYS use logger.opt(exception=True) when swallowing for traceback
+except ValueError as e:
+    logger.opt(exception=True).warning(f"Invalid data, skipping: {e}")
+    return None
+
+# NOT this (missing context):
+except Exception as e:
+    logger.warning(f"Failed: {e}")  # ❌ No traceback
+    return None
+```
+
+**Specific Exceptions First:**
+```python
+# Hierarchical exception handling (specific → general)
+except HTTPStatusError as e:
+    logger.error(f"HTTP {e.response.status_code}: {url}")
+    raise
+except HTTPError as e:
+    logger.error(f"Network error: {e}")
+    raise
+except Exception as e:
+    logger.error(f"Unexpected error: {e}")
+    raise
+```
+
+**Never:**
+- Bare `except Exception: return None` without logging
+- `except Exception` in critical paths (use specific exceptions)
+- Warning-level logs without `logger.opt(exception=True)` when swallowing exception
 
 **Logging (loguru):** `logger.info/warning/error/debug()` - set level via `LOG_LEVEL` env var
 
@@ -235,18 +289,237 @@ def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
 
 **Rules:** Mock all external APIs, test ranges/types, no real API integration tests
 
+### Async & Concurrency
+
+**Async-first API:** All I/O-bound methods must be `async`. Sync wrappers (`asyncio.run()`) only at CLI entry points — never inside async context.
+
+**Blocking I/O offloading (MANDATORY):**
+- Network/disk/ML inference → `await asyncio.to_thread(blocking_fn, *args)`
+- CPU-heavy (FinBERT) → `await loop.run_in_executor(None, fn, *args)`
+- Never call blocking functions directly in async code (freezes event loop)
+
+```python
+# ✅ GOOD
+daily = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol, 30)
+scores = await loop.run_in_executor(None, self.finbert.analyze_batch, texts)
+
+# ❌ BAD - blocks event loop
+daily = self._market_fetcher.fetch_daily(symbol, 30)
+```
+
+**Concurrency control:**
+- `asyncio.Semaphore` for rate limiting (LLM calls, API requests)
+- `asyncio.Lock` for shared async state
+- `threading.Lock` only for thread-shared state (cache, model access)
+- Never use `threading.Lock` in async code — use `asyncio.Lock`
+
+**Parallel execution:** `asyncio.gather(*tasks, return_exceptions=True)` — always handle exceptions:
+
+```python
+results = await asyncio.gather(*tasks, return_exceptions=True)
+for result in results:
+    if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+        raise result
+    if isinstance(result, Exception):
+        logger.error(f"Task failed: {result}")
+```
+
+**HTTP clients:**
+- Reuse clients for connection pooling (don't create per-request)
+- `async with httpx.AsyncClient()` for short-lived scopes
+- Store as instance attribute for long-lived services
+
+**Anti-patterns:**
+- ❌ `nest_asyncio` — archived, breaks cancellation/exceptions
+- ❌ `asyncio.run()` inside async functions — RuntimeError
+- ❌ Blocking calls (`requests.get`, `time.sleep`, `open().read()`) in async
+- ❌ Fire-and-forget `asyncio.create_task()` without error handling
+- ❌ Unbounded `asyncio.gather()` — use semaphore for backpressure
+
 ---
 
 ## Simplicity Principles
 
 ### Anti-Patterns
 
-❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons
+❌ **NEVER:** TODOs, placeholders, incomplete error handling, obvious comments, over-engineering, premature abstractions, >100 line changes, >400 line files, >60 line methods, print() (except main.py), bare excepts, commented code, backwards-compat hacks, provider-specific LLM (unless justified), globals, singletons, dicts/kwargs for structured data, inheritance hierarchies (prefer composition)
 
-✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations
+✅ **ALWAYS:** Simplest solution, reuse existing patterns, minimal changes, complete implementations, typed classes over dicts, split files >400 lines into logical modules, extract helper methods for >60 line functions, composition over inheritance, extract proper encapsulated abstractions
 
-**Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change?
+**Before implementing:** Can this be simpler? Abstractions needed NOW? Similar code exists? Minimal change? File too large (>400 lines)? Method too long (>60 lines)?
 **If unsure:** ASK for approval.
+
+### Types vs Dicts
+
+**ALWAYS create typed classes (Pydantic/dataclasses) instead of dicts/kwargs for structured data:**
+
+```python
+# ❌ BAD - dict and kwargs
+def analyze(self, **kwargs: Any) -> dict[str, Any]:
+    symbol = kwargs.get("symbol")
+    data = kwargs.get("data")
+    return {"signal": "BUY", "confidence": 0.8}
+
+# ✅ GOOD - typed classes
+class AnalysisRequest(BaseModel):
+    symbol: str
+    data: pd.DataFrame
+
+class AnalysisResult(BaseModel):
+    signal: Signal
+    confidence: float
+
+def analyze(self, request: AnalysisRequest) -> AnalysisResult:
+    return AnalysisResult(signal=Signal.BUY, confidence=0.8)
+```
+
+**Why:** Type safety, IDE autocomplete, validation, self-documenting code, catches errors at definition time
+
+**Exceptions:** Only use dicts for truly dynamic key-value stores (e.g., JSON from external API that you immediately parse into types)
+
+### Dict vs Typed Class Decision Matrix
+
+**ALWAYS create typed classes (Pydantic/dataclasses) instead of dicts/kwargs for structured data.**
+
+#### ✅ When Dict/Kwargs is Acceptable
+
+1. **Framework Requirements**
+   - LLM tool execution: `execute(**kwargs)` - Required for function calling interface
+   - Decorators: `wrapper(*args, **kwargs)` with ParamSpec - Preserves signatures
+   - UI frameworks: `super().__init__(**kwargs)` - Framework inheritance requirement
+
+2. **Dynamic Key-Value Storage**
+   - Caches: `_cache: dict[str, tuple[datetime, Any]]` - Truly dynamic keys
+   - Registries: `_tools: dict[str, BaseTool]` - Runtime registration
+   - Lookups: `STRATEGY_MAP: dict[MarketRegime, str]` - Enum mappings
+
+3. **Template Interpolation**
+   - Prompt loading: `load("user", **variables)` - f-string format() requires kwargs
+   - Must be typed: `**kwargs: str | int | float | list | dict` (not `Any`)
+
+4. **External API Intermediate**
+   - Alpha Vantage raw response: Parse immediately into typed model
+   - Keep dict only during validation/parsing step
+
+#### ❌ When to Use Typed Class
+
+1. **Function Return Values**
+   ```python
+   # ❌ Bad
+   def get_earnings_flags(...) -> dict:
+       return {"upcoming_earnings": True, "days_until_earnings": 5}
+
+   # ✅ Good
+   class EarningsFlags(BaseModel):
+       upcoming_earnings: bool
+       days_until_earnings: int | None
+
+   def get_earnings_flags(...) -> EarningsFlags:
+       return EarningsFlags(upcoming_earnings=True, days_until_earnings=5)
+   ```
+
+2. **Function Parameters**
+   ```python
+   # ❌ Bad
+   def analyze(self, metrics: dict[str, float | None]) -> Analysis:
+
+   # ✅ Good
+   class FundamentalMetrics(BaseModel):
+       pe_ratio: float | None = None
+       eps: float | None = None
+
+   def analyze(self, metrics: FundamentalMetrics) -> Analysis:
+   ```
+
+3. **State Objects**
+   ```python
+   # ❌ Bad
+   state = {**state, "final_decision": decision}
+
+   # ✅ Good
+   class DecisionState(BaseModel):
+       final_decision: TradingDecision
+
+   state = DecisionState(final_decision=decision)
+   ```
+
+4. **Configuration**
+   ```python
+   # ❌ Bad
+   kwargs = {"universe": "sp500", "top_n": 10}
+   screen(**kwargs)
+
+   # ✅ Good
+   class ScreeningArgs(BaseModel):
+       universe: str
+       top_n: int
+
+   args = ScreeningArgs(universe="sp500", top_n=10)
+   screen(args)
+   ```
+
+5. **API Schemas**
+   ```python
+   # ❌ Bad
+   def get_tool_definition(self) -> dict:
+       return {"type": "function", "function": {...}}
+
+   # ✅ Good
+   class ToolDefinition(BaseModel):
+       type: str = "function"
+       function: ToolFunction
+
+   def get_tool_definition(self) -> ToolDefinition:
+       return ToolDefinition(function=ToolFunction(...))
+   ```
+
+#### Model Creation Checklist
+
+When creating a new Pydantic model:
+
+1. ✅ Use descriptive name: `{Component}{Purpose}` (e.g., `EarningsFlags`, `FundamentalMetrics`)
+2. ✅ Add docstring: One-line description
+3. ✅ Use `Field()` for validation: `Field(ge=0.0, le=1.0, description="...")`
+4. ✅ Use `Field(default_factory=list)` for mutable defaults
+5. ✅ Add `class Config: arbitrary_types_allowed = True` if using DataFrame/datetime
+6. ✅ Use `| None` for optional fields (not `Optional[T]`)
+7. ✅ Use StrEnum for fixed string values
+8. ✅ Add `@property` for computed fields (not extra model fields)
+9. ✅ Implement `__repr__()` for debugging
+
+Example:
+```python
+class TechnicalMetrics(BaseModel):
+    """Technical analysis metrics."""
+
+    rsi: float = Field(ge=0.0, le=100.0, description="RSI indicator")
+    macd_hist: float
+    interpretation: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    warnings: list[str] = Field(default_factory=list)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    @property
+    def is_oversold(self) -> bool:
+        """Check if RSI indicates oversold."""
+        return self.rsi < 30.0
+
+    def __repr__(self) -> str:
+        return f"TechnicalMetrics(rsi={self.rsi:.1f}, confidence={self.confidence:.2f})"
+```
+
+#### Migration Pattern
+
+When refactoring dict → typed class:
+
+1. Create model in appropriate location (`src/{module}/models.py`)
+2. Update function signature: `-> dict` → `-> ModelName`
+3. Replace dict construction: `return {...}` → `return ModelName(...)`
+4. Update consumers: Access via attributes not keys
+5. Add `.model_dump()` at API boundaries if needed temporarily
+6. Run `mise typecheck` to verify
 
 ---
 
@@ -254,8 +527,9 @@ def test_technical_analyst_analyze(mock_llm_client, sample_ohlcv_data):
 
 ### Dependency Injection (MANDATORY)
 
-**All classes accept dependencies via `__init__` - no singletons, no globals:**
+**All classes accept dependencies via `__init__` - no singletons, no globals. ALWAYS use the DI container (`src/di/container.py`) for dependency resolution.**
 
+**Basic DI pattern:**
 ```python
 class TechnicalAnalyst:
     def __init__(self, llm_client: LLMClient, strategy: MomentumStrategy) -> None:
@@ -263,6 +537,253 @@ class TechnicalAnalyst:
         self.strategy = strategy
         logger.info("Initialized TechnicalAnalyst")
 ```
+
+**DI Container Usage:**
+
+The project uses `dependency-injector` for centralized dependency management. The container is defined in `src/di/container.py` and provides:
+- **Singleton** providers for stateful services (cache, database, API clients)
+- **Factory** providers for per-request instances (workflows, agents)
+
+**Creating dependencies from container:**
+```python
+from src.di.container import create_container
+
+# Create container (optionally with config path)
+container = create_container(config_path="~/.ai-casino/daemon-production.yaml")
+
+# Get singleton instances (shared across app)
+llm_client = container.llm_client()
+market_fetcher = container.market_fetcher()
+finnhub_fetcher = container.finnhub_fetcher()
+
+# Create workflow instances (new instance each time)
+workflow = container.workflow_meta(
+    broker=broker,
+    metrics_tracker=tracker,
+    container=container,  # IMPORTANT: Explicitly pass container to factories
+)
+```
+
+**CRITICAL: Factory providers and `providers.Self()`**
+
+`providers.Self()` does NOT work reliably with Factory providers. It evaluates to `None` instead of the container instance.
+
+```python
+# ❌ BAD - providers.Self() doesn't work with Factory
+workflow_meta = providers.Factory(
+    create_workflow_meta,
+    container=providers.Self(),  # This will be None!
+)
+
+# ✅ GOOD - pass container explicitly when calling factory
+workflow_meta = providers.Factory(
+    create_workflow_meta,
+    # Don't include container in factory definition
+)
+
+# Then in usage:
+workflow = container.workflow_meta(
+    broker=broker,
+    container=container,  # Explicitly pass here
+)
+```
+
+**Adding new providers:**
+
+When adding new services to the container:
+
+1. **Singleton for stateful services:**
+```python
+# In src/di/container.py
+new_service = providers.Singleton(
+    create_new_service,
+    dependency1=other_provider,
+    daemon_config=daemon_config,
+)
+```
+
+2. **Factory for per-request instances:**
+```python
+# In src/di/container.py
+new_workflow = providers.Factory(
+    create_new_workflow,
+    llm_client=llm_client,
+    # Don't include container=providers.Self() - won't work!
+)
+```
+
+3. **Create provider function in `src/di/providers/`:**
+```python
+# In src/di/providers/data.py (or appropriate module)
+def create_new_service(daemon_config: DaemonConfig) -> NewService:
+    """Create NewService with resolved config."""
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.new_service_api_key,
+        "NEW_SERVICE_API_KEY",
+    )
+    return NewService(api_key=api_key)
+```
+
+4. **Pass container explicitly when needed:**
+```python
+# In code that uses the factory
+instance = container.new_workflow(
+    param1=value1,
+    container=container,  # Explicitly pass container
+)
+```
+
+**Best practices:**
+- NEVER create service instances directly (e.g., `FinnhubFetcher()`) - always use container
+- NEVER use `providers.Self()` with Factory providers
+- Always pass `container` parameter explicitly when calling factories
+- For optional dependencies, check container first: `service = container.service() if container else None`
+- Add fallback only as last resort: `service = param or (container.service() if container else None) or Service()`
+
+### Composition over Inheritance (MANDATORY)
+
+**ALWAYS prefer composition over inheritance. Extract proper encapsulated abstractions and compose them together.**
+
+**Core principles:**
+- Favor "has-a" relationships over "is-a" relationships
+- Extract single-responsibility components that can be composed
+- Each abstraction should be independently testable and reusable
+- Compose abstractions via dependency injection
+
+**Why composition:**
+- **Flexibility:** Change behavior at runtime by swapping components
+- **Testability:** Mock individual components independently
+- **Maintainability:** Changes to one component don't cascade through inheritance hierarchy
+- **Clarity:** Explicit dependencies make code relationships obvious
+- **Reusability:** Components can be used in different contexts without inheritance constraints
+
+**Pattern:**
+
+```python
+# ❌ BAD - inheritance hierarchy
+class BaseAnalyst:
+    def __init__(self, llm_client: LLMClient) -> None:
+        self.llm = llm_client
+
+    def _format_result(self, data: dict) -> str:
+        return json.dumps(data, indent=2)
+
+class TechnicalAnalyst(BaseAnalyst):
+    def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+        result = self._run_analysis(market_data)
+        formatted = self._format_result(result)  # Inherited method
+        return TechnicalAnalysis(...)
+
+class SentimentAnalyst(BaseAnalyst):
+    def analyze(self, articles: list[NewsArticle]) -> SentimentAnalysis:
+        result = self._run_sentiment(articles)
+        formatted = self._format_result(result)  # Inherited method
+        return SentimentAnalysis(...)
+
+# ✅ GOOD - composition with extracted abstractions
+class ResultFormatter:
+    """Encapsulated formatting abstraction."""
+    def format(self, data: dict) -> str:
+        return json.dumps(data, indent=2)
+
+class TechnicalAnalyst:
+    def __init__(self, llm_client: LLMClient, formatter: ResultFormatter) -> None:
+        self.llm = llm_client
+        self.formatter = formatter  # Composed dependency
+
+    def analyze(self, symbol: str, market_data: pd.DataFrame) -> TechnicalAnalysis:
+        result = self._run_analysis(market_data)
+        formatted = self.formatter.format(result)  # Composed behavior
+        return TechnicalAnalysis(...)
+
+class SentimentAnalyst:
+    def __init__(self, llm_client: LLMClient, formatter: ResultFormatter) -> None:
+        self.llm = llm_client
+        self.formatter = formatter  # Composed dependency
+
+    def analyze(self, articles: list[NewsArticle]) -> SentimentAnalysis:
+        result = self._run_sentiment(articles)
+        formatted = self.formatter.format(result)  # Composed behavior
+        return SentimentAnalysis(...)
+```
+
+**When to extract abstractions:**
+
+1. **Shared behavior across multiple classes** → Extract to composable component
+2. **Complex logic that can be isolated** → Extract to single-responsibility class
+3. **Behavior that might change independently** → Extract to swappable component
+4. **Logic with its own dependencies** → Extract to injected component
+
+**Example: Extract validation logic**
+
+```python
+# ❌ BAD - validation mixed in class
+class OrderExecutor:
+    def execute(self, order: Order) -> ExecutionResult:
+        # Validation logic embedded
+        if order.quantity <= 0:
+            raise ValueError("Invalid quantity")
+        if order.price <= 0:
+            raise ValueError("Invalid price")
+        if not order.symbol:
+            raise ValueError("Missing symbol")
+
+        # Execution logic
+        return self._submit_order(order)
+
+# ✅ GOOD - extracted validation abstraction
+class OrderValidator:
+    """Encapsulated validation abstraction."""
+    def validate(self, order: Order) -> None:
+        if order.quantity <= 0:
+            raise ValueError("Invalid quantity")
+        if order.price <= 0:
+            raise ValueError("Invalid price")
+        if not order.symbol:
+            raise ValueError("Missing symbol")
+
+class OrderExecutor:
+    def __init__(self, validator: OrderValidator, broker: Broker) -> None:
+        self.validator = validator  # Composed validation
+        self.broker = broker
+
+    def execute(self, order: Order) -> ExecutionResult:
+        self.validator.validate(order)  # Delegated validation
+        return self._submit_order(order)  # Focused execution
+```
+
+**Benefits in testing:**
+
+```python
+# Easy to test with composition
+def test_order_executor_with_valid_order():
+    mock_validator = Mock(spec=OrderValidator)
+    mock_broker = Mock(spec=Broker)
+    executor = OrderExecutor(mock_validator, mock_broker)
+
+    result = executor.execute(order)
+
+    mock_validator.validate.assert_called_once_with(order)
+    assert result.success
+
+# Validator is independently testable
+def test_order_validator_rejects_negative_quantity():
+    validator = OrderValidator()
+    invalid_order = Order(quantity=-10, price=100, symbol="AAPL")
+
+    with pytest.raises(ValueError, match="Invalid quantity"):
+        validator.validate(invalid_order)
+```
+
+**Exceptions:**
+
+Inheritance is acceptable ONLY for:
+- Protocol/ABC definitions (interfaces)
+- Pydantic BaseModel subclasses (data models)
+- Framework-required inheritance (pytest fixtures, Django models)
+- Enum subclasses
+
+**Never use inheritance for code reuse** - always extract and compose instead.
 
 ### LLM Abstraction (Custom Provider Pattern)
 
@@ -479,12 +1000,13 @@ python -m src.main AAPL
 python -m src.main TSLA --period 180
 
 # Quality checks (run before every commit)
-mise check              # All checks: format + lint + test
+mise check              # All checks: format + lint + typecheck + test
 
 # Individual checks
 mise format             # Format code with ruff
 mise format:check       # Check formatting (CI mode)
 mise lint               # Run ruff linter
+mise typecheck          # Run pyrefly type checker
 mise test               # Run pytest
 mise test:cov           # Run with coverage report
 mise audit              # Check dependencies for known CVEs (pip-audit)

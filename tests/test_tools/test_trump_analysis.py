@@ -1,6 +1,6 @@
 """Tests for Trump analysis tool."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -10,68 +10,67 @@ from src.tools.trump_analysis import TrumpAnalysisTool
 class TestTrumpAnalysisTool:
     """Tests for TrumpAnalysisTool."""
 
-    def test_name(self):
+    def test_name(self, test_container_full):
         """Test tool name."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
         assert tool.name == "analyze_trump_posts"
 
-    def test_tool_definition(self):
+    def test_tool_definition(self, test_container_full):
         """Test tool definition structure."""
-        tool = TrumpAnalysisTool()
-        definition = tool.get_tool_definition()
+        tool = TrumpAnalysisTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "analyze_trump_posts"
         assert "Truth Social" in definition["function"]["description"]
         assert "days" in definition["function"]["parameters"]["properties"]
 
-    def test_does_not_require_confirmation(self):
+    def test_does_not_require_confirmation(self, test_container_full):
         """Test that tool does not require confirmation."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
         assert tool.requires_confirmation is False
 
-    def test_execute_no_posts(self):
+    def test_execute_no_posts(self, test_container_full):
         """Test execute with no posts found."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
 
-        with patch("src.data.truth_social.TruthSocialFetcher") as mock_fetcher_cls:
-            mock_fetcher = MagicMock()
-            mock_fetcher.fetch_recent.return_value = MagicMock(posts=[])
-            mock_fetcher_cls.return_value = mock_fetcher
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_recent.return_value = MagicMock(posts=[])
+        test_container_full.truth_social_fetcher.override(mock_fetcher)
 
-            result = tool.execute(days=3)
+        result = tool.execute(days=3)
 
-            assert "No Trump posts found" in result
+        assert "No Trump posts found" in result
 
-    def test_execute_clamps_days(self):
+    def test_execute_clamps_days(self, test_container_full):
         """Test that days parameter is clamped to 1-7."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
 
-        with patch("src.data.truth_social.TruthSocialFetcher") as mock_fetcher_cls:
-            mock_fetcher = MagicMock()
-            mock_fetcher.fetch_recent.return_value = MagicMock(posts=[])
-            mock_fetcher_cls.return_value = mock_fetcher
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_recent.return_value = MagicMock(posts=[])
+        test_container_full.truth_social_fetcher.override(mock_fetcher)
 
-            tool.execute(days=10)
-            mock_fetcher.fetch_recent.assert_called_with(hours=168)  # 7 * 24
+        tool.execute(days=10)
+        mock_fetcher.fetch_recent.assert_called_with(hours=168)  # 7 * 24
 
-            tool.execute(days=0)
-            mock_fetcher.fetch_recent.assert_called_with(hours=24)  # 1 * 24
+        tool.execute(days=0)
+        mock_fetcher.fetch_recent.assert_called_with(hours=24)  # 1 * 24
 
-    def test_execute_handles_error(self):
+    def test_execute_handles_error(self, test_container_full):
         """Test execute handles errors gracefully."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
 
-        with patch("src.data.truth_social.TruthSocialFetcher") as mock_fetcher_cls:
-            mock_fetcher_cls.side_effect = Exception("API error")
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_recent.side_effect = Exception("API error")
+        test_container_full.truth_social_fetcher.override(mock_fetcher)
 
-            result = tool.execute(days=3)
+        result = tool.execute(days=3)
 
-            assert "Failed to analyze Trump posts" in result
+        assert "Failed to analyze Trump posts" in result
 
-    def test_repr(self):
+    def test_repr(self, test_container_full):
         """Test string representation."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
         assert repr(tool) == "TrumpAnalysisTool()"
 
 
@@ -95,9 +94,9 @@ class TestFormatAnalysis:
             post_count=5,
         )
 
-    def test_format_analysis_structure(self, mock_analysis):
+    def test_format_analysis_structure(self, test_container_full, mock_analysis):
         """Test formatted analysis contains all sections."""
-        tool = TrumpAnalysisTool()
+        tool = TrumpAnalysisTool(container=test_container_full)
         result = tool._format_analysis(mock_analysis, days=3)
 
         assert "# Trump Analysis (Last 3 Days)" in result

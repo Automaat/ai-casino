@@ -44,8 +44,41 @@ daemon:
     enable_after_hours: false
 
   state:
-    # State persistence file
+    # State persistence file (deprecated - use database for production)
     state_file: "~/.ai-casino/daemon-state.json"
+
+    # Database cleanup configuration
+    # Enable automatic cleanup of old records
+    cleanup_enabled: true
+    # Retention period in days (1-365)
+    cleanup_retention_days: 90
+    # Hour to run daily cleanup (0-23, 3 = 3 AM)
+    cleanup_hour: 3
+
+  # ========================================
+  # DATABASE CONFIGURATION
+  # ========================================
+  database:
+    # PostgreSQL connection URL (priority: config > DATABASE_URL env var)
+    # Format: postgresql+asyncpg://user:password@host:port/dbname
+    # Example: postgresql+asyncpg://postgres:dev@localhost:5432/ai_casino_dev
+    # database_url: null
+
+    # Connection pool size (1-20)
+    # Controls max number of persistent connections
+    pool_size: 5
+
+    # Max connections beyond pool_size (0-50)
+    # Allows temporary burst capacity
+    max_overflow: 10
+
+    # Verify connection health before use
+    # Prevents stale connection errors
+    pool_pre_ping: true
+
+    # Enable database persistence (vs JSON file)
+    # Set to false to disable database writes (read-only mode)
+    enable_persistence: true
 
   journal:
     # After-hours trade journal
@@ -77,12 +110,98 @@ daemon:
     screen_days: ["mon", "tue", "wed", "thu", "fri"]
     # Screening criteria: momentum, value, or breakout
     criteria: "momentum"
-    # Universe to screen: SP500, NASDAQ100, or COMBINED
+    # Universe to screen: SP500 (~500), NASDAQ100 (~100), COMBINED (~600),
+    # RUSSELL3000 (~3000 unfiltered), US_LIQUID (~500-1500 filtered by liquidity_filters)
     universe: "COMBINED"
     # Number of top symbols to add to watchlist
     top_n: 10
     # Watchlist name for screened symbols
     watchlist_name: "daemon-screening"
+
+  # ========================================
+  # AUTOMATED STOCK DISCOVERY
+  # ========================================
+  discovery:
+    # Enable multi-source automated stock discovery
+    enabled: false
+
+    # Discovery schedule (after-hours)
+    discovery_time: "16:30"  # HH:MM, 16:00-20:00 window
+    discovery_days: ["mon", "wed", "fri"]
+
+    # Discovery sources (enable/disable)
+    enable_technical_screening: true    # RSI/MACD/breakout screening
+    enable_reddit_trending: false       # Reddit trending tickers
+    enable_earnings_calendar: true      # Stocks with upcoming earnings
+    enable_sector_rotation: true        # Stocks from leading sectors
+    enable_volume_spikes: false         # Real-time volume >2x avg (intraday)
+    enable_price_gaps: false            # Real-time gaps >5% (intraday)
+    enable_news_trending: false         # Marketaux trending articles
+
+    # Technical screening config
+    screening_criteria: ["momentum"]    # momentum, value, breakout (list)
+    # Universe: SP500 (~500), NASDAQ100 (~100), COMBINED (~600),
+    # RUSSELL3000 (~3000 unfiltered), US_LIQUID (~500-1500 filtered)
+    screening_universe: "COMBINED"
+    screening_top_n: 20                 # Candidates per criteria
+
+    # Reddit config
+    reddit_min_mentions: 5              # Minimum mentions threshold
+    reddit_min_upvote_ratio: 0.75       # Minimum upvote ratio (0-1)
+
+    # Earnings config
+    earnings_lookahead_days: 7          # Find earnings in next N days
+
+    # Trigger thresholds (intraday detection)
+    volume_spike_threshold: 2.0         # 2x average volume
+    price_gap_threshold: 5.0            # 5% price gap
+
+    # Multi-factor scoring weights (must sum to ~1.0)
+    scoring_weights:
+      technical_weight: 0.35    # Screening score
+      liquidity_weight: 0.25    # Volume, market cap
+      timing_weight: 0.20       # Earnings, sector momentum
+      social_weight: 0.15       # Reddit, news mentions
+      volatility_weight: 0.05   # ATR-based
+
+    # Discovery limits
+    max_discovered_per_cycle: 5         # Max new symbols per run
+    min_composite_score: 0.60           # Minimum score (0-1)
+    max_watchlist_size: 50              # Hard cap on total watchlist
+
+    # Portfolio-aware filters
+    portfolio_filters:
+      max_sector_concentration: 0.30    # Max 30% in one sector
+      max_correlation_threshold: 0.75   # Max correlation with holdings
+      min_market_cap: 1000000000        # $1B minimum
+      min_avg_volume: 1000000           # 1M shares/day minimum
+      price_range: [10.0, 500.0]        # Avoid penny stocks & ultra-expensive
+      exclude_sectors: []               # Sectors to exclude (e.g., ["Energy", "Utilities"])
+
+    # Candidate lifecycle management
+    candidate_ttl_days: 7               # Auto-expire after N days no signal
+    auto_remove_on_signal: false        # Remove from discovery after first signal
+
+    # Outcome tracking (learn from discoveries)
+    track_outcomes: true
+    outcome_lookback_days: 90
+
+  # ========================================
+  # LIQUIDITY FILTERS (for US_LIQUID universe)
+  # ========================================
+  liquidity_filters:
+    # Minimum market capitalization (default: $1B)
+    # Examples: 2000000000 ($2B strict), 500000000 ($500M moderate), 100000000 ($100M relaxed)
+    min_market_cap: 1000000000
+
+    # Minimum average daily volume in shares (default: 1M shares/day)
+    # Examples: 2000000 (2M strict), 500000 (500k moderate), 100000 (100k relaxed)
+    min_avg_volume: 1000000
+
+    # Price range to filter stocks [min, max] (default: $10-$500)
+    # Avoids penny stocks (<$10) and ultra-expensive stocks (>$500)
+    # Examples: [20.0, 500.0] (strict), [5.0, 500.0] (moderate), [2.0, 1000.0] (relaxed)
+    price_range: [10.0, 500.0]
 
   optimization:
     # After-hours strategy parameter optimization
@@ -242,6 +361,109 @@ daemon:
     # Hours of overnight news to analyze
     lookback_hours: 16
 
+  position_sizing:
+    # Position sizing strategy combining multiple methods
+    # Controls how many shares to buy/sell per trade
+
+    # PRIMARY GOAL: What are you optimizing for?
+    # - "maximize_returns": Use portfolio optimization weights primarily (best for growth)
+    # - "minimize_risk": Use risk-based sizing primarily (best for capital preservation)
+    # - "balanced": Blend both methods 50/50 (moderate approach)
+    primary_goal: "balanced"
+
+    # RISK TOLERANCE: How aggressive are position sizing constraints?
+    # - "conservative": Take minimum of all methods, strict limits, never exceed
+    # - "moderate": Layered constraints, balance safety and opportunity
+    # - "aggressive": Looser limits, confidence-weighted, allow larger positions
+    risk_tolerance: "moderate"
+
+    # COMPLEXITY: How sophisticated should the sizing logic be?
+    # - "simple": Basic layered constraints (primary → cash limit → risk limits)
+    # - "advanced": Include confidence weighting + Monte Carlo adjustment
+    complexity: "simple"
+
+    # ===== RISK LIMITS (always applied) =====
+
+    # Maximum risk per trade (% of account balance)
+    # Example: 2% means you can lose max 2% if stop-loss hits
+    max_risk_per_trade_pct: 2.0
+
+    # Maximum single position size (% of account balance)
+    # Example: 20% means no single stock can exceed $20k on $100k account
+    max_single_position_pct: 20.0
+
+    # Maximum total portfolio exposure (% of account balance)
+    # Example: 80% means max $80k invested on $100k account ($20k cash buffer)
+    max_total_exposure_pct: 80.0
+
+    # ===== BLENDING WEIGHTS (for "balanced" primary_goal) =====
+
+    # Weight for portfolio optimization method (must sum to 1.0 with risk_based)
+    # Higher = trust optimizer more, follow rebalancing targets more closely
+    blend_weight_optimization: 0.5
+
+    # Weight for risk-based method (must sum to 1.0 with optimization)
+    # Higher = trust risk management more, size based on stop-loss distance
+    blend_weight_risk_based: 0.5
+
+    # ===== CONFIDENCE SCALING (complexity="advanced" only) =====
+
+    # Reduce position size based on signal confidence
+    confidence_scaling_enabled: false
+
+    # High confidence threshold (no reduction above this)
+    # Example: 0.8 = full position size if confidence >= 80%
+    confidence_high_threshold: 0.8
+
+    # Low confidence threshold (reduction applied below this)
+    # Example: 0.6 = reduce position size if confidence < 60%
+    confidence_low_threshold: 0.6
+
+    # Reduction factor for low confidence trades (0.1-0.9)
+    # Example: 0.5 = use 50% of calculated position size if confidence < low_threshold
+    confidence_low_reduction_factor: 0.5
+
+    # ===== MONTE CARLO ADJUSTMENT (complexity="advanced" only) =====
+
+    # Reduce position size based on Monte Carlo stress test results
+    # Requires monte_carlo.enabled=true
+    use_monte_carlo_adjustment: false
+
+    # Multiplier applied when Monte Carlo shows high tail risk
+    # Example: 0.7 = reduce position to 70% if stress test fails
+    monte_carlo_risk_multiplier: 0.7
+
+    # ===== EXAMPLES =====
+    #
+    # CONSERVATIVE GROWTH:
+    #   primary_goal: "maximize_returns"
+    #   risk_tolerance: "conservative"
+    #   complexity: "simple"
+    #   max_risk_per_trade_pct: 1.0
+    #   max_single_position_pct: 10.0
+    #
+    # AGGRESSIVE RETURNS:
+    #   primary_goal: "maximize_returns"
+    #   risk_tolerance: "aggressive"
+    #   complexity: "advanced"
+    #   max_risk_per_trade_pct: 3.0
+    #   max_single_position_pct: 25.0
+    #   confidence_scaling_enabled: true
+    #
+    # SAFETY FIRST:
+    #   primary_goal: "minimize_risk"
+    #   risk_tolerance: "conservative"
+    #   complexity: "simple"
+    #   max_risk_per_trade_pct: 1.0
+    #   max_single_position_pct: 15.0
+    #
+    # BALANCED (default):
+    #   primary_goal: "balanced"
+    #   risk_tolerance: "moderate"
+    #   complexity: "simple"
+    #   blend_weight_optimization: 0.5
+    #   blend_weight_risk_based: 0.5
+
   position_management:
     # Advanced position management (trailing stops, profit targets)
     # Requires auto_trade=true
@@ -249,6 +471,9 @@ daemon:
     # Trailing stop loss
     trailing_stop_enabled: true
     trailing_stop_percent: 3.0
+    # Minimum dollar gap between stop price and current price (0.01-1.0, default: 0.10)
+    # Prevents Alpaca rejection due to stop price too close to market price
+    min_stop_gap_dollars: 0.10
     # Partial profit taking
     partial_profit_enabled: true
     profit_target_1_percent: 5.0
@@ -385,6 +610,81 @@ daemon:
     # Enable position syncing with broker before analysis
     enable_position_sync: true
 
+  # ========================================
+  # COORDINATOR AGENT (EXPERIMENTAL)
+  # ========================================
+  coordinator:
+    # Enable coordinator agent (autonomous multi-step trading cycles)
+    # Coordinator orchestrates analysis, tool calls, and trade execution
+    # WARNING: Experimental feature - test thoroughly in paper mode
+    enabled: false
+
+    # Maximum tool calls per coordinator cycle (5-50)
+    # Controls how many actions (fetch data, analyze, execute) the agent can take
+    # Higher values allow more complex workflows but increase latency
+    # Example: 25 = coordinator can make up to 25 tool calls before cycle ends
+    max_tool_calls: 25
+
+    # LLM temperature for coordinator reasoning (0.0-1.0)
+    # Lower = more deterministic decisions, higher = more exploratory
+    # Recommended: 0.3-0.5 for trading (balance creativity and consistency)
+    temperature: 0.5
+
+    # Optional LLM model override for coordinator (uses daemon llm config if null)
+    # Example: "claude-sonnet-4" for high-quality reasoning
+    # Set to null to inherit from daemon.llm.model
+    model_override: null
+
+    # Trade confirmation mode
+    # - "auto": Execute trades automatically within risk limits
+    # - "manual": Require human approval before executing each trade
+    confirmation_mode: "auto"
+
+    # Maximum cycle duration in seconds before timeout (60-3600)
+    # Prevents runaway cycles that take too long
+    # Example: 600 = 10 minute timeout per cycle
+    cycle_timeout_seconds: 600
+
+    # Maximum trades executed per day (1-100)
+    # Safety limit to prevent excessive trading
+    # Resets at market close
+    max_daily_trades: 10
+
+    # Maximum position size as % of portfolio (1.0-100.0)
+    # Overrides position_sizing config for coordinator-initiated trades
+    # Example: 10.0 = max 10% of portfolio in single position
+    max_position_pct: 10.0
+
+    # Minimum signal confidence required to execute trade (0.0-1.0)
+    # Lower confidence signals are flagged but not executed
+    # Example: 0.7 = only execute trades with ≥70% confidence
+    min_confidence_to_trade: 0.7
+
+    # ===== EXAMPLES =====
+    #
+    # CONSERVATIVE (manual approval):
+    #   enabled: true
+    #   confirmation_mode: "manual"
+    #   max_daily_trades: 5
+    #   max_position_pct: 5.0
+    #   min_confidence_to_trade: 0.8
+    #
+    # AGGRESSIVE (auto execution):
+    #   enabled: true
+    #   confirmation_mode: "auto"
+    #   max_daily_trades: 20
+    #   max_position_pct: 15.0
+    #   min_confidence_to_trade: 0.6
+    #   temperature: 0.7
+    #
+    # BALANCED (default):
+    #   enabled: false
+    #   confirmation_mode: "auto"
+    #   max_daily_trades: 10
+    #   max_position_pct: 10.0
+    #   min_confidence_to_trade: 0.7
+    #   temperature: 0.5
+
   api:
     # Embedded API server for daemon state/control
     enabled: false
@@ -392,11 +692,78 @@ daemon:
     host: "127.0.0.1"
     # TCP port (1-65535)
     port: 8484
+    # CORS allowed origins for dashboard access
+    # Add additional origins if dashboard runs on different ports
+    # cors_origins: ["http://localhost:8050", "http://localhost:5173", "http://localhost:3000"]
 
   # LLM Provider Configuration (optional, falls back to environment variables)
   llm:
     # provider: "ollama"      # Falls back to LLM_PROVIDER (ollama, anthropic, openai)
     # model: "qwen3:14b"      # Falls back to LLM_MODEL
+
+  # Data Sources Configuration
+  data_sources:
+    # Market data source: "yfinance" (no API key required) or "alpha_vantage" (requires API key)
+    # Default: yfinance (works without API key, auto-fallback behavior)
+    # Use alpha_vantage for higher data quality if you have API key
+    market_data: "yfinance"
+
+  # Profiling Configuration (performance monitoring)
+  profiling:
+    # Enable per-cycle CPU profiling with yappi (default: false)
+    # Requires: pip install yappi snakeviz
+    # enabled: false
+
+    # Output directory for profile files (supports ~ expansion)
+    # Directory structure: {output_dir}/{YYYY-MM-DD}/cycle_{num}_{timestamp}.{pstats,json}
+    # output_dir: "~/.ai-casino/profiles"
+
+    # Profiler type: "yappi" (async-aware, currently the only supported profiler)
+    # profiler_type: "yappi"
+
+    # Clock type: "wall" (wall-clock time, recommended) or "cpu" (CPU time only)
+    # clock_type: "wall"
+
+    # Output formats (list of: "pstats", "json")
+    # - pstats: Binary format for snakeviz/gprof2dot visualization
+    # - json: Human-readable summary with top functions and percentiles
+    # formats: ["pstats", "json"]
+
+    # Retention policy - files older than retention_days are deleted
+    # Valid range: 1-90 days (default: 7)
+    # retention_days: 7
+
+    # Maximum number of profile files to keep (default: 1000)
+    # Oldest files deleted when limit exceeded
+    # Valid range: 10-10000
+    # max_files: 1000
+
+    # Maximum disk usage in MB (default: 500)
+    # Oldest files deleted when limit exceeded
+    # Valid range: 10-5000
+    # max_disk_mb: 500
+
+    # Sample rate - profile every Nth cycle (default: 1 = every cycle)
+    # Use higher values to reduce overhead (e.g., 5 = every 5th cycle)
+    # Valid range: 1-100
+    # sample_rate: 1
+
+    # Number of top functions to track in output (default: 50)
+    # Valid range: 10-500
+    # top_n_functions: 50
+
+    # Enable metrics aggregation (default: true)
+    # Calculates percentiles (p50/p95/p99) and rolling window stats
+    # enable_metrics_aggregation: true
+
+    # Metrics rolling window size (default: 100)
+    # Number of recent profiling records to keep in memory
+    # Valid range: 10-1000
+    # metrics_window_size: 100
+
+    # Visualization:
+    # - snakeviz: python -m snakeviz ~/.ai-casino/profiles/YYYY-MM-DD/cycle_*.pstats
+    # - gprof2dot: gprof2dot -f pstats cycle.pstats | dot -Tpng -o output.png
 
   # API Keys Configuration (optional, falls back to environment variables)
   # Config keys take priority over env vars when both are present

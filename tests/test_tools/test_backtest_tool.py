@@ -1,17 +1,11 @@
 """Tests for RunBacktestTool."""
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.tools.backtest import RunBacktestTool
-
-
-@pytest.fixture
-def tool():
-    """Create RunBacktestTool."""
-    return RunBacktestTool()
 
 
 @pytest.fixture
@@ -33,17 +27,20 @@ def mock_backtest_result():
 class TestRunBacktestTool:
     """Tests for RunBacktestTool."""
 
-    def test_name(self, tool):
+    def test_name(self, test_container_full):
         """Test tool name."""
+        tool = RunBacktestTool(container=test_container_full)
         assert tool.name == "run_backtest"
 
-    def test_requires_confirmation(self, tool):
+    def test_requires_confirmation(self, test_container_full):
         """Test that tool requires confirmation."""
+        tool = RunBacktestTool(container=test_container_full)
         assert tool.requires_confirmation is True
 
-    def test_get_tool_definition(self, tool):
+    def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
-        definition = tool.get_tool_definition()
+        tool = RunBacktestTool(container=test_container_full)
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "run_backtest"
@@ -56,56 +53,82 @@ class TestRunBacktestTool:
         assert "cash" in params["properties"]
         assert set(params["required"]) == {"symbol", "start_date", "end_date"}
 
-    def test_execute_success(self, tool, mock_backtest_result):
+    def test_execute_success(self, test_container_full, mock_backtest_result):
         """Test successful execution."""
-        with patch("src.backtesting.runner.BacktestRunner") as mock_runner_cls:
-            mock_runner = MagicMock()
-            mock_runner.run_backtest.return_value = mock_backtest_result
-            mock_runner_cls.return_value = mock_runner
+        from src.backtesting.runner import BacktestRunner
 
-            result = tool.execute("AAPL", "2023-01-01", "2024-01-01")
+        tool = RunBacktestTool(container=test_container_full)
 
-            assert "AAPL" in result
-            assert "25.34%" in result  # total return
-            assert "1.45" in result  # sharpe
-            assert "48" in result  # total trades
-            mock_runner.run_backtest.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01")
+        mock_runner = MagicMock(spec=BacktestRunner)
+        mock_runner.run_backtest.return_value = mock_backtest_result
+        test_container_full.backtest_runner.override(mock_runner)
 
-    def test_execute_uppercase_symbol(self, tool, mock_backtest_result):
+        result = tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01")
+
+        assert "AAPL" in result
+        assert "25.34%" in result  # total return
+        assert "1.45" in result  # sharpe
+        assert "48" in result  # total trades
+        mock_runner.run_backtest.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01")
+
+    def test_execute_uppercase_symbol(self, test_container_full, mock_backtest_result):
         """Test that symbol is uppercased."""
-        with patch("src.backtesting.runner.BacktestRunner") as mock_runner_cls:
-            mock_runner = MagicMock()
-            mock_runner.run_backtest.return_value = mock_backtest_result
-            mock_runner_cls.return_value = mock_runner
+        from src.backtesting.runner import BacktestRunner
 
-            tool.execute("aapl", "2023-01-01", "2024-01-01")
+        tool = RunBacktestTool(container=test_container_full)
 
-            mock_runner.run_backtest.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01")
+        mock_runner = MagicMock(spec=BacktestRunner)
+        mock_runner.run_backtest.return_value = mock_backtest_result
+        test_container_full.backtest_runner.override(mock_runner)
 
-    def test_execute_custom_cash(self, tool, mock_backtest_result):
+        tool.execute(symbol="aapl", start_date="2023-01-01", end_date="2024-01-01")
+
+        mock_runner.run_backtest.assert_called_once_with("AAPL", "2023-01-01", "2024-01-01")
+
+    def test_execute_custom_cash(self, test_container_full, mock_backtest_result):
         """Test execution with custom cash."""
-        with patch("src.backtesting.runner.BacktestRunner") as mock_runner_cls:
-            mock_runner = MagicMock()
-            mock_runner.run_backtest.return_value = mock_backtest_result
-            mock_runner_cls.return_value = mock_runner
+        from dependency_injector import providers
 
-            tool.execute("AAPL", "2023-01-01", "2024-01-01", cash=50000)
+        from src.backtesting.runner import BacktestRunner
 
-            mock_runner_cls.assert_called_once_with(cash=50000.0)
+        tool = RunBacktestTool(container=test_container_full)
 
-    def test_execute_error_handling(self, tool):
+        mock_runner = MagicMock(spec=BacktestRunner)
+        mock_runner.run_backtest.return_value = mock_backtest_result
+
+        factory_called = False
+        original_cash = None
+
+        def mock_factory(cash=10000.0):
+            nonlocal factory_called, original_cash
+            factory_called = True
+            original_cash = cash
+            return mock_runner
+
+        test_container_full.backtest_runner.override(providers.Factory(mock_factory))
+
+        tool.execute(symbol="AAPL", start_date="2023-01-01", end_date="2024-01-01", cash=50000)
+
+        assert factory_called
+        assert original_cash == 50000.0
+
+    def test_execute_error_handling(self, test_container_full):
         """Test error handling on failure."""
-        with patch("src.backtesting.runner.BacktestRunner") as mock_runner_cls:
-            mock_runner = MagicMock()
-            mock_runner.run_backtest.side_effect = Exception("No data available")
-            mock_runner_cls.return_value = mock_runner
+        from src.backtesting.runner import BacktestRunner
 
-            result = tool.execute("INVALID", "2023-01-01", "2024-01-01")
+        tool = RunBacktestTool(container=test_container_full)
 
-            assert "Backtest failed" in result
-            assert "No data available" in result
+        mock_runner = MagicMock(spec=BacktestRunner)
+        mock_runner.run_backtest.side_effect = Exception("No data available")
+        test_container_full.backtest_runner.override(mock_runner)
 
-    def test_repr(self, tool):
+        result = tool.execute(symbol="INVALID", start_date="2023-01-01", end_date="2024-01-01")
+
+        assert "Backtest failed" in result
+        assert "No data available" in result
+
+    def test_repr(self, test_container_full):
         """Test string representation."""
+        tool = RunBacktestTool(container=test_container_full)
         repr_str = repr(tool)
         assert "RunBacktestTool" in repr_str
