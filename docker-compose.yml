@@ -4,10 +4,10 @@ services:
     container_name: ai-casino-postgres
     restart: unless-stopped
     environment:
-      # Database configuration (POSTGRES_PASSWORD must be provided via environment or .env)
+      # Database configuration (uses password from daemon-production.yaml by default)
       - POSTGRES_DB=ai_casino
       - POSTGRES_USER=ai_casino
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD environment variable must be set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ai_casino_secure_pass_2025}
     volumes:
       # Persistent storage on host machine
       - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql
