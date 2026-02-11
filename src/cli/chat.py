@@ -8,6 +8,8 @@ from pathlib import Path
 import typer
 from loguru import logger
 
+from src.utils.logging import sanitize_log_record
+
 
 def chat() -> None:
     """Launch interactive TUI chat interface."""
@@ -32,6 +34,7 @@ def chat() -> None:
         level="INFO",
         rotation="10 MB",
         retention="3 days",
+        filter=sanitize_log_record,
     )
 
     # Suppress all standard library logging to stderr

@@ -14,6 +14,7 @@ from rich.table import Table
 from src.optimization.optimizer import OptunaOptimizer
 from src.optimization.results import OptimizationResult
 from src.optimization.validation import WalkForwardValidator
+from src.utils.logging import sanitize_log_record
 
 console = Console()
 
@@ -124,6 +125,7 @@ def optimize(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         level=os.getenv("LOG_LEVEL", "INFO"),
+        filter=sanitize_log_record,
     )
 
     end_date = end or datetime.now(tz=UTC).strftime("%Y-%m-%d")
