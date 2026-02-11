@@ -6,9 +6,9 @@ services:
     environment:
       - POSTGRES_DB=ai_casino
       - POSTGRES_USER=ai_casino
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGE_ME_INSECURE_DEFAULT}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
-      - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql
+      - ${HOME}/.ai-casino/postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:

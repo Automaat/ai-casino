@@ -140,7 +140,7 @@ run = """
   echo "Daemon started (PID: $DAEMON_PID)"
   sleep 3
   echo "Installing frontend dependencies..."
-  cd frontend && npm install
+  cd frontend && npm ci
   echo "Building Svelte frontend..."
   npm run build
   echo "Starting Svelte frontend at http://localhost:4173"
@@ -158,7 +158,7 @@ run = """
   echo "Daemon started (PID: $DAEMON_PID)"
   sleep 3
   echo "Installing frontend dependencies..."
-  cd frontend && npm install
+  cd frontend && npm ci
   echo "Starting Svelte dev server at http://localhost:5173"
   npm run dev -- --host 0.0.0.0
 """
