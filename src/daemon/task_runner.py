@@ -30,21 +30,22 @@ class ScheduledTaskRunner:
     # Task registry (explicit, not dynamic)
     TASKS: ClassVar[list[ScheduledTask]] = [
         ScheduledTask("game_plan", "is_game_plan_time", "_run_game_plan", is_async=True),
-        ScheduledTask("prefetch", "is_prefetch_time", "_run_prefetch", "prefetch.enabled"),
+        ScheduledTask("prefetch", "is_prefetch_time", "_run_prefetch", "prefetch.enabled", is_async=True),
         ScheduledTask(
             "pre_market_refresh",
             "is_pre_market_refresh_time",
             "_run_pre_market_refresh",
             "prefetch.enabled",
+            is_async=True,
         ),
-        ScheduledTask("earnings_fetch", "is_earnings_fetch_time", "_run_earnings_fetch"),
-        ScheduledTask("sector_rotation", "is_sector_rotation_time", "_run_sector_rotation"),
+        ScheduledTask("earnings_fetch", "is_earnings_fetch_time", "_run_earnings_fetch", is_async=True),
+        ScheduledTask("sector_rotation", "is_sector_rotation_time", "_run_sector_rotation", is_async=True),
         ScheduledTask(
             "portfolio_rebalancing",
             "is_portfolio_rebalancing_time",
             "_run_portfolio_rebalancing",
         ),
-        ScheduledTask("peer_analysis", "is_peer_analysis_time", "_run_peer_analysis"),
+        ScheduledTask("peer_analysis", "is_peer_analysis_time", "_run_peer_analysis", is_async=True),
         ScheduledTask("correlation_audit", "is_correlation_audit_time", "_run_correlation_audit"),
         ScheduledTask(
             "monte_carlo",
@@ -56,6 +57,7 @@ class ScheduledTaskRunner:
             "after_hours_screening",
             "is_after_hours_screening_time",
             "_run_after_hours_screening",
+            is_async=True,
         ),
         ScheduledTask("optimization", "is_optimization_time", "_run_optimization", "optimization.enabled"),
         ScheduledTask("signal_tracking", "is_signal_tracking_time", "_run_signal_tracking"),
@@ -130,7 +132,7 @@ class ScheduledTaskRunner:
 
         # Special case: daily risk report (runs when market closed)
         if not self.scheduler.is_market_open() and self._task_service:
-            self._task_service.run_daily_risk_report()
+            await self._task_service.run_daily_risk_report()
 
     def _is_task_enabled(self, config_path: str) -> bool:
         """Check if task enabled via config path.

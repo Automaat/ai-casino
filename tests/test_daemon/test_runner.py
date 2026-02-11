@@ -482,7 +482,7 @@ class TestSectorRotationIntegration:
 
         rotation_called = False
 
-        def mock_run_rotation() -> None:
+        async def mock_run_rotation() -> None:
             nonlocal rotation_called
             rotation_called = True
 
@@ -530,7 +530,7 @@ class TestSectorRotationIntegration:
 
         rotation_called = False
 
-        def mock_run_rotation() -> None:
+        async def mock_run_rotation() -> None:
             nonlocal rotation_called
             rotation_called = True
 
@@ -556,7 +556,7 @@ class TestSectorRotationIntegration:
         assert not rotation_called
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_run_sector_rotation_records_state(self, sample_config: DaemonConfig) -> None:
+    async def test_run_sector_rotation_records_state(self, sample_config: DaemonConfig) -> None:
         """Test run_sector_rotation records analysis in state."""
         from datetime import UTC, datetime
 
@@ -594,14 +594,14 @@ class TestSectorRotationIntegration:
         task_service = DaemonTaskService(runner._components, runner._container)
 
         with patch("src.daemon.sector_rotation.DaemonSectorRotation", return_value=mock_daemon_rotation):
-            task_service.run_sector_rotation()
+            await task_service.run_sector_rotation()
 
         assert runner.state.last_sector_rotation is not None
         assert len(runner.state.sector_rotation_history) == 1
         assert runner.state.sector_rotation_history[0].leading_sectors == ["TECHNOLOGY"]
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_run_sector_rotation_dedup(self, sample_config: DaemonConfig) -> None:
+    async def test_run_sector_rotation_dedup(self, sample_config: DaemonConfig) -> None:
         """Test sector rotation deduplication (skip if already ran today)."""
         from datetime import datetime
         from zoneinfo import ZoneInfo
@@ -623,7 +623,7 @@ class TestSectorRotationIntegration:
 
         with patch("src.daemon.sector_rotation.DaemonSectorRotation") as mock_cls:
             mock_cls.return_value.run = mock_analyze
-            task_service.run_sector_rotation()
+            await task_service.run_sector_rotation()
 
         assert not rotation_ran
 
