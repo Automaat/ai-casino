@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.data.market import MarketData
@@ -29,37 +30,34 @@ class GetMarketDataTool(BaseTool):
         """Tool name."""
         return "get_market_data"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Get current market data for a stock including price, volume, and recent performance. "
                     "Use this to check current stock prices and basic market metrics."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "days": {
-                            "type": "integer",
-                            "description": "Number of days of historical data (default: 30)",
-                            "default": 30,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "days": ToolParameter(
+                            type="integer",
+                            description="Number of days of historical data (default: 30)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Fetch market data for a stock.

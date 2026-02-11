@@ -3,6 +3,11 @@ line-length = 110
 target-version = "py314"
 
 [lint]
+# Strict typing philosophy:
+# - All functions must have complete type annotations (ANN)
+# - Any type is banned except as last resort (ANN401)
+# - Prefer typed classes (Pydantic/dataclass) over dicts/kwargs with Any
+# - No implicit Optional (RUF013)
 select = [
     "F",      # Pyflakes
     "E",      # pycodestyle errors
@@ -12,7 +17,7 @@ select = [
     "N",      # pep8-naming
     "D",      # pydocstyle
     "UP",     # pyupgrade
-    "ANN",    # flake8-annotations
+    "ANN",    # flake8-annotations (includes ANN401 - ban Any)
     "S",      # flake8-bandit
     "BLE",    # flake8-blind-except
     "FBT",    # flake8-boolean-trap
@@ -121,6 +126,11 @@ max-complexity = 10
 
 [lint.pydocstyle]
 convention = "google"
+
+[lint.flake8-annotations]
+# Strict typing enforcement
+allow-star-arg-any = false  # Ban Any even in *args, **kwargs
+suppress-dummy-args = true  # Allow omitting types for dummy args like _ or __
 
 [format]
 quote-style = "double"

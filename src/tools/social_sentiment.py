@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.agents.social import SocialSentimentAnalysis
@@ -31,33 +32,31 @@ class GetSocialSentimentTool(BaseTool):
         """Tool name."""
         return "get_social_sentiment"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Analyze social sentiment for a stock from Reddit (WSB, r/stocks, r/investing) "
                     "and Finnhub social data. Returns social score, momentum, WSB mentions, "
                     "and sentiment breakdown."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Analyze social sentiment for a stock.

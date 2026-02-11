@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -30,37 +31,34 @@ class GetNewsTool(BaseTool):
         """Tool name."""
         return "get_news"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Get recent news articles for a stock. Returns headlines, sources, and dates. "
                     "Use this to understand recent events and news sentiment for a company."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of articles to return (default: 5)",
-                            "default": 5,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "limit": ToolParameter(
+                            type="integer",
+                            description="Maximum number of articles to return (default: 5)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Fetch news for a stock.

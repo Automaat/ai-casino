@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.backtesting.runner import BacktestResult
@@ -34,46 +35,43 @@ class RunBacktestTool(BaseTool):
         """Requires confirmation due to expensive computation."""
         return True
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Run a backtest of the momentum trading strategy on historical data. "
                     "Returns total return, Sharpe ratio, max drawdown, win rate, and trade stats. "
                     "This is an expensive operation that fetches data and runs simulations."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "start_date": {
-                            "type": "string",
-                            "description": "Backtest start date in YYYY-MM-DD format",
-                        },
-                        "end_date": {
-                            "type": "string",
-                            "description": "Backtest end date in YYYY-MM-DD format",
-                        },
-                        "cash": {
-                            "type": "integer",
-                            "description": "Initial cash balance (default: 100000)",
-                            "default": 100000,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "start_date": ToolParameter(
+                            type="string",
+                            description="Backtest start date in YYYY-MM-DD format",
+                        ),
+                        "end_date": ToolParameter(
+                            type="string",
+                            description="Backtest end date in YYYY-MM-DD format",
+                        ),
+                        "cash": ToolParameter(
+                            type="integer",
+                            description="Initial cash balance (default: 100000)",
+                        ),
                     },
-                    "required": ["symbol", "start_date", "end_date"],
-                },
-            },
-        }
+                    required=["symbol", "start_date", "end_date"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Run backtest for a stock.

@@ -5,6 +5,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from src.cache.historical import HistoricalCache
+from src.metrics.models import SignalRecord
 
 # Confidence bucket thresholds
 CONF_BUCKET_0_5 = 0.5
@@ -73,7 +74,7 @@ class SignalAccuracyCalculator:
             avg_return_20d=self._calculate_avg_return(signals, "20d"),
         )
 
-    def _calculate_hit_rate(self, signals: list[dict], signal_type: str, horizon: str) -> float:
+    def _calculate_hit_rate(self, signals: list[SignalRecord], signal_type: str, horizon: str) -> float:
         """Calculate hit rate for signal type at horizon.
 
         Args:
@@ -84,7 +85,7 @@ class SignalAccuracyCalculator:
         Returns:
             Hit rate (0.0-1.0)
         """
-        filtered = [s for s in signals if s["signal"] == signal_type]
+        filtered = [s for s in signals if s.signal == signal_type]
         if not filtered:
             return 0.0
 
@@ -93,12 +94,12 @@ class SignalAccuracyCalculator:
 
         for sig in filtered:
             # Use actual exit if closed early, else market price at T+Nd
-            price_future = sig["actual_exit_price"] or sig.get(f"price_at_{horizon}")
+            price_future = sig.actual_exit_price or getattr(sig, f"price_at_{horizon}")
             if price_future is None:
                 continue
 
-            if (signal_type == "BUY" and price_future > sig["price_at_signal"]) or (
-                signal_type == "SELL" and price_future < sig["price_at_signal"]
+            if (signal_type == "BUY" and price_future > sig.price_at_signal) or (
+                signal_type == "SELL" and price_future < sig.price_at_signal
             ):
                 hits += 1
 
@@ -127,7 +128,7 @@ class SignalAccuracyCalculator:
             return "0.9-1.0"
         return None
 
-    def _is_signal_correct(self, signal: dict, horizon: str) -> bool | None:
+    def _is_signal_correct(self, signal: SignalRecord, horizon: str) -> bool | None:
         """Check if signal prediction was correct.
 
         Args:
@@ -137,18 +138,18 @@ class SignalAccuracyCalculator:
         Returns:
             True if correct, False if incorrect, None if no data
         """
-        price_future = signal["actual_exit_price"] or signal.get(f"price_at_{horizon}")
+        price_future = signal.actual_exit_price or getattr(signal, f"price_at_{horizon}")
         if price_future is None:
             return None
 
-        signal_type = signal["signal"]
+        signal_type = signal.signal
         if signal_type == "BUY":
-            return price_future > signal["price_at_signal"]
+            return price_future > signal.price_at_signal
         if signal_type == "SELL":
-            return price_future < signal["price_at_signal"]
+            return price_future < signal.price_at_signal
         return None
 
-    def _calculate_calibration(self, signals: list[dict], horizon: str) -> dict[str, float]:
+    def _calculate_calibration(self, signals: list[SignalRecord], horizon: str) -> dict[str, float]:
         """Bucket by confidence, compute hit rate per bucket.
 
         Args:
@@ -158,13 +159,13 @@ class SignalAccuracyCalculator:
         Returns:
             Dict mapping confidence bucket to hit rate
         """
-        buckets: dict[str, list[dict]] = defaultdict(list)
+        buckets: dict[str, list[SignalRecord]] = defaultdict(list)
 
         for sig in signals:
-            if sig["signal"] == "HOLD":
+            if sig.signal == "HOLD":
                 continue
 
-            bucket = self._get_confidence_bucket(sig["confidence"])
+            bucket = self._get_confidence_bucket(sig.confidence)
             if bucket:
                 buckets[bucket].append(sig)
 
@@ -176,7 +177,7 @@ class SignalAccuracyCalculator:
 
         return result
 
-    def _calculate_strategy_accuracy(self, signals: list[dict], horizon: str) -> dict[str, float]:
+    def _calculate_strategy_accuracy(self, signals: list[SignalRecord], horizon: str) -> dict[str, float]:
         """Hit rate grouped by strategy.
 
         Args:
@@ -186,12 +187,12 @@ class SignalAccuracyCalculator:
         Returns:
             Dict mapping strategy name to hit rate
         """
-        by_strategy: dict[str, list[dict]] = defaultdict(list)
+        by_strategy: dict[str, list[SignalRecord]] = defaultdict(list)
 
         for sig in signals:
-            if sig["signal"] == "HOLD" or not sig["strategy_used"]:
+            if sig.signal == "HOLD" or not sig.strategy_used:
                 continue
-            by_strategy[sig["strategy_used"]].append(sig)
+            by_strategy[sig.strategy_used].append(sig)
 
         result = {}
         for strategy, sigs in by_strategy.items():
@@ -201,7 +202,11 @@ class SignalAccuracyCalculator:
 
         return result
 
-    def _calculate_regime_accuracy(self, signals: list[dict], horizon: str) -> dict[str, float] | None:
+    def _calculate_regime_accuracy(
+        self,
+        signals: list[SignalRecord],
+        horizon: str,
+    ) -> dict[str, float] | None:
         """Hit rate grouped by regime.
 
         Args:
@@ -211,12 +216,12 @@ class SignalAccuracyCalculator:
         Returns:
             Dict mapping regime to hit rate, or None if no regime data
         """
-        by_regime: dict[str, list[dict]] = defaultdict(list)
+        by_regime: dict[str, list[SignalRecord]] = defaultdict(list)
 
         for sig in signals:
-            if sig["signal"] == "HOLD" or not sig["regime"]:
+            if sig.signal == "HOLD" or not sig.regime:
                 continue
-            by_regime[sig["regime"]].append(sig)
+            by_regime[sig.regime].append(sig)
 
         if not by_regime:
             return None
@@ -229,7 +234,7 @@ class SignalAccuracyCalculator:
 
         return result
 
-    def _calculate_avg_return(self, signals: list[dict], horizon: str) -> float:
+    def _calculate_avg_return(self, signals: list[SignalRecord], horizon: str) -> float:
         """Average return % from signal to T+Nd.
 
         Args:
@@ -242,17 +247,17 @@ class SignalAccuracyCalculator:
         returns = []
 
         for sig in signals:
-            if sig["signal"] == "HOLD":
+            if sig.signal == "HOLD":
                 continue
 
-            price_future = sig["actual_exit_price"] or sig.get(f"price_at_{horizon}")
-            if price_future is None or sig["price_at_signal"] == 0:
+            price_future = sig.actual_exit_price or getattr(sig, f"price_at_{horizon}")
+            if price_future is None or sig.price_at_signal == 0:
                 continue
 
-            ret = ((price_future - sig["price_at_signal"]) / sig["price_at_signal"]) * 100
+            ret = ((price_future - sig.price_at_signal) / sig.price_at_signal) * 100
 
             # Invert for SELL signals (short position)
-            if sig["signal"] == "SELL":
+            if sig.signal == "SELL":
                 ret = -ret
 
             returns.append(ret)

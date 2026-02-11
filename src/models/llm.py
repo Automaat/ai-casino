@@ -7,15 +7,28 @@ import os
 import time
 from collections.abc import AsyncIterator, Callable
 from types import TracebackType
-from typing import TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
 
 from src.metrics.execution import ExecutionMetricsCollector
+from src.models.message_models import (
+    AnthropicAssistantMessage,
+    AnthropicToolResultMessage,
+    OpenAIAssistantMessage,
+    OpenAIToolCall,
+    OpenAIToolFunction,
+    OpenAIToolResultMessage,
+    ToolResultContent,
+    ToolUseContent,
+)
 from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvider, OpenAIProvider
 from src.models.providers.base import ToolCall
+
+if TYPE_CHECKING:
+    from src.tools.models import ToolDefinition
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -348,7 +361,7 @@ class LLMClient:
     def complete_with_tools(  # noqa: PLR0913
         self,
         prompt: str,
-        tools: list[dict],
+        tools: list[ToolDefinition],
         tool_executor: Callable[[str, dict], str],
         system: str | None = None,
         temperature: float = 0.7,
@@ -359,7 +372,7 @@ class LLMClient:
 
         Args:
             prompt: User prompt
-            tools: List of tool definitions in OpenAI format
+            tools: List of tool definitions
             tool_executor: Function to execute tools (name, args) -> result
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
@@ -378,7 +391,7 @@ class LLMClient:
     async def acomplete_with_tools(  # noqa: PLR0913
         self,
         prompt: str,
-        tools: list[dict],
+        tools: list[ToolDefinition],
         tool_executor: Callable[[str, dict], str],
         system: str | None = None,
         temperature: float = 0.7,
@@ -389,7 +402,7 @@ class LLMClient:
 
         Args:
             prompt: User prompt
-            tools: List of tool definitions in OpenAI format
+            tools: List of tool definitions
             tool_executor: Function to execute tools (name, args) -> result
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
@@ -402,13 +415,16 @@ class LLMClient:
         messages: list[dict] = self._build_messages(prompt, system)
         tool_calls_made = 0
 
+        # Convert ToolDefinition models to dicts for provider
+        tools_dict = [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in tools]
+
         while tool_calls_made < max_tool_calls:
             start = time.perf_counter() if self._metrics_collector else None
             error_msg = None
             try:
                 async with _get_semaphore():
                     text_response, tool_calls = await self._provider.acomplete_with_tools(
-                        messages, tools, temperature
+                        messages, tools_dict, temperature
                     )
             except Exception as e:
                 error_msg = str(e)
@@ -446,33 +462,33 @@ class LLMClient:
     def _format_tool_call_message(self, tool_calls: list[ToolCall]) -> dict:
         """Format tool calls for assistant message."""
         if self.provider == "anthropic":
-            content = []
-            for tc in tool_calls:
-                content.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.arguments})
-            return {"role": "assistant", "content": content}
+            content = [ToolUseContent(id=tc.id, name=tc.name, input=tc.arguments) for tc in tool_calls]
+            message = AnthropicAssistantMessage(content=content)
+            return message.model_dump(mode="json", exclude_none=True)
         # OpenAI format
-        return {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
-                }
-                for tc in tool_calls
-            ],
-        }
+        openai_tool_calls = [
+            OpenAIToolCall(
+                id=tc.id,
+                function=OpenAIToolFunction(name=tc.name, arguments=json.dumps(tc.arguments)),
+            )
+            for tc in tool_calls
+        ]
+        message = OpenAIAssistantMessage(tool_calls=openai_tool_calls)
+        message_dict = message.model_dump(mode="json", exclude_none=True)
+        # Ensure OpenAI assistant tool-call messages always include an explicit content field
+        if "content" not in message_dict:
+            message_dict["content"] = None
+        return message_dict
 
     def _format_tool_result_message(self, tool_call: ToolCall, result: str) -> dict:
         """Format tool result for message."""
         if self.provider == "anthropic":
-            return {
-                "role": "user",
-                "content": [{"type": "tool_result", "tool_use_id": tool_call.id, "content": result}],
-            }
+            content = [ToolResultContent(tool_use_id=tool_call.id, content=result)]
+            message = AnthropicToolResultMessage(content=content)
+            return message.model_dump(mode="json", exclude_none=True)
         # OpenAI format
-        return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+        message = OpenAIToolResultMessage(tool_call_id=tool_call.id, content=result)
+        return message.model_dump(mode="json", exclude_none=True)
 
     def _execute_tool(self, tool_call: ToolCall, executor: Callable[[str, dict], str]) -> str:
         """Execute a tool call and handle errors."""

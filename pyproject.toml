@@ -112,6 +112,8 @@ exclude_lines = [
 ]
 
 [tool.pyrefly]
+# Pyrefly uses strict type checking by default
+# Configuration is minimal - strictness comes from complete type annotations + ANN rules
 project-includes = [
     "**/*.py*",
     "**/*.ipynb",

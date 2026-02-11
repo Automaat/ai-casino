@@ -3,6 +3,7 @@
 import pytest
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 from src.tools.registry import ToolRegistry
 
 
@@ -24,16 +25,18 @@ class MockTool(BaseTool):
         """Requires confirmation."""
         return self._confirms
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": f"Mock tool: {self.name}",
-                "parameters": {"type": "object", "properties": {"arg1": {"type": "string"}}},
-            },
-        }
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=f"Mock tool: {self.name}",
+                parameters=ToolParametersSchema(
+                    properties={"arg1": ToolParameter(type="string", description="Argument 1")},
+                    required=[],
+                ),
+            )
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute tool."""
@@ -105,7 +108,7 @@ class TestToolRegistry:
         definitions = registry.get_definitions()
 
         assert len(definitions) == 2
-        names = [d["function"]["name"] for d in definitions]
+        names = [d.function.name for d in definitions]
         assert "tool_one" in names
         assert "tool_two" in names
 

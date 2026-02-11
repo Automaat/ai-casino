@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -33,43 +34,39 @@ class GenerateTearsheetTool(BaseTool):
         """Tool name."""
         return "generate_tearsheet"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Generate a QuantStats performance tearsheet for a stock's trading history. "
                     "Returns CAGR, Sharpe, Sortino, max drawdown, win rate, profit factor, "
                     "and benchmark comparison. Requires existing trade history."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "period": {
-                            "type": "string",
-                            "description": "Time period: 1m, 3m, 6m, 1y, all (default: 1y)",
-                            "default": "1y",
-                        },
-                        "benchmark": {
-                            "type": "string",
-                            "description": "Benchmark symbol for comparison (default: SPY)",
-                            "default": "SPY",
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "period": ToolParameter(
+                            type="string",
+                            description="Time period: 1m, 3m, 6m, 1y, all (default: 1y)",
+                        ),
+                        "benchmark": ToolParameter(
+                            type="string",
+                            description="Benchmark symbol for comparison (default: SPY)",
+                        ),
                     },
-                    "required": ["symbol"],
-                },
-            },
-        }
+                    required=["symbol"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Generate performance tearsheet.

@@ -2,6 +2,8 @@
 
 from abc import ABC, abstractmethod
 
+from src.tools.models import ToolDefinition
+
 
 class BaseTool(ABC):
     """Abstract base class for LLM tools."""
@@ -25,11 +27,11 @@ class BaseTool(ABC):
         return False
 
     @abstractmethod
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
 
     @abstractmethod

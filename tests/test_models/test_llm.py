@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError, ToolCall
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 
 @pytest.fixture
@@ -179,18 +180,16 @@ class TestCompleteWithTools:
     @pytest.fixture
     def sample_tools(self):
         return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_weather",
-                    "description": "Get weather for a location",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"location": {"type": "string"}},
-                        "required": ["location"],
-                    },
-                },
-            }
+            ToolDefinition(
+                function=ToolFunction(
+                    name="get_weather",
+                    description="Get weather for a location",
+                    parameters=ToolParametersSchema(
+                        properties={"location": ToolParameter(type="string", description="Location name")},
+                        required=["location"],
+                    ),
+                ),
+            )
         ]
 
     @pytest.fixture
@@ -274,18 +273,16 @@ class TestAcompleteWithTools:
     @pytest.fixture
     def sample_tools(self):
         return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "search",
-                    "description": "Search the web",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"query": {"type": "string"}},
-                        "required": ["query"],
-                    },
-                },
-            }
+            ToolDefinition(
+                function=ToolFunction(
+                    name="search",
+                    description="Search the web",
+                    parameters=ToolParametersSchema(
+                        properties={"query": ToolParameter(type="string", description="Search query")},
+                        required=["query"],
+                    ),
+                ),
+            )
         ]
 
     @pytest.fixture

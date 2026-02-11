@@ -4,9 +4,10 @@ import json
 import os
 from functools import cached_property
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 from loguru import logger
+from pydantic import BaseModel
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -41,7 +42,7 @@ from src.tui.widgets.status_bar import StatusBar
 HISTORY_FILE = Path("~/.ai-casino/chat-history.json").expanduser()
 
 
-class PendingToolConfirmation(TypedDict):
+class PendingToolConfirmation(BaseModel):
     """Structure for pending tool confirmation."""
 
     name: str
@@ -258,7 +259,7 @@ class TradingChatApp(App):
         tool_widget = tool_widgets.last() if tool_widgets else None
 
         if pending and text.lower() in ("yes", "y"):
-            result = self._tool_registry.execute(pending["name"], pending["args"])
+            result = self._tool_registry.execute(pending.name, pending.args)
             result_preview = result[:100] + "..." if len(result) > 100 else result
             if tool_widget and hasattr(tool_widget, "set_complete"):
                 tool_widget.set_complete(result_preview)
@@ -468,7 +469,7 @@ class TradingChatApp(App):
                 chat.add_assistant_message(
                     f"Tool `{name}` requires confirmation. Type 'yes' to proceed or anything else to skip."
                 )
-                self._pending_tool_confirmation = {"name": name, "args": args}
+                self._pending_tool_confirmation = PendingToolConfirmation(name=name, args=args)
                 return f"[Awaiting user confirmation for {name}]"
             return self._tool_registry.execute(name, args)
 

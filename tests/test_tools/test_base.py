@@ -3,6 +3,7 @@
 import pytest
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParametersSchema
 
 
 class ConcreteTool(BaseTool):
@@ -13,16 +14,15 @@ class ConcreteTool(BaseTool):
         """Tool name."""
         return "test_tool"
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": "Test tool",
-                "parameters": {"type": "object", "properties": {}},
-            },
-        }
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description="Test tool",
+                parameters=ToolParametersSchema(properties={}, required=[]),
+            )
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute tool."""
@@ -54,7 +54,7 @@ class TestBaseTool:
     def test_concrete_tool_definition(self):
         """Test get_tool_definition on concrete implementation."""
         tool = ConcreteTool()
-        definition = tool.get_tool_definition()
+        definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
         assert definition["function"]["name"] == "test_tool"

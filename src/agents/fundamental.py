@@ -5,6 +5,7 @@ from typing import Any
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.agents.models import FundamentalMetrics
 from src.data.fundamental import FundamentalDataFetcher
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
@@ -86,12 +87,12 @@ class FundamentalAnalyst:
 
             return FundamentalAnalysis(
                 valuation=valuation,
-                pe_ratio=metrics.get("pe_ratio"),
-                eps=metrics.get("eps"),
-                revenue_growth_yoy=metrics.get("revenue_growth_yoy"),
-                earnings_growth_yoy=metrics.get("earnings_growth_yoy"),
-                debt_to_equity=metrics.get("debt_to_equity"),
-                current_ratio=metrics.get("current_ratio"),
+                pe_ratio=metrics.pe_ratio,
+                eps=metrics.eps,
+                revenue_growth_yoy=metrics.revenue_growth_yoy,
+                earnings_growth_yoy=metrics.earnings_growth_yoy,
+                debt_to_equity=metrics.debt_to_equity,
+                current_ratio=metrics.current_ratio,
                 interpretation=interpretation,
                 confidence=confidence,
             )
@@ -100,25 +101,25 @@ class FundamentalAnalyst:
             logger.error(f"Fundamental analysis failed for {symbol}: {e}")
             raise
 
-    def _extract_metrics(self, overview: dict[str, Any]) -> dict[str, float | None]:
+    def _extract_metrics(self, overview: dict[str, Any]) -> FundamentalMetrics:
         """Extract key fundamental metrics from overview data.
 
         Args:
             overview: Raw overview data from Alpha Vantage
 
         Returns:
-            Dictionary of parsed metrics (None for missing/invalid values)
+            FundamentalMetrics with parsed values (None for missing/invalid)
         """
-        return {
-            "pe_ratio": self._parse_float(overview.get("PERatio")),
-            "eps": self._parse_float(overview.get("EPS")),
-            "revenue_growth_yoy": self._parse_float(overview.get("QuarterlyRevenueGrowthYOY")),
-            "earnings_growth_yoy": self._parse_float(overview.get("QuarterlyEarningsGrowthYOY")),
-            "debt_to_equity": self._parse_float(overview.get("DebtToEquity")),
-            "current_ratio": self._parse_float(overview.get("CurrentRatio")),
-        }
+        return FundamentalMetrics(
+            pe_ratio=self._parse_float(overview.get("PERatio")),
+            eps=self._parse_float(overview.get("EPS")),
+            revenue_growth_yoy=self._parse_float(overview.get("QuarterlyRevenueGrowthYOY")),
+            earnings_growth_yoy=self._parse_float(overview.get("QuarterlyEarningsGrowthYOY")),
+            debt_to_equity=self._parse_float(overview.get("DebtToEquity")),
+            current_ratio=self._parse_float(overview.get("CurrentRatio")),
+        )
 
-    def _assess_valuation(self, metrics: dict[str, float | None]) -> str:
+    def _assess_valuation(self, metrics: FundamentalMetrics) -> str:
         """Assess company valuation based on P/E ratio.
 
         Args:
@@ -127,7 +128,7 @@ class FundamentalAnalyst:
         Returns:
             Valuation string (UNDERVALUED | FAIRLY_VALUED | OVERVALUED)
         """
-        pe_ratio = metrics.get("pe_ratio")
+        pe_ratio = metrics.pe_ratio
 
         if pe_ratio is None:
             return "FAIRLY_VALUED"
@@ -140,7 +141,7 @@ class FundamentalAnalyst:
 
     def _build_metrics_section(
         self,
-        metrics: dict[str, float | None],
+        metrics: FundamentalMetrics,
         valuation: str,
         current_price: float | None,
     ) -> str:
@@ -162,22 +163,22 @@ class FundamentalAnalyst:
         prompt_parts.append(f"Valuation: {valuation}")
 
         # Add available metrics
-        if metrics.get("pe_ratio") is not None:
-            prompt_parts.append(f"P/E Ratio: {metrics['pe_ratio']:.2f}")
-        if metrics.get("eps") is not None:
-            prompt_parts.append(f"EPS: ${metrics['eps']:.2f}")
-        if metrics.get("revenue_growth_yoy") is not None:
-            prompt_parts.append(f"Revenue Growth YoY: {metrics['revenue_growth_yoy'] * 100:.1f}%")
-        if metrics.get("earnings_growth_yoy") is not None:
-            prompt_parts.append(f"Earnings Growth YoY: {metrics['earnings_growth_yoy'] * 100:.1f}%")
-        if metrics.get("debt_to_equity") is not None:
-            prompt_parts.append(f"Debt-to-Equity: {metrics['debt_to_equity']:.2f}")
-        if metrics.get("current_ratio") is not None:
-            prompt_parts.append(f"Current Ratio: {metrics['current_ratio']:.2f}")
+        if metrics.pe_ratio is not None:
+            prompt_parts.append(f"P/E Ratio: {metrics.pe_ratio:.2f}")
+        if metrics.eps is not None:
+            prompt_parts.append(f"EPS: ${metrics.eps:.2f}")
+        if metrics.revenue_growth_yoy is not None:
+            prompt_parts.append(f"Revenue Growth YoY: {metrics.revenue_growth_yoy * 100:.1f}%")
+        if metrics.earnings_growth_yoy is not None:
+            prompt_parts.append(f"Earnings Growth YoY: {metrics.earnings_growth_yoy * 100:.1f}%")
+        if metrics.debt_to_equity is not None:
+            prompt_parts.append(f"Debt-to-Equity: {metrics.debt_to_equity:.2f}")
+        if metrics.current_ratio is not None:
+            prompt_parts.append(f"Current Ratio: {metrics.current_ratio:.2f}")
 
         return "\n".join(prompt_parts)
 
-    def _calculate_confidence(self, metrics: dict[str, float | None], interpretation: str) -> float:
+    def _calculate_confidence(self, metrics: FundamentalMetrics, interpretation: str) -> float:
         """Calculate confidence score based on data completeness and LLM signals.
 
         Args:
@@ -191,10 +192,7 @@ class FundamentalAnalyst:
         confidence = 0.5
 
         # Boost based on data completeness
-        total_metrics = len(metrics)
-        non_none_metrics = sum(1 for v in metrics.values() if v is not None)
-        completeness_ratio = non_none_metrics / total_metrics if total_metrics > 0 else 0
-        confidence += 0.3 * completeness_ratio
+        confidence += 0.3 * metrics.completeness_ratio
 
         # Adjust based on LLM signals
         interpretation_lower = interpretation.lower()
@@ -206,9 +204,7 @@ class FundamentalAnalyst:
         # Clamp to [0.0, 1.0]
         return max(0.0, min(1.0, confidence))
 
-    def _calculate_confidence_from_keywords(
-        self, metrics: dict[str, float | None], keywords: list[str]
-    ) -> float:
+    def _calculate_confidence_from_keywords(self, metrics: FundamentalMetrics, keywords: list[str]) -> float:
         """Calculate confidence score based on data completeness and extracted keywords.
 
         Args:
@@ -222,10 +218,7 @@ class FundamentalAnalyst:
         confidence = 0.5
 
         # Boost based on data completeness
-        total_metrics = len(metrics)
-        non_none_metrics = sum(1 for v in metrics.values() if v is not None)
-        completeness_ratio = non_none_metrics / total_metrics if total_metrics > 0 else 0
-        confidence += 0.3 * completeness_ratio
+        confidence += 0.3 * metrics.completeness_ratio
 
         # Adjust based on keywords
         keywords_lower = [k.lower() for k in keywords]

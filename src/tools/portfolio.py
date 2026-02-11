@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -34,52 +35,48 @@ class OptimizePortfolioTool(BaseTool):
         """Requires confirmation due to expensive computation."""
         return True
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition in LiteLLM/OpenAI format.
 
         Returns:
-            Tool definition dict for LLM function calling
+            Tool definition for LLM function calling
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Optimize trading strategy parameters using Optuna hyperparameter search. "
                     "Tests different parameter combinations to find optimal Sharpe ratio. "
                     "This is an expensive operation that runs many backtests."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
-                        },
-                        "start_date": {
-                            "type": "string",
-                            "description": "Optimization start date in YYYY-MM-DD format",
-                        },
-                        "end_date": {
-                            "type": "string",
-                            "description": "Optimization end date in YYYY-MM-DD format",
-                        },
-                        "strategy": {
-                            "type": "string",
-                            "description": "Strategy to optimize (default: momentum)",
-                            "enum": ["momentum", "trend_following", "mean_reversion", "ensemble"],
-                            "default": "momentum",
-                        },
-                        "n_trials": {
-                            "type": "integer",
-                            "description": "Number of optimization trials (default: 50)",
-                            "default": 50,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA, MSFT)",
+                        ),
+                        "start_date": ToolParameter(
+                            type="string",
+                            description="Optimization start date in YYYY-MM-DD format",
+                        ),
+                        "end_date": ToolParameter(
+                            type="string",
+                            description="Optimization end date in YYYY-MM-DD format",
+                        ),
+                        "strategy": ToolParameter(
+                            type="string",
+                            description="Strategy to optimize (default: momentum)",
+                            enum=["momentum", "trend_following", "mean_reversion", "ensemble"],
+                        ),
+                        "n_trials": ToolParameter(
+                            type="integer",
+                            description="Number of optimization trials (default: 50)",
+                        ),
                     },
-                    "required": ["symbol", "start_date", "end_date"],
-                },
-            },
-        }
+                    required=["symbol", "start_date", "end_date"],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Run portfolio optimization.

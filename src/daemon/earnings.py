@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from loguru import logger
 
+from src.daemon.models import EarningsFlags
 from src.data.earnings import EarningsCalendar, EarningsCalendarFetcher, EarningsEvent
 
 
@@ -62,7 +63,7 @@ class DaemonEarningsCalendar:
 
         return "\n".join(lines)
 
-    def get_earnings_flags(self, events: list[EarningsEvent], symbol: str) -> dict:
+    def get_earnings_flags(self, events: list[EarningsEvent], symbol: str) -> EarningsFlags:
         """Get earnings flags for a specific symbol.
 
         Args:
@@ -70,7 +71,7 @@ class DaemonEarningsCalendar:
             symbol: Stock ticker to check
 
         Returns:
-            Dict with upcoming_earnings, days_until_earnings, pre_earnings_zone keys
+            EarningsFlags with upcoming_earnings, days_until_earnings, pre_earnings_zone
         """
         today = datetime.now(UTC).date()
 
@@ -88,17 +89,17 @@ class DaemonEarningsCalendar:
             elif days_until <= 3:
                 zone = "T-3"
 
-            return {
-                "upcoming_earnings": True,
-                "days_until_earnings": days_until,
-                "pre_earnings_zone": zone,
-            }
+            return EarningsFlags(
+                upcoming_earnings=True,
+                days_until_earnings=days_until,
+                pre_earnings_zone=zone,
+            )
 
-        return {
-            "upcoming_earnings": False,
-            "days_until_earnings": None,
-            "pre_earnings_zone": None,
-        }
+        return EarningsFlags(
+            upcoming_earnings=False,
+            days_until_earnings=None,
+            pre_earnings_zone=None,
+        )
 
     def __repr__(self) -> str:
         """String representation."""

@@ -9,6 +9,7 @@ from loguru import logger
 
 from src.agents.trump import TrumpAnalysis
 from src.tools.base import BaseTool
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -48,30 +49,27 @@ class TrumpAnalysisTool(BaseTool):
         """Tool name."""
         return self.TOOL_NAME
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition for LLM function calling."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description=(
                     "Analyze Trump's recent Truth Social posts for market-moving signals. "
                     "Detects tariff announcements, trade deals, crypto mentions, and company references. "
                     "Returns trading signal, affected tickers, and interpretation."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "days": {
-                            "type": "integer",
-                            "description": "Number of days to look back (default: 3, max: 7)",
-                            "default": 3,
-                        },
+                parameters=ToolParametersSchema(
+                    properties={
+                        "days": ToolParameter(
+                            type="integer",
+                            description="Number of days to look back (default: 3, max: 7)",
+                        ),
                     },
-                    "required": [],
-                },
-            },
-        }
+                    required=[],
+                ),
+            ),
+        )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Analyze Trump's recent posts.

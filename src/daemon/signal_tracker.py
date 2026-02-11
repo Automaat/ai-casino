@@ -8,6 +8,7 @@ from pandas.tseries.offsets import BDay
 from src.cache.historical import HistoricalCache
 from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
+from src.metrics.models import SignalUpdateRecord
 
 
 class SignalOutcomeTracker:
@@ -52,12 +53,12 @@ class SignalOutcomeTracker:
 
             # Update outcomes
             for signal in signals:
-                exit_price = exit_prices.get(signal["id"])
+                exit_price = exit_prices.get(signal.id)
 
                 if exit_price is not None:
                     # Early exit: write both actual_exit_price and price_at_{horizon}
                     self._cache.update_signal_outcome(
-                        signal["id"],
+                        signal.id,
                         actual_exit_price=exit_price,
                         **{f"price_at_{horizon}": exit_price},
                         outcome_updated_at=now.isoformat(),
@@ -69,18 +70,18 @@ class SignalOutcomeTracker:
 
                     if target_price is not None:
                         self._cache.update_signal_outcome(
-                            signal["id"],
+                            signal.id,
                             **{f"price_at_{horizon}": target_price},
                             outcome_updated_at=now.isoformat(),
                         )
                         stats[f"updated_{horizon}"] += 1
                     else:
-                        logger.warning(f"No price available for {signal['symbol']} at {horizon}")
+                        logger.warning(f"No price available for {signal.symbol} at {horizon}")
 
         logger.info(f"Signal tracking complete: {stats}")
         return stats
 
-    def _fetch_price_at_target_date(self, signal: dict, horizon: str) -> float | None:
+    def _fetch_price_at_target_date(self, signal: SignalUpdateRecord, horizon: str) -> float | None:
         """Fetch close price at target trading date for a signal.
 
         Args:
@@ -91,7 +92,7 @@ class SignalOutcomeTracker:
             Close price at target date or None if unavailable
         """
         trading_days = {"1d": 1, "5d": 5, "20d": 20}[horizon]
-        signal_timestamp = datetime.fromisoformat(signal["timestamp"])
+        signal_timestamp = datetime.fromisoformat(signal.timestamp)
 
         # Calculate target trading date (signal date + N business days)
         target_date = signal_timestamp + BDay(trading_days)
@@ -101,7 +102,7 @@ class SignalOutcomeTracker:
             # Add buffer days to account for market closures
             lookback_days = trading_days + 10
 
-            market_data = self._market_fetcher.fetch_daily(signal["symbol"], period_days=lookback_days)
+            market_data = self._market_fetcher.fetch_daily(signal.symbol, period_days=lookback_days)
 
             if market_data.data.empty:
                 return None
@@ -125,16 +126,16 @@ class SignalOutcomeTracker:
             close_price = float(df.loc[closest_date, "Close"])
 
             logger.debug(
-                f"Fetched {horizon} price for {signal['symbol']}: {close_price:.2f} at {closest_date.date()}"
+                f"Fetched {horizon} price for {signal.symbol}: {close_price:.2f} at {closest_date.date()}"
             )
 
             return close_price
 
         except Exception as e:
-            logger.warning(f"Failed to fetch {horizon} price for {signal['symbol']}: {e}")
+            logger.warning(f"Failed to fetch {horizon} price for {signal.symbol}: {e}")
             return None
 
-    def _get_early_exits(self, signals: list[dict]) -> dict[int, float]:
+    def _get_early_exits(self, signals: list[SignalUpdateRecord]) -> dict[int, float]:
         """Get actual exit prices for signals with closed trades.
 
         Args:
@@ -147,7 +148,7 @@ class SignalOutcomeTracker:
             return {}
 
         # Early exit detection not yet implemented
-        symbol_count = len({s["symbol"] for s in signals})
+        symbol_count = len({s.symbol for s in signals})
         logger.debug(f"Early exit detection skipped (not implemented) for {symbol_count} symbols")
         return {}
 
