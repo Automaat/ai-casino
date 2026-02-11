@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
@@ -37,10 +37,7 @@ class WorkflowContext(BaseModel):
     degradation_context: DegradationContext | None = None
     target_portfolio_weight: float | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def all_warnings(self) -> list[str]:

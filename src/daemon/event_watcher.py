@@ -9,11 +9,14 @@ Base pattern generalized from TrumpWatcher:
 - Async throughout with concurrent analysis
 """
 
+from __future__ import annotations
+
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from rich.console import Console
@@ -21,9 +24,11 @@ from rich.console import Console
 from src.agents.event_triage import EventTriageAgent
 from src.cache.historical import HistoricalCache
 from src.daemon.events import BaseEvent, EventSignal, TriageResult, Urgency
-from src.di.container import AppContainer
 from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 console = Console()
 

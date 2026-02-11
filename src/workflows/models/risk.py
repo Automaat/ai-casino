@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.trader import TradingDecision
@@ -27,10 +27,7 @@ class RiskAssessmentInput(BaseModel):
     degradation_context: DegradationContext | None
     broker_api_failed: bool
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def get_daily_data(self) -> pd.DataFrame:
         """Extract daily timeframe data from market data.
@@ -73,7 +70,4 @@ class RiskAssessmentOutput(BaseModel):
 
     risk_assessment: RiskAssessment
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pandas as pd
 import yfinance as yf
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.data.market import MarketDataFetcher
 from src.data.universe import StockUniverseFetcher
@@ -82,10 +82,7 @@ class DiscoveryEngineConfig(BaseModel):
     track_outcomes: bool = True
     outcome_lookback_days: int = 90
 
-    class Config:
-        """Pydantic model configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class StockDiscoveryEngine:
