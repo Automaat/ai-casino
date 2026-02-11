@@ -598,6 +598,9 @@ class DaemonFactory:
         # Import to fix pyrefly module path resolution
         from src.daemon.factory import DaemonComponents as DaemonComponentsType
 
+        # Signal outcome repository is extracted by AnalysisOrchestrator from components.container
+        # No need to pass it explicitly
+
         orchestrator = AnalysisOrchestrator(
             config=self.config.analysis_orchestration,
             components=cast("DaemonComponentsType", components),
