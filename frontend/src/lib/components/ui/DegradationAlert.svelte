@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DegradationResponse } from '$lib/types/api';
 
-	export let degradation: DegradationResponse | null;
+	export let degradation: DegradationResponse | null = null;
 
 	// Tier colors
 	const tierColors: Record<string, string> = {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { GamePlanResponse } from '$lib/types/api';
 
-	export let plan: GamePlanResponse | null;
+	export let plan: GamePlanResponse | null = null;
 
 	// Risk stance colors
 	const riskColors: Record<string, string> = {

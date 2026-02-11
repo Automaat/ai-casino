@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { WatchlistResponse } from '$lib/types/api';
 
-	export let watchlist: WatchlistResponse | null;
+	export let watchlist: WatchlistResponse | null = null;
 
 	let expanded = false;
 

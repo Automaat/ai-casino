@@ -18,7 +18,7 @@
 
 	let { data, symbol = '', height = 400 }: Props = $props();
 
-	let chartContainer: HTMLElement;
+	let chartContainer: HTMLElement = undefined as unknown as HTMLElement;
 	let chart: IChartApi | null = null;
 	let candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
 

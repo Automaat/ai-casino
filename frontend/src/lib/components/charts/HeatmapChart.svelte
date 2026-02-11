@@ -12,7 +12,7 @@
 
 	let { symbols, matrix, title = 'Correlation Matrix', height = 500 }: Props = $props();
 
-	let chartContainer: HTMLElement;
+	let chartContainer: HTMLElement = undefined as unknown as HTMLElement;
 	let chart: ECharts | null = null;
 
 	function updateChart() {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ServiceCheck } from '$lib/types/api';
 
-	export let check: ServiceCheck;
+	export let check: ServiceCheck = null as unknown as ServiceCheck;
 
 	// Map service names to display
 	const serviceNames: Record<string, string> = {
