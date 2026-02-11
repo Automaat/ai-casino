@@ -54,7 +54,7 @@ class TradingCoordinator:
         self._memory = memory
         self._config = config
         self._broker = broker
-        self._critic_agent = critic_agent
+        self._critic_agent = critic_agent  # Used by ReflectOnDecisionTool
         self._prompts = PromptLoader("coordinator")
         self._last_cycle_summary = "No previous cycle"
 

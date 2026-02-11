@@ -45,6 +45,7 @@ Evaluate this trading decision against four criteria:
 
 4. **Historical Pattern Risks**: Does this repeat recent mistakes or failed signals for this symbol?
 
-Provide scores (0.0-1.0) for consistency, alignment, and constraints.
+Provide structured scores (0.0-1.0) for criteria 1–3 (consistency, alignment, constraints).
+For criterion 4 (Historical Pattern Risks), provide qualitative assessment only.
 Identify critical issues that could lead to losses.
 Suggest concrete improvements or alternative actions.

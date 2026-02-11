@@ -31,7 +31,7 @@ False positives (allowing bad trades) are costly.
 
 ## Output Requirements
 
-Provide structured scores (0.0-1.0) for each criterion.
+Provide structured scores (0.0-1.0) for criteria 1–3 (Logical Consistency, Game Plan Alignment, Risk Constraint Compliance), and a qualitative assessment (no numeric score) for Historical Pattern Risks.
 
 **Critical Issues**: Serious flaws that should block execution
 - Must be specific and actionable

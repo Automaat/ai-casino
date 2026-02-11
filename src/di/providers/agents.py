@@ -470,7 +470,8 @@ def create_trading_coordinator(
     )
 
     # Rebuild registry with coordinator reference for reflection tool
-    tool_registry = build_coordinator_registry(container, memory, coordinator=coordinator)
+    # Pass critic_agent to avoid creating duplicate instance
+    tool_registry = build_coordinator_registry(container, memory, coordinator, critic_agent)
     coordinator._tools = tool_registry  # noqa: SLF001
 
     return coordinator
