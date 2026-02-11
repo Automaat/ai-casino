@@ -33,6 +33,10 @@ class ThreadedApiServer:
 
     def start(self) -> None:
         """Start uvicorn in a background daemon thread."""
+        # Prevent double-start: if the server thread is already running, do nothing.
+        if self._thread is not None and self._thread.is_alive():
+            logger.warning("API server thread already running; start() call ignored")
+            return
         self._thread = threading.Thread(target=self._run, daemon=True, name="api-server")
         self._thread.start()
         logger.info("API server thread started")
@@ -43,20 +47,28 @@ class ThreadedApiServer:
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(self._server.serve())
+        except Exception as e:
+            logger.opt(exception=True).error(f"API server crashed: {e}")
         finally:
             loop.close()
 
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float = 5.0) -> bool:
         """Signal shutdown and join the server thread.
 
         Args:
             timeout: Max seconds to wait for thread to finish
+
+        Returns:
+            True if thread exited cleanly, False if timeout or not running
         """
         self._server.should_exit = True
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
                 logger.warning("API server thread did not exit within timeout")
+                return False
+            return True
+        return False  # Thread was never started or already dead
 
     @property
     def should_exit(self) -> bool:

@@ -146,8 +146,11 @@ class DaemonLifecycle:
         if self._api_server:
             try:
                 logger.info("Stopping API server...")
-                await asyncio.to_thread(self._api_server.stop, 5.0)
-                logger.info("API server stopped")
+                stopped = await asyncio.to_thread(self._api_server.stop, 5.0)
+                if stopped:
+                    logger.info("API server stopped")
+                else:
+                    logger.error("API server thread did not exit cleanly")
             except Exception as e:
                 logger.error(f"Error stopping API server: {e}")
 
