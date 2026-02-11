@@ -1,5 +1,7 @@
 """Tests for BaseTool interface."""
 
+import asyncio
+
 import pytest
 
 from src.tools.base import BaseTool
@@ -36,6 +38,30 @@ class ConcreteToolWithConfirmation(ConcreteTool):
     def requires_confirmation(self) -> bool:
         """Requires confirmation."""
         return True
+
+
+class AsyncConcreteTool(BaseTool):
+    """Concrete implementation with native async execute."""
+
+    @property
+    def name(self) -> str:
+        return "async_test_tool"
+
+    def get_tool_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            function=ToolFunction(
+                name=self.name,
+                description="Async test tool",
+                parameters=ToolParametersSchema(properties={}, required=[]),
+            )
+        )
+
+    def execute(self, **kwargs: str | int | float | bool) -> str:
+        return f"sync executed with {kwargs}"
+
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return f"async executed with {kwargs}"
 
 
 class TestBaseTool:
@@ -86,3 +112,27 @@ class TestBaseTool:
 
         assert "ConcreteTool" in repr_str
         assert "test_tool" in repr_str
+
+    @pytest.mark.asyncio
+    async def test_aexecute_default_offloads_to_thread(self):
+        """Test that default aexecute offloads sync execute to thread."""
+        tool = ConcreteTool()
+        result = await tool.aexecute(foo="bar", num=42)
+        assert "executed with" in result
+        assert "foo" in result
+
+    @pytest.mark.asyncio
+    async def test_aexecute_can_be_overridden(self):
+        """Test that aexecute can be overridden for native async."""
+        tool = AsyncConcreteTool()
+        result = await tool.aexecute(foo="bar")
+        assert "async executed with" in result
+
+    @pytest.mark.asyncio
+    async def test_aexecute_and_execute_both_work(self):
+        """Test that both sync and async execution work on same tool."""
+        tool = AsyncConcreteTool()
+        sync_result = tool.execute(test="sync")
+        assert "sync executed with" in sync_result
+        async_result = await tool.aexecute(test="async")
+        assert "async executed with" in async_result
