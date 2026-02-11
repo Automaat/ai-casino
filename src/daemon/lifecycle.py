@@ -218,7 +218,7 @@ class DaemonLifecycle:
                 self.components.social_watcher.running = False
 
             # Wait for tasks to complete (up to 5 seconds)
-            done, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)
+            _done, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)
             if pending:
                 logger.warning(f"{len(pending)} watcher tasks did not complete in time, cancelling them")
                 for task in pending:
