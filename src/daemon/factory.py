@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
     from src.daemon.optimization import DaemonOptimizer
+    from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.di.container import AppContainer
@@ -70,6 +71,7 @@ class DaemonComponents:
     game_plan_agent: GamePlanAgent | None = None
     market_fetcher: MarketDataFetcher | None = None
     param_store: OptimizedParamStore | None = None
+    profiler: CycleProfiler | None = None
 
 
 class DaemonFactory:
@@ -181,7 +183,12 @@ class DaemonFactory:
             )
             logger.info("Tearsheet generator enabled")
 
-        # Phase 11: Assemble components
+        # Phase 11: Profiler (if enabled)
+        profiler = None
+        if self.config.profiling.enabled:
+            profiler = self._create_profiler()
+
+        # Phase 12: Assemble components
         components = DaemonComponents(
             config=self.config,
             state=state,
@@ -206,9 +213,10 @@ class DaemonFactory:
             game_plan_agent=None,
             market_fetcher=market_fetcher,
             param_store=param_store,
+            profiler=profiler,
         )
 
-        # Phase 12: Create task runner (needs components reference)
+        # Phase 13: Create task runner (needs components reference)
         task_runner = ScheduledTaskRunner(self.config, scheduler, daemon_runner=None)  # type: ignore[arg-type]
         components.task_runner = task_runner
 
@@ -480,6 +488,32 @@ class DaemonFactory:
 
         logger.info("Stock discovery engine initialized")
         return engine, market_fetcher
+
+    def _create_profiler(self) -> CycleProfiler:
+        """Create cycle profiler.
+
+        Returns:
+            CycleProfiler instance
+        """
+        from src.daemon.profiling.profiler import CycleProfiler
+        from src.daemon.profiling.storage import ProfileStorage
+
+        storage = ProfileStorage(
+            output_dir=self.config.profiling.output_dir,
+            retention_days=self.config.profiling.retention_days,
+            max_files=self.config.profiling.max_files,
+            max_disk_mb=self.config.profiling.max_disk_mb,
+        )
+
+        profiler = CycleProfiler(
+            storage=storage,
+            clock_type=self.config.profiling.clock_type,
+            top_n_functions=self.config.profiling.top_n_functions,
+            sample_rate=self.config.profiling.sample_rate,
+        )
+
+        logger.info(f"Profiler enabled: {profiler}")
+        return profiler
 
     def init_workflow(self, components: DaemonComponents) -> TradingWorkflow:
         """Initialize trading workflow (lazy).

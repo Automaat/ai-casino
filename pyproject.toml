@@ -67,6 +67,10 @@ dev = [
     "ruff==0.15.0",
     "aiosqlite==0.22.1",
 ]
+profiling = [
+    "yappi>=1.6.0",
+    "snakeviz>=2.2.0",
+]
 
 [project.scripts]
 aicasino = "src.cli.app:main"
