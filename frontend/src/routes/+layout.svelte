@@ -9,6 +9,7 @@
 		{ id: 'portfolio', label: 'Portfolio', href: '/portfolio' },
 		{ id: 'signals', label: 'Signals', href: '/signals' },
 		{ id: 'risk', label: 'Risk', href: '/risk' },
+		{ id: 'events', label: 'Events', href: '/events' },
 		{ id: 'config', label: 'Config', href: '/config' }
 	];
 
@@ -17,6 +18,7 @@
 		: currentPath.startsWith('/portfolio') ? 'portfolio'
 		: currentPath.startsWith('/signals') ? 'signals'
 		: currentPath.startsWith('/risk') ? 'risk'
+		: currentPath.startsWith('/events') ? 'events'
 		: currentPath.startsWith('/config') ? 'config'
 		: 'overview';
 
