@@ -210,3 +210,14 @@ class DegradationRecord(BaseModel):
     unavailable_services: list[str]
     confidence_adjustment: float
     halt_reason: str | None = None
+
+
+class ProfilingRecord(BaseModel):
+    """Record of cycle profiling metrics."""
+
+    cycle_number: int
+    timestamp: datetime
+    duration_seconds: float
+    profiling_overhead_percent: float
+    top_function: str | None = None
+    top_function_cumtime: float | None = None

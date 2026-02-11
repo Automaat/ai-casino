@@ -35,6 +35,7 @@ from src.daemon.state.models import (
     PortfolioRebalancingRecord,
     PortfolioSnapshot,
     PrefetchRecord,
+    ProfilingRecord,
     RiskReportRecord,
     ScreeningRecord,
     SectorRotationRecord,
@@ -129,6 +130,7 @@ class DaemonState(BaseModel):
                 "screening_history",
                 "last_earnings_fetch",
                 "earnings_calendar_history",
+                "profiling_history",
             ]:
                 if field in values:
                     data_pipeline_fields[field] = values.pop(field)
@@ -552,6 +554,10 @@ class DaemonState(BaseModel):
         """Delegate to data pipeline manager."""
         self.data_pipeline.record_earnings_fetch(events, symbols_fetched, symbols_failed)
 
+    def record_profiling(self, metrics: object) -> None:
+        """Delegate to data pipeline manager."""
+        self.data_pipeline.record_profiling(metrics)
+
     @property
     def last_prefetch(self) -> datetime | None:
         return self.data_pipeline.last_prefetch
@@ -595,6 +601,10 @@ class DaemonState(BaseModel):
     @property
     def earnings_calendar_history(self) -> list[EarningsCalendarRecord]:
         return self.data_pipeline.earnings_calendar_history
+
+    @property
+    def profiling_history(self) -> list[ProfilingRecord]:
+        return self.data_pipeline.profiling_history
 
     # ===================
     # Discovery Manager API

@@ -708,6 +708,63 @@ daemon:
     # Use alpha_vantage for higher data quality if you have API key
     market_data: "yfinance"
 
+  # Profiling Configuration (performance monitoring)
+  profiling:
+    # Enable per-cycle CPU profiling with yappi (default: false)
+    # Requires: pip install yappi snakeviz
+    # enabled: false
+
+    # Output directory for profile files (supports ~ expansion)
+    # Directory structure: {output_dir}/{YYYY-MM-DD}/cycle_{num}_{timestamp}.{pstats,json}
+    # output_dir: "~/.ai-casino/profiles"
+
+    # Profiler type: "yappi" (async-aware, currently the only supported profiler)
+    # profiler_type: "yappi"
+
+    # Clock type: "wall" (wall-clock time, recommended) or "cpu" (CPU time only)
+    # clock_type: "wall"
+
+    # Output formats (list of: "pstats", "json")
+    # - pstats: Binary format for snakeviz/gprof2dot visualization
+    # - json: Human-readable summary with top functions and percentiles
+    # formats: ["pstats", "json"]
+
+    # Retention policy - files older than retention_days are deleted
+    # Valid range: 1-90 days (default: 7)
+    # retention_days: 7
+
+    # Maximum number of profile files to keep (default: 1000)
+    # Oldest files deleted when limit exceeded
+    # Valid range: 10-10000
+    # max_files: 1000
+
+    # Maximum disk usage in MB (default: 500)
+    # Oldest files deleted when limit exceeded
+    # Valid range: 10-5000
+    # max_disk_mb: 500
+
+    # Sample rate - profile every Nth cycle (default: 1 = every cycle)
+    # Use higher values to reduce overhead (e.g., 5 = every 5th cycle)
+    # Valid range: 1-100
+    # sample_rate: 1
+
+    # Number of top functions to track in output (default: 50)
+    # Valid range: 10-500
+    # top_n_functions: 50
+
+    # Enable metrics aggregation (default: true)
+    # Calculates percentiles (p50/p95/p99) and rolling window stats
+    # enable_metrics_aggregation: true
+
+    # Metrics rolling window size (default: 100)
+    # Number of recent profiling records to keep in memory
+    # Valid range: 10-1000
+    # metrics_window_size: 100
+
+    # Visualization:
+    # - snakeviz: python -m snakeviz ~/.ai-casino/profiles/YYYY-MM-DD/cycle_*.pstats
+    # - gprof2dot: gprof2dot -f pstats cycle.pstats | dot -Tpng -o output.png
+
   # API Keys Configuration (optional, falls back to environment variables)
   # Config keys take priority over env vars when both are present
   api_keys:
