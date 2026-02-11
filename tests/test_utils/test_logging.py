@@ -130,6 +130,51 @@ class TestSanitizeMessage:
         result = sanitize_message(message)
         assert result == message
 
+    def test_sanitize_apikey_query_param(self) -> None:
+        """Redact ?apikey= query parameter (no underscore)."""
+        message = "GET https://api.example.com/data?apikey=single_word_key_123"
+        result = sanitize_message(message)
+        assert "apikey=[REDACTED]" in result
+        assert "single_word_key_123" not in result
+
+    def test_sanitize_key_query_param(self) -> None:
+        """Redact ?key= query parameter."""
+        message = "GET https://api.example.com/access?key=generic_key_value"
+        result = sanitize_message(message)
+        assert "key=[REDACTED]" in result
+        assert "generic_key_value" not in result
+
+    def test_sanitize_url_fragment(self) -> None:
+        """Redact token in URL with fragment identifier."""
+        message = "Navigate to https://example.com/page?token=secret#section"
+        result = sanitize_message(message)
+        assert "token=[REDACTED]" in result
+        # Note: Fragment gets consumed by [^&\s]+ pattern (expected limitation)
+        assert "secret#section" not in result
+
+    def test_sanitize_url_encoded_value(self) -> None:
+        """Redact URL-encoded token values."""
+        message = "GET https://api.example.com?token=abc%20def%21xyz"
+        result = sanitize_message(message)
+        assert "token=[REDACTED]" in result
+        assert "abc%20def%21xyz" not in result
+
+    def test_sanitize_empty_parameter_value(self) -> None:
+        """Handle empty parameter values (edge case)."""
+        message = "GET https://api.example.com?token=&other=value"
+        result = sanitize_message(message)
+        # Note: Empty value doesn't match [^&\s]+ pattern (no match, unchanged)
+        # This is acceptable - empty values don't leak sensitive data
+        assert result == message
+
+    def test_sanitize_trailing_ampersand(self) -> None:
+        """Handle trailing ampersand after sensitive param."""
+        message = "GET https://api.example.com?symbol=AAPL&token=secret&"
+        result = sanitize_message(message)
+        assert "token=[REDACTED]" in result
+        assert "secret" not in result
+        assert "symbol=AAPL" in result
+
 
 class TestSanitizeLogRecord:
     """Test sanitize_log_record filter function."""
