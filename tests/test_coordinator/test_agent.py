@@ -289,55 +289,6 @@ def test_format_risk_limits(coordinator):
     assert "auto" in result
 
 
-@pytest.mark.asyncio
-async def test_get_portfolio_context_success(coordinator, mock_broker):
-    """Test portfolio context retrieval."""
-    result = await coordinator._get_portfolio_context()
-
-    assert "Current Portfolio" in result
-    assert "$10,000.00" in result
-    assert "$12,000.00" in result
-
-
-@pytest.mark.asyncio
-async def test_get_portfolio_context_with_positions(coordinator, mock_broker):
-    """Test portfolio context with positions."""
-    from src.data.broker import BrokerAccountInfo, BrokerPosition
-
-    mock_broker.get_account_info.return_value = BrokerAccountInfo(
-        balance=10000.0,
-        portfolio_value=12000.0,
-        available_cash=8000.0,
-        total_exposure=2000.0,
-        positions={
-            "AAPL": BrokerPosition(
-                symbol="AAPL",
-                qty=10.0,
-                market_value=1500.0,
-                avg_entry_price=150.0,
-                unrealized_pnl=100.0,
-                unrealized_pnl_percent=6.67,
-            )
-        },
-    )
-
-    result = await coordinator._get_portfolio_context()
-
-    assert "AAPL" in result
-    assert "10" in result
-    assert "$150.00" in result
-
-
-@pytest.mark.asyncio
-async def test_get_portfolio_context_error(coordinator, mock_broker):
-    """Test portfolio context error handling."""
-    mock_broker.get_account_info.side_effect = ValueError("Broker error")
-
-    result = await coordinator._get_portfolio_context()
-
-    assert "unavailable" in result
-
-
 def test_format_degradation_context_full(coordinator):
     """Test degradation context formatting."""
     context = {
@@ -419,59 +370,6 @@ def test_get_trading_mode_manual(coordinator):
     mode = coordinator._get_trading_mode()
     assert "MANUAL" in mode
     assert "confirmation" in mode
-
-
-def test_load_game_plan_section_missing_file(coordinator, monkeypatch, tmp_path):
-    """Test game plan section returns empty string when file missing."""
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
-    fake_casino_dir = fake_home / ".ai-casino"
-    fake_casino_dir.mkdir()
-    fake_plans_dir = fake_casino_dir / "game-plans"
-    fake_plans_dir.mkdir()
-
-    monkeypatch.setenv("HOME", str(fake_home))
-    section = coordinator._load_game_plan_section()
-    assert section == ""
-
-
-def test_load_game_plan_section_with_existing_file(coordinator, monkeypatch, tmp_path):
-    """Test game plan section formats correctly when file exists."""
-    import json
-    from datetime import UTC, datetime
-
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
-    fake_casino_dir = fake_home / ".ai-casino"
-    fake_casino_dir.mkdir()
-    fake_plans_dir = fake_casino_dir / "game-plans"
-    fake_plans_dir.mkdir()
-
-    today = datetime.now(UTC).date()
-    plan_file = fake_plans_dir / f"{today}.json"
-
-    plan_data = {
-        "risk_stance": "AGGRESSIVE",
-        "priority_symbols": ["AAPL", "TSLA"],
-        "sector_focus": ["Tech", "Energy"],
-        "confidence": 0.85,
-        "reasoning": "Strong market momentum",
-        "key_levels": {"SPY": 450.0, "AAPL": 180.5},
-    }
-    with plan_file.open("w", encoding="utf-8") as f:
-        json.dump(plan_data, f)
-
-    monkeypatch.setenv("HOME", str(fake_home))
-    section = coordinator._load_game_plan_section()
-
-    assert "Today's Game Plan" in section
-    assert "AGGRESSIVE" in section
-    assert "AAPL" in section
-    assert "TSLA" in section
-    assert "0.85" in section or "85" in section
-    assert "Strong market momentum" in section
-    assert "450.00" in section or "$450" in section
-    assert "180.5" in section or "$180.5" in section
 
 
 @pytest.mark.asyncio

@@ -331,13 +331,11 @@ def create_trading_coordinator(
     # Get dependencies for enhanced memory
     broker = container.alpaca_broker()
     analysis_repo = container.analysis_repository()
-    trade_repo = container.trade_repository()
 
     # Create enhanced memory with multi-tier context
     memory = CoordinatorMemory(
         daemon_state=daemon_state,
         analysis_repo=analysis_repo,
-        trade_repo=trade_repo,
         broker=broker,
     )
 

@@ -1,9 +1,7 @@
 """Autonomous trading coordinator using LLM tool calling."""
 
 import asyncio
-import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -319,44 +317,6 @@ class TradingCoordinator:
 
         return "\n".join(lines)
 
-    async def _get_portfolio_context(self) -> str:
-        """Get current portfolio context from broker.
-
-        Returns:
-            Formatted markdown text with portfolio info
-        """
-        try:
-            account_info = await asyncio.to_thread(self._broker.get_account_info)
-
-            if getattr(account_info, "portfolio_value", None) and account_info.portfolio_value > 0:
-                exposure_percent_str = (
-                    f"{account_info.total_exposure / account_info.portfolio_value * 100:.1f}%"
-                )
-            else:
-                exposure_percent_str = "N/A"
-
-            lines = [
-                "\n## Current Portfolio\n",
-                f"- **Balance**: ${account_info.balance:,.2f}",
-                f"- **Portfolio Value**: ${account_info.portfolio_value:,.2f}",
-                f"- **Available Cash**: ${account_info.available_cash:,.2f}",
-                f"- **Total Exposure**: ${account_info.total_exposure:,.2f} ({exposure_percent_str})",
-            ]
-
-            if account_info.positions:
-                lines.append(f"\n**Positions ({len(account_info.positions)}):**")
-                for symbol, pos in account_info.positions.items():
-                    lines.append(
-                        f"- {symbol}: {pos.qty} shares @ ${pos.avg_entry_price:.2f} "
-                        f"(P&L: ${pos.unrealized_pnl:,.2f} / {pos.unrealized_pnl_percent:+.1f}%)"
-                    )
-
-            return "\n".join(lines)
-
-        except Exception as e:
-            logger.error(f"Failed to get portfolio context: {e}")
-            return "\n## Current Portfolio\n\n*Portfolio data unavailable*\n"
-
     def _format_degradation_context(self, context: dict) -> str:
         """Format degradation context as markdown.
 
@@ -388,51 +348,6 @@ class TradingCoordinator:
         if self._config.confirmation_mode == "manual":
             return "MANUAL (requires confirmation for trades)"
         return "AUTO (trades execute automatically)"
-
-    def _load_game_plan_section(self) -> str:
-        """Load today's game plan and format as section.
-
-        Returns:
-            Formatted game plan section or empty string if not available
-        """
-        plan_dir = Path("~/.ai-casino/game-plans").expanduser()
-        today = datetime.now(UTC).date()
-        plan_file = plan_dir / f"{today}.json"
-
-        if not plan_file.exists():
-            return ""
-
-        try:
-            with plan_file.open(encoding="utf-8") as f:
-                data = json.load(f)
-
-            # Build formatted section
-            priority = data.get("priority_symbols", [])
-            risk_stance = data.get("risk_stance", "NEUTRAL")
-            sector_focus = data.get("sector_focus", [])
-            confidence = data.get("confidence", 0.0)
-            reasoning = data.get("reasoning", "")
-            key_levels = data.get("key_levels", {})
-
-            lines = [
-                "\n## Today's Game Plan\n",
-                f"**Risk Stance:** {risk_stance}",
-                f"**Priority Symbols:** {', '.join(priority)}",
-                f"**Sector Focus:** {', '.join(sector_focus)}",
-                f"**Confidence:** {confidence:.0%}",
-                "",
-                "**Key Levels:**",
-            ]
-
-            for symbol, level in key_levels.items():
-                lines.append(f"- {symbol}: ${level:.2f}")
-
-            lines.extend(["", f"**Rationale:** {reasoning}"])
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.warning(f"Failed to load game plan: {e}")
-            return ""
 
     async def _get_positions_summary(self) -> str:
         """Get current positions summary for cycle prompt.

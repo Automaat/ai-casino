@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from src.daemon.state import DaemonState
     from src.data.broker import AlpacaBroker
     from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.trade import TradeRepository
 
 # Constants for memory limits
 _MAX_IN_MEMORY_RECORDS: Final[int] = 20
@@ -35,7 +34,6 @@ class CoordinatorMemory:
         memory_file: Path | None = None,
         daemon_state: DaemonState | None = None,
         analysis_repo: AnalysisRecordRepository | None = None,
-        trade_repo: TradeRepository | None = None,
         broker: AlpacaBroker | None = None,
     ) -> None:
         """Initialize coordinator memory.
@@ -44,7 +42,6 @@ class CoordinatorMemory:
             memory_file: Path to JSONL memory file (default: ~/.ai-casino/coordinator-memory.jsonl)
             daemon_state: Optional daemon state for today's data access
             analysis_repo: Optional analysis repository for historical queries
-            trade_repo: Optional trade repository for historical queries
             broker: Optional broker for portfolio data access
         """
         self._memory_file = memory_file or Path("~/.ai-casino/coordinator-memory.jsonl").expanduser()
@@ -53,7 +50,6 @@ class CoordinatorMemory:
         # Dependencies for multi-tier memory
         self._daemon_state = daemon_state
         self._analysis_repo = analysis_repo
-        self._trade_repo = trade_repo
         self._broker = broker
 
         # Create file if it doesn't exist
@@ -402,8 +398,6 @@ class CoordinatorMemory:
             deps.append("daemon_state")
         if self._analysis_repo:
             deps.append("analysis_repo")
-        if self._trade_repo:
-            deps.append("trade_repo")
         if self._broker:
             deps.append("broker")
         deps_str = f", deps={','.join(deps)}" if deps else ""

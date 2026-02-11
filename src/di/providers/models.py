@@ -244,11 +244,9 @@ def create_coordinator_tool_registry(
     if daemon_state is not None:
         broker = container.alpaca_broker()
         analysis_repo = container.analysis_repository()
-        trade_repo = container.trade_repository()
         memory = CoordinatorMemory(
             daemon_state=daemon_state,
             analysis_repo=analysis_repo,
-            trade_repo=trade_repo,
             broker=broker,
         )
 
