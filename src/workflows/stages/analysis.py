@@ -85,8 +85,8 @@ def _handle_fundamental_result(
             warnings.append(warning)
             return None
         raise result
-    assert isinstance(result, FundamentalAnalysis)  # noqa: S101
-    return result
+    # After exception handling, result is guaranteed to be FundamentalAnalysis
+    return cast("FundamentalAnalysis", result)
 
 
 def _handle_optional_result(
@@ -191,12 +191,10 @@ async def _run_analysis_group1(  # noqa: PLR0913
             trump_task = _timed_agent_call("trump", trump_analyst.analyze(input_data.trump_posts), collector)
             trump_result = tg.create_task(safe_optional(trump_task))
 
+    # Core analyses - types guaranteed by agent signatures (not wrapped in safe_optional)
     technical = technical_result.result()
     sentiment = sentiment_result.result()
     news = news_result.result()
-    assert isinstance(technical, TechnicalAnalysis)  # noqa: S101
-    assert isinstance(sentiment, SentimentAnalysis)  # noqa: S101
-    assert isinstance(news, NewsAnalysis)  # noqa: S101
 
     return {
         "core": (technical, sentiment, news),

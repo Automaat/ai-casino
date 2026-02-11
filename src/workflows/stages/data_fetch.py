@@ -80,7 +80,7 @@ async def _fetch_all_data(  # noqa: PLR0913
         trump_task = tg.create_task(fetch_trump_safe()) if trump_mode and trump_fetcher else None
 
     news_result = news_task.result()
-    assert isinstance(news_result, list)  # noqa: S101
+    # fetch_news_safe always returns list, no validation needed
     trump_data = trump_task.result() if trump_task else None
 
     return market_task.result(), news_result, trump_data
@@ -93,15 +93,21 @@ def _process_fetch_results(
 ) -> tuple[pd.DataFrame | MultiTimeframeData, list[TruthPost] | None]:
     """Process fetched data and extract relevant fields."""
     if use_multi_timeframe:
-        assert isinstance(market_result, MultiTimeframeData)  # noqa: S101
+        if not isinstance(market_result, MultiTimeframeData):
+            msg = f"Expected MultiTimeframeData, got {type(market_result).__name__}"
+            raise TypeError(msg)
         market_data: pd.DataFrame | MultiTimeframeData = market_result
     else:
-        assert isinstance(market_result, MarketData)  # noqa: S101
+        if not isinstance(market_result, MarketData):
+            msg = f"Expected MarketData, got {type(market_result).__name__}"
+            raise TypeError(msg)
         market_data = market_result.data
 
     trump_posts = None
     if trump_data:
-        assert isinstance(trump_data, TrumpPostData)  # noqa: S101
+        if not isinstance(trump_data, TrumpPostData):
+            msg = f"Expected TrumpPostData, got {type(trump_data).__name__}"
+            raise TypeError(msg)
         trump_posts = trump_data.posts
         logger.info(f"Fetched {len(trump_posts)} Trump posts")
 
