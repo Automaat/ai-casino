@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
+    from src.daemon.watchers.news_watcher import NewsWatcher
+    from src.daemon.watchers.social_watcher import SocialWatcher
     from src.di.container import AppContainer
     from src.discovery.engine import StockDiscoveryEngine
 
@@ -75,6 +77,8 @@ class DaemonComponents:
     param_store: OptimizedParamStore | None = None
     profiler: CycleProfiler | None = None
     coordinator: TradingCoordinator | None = None
+    news_watcher: NewsWatcher | None = None
+    social_watcher: SocialWatcher | None = None
 
 
 class DaemonFactory:
@@ -191,7 +195,15 @@ class DaemonFactory:
         if self.config.profiling.enabled:
             profiler = self._create_profiler()
 
-        # Phase 12: Assemble components
+        # Phase 12: Event watchers (if enabled)
+        news_watcher = None
+        social_watcher = None
+        if self.config.news_watcher.enabled or self.config.social_watcher.enabled:
+            news_watcher = self._container.news_watcher() if self.config.news_watcher.enabled else None
+            social_watcher = self._container.social_watcher() if self.config.social_watcher.enabled else None
+            logger.info("Event watchers initialized")
+
+        # Phase 13: Assemble components
         components = DaemonComponents(
             config=self.config,
             state=state,
@@ -217,9 +229,11 @@ class DaemonFactory:
             market_fetcher=market_fetcher,
             param_store=param_store,
             profiler=profiler,
+            news_watcher=news_watcher,
+            social_watcher=social_watcher,
         )
 
-        # Phase 13: Create task runner (needs components reference)
+        # Phase 14: Create task runner (needs components reference)
         task_runner = ScheduledTaskRunner(self.config, scheduler, daemon_runner=None)  # type: ignore[arg-type]
         components.task_runner = task_runner
 

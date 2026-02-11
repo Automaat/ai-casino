@@ -28,6 +28,7 @@ class DaemonLifecycle:
         self.running = False
         self._api_server: uvicorn.Server | None = None
         self._api_task: asyncio.Task | None = None
+        self._watcher_tasks: list[asyncio.Task] = []
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -68,8 +69,14 @@ class DaemonLifecycle:
         if self.components.config.api.enabled:
             self._start_api_server()
 
+        # Start event watchers if enabled
+        self._start_watchers()
+
     async def shutdown(self) -> None:
-        """Execute shutdown: stop API server, wait for background tasks, save state."""
+        """Execute shutdown: stop watchers, stop API server, wait for background tasks, save state."""
+        # Stop watchers first
+        await self._stop_watchers()
+
         # Stop API server before saving state
         await self._stop_api_server()
 
@@ -166,3 +173,59 @@ class DaemonLifecycle:
                     await self._api_task
             except Exception as e:
                 logger.error(f"Error stopping API server: {e}")
+
+    def _start_watchers(self) -> None:
+        """Start event watchers as background tasks."""
+        watchers = []
+
+        if self.components.news_watcher:
+            watchers.append(("NewsWatcher", self.components.news_watcher))
+
+        if self.components.social_watcher:
+            watchers.append(("SocialWatcher", self.components.social_watcher))
+
+        if not watchers:
+            return
+
+        for name, watcher in watchers:
+
+            def _log_watcher_task_result(t: asyncio.Task, watcher_name: str = name) -> None:
+                if t.cancelled():
+                    return
+                exc = t.exception()
+                if exc is not None:
+                    logger.opt(exception=exc).error(f"{watcher_name} crashed")
+
+            task = asyncio.create_task(watcher.run())
+            task.add_done_callback(_log_watcher_task_result)
+            self._watcher_tasks.append(task)
+            logger.info(f"{name} started as background task")
+
+        console.print(f"[bold cyan]Event watchers: {len(watchers)} active[/bold cyan]")
+
+    async def _stop_watchers(self) -> None:
+        """Stop event watchers gracefully."""
+        if not self._watcher_tasks:
+            return
+
+        try:
+            logger.info("Stopping event watchers...")
+
+            # Signal watchers to stop
+            if self.components.news_watcher:
+                self.components.news_watcher.running = False
+            if self.components.social_watcher:
+                self.components.social_watcher.running = False
+
+            # Wait for tasks to complete (up to 5 seconds)
+            _, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)
+            if pending:
+                logger.warning(f"{len(pending)} watcher tasks did not complete in time")
+            logger.info("Event watchers stopped")
+        except TimeoutError:
+            logger.warning("Watcher shutdown timed out, cancelling tasks")
+            for task in self._watcher_tasks:
+                task.cancel()
+            await asyncio.gather(*self._watcher_tasks, return_exceptions=True)
+        except Exception as e:
+            logger.error(f"Error stopping watchers: {e}")

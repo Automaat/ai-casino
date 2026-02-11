@@ -11,6 +11,7 @@ from src.di.providers import daemon as daemon_providers
 from src.di.providers import data as data_providers
 from src.di.providers import database as database_providers
 from src.di.providers import models as model_providers
+from src.di.providers import watchers as watcher_providers
 from src.di.providers import workflows as workflow_providers
 
 
@@ -362,6 +363,19 @@ class AppContainer(containers.DeclarativeContainer):
 
     task_service = providers.Factory(
         daemon_providers.create_task_service,
+    )
+
+    # Event watchers - Singleton (stateful background tasks)
+    news_watcher = providers.Singleton(
+        watcher_providers.create_news_watcher,
+        historical_cache=historical_cache,
+        daemon_config=daemon_config,
+    )
+
+    social_watcher = providers.Singleton(
+        watcher_providers.create_social_watcher,
+        historical_cache=historical_cache,
+        daemon_config=daemon_config,
     )
 
 
