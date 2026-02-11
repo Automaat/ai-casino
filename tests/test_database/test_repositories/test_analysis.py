@@ -26,18 +26,45 @@ def analysis_record() -> AnalysisRecord:
 
 
 @pytest.mark.asyncio
-async def test_create_analysis_record(analysis_record: AnalysisRecord) -> None:
-    """Test creating analysis record - placeholder for integration test."""
-    pytest.skip("Integration test - requires database setup")
+async def test_create_analysis_record(async_session, analysis_record: AnalysisRecord) -> None:
+    """Test creating analysis record."""
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    result = await repo.create(analysis_record)
+
+    assert result.symbol == analysis_record.symbol
+    assert result.signal == analysis_record.signal
+    assert result.confidence == analysis_record.confidence
+    assert result.executed_trade is True
 
 
 @pytest.mark.asyncio
-async def test_get_by_symbol() -> None:
-    """Test retrieving analysis records by symbol - placeholder for integration test."""
-    pytest.skip("Integration test - requires database setup")
+async def test_get_by_symbol(async_session, analysis_record: AnalysisRecord) -> None:
+    """Test retrieving analysis records by symbol."""
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    await repo.create(analysis_record)
+
+    results = await repo.get_by_symbol("AAPL")
+
+    assert len(results) == 1
+    assert results[0].symbol == "AAPL"
+    assert results[0].signal == "BUY"
 
 
 @pytest.mark.asyncio
-async def test_delete_before() -> None:
-    """Test cleanup of old records - placeholder for integration test."""
-    pytest.skip("Integration test - requires database setup")
+async def test_delete_before(async_session, analysis_record: AnalysisRecord) -> None:
+    """Test cleanup of old records."""
+    from datetime import timedelta
+
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    await repo.create(analysis_record)
+
+    cutoff = datetime.now(UTC) + timedelta(days=1)
+    deleted_count = await repo.delete_before(cutoff)
+
+    assert deleted_count == 1
