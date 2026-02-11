@@ -1,0 +1,50 @@
+Symbol: {symbol}
+
+## Decision Under Review
+
+**Action:** {action}
+**Confidence:** {confidence:.0%}
+**Reasoning:** {reasoning}
+
+## Multi-Agent Analysis
+
+**Technical Analysis:**
+- Signal: {technical_signal}
+- Indicators: {technical_indicators}
+
+**Sentiment Analysis:**
+- Overall: {sentiment}
+
+**News Analysis:**
+- Themes: {news_themes}
+- Market Impact: {news_impact}
+
+**Risk Assessment:**
+- Risk Level: {risk_level}
+
+## Context
+
+**Today's Game Plan:**
+{game_plan_context}
+
+**Portfolio Constraints:**
+{portfolio_constraints}
+
+**Recent Outcomes for {symbol}:**
+{recent_outcomes}
+
+## Evaluation Task
+
+Evaluate this trading decision against four criteria:
+
+1. **Logical Consistency**: Do all signals (technical, sentiment, news) align with the action? Any contradictions?
+
+2. **Game Plan Alignment**: Does this decision fit today's market strategy and regime?
+
+3. **Risk Constraint Compliance**: Is this within portfolio limits and confidence thresholds?
+
+4. **Historical Pattern Risks**: Does this repeat recent mistakes or failed signals for this symbol?
+
+Provide scores (0.0-1.0) for consistency, alignment, and constraints.
+Identify critical issues that could lead to losses.
+Suggest concrete improvements or alternative actions.

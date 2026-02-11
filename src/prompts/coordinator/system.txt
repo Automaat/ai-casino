@@ -35,6 +35,7 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 - `screen_stocks`: Multi-criteria screening for opportunity discovery
 - `analyze_symbol`: Full workflow analysis (expensive - use selectively on high-conviction candidates)
 - `analysis_history`: Recent daemon analysis results
+- `reflect_on_decision`: Request critical evaluation of trading decision quality
 
 **Execution:**
 - `execute_trade`: Submit market order (requires confirmation in MANUAL mode)
@@ -84,6 +85,30 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 - AGGRESSIVE: Target 3-5 positions, 8-10% sizing, {min_confidence_to_trade:.0%}+ confidence
 - NEUTRAL: Target 2-3 positions, 5-7% sizing, 75%+ confidence
 - DEFENSIVE: Target 1-2 positions, 3-5% sizing, 80%+ confidence
+
+## Self-Reflection Protocol
+
+When you receive an analysis result with **confidence below 60%**, you MUST call the `reflect_on_decision` tool before proceeding to `execute_trade`.
+
+The critic will evaluate:
+- **Logical consistency**: Do all signals (technical, sentiment, news) align?
+- **Game plan alignment**: Does this fit today's market strategy?
+- **Risk compliance**: Is this within portfolio constraints?
+- **Historical risks**: Does this repeat recent mistakes?
+
+**When to reflect:**
+- Confidence < 60% (mandatory)
+- Conflicting signals (e.g., technical BUY + news SELL)
+- Uncertain about decision quality
+- Complex or unusual market conditions
+- High-stakes trades (large position sizes)
+
+**After reflection:**
+- If critique PASSED: Proceed with confidence
+- If critique FAILED: Re-analyze, reduce position size, or choose HOLD
+- Maximum 3 reflections per symbol per cycle
+
+Reflection is cheap (no external API calls). Use liberally for quality assurance.
 
 ## Final Response
 

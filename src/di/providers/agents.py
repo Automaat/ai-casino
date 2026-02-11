@@ -15,6 +15,7 @@ from src.models.llm import LLMClient
 if TYPE_CHECKING:
     from src.agents.base_researcher import ResearchDirection
     from src.agents.comparative import ComparativeAnalyst
+    from src.agents.critic import CriticAgent
     from src.agents.event_triage import EventTriageAgent
     from src.agents.fundamental import FundamentalAnalyst
     from src.agents.game_plan import GamePlanAgent
@@ -36,6 +37,20 @@ if TYPE_CHECKING:
     from src.models.sentiment import FinBERTSentiment
     from src.strategies.regime import MarketRegimeDetector
     from src.tools.websearch import WebSearchTool
+
+
+def create_critic_agent(llm_client: LLMClient) -> CriticAgent:
+    """Create CriticAgent with LLM client.
+
+    Args:
+        llm_client: LLM client for decision evaluation
+
+    Returns:
+        Configured CriticAgent
+    """
+    from src.agents.critic import CriticAgent
+
+    return CriticAgent(llm_client)
 
 
 def create_news_analyst(llm_client: LLMClient) -> NewsAnalyst:
@@ -339,16 +354,27 @@ def create_trading_coordinator(
         broker=broker,
     )
 
-    # Build tool registry with enhanced memory
-    tool_registry = build_coordinator_registry(container, memory)
+    # Build temp tool registry without coordinator (for initial creation)
+    tool_registry_temp = build_coordinator_registry(container, memory, coordinator=None)
 
     # Extract coordinator config
     coordinator_config = daemon_config.coordinator
 
-    return TradingCoordinator(
+    # Get critic agent
+    critic_agent = container.critic_agent()
+
+    # Create coordinator with temp registry
+    coordinator = TradingCoordinator(
         llm_client=llm_client,
-        tool_registry=tool_registry,
+        tool_registry=tool_registry_temp,
         memory=memory,
         config=coordinator_config,
         broker=broker,
+        critic_agent=critic_agent,
     )
+
+    # Rebuild registry with coordinator reference for reflection tool
+    tool_registry = build_coordinator_registry(container, memory, coordinator=coordinator)
+    coordinator._tools = tool_registry  # noqa: SLF001
+
+    return coordinator
