@@ -658,9 +658,26 @@ class HistoricalCache:
         Args:
             signal_id: Signal outcome ID
             **fields: Fields to update (e.g., price_at_1d=150.5, outcome_updated_at="...")
+
+        Raises:
+            ValueError: If any field names are invalid
         """
         if not fields:
             return
+
+        # Validate field names to prevent SQL injection
+        valid_fields = {
+            "price_at_1d",
+            "price_at_5d",
+            "price_at_20d",
+            "actual_exit_price",
+            "actual_exit_date",
+            "outcome_updated_at",
+        }
+        invalid_fields = set(fields.keys()) - valid_fields
+        if invalid_fields:
+            msg = f"Invalid signal outcome fields: {', '.join(sorted(invalid_fields))}"
+            raise ValueError(msg)
 
         set_clause = ", ".join(f"{k} = ?" for k in fields)
         values = list(fields.values())
