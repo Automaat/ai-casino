@@ -205,9 +205,10 @@ class DaemonContextBuilder:
             Formatted peer analysis context or None
         """
         try:
-            from src.daemon.peer_analysis import DeepPeerAnalyzer
+            from src.daemon.peer_analysis import DeepPeerAnalyzer, PeerAnalyzerConfig
 
-            analyzer = DeepPeerAnalyzer(output_dir=self.components.config.peer_analysis.output_dir)
+            config = PeerAnalyzerConfig(output_dir=self.components.config.peer_analysis.output_dir)
+            analyzer = DeepPeerAnalyzer(config=config)
             return analyzer.format_context(symbol)
         except Exception as e:
             logger.warning(f"Failed to build peer context for {symbol}: {e}")

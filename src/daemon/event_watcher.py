@@ -12,6 +12,7 @@ Base pattern generalized from TrumpWatcher:
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -27,6 +28,16 @@ from src.workflows.types import TradingWorkflowResult
 console = Console()
 
 
+@dataclass
+class EventWatcherConfig:
+    """Base configuration for EventWatcher."""
+
+    poll_interval: int
+    relevance_threshold: float
+    cooldown_minutes: int
+    max_concurrent_analyses: int
+
+
 class EventWatcher(ABC):
     """Base class for event-driven stock analysis watchers.
 
@@ -34,12 +45,9 @@ class EventWatcher(ABC):
     Base class handles triage, cooldown, analysis orchestration, and signaling.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
-        poll_interval: int,
-        relevance_threshold: float,
-        cooldown_minutes: int,
-        max_concurrent_analyses: int,
+        config: EventWatcherConfig,
         historical_cache: HistoricalCache,
         container: AppContainer | None = None,
         signal_callback: Callable[[EventSignal], None] | None = None,
@@ -47,20 +55,17 @@ class EventWatcher(ABC):
         """Initialize event watcher.
 
         Args:
-            poll_interval: Seconds between poll cycles
-            relevance_threshold: Minimum relevance score to trigger analysis (0.0-1.0)
-            cooldown_minutes: Minutes to wait before re-analyzing same symbol
-            max_concurrent_analyses: Maximum symbols to analyze per cycle
+            config: Base configuration (poll interval, thresholds, etc.)
             historical_cache: Shared cache for market/news data
             container: Optional DI container (auto-created if not provided)
             signal_callback: Optional callback to persist signals (e.g., to state)
         """
         from src.di.container import create_container
 
-        self.poll_interval = poll_interval
-        self.relevance_threshold = relevance_threshold
-        self.cooldown_minutes = cooldown_minutes
-        self.max_concurrent_analyses = max_concurrent_analyses
+        self.poll_interval = config.poll_interval
+        self.relevance_threshold = config.relevance_threshold
+        self.cooldown_minutes = config.cooldown_minutes
+        self.max_concurrent_analyses = config.max_concurrent_analyses
         self.running = False
         self._signal_callback = signal_callback
         self._container = container or create_container()

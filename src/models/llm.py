@@ -1,5 +1,7 @@
 """LLM abstraction using custom provider implementations."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import inspect
@@ -7,6 +9,7 @@ import json
 import os
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar, cast
 
@@ -30,6 +33,20 @@ from src.models.providers.base import ToolCall
 
 if TYPE_CHECKING:
     from src.tools.models import ToolDefinition
+
+
+@dataclass
+class ToolCallingParams:
+    """Parameters for tool calling methods."""
+
+    prompt: str
+    tools: list[ToolDefinition]
+    tool_executor: Callable[[str, dict], str] | Callable[[str, dict], Awaitable[str]]
+    system: str | None = None
+    temperature: float = 0.7
+    max_tool_calls: int = 5
+    on_tool_call: Callable[[str, dict, str], None] | None = None
+
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -359,73 +376,39 @@ class LLMClient:
                     error=error_msg,
                 )
 
-    def complete_with_tools(  # noqa: PLR0913
-        self,
-        prompt: str,
-        tools: list[ToolDefinition],
-        tool_executor: Callable[[str, dict], str],
-        system: str | None = None,
-        temperature: float = 0.7,
-        max_tool_calls: int = 5,
-        on_tool_call: Callable[[str, dict, str], None] | None = None,
-    ) -> str:
+    def complete_with_tools(self, params: ToolCallingParams) -> str:
         """Generate completion with tool calling support (sync wrapper).
 
         Args:
-            prompt: User prompt
-            tools: List of tool definitions
-            tool_executor: Function to execute tools (name, args) -> result
-            system: System prompt (optional)
-            temperature: Sampling temperature (0.0-1.0)
-            max_tool_calls: Maximum tool calls per completion
-            on_tool_call: Callback invoked after each tool execution (name, args, result)
+            params: Tool calling parameters
 
         Returns:
             Final text response after tool execution
         """
-        return asyncio.run(
-            self.acomplete_with_tools(
-                prompt, tools, tool_executor, system, temperature, max_tool_calls, on_tool_call
-            )
-        )
+        return asyncio.run(self.acomplete_with_tools(params))
 
-    async def acomplete_with_tools(  # noqa: PLR0913
-        self,
-        prompt: str,
-        tools: list[ToolDefinition],
-        tool_executor: Callable[[str, dict], str] | Callable[[str, dict], Awaitable[str]],
-        system: str | None = None,
-        temperature: float = 0.7,
-        max_tool_calls: int = 5,
-        on_tool_call: Callable[[str, dict, str], None] | None = None,
-    ) -> str:
+    async def acomplete_with_tools(self, params: ToolCallingParams) -> str:
         """Generate completion with tool calling support (async).
 
         Args:
-            prompt: User prompt
-            tools: List of tool definitions
-            tool_executor: Function to execute tools (name, args) -> result (sync or async)
-            system: System prompt (optional)
-            temperature: Sampling temperature (0.0-1.0)
-            max_tool_calls: Maximum tool calls per completion
-            on_tool_call: Callback invoked after each tool execution (name, args, result)
+            params: Tool calling parameters
 
         Returns:
             Final text response after tool execution
         """
-        messages: list[dict] = self._build_messages(prompt, system)
+        messages: list[dict] = self._build_messages(params.prompt, params.system)
         tool_calls_made = 0
 
         # Convert ToolDefinition models to dicts for provider
-        tools_dict = [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in tools]
+        tools_dict = [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in params.tools]
 
-        while tool_calls_made < max_tool_calls:
+        while tool_calls_made < params.max_tool_calls:
             start = time.perf_counter() if self._metrics_collector else None
             error_msg = None
             try:
                 async with _get_semaphore():
                     text_response, tool_calls = await self._provider.acomplete_with_tools(
-                        messages, tools_dict, temperature
+                        messages, tools_dict, params.temperature
                     )
             except Exception as e:
                 error_msg = str(e)
@@ -449,16 +432,16 @@ class LLMClient:
             # Execute tools and add results
             for tool_call in tool_calls:
                 tool_calls_made += 1
-                result = await self._execute_tool_async(tool_call, tool_executor)
+                result = await self._execute_tool_async(tool_call, params.tool_executor)
 
-                if on_tool_call:
-                    on_tool_call(tool_call.name, tool_call.arguments, result)
+                if params.on_tool_call:
+                    params.on_tool_call(tool_call.name, tool_call.arguments, result)
 
                 messages.append(self._format_tool_result_message(tool_call, result))
 
         # Final completion without tools
         async with _get_semaphore():
-            return await self._provider.acomplete(messages, temperature)
+            return await self._provider.acomplete(messages, params.temperature)
 
     def _format_tool_call_message(self, tool_calls: list[ToolCall]) -> dict:
         """Format tool calls for assistant message."""

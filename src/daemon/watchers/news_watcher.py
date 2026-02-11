@@ -5,15 +5,27 @@ deduplicates via URL tracking, and triggers LLM triage + analysis for relevant e
 """
 
 from collections import deque
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import ClassVar, cast
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
-from src.daemon.event_watcher import EventWatcher
+from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, NewsEvent
 from src.data.news import NewsFetcher
+
+
+@dataclass
+class NewsWatcherConfig:
+    """Configuration for NewsWatcher."""
+
+    poll_interval: int = 300
+    relevance_threshold: float = 0.7
+    cooldown_minutes: int = 15
+    breaking_threshold_minutes: int = 15
+    max_concurrent_analyses: int = 2
 
 
 class NewsWatcher(EventWatcher):
@@ -54,39 +66,67 @@ class NewsWatcher(EventWatcher):
         }
     )
 
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913,D417 - Backward compat, prefer NewsWatcherConfig
         self,
         historical_cache: HistoricalCache,
-        poll_interval: int = 300,
-        relevance_threshold: float = 0.7,
-        cooldown_minutes: int = 15,
-        breaking_threshold_minutes: int = 15,
-        max_concurrent_analyses: int = 2,
+        config: NewsWatcherConfig | None = None,
+        poll_interval: int | None = None,
+        relevance_threshold: float | None = None,
+        cooldown_minutes: int | None = None,
+        breaking_threshold_minutes: int | None = None,
+        max_concurrent_analyses: int | None = None,
     ) -> None:
         """Initialize news watcher.
 
         Args:
             historical_cache: Shared cache for news data
-            poll_interval: Seconds between poll cycles
-            relevance_threshold: Minimum relevance score to trigger analysis
-            cooldown_minutes: Minutes to wait before re-analyzing same symbol
-            breaking_threshold_minutes: Max age for breaking news (minutes)
-            max_concurrent_analyses: Maximum symbols to analyze per cycle
+            config: Configuration (uses defaults if not provided)
+            **Individual params for backward compatibility (prefer config object)
         """
-        super().__init__(
-            poll_interval,
-            relevance_threshold,
-            cooldown_minutes,
-            max_concurrent_analyses=max_concurrent_analyses,
-            historical_cache=historical_cache,
+        # Backward compat: construct config from individual params if provided
+        if config is None and (
+            poll_interval is not None
+            or relevance_threshold is not None
+            or cooldown_minutes is not None
+            or breaking_threshold_minutes is not None
+            or max_concurrent_analyses is not None
+        ):
+            defaults = NewsWatcherConfig()
+            config = NewsWatcherConfig(
+                poll_interval=poll_interval if poll_interval is not None else defaults.poll_interval,
+                relevance_threshold=(
+                    relevance_threshold if relevance_threshold is not None else defaults.relevance_threshold
+                ),
+                cooldown_minutes=(
+                    cooldown_minutes if cooldown_minutes is not None else defaults.cooldown_minutes
+                ),
+                breaking_threshold_minutes=(
+                    breaking_threshold_minutes
+                    if breaking_threshold_minutes is not None
+                    else defaults.breaking_threshold_minutes
+                ),
+                max_concurrent_analyses=(
+                    max_concurrent_analyses
+                    if max_concurrent_analyses is not None
+                    else defaults.max_concurrent_analyses
+                ),
+            )
+
+        cfg = config or NewsWatcherConfig()
+        base_config = EventWatcherConfig(
+            poll_interval=cfg.poll_interval,
+            relevance_threshold=cfg.relevance_threshold,
+            cooldown_minutes=cfg.cooldown_minutes,
+            max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
-        self.breaking_threshold_minutes = breaking_threshold_minutes
+        super().__init__(base_config, historical_cache)
+        self.breaking_threshold_minutes = cfg.breaking_threshold_minutes
         self._news_fetcher: NewsFetcher | None = None
         self._seen_urls: deque[str] = deque(maxlen=100)  # Rolling window auto-evicts oldest
 
         logger.info(
-            f"NewsWatcher initialized (breaking_threshold={breaking_threshold_minutes}m, "
-            f"threshold={relevance_threshold})"
+            f"NewsWatcher initialized (breaking_threshold={cfg.breaking_threshold_minutes}m, "
+            f"threshold={cfg.relevance_threshold})"
         )
 
     def _init_components(self) -> None:

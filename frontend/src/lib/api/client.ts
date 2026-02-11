@@ -56,8 +56,16 @@ export const api = {
 		return fetchAPI<T.HealthResponse>('/health');
 	},
 
+	async getServiceHealth(): Promise<T.ServiceHealthResponse> {
+		return fetchAPI<T.ServiceHealthResponse>('/health/services');
+	},
+
 	async getStateSummary(): Promise<T.StateSummaryResponse> {
 		return fetchAPI<T.StateSummaryResponse>('/state/summary');
+	},
+
+	async getWatchlist(): Promise<T.WatchlistResponse> {
+		return fetchAPI<T.WatchlistResponse>('/watchlist');
 	},
 
 	// Analyses

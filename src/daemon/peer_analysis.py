@@ -2,6 +2,7 @@
 
 import json
 import time as time_mod
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -72,36 +73,56 @@ def _safe_float(value: str | float | None) -> float | None:
         return None
 
 
+@dataclass
+class PeerAnalyzerConfig:
+    """Configuration for DeepPeerAnalyzer."""
+
+    output_dir: str = "~/.ai-casino/peer-analysis"
+    max_peers: int = 10
+    rate_limit_sleep: float = 13.0
+
+
 class DeepPeerAnalyzer:
     """Weekly deep peer analysis comparing positions against sector peers."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         fundamental_fetcher: FundamentalDataFetcher | None = None,
         universe_fetcher: StockUniverseFetcher | None = None,
-        output_dir: str = "~/.ai-casino/peer-analysis",
-        max_peers: int = 10,
-        rate_limit_sleep: float = 13.0,
         historical_cache: HistoricalCache | None = None,
+        config: PeerAnalyzerConfig | None = None,
+        **deprecated_kwargs: str | int | float | None,
     ) -> None:
         """Initialize deep peer analyzer.
 
         Args:
             fundamental_fetcher: Alpha Vantage fundamental data fetcher (required for analyze_positions)
             universe_fetcher: Stock universe fetcher (required for analyze_positions)
-            output_dir: Directory to persist analysis results
-            max_peers: Maximum peers to compare per position
-            rate_limit_sleep: Seconds between API calls (AV rate limit)
             historical_cache: Optional cache for dedup
+            config: Configuration (uses defaults if not provided)
+            **deprecated_kwargs: Deprecated params (output_dir, max_peers, rate_limit_sleep). Use config.
         """
+        # Backward compat: construct config from individual params if provided
+        output_dir = deprecated_kwargs.get("output_dir")
+        max_peers = deprecated_kwargs.get("max_peers")
+        rate_limit_sleep = deprecated_kwargs.get("rate_limit_sleep")
+
+        if config is None and output_dir is not None:
+            config = PeerAnalyzerConfig(
+                output_dir=str(output_dir),
+                max_peers=int(max_peers) if max_peers else 10,
+                rate_limit_sleep=float(rate_limit_sleep) if rate_limit_sleep else 13.0,
+            )
+
+        cfg = config or PeerAnalyzerConfig()
         self._fundamental = fundamental_fetcher
         self._universe = universe_fetcher
-        self._output_dir = Path(output_dir).expanduser()
-        self._max_peers = max_peers
-        self._rate_limit_sleep = rate_limit_sleep
+        self._output_dir = Path(cfg.output_dir).expanduser()
+        self._max_peers = cfg.max_peers
+        self._rate_limit_sleep = cfg.rate_limit_sleep
         self._cache = historical_cache
         self._ticker_cache: dict[str, yf.Ticker] = {}
-        logger.info(f"Initialized DeepPeerAnalyzer (max_peers={max_peers})")
+        logger.info(f"Initialized DeepPeerAnalyzer (max_peers={cfg.max_peers})")
 
     def analyze_positions(self, symbols: list[str]) -> DeepPeerAnalysisResult:
         """Run deep peer analysis for all positions.

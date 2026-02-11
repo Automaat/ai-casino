@@ -52,15 +52,19 @@ async def run_instrumented_analysis(  # noqa: PLR0913
 
     # Stage 1: Fetch data
     start = time.perf_counter()
+    from src.workflows.stages.data_fetch import DataFetchConfig
+
     data_output = await data_fetch.fetch_data(
         symbol,
         period_days,
         trading_session,
-        workflow.market_fetcher,
-        workflow.news_fetcher,
-        enable_multi_timeframe=enable_multi_timeframe,
-        trump_mode=workflow.trump_mode,
-        trump_fetcher=workflow.trump_fetcher,
+        config=DataFetchConfig(
+            market_fetcher=workflow.market_fetcher,
+            news_fetcher=workflow.news_fetcher,
+            enable_multi_timeframe=enable_multi_timeframe,
+            trump_mode=workflow.trump_mode,
+            trump_fetcher=workflow.trump_fetcher,
+        ),
     )
     _record_stage(collector, "fetch_data", start)
 

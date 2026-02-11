@@ -180,13 +180,17 @@ class WebResearchAgent:
                 )
             return f"Unknown tool: {name}"
 
+        from src.models.llm import ToolCallingParams
+
         response = await self.llm.acomplete_with_tools(
-            prompt=prompt,
-            tools=tools,
-            tool_executor=tool_executor,
-            system=system,
-            temperature=0.3,
-            max_tool_calls=3,  # Limit to 3 searches per category (12 total for 4 categories)
+            ToolCallingParams(
+                prompt=prompt,
+                tools=tools,
+                tool_executor=tool_executor,
+                system=system,
+                temperature=0.3,
+                max_tool_calls=3,  # Limit to 3 searches per category (12 total for 4 categories)
+            )
         )
 
         return self._parse_research_response(category, response)

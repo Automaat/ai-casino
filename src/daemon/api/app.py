@@ -31,6 +31,8 @@ from src.daemon.api.models import (
     RiskHistoryResponse,
     RiskReportResponse,
     SectorRotationResponse,
+    ServiceCheck,
+    ServiceHealthResponse,
     SnapshotRecord,
     SnapshotsResponse,
     StateSummaryResponse,
@@ -536,6 +538,61 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             confidence_adjustment=latest.confidence_adjustment,
             halt_reason=latest.halt_reason,
         )
+
+    @app.get("/health/services", response_model=ServiceHealthResponse)
+    async def get_service_health() -> ServiceHealthResponse:
+        """Get individual service health checks."""
+        import json
+        from pathlib import Path
+
+        components: DaemonComponents = app.state.components
+
+        def _read_health_report() -> dict[str, Any]:
+            """Read the latest health report from disk, with a safe fallback."""
+            health_dir = Path(components.config.health.health_dir).expanduser()
+            reports = sorted(health_dir.glob("health-*.json"))
+            if not reports:
+                return {"overall_status": "HEALTHY", "service_checks": []}
+
+            latest_file = reports[-1]
+            try:
+                return json.loads(latest_file.read_text())
+            except Exception as e:
+                logger.warning(f"Failed to read or parse health report {latest_file}: {e}")
+                return {"overall_status": "HEALTHY", "service_checks": []}
+
+        # Read health report in thread to avoid blocking
+        report_data = await asyncio.to_thread(_read_health_report)
+
+        try:
+            raw_checks = report_data.get("service_checks", [])
+            if not isinstance(raw_checks, list):
+                msg = "service_checks is not a list"
+                raise TypeError(msg)
+
+            # Convert ServiceCheckResult-like dicts to ServiceCheck models
+            service_checks = [
+                ServiceCheck(
+                    service=check["service"],
+                    status=check["status"],
+                    message=check["message"],
+                    duration_ms=check["duration_ms"],
+                    checked_at=check["checked_at"],
+                )
+                for check in raw_checks
+            ]
+
+            overall_status = report_data.get("overall_status", "HEALTHY")
+            return ServiceHealthResponse(
+                overall_status=overall_status,
+                service_checks=service_checks,
+            )
+        except Exception as e:
+            logger.warning(f"Invalid health report format, using fallback health status: {e}")
+            return ServiceHealthResponse(
+                overall_status="HEALTHY",
+                service_checks=[],
+            )
 
     @app.get("/game-plan", response_model=GamePlanResponse | None)
     async def get_game_plan() -> GamePlanResponse | None:

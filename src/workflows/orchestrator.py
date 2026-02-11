@@ -108,15 +108,13 @@ class TradingWorkflow:
             self.vectorbt_runner = VectorBTRunner()
             logger.info("VectorBTRunner initialized for pre-trade validation")
 
-    async def analyze(  # noqa: PLR0913
+    async def analyze(
         self,
         symbol: str,
         period_days: int = 90,
         trading_session: TradingSession = TradingSession.REGULAR,
-        position_context: dict[str, object] | None = None,
-        enable_multi_timeframe: bool = False,
-        degradation_context: DegradationContext | None = None,
-        **context_kwargs: str | None,
+        extra_context: WorkflowExtraContext | None = None,
+        **deprecated_kwargs: dict[str, object] | bool | DegradationContext | str | None,
     ) -> TradingWorkflowResult:
         """Run complete trading analysis.
 
@@ -124,11 +122,9 @@ class TradingWorkflow:
             symbol: Stock ticker symbol
             period_days: Days of historical data to fetch
             trading_session: Trading session type (REGULAR or PRE_MARKET)
-            position_context: Optional position context (entry price, P&L, days held)
-            enable_multi_timeframe: Enable multi-timeframe analysis (requires market hours)
-            degradation_context: Optional degradation context
-            **context_kwargs: Optional context keys: sector_context, earnings_context,
-                peer_analysis_context, game_plan_context
+            extra_context: Optional workflow extra context (preferred)
+            **deprecated_kwargs: Deprecated params (position_context, enable_multi_timeframe,
+                                degradation_context, context_kwargs). Use extra_context.
 
         Returns:
             TradingWorkflowResult with all analyses and final decision
@@ -144,15 +140,45 @@ class TradingWorkflow:
             collector_token = current_collector.set(collector)
 
         try:
-            extra_context = WorkflowExtraContext(
-                sector_rotation_context=context_kwargs.get("sector_context"),
-                earnings_context=context_kwargs.get("earnings_context"),
-                peer_analysis_context=context_kwargs.get("peer_analysis_context"),
-                game_plan_context=context_kwargs.get("game_plan_context"),
-                position_context=position_context,
-                enable_multi_timeframe=enable_multi_timeframe,
-                degradation_context=degradation_context,
-            )
+            # Extract deprecated kwargs for backward compatibility
+            position_context = deprecated_kwargs.get("position_context")
+            enable_multi_timeframe = deprecated_kwargs.get("enable_multi_timeframe", False)
+            degradation_context = deprecated_kwargs.get("degradation_context")
+
+            # Backward compat: construct extra_context from individual params if needed
+            if extra_context is None and (
+                position_context is not None
+                or enable_multi_timeframe
+                or degradation_context is not None
+                or any(
+                    k not in {"position_context", "enable_multi_timeframe", "degradation_context"}
+                    for k in deprecated_kwargs
+                )
+            ):
+                from src.daemon.degradation import DegradationContext
+
+                # Extract context values with type narrowing
+                sector_ctx = deprecated_kwargs.get("sector_context")
+                earnings_ctx = deprecated_kwargs.get("earnings_context")
+                peer_ctx = deprecated_kwargs.get("peer_analysis_context")
+                game_plan_ctx = deprecated_kwargs.get("game_plan_context")
+
+                # Narrow position_context type
+                pos_ctx = position_context if isinstance(position_context, dict) else None
+
+                # Narrow degradation_context type
+                deg_ctx = degradation_context if isinstance(degradation_context, DegradationContext) else None
+
+                extra_context = WorkflowExtraContext(
+                    sector_rotation_context=sector_ctx if isinstance(sector_ctx, str) else None,
+                    earnings_context=earnings_ctx if isinstance(earnings_ctx, str) else None,
+                    peer_analysis_context=peer_ctx if isinstance(peer_ctx, str) else None,
+                    game_plan_context=game_plan_ctx if isinstance(game_plan_ctx, str) else None,
+                    position_context=pos_ctx,
+                    enable_multi_timeframe=bool(enable_multi_timeframe),
+                    degradation_context=deg_ctx,
+                )
+
             return await self._analyze_instrumented(
                 symbol, period_days, trading_session, collector, extra_context
             )
@@ -208,15 +234,20 @@ class TradingWorkflow:
         Returns:
             State dict with market and news data
         """
-        data_output = await data_fetch.fetch_data(
-            symbol=symbol,
-            period_days=period_days,
-            trading_session=trading_session,
+        from src.workflows.stages.data_fetch import DataFetchConfig
+
+        data_fetch_config = DataFetchConfig(
             market_fetcher=self.market_fetcher,
             news_fetcher=self.news_fetcher,
             enable_multi_timeframe=False,
             trump_mode=self.trump_mode,
             trump_fetcher=self.trump_fetcher if self.trump_mode else None,
+        )
+        data_output = await data_fetch.fetch_data(
+            symbol=symbol,
+            period_days=period_days,
+            trading_session=trading_session,
+            config=data_fetch_config,
         )
 
         return {

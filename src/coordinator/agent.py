@@ -125,15 +125,19 @@ class TradingCoordinator:
             logger.info(f"Starting coordinator cycle with {len(watchlist)} symbols on watchlist")
 
             # Run tool calling loop with timeout
+            from src.models.llm import ToolCallingParams
+
             final_response = await asyncio.wait_for(
                 self._llm.acomplete_with_tools(
-                    prompt=user_prompt,
-                    tools=tool_definitions,
-                    tool_executor=self._tool_executor,
-                    system=system_prompt,
-                    temperature=self._config.temperature,
-                    max_tool_calls=self._config.max_tool_calls,
-                    on_tool_call=self._on_tool_call,
+                    ToolCallingParams(
+                        prompt=user_prompt,
+                        tools=tool_definitions,
+                        tool_executor=self._tool_executor,
+                        system=system_prompt,
+                        temperature=self._config.temperature,
+                        max_tool_calls=self._config.max_tool_calls,
+                        on_tool_call=self._on_tool_call,
+                    )
                 ),
                 timeout=self._config.cycle_timeout_seconds,
             )

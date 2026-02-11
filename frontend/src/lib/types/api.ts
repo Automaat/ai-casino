@@ -112,9 +112,9 @@ export interface SectorRotationResponse {
 
 export interface DegradationResponse {
 	tier: string;
-	score: number;
-	reasons: string[];
-	timestamp: string;
+	unavailable_services: string[];
+	confidence_adjustment: number;
+	halt_reason: string | null;
 }
 
 export interface EventResponse {
@@ -136,9 +136,32 @@ export interface MarketEventsResponse {
 }
 
 export interface GamePlanResponse {
-	timestamp: string;
-	plan: string;
+	date: string;
+	priority_symbols: string[];
+	risk_stance: string;
+	sector_focus: string[];
+	reasoning: string;
+	confidence: number;
+	generated_at: string;
+}
+
+export interface ServiceCheck {
+	service: string;
+	status: string;
+	message: string;
+	duration_ms: number;
+	checked_at: string;
+}
+
+export interface ServiceHealthResponse {
+	overall_status: string;
+	service_checks: ServiceCheck[];
+}
+
+export interface WatchlistResponse {
 	symbols: string[];
+	count: number;
+	sources: Record<string, number>;
 }
 
 export interface ConfigResponse {

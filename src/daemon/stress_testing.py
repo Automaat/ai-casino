@@ -9,7 +9,7 @@ from src.daemon.config import MonteCarloConfig
 from src.daemon.state import MonteCarloRecord
 from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
-from src.metrics.monte_carlo import MonteCarloSimulator, SimulationMethod
+from src.metrics.monte_carlo import MonteCarloSimulator, SimulationConfig, SimulationMethod
 
 
 class DaemonStressTester:
@@ -75,14 +75,14 @@ class DaemonStressTester:
             f"({method.value}, {self.config.horizon_days} days)"
         )
 
-        result = simulator.simulate(
-            positions=position_dict,
+        sim_config = SimulationConfig(
             num_simulations=self.config.num_simulations,
             horizon_days=self.config.horizon_days,
             method=method,
             random_seed=self.config.random_seed,
             loss_threshold=self.config.loss_threshold,
         )
+        result = simulator.simulate(positions=position_dict, config=sim_config)
 
         # Check against risk tolerance
         exceeds_tolerance = result.prob_loss_gt_threshold > self.config.max_acceptable_prob
