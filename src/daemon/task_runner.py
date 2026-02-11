@@ -132,7 +132,7 @@ class ScheduledTaskRunner:
 
         # Special case: daily risk report (runs when market closed)
         if not self.scheduler.is_market_open() and self._task_service:
-            self._task_service.run_daily_risk_report()
+            await self._task_service.run_daily_risk_report()
 
     def _is_task_enabled(self, config_path: str) -> bool:
         """Check if task enabled via config path.
