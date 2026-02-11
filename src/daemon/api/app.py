@@ -540,7 +540,6 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     @app.get("/game-plan", response_model=GamePlanResponse | None)
     async def get_game_plan() -> GamePlanResponse | None:
         """Get latest game plan (if enabled and generated)."""
-        import asyncio
         import json
         from pathlib import Path
 
@@ -637,7 +636,6 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         Returns:
             ExecutionMetricsListResponse with list of metrics
         """
-        import asyncio
         import json
         from pathlib import Path
 
@@ -708,7 +706,6 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         Returns:
             WorkflowExecutionMetrics as dict
         """
-        import asyncio
         import json
         from pathlib import Path
 

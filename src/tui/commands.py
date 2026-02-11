@@ -600,7 +600,6 @@ Type freely to chat about markets or ask questions."""
             /candidates add SYM...   - add candidates to watchlist
             /candidates clear        - clear old candidates
         """
-        import asyncio
         from pathlib import Path
 
         from src.daemon.config import DaemonConfig
