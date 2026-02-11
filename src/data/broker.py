@@ -16,10 +16,9 @@ from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, StopOrd
 from loguru import logger
 from pydantic import BaseModel
 
-from src.cache.historical import HistoricalCache
-
 if TYPE_CHECKING:
     from alpaca.trading.models import Clock, Order, Position, TradeAccount
+    from src.cache.historical import HistoricalCache
 
 
 def round_price_for_broker(price: float) -> float:
@@ -108,7 +107,7 @@ class AlpacaBroker:
         api_key: str | None = None,
         secret_key: str | None = None,
         paper: bool = True,
-        historical_cache: HistoricalCache | None = None,
+        historical_cache: "HistoricalCache | None" = None,
     ) -> None:
         """Initialize Alpaca broker client.
 
