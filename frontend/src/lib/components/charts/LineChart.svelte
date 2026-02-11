@@ -18,7 +18,7 @@
 
 	let { data, title, height = 300, color = '#3b82f6', yAxisLabel }: Props = $props();
 
-	let chartContainer: HTMLElement;
+	let chartContainer = null as unknown as HTMLElement;
 	let chart: ECharts | null = null;
 
 	onMount(() => {
