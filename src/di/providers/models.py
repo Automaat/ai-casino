@@ -9,6 +9,7 @@ from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
     from src.backtesting.runner import BacktestRunner
+    from src.daemon.state import DaemonState
     from src.data.market import MarketDataFetcher
     from src.data.universe import StockUniverseFetcher
     from src.di.container import AppContainer
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     from src.optimization.optimizer import OptunaOptimizer
     from src.screening.screener import StockScreener
     from src.strategies.regime import MarketRegimeDetector
+    from src.tools.registry import ToolRegistry
     from src.tools.websearch import WebSearchTool
 
 
@@ -219,3 +221,21 @@ def create_stock_screener(
         universe_fetcher=universe_fetcher,
         liquidity_filters=daemon_config.liquidity_filters,
     )
+
+
+def create_coordinator_tool_registry(
+    container: AppContainer,
+    daemon_state: DaemonState | None = None,
+) -> ToolRegistry:
+    """Create coordinator tool registry with DI container.
+
+    Args:
+        container: DI container for tool dependency resolution
+        daemon_state: Optional daemon state for analysis history tool
+
+    Returns:
+        ToolRegistry with all coordinator tools registered
+    """
+    from src.coordinator.tools import build_coordinator_registry
+
+    return build_coordinator_registry(container, daemon_state)

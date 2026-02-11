@@ -185,6 +185,13 @@ class AppContainer(containers.DeclarativeContainer):
     stock_screener = providers.Singleton(
         model_providers.create_stock_screener,
         universe_fetcher=stock_universe_fetcher,
+        daemon_config=daemon_config,
+    )
+
+    coordinator_tool_registry = providers.Singleton(
+        model_providers.create_coordinator_tool_registry,
+        container=providers.Self(),
+        daemon_state=None,
     )
 
     # Agent providers
