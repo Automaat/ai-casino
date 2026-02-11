@@ -4,12 +4,23 @@ import contextlib
 import io
 import time as time_mod
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from loguru import logger
 
 from src.daemon.profiling.metrics import FunctionStats, ProfilingMetrics
 from src.daemon.profiling.storage import ProfileStorage
+
+
+@asynccontextmanager
+async def async_nullcontext() -> AsyncIterator[None]:
+    """Async no-op context manager for when profiler is disabled.
+
+    Yields:
+        None
+    """
+    yield None
 
 
 class CycleProfiler:

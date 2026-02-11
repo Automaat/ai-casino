@@ -232,7 +232,7 @@ class DaemonRunner:
             components=self._components,
             task_runner=self._task_runner,
             runner=self,
-            profiler=profiler,  # type: ignore[arg-type]
+            profiler=profiler,
         )
 
         result = await cycle_orchestrator.run_cycle()
@@ -262,7 +262,7 @@ class DaemonRunner:
             components=self._components,
             task_runner=self._task_runner,
             runner=self,
-            profiler=profiler,  # type: ignore[arg-type]
+            profiler=profiler,
         )
 
         while lifecycle.running:

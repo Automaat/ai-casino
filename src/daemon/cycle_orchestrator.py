@@ -65,14 +65,13 @@ class DaemonCycleOrchestrator:
         Returns:
             CycleResult with sleep time and cycle info
         """
-        import contextlib
-
         from src.daemon.degradation import DegradationTier
+        from src.daemon.profiling.profiler import async_nullcontext
 
         # Start profiling if enabled
         cycle_num = self.components.state.total_analyses
         profiling_context = (
-            self.profiler.profile_cycle(cycle_num) if self.profiler else contextlib.nullcontext()
+            self.profiler.profile_cycle(cycle_num) if self.profiler else async_nullcontext()
         )
 
         async with profiling_context as profile_metrics:

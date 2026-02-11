@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.event_bus import EventBus
+    from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.notifications import NotificationService
     from src.daemon.optimization import DaemonOptimizer
     from src.daemon.rebalancing import DaemonRebalancer
@@ -70,7 +71,7 @@ class DaemonComponents:
     game_plan_agent: GamePlanAgent | None = None
     market_fetcher: MarketDataFetcher | None = None
     param_store: OptimizedParamStore | None = None
-    profiler: object | None = None
+    profiler: "CycleProfiler | None" = None
 
 
 class DaemonFactory:
@@ -488,7 +489,7 @@ class DaemonFactory:
         logger.info("Stock discovery engine initialized")
         return engine, market_fetcher
 
-    def _create_profiler(self) -> object:
+    def _create_profiler(self) -> "CycleProfiler":
         """Create cycle profiler.
 
         Returns:

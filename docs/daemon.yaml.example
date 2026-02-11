@@ -718,7 +718,7 @@ daemon:
     # Directory structure: {output_dir}/{YYYY-MM-DD}/cycle_{num}_{timestamp}.{pstats,json}
     # output_dir: "~/.ai-casino/profiles"
 
-    # Profiler type: "yappi" (async-aware, recommended) or "cProfile"
+    # Profiler type: "yappi" (async-aware, currently the only supported profiler)
     # profiler_type: "yappi"
 
     # Clock type: "wall" (wall-clock time, recommended) or "cpu" (CPU time only)
