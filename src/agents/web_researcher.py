@@ -125,8 +125,20 @@ class WebResearchAgent:
         Returns:
             List of WebResearchResult
         """
-        tasks = [self._research_category_with_tools(symbol, cat) for cat in categories]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Wrap tasks to handle exceptions
+        async def safe_research(cat: ResearchCategory) -> WebResearchResult | Exception:
+            try:
+                return await self._research_category_with_tools(symbol, cat)
+            except Exception as e:
+                return e
+
+        # Run research tasks in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_research(cat)) for cat in categories]
+
+        # Extract results from tasks
+        results = [task.result() for task in task_results]
 
         successful_results: list[WebResearchResult] = []
         for category, result in zip(categories, results, strict=True):
@@ -193,8 +205,23 @@ class WebResearchAgent:
         Returns:
             List of WebResearchResult
         """
-        tasks = [self._research_category_with_template(symbol, cat) for cat in categories]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Wrap tasks to handle exceptions
+        async def safe_research_template(cat: ResearchCategory) -> WebResearchResult | BaseException:
+            try:
+                return await self._research_category_with_template(symbol, cat)
+            except BaseException as e:
+                # Re-raise control-flow exceptions so TaskGroup can cancel siblings promptly
+                if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise
+                return e
+
+        # Run research tasks in parallel using TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            task_results = [tg.create_task(safe_research_template(cat)) for cat in categories]
+
+        # Extract results from tasks
+        results = [task.result() for task in task_results]
 
         successful_results: list[WebResearchResult] = []
         for category, result in zip(categories, results, strict=True):

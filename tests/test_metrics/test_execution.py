@@ -288,10 +288,9 @@ class TestContextVarPropagation:
             finally:
                 current_agent.reset(token)
 
-        await asyncio.gather(
-            simulate_agent("technical"),
-            simulate_agent("news"),
-        )
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(simulate_agent("technical"))
+            tg.create_task(simulate_agent("news"))
 
         result = collector.finalize()
         agent_names = {call.agent_name for call in result.llm_calls}
