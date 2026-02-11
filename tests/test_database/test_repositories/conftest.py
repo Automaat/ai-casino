@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import JSON, Float, String, event
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session
 from sqlalchemy.sql import sqltypes
 
 from src.database.models import Base
