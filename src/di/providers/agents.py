@@ -319,7 +319,7 @@ def create_trading_coordinator(
         llm_client: LLM client for tool calling
         daemon_config: Daemon config for coordinator settings
         container: DI container for tool registry
-        daemon_state: Optional daemon state for analysis history
+        daemon_state: Optional daemon state for today's data access
 
     Returns:
         Configured TradingCoordinator
@@ -328,14 +328,19 @@ def create_trading_coordinator(
     from src.coordinator.memory import CoordinatorMemory
     from src.coordinator.tools import build_coordinator_registry
 
-    # Create shared memory
-    memory = CoordinatorMemory()
-
-    # Build tool registry with shared memory
-    tool_registry = build_coordinator_registry(container, daemon_state, memory)
-
-    # Get broker for portfolio context
+    # Get dependencies for enhanced memory
     broker = container.alpaca_broker()
+    analysis_repo = container.analysis_repository()
+
+    # Create enhanced memory with multi-tier context
+    memory = CoordinatorMemory(
+        daemon_state=daemon_state,
+        analysis_repo=analysis_repo,
+        broker=broker,
+    )
+
+    # Build tool registry with enhanced memory
+    tool_registry = build_coordinator_registry(container, memory)
 
     # Extract coordinator config
     coordinator_config = daemon_config.coordinator

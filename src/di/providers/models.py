@@ -231,11 +231,23 @@ def create_coordinator_tool_registry(
 
     Args:
         container: DI container for tool dependency resolution
-        daemon_state: Optional daemon state for analysis history tool
+        daemon_state: Optional daemon state for today's data access
 
     Returns:
         ToolRegistry with all coordinator tools registered
     """
+    from src.coordinator.memory import CoordinatorMemory
     from src.coordinator.tools import build_coordinator_registry
 
-    return build_coordinator_registry(container, daemon_state)
+    # Create memory with daemon_state if provided
+    memory = None
+    if daemon_state is not None:
+        broker = container.alpaca_broker()
+        analysis_repo = container.analysis_repository()
+        memory = CoordinatorMemory(
+            daemon_state=daemon_state,
+            analysis_repo=analysis_repo,
+            broker=broker,
+        )
+
+    return build_coordinator_registry(container, memory)

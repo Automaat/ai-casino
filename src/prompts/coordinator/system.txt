@@ -63,7 +63,9 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 - Risk level acceptable (prefer LOW/MEDIUM over HIGH)
 - No conflicting degradation warnings
 
-{game_plan_section}
+{today_game_plan_section}
+
+{today_summary_section}
 
 {memory_section}
 
