@@ -1,12 +1,12 @@
 """Tests for CoordinatorMemory decision query methods."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from src.coordinator.decision_models import DecisionQueryResult, SuccessRateStats
-from src.coordinator.memory import CoordinatorMemory
+from src.coordinator.decision_models import DecisionQueryResult
+from src.coordinator.memory import CoordinatorMemory, DecisionQueryParams
 from src.daemon.state.models import SignalOutcome
 
 
@@ -79,7 +79,7 @@ class TestCoordinatorMemoryDecisionQueries:
 
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
-        decisions = await memory.query_decisions(lookback_days=90, limit=50)
+        decisions = await memory.query_decisions(DecisionQueryParams(lookback_days=90, limit=50))
 
         assert len(decisions) == 4
         assert isinstance(decisions[0], DecisionQueryResult)
@@ -91,7 +91,7 @@ class TestCoordinatorMemoryDecisionQueries:
 
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
-        decisions = await memory.query_decisions(symbol="AAPL", lookback_days=90)
+        decisions = await memory.query_decisions(DecisionQueryParams(symbol="AAPL", lookback_days=90))
 
         assert len(decisions) == 1
         assert decisions[0].symbol == "AAPL"
@@ -105,7 +105,7 @@ class TestCoordinatorMemoryDecisionQueries:
 
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
-        decisions = await memory.query_decisions(lookback_days=90)
+        decisions = await memory.query_decisions(DecisionQueryParams(lookback_days=90))
 
         # Check HIT/MISS classification
         aapl_decision = next(d for d in decisions if d.symbol == "AAPL")
@@ -130,7 +130,7 @@ class TestCoordinatorMemoryDecisionQueries:
 
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
-        decisions = await memory.query_decisions(lookback_days=90)
+        decisions = await memory.query_decisions(DecisionQueryParams(lookback_days=90))
 
         assert len(decisions) == 1
         decision = decisions[0]
@@ -139,7 +139,7 @@ class TestCoordinatorMemoryDecisionQueries:
         expected_return = ((155.0 - 150.0) / 150.0) * 100
         assert abs(decision.return_pct - expected_return) < 0.01
 
-    async def test_query_decisions_horizon_selection(self, mock_signal_outcome_repo, sample_signal_outcomes):
+    async def test_query_decisions_horizon_selection(self, mock_signal_outcome_repo):
         """Test selecting different outcome horizons."""
         outcome_with_multiple_horizons = SignalOutcome(
             symbol="AAPL",
@@ -160,15 +160,15 @@ class TestCoordinatorMemoryDecisionQueries:
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
         # Test 1d horizon
-        decisions_1d = await memory.query_decisions(horizon="1d")
+        decisions_1d = await memory.query_decisions(DecisionQueryParams(horizon="1d"))
         assert decisions_1d[0].price_at_outcome == 152.0
 
         # Test 5d horizon
-        decisions_5d = await memory.query_decisions(horizon="5d")
+        decisions_5d = await memory.query_decisions(DecisionQueryParams(horizon="5d"))
         assert decisions_5d[0].price_at_outcome == 155.0
 
         # Test 20d horizon
-        decisions_20d = await memory.query_decisions(horizon="20d")
+        decisions_20d = await memory.query_decisions(DecisionQueryParams(horizon="20d"))
         assert decisions_20d[0].price_at_outcome == 160.0
 
     async def test_get_success_rate_basic(self, mock_signal_outcome_repo, sample_signal_outcomes):
@@ -212,7 +212,7 @@ class TestCoordinatorMemoryDecisionQueries:
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
         # Query all, then filter by regime
-        decisions = await memory.query_decisions(lookback_days=90)
+        decisions = await memory.query_decisions(DecisionQueryParams(lookback_days=90))
         # Filter happens in get_success_rate
         bullish_decisions = [d for d in decisions if hasattr(d, "regime") and d.regime == "trending_bullish"]
 
@@ -242,14 +242,14 @@ class TestCoordinatorMemoryDecisionQueries:
 
         stats = await memory.get_success_rate(lookback_days=90)
 
-        # Average: (0.85 + 0.80 + 0.90 + 0.75) / 4 = 0.825
+        # Expected average confidence from sample outcomes is 0.825
         assert abs(stats["avg_confidence"] - 0.825) < 0.01
 
     async def test_query_decisions_without_repo(self):
         """Test graceful handling when repository is not available."""
         memory = CoordinatorMemory(signal_outcome_repo=None)
 
-        decisions = await memory.query_decisions(lookback_days=90)
+        decisions = await memory.query_decisions(DecisionQueryParams(lookback_days=90))
 
         assert decisions == []
 
@@ -268,7 +268,7 @@ class TestCoordinatorMemoryDecisionQueries:
 
         memory = CoordinatorMemory(signal_outcome_repo=mock_signal_outcome_repo)
 
-        decisions = await memory.query_decisions(lookback_days=90)
+        decisions = await memory.query_decisions(DecisionQueryParams(lookback_days=90))
 
         assert decisions == []
 

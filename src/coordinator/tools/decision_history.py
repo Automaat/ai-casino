@@ -1,15 +1,19 @@
 """Decision history query tool for coordinator learning."""
 
 import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from loguru import logger
 
+from src.coordinator.memory import DecisionQueryParams
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.coordinator.memory import CoordinatorMemory
+
+# Constants
+_MAX_DISPLAYED_DECISIONS: Final[int] = 30
 
 
 class QueryPastDecisionsTool(BaseTool):
@@ -160,7 +164,7 @@ class QueryPastDecisionsTool(BaseTool):
         signal_str = str(signal) if signal and not isinstance(signal, bool) else None
 
         # Query decisions from memory (which delegates to signal_outcome_repo)
-        decisions = await self._memory.query_decisions(
+        params = DecisionQueryParams(
             symbol=symbol_str,
             signal=signal_str,
             lookback_days=lookback_days,
@@ -168,6 +172,7 @@ class QueryPastDecisionsTool(BaseTool):
             limit=50,
             horizon=horizon,
         )
+        decisions = await self._memory.query_decisions(params)
 
         # Get success rate statistics
         stats = await self._memory.get_success_rate(
@@ -177,14 +182,13 @@ class QueryPastDecisionsTool(BaseTool):
         )
 
         # Format results as markdown
-        return self._format_results(decisions, stats, symbol_str, signal_str, lookback_days, horizon)
+        return self._format_results(decisions, stats, symbol_str, lookback_days, horizon)
 
     def _format_results(
         self,
         decisions: list,
         stats: dict[str, object],
         symbol: str | None,
-        signal: str | None,
         lookback_days: int,
         horizon: str,
     ) -> str:
@@ -194,7 +198,6 @@ class QueryPastDecisionsTool(BaseTool):
             decisions: List of DecisionQueryResult instances
             stats: SuccessRateStats dict
             symbol: Symbol filter (optional)
-            signal: Signal filter (optional)
             lookback_days: Lookback period
             horizon: Outcome horizon
 
@@ -241,7 +244,7 @@ class QueryPastDecisionsTool(BaseTool):
             "|------|--------|--------|------|-------|---------|--------|--------|",
         ]
 
-        for decision in decisions[:30]:  # Limit to 30 rows for readability
+        for decision in decisions[:_MAX_DISPLAYED_DECISIONS]:
             date_str = decision.timestamp.strftime("%m/%d")
             conf_str = f"{decision.confidence * 100:.0f}%"
             entry_str = f"${decision.price_at_signal:.2f}"
@@ -266,8 +269,8 @@ class QueryPastDecisionsTool(BaseTool):
                 f"{entry_str} | {outcome_str} | {return_str} | {result_str} |"
             )
 
-        if len(decisions) > 30:
-            table_lines.append(f"\n*Showing first 30 of {len(decisions)} decisions*")
+        if len(decisions) > _MAX_DISPLAYED_DECISIONS:
+            table_lines.append(f"\n*Showing first {_MAX_DISPLAYED_DECISIONS} of {len(decisions)} decisions*")
 
         table = "\n".join(table_lines)
 

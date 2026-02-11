@@ -10,7 +10,9 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from src.coordinator.decision_models import DecisionQueryResult
     from src.daemon.state import DaemonState
+    from src.daemon.state.models import SignalOutcome
     from src.data.broker import AlpacaBroker
     from src.database.repositories.analysis import AnalysisRecordRepository
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
@@ -25,6 +27,17 @@ class ObservationRecord(BaseModel):
     timestamp: datetime
     observation: str
     category: str = Field(description="Observation category")
+
+
+class DecisionQueryParams(BaseModel):
+    """Parameters for querying past trading decisions."""
+
+    symbol: str | None = Field(default=None, description="Optional symbol filter")
+    signal: str | None = Field(default=None, description="Optional signal filter (BUY/SELL/HOLD)")
+    lookback_days: int = Field(default=90, description="Days to look back")
+    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="Min confidence filter")
+    limit: int = Field(default=50, description="Max results to return")
+    horizon: str = Field(default="5d", description="Outcome horizon - 1d, 5d, or 20d")
 
 
 class CoordinatorMemory:
@@ -395,104 +408,153 @@ class CoordinatorMemory:
 
         return f"{truncated}\n\n[Truncated for length]"
 
-    async def query_decisions(
-        self,
-        symbol: str | None = None,
-        signal: str | None = None,
-        lookback_days: int = 90,
-        min_confidence: float | None = None,
-        limit: int = 50,
-        horizon: str = "5d",
-    ) -> list:
+    async def query_decisions(self, params: DecisionQueryParams | None = None) -> list:
         """Query past trading decisions with outcomes for learning.
 
         Args:
-            symbol: Optional symbol filter
-            signal: Optional signal filter (BUY/SELL/HOLD)
-            lookback_days: Days to look back (default: 90)
-            min_confidence: Min confidence filter (0.0-1.0)
-            limit: Max results to return
-            horizon: Outcome horizon - "1d", "5d", or "20d"
+            params: Query parameters (uses defaults if None)
 
         Returns:
             List of DecisionQueryResult instances
         """
-        from src.coordinator.decision_models import DecisionQueryResult
+        if params is None:
+            params = DecisionQueryParams()
 
         if not self._signal_outcome_repo:
             logger.warning("Signal outcome repository not available")
             return []
 
         try:
-            start_date = datetime.now(UTC) - timedelta(days=lookback_days)
-
-            # Query outcomes from repository
-            if symbol:
-                outcomes = await self._signal_outcome_repo.get_by_symbol(
-                    symbol=symbol,
-                    limit=limit,
-                    start_date=start_date,
-                )
-            else:
-                outcomes = await self._signal_outcome_repo.get_recent_outcomes(
-                    window=lookback_days,
-                    signal_type=signal,
-                    min_confidence=min_confidence,
-                )
-                outcomes = outcomes[:limit]
-
-            # Convert to DecisionQueryResult with HIT/MISS classification
-            results = []
-            for outcome in outcomes:
-                # Get price at specified horizon
-                price_at_outcome = None
-                if horizon == "1d":
-                    price_at_outcome = outcome.price_at_1d
-                elif horizon == "5d":
-                    price_at_outcome = outcome.price_at_5d
-                elif horizon == "20d":
-                    price_at_outcome = outcome.price_at_20d
-
-                # Calculate return percentage
-                return_pct = None
-                if price_at_outcome is not None:
-                    return_pct = (
-                        (price_at_outcome - outcome.price_at_signal) / outcome.price_at_signal
-                    ) * 100
-
-                # Classify as HIT/MISS/PENDING
-                hit_miss = None
-                if price_at_outcome is not None:
-                    if outcome.signal == "BUY":
-                        hit_miss = "HIT" if price_at_outcome > outcome.price_at_signal else "MISS"
-                    elif outcome.signal == "SELL":
-                        hit_miss = "HIT" if price_at_outcome < outcome.price_at_signal else "MISS"
-                    else:  # HOLD
-                        hit_miss = "PENDING"
-                else:
-                    hit_miss = "PENDING"
-
-                results.append(
-                    DecisionQueryResult(
-                        symbol=outcome.symbol,
-                        timestamp=outcome.timestamp,
-                        signal=outcome.signal,
-                        confidence=outcome.confidence,
-                        price_at_signal=outcome.price_at_signal,
-                        price_at_outcome=price_at_outcome,
-                        return_pct=return_pct,
-                        hit_miss=hit_miss,
-                        regime=outcome.regime,
-                        strategy_used=outcome.strategy_used,
-                        trading_session=outcome.trading_session,
-                    )
-                )
-
-            return results
-
+            outcomes = await self._fetch_outcomes(
+                params.symbol, params.signal, params.lookback_days, params.min_confidence, params.limit
+            )
+            return [self._convert_outcome_to_result(outcome, params.horizon) for outcome in outcomes]
         except Exception as e:
             logger.opt(exception=True).error(f"Decision query failed: {e}")
             return []
+
+    async def _fetch_outcomes(
+        self,
+        symbol: str | None,
+        signal: str | None,
+        lookback_days: int,
+        min_confidence: float | None,
+        limit: int,
+    ) -> list:
+        """Fetch signal outcomes from repository with filters.
+
+        Args:
+            symbol: Optional symbol filter
+            signal: Optional signal filter
+            lookback_days: Days to look back
+            min_confidence: Min confidence filter
+            limit: Max results to return
+
+        Returns:
+            List of SignalOutcome instances
+        """
+        if not self._signal_outcome_repo:
+            return []
+
+        start_date = datetime.now(UTC) - timedelta(days=lookback_days)
+
+        if symbol:
+            outcomes = await self._signal_outcome_repo.get_by_symbol(
+                symbol=symbol,
+                limit=limit,
+                start_date=start_date,
+            )
+        else:
+            outcomes = await self._signal_outcome_repo.get_recent_outcomes(
+                window=lookback_days,
+                signal_type=signal,
+                min_confidence=min_confidence,
+            )
+            outcomes = outcomes[:limit]
+
+        return outcomes
+
+    def _convert_outcome_to_result(self, outcome: SignalOutcome, horizon: str) -> DecisionQueryResult:
+        """Convert SignalOutcome to DecisionQueryResult with HIT/MISS classification.
+
+        Args:
+            outcome: SignalOutcome instance
+            horizon: Outcome horizon - "1d", "5d", or "20d"
+
+        Returns:
+            DecisionQueryResult instance
+        """
+        from src.coordinator.decision_models import DecisionQueryResult
+
+        price_at_outcome = self._get_price_at_horizon(outcome, horizon)
+        return_pct = self._calculate_return_pct(outcome.price_at_signal, price_at_outcome)
+        hit_miss = self._classify_outcome(outcome.signal, outcome.price_at_signal, price_at_outcome)
+
+        return DecisionQueryResult(
+            symbol=outcome.symbol,
+            timestamp=outcome.timestamp,
+            signal=outcome.signal,
+            confidence=outcome.confidence,
+            price_at_signal=outcome.price_at_signal,
+            price_at_outcome=price_at_outcome,
+            return_pct=return_pct,
+            hit_miss=hit_miss,
+            regime=outcome.regime,
+            strategy_used=outcome.strategy_used,
+            trading_session=outcome.trading_session,
+        )
+
+    def _get_price_at_horizon(self, outcome: SignalOutcome, horizon: str) -> float | None:
+        """Get price at specified horizon from outcome.
+
+        Args:
+            outcome: SignalOutcome instance
+            horizon: Outcome horizon - "1d", "5d", or "20d"
+
+        Returns:
+            Price at horizon or None
+        """
+        if horizon == "1d":
+            return outcome.price_at_1d
+        if horizon == "5d":
+            return outcome.price_at_5d
+        if horizon == "20d":
+            return outcome.price_at_20d
+        return None
+
+    def _calculate_return_pct(self, price_at_signal: float, price_at_outcome: float | None) -> float | None:
+        """Calculate return percentage.
+
+        Args:
+            price_at_signal: Entry price
+            price_at_outcome: Exit price or None
+
+        Returns:
+            Return percentage or None
+        """
+        if price_at_outcome is None:
+            return None
+        return ((price_at_outcome - price_at_signal) / price_at_signal) * 100
+
+    def _classify_outcome(self, signal: str, price_at_signal: float, price_at_outcome: float | None) -> str:
+        """Classify outcome as HIT/MISS/PENDING.
+
+        Args:
+            signal: Trading signal (BUY/SELL/HOLD)
+            price_at_signal: Entry price
+            price_at_outcome: Exit price or None
+
+        Returns:
+            Classification string - "HIT", "MISS", or "PENDING"
+        """
+        if price_at_outcome is None:
+            return "PENDING"
+
+        if signal == "BUY":
+            return "HIT" if price_at_outcome > price_at_signal else "MISS"
+        if signal == "SELL":
+            return "HIT" if price_at_outcome < price_at_signal else "MISS"
+        return "PENDING"  # HOLD
 
     async def get_success_rate(
         self,
@@ -527,12 +589,13 @@ class CoordinatorMemory:
 
         try:
             # Query decisions with outcomes
-            decisions = await self.query_decisions(
+            params = DecisionQueryParams(
                 signal=signal,
                 lookback_days=lookback_days,
                 limit=1000,
                 horizon=horizon,
             )
+            decisions = await self.query_decisions(params)
 
             if not decisions:
                 return SuccessRateStats(

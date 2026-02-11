@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 
 from src.daemon.state.models import SignalOutcome, SignalUpdateRecord
@@ -16,6 +17,22 @@ from src.database.repositories.base import BaseRepository
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class SignalRecordInput(BaseModel):
+    """Input parameters for recording a trading signal."""
+
+    symbol: str = Field(description="Stock ticker symbol")
+    timestamp: datetime = Field(description="Signal timestamp")
+    signal: str = Field(description="BUY/SELL/HOLD")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score")
+    price_at_signal: float = Field(gt=0.0, description="Price when signal was generated")
+    strategy_used: str | None = Field(default=None, description="Strategy name")
+    regime: str | None = Field(default=None, description="Market regime")
+    trading_session: str = Field(default="REGULAR", description="REGULAR or PRE_MARKET")
+    technical_signal: str | None = Field(default=None, description="Technical analysis signal")
+    sentiment_signal: str | None = Field(default=None, description="Sentiment analysis signal")
+    news_signal: str | None = Field(default=None, description="News analysis signal")
 
 
 class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
@@ -30,57 +47,37 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         super().__init__(session)
         logger.debug("Initialized SignalOutcomeRepository")
 
-    async def record_signal(
-        self,
-        symbol: str,
-        timestamp: datetime,
-        signal: str,
-        confidence: float,
-        price_at_signal: float,
-        strategy_used: str | None = None,
-        regime: str | None = None,
-        trading_session: str = "REGULAR",
-        technical_signal: str | None = None,
-        sentiment_signal: str | None = None,
-        news_signal: str | None = None,
-    ) -> SignalOutcome:
+    async def record_signal(self, input_data: SignalRecordInput) -> SignalOutcome:
         """Record a new trading signal for outcome tracking.
 
         Args:
-            symbol: Stock ticker symbol
-            timestamp: Signal timestamp
-            signal: BUY/SELL/HOLD
-            confidence: Confidence score (0.0-1.0)
-            price_at_signal: Price when signal was generated
-            strategy_used: Strategy name (optional)
-            regime: Market regime (optional)
-            trading_session: REGULAR or PRE_MARKET
-            technical_signal: Technical analysis signal (optional)
-            sentiment_signal: Sentiment analysis signal (optional)
-            news_signal: News analysis signal (optional)
+            input_data: Signal record input parameters
 
         Returns:
             Created SignalOutcome
         """
         orm = SignalOutcomeORM(
             id=uuid.uuid4(),
-            symbol=symbol,
-            timestamp=timestamp,
-            signal=signal,
-            confidence=Decimal(str(confidence)),
-            price_at_signal=Decimal(str(price_at_signal)),
-            strategy_used=strategy_used,
-            regime=regime,
-            trading_session=trading_session,
-            technical_signal=technical_signal,
-            sentiment_signal=sentiment_signal,
-            news_signal=news_signal,
+            symbol=input_data.symbol,
+            timestamp=input_data.timestamp,
+            signal=input_data.signal,
+            confidence=Decimal(str(input_data.confidence)),
+            price_at_signal=Decimal(str(input_data.price_at_signal)),
+            strategy_used=input_data.strategy_used,
+            regime=input_data.regime,
+            trading_session=input_data.trading_session,
+            technical_signal=input_data.technical_signal,
+            sentiment_signal=input_data.sentiment_signal,
+            news_signal=input_data.news_signal,
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
         await self._session.commit()
 
-        logger.info(f"Recorded signal outcome: {symbol} {signal} @ {timestamp} (conf={confidence:.2f})")
+        logger.info(
+            f"Recorded signal outcome: {input_data.symbol} {input_data.signal} @ "
+            f"{input_data.timestamp} (conf={input_data.confidence:.2f})"
+        )
         return self._to_domain(orm)
 
     async def get_by_id(self, entity_id: str) -> SignalOutcome | None:
@@ -394,7 +391,7 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             Created SignalOutcome
         """
-        return await self.record_signal(
+        input_data = SignalRecordInput(
             symbol=entity.symbol,
             timestamp=entity.timestamp,
             signal=entity.signal,
@@ -407,6 +404,7 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             sentiment_signal=entity.sentiment_signal,
             news_signal=entity.news_signal,
         )
+        return await self.record_signal(input_data)
 
     def _to_domain(self, orm: SignalOutcomeORM) -> SignalOutcome:
         """Convert ORM model to SignalOutcome domain model.

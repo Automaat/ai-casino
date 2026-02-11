@@ -56,8 +56,7 @@ async def backfill_signal_outcomes(
     for record in sqlite_records:
         try:
             # Convert SQLite record to SignalOutcome domain model
-            # Note: SQLite timestamp is ISO string, need to parse
-            timestamp = datetime.fromisoformat(record.timestamp.replace("Z", "+00:00"))
+            timestamp = datetime.fromisoformat(record.timestamp)
 
             signal_outcome = SignalOutcome(
                 symbol=record.symbol,

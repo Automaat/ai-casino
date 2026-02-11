@@ -4,15 +4,14 @@ Note: These are unit tests using mocks. Integration tests with real database
 should be added separately.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID, uuid4
 
 import pytest
 
 from src.daemon.state.models import SignalOutcome
-from src.database.repositories.signal_outcome import SignalOutcomeRepository
+from src.database.repositories.signal_outcome import SignalOutcomeRepository, SignalRecordInput
 
 
 @pytest.fixture
@@ -51,7 +50,7 @@ class TestSignalOutcomeRepository:
         """Test recording a new signal outcome."""
         repo = SignalOutcomeRepository(mock_session)
 
-        outcome = await repo.record_signal(
+        input_data = SignalRecordInput(
             symbol=sample_signal_outcome.symbol,
             timestamp=sample_signal_outcome.timestamp,
             signal=sample_signal_outcome.signal,
@@ -64,6 +63,7 @@ class TestSignalOutcomeRepository:
             sentiment_signal=sample_signal_outcome.sentiment_signal,
             news_signal=sample_signal_outcome.news_signal,
         )
+        outcome = await repo.record_signal(input_data)
 
         assert outcome.symbol == "AAPL"
         assert outcome.signal == "BUY"

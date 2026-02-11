@@ -1,12 +1,11 @@
 """Tests for QueryPastDecisionsTool."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.coordinator.decision_models import DecisionQueryResult
-from src.coordinator.memory import CoordinatorMemory
 from src.coordinator.tools.decision_history import QueryPastDecisionsTool
 
 
@@ -138,8 +137,8 @@ class TestQueryPastDecisionsTool:
 
         assert "AAPL" in result
         mock_coordinator_memory.query_decisions.assert_called_once()
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["symbol"] == "AAPL"
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.symbol == "AAPL"
 
     def test_execute_with_signal_filter(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats
@@ -151,11 +150,11 @@ class TestQueryPastDecisionsTool:
 
         tool = QueryPastDecisionsTool(mock_coordinator_memory)
 
-        result = tool.execute(signal="BUY")
+        tool.execute(signal="BUY")
 
         mock_coordinator_memory.query_decisions.assert_called_once()
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["signal"] == "BUY"
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.signal == "BUY"
 
     def test_execute_with_lookback_days(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats
@@ -169,8 +168,8 @@ class TestQueryPastDecisionsTool:
         result = tool.execute(lookback_days=30)
 
         assert "Last 30 Days" in result
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["lookback_days"] == 30
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.lookback_days == 30
 
     def test_execute_with_lookback_days_capped(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats
@@ -181,10 +180,10 @@ class TestQueryPastDecisionsTool:
 
         tool = QueryPastDecisionsTool(mock_coordinator_memory)
 
-        result = tool.execute(lookback_days=500)  # Over max of 365
+        tool.execute(lookback_days=500)  # Over max of 365
 
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["lookback_days"] == 365
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.lookback_days == 365
 
     def test_execute_with_min_confidence(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats
@@ -196,10 +195,10 @@ class TestQueryPastDecisionsTool:
 
         tool = QueryPastDecisionsTool(mock_coordinator_memory)
 
-        result = tool.execute(min_confidence=0.85)
+        tool.execute(min_confidence=0.85)
 
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["min_confidence"] == 0.85
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.min_confidence == 0.85
 
     def test_execute_with_horizon(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats
@@ -213,8 +212,8 @@ class TestQueryPastDecisionsTool:
         result = tool.execute(horizon="20d")
 
         assert "20d Horizon" in result
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["horizon"] == "20d"
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.horizon == "20d"
 
     def test_execute_with_invalid_horizon_defaults(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats
@@ -225,10 +224,10 @@ class TestQueryPastDecisionsTool:
 
         tool = QueryPastDecisionsTool(mock_coordinator_memory)
 
-        result = tool.execute(horizon="invalid")
+        tool.execute(horizon="invalid")
 
-        call_kwargs = mock_coordinator_memory.query_decisions.call_args[1]
-        assert call_kwargs["horizon"] == "5d"
+        call_params = mock_coordinator_memory.query_decisions.call_args[0][0]
+        assert call_params.horizon == "5d"
 
     def test_format_results_with_decisions(
         self, mock_coordinator_memory, sample_decision_results, sample_success_stats

@@ -15,11 +15,12 @@ from src.cache.historical import SignalOutcomeInput
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.notification_helper import DaemonNotificationHelper
-from src.workflows.types import TradingWorkflowResult
+from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.factory import DaemonComponents
+    from src.strategies.session import TradingSession
 
 
 class AnalysisOrchestrationResult(BaseModel):
@@ -391,94 +392,12 @@ class AnalysisOrchestrator:
             session = self.scheduler.get_trading_session() or TradingSession.REGULAR
             await self._publish_event("ANALYSIS_START", {"symbol": symbol, "trading_session": session.value})
 
-            # Build contexts via delegated method
-            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = None, None, None, None
-            context_builder = self._context_builder
-            if context_builder:
-                sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = context_builder.build_analysis_contexts(
-                    symbol
-                )
+            extra_context = self._build_extra_context(symbol, position_context, degradation_context)
+            result = await self._run_workflow_analysis(symbol, session, target_allocations, extra_context)
 
-            if target_allocations is not None:
-                self.workflow.set_target_allocations(target_allocations)
-
-            try:
-                from src.workflows.types import WorkflowExtraContext
-
-                extra_context = WorkflowExtraContext(
-                    sector_rotation_context=sector_ctx,
-                    earnings_context=earnings_ctx,
-                    peer_analysis_context=peer_ctx,
-                    game_plan_context=game_plan_ctx,
-                    position_context=position_context,
-                    degradation_context=degradation_context,
-                )
-                result = await self.workflow.analyze(
-                    symbol,
-                    period_days=90,
-                    trading_session=session,
-                    extra_context=extra_context,
-                )
-            finally:
-                if target_allocations is not None:
-                    self.workflow.set_target_allocations(None)
-
-            if self.notification_service and self._components:
-                await self._notification_helper.maybe_notify_signal(result, self._components)
-
-            rsi = result.technical.rsi if result.technical else None
-            macd_hist = result.technical.macd_hist if result.technical else None
-
-            self.state.record_analysis(
-                symbol=symbol,
-                signal=result.decision.action.value,
-                confidence=result.decision.confidence,
-                executed=result.order is not None,
-                trading_session=result.trading_session,
-                is_paper_trade=self.trading_mode == "paper",
-                rsi=rsi,
-                macd_hist=macd_hist,
-                reasoning=result.decision.reasoning,
-            )
-
-            # Record signal outcome in PostgreSQL (preferred) or SQLite (fallback)
-            if self._signal_outcome_repo:
-                try:
-                    await self._signal_outcome_repo.record_signal(
-                        symbol=symbol,
-                        timestamp=datetime.now(UTC),
-                        signal=result.decision.action.value,
-                        confidence=result.decision.confidence,
-                        price_at_signal=result.risk.current_price,
-                        strategy_used=result.strategy_used,
-                        regime=result.regime.regime.value if result.regime else None,
-                        trading_session=result.trading_session.value,
-                        technical_signal=result.technical.signal.value,
-                        sentiment_signal=self._extract_sentiment_signal(result.sentiment),
-                        news_signal=self._extract_news_signal(result.news),
-                    )
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to record signal outcome: {e}")
-            elif self.historical_cache:
-                try:
-                    signal_input = SignalOutcomeInput(
-                        symbol=symbol,
-                        timestamp=datetime.now(UTC),
-                        signal=result.decision.action.value,
-                        confidence=result.decision.confidence,
-                        price_at_signal=result.risk.current_price,
-                        strategy_used=result.strategy_used,
-                        regime=result.regime.regime.value if result.regime else None,
-                        trading_session=result.trading_session.value,
-                        technical_signal=result.technical.signal.value,
-                        sentiment_signal=self._extract_sentiment_signal(result.sentiment),
-                        news_signal=self._extract_news_signal(result.news),
-                    )
-                    historical_cache = self.historical_cache
-                    if historical_cache:
-                        historical_cache.record_signal_outcome(signal_input)
-                except Exception as e:
-                    logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
+            await self._handle_notifications(result)
+            self._record_analysis_result(symbol, result)
+            await self._record_signal_outcome(symbol, result)
 
             await self._publish_event(
                 "ANALYSIS_COMPLETE",
@@ -497,6 +416,170 @@ class AnalysisOrchestrator:
             self.state.record_error(error_msg)
             await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
             return None
+
+    def _build_extra_context(
+        self,
+        symbol: str,
+        position_context: dict[str, object] | None,
+        degradation_context: DegradationContext | None,
+    ) -> WorkflowExtraContext:
+        """Build extra context for workflow analysis.
+
+        Args:
+            symbol: Stock ticker
+            position_context: Position context
+            degradation_context: Degradation context
+
+        Returns:
+            WorkflowExtraContext instance
+        """
+        sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = None, None, None, None
+        context_builder = self._context_builder
+        if context_builder:
+            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = context_builder.build_analysis_contexts(
+                symbol
+            )
+
+        return WorkflowExtraContext(
+            sector_rotation_context=sector_ctx,
+            earnings_context=earnings_ctx,
+            peer_analysis_context=peer_ctx,
+            game_plan_context=game_plan_ctx,
+            position_context=position_context,
+            degradation_context=degradation_context,
+        )
+
+    async def _run_workflow_analysis(
+        self,
+        symbol: str,
+        session: TradingSession,
+        target_allocations: dict[str, float] | None,
+        extra_context: WorkflowExtraContext,
+    ) -> TradingWorkflowResult:
+        """Run workflow analysis with target allocations if provided.
+
+        Args:
+            symbol: Stock ticker
+            session: Trading session
+            target_allocations: Target allocations (optional)
+            extra_context: Extra context for analysis
+
+        Returns:
+            TradingWorkflowResult
+        """
+        if target_allocations is not None:
+            self.workflow.set_target_allocations(target_allocations)
+
+        try:
+            return await self.workflow.analyze(
+                symbol,
+                period_days=90,
+                trading_session=session,
+                extra_context=extra_context,
+            )
+        finally:
+            if target_allocations is not None:
+                self.workflow.set_target_allocations(None)
+
+    async def _handle_notifications(self, result: TradingWorkflowResult) -> None:
+        """Handle notifications for analysis result.
+
+        Args:
+            result: TradingWorkflowResult
+        """
+        if self.notification_service and self._components:
+            await self._notification_helper.maybe_notify_signal(result, self._components)
+
+    def _record_analysis_result(self, symbol: str, result: TradingWorkflowResult) -> None:
+        """Record analysis result to daemon state.
+
+        Args:
+            symbol: Stock ticker
+            result: TradingWorkflowResult
+        """
+        rsi = result.technical.rsi if result.technical else None
+        macd_hist = result.technical.macd_hist if result.technical else None
+
+        self.state.record_analysis(
+            symbol=symbol,
+            signal=result.decision.action.value,
+            confidence=result.decision.confidence,
+            executed=result.order is not None,
+            trading_session=result.trading_session,
+            is_paper_trade=self.trading_mode == "paper",
+            rsi=rsi,
+            macd_hist=macd_hist,
+            reasoning=result.decision.reasoning,
+        )
+
+    async def _record_signal_outcome(self, symbol: str, result: TradingWorkflowResult) -> None:
+        """Record signal outcome to PostgreSQL or SQLite.
+
+        Args:
+            symbol: Stock ticker
+            result: TradingWorkflowResult
+        """
+        if self._signal_outcome_repo:
+            await self._record_signal_to_postgres(symbol, result)
+        elif self.historical_cache:
+            self._record_signal_to_sqlite(symbol, result)
+
+    async def _record_signal_to_postgres(self, symbol: str, result: TradingWorkflowResult) -> None:
+        """Record signal to PostgreSQL.
+
+        Args:
+            symbol: Stock ticker
+            result: TradingWorkflowResult
+        """
+        from src.database.repositories.signal_outcome import SignalRecordInput
+
+        if not self._signal_outcome_repo:
+            return
+
+        try:
+            input_data = SignalRecordInput(
+                symbol=symbol,
+                timestamp=datetime.now(UTC),
+                signal=result.decision.action.value,
+                confidence=result.decision.confidence,
+                price_at_signal=result.risk.current_price,
+                strategy_used=result.strategy_used,
+                regime=result.regime.regime.value if result.regime else None,
+                trading_session=result.trading_session.value,
+                technical_signal=result.technical.signal.value,
+                sentiment_signal=self._extract_sentiment_signal(result.sentiment),
+                news_signal=self._extract_news_signal(result.news),
+            )
+            await self._signal_outcome_repo.record_signal(input_data)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record signal outcome: {e}")
+
+    def _record_signal_to_sqlite(self, symbol: str, result: TradingWorkflowResult) -> None:
+        """Record signal to SQLite historical cache.
+
+        Args:
+            symbol: Stock ticker
+            result: TradingWorkflowResult
+        """
+        try:
+            signal_input = SignalOutcomeInput(
+                symbol=symbol,
+                timestamp=datetime.now(UTC),
+                signal=result.decision.action.value,
+                confidence=result.decision.confidence,
+                price_at_signal=result.risk.current_price,
+                strategy_used=result.strategy_used,
+                regime=result.regime.regime.value if result.regime else None,
+                trading_session=result.trading_session.value,
+                technical_signal=result.technical.signal.value,
+                sentiment_signal=self._extract_sentiment_signal(result.sentiment),
+                news_signal=self._extract_news_signal(result.news),
+            )
+            historical_cache = self.historical_cache
+            if historical_cache:
+                historical_cache.record_signal_outcome(signal_input)
+        except Exception as e:
+            logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
 
     async def _publish_event(self, event_type: str, data: dict[str, object]) -> None:
         """Publish event to EventBus.
