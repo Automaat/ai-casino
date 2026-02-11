@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import Field, PrivateAttr
 
-from src.daemon.state.managers.base import StateManager, _log_task_exception
+from src.daemon.state.managers.base import StateManager, _make_task_cleanup_callback
 from src.daemon.state.models import AnalysisRecord
 from src.strategies.session import TradingSession
 
@@ -82,7 +82,8 @@ class TradingStateManager(StateManager):
         if self._analysis_repository:
             try:
                 task = asyncio.create_task(self._analysis_repository.create(record))  # type: ignore[bad-argument-type]
-                task.add_done_callback(_log_task_exception)
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
                 logger.debug(f"Scheduled analysis record persistence to database: {symbol} {signal}")
             except Exception as e:
                 logger.error(f"Failed to schedule analysis record persistence: {e}")

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import Field, PrivateAttr
 
-from src.daemon.state.managers.base import StateManager, _log_task_exception
+from src.daemon.state.managers.base import StateManager, _make_task_cleanup_callback
 from src.daemon.state.models import DiscoveryHistoryRecord
 from src.discovery.models import DiscoveryCandidate
 
@@ -57,7 +57,8 @@ class DiscoveryStateManager(StateManager):
             if self._discovery_repository:
                 try:
                     task = asyncio.create_task(self._discovery_repository.create(history_record))  # type: ignore[bad-argument-type]
-                    task.add_done_callback(_log_task_exception)
+                    self._pending_tasks.add(task)
+                    task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
                     logger.debug(f"Scheduled discovery history persistence to database: {candidate.symbol}")
                 except Exception as e:
                     logger.error(f"Failed to schedule discovery history persistence: {e}")

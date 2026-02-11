@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -18,13 +19,19 @@ if TYPE_CHECKING:
     from src.database.repositories.trade import TradeRepository
 
 
-def _log_task_exception(task: asyncio.Task[object]) -> None:
-    """Log exceptions from fire-and-forget tasks."""
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.opt(exception=exc).error("Background task failed")
+def _make_task_cleanup_callback(task_set: set[asyncio.Task[Any]]) -> Callable[[asyncio.Task[object]], None]:
+    """Create callback that removes task from set and logs exceptions."""
+
+    def _cleanup_and_log(task: asyncio.Task[object]) -> None:
+        """Log exceptions and remove task from tracking set."""
+        task_set.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.opt(exception=exc).error("Background task failed")
+
+    return _cleanup_and_log
 
 
 class PositionContext(BaseModel):
@@ -114,6 +121,7 @@ class PositionManager:
         self.config = config
         self._database_engine = database_engine
         self._trade_repository = trade_repository
+        self._pending_tasks: set[asyncio.Task[Any]] = set()  # Track background tasks
         logger.info(f"PositionManager initialized: {config}")
 
     def sync_with_broker(
@@ -184,7 +192,8 @@ class PositionManager:
         if self._database_engine:
             try:
                 task = asyncio.create_task(self._async_persist_position_create(position))
-                task.add_done_callback(_log_task_exception)
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
             except Exception as e:
                 logger.error(f"Failed to persist new position to database: {e}")
                 raise
@@ -205,7 +214,8 @@ class PositionManager:
         if self._database_engine:
             try:
                 task = asyncio.create_task(self._async_persist_position_update(position))
-                task.add_done_callback(_log_task_exception)
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
             except Exception as e:
                 logger.error(f"Failed to update position in database: {e}")
                 raise
@@ -226,7 +236,8 @@ class PositionManager:
         if self._database_engine:
             try:
                 task = asyncio.create_task(self._async_persist_position_delete(symbol))
-                task.add_done_callback(_log_task_exception)
+                self._pending_tasks.add(task)
+                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
             except Exception as e:
                 logger.error(f"Failed to delete position from database: {e}")
                 raise
@@ -389,7 +400,8 @@ class PositionManager:
             if self._database_engine:
                 try:
                     task = asyncio.create_task(self._async_persist_action(action))
-                    task.add_done_callback(_log_task_exception)
+                    self._pending_tasks.add(task)
+                    task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
                     logger.debug(
                         f"Persisted position action to database: {action.symbol} {action.action_type}"
                     )
@@ -728,6 +740,33 @@ class PositionManager:
         except Exception as e:
             logger.error(f"Failed to submit new stop-loss: {e}")
             return None
+
+    async def wait_for_pending_tasks(self, timeout_seconds: float = 5.0) -> None:
+        """Wait for all pending background tasks to complete.
+
+        Args:
+            timeout_seconds: Maximum seconds to wait for tasks
+
+        Called during daemon shutdown to ensure database operations complete cleanly.
+        """
+        if not self._pending_tasks:
+            return
+
+        logger.info(f"Waiting for {len(self._pending_tasks)} pending position persistence tasks...")
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*self._pending_tasks, return_exceptions=True),  # type: ignore[bad-argument-type]
+                timeout_seconds,
+            )
+            logger.info("All pending position persistence tasks completed")
+        except TimeoutError:
+            logger.warning(f"Position persistence tasks timed out after {timeout_seconds}s, cancelling...")
+            for task in self._pending_tasks:
+                if not task.done():
+                    task.cancel()
+            # Wait briefly for cancellations to propagate
+            await asyncio.sleep(0.1)
+            self._pending_tasks.clear()
 
     def __repr__(self) -> str:
         """Return string representation."""

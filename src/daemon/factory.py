@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
     from src.daemon.optimization import DaemonOptimizer
+    from src.daemon.positions import PositionManager
     from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
@@ -63,7 +64,7 @@ class DaemonComponents:
     # Optional (None if disabled)
     daemon_optimizer: DaemonOptimizer | None = None
     daemon_rebalancer: DaemonRebalancer | None = None
-    position_manager: object | None = None
+    position_manager: PositionManager | None = None
     discovery_engine: StockDiscoveryEngine | None = None
     notification_service: NotificationService | None = None
     tearsheet_generator: DaemonTearsheetGenerator | None = None
@@ -346,7 +347,7 @@ class DaemonFactory:
             rebalance_threshold=self.config.rebalancing.rebalance_threshold,
         )
 
-    def _create_position_manager(self, broker: AlpacaBroker | None) -> object:
+    def _create_position_manager(self, broker: AlpacaBroker | None) -> PositionManager:
         """Create position manager.
 
         Args:
