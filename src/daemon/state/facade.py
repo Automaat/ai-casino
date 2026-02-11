@@ -369,7 +369,7 @@ class DaemonState(BaseModel):
         """Delegate to portfolio manager."""
         self.portfolio.record_optimization(symbols_optimized, symbols_skipped, total_time_seconds)
 
-    def record_portfolio_rebalancing(  # noqa: PLR0913
+    def record_portfolio_rebalancing(  # noqa: PLR0913 - Facade maintains backward compat
         self,
         method: str,
         allocations: list[PortfolioAllocationRecord],
@@ -380,15 +380,18 @@ class DaemonState(BaseModel):
         rebalances_pending: int,
     ) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_portfolio_rebalancing(
-            method,
-            allocations,
-            expected_return,
-            expected_volatility,
-            sharpe_ratio,
-            rebalances_executed,
-            rebalances_pending,
+        from src.daemon.state.managers.portfolio import PortfolioRebalancingInput
+
+        input_data = PortfolioRebalancingInput(
+            method=method,
+            allocations=allocations,
+            expected_return=expected_return,
+            expected_volatility=expected_volatility,
+            sharpe_ratio=sharpe_ratio,
+            rebalances_executed=rebalances_executed,
+            rebalances_pending=rebalances_pending,
         )
+        self.portfolio.record_portfolio_rebalancing(input_data)
 
     def record_sector_rotation(
         self,
@@ -416,7 +419,7 @@ class DaemonState(BaseModel):
             symbols_analyzed, rankings, swap_recommendations, total_peers, total_duration_seconds
         )
 
-    def record_correlation_audit(  # noqa: PLR0913
+    def record_correlation_audit(  # noqa: PLR0913 - Facade maintains backward compat
         self,
         num_positions: int,
         num_correlated_pairs: int,
@@ -427,15 +430,18 @@ class DaemonState(BaseModel):
         total_duration_seconds: float,
     ) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_correlation_audit(
-            num_positions,
-            num_correlated_pairs,
-            max_correlation,
-            avg_correlation,
-            diversification_ratio,
-            num_substitutions,
-            total_duration_seconds,
+        from src.daemon.state.managers.portfolio import CorrelationAuditInput
+
+        input_data = CorrelationAuditInput(
+            num_positions=num_positions,
+            num_correlated_pairs=num_correlated_pairs,
+            max_correlation=max_correlation,
+            avg_correlation=avg_correlation,
+            diversification_ratio=diversification_ratio,
+            num_substitutions=num_substitutions,
+            total_duration_seconds=total_duration_seconds,
         )
+        self.portfolio.record_correlation_audit(input_data)
 
     def record_risk_report(self, report: RiskReportRecord) -> None:
         """Delegate to portfolio manager."""
