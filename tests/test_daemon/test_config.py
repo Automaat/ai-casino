@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.coordinator.models import CoordinatorConfig
 from src.daemon.config import (
     DaemonConfig,
     EarningsCalendarConfig,
@@ -973,3 +974,120 @@ daemon:
                 blend_weight_optimization=0.6,
                 blend_weight_risk_based=0.3,
             )
+
+
+class TestCoordinatorConfig:
+    def test_defaults(self):
+        config = CoordinatorConfig()
+
+        assert config.enabled is False
+        assert config.max_tool_calls == 25
+        assert config.temperature == 0.5
+        assert config.model_override is None
+        assert config.confirmation_mode == "auto"
+        assert config.cycle_timeout_seconds == 600
+        assert config.max_daily_trades == 10
+        assert config.max_position_pct == 10.0
+        assert config.min_confidence_to_trade == 0.7
+
+    def test_custom(self):
+        config = CoordinatorConfig(
+            enabled=True,
+            max_tool_calls=30,
+            temperature=0.7,
+            model_override="claude-sonnet-4",
+            confirmation_mode="manual",
+            cycle_timeout_seconds=900,
+            max_daily_trades=20,
+            max_position_pct=15.0,
+            min_confidence_to_trade=0.8,
+        )
+
+        assert config.enabled is True
+        assert config.max_tool_calls == 30
+        assert config.temperature == 0.7
+        assert config.model_override == "claude-sonnet-4"
+        assert config.confirmation_mode == "manual"
+        assert config.cycle_timeout_seconds == 900
+        assert config.max_daily_trades == 20
+        assert config.max_position_pct == 15.0
+        assert config.min_confidence_to_trade == 0.8
+
+    def test_validation_bounds(self):
+        # Use variables to bypass type checker for validation tests
+        invalid_tool_calls_low = 3
+        invalid_tool_calls_high = 60
+        invalid_timeout_low = 30
+        invalid_timeout_high = 4000
+        invalid_trades_low = 0
+        invalid_trades_high = 150
+
+        with pytest.raises(ValueError, match=r"greater than or equal to 5"):
+            CoordinatorConfig(max_tool_calls=invalid_tool_calls_low)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"less than or equal to 50"):
+            CoordinatorConfig(max_tool_calls=invalid_tool_calls_high)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"greater than or equal to 60"):
+            CoordinatorConfig(cycle_timeout_seconds=invalid_timeout_low)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"less than or equal to 3600"):
+            CoordinatorConfig(cycle_timeout_seconds=invalid_timeout_high)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"greater than or equal to 1"):
+            CoordinatorConfig(max_daily_trades=invalid_trades_low)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match=r"less than or equal to 100"):
+            CoordinatorConfig(max_daily_trades=invalid_trades_high)  # type: ignore[arg-type]
+
+    def test_daemon_config_has_coordinator(self):
+        config = DaemonConfig()
+        assert isinstance(config.coordinator, CoordinatorConfig)
+        assert config.coordinator.enabled is False
+
+    def test_from_yaml_with_coordinator(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  coordinator:
+    enabled: true
+    max_tool_calls: 30
+    temperature: 0.7
+    model_override: "claude-sonnet-4"
+    confirmation_mode: "manual"
+    cycle_timeout_seconds: 900
+    max_daily_trades: 20
+    max_position_pct: 15.0
+    min_confidence_to_trade: 0.8
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+
+        assert config.coordinator.enabled is True
+        assert config.coordinator.max_tool_calls == 30
+        assert config.coordinator.temperature == 0.7
+        assert config.coordinator.model_override == "claude-sonnet-4"
+        assert config.coordinator.confirmation_mode == "manual"
+        assert config.coordinator.cycle_timeout_seconds == 900
+        assert config.coordinator.max_daily_trades == 20
+        assert config.coordinator.max_position_pct == 15.0
+        assert config.coordinator.min_confidence_to_trade == 0.8
+
+        path.unlink()
+
+    def test_from_yaml_without_coordinator_uses_defaults(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+
+        assert config.coordinator.enabled is False
+        assert config.coordinator.max_tool_calls == 25
+        assert config.coordinator.temperature == 0.5
+
+        path.unlink()
