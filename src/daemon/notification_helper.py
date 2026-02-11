@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 class DaemonNotificationHelper:
     """Helper for sending daemon notifications."""
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "DaemonNotificationHelper()"
+
     async def notify_degradation(
         self,
         degradation_context: DegradationContext,

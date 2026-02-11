@@ -93,6 +93,10 @@ class AnalysisOrchestrator:
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"AnalysisOrchestrator(max_concurrent={self.config.max_concurrent_analyses})"
+
     def _sync_positions_with_broker(self) -> bool:
         """Sync positions with broker and update state.
 

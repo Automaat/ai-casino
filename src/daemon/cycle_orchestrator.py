@@ -51,6 +51,10 @@ class DaemonCycleOrchestrator:
         self.runner = runner  # For delegating to runner methods
         self._notification_helper = DaemonNotificationHelper()
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "DaemonCycleOrchestrator()"
+
     async def run_cycle(self) -> CycleResult:
         """Run single daemon cycle: tasks → health → discovery → degradation → analysis → journal.
 

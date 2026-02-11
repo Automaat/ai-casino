@@ -258,6 +258,10 @@ class ThesisResearcher(BaseResearcher):
             return BullishConfidenceCalculator()
         return BearishConfidenceCalculator()
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"ThesisResearcher(direction={self.direction.value})"
+
     @property
     def llm_response_model(self) -> type[BaseModel]:
         """LLM response model type."""

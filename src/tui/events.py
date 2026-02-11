@@ -87,6 +87,10 @@ class AnalysisProgress(Message):
         self.detail = detail
         super().__init__()
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"AnalysisProgress(step={self.step_id}, status={self.status})"
+
 
 class AnalysisComplete(Message):
     """Analysis completed message."""
@@ -103,3 +107,7 @@ class AnalysisComplete(Message):
         self.symbol = symbol
         self.command_type = command_type
         super().__init__()
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"AnalysisComplete(symbol={self.symbol}, command={self.command_type})"

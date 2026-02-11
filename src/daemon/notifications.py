@@ -57,6 +57,10 @@ class NotificationRateLimiter:
         self.limit_minutes = limit_minutes
         self._last_notified: dict[str, datetime] = {}
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"NotificationRateLimiter(limit_minutes={self.limit_minutes})"
+
     def can_notify(self, symbol: str, trigger: NotificationTrigger) -> bool:
         """Check if notification is allowed by rate limit.
 

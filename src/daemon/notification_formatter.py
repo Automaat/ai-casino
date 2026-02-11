@@ -7,6 +7,10 @@ from src.daemon.notifications import NotificationMessage
 class NotificationFormatter:
     """Format notification messages for different channels."""
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return "NotificationFormatter()"
+
     @staticmethod
     def _escape_markdown(text: str) -> str:
         """Escape markdown special characters for Telegram Markdown (legacy) mode.

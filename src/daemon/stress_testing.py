@@ -32,6 +32,10 @@ class DaemonStressTester:
         self.market = market_fetcher
         self.config = config
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"DaemonStressTester(simulations={self.config.num_simulations})"
+
     def execute(self) -> MonteCarloRecord:
         """Run Monte Carlo simulation on current portfolio.
 

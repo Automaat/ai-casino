@@ -40,6 +40,10 @@ class DaemonRebalancer:
             f"auto_execute={'yes' if broker else 'no'})"
         )
 
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"DaemonRebalancer(threshold={self.rebalance_threshold:.2%})"
+
     def run(self, watchlist: list[str], method: str, auto_execute: bool) -> RebalancingResult:
         """Run portfolio rebalancing.
 
