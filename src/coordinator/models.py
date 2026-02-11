@@ -18,9 +18,9 @@ class CoordinatorConfig(BaseModel):
         default="auto", description="Trade confirmation mode: auto or manual"
     )
     cycle_timeout_seconds: int = Field(
-        default=600, ge=60, description="Maximum cycle duration in seconds before timeout"
+        default=600, ge=60, le=3600, description="Maximum cycle duration in seconds before timeout"
     )
-    max_daily_trades: int = Field(default=10, ge=1, description="Maximum trades executed per day")
+    max_daily_trades: int = Field(default=10, ge=1, le=100, description="Maximum trades executed per day")
     max_position_pct: float = Field(
         default=10.0, ge=1.0, le=100.0, description="Maximum position size as % of portfolio"
     )
