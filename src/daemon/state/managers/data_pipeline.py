@@ -11,6 +11,7 @@ from src.daemon.state.models import (
     EarningsCalendarRecord,
     EarningsEventRecord,
     PrefetchRecord,
+    ProfilingRecord,
     ScreeningRecord,
 )
 from src.screening.screener import ScreeningResult
@@ -31,6 +32,9 @@ class DataPipelineStateManager(StateManager):
     # Earnings
     last_earnings_fetch: datetime | None = None
     earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
+
+    # Profiling
+    profiling_history: list[ProfilingRecord] = Field(default_factory=list)
 
     def record_prefetch(
         self,
@@ -119,6 +123,35 @@ class DataPipelineStateManager(StateManager):
         )
         self.last_earnings_fetch = now
         self.earnings_calendar_history = self._cap_history(self.earnings_calendar_history, 10, 10)
+
+    def record_profiling(self, metrics: object) -> None:
+        """Record profiling metrics from cycle.
+
+        Args:
+            metrics: ProfilingMetrics object (typed as object to avoid circular import)
+        """
+        from src.daemon.profiling.metrics import ProfilingMetrics
+
+        if not isinstance(metrics, ProfilingMetrics):
+            return
+
+        top_func = None
+        top_cumtime = None
+        if metrics.top_functions:
+            top_func = metrics.top_functions[0].function
+            top_cumtime = metrics.top_functions[0].cumtime
+
+        record = ProfilingRecord(
+            cycle_number=metrics.cycle_number,
+            timestamp=metrics.timestamp,
+            duration_seconds=metrics.duration_seconds,
+            profiling_overhead_percent=metrics.profiling_overhead_percent,
+            top_function=top_func,
+            top_function_cumtime=top_cumtime,
+        )
+
+        self.profiling_history.append(record)
+        self.profiling_history = self._cap_history(self.profiling_history, 100, 100)
 
     def __repr__(self) -> str:
         """Return string representation."""
