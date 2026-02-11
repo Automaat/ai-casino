@@ -4,13 +4,17 @@
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import HeatmapChart from '$lib/components/charts/HeatmapChart.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
-	import { risk, correlation } from '$lib/stores/dashboard';
+	import GaugeChart from '$lib/components/charts/GaugeChart.svelte';
+	import SectorRotationHeatmap from '$lib/components/charts/SectorRotationHeatmap.svelte';
+	import RiskStatusBadge from '$lib/components/ui/RiskStatusBadge.svelte';
+	import { risk, correlation, sectorRotation } from '$lib/stores/dashboard';
 	import { api } from '$lib/api/client';
 	import { formatPercent, formatDateShort } from '$lib/utils/format';
 	import type { RiskReportResponse } from '$lib/types/api';
 
 	$: riskReport = $risk;
 	$: correlationData = $correlation;
+	$: sectorRotationData = $sectorRotation;
 
 	let riskHistory: RiskReportResponse[] = [];
 	let loading = true;
@@ -19,6 +23,7 @@
 		try {
 			await risk.fetch();
 			await correlation.fetch();
+			await sectorRotation.fetch();
 			const historyData = await api.getRiskHistory(30);
 			riskHistory = historyData.history;
 		} catch (error) {
@@ -79,6 +84,118 @@
 			icon="🎲"
 		/>
 	</div>
+
+	<!-- Risk Status -->
+	{#if riskReport}
+		<Card title="Risk Status">
+			<div class="flex items-center justify-center py-4">
+				<RiskStatusBadge status={riskReport.risk_status} size="lg" />
+			</div>
+		</Card>
+	{/if}
+
+	<!-- Risk Gauges -->
+	{#if riskReport}
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+			<Card title="VaR 95%">
+				<GaugeChart
+					value={riskReport.var_95 * 100}
+					min={0}
+					max={10}
+					thresholds={{ low: 3, medium: 4.5, high: 10 }}
+					title="VaR 95%"
+					unit="%"
+				/>
+			</Card>
+			<Card title="CVaR 99%">
+				<GaugeChart
+					value={riskReport.cvar_99 * 100}
+					min={0}
+					max={15}
+					thresholds={{ low: 5, medium: 7.5, high: 15 }}
+					title="CVaR 99%"
+					unit="%"
+				/>
+			</Card>
+			<Card title="CDaR 95%">
+				<GaugeChart
+					value={riskReport.cdar_95 * 100}
+					min={0}
+					max={25}
+					thresholds={{ low: 10, medium: 15, high: 25 }}
+					title="CDaR 95%"
+					unit="%"
+				/>
+			</Card>
+		</div>
+	{/if}
+
+	<!-- Sector Rotation Heatmap -->
+	<Card title="Sector Rotation">
+		{#if sectorRotationData && Object.keys(sectorRotationData.sector_strengths).length > 0}
+			<SectorRotationHeatmap
+				sectorStrengths={sectorRotationData.sector_strengths}
+				sectorMomenta={sectorRotationData.sector_momenta}
+				leadingSectors={sectorRotationData.leading_sectors}
+				laggingSectors={sectorRotationData.lagging_sectors}
+				flaggedPositions={sectorRotationData.flagged_positions}
+			/>
+		{:else}
+			<div class="text-center py-12 text-slate-400">
+				Sector rotation not enabled or no data available.
+			</div>
+		{/if}
+	</Card>
+
+	<!-- Risk Metrics Table -->
+	{#if riskReport}
+		<Card title="Detailed Risk Metrics">
+			<div class="overflow-x-auto">
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="border-b border-slate-700">
+							<th class="text-left py-3 px-4 text-slate-300 font-medium">Metric</th>
+							<th class="text-right py-3 px-4 text-slate-300 font-medium">Value</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-800">
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">VaR 95%</td>
+							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.var_95)}</td>
+						</tr>
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">VaR 99%</td>
+							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.var_99)}</td>
+						</tr>
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">CVaR 95%</td>
+							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.cvar_95)}</td>
+						</tr>
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">CVaR 99%</td>
+							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.cvar_99)}</td>
+						</tr>
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">CDaR 95%</td>
+							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.cdar_95)}</td>
+						</tr>
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">Max Drawdown</td>
+							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.max_drawdown)}</td>
+						</tr>
+						<tr class="hover:bg-slate-800/50">
+							<td class="py-3 px-4 text-slate-400">Risk Status</td>
+							<td class="py-3 px-4 text-right">
+								<div class="flex justify-end">
+									<RiskStatusBadge status={riskReport.risk_status} size="sm" />
+								</div>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</Card>
+	{/if}
 
 	<!-- Risk Charts -->
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">

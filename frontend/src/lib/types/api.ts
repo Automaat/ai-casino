@@ -92,6 +92,11 @@ export interface RiskReportResponse {
 	sharpe_ratio: number;
 	max_drawdown: number;
 	var_95: number;
+	var_99: number;
+	cvar_95: number;
+	cvar_99: number;
+	cdar_95: number;
+	risk_status: string;
 	timestamp: string;
 }
 
@@ -106,8 +111,12 @@ export interface CorrelationMatrixResponse {
 }
 
 export interface SectorRotationResponse {
-	sector_scores: Record<string, number>;
 	timestamp: string;
+	leading_sectors: string[];
+	lagging_sectors: string[];
+	sector_strengths: Record<string, number>;
+	sector_momenta: Record<string, string>;
+	flagged_positions: string[];
 }
 
 export interface DegradationResponse {
