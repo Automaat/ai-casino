@@ -10,7 +10,7 @@
 	import { positions } from '$lib/stores/dashboard';
 	import { api } from '$lib/api/client';
 	import { formatCurrency, formatPercent } from '$lib/utils/format';
-	import type { PositionResponse, SnapshotRecord, RebalanceResponse } from '$lib/types/api';
+	import type { PositionResponse, SnapshotsResponse, RebalanceResponse } from '$lib/types/api';
 
 	type EnhancedPosition = PositionResponse & {
 		market_value: number;
@@ -30,19 +30,29 @@
 	$: portfolioValue = positionsList.reduce((sum, p) => sum + p.market_value, 0);
 	$: totalPnl = positionsList.reduce((sum, p) => sum + p.unrealized_pnl, 0);
 
-	let snapshots: SnapshotRecord[] = [];
+	let snapshotsData: SnapshotsResponse | null = null;
 	let rebalance: RebalanceResponse | null = null;
 	let loading = true;
 
 	async function loadData() {
 		loading = true;
 		try {
-			const [snapshotsData, rebalanceData] = await Promise.all([
+			const results = await Promise.allSettled([
 				api.getSnapshots(30),
-				api.getRebalance().catch(() => null)
+				api.getRebalance()
 			]);
-			snapshots = snapshotsData.snapshots;
-			rebalance = rebalanceData;
+
+			if (results[0].status === 'fulfilled') {
+				snapshotsData = results[0].value;
+			} else {
+				console.error('Failed to load snapshots:', results[0].reason);
+			}
+
+			if (results[1].status === 'fulfilled') {
+				rebalance = results[1].value;
+			} else {
+				console.error('Failed to load rebalance:', results[1].reason);
+			}
 		} catch (error) {
 			console.error('Failed to load portfolio data:', error);
 		} finally {
@@ -60,7 +70,7 @@
 	}
 
 	// Equity curve data
-	$: equityData = snapshots.map(s => ({
+	$: equityData = (snapshotsData?.snapshots || []).map(s => ({
 		time: new Date(s.timestamp),
 		value: s.portfolio_value
 	}));
@@ -205,14 +215,24 @@
 		<!-- Equity Curve -->
 		<Card title="Equity Curve">
 			{#if !loading && equityData.length > 0}
-				<LineChart 
-					data={equityData} 
+				<LineChart
+					data={equityData}
 					height={300}
 					color="#059669"
 					yAxisLabel="Portfolio Value ($)"
 				/>
 			{:else if loading}
 				<div class="text-center py-12 text-gray-600">Loading...</div>
+			{:else if snapshotsData && snapshotsData.database_enabled === false}
+				<div class="text-center py-12 text-gray-600">
+					<div class="font-medium">Database persistence disabled</div>
+					<div class="text-sm mt-2">Enable in daemon config: <code class="bg-gray-100 px-1 rounded">database.enable_persistence: true</code></div>
+				</div>
+			{:else if snapshotsData && snapshotsData.has_trades === false}
+				<div class="text-center py-12 text-gray-600">
+					<div class="font-medium">No trades executed yet</div>
+					<div class="text-sm mt-2">Equity curve will populate after first trade execution</div>
+				</div>
 			{:else}
 				<div class="text-center py-12 text-gray-600">No historical data</div>
 			{/if}
@@ -234,9 +254,15 @@
 			<RebalanceChart allocations={rebalance.allocations} height={350} />
 		{:else if loading}
 			<div class="text-center py-12 text-gray-600">Loading...</div>
+		{:else if rebalance && rebalance.enabled === false}
+			<div class="text-center py-12 text-gray-600">
+				<div class="font-medium">Rebalancing disabled</div>
+				<div class="text-sm mt-2">Enable in daemon config: <code class="bg-gray-100 px-1 rounded">rebalancing.enabled: true</code></div>
+			</div>
 		{:else}
 			<div class="text-center py-12 text-gray-600">
-				No rebalancing data available
+				<div class="font-medium">No rebalancing data yet</div>
+				<div class="text-sm mt-2">Waiting for first scheduled rebalancing run</div>
 			</div>
 		{/if}
 	</Card>

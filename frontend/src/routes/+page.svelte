@@ -128,7 +128,7 @@
 		/>
 		<MetricCard
 			title="Win Rate"
-			value={summary ? formatPercent(summary.win_rate) : '0%'}
+			value={summary && summary.win_rate !== null ? formatPercent(summary.win_rate) : 'N/A'}
 			icon="🎯"
 		/>
 		<MetricCard

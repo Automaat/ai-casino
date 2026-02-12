@@ -199,7 +199,7 @@ class TestHealthEndpoint:
 
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["running"] is True
+        assert data["daemon_running"] is True
         assert data["last_run"] == "2024-01-15T10:30:00+00:00"
         assert isinstance(data["uptime_seconds"], float)
         assert data["uptime_seconds"] >= 0
@@ -229,7 +229,7 @@ class TestHealthEndpoint:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["running"] is False
+        assert data["daemon_running"] is False
 
     def test_health_no_last_run(self, client: TestClient, mock_runner: Mock) -> None:
         """Test health endpoint when no runs yet."""
@@ -978,3 +978,81 @@ class TestCorrelationEndpoint:
         response = client.get("/correlation/latest")
         assert response.status_code == 200
         assert response.json() is None
+
+
+class TestSnapshotsEndpoint:
+    """Tests for /portfolio/snapshots endpoint."""
+
+    def test_get_snapshots_status_fields(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test snapshots endpoint returns status fields."""
+        from src.daemon.config import DatabaseConfig
+
+        mock_runner.config.database = DatabaseConfig(enable_persistence=True)
+        mock_runner.state.trading.total_trades = 0
+
+        response = client.get("/portfolio/snapshots")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "database_enabled" in data
+        assert "has_trades" in data
+        assert data["database_enabled"] is True
+        assert data["has_trades"] is False
+
+    def test_get_snapshots_disabled_database(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test snapshots endpoint when database disabled."""
+        from src.daemon.config import DatabaseConfig
+
+        mock_runner.config.database = DatabaseConfig(enable_persistence=False)
+
+        response = client.get("/portfolio/snapshots")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["database_enabled"] is False
+        assert data["count"] == 0
+
+    def test_get_snapshots_has_trades(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test snapshots endpoint when trades exist."""
+        from src.daemon.config import DatabaseConfig
+
+        mock_runner.config.database = DatabaseConfig(enable_persistence=True)
+        mock_runner.state.trading.total_trades = 5
+
+        response = client.get("/portfolio/snapshots")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["has_trades"] is True
+
+
+class TestRebalanceEndpoint:
+    """Tests for /portfolio/rebalance endpoint."""
+
+    def test_get_rebalance_disabled(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test rebalance endpoint when disabled."""
+        from src.daemon.config.portfolio import PortfolioRebalancingConfig
+
+        mock_runner.config.rebalancing = PortfolioRebalancingConfig(enabled=False)
+
+        response = client.get("/portfolio/rebalance")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["enabled"] is False
+        assert data["timestamp"] is None
+        assert data["allocations"] == []
+
+    def test_get_rebalance_enabled_status(self, client: TestClient, mock_runner: Mock) -> None:
+        """Test rebalance endpoint returns enabled status."""
+        from src.daemon.config.portfolio import PortfolioRebalancingConfig
+
+        mock_runner.config.rebalancing = PortfolioRebalancingConfig(enabled=True)
+        mock_runner.state.portfolio.portfolio_rebalancing_history = []
+
+        response = client.get("/portfolio/rebalance")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "enabled" in data
+        assert data["enabled"] is True

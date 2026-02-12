@@ -447,8 +447,8 @@ class StockUniverseFetcher:
                 if len(cols) >= 3:
                     raw_name = cols[0].get_text(strip=True)
                     raw_symbol = cols[1].get_text(strip=True)
-                    name = raw_name
                     symbol = raw_symbol.replace(".", "-")
+                    name = raw_name
                     sector = cols[2].get_text(strip=True)
                     industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
 
