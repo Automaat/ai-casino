@@ -803,3 +803,28 @@ def test_container_agents(tmp_path):
     )
     yield container
     reset_test_container(container)
+
+
+@pytest.fixture
+def test_container_remote(tmp_path):
+    """Test container with remote FinBERT (requires service running on localhost:8485).
+
+    Use for integration tests with remote FinBERT service.
+    """
+    from src.daemon.config import DaemonConfig
+    from tests.di.container_test import create_test_container, reset_test_container
+
+    config = DaemonConfig()
+    config.finbert.mode = "remote"
+    config.finbert.service_url = "http://localhost:8485"
+
+    container = create_test_container(
+        temp_cache_path=tmp_path / "test.db",
+        config_overrides=config,
+        override_llm=True,
+        override_finbert=False,
+        override_fetchers=False,
+        override_broker=False,
+    )
+    yield container
+    reset_test_container(container)

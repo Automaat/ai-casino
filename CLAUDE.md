@@ -64,8 +64,16 @@ tests/               # Full mirror of src structure
 
 ### Configuration Changes
 
+**CRITICAL: YAML-only configuration**
+
+- **NEVER** use environment variables for config in this project
+- **ALWAYS** configure via `~/.ai-casino/daemon.yaml`
+- Environment variables only allowed as fallbacks in DI provider functions (`resolve_config_or_env`)
+- docker-compose.yml must NOT set config via environment variables
+
 **When adding new daemon config:**
-1. Add config model to `src/daemon/config.py`
+
+1. Add config model to `src/daemon/config/{module}.py`
 2. Add field to `DaemonConfig` with `Field(default_factory=...)`
 3. Update `DaemonConfig.from_yaml()` to extract and pass the data
 4. **MANDATORY: Update `docs/daemon.yaml.example`** with comprehensive documentation
@@ -73,6 +81,7 @@ tests/               # Full mirror of src structure
    - Include inline comments explaining each field
    - Document valid ranges, defaults, and examples
    - Keep example file comprehensive - users rely on it for discovery
+5. Update DI provider in `src/di/providers/` to read from `daemon_config.{section}`
 
 ### Pre-Commit (MANDATORY)
 
@@ -1022,14 +1031,30 @@ source .venv/bin/activate
 
 ### Configuration
 
-**Daemon config:** `docs/daemon.yaml.example` - comprehensive example with all config sections
-**Env vars (.env):**
-- Required: `ALPHA_VANTAGE_API_KEY`
-- Optional: `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`
-- LLM: `LLM_PROVIDER` (ollama|anthropic|openai), `LLM_MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_MAX_CONCURRENT` (1-20, default 5)
-- Logging: `LOG_LEVEL` (DEBUG|INFO|WARNING|ERROR)
+**Primary source:** `~/.ai-casino/daemon.yaml` - YAML-only configuration (see `docs/daemon.yaml.example`)
 
-**Note:** Daemon config values take priority over env vars. See `docs/daemon.yaml.example` for all options.
+**Configuration hierarchy:**
+
+1. **daemon.yaml** (only source) - all config must be here
+2. DI container resolves config
+3. Environment variables as fallback ONLY in DI providers (via `resolve_config_or_env`)
+
+**Environment variables (fallback only, not primary config):**
+
+- API keys: `ALPHA_VANTAGE_API_KEY`, `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
+- Runtime: `LOG_LEVEL` (DEBUG|INFO|WARNING|ERROR)
+
+**NEVER configure via:**
+
+- ❌ docker-compose.yml environment section (except `LOG_LEVEL`)
+- ❌ `.env` files for daemon config
+- ❌ Command-line arguments for config
+
+**ALWAYS configure via:**
+
+- ✅ `~/.ai-casino/daemon.yaml`
+- ✅ DI container reads from `daemon_config`
+- ✅ `resolve_config_or_env()` for API keys with env fallback
 
 ### TUI Logs
 

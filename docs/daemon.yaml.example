@@ -805,6 +805,27 @@ daemon:
     # Ollama base URL (only for ollama provider)
     ollama_base_url: "http://localhost:11434"
 
+  # ========================================
+  # FINBERT SENTIMENT CONFIGURATION
+  # ========================================
+  finbert:
+    # Mode: "local" (in-process) or "remote" (microservice)
+    # Local: Loads 440MB model in daemon process (slower startup, higher RAM)
+    # Remote: Connects to FinBERT service (faster startup, horizontally scalable)
+    # RECOMMENDED: Use remote mode in production (docker-compose includes finbert service)
+    # Default: local
+    mode: remote
+
+    # Service URL (only used in remote mode)
+    # Docker: http://finbert:8485
+    # Local dev: http://localhost:8485
+    service_url: http://finbert:8485
+
+    # HTTP request timeout in seconds (10-120)
+    # Batch of 50 texts typically takes 200-500ms
+    # Default: 60.0
+    # timeout: 60.0
+
   # Data Sources Configuration
   data_sources:
     # Market data source: "yfinance" (no API key required) or "alpha_vantage" (requires API key)

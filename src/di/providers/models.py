@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from src.metrics.quantstats_reporter import QuantStatsReporter
     from src.metrics.risk import RiskMetricsCalculator
     from src.metrics.tracker import MetricsTracker
-    from src.models.sentiment import FinBERTSentiment
     from src.optimization.optimizer import OptunaOptimizer
     from src.screening.screener import StockScreener
     from src.strategies.regime import MarketRegimeDetector
@@ -74,19 +73,33 @@ def create_llm_client(
     return llm_client
 
 
-def create_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
-    """Create FinBERT sentiment analyzer with lazy import.
+def create_finbert_sentiment(
+    daemon_config: DaemonConfig,
+    device: str | None = None,
+) -> object:
+    """Create FinBERT sentiment analyzer (local or remote based on config).
 
-    Thin wrapper over existing get_finbert_sentiment() factory.
-    Maintains singleton behavior via existing implementation.
-    Uses lazy import to avoid loading 440MB model on container creation.
+    Respects daemon_config.finbert.mode to choose between local in-process
+    model or remote microservice HTTP client. Maintains backward compatibility.
 
     Args:
-        device: Device for inference (cuda/cpu). Auto-detect if None.
+        daemon_config: Daemon configuration
+        device: Device for inference (cuda/cpu). Only used in local mode.
 
     Returns:
-        FinBERTSentiment singleton instance
+        FinBERTProtocol-compatible instance (FinBERTSentiment or FinBERTClient)
     """
+    mode = daemon_config.finbert.mode
+
+    if mode == "remote":
+        from src.models.sentiment_client import FinBERTClient
+
+        return FinBERTClient(
+            base_url=daemon_config.finbert.service_url,
+            timeout=daemon_config.finbert.timeout,
+        )
+
+    # Local mode: lazy import to avoid loading 440MB model on container creation
     from src.models.sentiment import get_finbert_sentiment
 
     return get_finbert_sentiment(device=device)

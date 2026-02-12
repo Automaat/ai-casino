@@ -165,6 +165,7 @@ class AppContainer(containers.DeclarativeContainer):
 
     finbert_sentiment = providers.Singleton(
         model_providers.create_finbert_sentiment,
+        daemon_config=daemon_config,
         device=None,
     )
 

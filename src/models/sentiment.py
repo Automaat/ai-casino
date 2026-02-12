@@ -4,8 +4,10 @@
 # Environment config handled by src/models/torch_config.py before import cascade reaches here.
 
 import atexit
+import os
 import threading
 from concurrent.futures import ProcessPoolExecutor
+from typing import Protocol
 
 import torch
 from loguru import logger
@@ -18,14 +20,18 @@ from src.metrics.execution import timed_operation
 # Suppress transformers logging (the env var alone doesn't catch everything)
 hf_logging.set_verbosity_error()
 
+# Feature flag for FinBERT mode (local in-process vs remote microservice)
+FINBERT_MODE = os.getenv("FINBERT_MODE", "local")
+FINBERT_SERVICE_URL = os.getenv("FINBERT_SERVICE_URL", "http://localhost:8485")
+
 # Process pool executor for parallel FinBERT inference (avoids GIL)
 _finbert_executor = ProcessPoolExecutor(max_workers=4)
 
 
 class _FinBERTHolder:
-    """Singleton holder for FinBERT instance."""
+    """Singleton holder for FinBERT instance (local or remote)."""
 
-    instance: FinBERTSentiment | None = None
+    instance: FinBERTSentiment | object | None = None
     lock = threading.Lock()
 
 
@@ -49,6 +55,14 @@ class SentimentScore(BaseModel):
     def score(self) -> float:
         """Get overall sentiment score (-1 to 1)."""
         return self.positive - self.negative
+
+
+class FinBERTProtocol(Protocol):
+    """Protocol defining FinBERT interface (local or remote)."""
+
+    def analyze_batch(self, texts: list[str]) -> list[SentimentScore]:
+        """Analyze sentiment of multiple texts."""
+        ...
 
 
 class FinBERTSentiment:
@@ -165,27 +179,50 @@ def _analyze_batch_worker(texts: list[str], device: str | None = None) -> list[d
     Returns:
         List of dicts with sentiment scores (positive, negative, neutral)
     """
-    finbert = get_finbert_sentiment(device=device)
-    scores = finbert.analyze_batch(texts)
+    finbert_obj = get_finbert_sentiment(device=device)
+    if not hasattr(finbert_obj, "analyze_batch"):
+        msg = "FinBERT object missing analyze_batch method"
+        raise AttributeError(msg)
+    scores = finbert_obj.analyze_batch(texts)
     return [{"positive": s.positive, "negative": s.negative, "neutral": s.neutral} for s in scores]
 
 
-def get_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
-    """Get or create singleton FinBERT sentiment analyzer.
+def get_finbert_sentiment(device: str | None = None) -> object:
+    """Get or create singleton FinBERT sentiment analyzer (local or remote based on FINBERT_MODE).
 
     Lazy-loads model on first call. Subsequent calls return cached instance.
     Thread-safe. Device parameter only used on first initialization.
 
     Args:
         device: Device for inference (cuda/cpu). Auto-detect if None.
-                Only used on first call; ignored on subsequent calls.
+                Only used on first call in local mode; ignored in remote mode and on subsequent calls.
 
     Returns:
-        FinBERTSentiment singleton instance
+        FinBERTSentiment or FinBERTClient instance (both provide analyze_batch method)
     """
+    if FINBERT_MODE == "remote":
+        # Remote mode: HTTP client
+        with _FinBERTHolder.lock:
+            if _FinBERTHolder.instance is None:
+                from src.models.sentiment_client import FinBERTClient
+
+                client = FinBERTClient(base_url=FINBERT_SERVICE_URL)
+                _FinBERTHolder.instance = client
+                logger.info(f"FinBERT remote client initialized (url={FINBERT_SERVICE_URL})")
+            instance = _FinBERTHolder.instance
+            if instance is None:
+                msg = "Failed to initialize FinBERT client"
+                raise RuntimeError(msg)
+            return instance
+
+    # Local mode: existing in-process implementation
     # Fast path: already initialized (no lock needed)
     if _FinBERTHolder.instance is not None:
-        if device is not None and device != _FinBERTHolder.instance.device:
+        if (
+            device is not None
+            and hasattr(_FinBERTHolder.instance, "device")
+            and device != _FinBERTHolder.instance.device
+        ):
             cached_device = _FinBERTHolder.instance.device
             logger.warning(
                 f"Device parameter '{device}' ignored - using cached instance with device '{cached_device}'"
@@ -198,9 +235,14 @@ def get_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
         if _FinBERTHolder.instance is not None:
             return _FinBERTHolder.instance
 
-        _FinBERTHolder.instance = FinBERTSentiment(device=device)
-        logger.info(f"FinBERT singleton initialized on {_FinBERTHolder.instance.device}")
-        return _FinBERTHolder.instance
+        model = FinBERTSentiment(device=device)
+        _FinBERTHolder.instance = model
+        logger.info(f"FinBERT singleton initialized on {model.device}")
+        instance = _FinBERTHolder.instance
+        if instance is None:
+            msg = "Failed to initialize FinBERT"
+            raise RuntimeError(msg)
+        return instance
 
 
 def clear_finbert_sentiment() -> None:

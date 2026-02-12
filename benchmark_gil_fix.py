@@ -93,8 +93,9 @@ async def main() -> None:
 
     # Warm up FinBERT model
     logger.info("Warming up FinBERT model...")
-    finbert = get_finbert_sentiment()
-    finbert.analyze_batch(["Test sentence for warmup"])
+    finbert_obj = get_finbert_sentiment()
+    assert hasattr(finbert_obj, "analyze_batch")
+    finbert_obj.analyze_batch(["Test sentence for warmup"])
 
     # Benchmark single stock (baseline)
     logger.info("\n1. Single stock baseline:")
