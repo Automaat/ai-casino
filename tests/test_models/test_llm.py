@@ -180,9 +180,7 @@ class TestCompleteWithTools:
 
         return executor
 
-    def test_complete_with_tools_no_tool_calls(
-        self, mock_openai_provider, sample_tools, mock_tool_executor
-    ):
+    def test_complete_with_tools_no_tool_calls(self, mock_openai_provider, sample_tools, mock_tool_executor):
         """Test when LLM returns without tool calls."""
         _, provider = mock_openai_provider
         provider.acomplete_with_tools = AsyncMock(return_value=("I don't need tools for this", None))
@@ -200,9 +198,7 @@ class TestCompleteWithTools:
         assert result == "I don't need tools for this"
         assert provider.acomplete_with_tools.call_count == 1
 
-    def test_complete_with_tools_executes_tool(
-        self, mock_openai_provider, sample_tools, mock_tool_executor
-    ):
+    def test_complete_with_tools_executes_tool(self, mock_openai_provider, sample_tools, mock_tool_executor):
         """Test tool execution and final response."""
         _, provider = mock_openai_provider
 
@@ -377,9 +373,7 @@ class TestAsyncToolExecutor:
         assert result == "Async analysis complete"
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_multiple_async_calls(
-        self, mock_openai_provider, sample_tools
-    ):
+    async def test_acomplete_with_tools_multiple_async_calls(self, mock_openai_provider, sample_tools):
         """Test multiple tool calls with async executor."""
         _, provider = mock_openai_provider
 
@@ -408,9 +402,7 @@ class TestAsyncToolExecutor:
         assert call_count == 2
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_sync_executor_error(
-        self, mock_openai_provider, sample_tools
-    ):
+    async def test_acomplete_with_tools_sync_executor_error(self, mock_openai_provider, sample_tools):
         """Test error handling with failing sync executor."""
         _, provider = mock_openai_provider
 
@@ -435,9 +427,7 @@ class TestAsyncToolExecutor:
         assert result == "Error handled"
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_async_executor_error(
-        self, mock_openai_provider, sample_tools
-    ):
+    async def test_acomplete_with_tools_async_executor_error(self, mock_openai_provider, sample_tools):
         """Test error handling with failing async executor."""
         _, provider = mock_openai_provider
 
@@ -463,9 +453,7 @@ class TestAsyncToolExecutor:
         assert result == "Async error handled"
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_sync_returning_awaitable(
-        self, mock_openai_provider, sample_tools
-    ):
+    async def test_acomplete_with_tools_sync_returning_awaitable(self, mock_openai_provider, sample_tools):
         """Test sync function that returns awaitable (edge case)."""
         _, provider = mock_openai_provider
 

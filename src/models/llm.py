@@ -102,27 +102,8 @@ def _parse_max_concurrent_requests() -> int:
 # Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 5)
 # With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
 # OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
-MAX_CONCURRENT_REQUESTS = 5  # Will be updated via set_max_concurrent()
+MAX_CONCURRENT_REQUESTS = _parse_max_concurrent_requests()
 _semaphore_holder: dict[str, asyncio.Semaphore | int | None] = {}
-
-
-def set_max_concurrent(value: int) -> None:
-    """Set global max concurrent requests limit.
-
-    Args:
-        value: Concurrency limit (1-20)
-    """
-    global MAX_CONCURRENT_REQUESTS
-    if value < _MIN_CONCURRENT_REQUESTS:
-        logger.warning(f"Clamping max_concurrent {value} to minimum {_MIN_CONCURRENT_REQUESTS}")
-        MAX_CONCURRENT_REQUESTS = _MIN_CONCURRENT_REQUESTS
-    elif value > _MAX_CONCURRENT_REQUESTS:
-        logger.warning(f"Clamping max_concurrent {value} to maximum {_MAX_CONCURRENT_REQUESTS}")
-        MAX_CONCURRENT_REQUESTS = _MAX_CONCURRENT_REQUESTS
-    else:
-        MAX_CONCURRENT_REQUESTS = value
-    # Reset semaphore on next _get_semaphore() call
-    _semaphore_holder.clear()
 
 
 def _get_semaphore() -> asyncio.Semaphore:

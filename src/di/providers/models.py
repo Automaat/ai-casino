@@ -4,7 +4,8 @@ import os
 from typing import TYPE_CHECKING
 
 from src.daemon.config import DaemonConfig
-from src.models.llm import LLMClient, set_max_concurrent
+from src.di.config import resolve_config_or_env
+from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
     from src.backtesting.runner import BacktestRunner
@@ -29,8 +30,9 @@ def create_llm_client(
     daemon_config: DaemonConfig,
     metrics_collector: ExecutionMetricsCollector | None = None,
 ) -> LLMClient:
-    """Create LLMClient with config.
+    """Create LLMClient with resolved config.
 
+    Resolves provider/model from daemon_config.llm.* with env fallbacks.
     API key resolution by provider type (anthropic/openai/ollama).
 
     Args:
@@ -40,25 +42,30 @@ def create_llm_client(
     Returns:
         Configured LLMClient
     """
-    # Set global concurrency limit from config
-    set_max_concurrent(daemon_config.llm.max_concurrent)
+    provider = daemon_config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
 
-    provider = daemon_config.llm.provider
-
-    # API keys: use config value or fall back to env var
     if provider == "anthropic":
-        api_key = daemon_config.api_keys.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
+        api_key = resolve_config_or_env(
+            daemon_config.api_keys.anthropic_api_key,
+            "ANTHROPIC_API_KEY",
+        )
     elif provider == "openai":
-        api_key = daemon_config.api_keys.openai_api_key or os.getenv("OPENAI_API_KEY")
+        api_key = resolve_config_or_env(
+            daemon_config.api_keys.openai_api_key,
+            "OPENAI_API_KEY",
+        )
     else:
         api_key = None
 
     llm_client = LLMClient(
-        provider=daemon_config.llm.provider,
-        model=daemon_config.llm.model,
-        base_url=daemon_config.llm.ollama_base_url,
+        provider=provider,
+        model=daemon_config.llm.model or os.getenv("LLM_MODEL", "qwen3:14b"),
+        base_url=daemon_config.llm.ollama_base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         api_key=api_key,
-        openai_base_url=daemon_config.api_keys.openai_api_base or os.getenv("OPENAI_API_BASE"),
+        openai_base_url=resolve_config_or_env(
+            daemon_config.api_keys.openai_api_base,
+            "OPENAI_API_BASE",
+        ),
     )
 
     if metrics_collector is not None:

@@ -1,6 +1,5 @@
 """Notification channel implementations."""
 
-
 import httpx
 from loguru import logger
 
