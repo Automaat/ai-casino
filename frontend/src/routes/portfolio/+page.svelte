@@ -5,23 +5,44 @@
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import TreemapChart from '$lib/components/charts/TreemapChart.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
+	import RebalanceChart from '$lib/components/charts/RebalanceChart.svelte';
 	import { positions } from '$lib/stores/dashboard';
 	import { api } from '$lib/api/client';
 	import { formatCurrency, formatPercent } from '$lib/utils/format';
-	import type { PositionResponse, SnapshotRecord } from '$lib/types/api';
+	import type { PositionResponse, SnapshotRecord, RebalanceResponse } from '$lib/types/api';
+
+	type EnhancedPosition = PositionResponse & {
+		market_value: number;
+		unrealized_pnl: number;
+		unrealized_pnl_percent: number;
+	};
 
 	$: portfolio = $positions;
-	$: positionsList = portfolio?.positions || [];
-	
+	$: positionsList = (portfolio?.positions || []).map((p): EnhancedPosition => ({
+		...p,
+		market_value: p.current_qty * p.current_price,
+		unrealized_pnl: (p.current_price - p.entry_price) * p.current_qty,
+		unrealized_pnl_percent: ((p.current_price / p.entry_price) - 1) * 100
+	}));
+
+	// Portfolio totals
+	$: portfolioValue = positionsList.reduce((sum, p) => sum + p.market_value, 0);
+	$: totalPnl = positionsList.reduce((sum, p) => sum + p.unrealized_pnl, 0);
+
 	let snapshots: SnapshotRecord[] = [];
+	let rebalance: RebalanceResponse | null = null;
 	let loading = true;
 
 	onMount(async () => {
 		try {
-			const data = await api.getSnapshots(30);
-			snapshots = data.snapshots;
+			const [snapshotsData, rebalanceData] = await Promise.all([
+				api.getSnapshots(30),
+				api.getRebalance().catch(() => null)
+			]);
+			snapshots = snapshotsData.snapshots;
+			rebalance = rebalanceData;
 		} catch (error) {
-			console.error('Failed to load snapshots:', error);
+			console.error('Failed to load portfolio data:', error);
 		} finally {
 			loading = false;
 		}
@@ -39,42 +60,87 @@
 		value: p.market_value
 	}));
 
-	const positionColumns = [
-		{ 
-			key: 'symbol' as keyof PositionResponse, 
+	// Stop-loss coverage percentage
+	$: stopLossCoverage = positionsList.length > 0
+		? (positionsList.filter(p => p.current_stop_loss > 0).length / positionsList.length) * 100
+		: 0;
+
+	// Average entry confidence
+	$: avgConfidence = positionsList.length > 0
+		? positionsList.reduce((sum, p) => sum + p.entry_confidence, 0) / positionsList.length
+		: 0;
+
+	// Position age distribution
+	$: positionAgeDistribution = (() => {
+		const buckets = { '0-7d': 0, '8-30d': 0, '31-90d': 0, '90+d': 0 };
+		positionsList.forEach((p: EnhancedPosition) => {
+			if (p.days_held <= 7) buckets['0-7d']++;
+			else if (p.days_held <= 30) buckets['8-30d']++;
+			else if (p.days_held <= 90) buckets['31-90d']++;
+			else buckets['90+d']++;
+		});
+		return Object.entries(buckets)
+			.filter(([_, count]) => count > 0)
+			.map(([range, count]) => `${range}: ${count}`)
+			.join(' | ') || 'No positions';
+	})();
+
+	const positionColumns: Array<{
+		key: keyof EnhancedPosition;
+		label: string;
+		format?: (value: any) => string;
+		class?: string;
+	}> = [
+		{
+			key: 'symbol',
 			label: 'Symbol',
 			class: 'font-medium'
 		},
-		{ 
-			key: 'quantity' as keyof PositionResponse, 
+		{
+			key: 'current_qty',
 			label: 'Quantity',
 			format: (value: number) => value.toFixed(0)
 		},
-		{ 
-			key: 'avg_entry_price' as keyof PositionResponse, 
+		{
+			key: 'entry_price',
 			label: 'Avg Entry',
 			format: (value: number) => formatCurrency(value)
 		},
-		{ 
-			key: 'current_price' as keyof PositionResponse, 
+		{
+			key: 'current_price',
 			label: 'Current Price',
 			format: (value: number) => formatCurrency(value)
 		},
-		{ 
-			key: 'market_value' as keyof PositionResponse, 
+		{
+			key: 'market_value',
 			label: 'Market Value',
 			format: (value: number) => formatCurrency(value)
 		},
-		{ 
-			key: 'unrealized_pnl' as keyof PositionResponse, 
+		{
+			key: 'unrealized_pnl',
 			label: 'P&L',
 			format: (value: number) => formatCurrency(value),
 			class: 'font-semibold'
 		},
-		{ 
-			key: 'unrealized_pnl_percent' as keyof PositionResponse, 
+		{
+			key: 'unrealized_pnl_percent',
 			label: 'P&L %',
 			format: (value: number) => formatPercent(value / 100)
+		},
+		{
+			key: 'current_stop_loss',
+			label: 'Stop Loss',
+			format: (value: number) => formatCurrency(value)
+		},
+		{
+			key: 'entry_confidence',
+			label: 'Entry Conf',
+			format: (value: number) => formatPercent(value)
+		},
+		{
+			key: 'days_held',
+			label: 'Days Held',
+			format: (value: number) => `${value}d`
 		}
 	];
 </script>
@@ -88,18 +154,37 @@
 	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 		<MetricCard
 			title="Portfolio Value"
-			value={portfolio ? formatCurrency(portfolio.portfolio_value) : '$0'}
+			value={formatCurrency(portfolioValue)}
 			icon="💰"
 		/>
 		<MetricCard
-			title="Cash"
-			value={portfolio ? formatCurrency(portfolio.cash) : '$0'}
+			title="Total P&L"
+			value={formatCurrency(totalPnl)}
 			icon="💵"
 		/>
 		<MetricCard
 			title="Positions"
-			value={portfolio?.positions.length ?? 0}
+			value={positionsList.length}
 			icon="📈"
+		/>
+	</div>
+
+	<!-- Additional Metrics -->
+	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+		<MetricCard
+			title="Avg Confidence"
+			value={formatPercent(avgConfidence)}
+			icon="🎯"
+		/>
+		<MetricCard
+			title="Stop-Loss Coverage"
+			value={formatPercent(stopLossCoverage / 100)}
+			icon="🛡️"
+		/>
+		<MetricCard
+			title="Position Age"
+			value={positionAgeDistribution}
+			icon="📅"
 		/>
 	</div>
 
@@ -130,6 +215,19 @@
 			{/if}
 		</Card>
 	</div>
+
+	<!-- Rebalance Chart -->
+	<Card title="Rebalance Analysis">
+		{#if rebalance && rebalance.allocations.length > 0}
+			<RebalanceChart allocations={rebalance.allocations} height={350} />
+		{:else if loading}
+			<div class="text-center py-12 text-slate-400">Loading...</div>
+		{:else}
+			<div class="text-center py-12 text-slate-400">
+				No rebalancing data available
+			</div>
+		{/if}
+	</Card>
 
 	<!-- Positions Table -->
 	<Card title="Positions">
