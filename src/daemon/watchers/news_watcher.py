@@ -165,7 +165,7 @@ class NewsWatcher(EventWatcher):
             if self._news_fetcher is None:
                 msg = "No fetchers configured and fallback failed"
                 raise RuntimeError(msg)
-            articles = await asyncio.to_thread(self._news_fetcher.fetch_market_news, 50)
+            articles = await self._news_fetcher.afetch_market_news(50)
             all_articles = [(art, "marketaux") for art in articles]
 
         # Deduplicate by URL (keep highest weight)

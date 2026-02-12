@@ -1,5 +1,6 @@
 """News tool for fetching stock news."""
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -76,7 +77,7 @@ class GetNewsTool(BaseTool):
 
         try:
             fetcher = self._container.news_fetcher()
-            articles = fetcher.fetch_company_news(symbol.upper(), limit=limit)
+            articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
 
             return self._format_articles(symbol.upper(), articles)
         except Exception as e:

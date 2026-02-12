@@ -1,6 +1,5 @@
 """News data fetcher for financial news."""
 
-import asyncio
 from datetime import datetime
 
 import httpx
@@ -77,44 +76,13 @@ class NewsFetcher:
         if rate_limit:
             logger.info(f"Marketaux rate limit header (symbol={symbol}): {rate_limit}")
 
+    @HTTP_RETRY
     async def afetch_company_news(
         self,
         symbol: str,
         limit: int = 10,
     ) -> list[NewsArticle]:
         """Fetch recent news for a company asynchronously.
-
-        Args:
-            symbol: Stock ticker symbol
-            limit: Maximum number of articles
-
-        Returns:
-            List of NewsArticle objects
-        """
-        return await asyncio.to_thread(self._fetch_company_news_sync, symbol, limit)
-
-    async def afetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
-        """Fetch general market news asynchronously.
-
-        Args:
-            limit: Maximum number of articles
-
-        Returns:
-            List of NewsArticle objects
-        """
-        return await asyncio.to_thread(self._fetch_market_news_sync, limit)
-
-    def get_source_name(self) -> str:
-        """Return source identifier."""
-        return "marketaux"
-
-    @HTTP_RETRY
-    def _fetch_company_news_sync(
-        self,
-        symbol: str,
-        limit: int = 10,
-    ) -> list[NewsArticle]:
-        """Fetch recent news for a company (sync implementation).
 
         Args:
             symbol: Stock ticker symbol
@@ -137,8 +105,8 @@ class NewsFetcher:
 
         with timed_operation("news_fetch", source="marketaux"):
             try:
-                with httpx.Client(timeout=30.0) as client:
-                    response = client.get(self.BASE_URL, params=params)
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(self.BASE_URL, params=params)
 
                     # Log rate limit headers before raising
                     self._log_rate_limit_headers(response, symbol)
@@ -174,25 +142,9 @@ class NewsFetcher:
                 logger.opt(exception=True).error(f"News fetch failed: {e}")
                 raise
 
-    def fetch_company_news(
-        self,
-        symbol: str,
-        limit: int = 10,
-    ) -> list[NewsArticle]:
-        """Fetch recent news for a company (deprecated, use afetch_company_news).
-
-        Args:
-            symbol: Stock ticker symbol
-            limit: Maximum number of articles
-
-        Returns:
-            List of NewsArticle objects
-        """
-        return self._fetch_company_news_sync(symbol, limit)
-
     @HTTP_RETRY
-    def _fetch_market_news_sync(self, limit: int = 20) -> list[NewsArticle]:
-        """Fetch general market news (sync implementation).
+    async def afetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
+        """Fetch general market news asynchronously.
 
         Args:
             limit: Maximum number of articles
@@ -212,8 +164,8 @@ class NewsFetcher:
             params["api_token"] = self.api_key
 
         try:
-            with httpx.Client(timeout=30.0) as client:
-                response = client.get(self.BASE_URL, params=params)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(self.BASE_URL, params=params)
                 response.raise_for_status()
 
                 data = response.json()
@@ -237,16 +189,9 @@ class NewsFetcher:
             logger.opt(exception=True).error(f"Market news fetch failed: {e}")
             raise
 
-    def fetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
-        """Fetch general market news (deprecated, use afetch_market_news).
-
-        Args:
-            limit: Maximum number of articles
-
-        Returns:
-            List of NewsArticle objects
-        """
-        return self._fetch_market_news_sync(limit)
+    def get_source_name(self) -> str:
+        """Return source identifier."""
+        return "marketaux"
 
     def __repr__(self) -> str:
         """String representation."""

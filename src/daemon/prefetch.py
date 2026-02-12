@@ -1,5 +1,6 @@
 """After-hours data prefetching and caching."""
 
+import asyncio
 import hashlib
 import time
 from datetime import UTC, datetime
@@ -117,7 +118,7 @@ class DataPrefetcher:
 
         # News (uses Marketaux, no AV rate limit concern)
         try:
-            articles = self._news_fetcher.fetch_company_news(symbol)
+            articles = asyncio.run(self._news_fetcher.afetch_company_news(symbol))
             key = self._cache_key("news", symbol)
             self._cache.set(
                 key,
