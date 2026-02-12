@@ -147,13 +147,13 @@ class DuckDuckGoNewsFetcher:
         try:
             # Try ISO format
             return datetime.fromisoformat(date_str)
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             pass
 
         try:
             # Try timestamp
             return datetime.fromtimestamp(float(date_str), tz=UTC)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             logger.warning(f"Could not parse date: {date_str}, using now()")
             return datetime.now(UTC)
 

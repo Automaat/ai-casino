@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pandas as pd
 import pytest
@@ -61,7 +61,7 @@ def mock_market_fetcher(sample_market_data: MarketData) -> Mock:
 def mock_news_fetcher(sample_articles: list[NewsArticle]) -> Mock:
     """Create mock news fetcher."""
     fetcher = Mock()
-    fetcher.fetch_company_news.return_value = sample_articles
+    fetcher.afetch_company_news = AsyncMock(return_value=sample_articles)
     return fetcher
 
 
@@ -136,7 +136,7 @@ class TestPrefetchSymbol:
 
     def test_handles_news_failure(self, prefetcher: DataPrefetcher, mock_news_fetcher: Mock) -> None:
         """Verify news failure doesn't stop fundamentals."""
-        mock_news_fetcher.fetch_company_news.side_effect = RuntimeError("down")
+        mock_news_fetcher.afetch_company_news = AsyncMock(side_effect=RuntimeError("down"))
 
         with patch("src.daemon.prefetch.time.sleep"):
             result = prefetcher.prefetch_symbol("AAPL")
@@ -274,7 +274,7 @@ class TestPrefetchHandlesFailures:
     ) -> None:
         """Verify complete failure returns result with all False."""
         mock_market_fetcher.fetch_daily.side_effect = RuntimeError("x")
-        mock_news_fetcher.fetch_company_news.side_effect = RuntimeError("x")
+        mock_news_fetcher.afetch_company_news = AsyncMock(side_effect=RuntimeError("x"))
         mock_fundamental_fetcher.fetch_overview.side_effect = RuntimeError("x")
 
         result = prefetcher.prefetch_symbol("AAPL")
