@@ -129,6 +129,7 @@ def _init_event_watchers(
                 cooldown_minutes=daemon_config.news_watcher.cooldown_minutes,
                 breaking_threshold_minutes=daemon_config.news_watcher.breaking_threshold_minutes,
                 max_concurrent_analyses=daemon_config.news_watcher.max_concurrent_analyses,
+                container=container,
             )
         )
         console.print("[green]✓[/green] NewsWatcher enabled")
@@ -145,6 +146,7 @@ def _init_event_watchers(
                 viral_upvote_ratio=daemon_config.social_watcher.viral_upvote_ratio,
                 subreddits=daemon_config.social_watcher.subreddits,
                 max_concurrent_analyses=daemon_config.social_watcher.max_concurrent_analyses,
+                container=container,
             )
         )
         console.print("[green]✓[/green] SocialWatcher enabled")
@@ -163,6 +165,7 @@ def _init_event_watchers(
                 watchlist=daemon_config.watchlist,
                 max_symbols_per_cycle=daemon_config.anomaly_watcher.max_symbols_per_cycle,
                 max_concurrent_analyses=daemon_config.anomaly_watcher.max_concurrent_analyses,
+                container=container,
             )
         )
         console.print("[green]✓[/green] AnomalyWatcher enabled")

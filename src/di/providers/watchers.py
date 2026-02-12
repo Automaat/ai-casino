@@ -1,5 +1,7 @@
 """DI providers for event watchers."""
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
@@ -8,16 +10,21 @@ from src.daemon.watchers.news_watcher import NewsWatcher
 from src.daemon.watchers.social_watcher import SocialWatcher
 from src.data.base_news_fetcher import BaseNewsFetcher
 
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
+
 
 def create_news_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
+    container: "AppContainer | None" = None,
 ) -> NewsWatcher | None:
     """Create news watcher with enabled sources.
 
     Args:
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
+        container: Optional DI container (auto-created if not provided)
 
     Returns:
         NewsWatcher instance if enabled, None otherwise
@@ -59,6 +66,7 @@ def create_news_watcher(
     return NewsWatcher(
         historical_cache=historical_cache,
         fetchers=fetchers,
+        container=container,
         poll_interval=config.poll_interval_minutes * 60,
         relevance_threshold=config.relevance_threshold,
         cooldown_minutes=config.cooldown_minutes,
@@ -70,12 +78,14 @@ def create_news_watcher(
 def create_social_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
+    container: "AppContainer | None" = None,
 ) -> SocialWatcher | None:
     """Create social media watcher if enabled.
 
     Args:
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
+        container: Optional DI container (auto-created if not provided)
 
     Returns:
         SocialWatcher instance if enabled, None otherwise
@@ -87,6 +97,7 @@ def create_social_watcher(
 
     return SocialWatcher(
         historical_cache=historical_cache,
+        container=container,
         poll_interval=config.poll_interval_minutes * 60,
         relevance_threshold=config.relevance_threshold,
         cooldown_minutes=config.cooldown_minutes,
