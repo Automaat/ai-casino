@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.data.news import NewsArticle
+from src.models.sentiment import _analyze_batch_worker, _finbert_executor
 
 if TYPE_CHECKING:
     from src.models.sentiment import FinBERTSentiment, SentimentScore
@@ -66,7 +67,13 @@ class SentimentAnalyst:
         texts = [f"{article.title}. {article.description}" for article in articles]
 
         loop = asyncio.get_running_loop()
-        scores = await loop.run_in_executor(None, self.finbert.analyze_batch, texts)
+        # Use ProcessPoolExecutor for true parallelism (avoids GIL)
+        score_dicts = await loop.run_in_executor(_finbert_executor, _analyze_batch_worker, texts, None)
+
+        # Import here to avoid circular import at module level
+        from src.models.sentiment import SentimentScore
+
+        scores = [SentimentScore(**s) for s in score_dicts]
 
         overall_score = self._aggregate_sentiment(scores)
         sentiment_label = self._get_sentiment_label(overall_score)

@@ -4,6 +4,7 @@
 # Environment config handled by src/models/torch_config.py before import cascade reaches here.
 
 import threading
+from concurrent.futures import ProcessPoolExecutor
 
 import torch
 from loguru import logger
@@ -15,6 +16,9 @@ from src.metrics.execution import timed_operation
 
 # Suppress transformers logging (the env var alone doesn't catch everything)
 hf_logging.set_verbosity_error()
+
+# Process pool executor for parallel FinBERT inference (avoids GIL)
+_finbert_executor = ProcessPoolExecutor(max_workers=4)
 
 
 class _FinBERTHolder:
@@ -147,6 +151,24 @@ class FinBERTSentiment:
         return f"FinBERTSentiment(device={self.device})"
 
 
+def _analyze_batch_worker(texts: list[str], device: str | None = None) -> list[dict[str, float]]:
+    """Worker function for ProcessPoolExecutor to analyze sentiment batch.
+
+    This function reconstructs FinBERT in the worker process (singleton per worker).
+    Returns plain dicts instead of SentimentScore to ensure picklability.
+
+    Args:
+        texts: List of texts to analyze
+        device: Device for inference (cuda/cpu)
+
+    Returns:
+        List of dicts with sentiment scores (positive, negative, neutral)
+    """
+    finbert = get_finbert_sentiment(device=device)
+    scores = finbert.analyze_batch(texts)
+    return [{"positive": s.positive, "negative": s.negative, "neutral": s.neutral} for s in scores]
+
+
 def get_finbert_sentiment(device: str | None = None) -> FinBERTSentiment:
     """Get or create singleton FinBERT sentiment analyzer.
 
@@ -185,3 +207,12 @@ def clear_finbert_sentiment() -> None:
     with _FinBERTHolder.lock:
         _FinBERTHolder.instance = None
         logger.debug("FinBERT singleton cleared")
+
+
+def shutdown_finbert_executor() -> None:
+    """Shutdown the process pool executor (for cleanup).
+
+    Should be called at application shutdown to properly cleanup worker processes.
+    """
+    _finbert_executor.shutdown(wait=True)
+    logger.debug("FinBERT executor shutdown")
