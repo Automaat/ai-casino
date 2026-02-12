@@ -48,6 +48,12 @@ def mock_container():
     mock_llm.acomplete = AsyncMock(return_value="OK")
     mock_llm.close = AsyncMock()
     container.llm_client = Mock(return_value=mock_llm)
+
+    # Mock circuit breaker registry - must be callable that returns object with async methods
+    mock_cb_registry = Mock()
+    mock_cb_registry.get_all_statuses = AsyncMock(return_value={})
+    container.circuit_breaker_registry = lambda: mock_cb_registry
+
     return container
 
 
