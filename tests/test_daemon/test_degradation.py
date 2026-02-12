@@ -183,9 +183,9 @@ def test_halted_mode_llm_down(policy):
                 checked_at=datetime.now(UTC),
             ),
             ServiceCheckResult(
-                service="llm_anthropic",
+                service="llm_ollama",
                 status=ServiceStatus.UNHEALTHY,
-                message="API key invalid",
+                message="Connection refused",
                 duration_ms=100.0,
                 checked_at=datetime.now(UTC),
             ),
@@ -198,6 +198,54 @@ def test_halted_mode_llm_down(policy):
 
     assert context.tier == DegradationTier.HALTED
     assert "llm" in context.halt_reason.lower()
+
+
+def test_stale_health_report_different_llm_provider():
+    """Regression: stale health with wrong LLM provider should not halt."""
+    # Config uses openai, but health report has stale llm_ollama UNHEALTHY
+    config = DaemonConfig()
+    config.llm.provider = "openai"
+    policy = DegradationPolicy(config)
+
+    health_report = HealthReport(
+        timestamp=datetime.now(UTC),
+        overall_status=ServiceStatus.UNHEALTHY,
+        service_checks=[
+            ServiceCheckResult(
+                service="alpha_vantage",
+                status=ServiceStatus.HEALTHY,
+                message="OK",
+                duration_ms=100.0,
+                checked_at=datetime.now(UTC),
+            ),
+            ServiceCheckResult(
+                service="llm_ollama",
+                status=ServiceStatus.UNHEALTHY,
+                message="Connection refused (stale)",
+                duration_ms=100.0,
+                checked_at=datetime.now(UTC),
+            ),
+            ServiceCheckResult(
+                service="llm_openai",
+                status=ServiceStatus.HEALTHY,
+                message="OK",
+                duration_ms=150.0,
+                checked_at=datetime.now(UTC),
+            ),
+        ],
+        cleanup_results=[],
+        total_duration_ms=250.0,
+    )
+
+    context = policy.evaluate_degradation(health_report)
+
+    # Should NOT halt (configured provider is healthy)
+    assert context.tier == DegradationTier.FULL
+    assert context.halt_reason is None
+    assert len(context.available_agents) == 9
+    assert context.confidence_adjustment == 1.0
+    # Stale llm_ollama should be filtered from unavailable_services
+    assert "llm_ollama" not in context.unavailable_services
 
 
 def test_confidence_penalty_capped_at_50_percent(policy):

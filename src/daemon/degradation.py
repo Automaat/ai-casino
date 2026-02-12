@@ -154,28 +154,33 @@ class DegradationPolicy:
 
         unhealthy = [c.service for c in health_report.service_checks if c.status == ServiceStatus.UNHEALTHY]
 
+        # Filter out non-configured LLM providers from unhealthy list to avoid stale health report confusion
+        configured_llm_service = f"llm_{self.config.llm.provider}"
+        unhealthy_relevant = [s for s in unhealthy if not s.startswith("llm_") or s == configured_llm_service]
+
         # Critical failures → HALTED
-        if any("alpha_vantage" in s for s in unhealthy):
+        if any("alpha_vantage" in s for s in unhealthy_relevant):
             return DegradationContext(
                 tier=DegradationTier.HALTED,
                 available_agents=set(),
-                unavailable_services=unhealthy,
+                unavailable_services=unhealthy_relevant,
                 confidence_adjustment=0.0,
                 halt_reason="No market data (Alpha Vantage down)",
             )
 
-        if any("llm" in s for s in unhealthy):
+        # Check if configured LLM provider is unhealthy
+        if configured_llm_service in unhealthy_relevant:
             return DegradationContext(
                 tier=DegradationTier.HALTED,
                 available_agents=set(),
-                unavailable_services=unhealthy,
+                unavailable_services=unhealthy_relevant,
                 confidence_adjustment=0.0,
                 halt_reason="LLM service unavailable",
             )
 
         # Map services → unavailable agents
         unavailable_agents = set()
-        for service in unhealthy:
+        for service in unhealthy_relevant:
             agent_list = self._service_to_agents.get(service, [])
             unavailable_agents.update(agent_list)
 
@@ -196,7 +201,7 @@ class DegradationPolicy:
         return DegradationContext(
             tier=tier,
             available_agents=available_agents,
-            unavailable_services=unhealthy,
+            unavailable_services=unhealthy_relevant,
             confidence_adjustment=confidence_adjustment,
         )
 

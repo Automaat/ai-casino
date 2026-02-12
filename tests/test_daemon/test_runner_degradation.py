@@ -100,7 +100,7 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
 
 async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_dir):
     """Verify daemon skips cycle when LLM unavailable."""
-    # Create health report with LLM down
+    # Create health report with LLM down (using default ollama provider)
     create_health_report(
         temp_health_dir,
         [
@@ -112,9 +112,9 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
                 checked_at=datetime.now(UTC),
             ),
             ServiceCheckResult(
-                service="llm_anthropic",
+                service="llm_ollama",
                 status=ServiceStatus.UNHEALTHY,
-                message="API key invalid",
+                message="Connection refused",
                 duration_ms=100.0,
                 checked_at=datetime.now(UTC),
             ),
