@@ -66,8 +66,8 @@ class ExecuteTradeTool(BaseTool):
                 name=self.name,
                 description=(
                     "Execute a market order (BUY or SELL) with optional stop loss. "
-                    "Requires rationale for trade decision. In LIVE mode, requires user confirmation. "
-                    "In PAPER mode, executes automatically."
+                    "Requires confidence (0.0-1.0) for threshold validation and rationale for trade decision. "
+                    "In LIVE mode, requires user confirmation. In PAPER mode, executes automatically."
                 ),
                 parameters=ToolParametersSchema(
                     properties={
@@ -106,7 +106,7 @@ class ExecuteTradeTool(BaseTool):
 
         Args:
             **kwargs: Tool arguments (symbol: str, action: str, quantity: int,
-                     stop_loss_price: float | None, rationale: str)
+                     confidence: float, stop_loss_price: float | None, rationale: str)
 
         Returns:
             Order status with details
