@@ -45,19 +45,22 @@ export interface AnalysesResponse {
 
 export interface PositionResponse {
 	symbol: string;
-	quantity: number;
-	avg_entry_price: number;
+	entry_price: number;
+	current_qty: number;
+	current_stop_loss: number;
+	entry_timestamp: string;
+	entry_signal: string;
+	entry_confidence: number;
+	days_held: number;
+	trailing_stop_activated: boolean;
+	breakeven_activated: boolean;
+	profit_targets: number[];
 	current_price: number;
-	market_value: number;
-	unrealized_pnl: number;
-	unrealized_pnl_percent: number;
 }
 
 export interface PositionsResponse {
 	positions: PositionResponse[];
-	total_value: number;
-	cash: number;
-	portfolio_value: number;
+	count: number;
 }
 
 export interface SnapshotRecord {
@@ -73,18 +76,19 @@ export interface SnapshotsResponse {
 
 export interface RebalanceAllocation {
 	symbol: string;
-	target_percent: number;
-	current_percent: number;
-	current_value: number;
-	target_value: number;
+	target_weight: number;
+	current_weight: number;
+	delta: number;
 	action: string;
-	shares_to_trade: number;
 }
 
 export interface RebalanceResponse {
-	allocations: RebalanceAllocation[];
 	timestamp: string;
-	portfolio_value: number;
+	method: string;
+	allocations: RebalanceAllocation[];
+	expected_return: number;
+	expected_volatility: number;
+	sharpe_ratio: number;
 }
 
 export interface RiskReportResponse {
