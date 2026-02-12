@@ -7,15 +7,20 @@ import time
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
 from pydantic import BaseModel
 
+from src.circuit_breaker import CircuitBreakerState
 from src.daemon.config import DaemonConfig
 from src.daemon.notifications import NotificationService
 from src.daemon.state import DaemonState
 from src.di.container import AppContainer
+
+if TYPE_CHECKING:
+    from src.circuit_breaker import CircuitBreakerRegistry
 
 
 class ServiceStatus(StrEnum):
@@ -65,6 +70,7 @@ class HealthChecker:
         state: DaemonState,
         container: AppContainer | None = None,
         notification_service: NotificationService | None = None,
+        circuit_breaker_registry: CircuitBreakerRegistry | None = None,
     ) -> None:
         """Initialize health checker.
 
@@ -73,6 +79,7 @@ class HealthChecker:
             state: Current daemon state
             container: Optional DI container (auto-created if not provided)
             notification_service: Optional notification service for health alerts
+            circuit_breaker_registry: Optional circuit breaker registry for status checks
         """
         from src.di.container import create_container
 
@@ -80,6 +87,7 @@ class HealthChecker:
         self.state = state
         self._container = container or create_container()
         self.notification_service = notification_service
+        self._circuit_breaker_registry = circuit_breaker_registry
         self._health_dir = Path(config.health.health_dir).expanduser()
         self._archive_dir = Path(config.health.archive_dir).expanduser()
 
@@ -99,6 +107,11 @@ class HealthChecker:
             await self._check_llm(),
             await self._check_finnhub(),
         ]
+
+        # Add circuit breaker status checks
+        if self._circuit_breaker_registry:
+            circuit_checks = self._check_circuit_breakers()
+            checks.extend(circuit_checks)
 
         # Run cleanup operations
         cleanups = [
@@ -353,6 +366,42 @@ class HealthChecker:
                 duration_ms=duration,
                 checked_at=datetime.now(UTC),
             )
+
+    def _check_circuit_breakers(self) -> list[ServiceCheckResult]:
+        """Check circuit breaker statuses for all services.
+
+        Returns:
+            List of ServiceCheckResult for circuit breakers in OPEN state
+        """
+        if not self._circuit_breaker_registry:
+            return []
+
+        results = []
+        circuit_statuses = self._circuit_breaker_registry.get_all_statuses()
+
+        for service, status in circuit_statuses.items():
+            if status.state == CircuitBreakerState.OPEN:
+                open_until = status.opened_at
+                if status.opened_at:
+                    timeout_seconds = self.config.api.circuit_breaker.timeout_seconds
+                    open_until = status.opened_at.timestamp() + timeout_seconds
+                    open_until_str = datetime.fromtimestamp(open_until, tz=UTC).strftime(
+                        "%Y-%m-%d %H:%M:%S UTC"
+                    )
+                else:
+                    open_until_str = "unknown"
+
+                result = ServiceCheckResult(
+                    service=f"circuit_breaker_{service}",
+                    status=ServiceStatus.DEGRADED,
+                    message=f"Circuit open until {open_until_str}",
+                    duration_ms=0,
+                    checked_at=datetime.now(UTC),
+                )
+                results.append(result)
+                logger.info(f"Circuit breaker for {service} is OPEN (degraded)")
+
+        return results
 
     def _archive_old_analyses(self) -> CleanupResult:
         """Archive analyses older than archive_days from state."""

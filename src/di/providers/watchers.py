@@ -38,9 +38,14 @@ def create_news_watcher(
     fetchers: list[BaseNewsFetcher] = []
 
     if config.sources.enable_marketaux:
+        from src.di.container import create_container
         from src.di.providers.data import create_news_fetcher
 
-        fetchers.append(create_news_fetcher(daemon_config, historical_cache))
+        # Get circuit breaker registry from container
+        _container = container or create_container()
+        circuit_breaker_registry = _container.circuit_breaker_registry()
+
+        fetchers.append(create_news_fetcher(daemon_config, historical_cache, circuit_breaker_registry))
 
     if config.sources.enable_finnhub:
         from src.di.providers.data import create_finnhub_news_fetcher

@@ -739,6 +739,36 @@ daemon:
     # Add additional origins if dashboard runs on different ports
     # cors_origins: ["http://localhost:8050", "http://localhost:5173", "http://localhost:3000"]
 
+    # Circuit breaker configuration for external API calls
+    circuit_breaker:
+      # Consecutive failures before opening circuit (1-20)
+      # Opens circuit after N consecutive retriable errors (402, 429, 5xx, timeouts)
+      failure_threshold: 3
+
+      # Successful requests in half-open to close circuit (1-5)
+      # Number of successful test requests needed to restore normal operation
+      success_threshold: 1
+
+      # Default timeout before testing recovery (60-86400)
+      # Used for errors not in specific categories below
+      timeout_seconds: 3600
+
+      # Timeout for quota errors - 402 Payment Required (300-172800)
+      # 3600 = 1 hour (balance between retry frequency and quota recovery)
+      quota_error_timeout_seconds: 3600
+
+      # Timeout for rate limit errors - 429 Too Many Requests (60-86400)
+      # 300 = 5 minutes (typical rate limit window)
+      rate_limit_timeout_seconds: 300
+
+      # Timeout for server errors - 503/504 (30-3600)
+      # 60 = 1 minute (transient server issues)
+      server_error_timeout_seconds: 60
+
+      # Max concurrent test requests in half-open state (1-5)
+      # Limits how many requests can test recovery simultaneously
+      half_open_max_calls: 1
+
   # ========================================
   # METRICS CONFIGURATION
   # ========================================
