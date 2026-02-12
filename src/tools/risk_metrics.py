@@ -89,7 +89,7 @@ class GetRiskMetricsTool(BaseTool):
 
             return self._format_result(symbol, days, metrics)
         except Exception as e:
-            logger.error(f"Risk metrics calculation failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Risk metrics calculation failed for {symbol}: {e}")
             return f"Risk metrics calculation failed for {symbol}: {e}"
 
     def _format_result(self, symbol: str, days: int, metrics: RiskMetrics) -> str:

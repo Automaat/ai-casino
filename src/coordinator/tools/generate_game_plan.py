@@ -96,7 +96,7 @@ class GenerateGamePlanTool(BaseTool):
             return self._format_result(plan)
 
         except Exception as e:
-            logger.error(f"Game plan generation failed: {e}")
+            logger.opt(exception=True).error(f"Game plan generation failed: {e}")
             return f"Failed to generate game plan: {e}"
 
     def execute(self, **kwargs: str | int | float | bool) -> str:

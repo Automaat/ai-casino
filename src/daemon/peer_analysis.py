@@ -150,7 +150,7 @@ class DeepPeerAnalyzer:
                 analyses.append(result)
                 total_peers += result.peer_count
             except Exception as e:
-                logger.error(f"Peer analysis failed for {symbol}: {e}")
+                logger.opt(exception=True).error(f"Peer analysis failed for {symbol}: {e}")
 
         duration = time_mod.time() - start
         result = DeepPeerAnalysisResult(
@@ -220,7 +220,7 @@ class DeepPeerAnalyzer:
                 return "Unknown"
             return sector
         except Exception as e:
-            logger.warning(f"Failed to get sector for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to get sector for {symbol}: {e}")
             return "Unknown"
 
     def _get_peers(self, symbol: str, sector: str, universe: list[StockInfo]) -> list[str]:
@@ -300,7 +300,7 @@ class DeepPeerAnalyzer:
             return metrics
 
         except Exception as e:
-            logger.warning(f"Failed to fetch metrics for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch metrics for {symbol}: {e}")
             return None
 
     def _composite_score(self, metrics: PeerMetrics) -> float:
@@ -437,7 +437,7 @@ class DeepPeerAnalyzer:
                 if analysis.symbol == symbol:
                     return analysis
         except Exception as e:
-            logger.warning(f"Failed to load peer analysis for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to load peer analysis for {symbol}: {e}")
 
         return None
 

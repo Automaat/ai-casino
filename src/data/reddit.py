@@ -339,7 +339,7 @@ class RedditFetcher:
             return result
 
         except Exception as e:
-            logger.error(f"Reddit fetch failed: {e}")
+            logger.opt(exception=True).error(f"Reddit fetch failed: {e}")
             raise
 
     def _extract_tickers(self, text: str) -> set[str]:
@@ -442,7 +442,7 @@ class RedditFetcher:
             return results
 
         except Exception as e:
-            logger.error(f"Reddit trending fetch failed: {e}")
+            logger.opt(exception=True).error(f"Reddit trending fetch failed: {e}")
             raise
 
     def clear_cache(self) -> None:

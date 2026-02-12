@@ -39,7 +39,7 @@ async def backfill_analyses(
             await repository.create(analysis)
             success += 1
         except Exception as e:
-            logger.error(f"Failed to backfill analysis {analysis.symbol}: {e}")
+            logger.opt(exception=True).error(f"Failed to backfill analysis {analysis.symbol}: {e}")
             errors += 1
 
     logger.info(f"Analysis backfill complete: {success} success, {errors} errors")
@@ -68,7 +68,7 @@ async def backfill_discovery_history(
             await repository.create(record)
             success += 1
         except Exception as e:
-            logger.error(f"Failed to backfill discovery {record.symbol}: {e}")
+            logger.opt(exception=True).error(f"Failed to backfill discovery {record.symbol}: {e}")
             errors += 1
 
     logger.info(f"Discovery history backfill complete: {success} success, {errors} errors")
@@ -100,7 +100,7 @@ async def backfill_position_actions(
             await repository.create(action)
             success += 1
         except Exception as e:
-            logger.error(f"Failed to backfill position action: {e}")
+            logger.opt(exception=True).error(f"Failed to backfill position action: {e}")
             errors += 1
 
     logger.info(f"Position actions backfill complete: {success} success, {errors} errors")

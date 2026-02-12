@@ -74,7 +74,7 @@ def _parse_max_concurrent_requests() -> int:
     try:
         value = int(raw_value)
     except ValueError:
-        logger.warning(
+        logger.opt(exception=True).warning(
             "Invalid LLM_MAX_CONCURRENT value %r; using default %d",
             raw_value,
             _DEFAULT_CONCURRENT_REQUESTS,
@@ -480,7 +480,7 @@ class LLMClient:
         try:
             return executor(tool_call.name, tool_call.arguments)
         except Exception as e:
-            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            logger.opt(exception=True).error(f"Tool '{tool_call.name}' execution failed: {e}")
             return f"Tool '{tool_call.name}' failed: {e}"
 
     async def _execute_tool_async(
@@ -514,7 +514,7 @@ class LLMClient:
 
             return result
         except Exception as e:
-            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            logger.opt(exception=True).error(f"Tool '{tool_call.name}' execution failed: {e}")
             return f"Tool '{tool_call.name}' failed: {e}"
 
     async def close(self) -> None:

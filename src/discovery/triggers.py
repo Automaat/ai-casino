@@ -63,7 +63,7 @@ class TriggerDetector:
                     )
 
             except Exception as e:
-                logger.warning(f"Volume spike detection failed for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Volume spike detection failed for {symbol}: {e}")
                 continue
 
         logger.info(f"Volume spike detection: {len(spikes)} candidates from {len(universe)} symbols")
@@ -102,7 +102,7 @@ class TriggerDetector:
                     )
 
             except Exception as e:
-                logger.warning(f"Price gap detection failed for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Price gap detection failed for {symbol}: {e}")
                 continue
 
         logger.info(f"Price gap detection: {len(gaps)} candidates from {len(universe)} symbols")
@@ -149,7 +149,7 @@ class TriggerDetector:
                     )
 
             except Exception as e:
-                logger.warning(f"ATR anomaly detection failed for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"ATR anomaly detection failed for {symbol}: {e}")
                 continue
 
         logger.info(f"ATR anomaly detection: {len(anomalies)} candidates from {len(universe)} symbols")

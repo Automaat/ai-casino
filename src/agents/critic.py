@@ -109,7 +109,7 @@ class CriticAgent:
                 temperature=0.3,
             )
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed for critique, falling back: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed for critique, falling back: {e}")
             text_response = await self.llm.acomplete(prompt, system=system, temperature=0.3)
             return self._create_fallback_analysis(request, text_response)
 

@@ -94,7 +94,7 @@ async def get_broker_account_info_cached(
                     "portfolio_value": account_info.portfolio_value,
                 }
             except Exception as e:
-                logger.warning(f"Failed to fetch broker account info: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch broker account info: {e}")
                 cache[cache_key] = None
 
         yield cache[cache_key]
@@ -312,7 +312,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                         )
                     )
                 except Exception as e:
-                    logger.error(f"Failed to parse position {symbol}: {e}")
+                    logger.opt(exception=True).error(f"Failed to parse position {symbol}: {e}")
                     continue
 
             return PositionsResponse(positions=positions, count=len(positions))
@@ -360,7 +360,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             logger.debug("DATABASE_URL not configured, returning empty snapshots")
             return SnapshotsResponse(snapshots=[], count=0)
         except Exception as e:
-            logger.error(f"Failed to fetch snapshots: {e}")
+            logger.opt(exception=True).error(f"Failed to fetch snapshots: {e}")
             raise HTTPException(status_code=500, detail="Failed to fetch portfolio snapshots") from e
 
     @app.get("/portfolio/rebalance", response_model=RebalanceResponse | None)
@@ -419,7 +419,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             broker_symbols = set(dict(components.state.active_positions).keys())
             broker_count = len([s for s in broker_symbols if s in symbols])
         except Exception as e:
-            logger.warning(f"Unable to derive broker symbols for watchlist: {e}")
+            logger.opt(exception=True).warning(f"Unable to derive broker symbols for watchlist: {e}")
 
         screening_count = 0
         if components.config.screening.enabled and components.state.screening_history:
@@ -559,7 +559,9 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             try:
                 return json.loads(latest_file.read_text())
             except Exception as e:
-                logger.warning(f"Failed to read or parse health report {latest_file}: {e}")
+                logger.opt(exception=True).warning(
+                    f"Failed to read or parse health report {latest_file}: {e}"
+                )
                 return {"overall_status": "HEALTHY", "service_checks": []}
 
         # Read health report in thread to avoid blocking
@@ -589,7 +591,9 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 service_checks=service_checks,
             )
         except Exception as e:
-            logger.warning(f"Invalid health report format, using fallback health status: {e}")
+            logger.opt(exception=True).warning(
+                f"Invalid health report format, using fallback health status: {e}"
+            )
             return ServiceHealthResponse(
                 overall_status="HEALTHY",
                 service_checks=[],
@@ -634,7 +638,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 generated_at=plan_data["generated_at"],
             )
         except Exception as e:
-            logger.error(f"Failed to load game plan: {e}")
+            logger.opt(exception=True).error(f"Failed to load game plan: {e}")
             return None
 
     @app.get("/events", response_model=EventResponse)
@@ -738,7 +742,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                         metric = json.loads(line)
                         metrics.append(metric)
                     except json.JSONDecodeError as e:
-                        logger.warning(f"Malformed JSONL line: {e}")
+                        logger.opt(exception=True).warning(f"Malformed JSONL line: {e}")
                         continue
 
                 # Reverse to get newest first
@@ -749,7 +753,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         try:
             metrics = await asyncio.to_thread(_read_metrics)
         except Exception as e:
-            logger.error(f"Failed to read execution metrics: {e}")
+            logger.opt(exception=True).error(f"Failed to read execution metrics: {e}")
             raise HTTPException(status_code=500, detail="Failed to read execution metrics") from e
 
         return ExecutionMetricsListResponse(metrics=metrics, count=len(metrics))
@@ -798,7 +802,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Failed to fetch workflow detail: {e}")
+            logger.opt(exception=True).error(f"Failed to fetch workflow detail: {e}")
             raise HTTPException(status_code=500, detail="Failed to fetch workflow detail") from e
 
     @app.websocket("/ws/events")
@@ -832,7 +836,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected: {websocket.client}")
         except Exception as e:
-            logger.error(f"WebSocket error: {e}")
+            logger.opt(exception=True).error(f"WebSocket error: {e}")
         finally:
             await components.event_bus.unsubscribe(subscriber_id)
             logger.info(f"Unsubscribed: {subscriber_id}")

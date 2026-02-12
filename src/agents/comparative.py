@@ -100,7 +100,7 @@ class ComparativeAnalyst:
             )
 
         except Exception as e:
-            logger.error(f"Comparative analysis failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Comparative analysis failed for {symbol}: {e}")
             raise
 
     def _calculate_relative_metrics(self, data: ComparativeData) -> dict[str, float | None]:

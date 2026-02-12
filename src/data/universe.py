@@ -231,7 +231,7 @@ class StockUniverseFetcher:
                             continue
 
             except Exception as e:
-                logger.warning(f"Failed to fetch OHLCV batch: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch OHLCV batch: {e}")
                 continue
 
         logger.info(f"Stage 1: Fetched OHLCV for {len(all_data)} symbols")

@@ -43,7 +43,9 @@ def retry(
                     last_error = e
                     if attempt < max_attempts - 1:
                         wait_time = delay * (2**attempt)
-                        logger.warning(f"Retry {attempt + 1}/{max_attempts} after {wait_time}s: {e}")
+                        logger.opt(exception=True).warning(
+                            f"Retry {attempt + 1}/{max_attempts} after {wait_time}s: {e}"
+                        )
                         await asyncio.sleep(wait_time)
             if last_error is not None:
                 raise last_error

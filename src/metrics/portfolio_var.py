@@ -154,7 +154,9 @@ class PortfolioVaRCalculator:
                 else:
                     logger.warning(f"Insufficient data for {symbol} ({len(daily_returns)} points), excluding")
             except Exception as e:
-                logger.warning(f"Failed to fetch data for {symbol}: {e}, excluding from VaR")
+                logger.opt(exception=True).warning(
+                    f"Failed to fetch data for {symbol}: {e}, excluding from VaR"
+                )
 
         if not symbol_returns:
             return [], 0

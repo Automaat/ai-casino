@@ -118,7 +118,7 @@ class ReflectOnDecisionTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 critique = future.result()
         except Exception as e:
-            logger.error(f"Critique failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Critique failed for {symbol}: {e}")
             return f"❌ **Critique failed for {symbol}:** {e}"
 
         # Increment reflection counter

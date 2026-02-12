@@ -187,7 +187,7 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
                 try:
                     sources_list.append(DiscoverySource(source_str))
                 except ValueError:
-                    logger.warning(f"Unknown discovery source: {source_str}")
+                    logger.opt(exception=True).warning(f"Unknown discovery source: {source_str}")
 
         return DiscoveryHistoryRecord(
             symbol=orm.symbol,

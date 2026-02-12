@@ -72,7 +72,7 @@ class MonteCarloSimulator:
         try:
             np.linalg.cholesky(self.cov_matrix)
         except np.linalg.LinAlgError:
-            logger.warning("Singular covariance matrix, adding ridge regularization")
+            logger.opt(exception=True).warning("Singular covariance matrix, adding ridge regularization")
             self.cov_matrix += 1e-6 * np.eye(len(self.cov_matrix))
 
     def __repr__(self) -> str:

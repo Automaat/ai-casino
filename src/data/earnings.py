@@ -91,7 +91,7 @@ class EarningsCalendarFetcher:
                 estimate_eps=estimate_eps,
             )
         except Exception as e:
-            logger.error(f"Failed to fetch earnings for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Failed to fetch earnings for {symbol}: {e}")
             raise  # Allow tenacity to retry transient failures
 
     def _extract_earnings_date(self, calendar: object) -> date | None:
@@ -182,7 +182,7 @@ class EarningsCalendarFetcher:
         try:
             return date.fromisoformat(str(raw))
         except ValueError:
-            logger.warning(f"Unparseable earnings date: {raw}")
+            logger.opt(exception=True).warning(f"Unparseable earnings date: {raw}")
             return None
 
     def __repr__(self) -> str:

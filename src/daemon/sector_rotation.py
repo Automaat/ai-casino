@@ -132,7 +132,7 @@ class DaemonSectorRotation:
                     logger.info(f"Flagged {symbol} in weak sector: {normalized}")
 
             except Exception as e:
-                logger.warning(f"Failed to check sector for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Failed to check sector for {symbol}: {e}")
 
         return flagged
 

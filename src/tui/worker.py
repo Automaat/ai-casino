@@ -196,7 +196,7 @@ async def _run_analysis_async(
         logger.info(f"Analysis cancelled for {validated_symbol}")
         raise
     except Exception as e:
-        logger.error(f"Analysis failed for {validated_symbol}: {e}")
+        logger.opt(exception=True).error(f"Analysis failed for {validated_symbol}: {e}")
         msg = f"Analysis failed: {e}"
         raise RuntimeError(msg) from e
 
@@ -262,7 +262,9 @@ def start_analysis(
                         "did not terminate within 5s after cancellation."
                     )
             except Exception as e:
-                logger.warning(f"Error waiting for previous analysis thread for {validated_symbol}: {e}")
+                logger.opt(exception=True).warning(
+                    f"Error waiting for previous analysis thread for {validated_symbol}: {e}"
+                )
 
     def noop_result(_: dict) -> None:
         pass
@@ -369,7 +371,7 @@ async def _run_screening_async(params: ScreeningParams) -> dict:
         logger.info(f"Screening cancelled for {params.criteria}")
         raise
     except Exception as e:
-        logger.error(f"Screening failed: {e}")
+        logger.opt(exception=True).error(f"Screening failed: {e}")
         msg = f"Screening failed: {e}"
         raise RuntimeError(msg) from e
 

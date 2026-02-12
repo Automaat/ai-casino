@@ -117,7 +117,7 @@ class BaseResearcher(ABC):
             key_points = getattr(llm_response, self._get_key_points_field())
             target = getattr(llm_response, self._get_target_field())
         except (StructuredOutputError, AttributeError) as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
             thesis = self._extract_thesis(response)
             key_points = self._extract_key_points(response)

@@ -213,7 +213,7 @@ class DaemonState(BaseModel):
             logger.info(f"Loaded daemon state from {expanded_path}")
             return cls.model_validate(data)
         except Exception as e:
-            logger.warning(f"Failed to load state: {e}, starting fresh")
+            logger.opt(exception=True).warning(f"Failed to load state: {e}, starting fresh")
             return cls()
 
     def save(self, path: str) -> None:
@@ -230,7 +230,7 @@ class DaemonState(BaseModel):
                 json.dump(self.model_dump(mode="json"), f, indent=2, default=str)
             logger.debug(f"Saved daemon state to {expanded_path}")
         except Exception as e:
-            logger.error(f"Failed to save state: {e}")
+            logger.opt(exception=True).error(f"Failed to save state: {e}")
 
     # ===================
     # Trading Manager API

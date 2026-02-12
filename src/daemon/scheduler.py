@@ -534,7 +534,7 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.prefetch_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed prefetch_time '{self.prefetch_time}': {e}")
+            logger.opt(exception=True).warning(f"Malformed prefetch_time '{self.prefetch_time}': {e}")
             return False
 
         current_minutes = now.hour * 60 + now.minute
@@ -557,7 +557,9 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.pre_market_refresh_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed pre_market_refresh_time '{self.pre_market_refresh_time}': {e}")
+            logger.opt(exception=True).warning(
+                f"Malformed pre_market_refresh_time '{self.pre_market_refresh_time}': {e}"
+            )
             return False
 
         current_minutes = now.hour * 60 + now.minute
@@ -675,7 +677,7 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.tearsheet_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed tearsheet_time '{self.tearsheet_time}': {e}")
+            logger.opt(exception=True).warning(f"Malformed tearsheet_time '{self.tearsheet_time}': {e}")
             return False
 
         current_minutes = now.hour * 60 + now.minute
@@ -701,7 +703,9 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.signal_tracking_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed signal_tracking_time '{self.signal_tracking_time}': {e}")
+            logger.opt(exception=True).warning(
+                f"Malformed signal_tracking_time '{self.signal_tracking_time}': {e}"
+            )
             return False
 
         current_minutes = now.hour * 60 + now.minute
@@ -728,7 +732,7 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.rebalancing_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed rebalancing_time '{self.rebalancing_time}': {e}")
+            logger.opt(exception=True).warning(f"Malformed rebalancing_time '{self.rebalancing_time}': {e}")
             return False
 
         current_minutes = now.hour * 60 + now.minute
@@ -753,7 +757,7 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.game_plan_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Malformed game_plan_time '{self.game_plan_time}': {e}")
+            logger.opt(exception=True).warning(f"Malformed game_plan_time '{self.game_plan_time}': {e}")
             return False
 
         current_minutes = now.hour * 60 + now.minute
@@ -778,7 +782,9 @@ class MarketScheduler:
         try:
             target_hour, target_minute = map(int, self.monte_carlo_time.split(":"))
         except (ValueError, AttributeError) as e:
-            logger.warning(f"Invalid monte_carlo_time format: {self.monte_carlo_time}: {e}")
+            logger.opt(exception=True).warning(
+                f"Invalid monte_carlo_time format: {self.monte_carlo_time}: {e}"
+            )
             return False
 
         current_minutes = now.hour * 60 + now.minute

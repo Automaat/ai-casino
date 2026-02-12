@@ -59,7 +59,7 @@ class CycleProfiler:
 
             return True
         except ImportError:
-            logger.warning("yappi not installed, profiling disabled")
+            logger.opt(exception=True).warning("yappi not installed, profiling disabled")
             return False
 
     @contextlib.asynccontextmanager

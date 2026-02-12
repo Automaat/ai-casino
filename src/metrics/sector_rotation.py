@@ -160,7 +160,7 @@ class SectorRotationAnalyzer:
                 col = data["Close"][ticker].dropna() if len(tickers) > 1 else data["Close"].dropna()
                 closes[ticker] = col.tolist()
             except (KeyError, TypeError) as e:
-                logger.warning(f"Failed to extract close prices for {ticker}: {e}")
+                logger.opt(exception=True).warning(f"Failed to extract close prices for {ticker}: {e}")
 
         return closes
 

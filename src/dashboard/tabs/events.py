@@ -82,7 +82,7 @@ def render(client: DaemonAPIClient) -> list:  # noqa: ARG001
         ]
 
     except Exception as e:
-        logger.error(f"Events tab render failed: {e}")
+        logger.opt(exception=True).error(f"Events tab render failed: {e}")
         return [dbc.Alert(f"Failed to load events: {e!s}", color="danger")]
 
 
@@ -149,7 +149,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                 "events": events_data,
             }
         except Exception as e:
-            logger.error(f"Events refresh failed: {e}")
+            logger.opt(exception=True).error(f"Events refresh failed: {e}")
             fallback = {"timestamp": datetime.now(UTC).isoformat(), "events": []}
             return current_data or fallback
 
@@ -239,7 +239,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             degradation_history = client.get_degradation_history(limit=50)
             return _build_degradation_timeline(degradation_history.records)
         except Exception as e:
-            logger.error(f"Degradation timeline refresh failed: {e}")
+            logger.opt(exception=True).error(f"Degradation timeline refresh failed: {e}")
             return dbc.Alert("Degradation history unavailable", color="warning", className="mb-3")
 
     @app.callback(

@@ -174,7 +174,7 @@ class OllamaProvider(BaseLLMProvider):
             except (json.JSONDecodeError, ValidationError) as e:
                 last_error = e
                 if attempt == 0:
-                    logger.warning(f"Structured output validation failed, retrying: {e}")
+                    logger.opt(exception=True).warning(f"Structured output validation failed, retrying: {e}")
                     error_feedback = f"\n\nPrevious response was invalid: {e}\nPlease provide valid JSON."
                     augmented_messages[-1] = {
                         "role": "user",

@@ -115,7 +115,7 @@ class AnalyzeSymbolTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 return future.result()
         except Exception as e:
-            logger.error(f"Analysis failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Analysis failed for {symbol}: {e}")
             return f"Analysis failed for {symbol}: {e}"
 
     async def _run_analysis(
@@ -178,7 +178,7 @@ class AnalyzeSymbolTool(BaseTool):
 
             return None
         except Exception as e:
-            logger.warning(f"Failed to get position context: {e}")
+            logger.opt(exception=True).warning(f"Failed to get position context: {e}")
             return None
 
     def _format_result(self, result: TradingWorkflowResult) -> str:

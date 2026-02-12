@@ -192,6 +192,6 @@ async def validate_strategy_with_backtest(  # noqa: PLR0913
         return BacktestValidationOutput(backtest_validation=validation, warnings=warnings)
 
     except Exception as e:
-        logger.warning(f"Backtest validation error: {e}, continuing without validation")
+        logger.opt(exception=True).warning(f"Backtest validation error: {e}, continuing without validation")
         warning = f"Backtest error: {e}"
         return BacktestValidationOutput(backtest_validation=None, warnings=[warning])

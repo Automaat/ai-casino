@@ -86,7 +86,7 @@ class TradingStateManager(StateManager):
                     f"{input_data.symbol} {input_data.signal}"
                 )
             except Exception as e:
-                logger.error(f"Failed to schedule analysis record persistence: {e}")
+                logger.opt(exception=True).error(f"Failed to schedule analysis record persistence: {e}")
                 raise
 
         # Keep in-memory list (capped for transition period)

@@ -168,7 +168,7 @@ class TrumpAnalyst:
             confidence = llm_response.confidence
             interpretation = llm_response.interpretation
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(user_prompt, system=system_prompt, temperature=0.4)
             sentiment = self._extract_sentiment(response)
             signal = self._extract_signal(response)

@@ -428,7 +428,7 @@ class RiskManagementAgent:
 
             return var_ok and cvar_ok
         except Exception as e:
-            logger.error(f"Portfolio VaR validation failed: {e}")
+            logger.opt(exception=True).error(f"Portfolio VaR validation failed: {e}")
             warnings.append(f"Portfolio VaR check failed: {e}")
             return True
 
@@ -633,7 +633,7 @@ class RiskManagementAgent:
 
             logger.debug(f"Audit logged: {assessment.symbol} {assessment.action.value}")
         except Exception as e:
-            logger.error(f"Audit logging failed: {e}")
+            logger.opt(exception=True).error(f"Audit logging failed: {e}")
 
     # Delegation methods for backward compatibility with tests
     def _get_atr(self, market_data: pd.DataFrame, period: int = 14) -> float | None:

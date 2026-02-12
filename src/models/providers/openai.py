@@ -111,7 +111,9 @@ class OpenAIProvider(BaseLLMProvider):
                 try:
                     arguments = json.loads(tc.function.arguments)
                 except json.JSONDecodeError as exc:
-                    logger.error(f"Failed to parse tool call arguments for tool '{tc.function.name}': {exc}")
+                    logger.opt(exception=True).error(
+                        f"Failed to parse tool call arguments for tool '{tc.function.name}': {exc}"
+                    )
                     return None, None
 
                 tool_calls.append(

@@ -98,7 +98,7 @@ class EventBus:
                     q.put_nowait(event)
                 except queue.Full:
                     dropped_count += 1
-                    logger.warning(
+                    logger.opt(exception=True).warning(
                         f"Dropped event {event.event_type} for subscriber {subscriber_id} (queue full)"
                     )
 
@@ -108,7 +108,7 @@ class EventBus:
                 )
 
         except Exception as e:
-            logger.error(f"EventBus publish failed: {e}")
+            logger.opt(exception=True).error(f"EventBus publish failed: {e}")
 
     def get_history(self, limit: int | None = None) -> list[DashboardEvent]:
         """Get event history, newest first.

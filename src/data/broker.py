@@ -171,7 +171,7 @@ class AlpacaBroker:
             )
         except Exception as e:
             msg = f"Failed to fetch account info: {e}"
-            logger.error(msg)
+            logger.opt(exception=True).error(msg)
             raise BrokerAPIError(msg) from e
 
     def submit_order(
@@ -240,7 +240,7 @@ class AlpacaBroker:
             return order_status
         except Exception as e:
             msg = f"Failed to submit order: {e}"
-            logger.error(msg)
+            logger.opt(exception=True).error(msg)
             raise BrokerAPIError(msg) from e
 
     def get_order_status(self, order_id: str) -> OrderStatus:
@@ -267,7 +267,7 @@ class AlpacaBroker:
                 filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
             )
         except Exception as e:
-            logger.error(f"Failed to get order status: {e}")
+            logger.opt(exception=True).error(f"Failed to get order status: {e}")
             raise
 
     def submit_stop_order(self, symbol: str, qty: int, stop_price: float) -> OrderStatus:
@@ -319,7 +319,7 @@ class AlpacaBroker:
             )
         except Exception as e:
             msg = f"Failed to submit order: {e}"
-            logger.error(msg)
+            logger.opt(exception=True).error(msg)
             raise BrokerAPIError(msg) from e
 
     def cancel_order(self, order_id: str) -> None:
@@ -332,7 +332,7 @@ class AlpacaBroker:
             self.client.cancel_order_by_id(order_id=order_id)
             logger.info(f"Cancelled order: {order_id}")
         except Exception as e:
-            logger.error(f"Failed to cancel order: {e}")
+            logger.opt(exception=True).error(f"Failed to cancel order: {e}")
             raise
 
     def is_market_open(self) -> bool:
@@ -345,7 +345,7 @@ class AlpacaBroker:
             clock: Clock = self.client.get_clock()  # type: ignore[assignment]
             return clock.is_open
         except Exception as e:
-            logger.warning(f"Failed to check market status: {e}")
+            logger.opt(exception=True).warning(f"Failed to check market status: {e}")
             return False
 
     def __repr__(self) -> str:

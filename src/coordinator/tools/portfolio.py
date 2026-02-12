@@ -89,7 +89,7 @@ class PortfolioStatusTool(BaseTool):
             return "\n".join(lines)
 
         except Exception as e:
-            logger.error(f"Portfolio status check failed: {e}")
+            logger.opt(exception=True).error(f"Portfolio status check failed: {e}")
             return f"Failed to fetch portfolio status: {e}"
 
     def __repr__(self) -> str:

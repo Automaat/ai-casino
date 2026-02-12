@@ -10,6 +10,7 @@ from loguru import logger
 from pydantic import BaseModel
 from rich.console import Console
 
+from src.daemon.degradation import AgentType
 from src.daemon.notification_helper import DaemonNotificationHelper
 from src.strategies.session import TradingSession
 from src.workflows.types import TradingWorkflowResult
@@ -147,8 +148,13 @@ class DaemonCycleOrchestrator:
         from src.daemon.degradation import DegradationTier
 
         if degradation_context.tier == DegradationTier.HALTED:
-            logger.warning(f"Analysis HALTED: {degradation_context.halt_reason}")
+            logger.warning(
+                f"Analysis HALTED: {degradation_context.halt_reason} | "
+                f"Unavailable services: {', '.join(degradation_context.unavailable_services) or 'none'} | "
+                f"Available agents: {len(degradation_context.available_agents)}/{len(AgentType)}"
+            )
             console.print(f"[red]HALTED: {degradation_context.halt_reason}[/red]")
+            console.print(f"[dim]Unavailable: {', '.join(degradation_context.unavailable_services)}[/dim]")
 
             # Notify on every halted cycle
             if self.components.notification_service:
@@ -168,11 +174,18 @@ class DaemonCycleOrchestrator:
 
         # Log degradation status if not FULL
         if degradation_context.tier != DegradationTier.FULL:
+            unavailable_agents = set(AgentType) - degradation_context.available_agents
             logger.warning(
-                f"Degraded mode: {degradation_context.tier}, "
-                f"unavailable: {degradation_context.unavailable_services}"
+                f"Degraded mode: {degradation_context.tier} | "
+                f"Unavailable services: {', '.join(degradation_context.unavailable_services)} | "
+                f"Unavailable agents: {', '.join(str(a) for a in unavailable_agents)} | "
+                f"Confidence adjustment: {degradation_context.confidence_adjustment:.2f}"
             )
             console.print(f"[yellow]DEGRADED: {degradation_context.tier}[/yellow]")
+            console.print(
+                f"[dim]Unavailable: {', '.join(degradation_context.unavailable_services)} | "
+                f"Confidence: {degradation_context.confidence_adjustment:.0%}[/dim]"
+            )
 
             # Notify on every degraded cycle
             if self.components.notification_service:
@@ -445,4 +458,4 @@ class DaemonCycleOrchestrator:
                 DashboardEvent(event_type=EventType[event_type], data=data)
             )
         except Exception as e:
-            logger.error(f"Failed to publish {event_type} event: {e}")
+            logger.opt(exception=True).error(f"Failed to publish {event_type} event: {e}")

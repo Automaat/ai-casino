@@ -142,7 +142,7 @@ class NotificationService:
             try:
                 await self._send_to_channel(name, ch, message)
             except Exception as e:
-                logger.error(f"Unexpected error sending to channel {name}: {e}")
+                logger.opt(exception=True).error(f"Unexpected error sending to channel {name}: {e}")
 
         # Run sends in parallel using TaskGroup
         if self.channels:
@@ -170,7 +170,7 @@ class NotificationService:
             else:
                 logger.warning(f"Failed to send notification via {name}")
         except Exception as e:
-            logger.error(f"Error sending notification via {name}: {e}")
+            logger.opt(exception=True).error(f"Error sending notification via {name}: {e}")
 
     def __repr__(self) -> str:
         """Return string representation."""

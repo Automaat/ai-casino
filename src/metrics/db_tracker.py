@@ -297,7 +297,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             await asyncio.to_thread(_write_report)
             logger.info(f"Saved metrics report to {path}")
         except Exception as e:
-            logger.error(f"Failed to save report: {e}")
+            logger.opt(exception=True).error(f"Failed to save report: {e}")
             raise
 
     def __repr__(self) -> str:

@@ -468,19 +468,19 @@ class DaemonAPIClient:
         try:
             positions = self.get_positions()
         except Exception as e:
-            logger.warning(f"Failed to fetch positions: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch positions: {e}")
 
         snapshots = None
         try:
             snapshots = self.get_snapshots(days)
         except Exception as e:
-            logger.warning(f"Failed to fetch snapshots: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch snapshots: {e}")
 
         rebalance = None
         try:
             rebalance = self.get_rebalance()
         except Exception as e:
-            logger.warning(f"Failed to fetch rebalance: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch rebalance: {e}")
 
         return {"positions": positions, "snapshots": snapshots, "rebalance": rebalance}
 
@@ -506,7 +506,7 @@ class DaemonAPIClient:
                 response.raise_for_status()
                 return PositionsResponse.model_validate(response.json())
             except Exception as e:
-                logger.warning(f"Failed to parse positions: {e}")
+                logger.opt(exception=True).warning(f"Failed to parse positions: {e}")
         elif isinstance(response, Exception):
             logger.warning(f"Failed to fetch positions: {response}")
         return None
@@ -518,7 +518,7 @@ class DaemonAPIClient:
                 response.raise_for_status()
                 return SnapshotsResponse.model_validate(response.json())
             except Exception as e:
-                logger.warning(f"Failed to parse snapshots: {e}")
+                logger.opt(exception=True).warning(f"Failed to parse snapshots: {e}")
         elif isinstance(response, Exception):
             logger.warning(f"Failed to fetch snapshots: {response}")
         return None
@@ -531,7 +531,7 @@ class DaemonAPIClient:
                 data = response.json()
                 return RebalanceResponse.model_validate(data) if data else None
             except Exception as e:
-                logger.warning(f"Failed to parse rebalance: {e}")
+                logger.opt(exception=True).warning(f"Failed to parse rebalance: {e}")
         elif isinstance(response, Exception):
             logger.warning(f"Failed to fetch rebalance: {response}")
         return None

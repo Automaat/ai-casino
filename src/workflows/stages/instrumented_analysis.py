@@ -326,7 +326,7 @@ async def _build_and_persist_result(  # noqa: PLR0913
         try:
             persist_jsonl(execution_metrics)
         except Exception as e:
-            logger.error(f"Failed to persist execution metrics (continuing): {e}")
+            logger.opt(exception=True).error(f"Failed to persist execution metrics (continuing): {e}")
 
     if workflow.metrics_tracker:
         try:
@@ -340,7 +340,7 @@ async def _build_and_persist_result(  # noqa: PLR0913
                     result, strategy_name=strategy_output.strategy_name, is_paper_trade=is_paper
                 )
         except Exception as e:
-            logger.error(f"Failed to record metrics (continuing): {e}")
+            logger.opt(exception=True).error(f"Failed to record metrics (continuing): {e}")
 
     if (
         workflow.snapshot_on_trade

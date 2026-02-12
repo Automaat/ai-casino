@@ -57,7 +57,7 @@ class SnapshotStateManager(StateManager):
                     f"value={snapshot.portfolio_value}"
                 )
             except Exception as e:
-                logger.error(f"Failed to persist portfolio snapshot to database: {e}")
+                logger.opt(exception=True).error(f"Failed to persist portfolio snapshot to database: {e}")
                 raise
 
     def __repr__(self) -> str:
