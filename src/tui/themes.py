@@ -78,56 +78,93 @@ def _detect_ghostty_theme() -> bool | None:
     return None
 
 
-def detect_dark_mode() -> bool:
+def detect_dark_mode(theme_config: str | None = None) -> bool:
     """Detect OS dark mode preference.
+
+    Args:
+        theme_config: Theme override from config (nord-dark, nord-light, or None for auto-detect)
 
     Returns:
         True for dark mode, False for light mode.
     """
-    # 1. AI_CASINO_THEME env override
-    override = os.getenv("AI_CASINO_THEME", "").lower()
-    if override == "dark":
-        logger.debug("Theme override: dark")
-        return True
-    if override == "light":
-        logger.debug("Theme override: light")
-        return False
+    # 1. Config theme override
+    config_result = _check_config_override(theme_config)
+    if config_result is not None:
+        return config_result
 
     # 2. Ghostty terminal config
-    if os.getenv("TERM_PROGRAM") == "ghostty":
-        result = _detect_ghostty_theme()
-        if result is not None:
-            return result
+    ghostty_result = _check_ghostty_terminal()
+    if ghostty_result is not None:
+        return ghostty_result
 
     # 3. COLORFGBG env (iTerm2, Konsole)
-    colorfgbg = os.getenv("COLORFGBG", "")
-    if colorfgbg:
-        parts = colorfgbg.split(";")
-        if len(parts) >= 2:
-            try:
-                bg_color = int(parts[-1])
-                is_dark = bg_color < 8
-                logger.debug(f"COLORFGBG detection: {'dark' if is_dark else 'light'}")
-                return is_dark
-            except ValueError:
-                pass
+    colorfgbg_result = _check_colorfgbg_env()
+    if colorfgbg_result is not None:
+        return colorfgbg_result
 
     # 4. macOS detection via defaults (system-wide fallback)
-    if sys.platform == "darwin":
-        try:
-            result = subprocess.run(
-                ["/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle"],
-                capture_output=True,
-                text=True,
-                timeout=1,
-                check=False,
-            )
-            is_dark = result.returncode == 0 and "dark" in result.stdout.lower()
-            logger.debug(f"macOS theme detection: {'dark' if is_dark else 'light'}")
-            return is_dark
-        except Exception as e:
-            logger.debug(f"macOS theme detection failed: {e}")
+    macos_result = _check_macos_theme()
+    if macos_result is not None:
+        return macos_result
 
     # 5. Default to dark
     logger.debug("Theme detection: defaulting to dark")
     return True
+
+
+def _check_config_override(theme_config: str | None) -> bool | None:
+    """Check config theme override. Returns True=dark, False=light, None=no override."""
+    if not theme_config:
+        return None
+    override = theme_config.lower()
+    if "dark" in override:
+        logger.debug("Theme override from config: dark")
+        return True
+    if "light" in override:
+        logger.debug("Theme override from config: light")
+        return False
+    return None
+
+
+def _check_ghostty_terminal() -> bool | None:
+    """Check Ghostty terminal theme. Returns True=dark, False=light, None=not Ghostty."""
+    if os.getenv("TERM_PROGRAM") != "ghostty":
+        return None
+    return _detect_ghostty_theme()
+
+
+def _check_colorfgbg_env() -> bool | None:
+    """Check COLORFGBG env var. Returns True=dark, False=light, None=not available."""
+    colorfgbg = os.getenv("COLORFGBG", "")
+    if not colorfgbg:
+        return None
+    parts = colorfgbg.split(";")
+    if len(parts) < 2:
+        return None
+    try:
+        bg_color = int(parts[-1])
+        is_dark = bg_color < 8
+        logger.debug(f"COLORFGBG detection: {'dark' if is_dark else 'light'}")
+        return is_dark
+    except ValueError:
+        return None
+
+
+def _check_macos_theme() -> bool | None:
+    """Check macOS theme. Returns True=dark, False=light, None=not macOS or failed."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        result = subprocess.run(
+            ["/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+            check=False,
+        )
+        is_dark = result.returncode == 0 and "dark" in result.stdout.lower()
+        logger.debug(f"macOS theme detection: {'dark' if is_dark else 'light'}")
+        return is_dark
+    except Exception as e:
+        logger.debug(f"macOS theme detection failed: {e}")
+        return None

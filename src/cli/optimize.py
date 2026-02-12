@@ -1,6 +1,5 @@
 """Optimize subcommand for strategy optimization."""
 
-import os
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -116,15 +115,15 @@ def optimize(
     end: Annotated[str | None, typer.Option("--end", help="End date (YYYY-MM-DD)")] = None,
 ) -> None:
     """Optimize trading strategy parameters."""
-    from dotenv import load_dotenv
+    from src.daemon.config import DaemonConfig
 
-    load_dotenv()
+    daemon_config = DaemonConfig()
 
     logger.remove()
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO"),
+        level=daemon_config.logging.log_level,
         filter=sanitize_log_record,
     )
 

@@ -1,6 +1,5 @@
 """QuantStats-based performance reporting."""
 
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import SupportsFloat, cast
@@ -36,13 +35,13 @@ def _to_float(value: SupportsFloat | pd.Series) -> float:
 class QuantStatsReporter:
     """Generate QuantStats performance tearsheets."""
 
-    def __init__(self, risk_free_rate: float | None = None) -> None:
+    def __init__(self, risk_free_rate: float) -> None:
         """Initialize QuantStats reporter.
 
         Args:
-            risk_free_rate: Annual risk-free rate (default from env or 0.02)
+            risk_free_rate: Annual risk-free rate
         """
-        self.risk_free_rate = risk_free_rate or float(os.getenv("RISK_FREE_RATE", "0.02"))
+        self.risk_free_rate = risk_free_rate
         logger.info(f"Initialized QuantStatsReporter (risk_free_rate={self.risk_free_rate:.4f})")
 
     def generate_tearsheet(

@@ -58,8 +58,9 @@ def create_llm_client(
         api_key = None
 
     llm_client = LLMClient(
-        provider=daemon_config.llm.provider,
-        model=daemon_config.llm.model,
+        provider=provider,
+        model=daemon_config.llm.model or os.getenv("LLM_MODEL", "qwen3:14b"),
+        base_url=daemon_config.llm.ollama_base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         api_key=api_key,
         openai_base_url=resolve_config_or_env(
             daemon_config.api_keys.openai_api_base,
@@ -174,32 +175,32 @@ def create_optuna_optimizer(n_trials: int = 100) -> OptunaOptimizer:
     return OptunaOptimizer(n_trials=n_trials)
 
 
-def create_metrics_tracker(risk_free_rate: float | None = None) -> MetricsTracker:
-    """Create MetricsTracker with lazy import.
+def create_metrics_tracker(daemon_config: DaemonConfig) -> MetricsTracker:
+    """Create MetricsTracker with config.
 
     Args:
-        risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
+        daemon_config: Daemon configuration
 
     Returns:
         MetricsTracker instance
     """
     from src.metrics.tracker import MetricsTracker
 
-    return MetricsTracker(risk_free_rate=risk_free_rate)
+    return MetricsTracker(risk_free_rate=daemon_config.metrics.risk_free_rate)
 
 
-def create_quantstats_reporter(risk_free_rate: float | None = None) -> QuantStatsReporter:
-    """Create QuantStatsReporter with lazy import.
+def create_quantstats_reporter(daemon_config: DaemonConfig) -> QuantStatsReporter:
+    """Create QuantStatsReporter with config.
 
     Args:
-        risk_free_rate: Annual risk-free rate (default from env or 0.02)
+        daemon_config: Daemon configuration
 
     Returns:
         QuantStatsReporter instance
     """
     from src.metrics.quantstats_reporter import QuantStatsReporter
 
-    return QuantStatsReporter(risk_free_rate=risk_free_rate)
+    return QuantStatsReporter(risk_free_rate=daemon_config.metrics.risk_free_rate)
 
 
 def create_stock_screener(

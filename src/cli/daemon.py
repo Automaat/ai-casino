@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -33,18 +32,7 @@ def daemon(
     ] = None,
 ) -> None:
     """Run autonomous trading daemon (24/7 scheduled analysis)."""
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-    logger.remove()
-    logger.add(
-        sys.stderr,
-        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO"),
-        filter=sanitize_log_record,
-    )
-
+    # Load config first to get log level
     try:
         if config is not None:
             if not config.exists():
@@ -53,7 +41,19 @@ def daemon(
             daemon_config = DaemonConfig.from_yaml(config)
         else:
             daemon_config = DaemonConfig()
+    except Exception as e:
+        console.print(f"[bold red]Config error:[/bold red] {e}")
+        raise typer.Exit(1) from e
 
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+        level=daemon_config.logging.log_level,
+        filter=sanitize_log_record,
+    )
+
+    try:
         runner = DaemonRunner(daemon_config)
         asyncio.run(runner.run())
     except KeyboardInterrupt:
@@ -75,15 +75,14 @@ def trump_daemon(
     Monitors Trump's Truth Social posts and triggers stock analysis
     when market-relevant posts are detected.
     """
-    from dotenv import load_dotenv
-
-    load_dotenv()
+    # Load default config for log level
+    daemon_config = DaemonConfig()
 
     logger.remove()
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO"),
+        level=daemon_config.logging.log_level,
         filter=sanitize_log_record,
     )
 
@@ -258,20 +257,18 @@ def events_daemon(
     Monitors real-time events (news, social, filings, anomalies) and triggers
     immediate trading analysis for high-relevance signals.
     """
-    from dotenv import load_dotenv
-
-    load_dotenv()
+    # Load config first to get log level
+    daemon_config = _load_daemon_config(config)
 
     logger.remove()
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO"),
+        level=daemon_config.logging.log_level,
         filter=sanitize_log_record,
     )
 
     try:
-        daemon_config = _load_daemon_config(config)
         _validate_watchers_config(daemon_config)
 
         container = create_container()

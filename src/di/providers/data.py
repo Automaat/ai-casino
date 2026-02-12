@@ -43,10 +43,7 @@ def create_market_fetcher(
 
     api_key = None
     if use_alpha_vantage:
-        api_key = resolve_config_or_env(
-            daemon_config.api_keys.alpha_vantage_api_key,
-            "ALPHA_VANTAGE_API_KEY",
-        )
+        api_key = daemon_config.api_keys.alpha_vantage_api_key
 
     return MarketDataFetcher(
         use_alpha_vantage=use_alpha_vantage,
@@ -84,10 +81,7 @@ def create_news_fetcher(
     Returns:
         Configured NewsFetcher
     """
-    api_key = resolve_config_or_env(
-        daemon_config.api_keys.marketaux_api_key,
-        "MARKETAUX_API_KEY",
-    )
+    api_key = daemon_config.api_keys.marketaux_api_key
     return NewsFetcher(
         api_key=api_key,
         historical_cache=historical_cache,
@@ -107,10 +101,7 @@ def create_fundamental_fetcher(
     Returns:
         Configured FundamentalDataFetcher
     """
-    api_key = resolve_config_or_env(
-        daemon_config.api_keys.alpha_vantage_api_key,
-        "ALPHA_VANTAGE_API_KEY",
-    )
+    api_key = daemon_config.api_keys.alpha_vantage_api_key
     return FundamentalDataFetcher(
         api_key=api_key,
         historical_cache=historical_cache,
@@ -128,10 +119,7 @@ def create_finnhub_fetcher(
     Returns:
         Configured FinnhubFetcher
     """
-    api_key = resolve_config_or_env(
-        daemon_config.api_keys.finnhub_api_key,
-        "FINNHUB_API_KEY",
-    )
+    api_key = daemon_config.api_keys.finnhub_api_key
     return FinnhubFetcher(
         api_key=api_key,
         cache_dir="data/cache/finnhub",
@@ -151,18 +139,9 @@ def create_reddit_fetcher(
     Returns:
         Configured RedditFetcher
     """
-    client_id = resolve_config_or_env(
-        daemon_config.api_keys.reddit_client_id,
-        "REDDIT_CLIENT_ID",
-    )
-    client_secret = resolve_config_or_env(
-        daemon_config.api_keys.reddit_client_secret,
-        "REDDIT_CLIENT_SECRET",
-    )
-    user_agent = resolve_config_or_env(
-        daemon_config.api_keys.reddit_user_agent,
-        "REDDIT_USER_AGENT",
-    )
+    client_id = daemon_config.api_keys.reddit_client_id
+    client_secret = daemon_config.api_keys.reddit_client_secret
+    user_agent = daemon_config.api_keys.reddit_user_agent
     return RedditFetcher(
         client_id=client_id,
         client_secret=client_secret,
@@ -247,36 +226,18 @@ def create_alpaca_broker(
     trading_mode = daemon_config.trading_mode.value
 
     if trading_mode == "paper":
-        paper_api_key = resolve_config_or_env(
-            daemon_config.api_keys.alpaca_paper_api_key,
-            "ALPACA_PAPER_API_KEY",
-        )
-        paper_secret_key = resolve_config_or_env(
-            daemon_config.api_keys.alpaca_paper_secret_key,
-            "ALPACA_PAPER_SECRET_KEY",
-        )
+        paper_api_key = daemon_config.api_keys.alpaca_paper_api_key
+        paper_secret_key = daemon_config.api_keys.alpaca_paper_secret_key
 
         if paper_api_key and paper_secret_key:
             api_key = paper_api_key
             secret_key = paper_secret_key
         else:
-            api_key = resolve_config_or_env(
-                daemon_config.api_keys.alpaca_api_key,
-                "ALPACA_API_KEY",
-            )
-            secret_key = resolve_config_or_env(
-                daemon_config.api_keys.alpaca_secret_key,
-                "ALPACA_SECRET_KEY",
-            )
+            api_key = daemon_config.api_keys.alpaca_api_key
+            secret_key = daemon_config.api_keys.alpaca_secret_key
     else:  # live
-        api_key = resolve_config_or_env(
-            daemon_config.api_keys.alpaca_api_key,
-            "ALPACA_API_KEY",
-        )
-        secret_key = resolve_config_or_env(
-            daemon_config.api_keys.alpaca_secret_key,
-            "ALPACA_SECRET_KEY",
-        )
+        api_key = daemon_config.api_keys.alpaca_api_key
+        secret_key = daemon_config.api_keys.alpaca_secret_key
 
     return AlpacaBroker(
         api_key=api_key,

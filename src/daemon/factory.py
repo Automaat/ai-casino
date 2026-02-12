@@ -187,6 +187,7 @@ class DaemonFactory:
             from src.daemon.tearsheet import DaemonTearsheetGenerator
 
             tearsheet_generator = DaemonTearsheetGenerator(
+                risk_free_rate=self.config.metrics.risk_free_rate,
                 broker=broker,
                 market_fetcher=None,
             )

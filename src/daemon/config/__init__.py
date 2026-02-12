@@ -25,6 +25,7 @@ from src.daemon.config.infrastructure import (
     LLMConfig,
     PrefetchConfig,
 )
+from src.daemon.config.logging import LoggingConfig
 from src.daemon.config.notifications import NotificationsConfig, TelegramNotificationConfig
 from src.daemon.config.portfolio import (
     CorrelationAuditConfig,
@@ -33,7 +34,7 @@ from src.daemon.config.portfolio import (
     PortfolioRebalancingConfig,
 )
 from src.daemon.config.profiling import ProfilingConfig
-from src.daemon.config.reporting import HealthConfig, ReportingConfig, SignalTrackingConfig
+from src.daemon.config.reporting import HealthConfig, MetricsConfig, ReportingConfig, SignalTrackingConfig
 from src.daemon.config.risk import (
     MonteCarloConfig,
     PositionManagementConfig,
@@ -55,6 +56,7 @@ from src.daemon.config.trading import (
     ScheduleConfig,
     StateConfig,
 )
+from src.daemon.config.ui import UIConfig
 
 __all__ = [
     "AnalysisOrchestratorConfig",
@@ -74,6 +76,8 @@ __all__ = [
     "JournalConfig",
     "LLMConfig",
     "LiquidityFilterConfig",
+    "LoggingConfig",
+    "MetricsConfig",
     "MonteCarloConfig",
     "NewsWatcherConfig",
     "NotificationTrigger",
@@ -97,6 +101,7 @@ __all__ = [
     "StateConfig",
     "TelegramNotificationConfig",
     "TradingMode",
+    "UIConfig",
 ]
 
 
@@ -145,6 +150,9 @@ class DaemonConfig(BaseModel):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     coordinator: CoordinatorConfig = Field(default_factory=CoordinatorConfig)
     profiling: ProfilingConfig = Field(default_factory=ProfilingConfig)
+    metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> DaemonConfig:
@@ -197,6 +205,9 @@ class DaemonConfig(BaseModel):
         database_data = daemon_data.pop("database", {}) or {}
         coordinator_data = daemon_data.pop("coordinator", {}) or {}
         profiling_data = daemon_data.pop("profiling", {}) or {}
+        metrics_data = daemon_data.pop("metrics", {}) or {}
+        ui_data = daemon_data.pop("ui", {}) or {}
+        logging_data = daemon_data.pop("logging", {}) or {}
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
@@ -246,6 +257,9 @@ class DaemonConfig(BaseModel):
             database=DatabaseConfig(**database_data),
             coordinator=CoordinatorConfig(**coordinator_data),
             profiling=ProfilingConfig(**profiling_data),
+            metrics=MetricsConfig(**metrics_data),
+            ui=UIConfig(**ui_data),
+            logging=LoggingConfig(**logging_data),
         )
 
     def __repr__(self) -> str:

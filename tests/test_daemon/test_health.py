@@ -198,7 +198,8 @@ class TestCheckLLM:
         assert result.status == ServiceStatus.UNHEALTHY
 
     async def test_anthropic_healthy(self, checker: HealthChecker):
-        with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test"}):
+        checker.config.llm.provider = "anthropic"
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
             result = await checker._check_llm()
 
         assert result.status == ServiceStatus.HEALTHY

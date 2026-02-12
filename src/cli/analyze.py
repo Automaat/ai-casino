@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from src.daemon.config import DaemonConfig
 from src.di.container import AppContainer, create_container
 from src.metrics.execution import WorkflowExecutionMetrics
 from src.metrics.tracker import MetricsTracker
@@ -408,7 +409,9 @@ async def _analyze_stock(
         else:
             console.print("[yellow]Warning: Trading enabled but Alpaca credentials not found[/yellow]")
 
-    metrics_tracker = MetricsTracker() if show_metrics else None
+    # Load config for metrics tracker
+    config = DaemonConfig()
+    metrics_tracker = MetricsTracker(config.metrics.risk_free_rate) if show_metrics else None
 
     workflow_factory = _select_workflow_factory(container, use_meta_agent, trump_mode)
     workflow = workflow_factory(
@@ -439,15 +442,16 @@ def analyze(
     metrics: Annotated[bool, typer.Option("--metrics", help="Show execution performance metrics")] = False,
 ) -> None:
     """Analyze a stock and generate trading recommendations."""
-    from dotenv import load_dotenv
+    from src.daemon.config import DaemonConfig
 
-    load_dotenv()
+    # Load default config for log level
+    daemon_config = DaemonConfig()
 
     logger.remove()
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO"),
+        level=daemon_config.logging.log_level,
         filter=sanitize_log_record,
     )
 

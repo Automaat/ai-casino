@@ -42,7 +42,7 @@ def test_quantstats_reporter_init():
 
 def test_quantstats_reporter_init_default():
     """Test QuantStatsReporter initialization with default risk-free rate."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     assert reporter.risk_free_rate == 0.02
 
@@ -98,7 +98,7 @@ def test_equity_curve_to_returns():
 
 def test_generate_tearsheet_without_benchmark(mock_quantstats, sample_trades_for_tearsheet):
     """Test generating tearsheet without benchmark."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     tearsheet = reporter.generate_tearsheet("AAPL", sample_trades_for_tearsheet)
 
@@ -114,7 +114,7 @@ def test_generate_tearsheet_without_benchmark(mock_quantstats, sample_trades_for
 
 def test_generate_tearsheet_with_benchmark(mock_quantstats, sample_trades_for_tearsheet):
     """Test generating tearsheet with benchmark."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     benchmark_returns = pd.Series([0.01, 0.02, 0.01], index=pd.date_range("2024-01-01", periods=3))
 
@@ -133,7 +133,7 @@ def test_generate_tearsheet_with_benchmark(mock_quantstats, sample_trades_for_te
 
 def test_generate_tearsheet_no_closed_trades():
     """Test generating tearsheet with no closed trades."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     open_trade = TradeRecord(
         timestamp=datetime.now(UTC),
@@ -156,7 +156,7 @@ def test_generate_tearsheet_no_closed_trades():
 
 def test_calculate_metrics(mock_quantstats):
     """Test calculating QuantStats metrics."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     returns = pd.Series([0.01, 0.02, -0.01, 0.03])
     metrics = reporter._calculate_metrics(returns)
@@ -171,7 +171,7 @@ def test_calculate_metrics(mock_quantstats):
 
 def test_calculate_max_dd_duration():
     """Test calculating maximum drawdown duration."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     dd_series = pd.Series([0.0, -0.05, -0.10, -0.08, 0.0, -0.02, 0.0])
     duration = reporter._calculate_max_dd_duration(dd_series)
@@ -181,7 +181,7 @@ def test_calculate_max_dd_duration():
 
 def test_calculate_max_dd_duration_empty():
     """Test calculating max DD duration with empty series."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     dd_series = pd.Series([])
     duration = reporter._calculate_max_dd_duration(dd_series)
@@ -191,7 +191,7 @@ def test_calculate_max_dd_duration_empty():
 
 def test_generate_html(mock_quantstats):
     """Test generating HTML report."""
-    reporter = QuantStatsReporter()
+    reporter = QuantStatsReporter(risk_free_rate=0.02)
 
     returns = pd.Series([0.01, 0.02, -0.01], index=pd.date_range("2024-01-01", periods=3))
     html_path = reporter._generate_html("AAPL", returns)

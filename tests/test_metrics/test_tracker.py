@@ -225,10 +225,9 @@ def test_metrics_tracker_initialization():
 
 
 def test_metrics_tracker_initialization_with_env():
-    """Test MetricsTracker uses env var for risk-free rate."""
+    """Test MetricsTracker accepts risk-free rate parameter."""
     with patch("pathlib.Path.exists", return_value=False):
-        with patch.dict("os.environ", {"RISK_FREE_RATE": "0.05"}):
-            tracker = MetricsTracker()
+        tracker = MetricsTracker(risk_free_rate=0.05)
 
     assert tracker.risk_free_rate == 0.05
 
@@ -488,7 +487,7 @@ def test_load_trades_from_jsonl():
 
     with patch("pathlib.Path.exists", return_value=True):
         with patch("pathlib.Path.open", mock_open(read_data=jsonl_content)):
-            tracker = MetricsTracker()
+            tracker = MetricsTracker(risk_free_rate=0.02)
 
     assert len(tracker.trades) == 1
     assert tracker.trades[0].symbol == "AAPL"

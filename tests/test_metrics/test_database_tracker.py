@@ -167,8 +167,8 @@ class TestDatabaseMetricsTrackerInit:
         assert tracker._trades_cache is None
 
     def test_initialization_default_risk_rate(self, mock_trade_repo):
-        """Test DatabaseMetricsTracker uses default risk-free rate."""
-        tracker = DatabaseMetricsTracker(mock_trade_repo)
+        """Test DatabaseMetricsTracker accepts risk-free rate parameter."""
+        tracker = DatabaseMetricsTracker(mock_trade_repo, risk_free_rate=0.02)
 
         assert tracker.risk_free_rate == 0.02
 

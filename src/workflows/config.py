@@ -32,8 +32,9 @@ class WorkflowConfig(BaseModel):
     use_meta_agent: bool = Field(default=True, description="Use meta-agent for strategy selection")
     trump_mode: bool = Field(default=False, description="Enable Trump social media analysis")
     snapshot_on_trade: bool | None = Field(
-        default=None, description="Capture portfolio snapshot after trades (None = read from env)"
+        default=None, description="Capture portfolio snapshot after trades"
     )
+    execution_metrics_enabled: bool = Field(default=True, description="Enable execution metrics collection")
     pre_trade_backtest_config: PreTradeBacktestingConfig | None = Field(
         default=None, description="Pre-trade backtesting configuration"
     )

@@ -101,7 +101,7 @@ def validate_paper_trading(config_path: str = "daemon.yaml") -> int:
         state = DaemonState.load(config.state.state_file)
 
         # Initialize tracker and validator
-        metrics_tracker = MetricsTracker()
+        metrics_tracker = MetricsTracker(config.metrics.risk_free_rate)
         validator = PaperTradingValidator(
             config=config.paper_trading,
             state=state,

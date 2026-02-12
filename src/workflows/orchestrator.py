@@ -12,7 +12,7 @@ from src.agents.sentiment import SentimentAnalyst
 from src.agents.trump import TrumpAnalyst
 from src.backtesting import VectorBTRunner
 from src.data.truth_social import TruthSocialFetcher
-from src.metrics.execution import ExecutionMetricsCollector, current_collector, is_metrics_enabled
+from src.metrics.execution import ExecutionMetricsCollector, current_collector
 from src.strategies.ensemble import EnsembleStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.session import TradingSession
@@ -25,15 +25,13 @@ from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
-    def __init__(self, config: WorkflowConfig, components: WorkflowComponents) -> None:  # noqa: PLR0915
+    def __init__(self, config: WorkflowConfig, components: WorkflowComponents) -> None:
         """Initialize trading workflow.
 
         Args:
             config: Workflow behavior configuration
             components: Injected dependencies
         """
-        import os
-
         from src.agents.meta import MetaAgent
         from src.agents.risk import RiskManagementAgent
 
@@ -41,10 +39,8 @@ class TradingWorkflow:
         self.use_ensemble = config.use_ensemble
         self.use_meta_agent = config.use_meta_agent
         self.trump_mode = config.trump_mode
-        snapshot_on_trade = config.snapshot_on_trade
-        if snapshot_on_trade is None:
-            snapshot_on_trade = os.getenv("PORTFOLIO_SNAPSHOT_ON_TRADE", "false").lower() == "true"
-        self.snapshot_on_trade = snapshot_on_trade
+        self.snapshot_on_trade = config.snapshot_on_trade or False
+        self.execution_metrics_enabled = config.execution_metrics_enabled
         self.pre_trade_backtest_config = config.pre_trade_backtest_config
 
         # Extract components
@@ -134,7 +130,7 @@ class TradingWorkflow:
         # Set up execution metrics collector if enabled
         collector: ExecutionMetricsCollector | None = None
         collector_token = None
-        if is_metrics_enabled():
+        if self.execution_metrics_enabled:
             collector = ExecutionMetricsCollector(symbol, self.llm_client.provider, self.llm_client.model)
             self.llm_client.set_metrics_collector(collector)
             collector_token = current_collector.set(collector)

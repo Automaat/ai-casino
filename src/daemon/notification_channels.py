@@ -1,7 +1,5 @@
 """Notification channel implementations."""
 
-import os
-
 import httpx
 from loguru import logger
 
@@ -19,8 +17,8 @@ class TelegramChannel(NotificationChannel):
         Args:
             config: Telegram configuration
         """
-        self.bot_token = config.bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = config.chat_id or os.getenv("TELEGRAM_CHAT_ID")
+        self.bot_token = config.bot_token
+        self.chat_id = config.chat_id
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
 
     def is_configured(self) -> bool:

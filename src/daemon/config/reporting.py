@@ -55,3 +55,11 @@ class SignalTrackingConfig(BaseModel):
         if self.enabled:
             validate_time_range(self.tracking_time, "tracking_time", "after_hours")
         return self
+
+
+class MetricsConfig(BaseModel):
+    """Metrics collection configuration."""
+
+    risk_free_rate: float = Field(default=0.02, ge=0.0, le=0.10)
+    execution_metrics_enabled: bool = True
+    portfolio_snapshot_on_trade: bool = False

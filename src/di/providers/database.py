@@ -1,6 +1,5 @@
 """Database provider functions for DI container."""
 
-import os
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -18,23 +17,8 @@ if TYPE_CHECKING:
     from src.database.repositories.trade import TradeRepository
 
 
-def resolve_config_or_env(config_value: str | None, env_var: str) -> str | None:
-    """Resolve value from config or environment variable.
-
-    Args:
-        config_value: Value from config file
-        env_var: Environment variable name
-
-    Returns:
-        Resolved value (config takes priority) or None
-    """
-    if config_value:
-        return config_value
-    return os.getenv(env_var)
-
-
 def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
-    """Create DatabaseEngine with resolved config.
+    """Create DatabaseEngine with config.
 
     Args:
         daemon_config: Daemon configuration
@@ -45,15 +29,12 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     Raises:
         MissingDatabaseURLError: If enable_persistence=True but no database URL
     """
-    database_url = resolve_config_or_env(
-        daemon_config.database.database_url,
-        "DATABASE_URL",
-    )
+    database_url = daemon_config.database.database_url
 
     if daemon_config.database.enable_persistence and not database_url:
         logger.error(
             "Database persistence enabled but DATABASE_URL not configured. "
-            "Set database.database_url in daemon.yaml or DATABASE_URL env var."
+            "Set database.database_url in daemon.yaml."
         )
         raise MissingDatabaseURLError
 

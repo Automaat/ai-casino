@@ -404,12 +404,9 @@ def create_trading_coordinator(
     Returns:
         Configured TradingCoordinator
     """
-    import os
-
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.memory import CoordinatorMemory
     from src.coordinator.tools import build_coordinator_registry
-    from src.di.config import resolve_config_or_env
 
     # Get dependencies for enhanced memory
     broker = container.alpaca_broker()
@@ -441,28 +438,18 @@ def create_trading_coordinator(
 
     # Apply model override if configured
     if coordinator_config.model_override:
-        # Resolve API keys same way as create_llm_client
-        provider = daemon_config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+        provider = daemon_config.llm.provider
         api_key = None
         if provider == "anthropic":
-            api_key = resolve_config_or_env(
-                daemon_config.api_keys.anthropic_api_key,
-                "ANTHROPIC_API_KEY",
-            )
+            api_key = daemon_config.api_keys.anthropic_api_key
         elif provider == "openai":
-            api_key = resolve_config_or_env(
-                daemon_config.api_keys.openai_api_key,
-                "OPENAI_API_KEY",
-            )
+            api_key = daemon_config.api_keys.openai_api_key
 
         coordinator_llm = LLMClient(
             provider=provider,
             model=coordinator_config.model_override,
             api_key=api_key,
-            openai_base_url=resolve_config_or_env(
-                daemon_config.api_keys.openai_api_base,
-                "OPENAI_API_BASE",
-            ),
+            openai_base_url=daemon_config.api_keys.openai_api_base,
         )
     else:
         coordinator_llm = llm_client

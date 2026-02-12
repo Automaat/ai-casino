@@ -1,6 +1,5 @@
 """Dashboard subcommand for daemon monitoring."""
 
-import os
 import sys
 
 import typer
@@ -13,6 +12,8 @@ from src.dashboard.config import DashboardConfig
 from src.utils.logging import sanitize_log_record
 
 console = Console()
+
+DEFAULT_DASHBOARD_PORT = 8050
 
 
 def _check_daemon_health(api_url: str) -> DaemonAPIClient:
@@ -58,13 +59,13 @@ def dashboard(
         port: Dashboard server port (default: 8050)
         debug: Enable debug mode (default: False)
     """
-    from dotenv import load_dotenv
+    from src.daemon.config import DaemonConfig
 
-    load_dotenv()
+    daemon_config = DaemonConfig()
 
     # Configure logging
     logger.remove()
-    log_level = "DEBUG" if debug else os.getenv("LOG_LEVEL", "INFO")
+    log_level = "DEBUG" if debug else daemon_config.logging.log_level
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
@@ -73,18 +74,27 @@ def dashboard(
     )
 
     try:
-        # Create config - let DashboardConfig handle api_url default
-        # Normalize empty/whitespace-only strings to None so DashboardConfig applies env/default
-        normalized_api_url = None
+        # Start with daemon config values
+        config = DashboardConfig.from_daemon_config(daemon_config)
+
+        # Apply CLI overrides
         if api_url is not None:
             stripped_api_url = api_url.strip()
             if stripped_api_url:
-                normalized_api_url = stripped_api_url
+                config = DashboardConfig(
+                    api_url=stripped_api_url,
+                    port=port,
+                    host=config.host,
+                    refresh_interval=config.refresh_interval,
+                )
 
-        if normalized_api_url is not None:
-            config = DashboardConfig(api_url=normalized_api_url, port=port)
-        else:
-            config = DashboardConfig(port=port)
+        if port != DEFAULT_DASHBOARD_PORT:  # Non-default port specified
+            config = DashboardConfig(
+                api_url=config.api_url,
+                port=port,
+                host=config.host,
+                refresh_interval=config.refresh_interval,
+            )
 
         console.print("[bold cyan]AI Casino Dashboard[/bold cyan]")
         console.print(f"API URL: {config.api_url}")

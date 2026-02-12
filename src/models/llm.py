@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
 
@@ -50,12 +49,10 @@ class ToolCallingParams:
 
 T = TypeVar("T", bound=BaseModel)
 
-load_dotenv()
 
-
-_DEFAULT_CONCURRENT_REQUESTS = 5
 _MIN_CONCURRENT_REQUESTS = 1
 _MAX_CONCURRENT_REQUESTS = 20
+_DEFAULT_CONCURRENT_REQUESTS = 5
 
 
 def _parse_max_concurrent_requests() -> int:
@@ -138,24 +135,24 @@ class LLMClient:
 
     def __init__(
         self,
-        provider: str | None = None,
-        model: str | None = None,
-        base_url: str | None = None,
+        provider: str,
+        model: str,
+        base_url: str = "http://localhost:11434",
         api_key: str | None = None,
         openai_base_url: str | None = None,
     ) -> None:
         """Initialize LLM client.
 
         Args:
-            provider: LLM provider (ollama, anthropic, openai). Defaults to env.
-            model: Model name. Defaults to env.
-            base_url: Base URL for Ollama. Defaults to env.
-            api_key: API key for provider (optional, falls back to env var)
+            provider: LLM provider (ollama, anthropic, openai)
+            model: Model name
+            base_url: Base URL for Ollama
+            api_key: API key for provider (optional)
             openai_base_url: Custom base URL for OpenAI (optional)
         """
-        self.provider = provider or os.getenv("LLM_PROVIDER", "ollama")
-        self.model = model or os.getenv("LLM_MODEL", "qwen3:14b")
-        self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.provider = provider
+        self.model = model
+        self.base_url = base_url
         self._api_key = api_key
         self._openai_base_url = openai_base_url
 
@@ -181,7 +178,7 @@ class LLMClient:
             return OpenAIProvider(
                 model=self.model,
                 api_key=self._api_key,
-                base_url=self._openai_base_url or os.getenv("OPENAI_API_BASE"),
+                base_url=self._openai_base_url,
             )
         msg = f"Unsupported provider: {self.provider}"
         raise ValueError(msg)

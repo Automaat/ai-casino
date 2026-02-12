@@ -133,16 +133,13 @@ class TearSheet(BaseModel):
 class BaseMetricsTracker(ABC):
     """Abstract base class for metrics trackers."""
 
-    def __init__(self, risk_free_rate: float | None = None) -> None:
+    def __init__(self, risk_free_rate: float) -> None:
         """Initialize base metrics tracker.
 
         Args:
-            risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
+            risk_free_rate: Annual risk-free rate for Sharpe ratio
         """
-        if risk_free_rate is None:
-            self.risk_free_rate = float(os.getenv("RISK_FREE_RATE", "0.02"))
-        else:
-            self.risk_free_rate = risk_free_rate
+        self.risk_free_rate = risk_free_rate
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -185,11 +182,11 @@ class BaseMetricsTracker(ABC):
 class MetricsTracker(BaseMetricsTracker):
     """Tracker for recording trades and calculating performance metrics."""
 
-    def __init__(self, risk_free_rate: float | None = None) -> None:
+    def __init__(self, risk_free_rate: float) -> None:
         """Initialize metrics tracker.
 
         Args:
-            risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
+            risk_free_rate: Annual risk-free rate for Sharpe ratio
         """
         super().__init__(risk_free_rate)
         self._trades: list[TradeRecord] = []
@@ -503,7 +500,7 @@ class MetricsTracker(BaseMetricsTracker):
 
 def create_metrics_tracker(
     trade_repository: TradeRepository | None = None,
-    risk_free_rate: float | None = None,
+    risk_free_rate: float = 0.02,
 ) -> BaseMetricsTracker:
     """Factory to create appropriate metrics tracker.
 

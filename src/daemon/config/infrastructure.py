@@ -66,8 +66,10 @@ class ApiConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM provider configuration."""
 
-    provider: str | None = None
-    model: str | None = None
+    provider: str = "ollama"
+    model: str = "qwen3:14b"
+    max_concurrent: int = Field(default=5, ge=1, le=20)
+    ollama_base_url: str = "http://localhost:11434"
 
 
 class DataSourcesConfig(BaseModel):
