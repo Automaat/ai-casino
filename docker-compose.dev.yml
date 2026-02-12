@@ -1,14 +1,51 @@
 # Development overrides for docker-compose.yml
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# After first start, pull qwen3:14b model (~8GB):
+#   docker exec ai-casino-ollama-dev ollama pull qwen3:14b
 
 services:
+  ollama:
+    image: ollama/ollama:0.5.4
+    container_name: ai-casino-ollama-dev
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist models on host (qwen3:14b is ~8GB)
+      - ${HOME}/.ai-casino/ollama-models:/root/.ollama
+    networks:
+      - ai-casino-net
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Uncomment for GPU support (NVIDIA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
   daemon:
     # Mount source code for live reload (restart daemon after code changes)
     volumes:
       - ./src:/app/src:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./daemon-dev.yaml:/root/.ai-casino/daemon-production.yaml:ro  # Dev config at path expected by daemon CMD
     environment:
       - LOG_LEVEL=DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      finbert:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
 
   finbert:
     environment:
