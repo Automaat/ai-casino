@@ -837,6 +837,9 @@ async def test_api_server_lifecycle(sample_config: DaemonConfig) -> None:
         # Wait for daemon to stop
         await asyncio.wait_for(run_task, timeout=10.0)
 
+        # Small delay to ensure port is released
+        await asyncio.sleep(0.2)
+
         # Verify API server is no longer responding
         async with httpx.AsyncClient() as client:
             try:

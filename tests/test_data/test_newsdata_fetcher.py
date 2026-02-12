@@ -39,8 +39,9 @@ def test_fetcher_init_with_key():
 
 
 def test_fetcher_init_from_env(monkeypatch):
-    monkeypatch.setenv("NEWSDATA_API_KEY", "env-key")
-    fetcher = NewsDataFetcher()
+    # After removing env var fallbacks, this test no longer applies
+    # API key must be passed explicitly or via config
+    fetcher = NewsDataFetcher(api_key="env-key")
     assert fetcher.api_key == "env-key"
 
 
