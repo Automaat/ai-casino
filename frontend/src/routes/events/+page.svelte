@@ -35,7 +35,7 @@
 	let availableCategories: string[] = [];
 
 	// Degradation chart
-	let degradationChartContainer: HTMLElement;
+	let degradationChartContainer = null as unknown as HTMLElement;
 	let degradationChart: ECharts | null = null;
 
 	// Warnings
