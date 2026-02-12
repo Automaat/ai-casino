@@ -1,6 +1,5 @@
 """Optimize subcommand for strategy optimization."""
 
-import os
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta

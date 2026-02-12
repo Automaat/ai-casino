@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -55,7 +54,6 @@ def daemon(
     )
 
     try:
-
         runner = DaemonRunner(daemon_config)
         asyncio.run(runner.run())
     except KeyboardInterrupt:

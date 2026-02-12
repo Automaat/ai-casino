@@ -1,6 +1,5 @@
 """Backtest subcommand for strategy backtesting."""
 
-import os
 import sys
 from datetime import UTC, datetime, timedelta
 

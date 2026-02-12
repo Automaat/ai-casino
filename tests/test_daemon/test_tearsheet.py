@@ -109,7 +109,7 @@ def mock_market_fetcher():
 
 def test_generator_initialization():
     """Test generator initializes correctly."""
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     assert generator.broker is None
     assert generator.market_fetcher is None
     assert generator.reporter is not None
@@ -125,7 +125,7 @@ def test_generator_initialization_with_market_fetcher(mock_market_fetcher):
 
 def test_simulate_trades_from_analyses(sample_analyses, mock_market_fetcher):
     """Test simulating trades from analysis records with real prices."""
-    generator = DaemonTearsheetGenerator(market_fetcher=mock_market_fetcher)
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02, market_fetcher=mock_market_fetcher)
     trades = generator._simulate_trades_from_analyses(sample_analyses)
 
     # Should create 1 closed trade from AAPL BUY->SELL
@@ -140,7 +140,7 @@ def test_simulate_trades_from_analyses(sample_analyses, mock_market_fetcher):
 
 def test_simulate_trades_empty_analyses():
     """Test simulating trades with empty analyses."""
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     trades = generator._simulate_trades_from_analyses([])
     assert trades == []
 
@@ -148,7 +148,7 @@ def test_simulate_trades_empty_analyses():
 def test_simulate_trades_only_buys(sample_analyses):
     """Test simulating trades with only BUY signals."""
     buy_only = [a for a in sample_analyses if a.signal == "BUY"]
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     trades = generator._simulate_trades_from_analyses(buy_only)
 
     # No closed trades since no matching SELL signals
@@ -157,7 +157,7 @@ def test_simulate_trades_only_buys(sample_analyses):
 
 def test_fetch_benchmark_returns(mock_market_fetcher, sample_trade_records):
     """Test fetching benchmark returns."""
-    generator = DaemonTearsheetGenerator(market_fetcher=mock_market_fetcher)
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02, market_fetcher=mock_market_fetcher)
     returns = generator._fetch_benchmark_returns("SPY", sample_trade_records)
 
     assert returns is not None
@@ -167,14 +167,14 @@ def test_fetch_benchmark_returns(mock_market_fetcher, sample_trade_records):
 
 def test_fetch_benchmark_returns_no_fetcher(sample_trade_records):
     """Test fetching benchmark returns without market fetcher."""
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     returns = generator._fetch_benchmark_returns("SPY", sample_trade_records)
     assert returns is None
 
 
 def test_fetch_benchmark_returns_empty_trades(mock_market_fetcher):
     """Test fetching benchmark returns with empty trades."""
-    generator = DaemonTearsheetGenerator(market_fetcher=mock_market_fetcher)
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02, market_fetcher=mock_market_fetcher)
     returns = generator._fetch_benchmark_returns("SPY", [])
     assert returns is None
 
@@ -205,7 +205,7 @@ def test_generate_portfolio_tearsheet(mock_generate, sample_analyses, mock_marke
     )
     mock_generate.return_value = mock_tearsheet
 
-    generator = DaemonTearsheetGenerator(market_fetcher=mock_market_fetcher)
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02, market_fetcher=mock_market_fetcher)
     tearsheet = generator.generate_portfolio_tearsheet(sample_analyses, benchmark_symbol="SPY")
 
     assert tearsheet is not None
@@ -216,7 +216,7 @@ def test_generate_portfolio_tearsheet(mock_generate, sample_analyses, mock_marke
 @patch("src.daemon.tearsheet.QuantStatsReporter.generate_tearsheet")
 def test_generate_portfolio_tearsheet_no_trades(mock_generate):
     """Test generating tearsheet with no closed trades."""
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     tearsheet = generator.generate_portfolio_tearsheet([], benchmark_symbol="SPY")
 
     assert tearsheet is None
@@ -242,7 +242,7 @@ def test_cleanup_old_tearsheets(tmp_path):
 
     os.utime(old_file, (old_time, old_time))
 
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
 
     with patch("pathlib.Path.home", return_value=tmp_path):
         generator.cleanup_old_tearsheets(retention_days=30)
@@ -255,7 +255,7 @@ def test_cleanup_old_tearsheets(tmp_path):
 def test_cleanup_old_tearsheets_no_directory():
     """Test cleanup when tearsheet directory doesn't exist."""
     # Smoke test: verifies no exception when directory doesn't exist
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
 
     with patch("pathlib.Path.home", return_value=Path("/nonexistent")):
         generator.cleanup_old_tearsheets(retention_days=30)
@@ -264,7 +264,7 @@ def test_cleanup_old_tearsheets_no_directory():
 
 def test_repr():
     """Test string representation."""
-    generator = DaemonTearsheetGenerator()
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     assert "no broker" in repr(generator)
 
     generator = DaemonTearsheetGenerator(broker=MagicMock())

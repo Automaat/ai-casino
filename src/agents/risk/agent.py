@@ -1,7 +1,6 @@
 """Risk Management Agent."""
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING

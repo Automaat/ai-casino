@@ -1,6 +1,5 @@
 """Dashboard subcommand for daemon monitoring."""
 
-import os
 import sys
 
 import typer

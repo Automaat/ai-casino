@@ -34,7 +34,6 @@ from src.daemon.config.portfolio import (
 )
 from src.daemon.config.profiling import ProfilingConfig
 from src.daemon.config.reporting import HealthConfig, MetricsConfig, ReportingConfig, SignalTrackingConfig
-from src.daemon.config.ui import UIConfig
 from src.daemon.config.risk import (
     MonteCarloConfig,
     PositionManagementConfig,
@@ -56,6 +55,7 @@ from src.daemon.config.trading import (
     ScheduleConfig,
     StateConfig,
 )
+from src.daemon.config.ui import UIConfig
 
 __all__ = [
     "AnalysisOrchestratorConfig",
