@@ -56,7 +56,6 @@ from src.daemon.config.trading import (
     ScheduleConfig,
     StateConfig,
 )
-from src.daemon.config.ui import UIConfig
 
 __all__ = [
     "AnalysisOrchestratorConfig",
@@ -101,7 +100,6 @@ __all__ = [
     "StateConfig",
     "TelegramNotificationConfig",
     "TradingMode",
-    "UIConfig",
 ]
 
 
@@ -151,7 +149,6 @@ class DaemonConfig(BaseModel):
     coordinator: CoordinatorConfig = Field(default_factory=CoordinatorConfig)
     profiling: ProfilingConfig = Field(default_factory=ProfilingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
-    ui: UIConfig = Field(default_factory=UIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @classmethod
@@ -206,7 +203,6 @@ class DaemonConfig(BaseModel):
         coordinator_data = daemon_data.pop("coordinator", {}) or {}
         profiling_data = daemon_data.pop("profiling", {}) or {}
         metrics_data = daemon_data.pop("metrics", {}) or {}
-        ui_data = daemon_data.pop("ui", {}) or {}
         logging_data = daemon_data.pop("logging", {}) or {}
 
         # Extract nested telegram config from notifications
@@ -258,7 +254,6 @@ class DaemonConfig(BaseModel):
             coordinator=CoordinatorConfig(**coordinator_data),
             profiling=ProfilingConfig(**profiling_data),
             metrics=MetricsConfig(**metrics_data),
-            ui=UIConfig(**ui_data),
             logging=LoggingConfig(**logging_data),
         )
 

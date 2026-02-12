@@ -50,16 +50,8 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run daemon with Dash dashboard (legacy, API enabled)"
-run = """
-  trap 'pkill -P $$' EXIT
-  uv run python -m src.main daemon --config daemon-dev.yaml &
-  DAEMON_PID=$!
-  echo "Daemon started (PID: $DAEMON_PID)"
-  sleep 3
-  echo "Starting dashboard at http://localhost:8050"
-  uv run python -m src.main dashboard --api-url http://127.0.0.1:8484
-"""
+description = "Run daemon with API enabled"
+run = "uv run python -m src.main daemon --config daemon-dev.yaml"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
 [tasks."dev:momentum"]
@@ -78,11 +70,6 @@ description = "Launch interactive TUI chat"
 run = "uv run python -m src.main chat"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
-[tasks.dashboard]
-description = "Launch Dash dashboard"
-usage = 'option "--api-url" help="Daemon API URL" option "-p --port" help="Port" default="8050"'
-run = "uv run python -m src.main dashboard ${usage_api_url:+--api-url \"$usage_api_url\"} ${usage_port:+--port $usage_port}"
-
 [tasks."db:start"]
 description = "Start PostgreSQL container"
 run = "docker run -d --name ai-casino-db -p 5432:5432 -e POSTGRES_DB=ai_casino -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine || docker start ai-casino-db"
@@ -100,7 +87,7 @@ description = "Open psql shell"
 run = "docker exec -it ai-casino-db psql -U postgres -d ai_casino"
 
 [tasks.prod]
-description = "Run production daemon with Docker Compose (Dash UI)"
+description = "Run production daemon with Docker Compose"
 run = "docker compose up --build"
 
 [tasks."prod:down"]

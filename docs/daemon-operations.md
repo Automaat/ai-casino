@@ -183,7 +183,6 @@ All daemon configuration is YAML-based. See `docs/daemon.yaml.example` for compr
 | `api_keys`        | API keys for data providers and brokers   |
 | `logging`         | Log level configuration                   |
 | `metrics`         | Performance metrics and risk-free rate    |
-| `ui`              | Dashboard and TUI theme settings          |
 | `database`        | PostgreSQL persistence configuration      |
 | `position_sizing` | Risk management limits                    |
 | `notifications`   | Telegram notification settings            |
