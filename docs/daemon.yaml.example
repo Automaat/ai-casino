@@ -612,7 +612,13 @@ daemon:
     # Minimum confidence threshold for signal notifications (0.0-1.0)
     min_confidence: 0.7
     # Events to notify on
-    notify_on: ["signal", "risk_rejection", "portfolio_var_breach", "health_failure"]
+    # Options: signal, risk_rejection, portfolio_var_breach, health_failure,
+    #          paper_trading_ready, agent_alert
+    # agent_alert: LLM agents can send notifications for important events
+    #   - Rate limited per symbol (60 min default)
+    #   - Agents determine priority: LOW/MEDIUM/HIGH/CRITICAL
+    #   - Use for critical market events, anomalies, or actionable insights
+    notify_on: ["signal", "risk_rejection", "portfolio_var_breach", "health_failure", "agent_alert"]
     # Rate limiting
     rate_limit_enabled: true
     rate_limit_per_symbol_minutes: 60
