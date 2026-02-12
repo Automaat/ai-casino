@@ -126,22 +126,43 @@ export interface DegradationResponse {
 	halt_reason: string | null;
 }
 
+export interface SystemEvent {
+	timestamp: string;
+	event_type: string;
+	data: Record<string, any>;
+}
+
 export interface EventResponse {
-	events: Array<{
-		timestamp: string;
-		type: string;
-		message: string;
-		severity: string;
-	}>;
+	events: SystemEvent[];
+}
+
+export interface MarketEvent {
+	signal_timestamp: string;
+	event: {
+		event_type: string;
+		symbol: string;
+		summary: string;
+		impact_score: number;
+		source: string;
+	};
+	summary: string;
 }
 
 export interface MarketEventsResponse {
-	events: Array<{
-		timestamp: string;
-		symbol: string;
-		event_type: string;
-		description: string;
-	}>;
+	events: MarketEvent[];
+}
+
+export interface DegradationRecord {
+	timestamp: string;
+	tier: string;
+	unavailable_services: string[];
+	confidence_adjustment: number;
+	reason: string;
+}
+
+export interface DegradationHistoryResponse {
+	records: DegradationRecord[];
+	count: number;
 }
 
 export interface GamePlanResponse {

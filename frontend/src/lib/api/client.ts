@@ -128,6 +128,11 @@ export const api = {
 		return fetchAPI<T.MarketEventsResponse>(`/events/market${query}`);
 	},
 
+	async getDegradationHistory(limit?: number): Promise<T.DegradationHistoryResponse> {
+		const query = limit ? `?limit=${limit}` : '';
+		return fetchAPI<T.DegradationHistoryResponse>(`/events/degradation-history${query}`);
+	},
+
 	// Config
 	async getConfig(): Promise<T.ConfigResponse> {
 		return fetchAPI<T.ConfigResponse>('/config');

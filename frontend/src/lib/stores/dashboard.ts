@@ -276,6 +276,63 @@ function createDegradationStore() {
 	});
 }
 
+// Events store
+function createEventsStore() {
+	const { subscribe, set } = writable<T.EventResponse | null>(null);
+
+	async function fetch(params?: { limit?: number }) {
+		try {
+			const data = await api.getEvents(params?.limit);
+			set(data);
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch events:', error);
+			set(null);
+			return null;
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
+// Market events store
+function createMarketEventsStore() {
+	const { subscribe, set } = writable<T.MarketEventsResponse | null>(null);
+
+	async function fetch(params?: { limit?: number }) {
+		try {
+			const data = await api.getMarketEvents(params?.limit);
+			set(data);
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch market events:', error);
+			set(null);
+			return null;
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
+// Degradation history store
+function createDegradationHistoryStore() {
+	const { subscribe, set } = writable<T.DegradationHistoryResponse | null>(null);
+
+	async function fetch(params?: { limit?: number }) {
+		try {
+			const data = await api.getDegradationHistory(params?.limit);
+			set(data);
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch degradation history:', error);
+			set(null);
+			return null;
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
 // Export stores
 export const health = createHealthStore();
 export const stateSummary = createStateSummaryStore();
@@ -289,6 +346,9 @@ export const serviceHealth = createServiceHealthStore();
 export const gamePlan = createGamePlanStore();
 export const watchlist = createWatchlistStore();
 export const degradation = createDegradationStore();
+export const events = createEventsStore();
+export const marketEvents = createMarketEventsStore();
+export const degradationHistory = createDegradationHistoryStore();
 
 // Derived stores
 export const isDaemonRunning = derived(health, ($health) => $health?.daemon_running ?? false);

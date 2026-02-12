@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from ddgs import DDGS
-from diskcache import Cache
+from diskcache import Cache, JSONDisk
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -70,7 +70,7 @@ class WebSearchFetcher:
         """
         self._cache_dir = Path(cache_dir or "data/cache/websearch")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir))
+        self._cache = Cache(str(self._cache_dir), disk=JSONDisk, disk_compress_level=6)
         logger.info(f"Initialized WebSearchFetcher (cache_dir={self._cache_dir})")
 
     def _cache_key(self, query: str, search_type: SearchType) -> str:
@@ -136,7 +136,9 @@ class WebSearchFetcher:
                 fetched_at=datetime.now(),
             )
 
-            self._cache.set(cache_key, response.model_dump(), expire=self._get_ttl(SearchType.GENERAL))
+            self._cache.set(
+                cache_key, response.model_dump(mode="json"), expire=self._get_ttl(SearchType.GENERAL)
+            )
             logger.info(f"Fetched {len(results)} search results")
             return response
 
@@ -191,7 +193,9 @@ class WebSearchFetcher:
                 fetched_at=datetime.now(),
             )
 
-            self._cache.set(cache_key, response.model_dump(), expire=self._get_ttl(SearchType.NEWS))
+            self._cache.set(
+                cache_key, response.model_dump(mode="json"), expire=self._get_ttl(SearchType.NEWS)
+            )
             logger.info(f"Fetched {len(results)} news results")
             return response
 
