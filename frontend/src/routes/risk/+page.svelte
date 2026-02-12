@@ -153,7 +153,7 @@
 				flaggedPositions={sectorRotationData.flagged_positions}
 			/>
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				Sector rotation not enabled or no data available.
 			</div>
 		{/if}
@@ -165,38 +165,38 @@
 			<div class="overflow-x-auto">
 				<table class="w-full text-sm">
 					<thead>
-						<tr class="border-b border-slate-700">
-							<th class="text-left py-3 px-4 text-slate-300 font-medium">Metric</th>
-							<th class="text-right py-3 px-4 text-slate-300 font-medium">Value</th>
+						<tr class="border-b border-gray-300">
+							<th class="text-left py-3 px-4 text-gray-700 font-medium">Metric</th>
+							<th class="text-right py-3 px-4 text-gray-700 font-medium">Value</th>
 						</tr>
 					</thead>
-					<tbody class="divide-y divide-slate-800">
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">VaR 95%</td>
-							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.var_95)}</td>
+					<tbody class="divide-y divide-gray-200">
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">VaR 95%</td>
+							<td class="py-3 px-4 text-right text-gray-800 font-mono">{formatPercent(riskReport.var_95)}</td>
 						</tr>
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">VaR 99%</td>
-							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.var_99)}</td>
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">VaR 99%</td>
+							<td class="py-3 px-4 text-right text-gray-800 font-mono">{formatPercent(riskReport.var_99)}</td>
 						</tr>
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">CVaR 95%</td>
-							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.cvar_95)}</td>
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">CVaR 95%</td>
+							<td class="py-3 px-4 text-right text-gray-800 font-mono">{formatPercent(riskReport.cvar_95)}</td>
 						</tr>
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">CVaR 99%</td>
-							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.cvar_99)}</td>
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">CVaR 99%</td>
+							<td class="py-3 px-4 text-right text-gray-800 font-mono">{formatPercent(riskReport.cvar_99)}</td>
 						</tr>
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">CDaR 95%</td>
-							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.cdar_95)}</td>
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">CDaR 95%</td>
+							<td class="py-3 px-4 text-right text-gray-800 font-mono">{formatPercent(riskReport.cdar_95)}</td>
 						</tr>
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">Max Drawdown</td>
-							<td class="py-3 px-4 text-right text-slate-200 font-mono">{formatPercent(riskReport.max_drawdown)}</td>
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">Max Drawdown</td>
+							<td class="py-3 px-4 text-right text-gray-800 font-mono">{formatPercent(riskReport.max_drawdown)}</td>
 						</tr>
-						<tr class="hover:bg-slate-800/50">
-							<td class="py-3 px-4 text-slate-400">Risk Status</td>
+						<tr class="hover:bg-gray-50">
+							<td class="py-3 px-4 text-gray-600">Risk Status</td>
 							<td class="py-3 px-4 text-right">
 								<div class="flex justify-end">
 									<RiskStatusBadge status={riskReport.risk_status} size="sm" />
@@ -220,9 +220,9 @@
 					yAxisLabel="Sharpe Ratio"
 				/>
 			{:else if loading}
-				<div class="text-center py-12 text-slate-400">Loading...</div>
+				<div class="text-center py-12 text-gray-600">Loading...</div>
 			{:else}
-				<div class="text-center py-12 text-slate-400">No risk history</div>
+				<div class="text-center py-12 text-gray-600">No risk history</div>
 			{/if}
 		</Card>
 
@@ -235,9 +235,9 @@
 					yAxisLabel="Volatility"
 				/>
 			{:else if loading}
-				<div class="text-center py-12 text-slate-400">Loading...</div>
+				<div class="text-center py-12 text-gray-600">Loading...</div>
 			{:else}
-				<div class="text-center py-12 text-slate-400">No volatility data</div>
+				<div class="text-center py-12 text-gray-600">No volatility data</div>
 			{/if}
 		</Card>
 	</div>
@@ -252,7 +252,7 @@
 				title=""
 			/>
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No correlation data available. Requires multiple positions.
 			</div>
 		{/if}
@@ -262,26 +262,26 @@
 	<Card title="Risk Metrics Explained">
 		<dl class="space-y-4 text-sm">
 			<div>
-				<dt class="font-medium text-slate-300">Sharpe Ratio</dt>
-				<dd class="mt-1 text-slate-400">
+				<dt class="font-medium text-gray-700">Sharpe Ratio</dt>
+				<dd class="mt-1 text-gray-600">
 					Measures risk-adjusted returns. Higher is better. &gt;1 is good, &gt;2 is excellent.
 				</dd>
 			</div>
 			<div>
-				<dt class="font-medium text-slate-300">Volatility</dt>
-				<dd class="mt-1 text-slate-400">
+				<dt class="font-medium text-gray-700">Volatility</dt>
+				<dd class="mt-1 text-gray-600">
 					Standard deviation of returns. Lower means more stable portfolio.
 				</dd>
 			</div>
 			<div>
-				<dt class="font-medium text-slate-300">Max Drawdown</dt>
-				<dd class="mt-1 text-slate-400">
+				<dt class="font-medium text-gray-700">Max Drawdown</dt>
+				<dd class="mt-1 text-gray-600">
 					Largest peak-to-trough decline. Shows worst-case historical loss.
 				</dd>
 			</div>
 			<div>
-				<dt class="font-medium text-slate-300">Value at Risk (VaR 95%)</dt>
-				<dd class="mt-1 text-slate-400">
+				<dt class="font-medium text-gray-700">Value at Risk (VaR 95%)</dt>
+				<dd class="mt-1 text-gray-600">
 					Maximum expected loss over a time period at 95% confidence level.
 				</dd>
 			</div>

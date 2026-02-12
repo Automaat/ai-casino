@@ -10,10 +10,10 @@
 	let { title, class: className, children }: Props = $props();
 </script>
 
-<div class="bg-slate-800 rounded-lg border border-slate-700 {className}">
+<div class="bg-white rounded-lg border border-gray-300 {className}">
 	{#if title}
-		<div class="px-6 py-4 border-b border-slate-700">
-			<h3 class="text-lg font-semibold text-slate-100">{title}</h3>
+		<div class="px-6 py-4 border-b border-gray-300">
+			<h3 class="text-lg font-semibold text-black">{title}</h3>
 		</div>
 	{/if}
 	<div class="p-6">

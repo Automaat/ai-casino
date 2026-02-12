@@ -17,14 +17,14 @@
 
 {#if shouldShow && degradation}
 	<div
-		class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border-l-4 border-yellow-400 dark:border-yellow-600"
+		class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-600"
 		role="alert"
 	>
 		<div class="flex items-start gap-3">
 			<span class="text-2xl">⚠️</span>
 			<div class="flex-1">
 				<div class="flex items-center gap-3 mb-2">
-					<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Service Degradation</h3>
+					<h3 class="text-lg font-semibold text-black">Service Degradation</h3>
 					<span class="px-3 py-1 rounded-full border text-sm font-medium {tierClass}">
 						{degradation.tier}
 					</span>
@@ -32,7 +32,7 @@
 
 				<!-- Confidence Adjustment -->
 				<div class="mb-2">
-					<span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+					<span class="text-sm font-medium text-gray-700">
 						Confidence Adjustment: {(degradation.confidence_adjustment * 100).toFixed(0)}%
 					</span>
 				</div>
@@ -40,12 +40,12 @@
 				<!-- Unavailable Services -->
 				{#if degradation.unavailable_services.length > 0}
 					<div class="mb-2">
-						<span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+						<span class="text-xs font-medium text-gray-600 uppercase">
 							Unavailable Services
 						</span>
 						<div class="flex flex-wrap gap-2 mt-1">
 							{#each degradation.unavailable_services as service}
-								<span class="px-2 py-1 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 text-xs rounded">
+								<span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded">
 									{service}
 								</span>
 							{/each}
@@ -55,11 +55,11 @@
 
 				<!-- Halt Reason -->
 				{#if degradation.halt_reason}
-					<div class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded">
-						<span class="text-xs font-medium text-red-700 dark:text-red-300 uppercase">
+					<div class="mt-2 p-2 bg-red-50 rounded">
+						<span class="text-xs font-medium text-red-700 uppercase">
 							Trading Halted
 						</span>
-						<p class="text-sm text-red-600 dark:text-red-400 mt-1">
+						<p class="text-sm text-red-700 mt-1">
 							{degradation.halt_reason}
 						</p>
 					</div>

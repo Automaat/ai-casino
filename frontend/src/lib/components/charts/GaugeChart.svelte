@@ -24,7 +24,7 @@
 	let chart: ECharts | null = null;
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 
 		const option: EChartsOption = {
 			backgroundColor: 'transparent',
@@ -42,7 +42,7 @@
 						lineStyle: {
 							width: 20,
 							color: [
-								[thresholds.low / max, '#10b981'],
+								[thresholds.low / max, '#059669'],
 								[thresholds.medium / max, '#f59e0b'],
 								[1, '#ef4444']
 							]
@@ -50,7 +50,7 @@
 					},
 					pointer: {
 						itemStyle: {
-							color: '#e2e8f0'
+							color: '#374151'
 						},
 						width: 5,
 						length: '60%'
@@ -59,7 +59,7 @@
 						distance: -20,
 						length: 6,
 						lineStyle: {
-							color: '#334155',
+							color: '#d1d5db',
 							width: 1
 						}
 					},
@@ -67,12 +67,12 @@
 						distance: -20,
 						length: 12,
 						lineStyle: {
-							color: '#334155',
+							color: '#d1d5db',
 							width: 2
 						}
 					},
 					axisLabel: {
-						color: '#94a3b8',
+						color: '#4b5563',
 						distance: 20,
 						fontSize: 11,
 						formatter: (value: number) => value.toFixed(0)
@@ -80,7 +80,7 @@
 					title: {
 						offsetCenter: [0, '85%'],
 						fontSize: 14,
-						color: '#e2e8f0'
+						color: '#000000'
 					},
 					detail: {
 						fontSize: 22,
@@ -91,11 +91,11 @@
 							value: {
 								fontSize: 24,
 								fontWeight: 'bold',
-								color: '#e2e8f0'
+								color: '#000000'
 							},
 							unit: {
 								fontSize: 16,
-								color: '#94a3b8',
+								color: '#4b5563',
 								padding: [0, 0, 0, 4]
 							}
 						}

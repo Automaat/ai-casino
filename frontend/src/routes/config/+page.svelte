@@ -98,14 +98,14 @@
 
 <div class="space-y-8">
 	<div>
-		<h1 class="text-3xl font-bold text-slate-100">Configuration</h1>
-		<p class="mt-2 text-slate-400">View daemon configuration (auto-refreshes every 5 seconds)</p>
+		<h1 class="text-3xl font-bold text-black">Configuration</h1>
+		<p class="mt-2 text-gray-600">View daemon configuration (auto-refreshes every 5 seconds)</p>
 	</div>
 
 	{#if !cfg}
 		<div class="text-center py-12">
-			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-slate-400"></div>
-			<p class="mt-4 text-slate-400">Loading configuration...</p>
+			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+			<p class="mt-4 text-gray-600">Loading configuration...</p>
 		</div>
 	{:else}
 		<!-- Summary Cards -->
@@ -118,23 +118,23 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="text-slate-500">No symbols</p>
+					<p class="text-gray-600">No symbols</p>
 				{/if}
 			</Card>
 
 			<Card title="Interval">
-				<div class="text-3xl font-bold text-slate-100">
+				<div class="text-3xl font-bold text-black">
 					{cfg.interval_minutes}
-					<span class="text-lg text-slate-400 ml-2">min</span>
+					<span class="text-lg text-gray-600 ml-2">min</span>
 				</div>
 			</Card>
 
 			<Card title="Market Hours Only">
 				<div class="text-3xl">
 					{#if cfg.market_hours_only}
-						<span class="text-green-400">✓</span>
+						<span class="text-green-600">✓</span>
 					{:else}
-						<span class="text-red-400">✗</span>
+						<span class="text-red-600">✗</span>
 					{/if}
 				</div>
 			</Card>
@@ -142,15 +142,15 @@
 			<Card title="Auto Trade">
 				<div class="text-3xl">
 					{#if cfg.auto_trade}
-						<span class="text-green-400">✓</span>
+						<span class="text-green-600">✓</span>
 					{:else}
-						<span class="text-red-400">✗</span>
+						<span class="text-red-600">✗</span>
 					{/if}
 				</div>
 			</Card>
 
 			<Card title="Trading Mode">
-				<div class="text-2xl font-bold text-slate-100 uppercase">
+				<div class="text-2xl font-bold text-black uppercase">
 					{cfg.trading_mode || 'UNKNOWN'}
 				</div>
 			</Card>
@@ -158,9 +158,9 @@
 			<Card title="Pre-Market">
 				<div class="text-3xl">
 					{#if cfg.schedule && typeof cfg.schedule === 'object' && 'enable_pre_market' in cfg.schedule && cfg.schedule.enable_pre_market}
-						<span class="text-green-400">✓</span>
+						<span class="text-green-600">✓</span>
 					{:else}
-						<span class="text-red-400">✗</span>
+						<span class="text-red-600">✗</span>
 					{/if}
 				</div>
 			</Card>
@@ -168,7 +168,7 @@
 
 		<!-- Configuration Sections -->
 		<div>
-			<h2 class="text-2xl font-bold text-slate-100 mb-4">Configuration Sections</h2>
+			<h2 class="text-2xl font-bold text-black mb-4">Configuration Sections</h2>
 			<Accordion items={accordionItems} defaultOpen={['trading-&-execution']}>
 				{#snippet content(rawData)}
 					{@const data = rawData as AccordionContentData}
@@ -178,24 +178,24 @@
 							{@const sectionDataRecord = typeof sectionData === 'object' && sectionData !== null && !Array.isArray(sectionData) ? sectionData as Record<string, unknown> : {}}
 							{@const enabled = getSectionEnabled(sectionDataRecord)}
 							{@const sortedEntries = sortConfigKeys(sectionDataRecord)}
-							{@const borderColor = enabled ? 'border-l-green-500' : 'border-l-slate-600'}
+							{@const borderColor = enabled ? 'border-l-green-700' : 'border-l-gray-300'}
 
-							<div class="bg-slate-800/50 rounded-lg border border-slate-700 border-l-4 {borderColor} overflow-hidden">
-								<div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-									<h4 class="font-semibold text-slate-100">{section.title}</h4>
+							<div class="bg-gray-50 rounded-lg border border-gray-300 border-l-4 {borderColor} overflow-hidden">
+								<div class="px-4 py-3 border-b border-gray-300 flex items-center justify-between">
+									<h4 class="font-semibold text-black">{section.title}</h4>
 									<Badge variant={enabled ? 'success' : 'neutral'}>
 										{enabled ? 'Enabled' : 'Disabled'}
 									</Badge>
 								</div>
 								<div class="overflow-x-auto">
-									<table class="min-w-full divide-y divide-slate-700">
-										<tbody class="divide-y divide-slate-700">
+									<table class="min-w-full divide-y divide-gray-200">
+										<tbody class="divide-y divide-gray-200">
 											{#each sortedEntries as [key, value]}
 												{@const formatted = formatConfigValue(value)}
-												{@const colorClass = formatted.color || 'text-slate-300'}
+												{@const colorClass = formatted.color || 'text-gray-700'}
 
-												<tr class="hover:bg-slate-700/30">
-													<td class="px-4 py-3 text-sm text-slate-400 w-1/3">{key}</td>
+												<tr class="hover:bg-gray-50">
+													<td class="px-4 py-3 text-sm text-gray-600 w-1/3">{key}</td>
 													<td class="px-4 py-3 text-sm {colorClass}">
 														{#if formatted.type === 'list' && Array.isArray(value) && value.length > 0}
 															<div class="flex flex-wrap gap-1">

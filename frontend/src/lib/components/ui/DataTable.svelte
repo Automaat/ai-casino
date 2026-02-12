@@ -16,23 +16,23 @@
 </script>
 
 <div class="overflow-x-auto {className}">
-	<table class="min-w-full divide-y divide-slate-700">
-		<thead class="bg-slate-800/50">
+	<table class="min-w-full divide-y divide-gray-300">
+		<thead class="bg-gray-50">
 			<tr>
 				{#each columns as column}
-					<th 
-						class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider {column.class || ''}"
+					<th
+						class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider {column.class || ''}"
 					>
 						{column.label}
 					</th>
 				{/each}
 			</tr>
 		</thead>
-		<tbody class="bg-slate-800 divide-y divide-slate-700">
+		<tbody class="bg-white divide-y divide-gray-300">
 			{#each data as row}
-				<tr class="hover:bg-slate-700/50 transition-colors">
+				<tr class="hover:bg-gray-50 transition-colors">
 					{#each columns as column}
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+						<td class="px-6 py-4 whitespace-nowrap text-sm text-black">
 							{#if column.format}
 								{column.format(row[column.key], row)}
 							{:else}
@@ -45,7 +45,7 @@
 		</tbody>
 	</table>
 	{#if data.length === 0}
-		<div class="text-center py-12 text-slate-400">
+		<div class="text-center py-12 text-gray-600">
 			No data available
 		</div>
 	{/if}

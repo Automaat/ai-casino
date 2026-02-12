@@ -208,13 +208,13 @@
 				<LineChart 
 					data={equityData} 
 					height={300}
-					color="#10b981"
+					color="#059669"
 					yAxisLabel="Portfolio Value ($)"
 				/>
 			{:else if loading}
-				<div class="text-center py-12 text-slate-400">Loading...</div>
+				<div class="text-center py-12 text-gray-600">Loading...</div>
 			{:else}
-				<div class="text-center py-12 text-slate-400">No historical data</div>
+				<div class="text-center py-12 text-gray-600">No historical data</div>
 			{/if}
 		</Card>
 
@@ -223,7 +223,7 @@
 			{#if treemapData.length > 0}
 				<TreemapChart data={treemapData} height={300} title="" />
 			{:else}
-				<div class="text-center py-12 text-slate-400">No positions</div>
+				<div class="text-center py-12 text-gray-600">No positions</div>
 			{/if}
 		</Card>
 	</div>
@@ -233,9 +233,9 @@
 		{#if rebalance && rebalance.allocations.length > 0}
 			<RebalanceChart allocations={rebalance.allocations} height={350} />
 		{:else if loading}
-			<div class="text-center py-12 text-slate-400">Loading...</div>
+			<div class="text-center py-12 text-gray-600">Loading...</div>
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No rebalancing data available
 			</div>
 		{/if}
@@ -246,7 +246,7 @@
 		{#if positionsList.length > 0}
 			<DataTable data={positionsList} columns={positionColumns} />
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No active positions. Start trading to see positions here.
 			</div>
 		{/if}

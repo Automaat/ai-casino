@@ -6,22 +6,22 @@
 </script>
 
 <div class="space-y-6">
-	<h2 class="text-2xl font-bold text-slate-100">Workflow Execution</h2>
+	<h2 class="text-2xl font-bold text-black">Workflow Execution</h2>
 
 	<!-- Sub-tab buttons -->
-	<div class="flex gap-4 border-b border-slate-700">
+	<div class="flex gap-4 border-b border-gray-300">
 		<button
 			class="px-4 py-2 text-sm font-medium transition-colors {activeSubTab === 'live'
-				? 'text-blue-400 border-b-2 border-blue-400'
-				: 'text-slate-400 hover:text-slate-300'}"
+				? 'text-blue-600 border-b-2 border-blue-600'
+				: 'text-gray-600 hover:text-gray-700'}"
 			onclick={() => activeSubTab = 'live'}
 		>
 			Live Status
 		</button>
 		<button
 			class="px-4 py-2 text-sm font-medium transition-colors {activeSubTab === 'historical'
-				? 'text-blue-400 border-b-2 border-blue-400'
-				: 'text-slate-400 hover:text-slate-300'}"
+				? 'text-blue-600 border-b-2 border-blue-600'
+				: 'text-gray-600 hover:text-gray-700'}"
 			onclick={() => activeSubTab = 'historical'}
 		>
 			Historical Analysis

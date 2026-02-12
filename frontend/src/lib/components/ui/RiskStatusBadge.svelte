@@ -33,9 +33,9 @@
 	};
 
 	const colorClasses = {
-		green: 'bg-green-900 text-green-200 border-green-700',
-		yellow: 'bg-yellow-900 text-yellow-200 border-yellow-700',
-		red: 'bg-red-900 text-red-200 border-red-700'
+		green: 'bg-green-100 text-green-800 border-green-300',
+		yellow: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+		red: 'bg-red-100 text-red-800 border-red-300'
 	};
 </script>
 

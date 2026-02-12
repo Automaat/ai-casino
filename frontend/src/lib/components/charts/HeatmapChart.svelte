@@ -30,7 +30,7 @@
 			backgroundColor: 'transparent',
 			title: {
 				text: title,
-				textStyle: { color: '#e2e8f0', fontSize: 16 }
+				textStyle: { color: '#000000', fontSize: 16 }
 			},
 			tooltip: {
 				position: 'top',
@@ -49,13 +49,13 @@
 				type: 'category',
 				data: symbols,
 				splitArea: { show: true },
-				axisLabel: { color: '#94a3b8' }
+				axisLabel: { color: '#4b5563' }
 			},
 			yAxis: {
 				type: 'category',
 				data: symbols,
 				splitArea: { show: true },
-				axisLabel: { color: '#94a3b8' }
+				axisLabel: { color: '#4b5563' }
 			},
 			visualMap: {
 				min: -1,
@@ -65,9 +65,9 @@
 				left: 'center',
 				bottom: '5%',
 				inRange: {
-					color: ['#ef4444', '#f59e0b', '#10b981']
+					color: ['#ef4444', '#f59e0b', '#059669']
 				},
-				textStyle: { color: '#94a3b8' }
+				textStyle: { color: '#4b5563' }
 			},
 			series: [
 				{
@@ -77,7 +77,7 @@
 					label: {
 						show: true,
 						formatter: (params: any) => params.data[2].toFixed(2),
-						color: '#e2e8f0'
+						color: '#000000'
 					},
 					emphasis: {
 						itemStyle: {
@@ -93,7 +93,7 @@
 	}
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 		updateChart();
 
 		const resizeObserver = new ResizeObserver(() => {

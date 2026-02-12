@@ -61,10 +61,10 @@
 					{latestEvent.event_type}
 				</Badge>
 				<div class="flex-1">
-					<p class="text-slate-300">
+					<p class="text-gray-700">
 						{latestEvent.data.message || JSON.stringify(latestEvent.data)}
 					</p>
-					<p class="text-sm text-slate-500 mt-1">
+					<p class="text-sm text-gray-600 mt-1">
 						{formatRelativeTime(latestEvent.timestamp)}
 					</p>
 				</div>
@@ -77,17 +77,17 @@
 		{#if eventsList.length > 0}
 			<div class="space-y-3">
 				{#each eventsList as event}
-					<div class="flex items-start gap-4 py-2 border-b border-slate-700 last:border-b-0">
+					<div class="flex items-start gap-4 py-2 border-b border-gray-300 last:border-b-0">
 						<div class="flex-shrink-0">
 							<Badge variant={getBadgeVariant(event.event_type)}>
 								{event.event_type}
 							</Badge>
 						</div>
 						<div class="flex-1 min-w-0">
-							<p class="text-sm text-slate-300 truncate">
+							<p class="text-sm text-gray-700 truncate">
 								{event.data.message || event.data.symbol || JSON.stringify(event.data)}
 							</p>
-							<p class="text-xs text-slate-500 mt-1">
+							<p class="text-xs text-gray-600 mt-1">
 								{formatRelativeTime(event.timestamp)}
 							</p>
 						</div>
@@ -95,7 +95,7 @@
 				{/each}
 			</div>
 		{:else}
-			<p class="text-slate-400 text-center py-8">No recent events</p>
+			<p class="text-gray-600 text-center py-8">No recent events</p>
 		{/if}
 	</Card>
 </div>

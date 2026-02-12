@@ -148,7 +148,7 @@
 				yAxisLabel="Confidence"
 			/>
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No analysis data available
 			</div>
 		{/if}
@@ -165,7 +165,7 @@
 				xAxisLabel="Hour"
 			/>
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No analysis data available
 			</div>
 		{/if}
@@ -176,7 +176,7 @@
 		{#if recentAnalyses.length > 0}
 			<DataTable data={recentAnalyses.slice(0, 10)} columns={analysisColumns} />
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No analyses yet. Daemon may be stopped or no trading cycles completed.
 			</div>
 		{/if}
@@ -187,12 +187,12 @@
 		<Card title="System Status">
 			<dl class="grid grid-cols-2 gap-4 text-sm">
 				<div>
-					<dt class="text-slate-400">Total Trades</dt>
-					<dd class="mt-1 text-lg font-semibold text-slate-100">{summary.total_trades}</dd>
+					<dt class="text-gray-600">Total Trades</dt>
+					<dd class="mt-1 text-lg font-semibold text-black">{summary.total_trades}</dd>
 				</div>
 				<div>
-					<dt class="text-slate-400">Errors</dt>
-					<dd class="mt-1 text-lg font-semibold text-slate-100">{summary.error_count}</dd>
+					<dt class="text-gray-600">Errors</dt>
+					<dd class="mt-1 text-lg font-semibold text-black">{summary.error_count}</dd>
 				</div>
 			</dl>
 		</Card>

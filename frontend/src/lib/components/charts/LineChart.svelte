@@ -22,19 +22,19 @@
 	let chart: ECharts | null = null;
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 
 		const option: EChartsOption = {
 			backgroundColor: 'transparent',
 			title: title ? {
 				text: title,
-				textStyle: { color: '#e2e8f0', fontSize: 14 }
+				textStyle: { color: '#000000', fontSize: 14 }
 			} : undefined,
 			tooltip: {
 				trigger: 'axis',
-				backgroundColor: '#1e293b',
-				borderColor: '#334155',
-				textStyle: { color: '#e2e8f0' }
+				backgroundColor: '#ffffff',
+				borderColor: '#d1d5db',
+				textStyle: { color: '#000000' }
 			},
 			grid: {
 				left: '3%',
@@ -46,16 +46,16 @@
 				type: 'category',
 				boundaryGap: false,
 				data: data.map(d => typeof d.time === 'string' ? d.time : d.time.toLocaleString()),
-				axisLine: { lineStyle: { color: '#334155' } },
-				axisLabel: { color: '#94a3b8' }
+				axisLine: { lineStyle: { color: '#d1d5db' } },
+				axisLabel: { color: '#4b5563' }
 			},
 			yAxis: {
 				type: 'value',
 				name: yAxisLabel,
-				nameTextStyle: { color: '#94a3b8' },
-				axisLine: { lineStyle: { color: '#334155' } },
-				axisLabel: { color: '#94a3b8' },
-				splitLine: { lineStyle: { color: '#334155' } }
+				nameTextStyle: { color: '#4b5563' },
+				axisLine: { lineStyle: { color: '#d1d5db' } },
+				axisLabel: { color: '#4b5563' },
+				splitLine: { lineStyle: { color: '#e5e7eb' } }
 			},
 			series: [
 				{

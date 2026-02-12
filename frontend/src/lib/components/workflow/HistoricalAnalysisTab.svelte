@@ -44,7 +44,7 @@
 		<label for="workflow-selector" class="sr-only">Select workflow execution</label>
 		<select
 			id="workflow-selector"
-			class="w-full bg-slate-700 text-slate-100 border border-slate-600 rounded px-4 py-2"
+			class="w-full bg-gray-100 text-black border border-gray-300 rounded px-4 py-2"
 			bind:value={selectedWorkflowId}
 			onchange={() => handleWorkflowSelection(selectedWorkflowId)}
 		>
@@ -56,7 +56,7 @@
 			{/each}
 		</select>
 		{#if metricsList.length === 0}
-			<p class="text-slate-400 text-sm mt-2">No workflow executions found</p>
+			<p class="text-gray-600 text-sm mt-2">No workflow executions found</p>
 		{/if}
 	</Card>
 
@@ -64,16 +64,16 @@
 	{#if selectedMetrics && !loading}
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 			<Card title="Total Time">
-				<p class="text-3xl font-bold text-blue-400">{totalTime}s</p>
+				<p class="text-3xl font-bold text-blue-600">{totalTime}s</p>
 			</Card>
 			<Card title="LLM Calls">
-				<p class="text-3xl font-bold text-green-400">{llmCalls}</p>
+				<p class="text-3xl font-bold text-green-600">{llmCalls}</p>
 			</Card>
 			<Card title="Tokens">
 				<p class="text-3xl font-bold text-purple-400">{totalTokens}k</p>
 			</Card>
 			<Card title="Cost">
-				<p class="text-3xl font-bold text-yellow-400">${totalCost}</p>
+				<p class="text-3xl font-bold text-yellow-600">${totalCost}</p>
 			</Card>
 		</div>
 
@@ -96,11 +96,11 @@
 		</Card>
 	{:else if loading}
 		<Card>
-			<p class="text-slate-400 text-center py-8">Loading metrics...</p>
+			<p class="text-gray-600 text-center py-8">Loading metrics...</p>
 		</Card>
 	{:else}
 		<Card>
-			<p class="text-slate-400 text-center py-8">Select a workflow execution to view details</p>
+			<p class="text-gray-600 text-center py-8">Select a workflow execution to view details</p>
 		</Card>
 	{/if}
 </div>

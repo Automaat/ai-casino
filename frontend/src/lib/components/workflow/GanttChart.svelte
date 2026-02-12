@@ -14,7 +14,7 @@
 	let chart: ECharts | null = null;
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 
 		const resizeObserver = new ResizeObserver(() => {
 			chart?.resize();
@@ -48,9 +48,9 @@
 				backgroundColor: 'transparent',
 				tooltip: {
 					trigger: 'item',
-					backgroundColor: '#1e293b',
-					borderColor: '#334155',
-					textStyle: { color: '#e2e8f0' },
+					backgroundColor: '#ffffff',
+					borderColor: '#e5e7eb',
+					textStyle: { color: '#374151' },
 					formatter: (params: any) => {
 						const duration = (params.value[3] / 1000).toFixed(2);
 						return `${params.name}<br/>Duration: ${duration}s`;
@@ -66,16 +66,16 @@
 				xAxis: {
 					type: 'value',
 					name: 'Time (ms)',
-					nameTextStyle: { color: '#94a3b8' },
-					axisLine: { lineStyle: { color: '#334155' } },
-					axisLabel: { color: '#94a3b8' },
-					splitLine: { lineStyle: { color: '#334155' } }
+					nameTextStyle: { color: '#6b7280' },
+					axisLine: { lineStyle: { color: '#d1d5db' } },
+					axisLabel: { color: '#6b7280' },
+					splitLine: { lineStyle: { color: '#e5e7eb' } }
 				},
 				yAxis: {
 					type: 'category',
 					data: data.map(s => s.stage),
-					axisLine: { lineStyle: { color: '#334155' } },
-					axisLabel: { color: '#94a3b8' }
+					axisLine: { lineStyle: { color: '#d1d5db' } },
+					axisLabel: { color: '#6b7280' }
 				},
 				series: [
 					{

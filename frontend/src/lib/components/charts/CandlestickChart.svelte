@@ -26,11 +26,11 @@
 		const chartInstance = createChart(chartContainer, {
 			layout: {
 				background: { type: ColorType.Solid, color: 'transparent' },
-				textColor: '#94a3b8'
+				textColor: '#4b5563'
 			},
 			grid: {
-				vertLines: { color: '#334155' },
-				horzLines: { color: '#334155' }
+				vertLines: { color: '#e5e7eb' },
+				horzLines: { color: '#e5e7eb' }
 			},
 			width: chartContainer.clientWidth,
 			height,
@@ -42,10 +42,10 @@
 		chart = chartInstance;
 
 		candlestickSeries = (chartInstance as any).addCandlestickSeries({
-			upColor: '#10b981',
+			upColor: '#059669',
 			downColor: '#ef4444',
 			borderVisible: false,
-			wickUpColor: '#10b981',
+			wickUpColor: '#059669',
 			wickDownColor: '#ef4444'
 		});
 
@@ -80,7 +80,7 @@
 
 <div class="w-full">
 	{#if symbol}
-		<div class="mb-2 text-sm font-medium text-slate-300">{symbol}</div>
+		<div class="mb-2 text-sm font-medium text-gray-700">{symbol}</div>
 	{/if}
-	<div bind:this={chartContainer} class="rounded-lg overflow-hidden bg-slate-900"></div>
+	<div bind:this={chartContainer} class="rounded-lg overflow-hidden bg-white"></div>
 </div>
