@@ -72,7 +72,6 @@ def track_agent(func: Callable[..., Any]) -> Callable[..., Any]:
 
         return async_wrapper
 
-
     @functools.wraps(func)
     def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
         """Sync wrapper with execution tracking."""
