@@ -69,9 +69,7 @@ class SentimentAnalyst:
         loop = asyncio.get_running_loop()
         # Use ProcessPoolExecutor for true parallelism (avoids GIL)
         device = getattr(self.finbert, "device", "cpu")
-        score_dicts = await loop.run_in_executor(
-            _finbert_executor, _analyze_batch_worker, texts, device
-        )
+        score_dicts = await loop.run_in_executor(_finbert_executor, _analyze_batch_worker, texts, device)
 
         # Import here to avoid circular import at module level
         from src.models.sentiment import SentimentScore

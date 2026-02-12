@@ -180,7 +180,9 @@ def _analyze_batch_worker(texts: list[str], device: str | None = None) -> list[d
         List of dicts with sentiment scores (positive, negative, neutral)
     """
     finbert_obj = get_finbert_sentiment(device=device)
-    assert hasattr(finbert_obj, "analyze_batch")
+    if not hasattr(finbert_obj, "analyze_batch"):
+        msg = "FinBERT object missing analyze_batch method"
+        raise AttributeError(msg)
     scores = finbert_obj.analyze_batch(texts)
     return [{"positive": s.positive, "negative": s.negative, "neutral": s.neutral} for s in scores]
 
@@ -223,8 +225,7 @@ def get_finbert_sentiment(device: str | None = None) -> object:
         ):
             cached_device = _FinBERTHolder.instance.device
             logger.warning(
-                f"Device parameter '{device}' ignored - "
-                f"using cached instance with device '{cached_device}'"
+                f"Device parameter '{device}' ignored - using cached instance with device '{cached_device}'"
             )
         return _FinBERTHolder.instance
 

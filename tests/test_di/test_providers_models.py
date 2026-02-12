@@ -83,13 +83,15 @@ def test_create_llm_client_with_metrics_collector():
 
 def test_create_finbert_sentiment_singleton():
     """Test FinBERT singleton behavior - factory called once per create_finbert_sentiment() call."""
+    config = DaemonConfig()
+
     with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
         instance1 = MagicMock()
         instance2 = MagicMock()
         mock_factory.side_effect = [instance1, instance2]
 
-        create_finbert_sentiment()
-        create_finbert_sentiment()
+        create_finbert_sentiment(config)
+        create_finbert_sentiment(config)
 
         # create_finbert_sentiment() is not itself singleton - it delegates to get_finbert_sentiment()
         # get_finbert_sentiment() handles singleton internally, returning same instance
@@ -99,10 +101,12 @@ def test_create_finbert_sentiment_singleton():
 
 def test_create_finbert_sentiment_device():
     """Test device parameter passthrough."""
+    config = DaemonConfig()
+
     with patch("src.models.sentiment.get_finbert_sentiment") as mock_factory:
         mock_instance = MagicMock()
         mock_factory.return_value = mock_instance
 
-        create_finbert_sentiment(device="cuda")
+        create_finbert_sentiment(config, device="cuda")
 
         mock_factory.assert_called_once_with(device="cuda")

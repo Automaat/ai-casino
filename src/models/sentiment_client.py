@@ -1,13 +1,13 @@
 """HTTP client for FinBERT microservice (backward-compatible with FinBERTSentiment)."""
 
 import asyncio
-from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
 
-if TYPE_CHECKING:
-    from src.models.sentiment import SentimentScore
+from src.models.sentiment import SentimentScore
+
+__all__ = ["FinBERTClient", "SentimentScore"]
 
 
 class FinBERTClient:
@@ -26,7 +26,7 @@ class FinBERTClient:
         self._client = httpx.Client(timeout=timeout, base_url=self.base_url)
         logger.info(f"Initialized FinBERTClient (url={base_url}, timeout={timeout}s)")
 
-    def analyze_batch(self, texts: list[str]) -> list["SentimentScore"]:
+    def analyze_batch(self, texts: list[str]) -> list[SentimentScore]:
         """Analyze sentiment of multiple texts (synchronous).
 
         Args:
@@ -42,8 +42,6 @@ class FinBERTClient:
             return []
 
         try:
-            from src.models.sentiment import SentimentScore
-
             response = self._client.post("/analyze", json={"texts": texts})
             response.raise_for_status()
             data = response.json()
@@ -52,7 +50,7 @@ class FinBERTClient:
             logger.error(f"FinBERT service request failed: {e}")
             raise
 
-    async def analyze_batch_async(self, texts: list[str]) -> list["SentimentScore"]:
+    async def analyze_batch_async(self, texts: list[str]) -> list[SentimentScore]:
         """Analyze sentiment asynchronously using thread offload (Python 3.14 compat).
 
         Args:
