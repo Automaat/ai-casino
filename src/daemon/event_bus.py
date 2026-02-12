@@ -98,7 +98,7 @@ class EventBus:
                     q.put_nowait(event)
                 except queue.Full:
                     dropped_count += 1
-                    logger.opt(exception=True).warning(
+                    logger.warning(
                         f"Dropped event {event.event_type} for subscriber {subscriber_id} (queue full)"
                     )
 

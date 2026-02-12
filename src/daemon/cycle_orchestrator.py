@@ -178,7 +178,7 @@ class DaemonCycleOrchestrator:
             logger.warning(
                 f"Degraded mode: {degradation_context.tier} | "
                 f"Unavailable services: {', '.join(degradation_context.unavailable_services)} | "
-                f"Unavailable agents: {', '.join(str(a) for a in unavailable_agents)} | "
+                f"Unavailable agents: {', '.join(str(a) for a in sorted(unavailable_agents))} | "
                 f"Confidence adjustment: {degradation_context.confidence_adjustment:.2f}"
             )
             console.print(f"[yellow]DEGRADED: {degradation_context.tier}[/yellow]")
