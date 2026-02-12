@@ -11,7 +11,7 @@ class HealthResponse(BaseModel):
 
     status: str = Field(description="Health status (healthy/degraded)")
     uptime_seconds: float = Field(description="Daemon uptime in seconds")
-    running: bool = Field(description="Whether daemon is running")
+    daemon_running: bool = Field(description="Whether daemon is running")
     last_run: str | None = Field(description="Last analysis run timestamp")
 
 
@@ -19,7 +19,10 @@ class StateSummaryResponse(BaseModel):
     """State summary endpoint response."""
 
     total_analyses: int = Field(description="Total analyses performed")
+    recent_analyses: list[dict] = Field(description="Recent analysis records", default_factory=list)
     total_trades: int = Field(description="Total trades executed")
+    positions_count: int = Field(description="Number of active positions")
+    win_rate: float = Field(description="Win rate (0.0-1.0)")
     error_count: int = Field(description="Total errors recorded")
     degradation_tier: str = Field(description="Current degradation tier")
     trading_mode: str = Field(description="Current trading mode (paper/live)")
@@ -108,6 +111,8 @@ class SnapshotsResponse(BaseModel):
 
     snapshots: list[SnapshotRecord]
     count: int
+    database_enabled: bool = Field(description="Whether database persistence is enabled")
+    has_trades: bool = Field(default=False, description="Whether any trades have been executed")
 
 
 class RebalanceAllocation(BaseModel):
@@ -123,12 +128,13 @@ class RebalanceAllocation(BaseModel):
 class RebalanceResponse(BaseModel):
     """Rebalance endpoint response."""
 
-    timestamp: datetime
-    method: str
-    allocations: list[RebalanceAllocation]
-    expected_return: float
-    expected_volatility: float
-    sharpe_ratio: float
+    enabled: bool = Field(description="Whether rebalancing is enabled")
+    timestamp: datetime | None = Field(default=None, description="Last rebalance timestamp")
+    method: str | None = Field(default=None, description="Rebalancing method")
+    allocations: list[RebalanceAllocation] = Field(default_factory=list, description="Target allocations")
+    expected_return: float | None = Field(default=None, description="Expected portfolio return")
+    expected_volatility: float | None = Field(default=None, description="Expected volatility")
+    sharpe_ratio: float | None = Field(default=None, description="Expected Sharpe ratio")
 
 
 class RiskReportResponse(BaseModel):

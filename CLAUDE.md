@@ -53,6 +53,47 @@ tests/               # Full mirror of src structure
 
 ---
 
+## UI/UX Patterns
+
+### Empty States Must Distinguish Feature Status
+
+**Pattern:** Empty UI sections must show why they're empty - distinguish "disabled" vs "no data yet".
+
+**Bad:**
+
+```svelte
+{:else}
+  <div>No data available</div>
+{/if}
+```
+
+**Good:**
+
+```svelte
+{:else if !response?.enabled}
+  <div>
+    <div class="font-medium">Feature disabled</div>
+    <div class="text-sm">Enable in config: <code>feature.enabled: true</code></div>
+  </div>
+{:else}
+  <div>
+    <div class="font-medium">No data yet</div>
+    <div class="text-sm">Waiting for first run</div>
+  </div>
+{/if}
+```
+
+**Implementation:**
+
+1. Add status fields to API response model (`enabled: bool`, `database_enabled: bool`, `has_data: bool`)
+2. Update endpoint to populate status from config
+3. Update frontend types to match
+4. Update UI to show contextual messages
+
+**Example:** Portfolio snapshots/rebalancing endpoints
+
+---
+
 ## Development Workflow
 
 ### Before Coding

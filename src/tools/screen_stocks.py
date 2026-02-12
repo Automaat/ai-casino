@@ -81,7 +81,7 @@ class ScreenStocksTool(BaseTool):
             ),
         )
 
-    def execute(self, **kwargs: str | int | float | bool) -> str:
+    def execute(self, **kwargs: str | int | float | bool | dict) -> str:
         """Execute stock screening.
 
         Args:
@@ -90,9 +90,15 @@ class ScreenStocksTool(BaseTool):
         Returns:
             Formatted screening results with analysis
         """
-        criteria = str(kwargs["criteria"])
-        universe = str(kwargs.get("universe", "COMBINED"))
-        top_n = int(kwargs.get("top_n", 10))
+        # Unwrap 'parameters' key if LLM nested arguments
+        args = kwargs
+        if "parameters" in kwargs and isinstance(kwargs["parameters"], dict):
+            args = dict(kwargs["parameters"])
+
+        criteria = str(args["criteria"])
+        universe = str(args.get("universe", "COMBINED"))
+        top_n_raw = args.get("top_n", 10)
+        top_n = int(top_n_raw) if isinstance(top_n_raw, (int, float, str)) else 10
 
         logger.info(f"Screening {universe} for {criteria} (top {top_n})")
 

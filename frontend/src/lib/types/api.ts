@@ -72,6 +72,9 @@ export interface SnapshotRecord {
 
 export interface SnapshotsResponse {
 	snapshots: SnapshotRecord[];
+	count: number;
+	database_enabled: boolean;
+	has_trades: boolean;
 }
 
 export interface RebalanceAllocation {
@@ -83,12 +86,13 @@ export interface RebalanceAllocation {
 }
 
 export interface RebalanceResponse {
-	timestamp: string;
-	method: string;
+	enabled: boolean;
+	timestamp?: string | null;
+	method?: string | null;
 	allocations: RebalanceAllocation[];
-	expected_return: number;
-	expected_volatility: number;
-	sharpe_ratio: number;
+	expected_return?: number | null;
+	expected_volatility?: number | null;
+	sharpe_ratio?: number | null;
 }
 
 export interface RiskReportResponse {

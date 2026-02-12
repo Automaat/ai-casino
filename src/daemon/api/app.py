@@ -148,7 +148,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         return HealthResponse(
             status=status,
             uptime_seconds=uptime,
-            running=components.running,
+            daemon_running=components.running,
             last_run=components.state.last_run.isoformat() if components.state.last_run else None,
         )
 
@@ -162,9 +162,25 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         if components.state.degradation_history:
             degradation_tier = components.state.degradation_history[-1].tier
 
+        # Calculate positions count and win rate
+        positions_count = len(components.state.active_positions)
+
+        # Win rate calculation (TODO: implement proper trade tracking)
+        # For now, return 0.0 as we need proper closed trade tracking
+        win_rate = 0.0
+
+        # Get recent analyses (last 50), convert to dicts
+        recent_analyses = [
+            analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
+            for analysis in components.state.trading.analyses[-50:]
+        ]
+
         return StateSummaryResponse(
             total_analyses=components.state.total_analyses,
+            recent_analyses=recent_analyses,
             total_trades=components.state.total_trades,
+            positions_count=positions_count,
+            win_rate=win_rate,
             error_count=len(components.state.errors),
             degradation_tier=degradation_tier,
             trading_mode=components.state.current_trading_mode,
@@ -320,22 +336,20 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     @app.get("/portfolio/snapshots", response_model=SnapshotsResponse)
     async def get_snapshots(days: int = 30) -> SnapshotsResponse:
         """Get portfolio snapshots history."""
-        import os
-
         from src.database.connection import get_session
         from src.database.engine import MissingDatabaseURLError
         from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
-        # Return empty if DATABASE_URL not configured
-        if not os.getenv("DATABASE_URL"):
-            logger.debug("DATABASE_URL not set, returning empty snapshots")
-            return SnapshotsResponse(snapshots=[], count=0)
+        components: DaemonComponents = app.state.components
 
         # Clamp days to prevent abuse
         days = max(1, min(days, 365))
 
         start = datetime.now(UTC) - timedelta(days=days)
         end = datetime.now(UTC)
+
+        # Check if database persistence is enabled
+        database_enabled = components.config.database.enable_persistence
 
         try:
             async with get_session() as session:
@@ -355,21 +369,33 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                     for s in snapshots
                 ]
 
-                return SnapshotsResponse(snapshots=snapshot_records, count=len(snapshot_records))
+                # Check if we have any trade history
+                has_trades = len(snapshot_records) > 0 or components.state.total_trades > 0
+
+                return SnapshotsResponse(
+                    snapshots=snapshot_records,
+                    count=len(snapshot_records),
+                    database_enabled=database_enabled,
+                    has_trades=has_trades,
+                )
         except MissingDatabaseURLError:
             logger.debug("DATABASE_URL not configured, returning empty snapshots")
-            return SnapshotsResponse(snapshots=[], count=0)
+            return SnapshotsResponse(snapshots=[], count=0, database_enabled=False, has_trades=False)
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to fetch snapshots: {e}")
             raise HTTPException(status_code=500, detail="Failed to fetch portfolio snapshots") from e
 
-    @app.get("/portfolio/rebalance", response_model=RebalanceResponse | None)
-    async def get_rebalance() -> RebalanceResponse | None:
+    @app.get("/portfolio/rebalance", response_model=RebalanceResponse)
+    async def get_rebalance() -> RebalanceResponse:
         """Get latest portfolio rebalance data."""
         components: DaemonComponents = app.state.components
 
-        if not components.state.portfolio_rebalancing_history:
-            return None
+        # Check if rebalancing is enabled
+        rebalancing_enabled = components.config.rebalancing.enabled
+
+        # If disabled or no history, return status-only response
+        if not rebalancing_enabled or not components.state.portfolio_rebalancing_history:
+            return RebalanceResponse(enabled=rebalancing_enabled)
 
         latest = components.state.portfolio_rebalancing_history[-1]
 
@@ -397,6 +423,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 )
 
             return RebalanceResponse(
+                enabled=rebalancing_enabled,
                 timestamp=latest.timestamp,
                 method=latest.method,
                 allocations=allocations,
