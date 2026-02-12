@@ -22,6 +22,7 @@ from src.daemon.config.infrastructure import (
     ApiKeysConfig,
     DatabaseConfig,
     DataSourcesConfig,
+    FinBERTConfig,
     LLMConfig,
     PrefetchConfig,
 )
@@ -70,6 +71,7 @@ __all__ = [
     "DiscoveryConfig",
     "EarningsCalendarConfig",
     "FilingsWatcherConfig",
+    "FinBERTConfig",
     "GamePlanConfig",
     "HealthConfig",
     "JournalConfig",
@@ -143,6 +145,7 @@ class DaemonConfig(BaseModel):
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    finbert: FinBERTConfig = Field(default_factory=FinBERTConfig)
     api_keys: ApiKeysConfig = Field(default_factory=ApiKeysConfig)
     data_sources: DataSourcesConfig = Field(default_factory=DataSourcesConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
@@ -197,6 +200,7 @@ class DaemonConfig(BaseModel):
         anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {}) or {}
         api_data = daemon_data.pop("api", {}) or {}
         llm_data = daemon_data.pop("llm", {}) or {}
+        finbert_data = daemon_data.pop("finbert", {}) or {}
         api_keys_data = daemon_data.pop("api_keys", {}) or {}
         data_sources_data = daemon_data.pop("data_sources", {}) or {}
         database_data = daemon_data.pop("database", {}) or {}
@@ -248,6 +252,7 @@ class DaemonConfig(BaseModel):
             anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
             api=ApiConfig(**api_data),
             llm=LLMConfig(**llm_data),
+            finbert=FinBERTConfig(**finbert_data),
             api_keys=ApiKeysConfig(**api_keys_data),
             data_sources=DataSourcesConfig(**data_sources_data),
             database=DatabaseConfig(**database_data),

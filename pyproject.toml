@@ -122,6 +122,7 @@ project-includes = [
 ]
 project-excludes = [
     "tests/**",
+    "services/**",
 ]
 
 [tool.uv]

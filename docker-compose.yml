@@ -23,12 +23,41 @@ services:
       timeout: 3s
       retries: 5
 
+  finbert:
+    build:
+      context: ./services/finbert
+      dockerfile: Dockerfile
+    container_name: ai-casino-finbert
+    restart: unless-stopped
+    environment:
+      - FINBERT_DEVICE=cpu
+      - FINBERT_LOG_LEVEL=INFO
+    ports:
+      - "8485:8485"
+    networks:
+      - ai-casino-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8485/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
   daemon:
     build: .
     container_name: ai-casino-daemon
     restart: unless-stopped
     volumes:
       # Mount production config from host
+      # Configure FinBERT mode in ~/.ai-casino/daemon.yaml (see docs/daemon.yaml.example)
       - ${HOME}/.ai-casino:/root/.ai-casino
     environment:
       # Log level (can override in config)
@@ -40,6 +69,8 @@ services:
       - ai-casino-net
     depends_on:
       postgres:
+        condition: service_healthy
+      finbert:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8484/health"]

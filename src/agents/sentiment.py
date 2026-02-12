@@ -10,7 +10,7 @@ from src.data.news import NewsArticle
 from src.models.sentiment import _analyze_batch_worker, _finbert_executor
 
 if TYPE_CHECKING:
-    from src.models.sentiment import FinBERTSentiment, SentimentScore
+    from src.models.sentiment import SentimentScore
 
 
 class SentimentAnalysis(BaseModel):
@@ -31,11 +31,11 @@ class SentimentAnalyst:
     POSITIVE_THRESHOLD = 0.2
     NEGATIVE_THRESHOLD = -0.2
 
-    def __init__(self, finbert: FinBERTSentiment) -> None:
+    def __init__(self, finbert: object) -> None:
         """Initialize sentiment analyst.
 
         Args:
-            finbert: FinBERT sentiment model
+            finbert: FinBERT sentiment analyzer (local or remote, provides analyze_batch method)
         """
         self.finbert = finbert
         logger.info("Initialized SentimentAnalyst")
@@ -68,8 +68,9 @@ class SentimentAnalyst:
 
         loop = asyncio.get_running_loop()
         # Use ProcessPoolExecutor for true parallelism (avoids GIL)
+        device = getattr(self.finbert, "device", "cpu")
         score_dicts = await loop.run_in_executor(
-            _finbert_executor, _analyze_batch_worker, texts, self.finbert.device
+            _finbert_executor, _analyze_batch_worker, texts, device
         )
 
         # Import here to avoid circular import at module level

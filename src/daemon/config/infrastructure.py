@@ -101,6 +101,25 @@ class ApiKeysConfig(BaseModel):
     openai_api_base: str | None = None
 
 
+class FinBERTConfig(BaseModel):
+    """FinBERT sentiment service configuration."""
+
+    mode: Literal["local", "remote"] = Field(
+        default="local",
+        description="FinBERT mode: 'local' (in-process) or 'remote' (microservice)",
+    )
+    service_url: str = Field(
+        default="http://localhost:8485",
+        description="FinBERT service URL (only used in remote mode)",
+    )
+    timeout: float = Field(
+        default=60.0,
+        ge=10.0,
+        le=120.0,
+        description="HTTP request timeout in seconds (10-120)",
+    )
+
+
 class DatabaseConfig(BaseModel):
     """Database configuration for PostgreSQL persistence."""
 
