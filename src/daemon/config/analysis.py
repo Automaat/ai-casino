@@ -11,6 +11,15 @@ class AnalysisOrchestratorConfig(BaseModel):
     enable_position_sync: bool = True
 
 
+class NewsSourcesConfig(BaseModel):
+    """News source configuration."""
+
+    enable_marketaux: bool = True
+    enable_finnhub: bool = False
+    enable_newsdata: bool = False
+    enable_duckduckgo: bool = False
+
+
 class NewsWatcherConfig(BaseModel):
     """Configuration for news watcher."""
 
@@ -20,6 +29,7 @@ class NewsWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+    sources: NewsSourcesConfig = Field(default_factory=NewsSourcesConfig)
 
 
 class SocialWatcherConfig(BaseModel):

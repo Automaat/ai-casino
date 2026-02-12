@@ -12,6 +12,7 @@ from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
     AnomalyWatcherConfig,
     FilingsWatcherConfig,
+    NewsSourcesConfig,
     NewsWatcherConfig,
     SocialWatcherConfig,
 )
@@ -200,6 +201,9 @@ class DaemonConfig(BaseModel):
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
 
+        # Extract nested sources config from news_watcher
+        news_sources_data = news_watcher_data.pop("sources", {}) or {}
+
         return cls(
             **daemon_data,
             paper_trading=PaperTradingConfig(**paper_trading_data),
@@ -229,7 +233,9 @@ class DaemonConfig(BaseModel):
                 **notifications_data, telegram=TelegramNotificationConfig(**telegram_data)
             ),
             analysis_orchestration=AnalysisOrchestratorConfig(**analysis_orchestration_data),
-            news_watcher=NewsWatcherConfig(**news_watcher_data),
+            news_watcher=NewsWatcherConfig(
+                **news_watcher_data, sources=NewsSourcesConfig(**news_sources_data)
+            ),
             social_watcher=SocialWatcherConfig(**social_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
             anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),

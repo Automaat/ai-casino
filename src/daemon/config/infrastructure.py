@@ -85,6 +85,7 @@ class ApiKeysConfig(BaseModel):
 
     alpha_vantage_api_key: str | None = None
     marketaux_api_key: str | None = None
+    newsdata_api_key: str | None = None
     finnhub_api_key: str | None = None
     alpaca_api_key: str | None = None
     alpaca_secret_key: str | None = None
