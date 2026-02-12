@@ -78,20 +78,24 @@ def _detect_ghostty_theme() -> bool | None:
     return None
 
 
-def detect_dark_mode() -> bool:
+def detect_dark_mode(theme_config: str | None = None) -> bool:
     """Detect OS dark mode preference.
+
+    Args:
+        theme_config: Theme override from config (nord-dark, nord-light, or None for auto-detect)
 
     Returns:
         True for dark mode, False for light mode.
     """
-    # 1. AI_CASINO_THEME env override
-    override = os.getenv("AI_CASINO_THEME", "").lower()
-    if override == "dark":
-        logger.debug("Theme override: dark")
-        return True
-    if override == "light":
-        logger.debug("Theme override: light")
-        return False
+    # 1. Config theme override
+    if theme_config:
+        override = theme_config.lower()
+        if "dark" in override:
+            logger.debug("Theme override from config: dark")
+            return True
+        if "light" in override:
+            logger.debug("Theme override from config: light")
+            return False
 
     # 2. Ghostty terminal config
     if os.getenv("TERM_PROGRAM") == "ghostty":

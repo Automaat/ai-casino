@@ -100,7 +100,10 @@ async def _tearsheet_async(
             console.print("[yellow]Warning: Could not fetch benchmark data, continuing without[/yellow]")
             benchmark = None
 
-    reporter = QuantStatsReporter()
+    from src.daemon.config import DaemonConfig
+
+    daemon_config = DaemonConfig()
+    reporter = QuantStatsReporter(daemon_config.metrics.risk_free_rate)
 
     try:
         tearsheet_obj = reporter.generate_tearsheet(

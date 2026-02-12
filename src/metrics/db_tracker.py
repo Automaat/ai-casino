@@ -24,7 +24,7 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
     def __init__(
         self,
         trade_repository: TradeRepository,
-        risk_free_rate: float | None = None,
+        risk_free_rate: float,
     ) -> None:
         """Initialize database metrics tracker.
 

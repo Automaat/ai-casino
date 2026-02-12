@@ -130,15 +130,15 @@ def backtest(
     portfolio: bool = False,
 ) -> None:
     """Run backtest for symbol(s)."""
-    from dotenv import load_dotenv
+    from src.daemon.config import DaemonConfig
 
-    load_dotenv()
+    daemon_config = DaemonConfig()
 
     logger.remove()
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO"),
+        level=daemon_config.logging.log_level,
         filter=sanitize_log_record,
     )
 

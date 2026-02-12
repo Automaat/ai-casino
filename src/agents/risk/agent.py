@@ -70,29 +70,23 @@ class RiskManagementAgent:
             enable_trailing_stop: Enable trailing stop-loss
             portfolio_var_calculator: Optional VaR calculator for portfolio-level limits
             portfolio_var_config: Optional VaR limit configuration
-            position_sizing_config: Optional position sizing config (takes priority over individual params and env vars)
+            position_sizing_config: Optional position sizing config (takes priority over individual params)
         """
         self.llm = llm_client
         self.max_position_risk = (
             position_sizing_config.max_risk_per_trade_pct
             if position_sizing_config
-            else (
-                max_position_risk
-                or float(os.getenv("MAX_POSITION_RISK", str(self.MAX_POSITION_RISK_PERCENT)))
-            )
+            else (max_position_risk or self.MAX_POSITION_RISK_PERCENT)
         )
         self.max_exposure = (
             position_sizing_config.max_total_exposure_pct
             if position_sizing_config
-            else (max_exposure or float(os.getenv("MAX_EXPOSURE", str(self.MAX_TOTAL_EXPOSURE_PERCENT))))
+            else (max_exposure or self.MAX_TOTAL_EXPOSURE_PERCENT)
         )
         self.max_single_position = (
             position_sizing_config.max_single_position_pct
             if position_sizing_config
-            else (
-                max_single_position
-                or float(os.getenv("MAX_SINGLE_POSITION", str(self.MAX_SINGLE_POSITION_PERCENT)))
-            )
+            else (max_single_position or self.MAX_SINGLE_POSITION_PERCENT)
         )
         self.enable_trailing_stop = enable_trailing_stop
         self._var_calculator = portfolio_var_calculator

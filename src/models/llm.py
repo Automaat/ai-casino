@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar, cast
 
-from dotenv import load_dotenv
 from loguru import logger
 from pydantic import BaseModel
 
@@ -50,63 +49,34 @@ class ToolCallingParams:
 
 T = TypeVar("T", bound=BaseModel)
 
-load_dotenv()
 
-
-_DEFAULT_CONCURRENT_REQUESTS = 5
 _MIN_CONCURRENT_REQUESTS = 1
 _MAX_CONCURRENT_REQUESTS = 20
 
-
-def _parse_max_concurrent_requests() -> int:
-    """Parse and validate LLM_MAX_CONCURRENT environment variable.
-
-    Valid range is 1-20. Falls back to default (5) on invalid values.
-
-    Returns:
-        Validated concurrency limit (1-20)
-    """
-    raw_value = os.getenv("LLM_MAX_CONCURRENT")
-
-    if raw_value is None:
-        return _DEFAULT_CONCURRENT_REQUESTS
-
-    try:
-        value = int(raw_value)
-    except ValueError:
-        logger.warning(
-            "Invalid LLM_MAX_CONCURRENT value %r; using default %d",
-            raw_value,
-            _DEFAULT_CONCURRENT_REQUESTS,
-        )
-        return _DEFAULT_CONCURRENT_REQUESTS
-
-    if value < _MIN_CONCURRENT_REQUESTS:
-        logger.warning(
-            "LLM_MAX_CONCURRENT value %d is below minimum %d; clamping to %d",
-            value,
-            _MIN_CONCURRENT_REQUESTS,
-            _MIN_CONCURRENT_REQUESTS,
-        )
-        return _MIN_CONCURRENT_REQUESTS
-
-    if value > _MAX_CONCURRENT_REQUESTS:
-        logger.warning(
-            "LLM_MAX_CONCURRENT value %d exceeds maximum %d; clamping to %d",
-            value,
-            _MAX_CONCURRENT_REQUESTS,
-            _MAX_CONCURRENT_REQUESTS,
-        )
-        return _MAX_CONCURRENT_REQUESTS
-
-    return value
-
-
-# Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 5)
+# Limit concurrent async requests for multi-agent workflows (from config, default 5)
 # With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
 # OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
-MAX_CONCURRENT_REQUESTS = _parse_max_concurrent_requests()
+MAX_CONCURRENT_REQUESTS = 5  # Will be updated via set_max_concurrent()
 _semaphore_holder: dict[str, asyncio.Semaphore | int | None] = {}
+
+
+def set_max_concurrent(value: int) -> None:
+    """Set global max concurrent requests limit.
+
+    Args:
+        value: Concurrency limit (1-20)
+    """
+    global MAX_CONCURRENT_REQUESTS
+    if value < _MIN_CONCURRENT_REQUESTS:
+        logger.warning(f"Clamping max_concurrent {value} to minimum {_MIN_CONCURRENT_REQUESTS}")
+        MAX_CONCURRENT_REQUESTS = _MIN_CONCURRENT_REQUESTS
+    elif value > _MAX_CONCURRENT_REQUESTS:
+        logger.warning(f"Clamping max_concurrent {value} to maximum {_MAX_CONCURRENT_REQUESTS}")
+        MAX_CONCURRENT_REQUESTS = _MAX_CONCURRENT_REQUESTS
+    else:
+        MAX_CONCURRENT_REQUESTS = value
+    # Reset semaphore on next _get_semaphore() call
+    _semaphore_holder.clear()
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -138,24 +108,24 @@ class LLMClient:
 
     def __init__(
         self,
-        provider: str | None = None,
-        model: str | None = None,
-        base_url: str | None = None,
+        provider: str,
+        model: str,
+        base_url: str = "http://localhost:11434",
         api_key: str | None = None,
         openai_base_url: str | None = None,
     ) -> None:
         """Initialize LLM client.
 
         Args:
-            provider: LLM provider (ollama, anthropic, openai). Defaults to env.
-            model: Model name. Defaults to env.
-            base_url: Base URL for Ollama. Defaults to env.
-            api_key: API key for provider (optional, falls back to env var)
+            provider: LLM provider (ollama, anthropic, openai)
+            model: Model name
+            base_url: Base URL for Ollama
+            api_key: API key for provider (optional)
             openai_base_url: Custom base URL for OpenAI (optional)
         """
-        self.provider = provider or os.getenv("LLM_PROVIDER", "ollama")
-        self.model = model or os.getenv("LLM_MODEL", "qwen3:14b")
-        self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.provider = provider
+        self.model = model
+        self.base_url = base_url
         self._api_key = api_key
         self._openai_base_url = openai_base_url
 
@@ -181,7 +151,7 @@ class LLMClient:
             return OpenAIProvider(
                 model=self.model,
                 api_key=self._api_key,
-                base_url=self._openai_base_url or os.getenv("OPENAI_API_BASE"),
+                base_url=self._openai_base_url,
             )
         msg = f"Unsupported provider: {self.provider}"
         raise ValueError(msg)

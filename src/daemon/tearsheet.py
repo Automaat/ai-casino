@@ -21,18 +21,20 @@ class DaemonTearsheetGenerator:
 
     def __init__(
         self,
+        risk_free_rate: float,
         broker: AlpacaBroker | None = None,
         market_fetcher: MarketDataFetcher | None = None,
     ) -> None:
         """Initialize tearsheet generator.
 
         Args:
+            risk_free_rate: Annual risk-free rate for metrics
             broker: Optional Alpaca broker for fetching closed trades
             market_fetcher: Optional market data fetcher for benchmark data
         """
         self.broker = broker
         self.market_fetcher = market_fetcher
-        self.reporter = QuantStatsReporter()
+        self.reporter = QuantStatsReporter(risk_free_rate)
         logger.info("Initialized DaemonTearsheetGenerator")
 
     def generate_portfolio_tearsheet(

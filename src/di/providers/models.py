@@ -1,11 +1,9 @@
 """Model providers for DI container."""
 
-import os
 from typing import TYPE_CHECKING
 
 from src.daemon.config import DaemonConfig
-from src.di.config import resolve_config_or_env
-from src.models.llm import LLMClient
+from src.models.llm import LLMClient, set_max_concurrent
 
 if TYPE_CHECKING:
     from src.backtesting.runner import BacktestRunner
@@ -30,9 +28,8 @@ def create_llm_client(
     daemon_config: DaemonConfig,
     metrics_collector: ExecutionMetricsCollector | None = None,
 ) -> LLMClient:
-    """Create LLMClient with resolved config.
+    """Create LLMClient with config.
 
-    Resolves provider/model from daemon_config.llm.* with env fallbacks.
     API key resolution by provider type (anthropic/openai/ollama).
 
     Args:
@@ -42,29 +39,24 @@ def create_llm_client(
     Returns:
         Configured LLMClient
     """
-    provider = daemon_config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+    # Set global concurrency limit from config
+    set_max_concurrent(daemon_config.llm.max_concurrent)
+
+    provider = daemon_config.llm.provider
 
     if provider == "anthropic":
-        api_key = resolve_config_or_env(
-            daemon_config.api_keys.anthropic_api_key,
-            "ANTHROPIC_API_KEY",
-        )
+        api_key = daemon_config.api_keys.anthropic_api_key
     elif provider == "openai":
-        api_key = resolve_config_or_env(
-            daemon_config.api_keys.openai_api_key,
-            "OPENAI_API_KEY",
-        )
+        api_key = daemon_config.api_keys.openai_api_key
     else:
         api_key = None
 
     llm_client = LLMClient(
         provider=daemon_config.llm.provider,
         model=daemon_config.llm.model,
+        base_url=daemon_config.llm.ollama_base_url,
         api_key=api_key,
-        openai_base_url=resolve_config_or_env(
-            daemon_config.api_keys.openai_api_base,
-            "OPENAI_API_BASE",
-        ),
+        openai_base_url=daemon_config.api_keys.openai_api_base,
     )
 
     if metrics_collector is not None:
@@ -174,32 +166,32 @@ def create_optuna_optimizer(n_trials: int = 100) -> OptunaOptimizer:
     return OptunaOptimizer(n_trials=n_trials)
 
 
-def create_metrics_tracker(risk_free_rate: float | None = None) -> MetricsTracker:
-    """Create MetricsTracker with lazy import.
+def create_metrics_tracker(daemon_config: DaemonConfig) -> MetricsTracker:
+    """Create MetricsTracker with config.
 
     Args:
-        risk_free_rate: Annual risk-free rate for Sharpe ratio (default from env or 0.02)
+        daemon_config: Daemon configuration
 
     Returns:
         MetricsTracker instance
     """
     from src.metrics.tracker import MetricsTracker
 
-    return MetricsTracker(risk_free_rate=risk_free_rate)
+    return MetricsTracker(risk_free_rate=daemon_config.metrics.risk_free_rate)
 
 
-def create_quantstats_reporter(risk_free_rate: float | None = None) -> QuantStatsReporter:
-    """Create QuantStatsReporter with lazy import.
+def create_quantstats_reporter(daemon_config: DaemonConfig) -> QuantStatsReporter:
+    """Create QuantStatsReporter with config.
 
     Args:
-        risk_free_rate: Annual risk-free rate (default from env or 0.02)
+        daemon_config: Daemon configuration
 
     Returns:
         QuantStatsReporter instance
     """
     from src.metrics.quantstats_reporter import QuantStatsReporter
 
-    return QuantStatsReporter(risk_free_rate=risk_free_rate)
+    return QuantStatsReporter(risk_free_rate=daemon_config.metrics.risk_free_rate)
 
 
 def create_stock_screener(

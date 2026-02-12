@@ -58,13 +58,13 @@ def dashboard(
         port: Dashboard server port (default: 8050)
         debug: Enable debug mode (default: False)
     """
-    from dotenv import load_dotenv
+    from src.daemon.config import DaemonConfig
 
-    load_dotenv()
+    daemon_config = DaemonConfig()
 
     # Configure logging
     logger.remove()
-    log_level = "DEBUG" if debug else os.getenv("LOG_LEVEL", "INFO")
+    log_level = "DEBUG" if debug else daemon_config.logging.log_level
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
