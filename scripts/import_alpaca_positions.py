@@ -16,7 +16,7 @@ from src.daemon.positions import PositionRecord
 from src.data.broker import AlpacaBroker
 from src.database.engine import DatabaseEngine
 from src.database.repositories.position import PositionRecordRepository
-from src.strategies.momentum import Signal
+from src.strategies.signal import Signal
 
 
 async def main() -> None:

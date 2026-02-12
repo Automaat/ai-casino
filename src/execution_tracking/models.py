@@ -58,8 +58,7 @@ class ExecutionNode(BaseModel):
         self.status = ExecutionStatus.FAILED
         self.error = error
         self.end_time = datetime.now(UTC)
-        if self.end_time:
-            self.duration_ms = (self.end_time - self.start_time).total_seconds() * 1000
+        self.duration_ms = (self.end_time - self.start_time).total_seconds() * 1000
 
 
 class ExecutionGraph(BaseModel):

@@ -180,7 +180,7 @@ class ExecutionGraphTracker:
             # Fire and forget - don't block on event publishing
             # Only publish if there's a running event loop
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 asyncio.create_task(self._event_bus.publish(event))
             except RuntimeError:
                 # No event loop running - skip publishing (common in tests)
