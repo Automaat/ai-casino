@@ -74,7 +74,6 @@ def test_create_market_fetcher_alpha_vantage(monkeypatch, mock_historical_cache)
     assert isinstance(fetcher, MarketDataFetcher)
     assert fetcher.use_alpha_vantage is True
 
-
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
     config = DaemonConfig(data_sources=DataSourcesConfig(market_data="alpha_vantage"))
     fetcher = data_providers.create_market_fetcher(config, mock_historical_cache)
@@ -91,7 +90,6 @@ def test_create_news_fetcher(mock_daemon_config, mock_historical_cache):
     assert fetcher._cache is mock_historical_cache
     assert fetcher.api_key == "test_mx_key"
 
-
     assert isinstance(fetcher, NewsFetcher)
 
 
@@ -103,7 +101,6 @@ def test_create_fundamental_fetcher(mock_daemon_config, mock_historical_cache):
     assert fetcher._cache is mock_historical_cache
     assert fetcher.api_key == "test_av_key"
 
-
     assert isinstance(fetcher, FundamentalDataFetcher)
 
 
@@ -114,7 +111,6 @@ def test_create_finnhub_fetcher(mock_daemon_config):
     assert isinstance(fetcher, FinnhubFetcher)
     assert fetcher._api_key == "test_fh_key"
 
-
     assert isinstance(fetcher, FinnhubFetcher)
 
 
@@ -124,7 +120,6 @@ def test_create_reddit_fetcher(mock_daemon_config, mock_historical_cache):
 
     assert isinstance(fetcher, RedditFetcher)
     assert fetcher._historical_cache is mock_historical_cache
-
 
     assert isinstance(fetcher, RedditFetcher)
 
@@ -211,6 +206,5 @@ def test_create_alpaca_broker_live(mock_historical_cache):
     assert isinstance(broker, AlpacaBroker)
     assert broker.paper is False
     assert broker._cache is mock_historical_cache
-
 
     assert isinstance(broker, AlpacaBroker)

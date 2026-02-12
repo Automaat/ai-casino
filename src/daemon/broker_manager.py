@@ -51,9 +51,7 @@ class BrokerManager:
         if self.config.auto_trade:
             # Get credentials from config only
             if self.config.trading_mode == TradingMode.PAPER:
-                api_key = (
-                    self.config.api_keys.alpaca_paper_api_key or self.config.api_keys.alpaca_api_key
-                )
+                api_key = self.config.api_keys.alpaca_paper_api_key or self.config.api_keys.alpaca_api_key
                 secret_key = (
                     self.config.api_keys.alpaca_paper_secret_key or self.config.api_keys.alpaca_secret_key
                 )
@@ -89,7 +87,6 @@ class BrokerManager:
                     self.state.current_trading_mode = "paper"
                     self.state.paper_trading_start_date = datetime.now(UTC)
                     logger.warning("Switched to paper mode, reset start date")
-
 
     def get_merged_watchlist(self) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates.

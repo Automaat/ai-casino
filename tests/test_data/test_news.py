@@ -51,7 +51,6 @@ def test_fetcher_init_with_key():
     assert fetcher.api_key == "test-key"
 
 
-
 def test_fetcher_init_no_key(monkeypatch):
     monkeypatch.delenv("MARKETAUX_API_KEY", raising=False)
     fetcher = NewsFetcher()
