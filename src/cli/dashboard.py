@@ -13,6 +13,8 @@ from src.utils.logging import sanitize_log_record
 
 console = Console()
 
+DEFAULT_DASHBOARD_PORT = 8050
+
 
 def _check_daemon_health(api_url: str) -> DaemonAPIClient:
     """Check daemon health and warn if unreachable."""
@@ -86,7 +88,7 @@ def dashboard(
                     refresh_interval=config.refresh_interval,
                 )
 
-        if port != 8050:  # Non-default port specified
+        if port != DEFAULT_DASHBOARD_PORT:  # Non-default port specified
             config = DashboardConfig(
                 api_url=config.api_url,
                 port=port,
