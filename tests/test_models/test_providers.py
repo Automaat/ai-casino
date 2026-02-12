@@ -26,10 +26,8 @@ class TestOpenAIProviderStructured:
             mock.return_value = client
             yield client
 
-    async def test_astructured_returns_validated_model(self, mock_openai_client, monkeypatch):
+    async def test_astructured_returns_validated_model(self, mock_openai_client):
         """Test OpenAI astructured returns validated Pydantic model."""
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-
         from src.models.providers.openai import OpenAIProvider
 
         # Mock response
@@ -41,7 +39,8 @@ class TestOpenAIProviderStructured:
         mock_response.choices = [mock_choice]
         mock_openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        provider = OpenAIProvider(model="gpt-4o")
+        # Pass API key explicitly (no env var fallback after refactoring)
+        provider = OpenAIProvider(model="gpt-4o", api_key="test-key")
         result = await provider.astructured(
             [{"role": "user", "content": "test"}], SampleResponseModel, temperature=0.5
         )
@@ -50,10 +49,8 @@ class TestOpenAIProviderStructured:
         assert result.answer == "42"
         assert result.confidence == 0.95
 
-    async def test_astructured_raises_on_validation_error(self, mock_openai_client, monkeypatch):
+    async def test_astructured_raises_on_validation_error(self, mock_openai_client):
         """Test OpenAI astructured raises StructuredOutputError on validation failure."""
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-
         from src.models.providers.openai import OpenAIProvider
 
         mock_message = MagicMock()
@@ -64,7 +61,8 @@ class TestOpenAIProviderStructured:
         mock_response.choices = [mock_choice]
         mock_openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        provider = OpenAIProvider(model="gpt-4o")
+        # Pass API key explicitly (no env var fallback after refactoring)
+        provider = OpenAIProvider(model="gpt-4o", api_key="test-key")
         with pytest.raises(StructuredOutputError) as exc_info:
             await provider.astructured(
                 [{"role": "user", "content": "test"}], SampleResponseModel, temperature=0.5
@@ -73,14 +71,14 @@ class TestOpenAIProviderStructured:
         assert "Validation failed" in str(exc_info.value)
         assert exc_info.value.raw_response is not None
 
-    def test_supports_structured_output(self, mock_openai_client, monkeypatch):
+    def test_supports_structured_output(self, mock_openai_client):
         """Test OpenAI provider supports structured output."""
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         _ = mock_openai_client  # Fixture needed for mock to work
 
         from src.models.providers.openai import OpenAIProvider
 
-        provider = OpenAIProvider(model="gpt-4o")
+        # Pass API key explicitly (no env var fallback after refactoring)
+        provider = OpenAIProvider(model="gpt-4o", api_key="test-key")
         assert provider.supports_structured_output is True
 
 
@@ -88,13 +86,13 @@ class TestOpenAISchemaProcessing:
     """Tests for OpenAI schema processing (_ensure_additional_properties_false)."""
 
     @pytest.fixture
-    def provider(self, monkeypatch):
+    def provider(self):
         """Create OpenAI provider instance."""
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         with patch("src.models.providers.openai.AsyncOpenAI"):
             from src.models.providers.openai import OpenAIProvider
 
-            return OpenAIProvider(model="gpt-4o")
+            # Pass API key explicitly (no env var fallback after refactoring)
+            return OpenAIProvider(model="gpt-4o", api_key="test-key")
 
     def test_nested_objects_get_additional_properties_false(self, provider):
         """Test nested objects receive additionalProperties: false."""
@@ -268,10 +266,8 @@ class TestAnthropicProviderStructured:
             mock.return_value = client
             yield client
 
-    async def test_astructured_returns_validated_model(self, mock_anthropic_client, monkeypatch):
+    async def test_astructured_returns_validated_model(self, mock_anthropic_client):
         """Test Anthropic astructured returns validated Pydantic model via tool use."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-
         from src.models.providers.anthropic import AnthropicProvider
 
         # Mock tool use response
@@ -283,7 +279,8 @@ class TestAnthropicProviderStructured:
         mock_response.content = [mock_tool_block]
         mock_anthropic_client.messages.create = AsyncMock(return_value=mock_response)
 
-        provider = AnthropicProvider(model="claude-sonnet-4-20250514")
+        # Pass API key explicitly (no env var fallback after refactoring)
+        provider = AnthropicProvider(model="claude-sonnet-4-20250514", api_key="test-key")
         result = await provider.astructured(
             [{"role": "user", "content": "test"}], SampleResponseModel, temperature=0.5
         )
@@ -292,10 +289,8 @@ class TestAnthropicProviderStructured:
         assert result.answer == "test answer"
         assert result.confidence == 0.8
 
-    async def test_astructured_raises_when_no_tool_block(self, mock_anthropic_client, monkeypatch):
+    async def test_astructured_raises_when_no_tool_block(self, mock_anthropic_client):
         """Test Anthropic astructured raises error when no tool_use block."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-
         from src.models.providers.anthropic import AnthropicProvider
 
         # Mock text-only response (no tool use)
@@ -306,7 +301,8 @@ class TestAnthropicProviderStructured:
         mock_response.content = [mock_text_block]
         mock_anthropic_client.messages.create = AsyncMock(return_value=mock_response)
 
-        provider = AnthropicProvider(model="claude-sonnet-4-20250514")
+        # Pass API key explicitly (no env var fallback after refactoring)
+        provider = AnthropicProvider(model="claude-sonnet-4-20250514", api_key="test-key")
         with pytest.raises(StructuredOutputError) as exc_info:
             await provider.astructured(
                 [{"role": "user", "content": "test"}], SampleResponseModel, temperature=0.5
@@ -314,14 +310,14 @@ class TestAnthropicProviderStructured:
 
         assert "No tool_use block" in str(exc_info.value)
 
-    def test_supports_structured_output(self, mock_anthropic_client, monkeypatch):
+    def test_supports_structured_output(self, mock_anthropic_client):
         """Test Anthropic provider supports structured output."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         _ = mock_anthropic_client  # Fixture needed for mock to work
 
         from src.models.providers.anthropic import AnthropicProvider
 
-        provider = AnthropicProvider(model="claude-sonnet-4-20250514")
+        # Pass API key explicitly (no env var fallback after refactoring)
+        provider = AnthropicProvider(model="claude-sonnet-4-20250514", api_key="test-key")
         assert provider.supports_structured_output is True
 
 

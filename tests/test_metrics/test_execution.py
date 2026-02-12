@@ -315,10 +315,8 @@ class TestContextVarPropagation:
 class TestProviderUsageCapture:
     """Tests that providers capture _last_usage."""
 
-    async def test_anthropic_captures_usage(self, monkeypatch):
+    async def test_anthropic_captures_usage(self):
         from unittest.mock import AsyncMock, patch
-
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         with patch("src.models.providers.anthropic.AsyncAnthropic") as mock_cls:
             client = MagicMock()
@@ -332,17 +330,16 @@ class TestProviderUsageCapture:
 
             from src.models.providers.anthropic import AnthropicProvider
 
-            provider = AnthropicProvider(model="claude-sonnet-4-20250514")
+            # Pass API key explicitly (no env var fallback after refactoring)
+            provider = AnthropicProvider(model="claude-sonnet-4-20250514", api_key="test-key")
             await provider.acomplete([{"role": "user", "content": "test"}])
 
             assert provider.last_usage is not None
             assert provider.last_usage.input_tokens == 100
             assert provider.last_usage.output_tokens == 50
 
-    async def test_openai_captures_usage(self, monkeypatch):
+    async def test_openai_captures_usage(self):
         from unittest.mock import AsyncMock, patch
-
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
         with patch("src.models.providers.openai.AsyncOpenAI") as mock_cls:
             client = MagicMock()
@@ -356,7 +353,8 @@ class TestProviderUsageCapture:
 
             from src.models.providers.openai import OpenAIProvider
 
-            provider = OpenAIProvider(model="gpt-4o")
+            # Pass API key explicitly (no env var fallback after refactoring)
+            provider = OpenAIProvider(model="gpt-4o", api_key="test-key")
             await provider.acomplete([{"role": "user", "content": "test"}])
 
             assert provider.last_usage is not None
