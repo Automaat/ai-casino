@@ -5,7 +5,7 @@ and triggers LLM triage + analysis for relevant posts.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -119,14 +119,16 @@ class TrumpWatcher(EventWatcher):
 
         logger.debug(f"Found {len(new_posts)} new Trump posts")
 
-        # Convert to TrumpEvent objects
+        # Convert to TrumpEvent objects (cast to satisfy Protocol variance)
         events: list[BaseEvent] = [
-            TrumpEvent(
-                event_id=post.id,
-                timestamp=post.created_at,
-                post=post,
+            cast(
+                "BaseEvent",
+                TrumpEvent(
+                    event_id=post.id,
+                    timestamp=post.created_at,
+                    post=post,
+                ),
             )
             for post in new_posts
         ]
-
         return events
