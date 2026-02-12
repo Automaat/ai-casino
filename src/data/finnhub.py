@@ -1,7 +1,6 @@
 """Finnhub social sentiment data fetcher."""
 
 import hashlib
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -87,14 +86,14 @@ class FinnhubFetcher:
             api_key: Finnhub API key
             cache_dir: Cache directory path
         """
-        self._api_key = api_key or os.getenv("FINNHUB_API_KEY")
+        self._api_key = api_key
 
         self._cache_dir = Path(cache_dir or "data/cache/finnhub")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache = Cache(str(self._cache_dir))
 
         if not self._api_key:
-            logger.warning("Finnhub API key not set - API calls will fail")
+            logger.warning("finnhub_api_key not set in config - API calls will fail")
         else:
             logger.info(f"Initialized FinnhubFetcher (cache_dir={self._cache_dir})")
 

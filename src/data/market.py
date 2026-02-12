@@ -1,7 +1,6 @@
 """Market data fetchers for stock prices and fundamentals."""
 
 import asyncio
-import os
 import zoneinfo
 from datetime import UTC, date, datetime, timedelta
 
@@ -91,11 +90,10 @@ class MarketDataFetcher:
         self._cache = historical_cache
 
         if use_alpha_vantage:
-            resolved_key = api_key or os.getenv("ALPHA_VANTAGE_API_KEY")
-            if not resolved_key:
-                msg = "ALPHA_VANTAGE_API_KEY not set in environment or config"
+            if not api_key:
+                msg = "alpha_vantage_api_key not set in config"
                 raise ValueError(msg)
-            self.ts = TimeSeries(key=resolved_key, output_format="pandas")
+            self.ts = TimeSeries(key=api_key, output_format="pandas")
             logger.info("Initialized Alpha Vantage client")
         else:
             logger.info("Using yfinance for market data")

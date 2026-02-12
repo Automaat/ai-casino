@@ -1,10 +1,8 @@
 """Model providers for DI container."""
 
-import os
 from typing import TYPE_CHECKING
 
 from src.daemon.config import DaemonConfig
-from src.di.config import resolve_config_or_env
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
@@ -41,30 +39,21 @@ def create_llm_client(
     Returns:
         Configured LLMClient
     """
-    provider = daemon_config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+    provider = daemon_config.llm.provider or "ollama"
 
     if provider == "anthropic":
-        api_key = resolve_config_or_env(
-            daemon_config.api_keys.anthropic_api_key,
-            "ANTHROPIC_API_KEY",
-        )
+        api_key = daemon_config.api_keys.anthropic_api_key
     elif provider == "openai":
-        api_key = resolve_config_or_env(
-            daemon_config.api_keys.openai_api_key,
-            "OPENAI_API_KEY",
-        )
+        api_key = daemon_config.api_keys.openai_api_key
     else:
         api_key = None
 
     llm_client = LLMClient(
         provider=provider,
-        model=daemon_config.llm.model or os.getenv("LLM_MODEL", "qwen3:14b"),
-        base_url=daemon_config.llm.ollama_base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        model=daemon_config.llm.model or "qwen3:14b",
+        base_url=daemon_config.llm.ollama_base_url or "http://localhost:11434",
         api_key=api_key,
-        openai_base_url=resolve_config_or_env(
-            daemon_config.api_keys.openai_api_base,
-            "OPENAI_API_BASE",
-        ),
+        openai_base_url=daemon_config.api_keys.openai_api_base,
     )
 
     if metrics_collector is not None:

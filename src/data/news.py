@@ -1,7 +1,6 @@
 """News data fetcher for financial news."""
 
 import asyncio
-import os
 from datetime import datetime
 
 import httpx
@@ -58,10 +57,10 @@ class NewsFetcher:
             api_key: Marketaux API key. Defaults to env variable.
             historical_cache: Optional permanent cache for news articles
         """
-        self.api_key = api_key or os.getenv("MARKETAUX_API_KEY", "")
+        self.api_key = api_key or ""
         self._cache = historical_cache
         if not self.api_key:
-            logger.warning("MARKETAUX_API_KEY not set - API calls may be limited")
+            logger.warning("marketaux_api_key not set in config - API calls may be limited")
 
     def _log_rate_limit_headers(self, response: httpx.Response, symbol: str = "") -> None:
         """Log Marketaux rate limit headers.
