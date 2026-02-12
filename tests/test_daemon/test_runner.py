@@ -1,7 +1,6 @@
 """Tests for daemon runner."""
 
 import asyncio
-import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import ANY, AsyncMock, Mock, patch
@@ -206,7 +205,7 @@ def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonC
 
 
 async def test_analyze_watchlist_uses_merged(
-    sample_config: DaemonConfig, mock_broker: Mock
+    sample_config: DaemonConfig, mock_broker: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Test _analyze_watchlist uses merged watchlist."""
     sample_config.api_keys.alpha_vantage_api_key = "test_key"

@@ -90,7 +90,9 @@ class BrokerManager:
         else:
             # Watchlist-only mode: Try to init broker for position merging if credentials present
             api_key = self.config.api_keys.alpaca_paper_api_key or self.config.api_keys.alpaca_api_key
-            secret_key = self.config.api_keys.alpaca_paper_secret_key or self.config.api_keys.alpaca_secret_key
+            secret_key = (
+                self.config.api_keys.alpaca_paper_secret_key or self.config.api_keys.alpaca_secret_key
+            )
 
             if api_key and secret_key:
                 try:
