@@ -35,30 +35,30 @@ daemon:
   market_hours_only: false
   auto_trade: false
 
-news_watcher:
-  enabled: true
-  poll_interval: 120  # 2 minutes (aggressive for testing)
-  relevance_threshold: 0.7
-  cooldown_minutes: 30
-  breaking_threshold_minutes: 15
-  max_concurrent_analyses: 2
+  news_watcher:
+    enabled: true
+    poll_interval_minutes: 2  # 2 minutes (aggressive for testing)
+    relevance_threshold: 0.7
+    cooldown_minutes: 30
+    breaking_threshold_minutes: 15
+    max_concurrent_analyses: 2
 
-api_keys:
-  alpha_vantage_api_key: "YOUR_KEY"
-  marketaux_api_key: "YOUR_KEY"
-  finnhub_api_key: "YOUR_KEY"
-  anthropic_api_key: "YOUR_KEY"
+  api_keys:
+    alpha_vantage_api_key: "YOUR_KEY"
+    marketaux_api_key: "YOUR_KEY"
+    finnhub_api_key: "YOUR_KEY"
+    anthropic_api_key: "YOUR_KEY"
 
-database:
-  enable_persistence: false
+  database:
+    enable_persistence: false
 
-api:
-  enabled: false
+  api:
+    enabled: false
 ```
 
 **Config notes:**
 
-- `poll_interval: 120` - Check every 2 minutes (vs default 5 min)
+- `poll_interval_minutes: 2` - Check every 2 minutes (vs default 5 min)
 - `breaking_threshold_minutes: 15` - Only news <15min old
 - `market_hours_only: false` - Run 24/7 for testing
 - `auto_trade: false` - Paper analysis only, no actual trades
@@ -74,7 +74,7 @@ api:
 rm -f ~/.ai-casino/worker.log
 
 # Start daemon (Ctrl+C to stop)
-python -m src.cli.daemon --config ~/.ai-casino/daemon-test.yaml
+python -m src.cli.app daemon --config ~/.ai-casino/daemon-test.yaml
 ```
 
 **Expected output:**

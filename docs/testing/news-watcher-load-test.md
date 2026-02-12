@@ -33,31 +33,31 @@ daemon:
   market_hours_only: false
   auto_trade: false
 
-news_watcher:
-  enabled: true
-  poll_interval: 60  # 1 minute (very aggressive)
-  relevance_threshold: 0.5  # Lower threshold (more events)
-  cooldown_minutes: 10  # Short cooldown
-  breaking_threshold_minutes: 30  # Longer window
-  max_concurrent_analyses: 3
+  news_watcher:
+    enabled: true
+    poll_interval_minutes: 1  # 1 minute (very aggressive)
+    relevance_threshold: 0.5  # Lower threshold (more events)
+    cooldown_minutes: 10  # Short cooldown
+    breaking_threshold_minutes: 30  # Longer window
+    max_concurrent_analyses: 3
 
-api_keys:
-  alpha_vantage_api_key: "YOUR_KEY"
-  marketaux_api_key: "YOUR_KEY"  # Premium tier recommended
-  finnhub_api_key: "YOUR_KEY"
-  newsdata_api_key: "YOUR_KEY"
-  anthropic_api_key: "YOUR_KEY"
+  api_keys:
+    alpha_vantage_api_key: "YOUR_KEY"
+    marketaux_api_key: "YOUR_KEY"  # Premium tier recommended
+    finnhub_api_key: "YOUR_KEY"
+    newsdata_api_key: "YOUR_KEY"
+    anthropic_api_key: "YOUR_KEY"
 
-database:
-  enable_persistence: false
+  database:
+    enable_persistence: false
 
-api:
-  enabled: false
+  api:
+    enabled: false
 ```
 
 **Load test parameters:**
 
-- `poll_interval: 60` - Poll every minute (60 fetches/hour)
+- `poll_interval_minutes: 1` - Poll every minute (60 fetches/hour)
 - `5 symbols` - Larger watchlist for more analysis
 - `relevance_threshold: 0.5` - More events analyzed
 - All 4 news sources enabled
@@ -70,7 +70,7 @@ api:
 
 ```bash
 # Start daemon
-python -m src.cli.daemon --config ~/.ai-casino/daemon-loadtest.yaml
+python -m src.cli.app daemon --config ~/.ai-casino/daemon-loadtest.yaml
 
 # In another terminal, capture baseline
 ps aux | grep "daemon" | grep -v grep | awk '{print "Initial RSS:", $6/1024, "MB"}'
@@ -294,7 +294,7 @@ grep "fetch failed" ~/.ai-casino/worker.log  # All sources failing?
 **Fix:**
 
 - Verify API keys: Check config
-- Test sources manually: `python -m src.data.news`
+- Verify API keys in daemon config YAML
 - Lower `breaking_threshold_minutes: 60`
 
 ---
