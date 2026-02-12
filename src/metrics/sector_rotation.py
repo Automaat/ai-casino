@@ -149,10 +149,9 @@ class SectorRotationAnalyzer:
             Dict mapping ticker to list of close prices
         """
         tickers = [etf for _, etf in SECTOR_ETFS] + [MARKET_INDEX]
-        ticker_str = " ".join(tickers)
 
         logger.info(f"Fetching sector data for {len(tickers)} symbols")
-        data = yf.download(ticker_str, period="6mo", progress=False)
+        data = yf.download(tickers, period="6mo", progress=False, group_by="ticker")
 
         closes: dict[str, list[float]] = {}
         for ticker in tickers:

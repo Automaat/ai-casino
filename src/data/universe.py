@@ -365,6 +365,11 @@ class StockUniverseFetcher:
                     sector = cols[3].get_text(strip=True)
                     industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
 
+                    # Validate: symbol should not contain spaces and should be short
+                    if " " in symbol or len(symbol) > 6:
+                        logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                        continue
+
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
 
             return stocks
@@ -394,6 +399,11 @@ class StockUniverseFetcher:
                     symbol = cols[1].get_text(strip=True).replace(".", "-")
                     sector = cols[2].get_text(strip=True)
                     industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
+
+                    # Validate: symbol should not contain spaces and should be short
+                    if " " in symbol or len(symbol) > 6:
+                        logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                        continue
 
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
 
@@ -431,6 +441,11 @@ class StockUniverseFetcher:
 
                 # Handle BRK.B -> BRK-B conversion
                 symbol = ticker.replace(".", "-")
+
+                # Validate: symbol should not contain spaces and should be short
+                if " " in symbol or len(symbol) > 6:
+                    logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                    continue
 
                 stocks.append(
                     StockInfo(
