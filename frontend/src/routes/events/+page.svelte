@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Card from '$lib/components/ui/Card.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import { events, marketEvents, degradationHistory, analyses, risk, degradation } from '$lib/stores/dashboard';
 	import { formatDate } from '$lib/utils/format';
-	import type { SystemEvent, MarketEvent, DegradationRecord } from '$lib/types/api';
+	import type { SystemEvent, MarketEvent } from '$lib/types/api';
 	import * as echarts from 'echarts';
 	import type { ECharts, EChartsOption } from 'echarts';
 
@@ -204,9 +202,9 @@
 
 		// Date filter
 		if (start && end) {
-			const startDate = new Date(start);
-			const endDate = new Date(end);
-			endDate.setHours(23, 59, 59, 999);
+			const startDate = new Date(start + 'T00:00:00');
+			const endDate = new Date(end + 'T23:59:59');
+			endDate.setMilliseconds(999);
 
 			filtered = filtered.filter(e => {
 				const eventDate = new Date(e.timestamp);
@@ -228,17 +226,21 @@
 		marketEvents.fetch({ limit: 100 });
 		degradationHistory.fetch({ limit: 50 });
 		analyses.fetch({ limit: 100 });
-
-		// Initialize degradation chart
-		if (degradationChartContainer) {
-			degradationChart = echarts.init(degradationChartContainer, 'dark');
-			updateDegradationChart();
-		}
+		risk.fetch();
 
 		return () => {
 			degradationChart?.dispose();
+			degradationChart = null;
 		};
 	});
+
+	// Initialize degradation chart reactively when container becomes available
+	$: if (degradationChartContainer && !degradationChart) {
+		degradationChart = echarts.init(degradationChartContainer, 'dark');
+		if ($degradationHistory) {
+			updateDegradationChart();
+		}
+	}
 
 	$: if (degradationChart && $degradationHistory) {
 		updateDegradationChart();
@@ -313,30 +315,6 @@
 		degradationChart.setOption(option);
 	}
 
-	const columns = [
-		{
-			key: 'timestamp' as keyof CombinedEvent,
-			label: 'Timestamp',
-			format: (value: string) => formatDate(value),
-			class: 'font-mono text-xs'
-		},
-		{
-			key: 'event_type' as keyof CombinedEvent,
-			label: 'Type',
-			class: 'font-medium'
-		},
-		{
-			key: 'category' as keyof CombinedEvent,
-			label: 'Category',
-			class: 'text-xs'
-		},
-		{
-			key: 'details' as keyof CombinedEvent,
-			label: 'Details',
-			format: (value: string) => truncate(value),
-			class: 'text-xs'
-		}
-	];
 </script>
 
 <svelte:head>
@@ -349,7 +327,7 @@
 		<div class="space-y-2">
 			<h2 class="text-xl font-semibold text-slate-100">⚠️ Active Warnings</h2>
 			{#each warnings as warning}
-				<div class="bg-{warning.severity === 'danger' ? 'red' : 'yellow'}-900/20 border border-{warning.severity === 'danger' ? 'red' : 'yellow'}-700 rounded-lg p-4">
+				<div class="{warning.severity === 'danger' ? 'bg-red-900/20 border-red-700' : 'bg-yellow-900/20 border-yellow-700'} border rounded-lg p-4">
 					<div class="flex items-start gap-3">
 						<span class="text-2xl">{warning.icon}</span>
 						<div>
