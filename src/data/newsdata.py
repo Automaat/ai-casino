@@ -67,7 +67,11 @@ class NewsDataFetcher:
 
                     try:
                         published_at = datetime.fromisoformat(item.get("pubDate", ""))
-                    except (ValueError, AttributeError, TypeError):
+                    except (  # ruff: noqa: COM812
+                        ValueError,
+                        AttributeError,
+                        TypeError,
+                    ):
                         published_at = datetime.now(UTC)
                         logger.warning(f"Invalid date format: {item.get('pubDate')}")
 
@@ -125,7 +129,11 @@ class NewsDataFetcher:
 
                     try:
                         published_at = datetime.fromisoformat(item.get("pubDate", ""))
-                    except (ValueError, AttributeError, TypeError):
+                    except (  # ruff: noqa: COM812
+                        ValueError,
+                        AttributeError,
+                        TypeError,
+                    ):
                         published_at = datetime.now(UTC)
                         logger.warning(f"Invalid date format: {item.get('pubDate')}")
 
