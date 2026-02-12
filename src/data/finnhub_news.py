@@ -147,8 +147,6 @@ class FinnhubNewsFetcher:
                     if not item.get("url") or not item.get("headline"):
                         continue
 
-                    from datetime import UTC
-
                     published_at = datetime.fromtimestamp(item.get("datetime", 0), tz=UTC)
 
                     articles.append(

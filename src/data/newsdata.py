@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from dotenv import load_dotenv
@@ -68,10 +68,10 @@ class NewsDataFetcher:
 
         Args:
             symbol: Stock ticker symbol
-            limit: Maximum number of articles
+            limit: Maximum number of articles (capped at 10 by API)
 
         Returns:
-            List of NewsArticle objects
+            List of NewsArticle objects (max 10 per API limitation)
         """
         logger.info(f"Fetching {limit} news articles for {symbol} from NewsData.io")
 
@@ -97,7 +97,7 @@ class NewsDataFetcher:
                     try:
                         published_at = datetime.fromisoformat(item.get("pubDate", ""))
                     except ValueError, AttributeError:
-                        published_at = datetime.now()
+                        published_at = datetime.now(UTC)
                         logger.warning(f"Invalid date format: {item.get('pubDate')}")
 
                     articles.append(
@@ -126,10 +126,10 @@ class NewsDataFetcher:
         """Fetch general market news (sync implementation).
 
         Args:
-            limit: Maximum number of articles
+            limit: Maximum number of articles (capped at 10 by API)
 
         Returns:
-            List of NewsArticle objects
+            List of NewsArticle objects (max 10 per API limitation)
         """
         logger.info(f"Fetching {limit} general market news from NewsData.io")
 
@@ -155,7 +155,7 @@ class NewsDataFetcher:
                     try:
                         published_at = datetime.fromisoformat(item.get("pubDate", ""))
                     except ValueError, AttributeError:
-                        published_at = datetime.now()
+                        published_at = datetime.now(UTC)
                         logger.warning(f"Invalid date format: {item.get('pubDate')}")
 
                     articles.append(
