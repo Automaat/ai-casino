@@ -14,6 +14,7 @@ from src.data.reddit import RedditFetcher
 from src.data.truth_social import TruthSocialFetcher
 from src.data.universe import StockUniverseFetcher
 from src.data.websearch import WebSearchFetcher
+from src.di.config import resolve_config_or_env
 
 
 def create_historical_cache() -> HistoricalCache:
