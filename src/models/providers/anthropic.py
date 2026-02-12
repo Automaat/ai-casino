@@ -1,6 +1,5 @@
 """Anthropic LLM provider using official SDK."""
 
-import os
 from collections.abc import AsyncIterator
 from typing import TypeVar
 
@@ -52,14 +51,13 @@ class AnthropicProvider(BaseLLMProvider):
         Raises:
             ValueError: If API key is not provided and ANTHROPIC_API_KEY env var is empty
         """
-        resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        if not resolved_key:
-            msg = "Anthropic API key required: set ANTHROPIC_API_KEY env var or pass api_key"
+        if not api_key:
+            msg = "Anthropic API key required in config (api_keys.anthropic_api_key)"
             raise ValueError(msg)
 
         self._model = model
         self._max_tokens = max_tokens
-        self._client = AsyncAnthropic(api_key=resolved_key)
+        self._client = AsyncAnthropic(api_key=api_key)
         logger.debug(f"Initialized AnthropicProvider: model={model}, max_tokens={max_tokens}")
 
     async def close(self) -> None:

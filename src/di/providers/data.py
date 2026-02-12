@@ -14,7 +14,6 @@ from src.data.reddit import RedditFetcher
 from src.data.truth_social import TruthSocialFetcher
 from src.data.universe import StockUniverseFetcher
 from src.data.websearch import WebSearchFetcher
-from src.di.config import resolve_config_or_env
 
 
 def create_historical_cache() -> HistoricalCache:
@@ -251,15 +250,11 @@ def create_newsdata_fetcher(
     daemon_config: DaemonConfig,
     historical_cache: HistoricalCache,
 ) -> BaseNewsFetcher:
-    """Create NewsDataFetcher with resolved config."""
+    """Create NewsDataFetcher with config."""
     from src.data.newsdata import NewsDataFetcher
 
-    api_key = resolve_config_or_env(
-        daemon_config.api_keys.newsdata_api_key,
-        "NEWSDATA_API_KEY",
-    )
     return NewsDataFetcher(
-        api_key=api_key,
+        api_key=daemon_config.api_keys.newsdata_api_key,
         historical_cache=historical_cache,
     )
 
@@ -268,15 +263,11 @@ def create_finnhub_news_fetcher(
     daemon_config: DaemonConfig,
     historical_cache: HistoricalCache,
 ) -> BaseNewsFetcher:
-    """Create FinnhubNewsFetcher with resolved config."""
+    """Create FinnhubNewsFetcher with config."""
     from src.data.finnhub_news import FinnhubNewsFetcher
 
-    api_key = resolve_config_or_env(
-        daemon_config.api_keys.finnhub_api_key,
-        "FINNHUB_API_KEY",
-    )
     return FinnhubNewsFetcher(
-        api_key=api_key,
+        api_key=daemon_config.api_keys.finnhub_api_key,
         historical_cache=historical_cache,
     )
 
