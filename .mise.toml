@@ -163,3 +163,21 @@ run = """
   echo "Starting Svelte dev server at http://localhost:5173"
   npm run dev -- --host 0.0.0.0
 """
+
+[tasks.profile]
+description = "Profile daemon cycle (default: 5 stocks, no issues created)"
+usage = 'option "--stocks" help="Comma-separated stock symbols" default="AAPL,TSLA,GOOGL,MSFT,NVDA" option "--max-concurrent" help="Max concurrent analyses" default="3" option "--config" help="Config file path"'
+run = "uv run --all-extras python scripts/profile_daemon.py --no-issues ${usage_stocks:+--stocks \"$usage_stocks\"} ${usage_max_concurrent:+--max-concurrent $usage_max_concurrent} ${usage_config:+--config \"$usage_config\"}"
+
+[tasks."profile:prod"]
+description = "Profile daemon with production config"
+run = "uv run --all-extras python scripts/profile_daemon.py --config ~/.ai-casino/daemon-production.yaml --no-issues"
+
+[tasks."profile:report"]
+description = "Open latest profiling report"
+run = "cat $(ls -t ~/.ai-casino/profiles/benchmark/bottleneck_report_*.json | head -1)"
+
+[tasks."profile:issues"]
+description = "Profile and create GitHub issues for top 3 bottlenecks"
+usage = 'option "--config" help="Config file path"'
+run = "uv run --all-extras python scripts/profile_daemon.py ${usage_config:+--config \"$usage_config\"}"
