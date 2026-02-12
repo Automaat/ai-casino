@@ -97,7 +97,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     @app.callback(
         Output("events-data-store", "data"),
         Input("interval-component", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
         State("events-data-store", "data"),
     )
     def update_events_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
@@ -195,7 +195,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     @app.callback(
         Output("events-warnings-banner", "children"),
         Input("interval-component", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
     )
     def update_warnings_banner(n_intervals: int, active_tab: str) -> html.Div:  # noqa: ARG001
         """Update warnings banner.
@@ -218,7 +218,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     @app.callback(
         Output("events-degradation-timeline", "children"),
         Input("interval-component", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
     )
     def update_degradation_timeline(n_intervals: int, active_tab: str) -> dcc.Graph | dbc.Alert:  # noqa: ARG001
         """Update degradation timeline.

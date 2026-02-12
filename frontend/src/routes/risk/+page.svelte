@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import HeatmapChart from '$lib/components/charts/HeatmapChart.svelte';
@@ -19,7 +20,8 @@
 	let riskHistory: RiskReportResponse[] = [];
 	let loading = true;
 
-	onMount(async () => {
+	async function loadData() {
+		loading = true;
 		try {
 			await risk.fetch();
 			await correlation.fetch();
@@ -31,7 +33,17 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	// Fetch data on mount
+	onMount(() => {
+		loadData();
 	});
+
+	// Refetch when route changes (handles tab switching)
+	$: if ($page.url.pathname === '/risk') {
+		loadData();
+	}
 
 	// Sharpe ratio history
 	$: sharpeData = riskHistory

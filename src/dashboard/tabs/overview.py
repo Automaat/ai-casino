@@ -50,7 +50,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     @app.callback(
         Output("overview-data-store", "data"),
         Input("interval-component", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
         State("overview-data-store", "data"),
     )
     def update_overview_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
@@ -64,7 +64,10 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
         Returns:
             Serialized overview data
         """
-        if active_tab != "overview":
+        from dash import callback_context
+
+        # Only check active tab if triggered by interval, not by tab switch
+        if callback_context.triggered_id == "interval-component" and active_tab != "overview":
             raise PreventUpdate
 
         try:

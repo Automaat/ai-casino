@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, State, dcc, html
+from dash import Dash, Input, Output, dcc, html
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     @app.callback(
         [Output("workflow-live-status", "children"), Output("workflow-live-agents", "children")],
         Input("workflow-interval", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
     )
     def update_live_view(n_intervals: int, active_tab: str) -> tuple[list, list]:  # noqa: ARG001
         """Update live execution view.
@@ -84,9 +84,11 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
         Returns:
             Tuple of (status HTML, activity feed HTML)
         """
+        from dash import callback_context
         from dash.exceptions import PreventUpdate
 
-        if active_tab != "workflow":
+        # Only check active tab if triggered by interval, not by tab switch
+        if callback_context.triggered_id == "workflow-interval" and active_tab != "workflow":
             raise PreventUpdate
 
         try:
@@ -116,7 +118,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
     @app.callback(
         Output("workflow-history-selector", "options"),
         Input("workflow-interval", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
     )
     def populate_dropdown(n_intervals: int, active_tab: str) -> list[dict]:  # noqa: ARG001
         """Populate dropdown with workflow history.
@@ -128,9 +130,11 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
         Returns:
             Dropdown options
         """
+        from dash import callback_context
         from dash.exceptions import PreventUpdate
 
-        if active_tab != "workflow":
+        # Only check active tab if triggered by interval, not by tab switch
+        if callback_context.triggered_id == "workflow-interval" and active_tab != "workflow":
             raise PreventUpdate
 
         try:
