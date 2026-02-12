@@ -97,7 +97,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
     @app.callback(
         Output("signals-data-store", "data"),
         Input("interval-component", "n_intervals"),
-        State("tabs", "active_tab"),
+        Input("tabs", "active_tab"),
         State("signals-data-store", "data"),
     )
     def update_signals_data(n_intervals: int, active_tab: str, current_data: dict | None) -> dict:  # noqa: ARG001
@@ -113,10 +113,12 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
         """
         from datetime import UTC, datetime
 
+        from dash import callback_context
         from dash.exceptions import PreventUpdate
         from loguru import logger
 
-        if active_tab != "signals":
+        # Only check active tab if triggered by interval, not by tab switch
+        if callback_context.triggered_id == "interval-component" and active_tab != "signals":
             raise PreventUpdate
 
         try:
