@@ -2,7 +2,6 @@
 
 import copy
 import json
-import os
 from collections.abc import AsyncIterator
 from typing import TypeVar
 
@@ -31,16 +30,15 @@ class OpenAIProvider(BaseLLMProvider):
         Raises:
             ValueError: If API key is not provided and OPENAI_API_KEY env var is empty
         """
-        resolved_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not resolved_key:
-            msg = "OpenAI API key required: set OPENAI_API_KEY env var or pass api_key"
+        if not api_key:
+            msg = "OpenAI API key required in config (api_keys.openai_api_key)"
             raise ValueError(msg)
 
         self._model = model
         self._is_gpt5 = model.startswith("gpt-5")
         self._client = AsyncOpenAI(
-            api_key=resolved_key,
-            base_url=base_url or os.getenv("OPENAI_API_BASE"),
+            api_key=api_key,
+            base_url=base_url,
         )
         logger.debug(f"Initialized OpenAIProvider: model={model}")
 

@@ -1,7 +1,6 @@
 """Finnhub news fetcher."""
 
 import asyncio
-import os
 from datetime import UTC, datetime
 
 import httpx
@@ -30,10 +29,10 @@ class FinnhubNewsFetcher:
             api_key: Finnhub API key
             historical_cache: Optional permanent cache for news articles
         """
-        self.api_key = api_key or os.getenv("FINNHUB_API_KEY", "")
+        self.api_key = api_key or ""
         self._cache = historical_cache
         if not self.api_key:
-            logger.warning("FINNHUB_API_KEY not set - API calls may be limited")
+            logger.warning("finnhub_api_key not set in config - API calls may be limited")
 
     async def afetch_company_news(self, symbol: str, limit: int = 10) -> list[NewsArticle]:
         """Fetch company-specific news asynchronously.

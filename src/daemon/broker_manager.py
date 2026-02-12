@@ -1,6 +1,5 @@
 """Broker lifecycle and watchlist management for daemon."""
 
-import os
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -50,34 +49,24 @@ class BrokerManager:
         from src.daemon.config import TradingMode
 
         if self.config.auto_trade:
-            # Resolve credentials with config priority
+            # Get credentials from config only
             if self.config.trading_mode == TradingMode.PAPER:
-                api_key = (
-                    self.config.api_keys.alpaca_paper_api_key
-                    or os.getenv("ALPACA_PAPER_API_KEY")
-                    or self.config.api_keys.alpaca_api_key
-                    or os.getenv("ALPACA_API_KEY")
-                )
+                api_key = self.config.api_keys.alpaca_paper_api_key or self.config.api_keys.alpaca_api_key
                 secret_key = (
-                    self.config.api_keys.alpaca_paper_secret_key
-                    or os.getenv("ALPACA_PAPER_SECRET_KEY")
-                    or self.config.api_keys.alpaca_secret_key
-                    or os.getenv("ALPACA_SECRET_KEY")
+                    self.config.api_keys.alpaca_paper_secret_key or self.config.api_keys.alpaca_secret_key
                 )
             else:
-                api_key = self._resolve_config_or_env(self.config.api_keys.alpaca_api_key, "ALPACA_API_KEY")
-                secret_key = self._resolve_config_or_env(
-                    self.config.api_keys.alpaca_secret_key, "ALPACA_SECRET_KEY"
-                )
+                api_key = self.config.api_keys.alpaca_api_key
+                secret_key = self.config.api_keys.alpaca_secret_key
 
             if not api_key or not secret_key:
                 if self.config.trading_mode == TradingMode.LIVE:
-                    msg = "auto_trade with live mode requires ALPACA_API_KEY/ALPACA_SECRET_KEY"
+                    msg = "auto_trade with live mode requires alpaca_api_key/alpaca_secret_key in config"
                 else:
                     msg = (
                         "auto_trade with paper mode requires "
-                        "ALPACA_PAPER_API_KEY/ALPACA_PAPER_SECRET_KEY "
-                        "or ALPACA_API_KEY/ALPACA_SECRET_KEY as a fallback"
+                        "alpaca_paper_api_key/alpaca_paper_secret_key "
+                        "or alpaca_api_key/alpaca_secret_key as a fallback in config"
                     )
                 raise ValueError(msg)
 
@@ -98,27 +87,25 @@ class BrokerManager:
                     self.state.current_trading_mode = "paper"
                     self.state.paper_trading_start_date = datetime.now(UTC)
                     logger.warning("Switched to paper mode, reset start date")
-        elif os.getenv("ALPACA_API_KEY") and os.getenv("ALPACA_SECRET_KEY"):
-            try:
-                self.broker = AlpacaBroker(paper=True, historical_cache=self._historical_cache)
-                logger.info("Alpaca broker initialized for watchlist merging")
-            except Exception as e:
-                logger.exception(f"Failed to initialize broker: {e}")
-                self.broker = None
+        else:
+            # Watchlist-only mode: Try to init broker for position merging if credentials present
+            api_key = self.config.api_keys.alpaca_paper_api_key or self.config.api_keys.alpaca_api_key
+            secret_key = (
+                self.config.api_keys.alpaca_paper_secret_key or self.config.api_keys.alpaca_secret_key
+            )
 
-    def _resolve_config_or_env(self, config_value: str | None, env_var: str) -> str | None:
-        """Resolve config value from daemon config or env var.
-
-        Config takes priority over environment variable.
-
-        Args:
-            config_value: Value from daemon config (priority)
-            env_var: Environment variable name (fallback)
-
-        Returns:
-            Resolved config value or None
-        """
-        return config_value or os.getenv(env_var)
+            if api_key and secret_key:
+                try:
+                    self.broker = AlpacaBroker(
+                        api_key=api_key,
+                        secret_key=secret_key,
+                        paper=True,
+                        historical_cache=self._historical_cache,
+                    )
+                    logger.info("Alpaca broker initialized for watchlist merging (read-only)")
+                except Exception as e:
+                    logger.warning(f"Failed to init broker for watchlist merging: {e}")
+                    self.broker = None
 
     def get_merged_watchlist(self) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates.

@@ -14,7 +14,6 @@ from src.data.reddit import RedditFetcher
 from src.data.truth_social import TruthSocialFetcher
 from src.data.universe import StockUniverseFetcher
 from src.data.websearch import WebSearchFetcher
-from src.di.config import resolve_config_or_env
 
 
 def create_historical_cache() -> HistoricalCache:
@@ -39,11 +38,16 @@ def create_market_fetcher(
     Returns:
         Configured MarketDataFetcher
     """
+    from src.di.config import resolve_config_or_env
+
     use_alpha_vantage = daemon_config.data_sources.market_data == "alpha_vantage"
 
     api_key = None
     if use_alpha_vantage:
-        api_key = daemon_config.api_keys.alpha_vantage_api_key
+        api_key = resolve_config_or_env(
+            daemon_config.api_keys.alpha_vantage_api_key,
+            "ALPHA_VANTAGE_API_KEY",
+        )
 
     return MarketDataFetcher(
         use_alpha_vantage=use_alpha_vantage,
@@ -81,7 +85,12 @@ def create_news_fetcher(
     Returns:
         Configured NewsFetcher
     """
-    api_key = daemon_config.api_keys.marketaux_api_key
+    from src.di.config import resolve_config_or_env
+
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.marketaux_api_key,
+        "MARKETAUX_API_KEY",
+    )
     return NewsFetcher(
         api_key=api_key,
         historical_cache=historical_cache,
@@ -101,7 +110,12 @@ def create_fundamental_fetcher(
     Returns:
         Configured FundamentalDataFetcher
     """
-    api_key = daemon_config.api_keys.alpha_vantage_api_key
+    from src.di.config import resolve_config_or_env
+
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.alpha_vantage_api_key,
+        "ALPHA_VANTAGE_API_KEY",
+    )
     return FundamentalDataFetcher(
         api_key=api_key,
         historical_cache=historical_cache,
@@ -119,7 +133,12 @@ def create_finnhub_fetcher(
     Returns:
         Configured FinnhubFetcher
     """
-    api_key = daemon_config.api_keys.finnhub_api_key
+    from src.di.config import resolve_config_or_env
+
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.finnhub_api_key,
+        "FINNHUB_API_KEY",
+    )
     return FinnhubFetcher(
         api_key=api_key,
         cache_dir="data/cache/finnhub",
@@ -139,9 +158,20 @@ def create_reddit_fetcher(
     Returns:
         Configured RedditFetcher
     """
-    client_id = daemon_config.api_keys.reddit_client_id
-    client_secret = daemon_config.api_keys.reddit_client_secret
-    user_agent = daemon_config.api_keys.reddit_user_agent
+    from src.di.config import resolve_config_or_env
+
+    client_id = resolve_config_or_env(
+        daemon_config.api_keys.reddit_client_id,
+        "REDDIT_CLIENT_ID",
+    )
+    client_secret = resolve_config_or_env(
+        daemon_config.api_keys.reddit_client_secret,
+        "REDDIT_CLIENT_SECRET",
+    )
+    user_agent = resolve_config_or_env(
+        daemon_config.api_keys.reddit_user_agent,
+        "REDDIT_USER_AGENT",
+    )
     return RedditFetcher(
         client_id=client_id,
         client_secret=client_secret,
@@ -223,21 +253,41 @@ def create_alpaca_broker(
     Returns:
         Configured AlpacaBroker
     """
+    from src.di.config import resolve_config_or_env
+
     trading_mode = daemon_config.trading_mode.value
 
     if trading_mode == "paper":
-        paper_api_key = daemon_config.api_keys.alpaca_paper_api_key
-        paper_secret_key = daemon_config.api_keys.alpaca_paper_secret_key
+        paper_api_key = resolve_config_or_env(
+            daemon_config.api_keys.alpaca_paper_api_key,
+            "ALPACA_PAPER_API_KEY",
+        )
+        paper_secret_key = resolve_config_or_env(
+            daemon_config.api_keys.alpaca_paper_secret_key,
+            "ALPACA_PAPER_SECRET_KEY",
+        )
 
         if paper_api_key and paper_secret_key:
             api_key = paper_api_key
             secret_key = paper_secret_key
         else:
-            api_key = daemon_config.api_keys.alpaca_api_key
-            secret_key = daemon_config.api_keys.alpaca_secret_key
+            api_key = resolve_config_or_env(
+                daemon_config.api_keys.alpaca_api_key,
+                "ALPACA_API_KEY",
+            )
+            secret_key = resolve_config_or_env(
+                daemon_config.api_keys.alpaca_secret_key,
+                "ALPACA_SECRET_KEY",
+            )
     else:  # live
-        api_key = daemon_config.api_keys.alpaca_api_key
-        secret_key = daemon_config.api_keys.alpaca_secret_key
+        api_key = resolve_config_or_env(
+            daemon_config.api_keys.alpaca_api_key,
+            "ALPACA_API_KEY",
+        )
+        secret_key = resolve_config_or_env(
+            daemon_config.api_keys.alpaca_secret_key,
+            "ALPACA_SECRET_KEY",
+        )
 
     return AlpacaBroker(
         api_key=api_key,
@@ -251,8 +301,9 @@ def create_newsdata_fetcher(
     daemon_config: DaemonConfig,
     historical_cache: HistoricalCache,
 ) -> BaseNewsFetcher:
-    """Create NewsDataFetcher with resolved config."""
+    """Create NewsDataFetcher with config."""
     from src.data.newsdata import NewsDataFetcher
+    from src.di.config import resolve_config_or_env
 
     api_key = resolve_config_or_env(
         daemon_config.api_keys.newsdata_api_key,
@@ -268,8 +319,9 @@ def create_finnhub_news_fetcher(
     daemon_config: DaemonConfig,
     historical_cache: HistoricalCache,
 ) -> BaseNewsFetcher:
-    """Create FinnhubNewsFetcher with resolved config."""
+    """Create FinnhubNewsFetcher with config."""
     from src.data.finnhub_news import FinnhubNewsFetcher
+    from src.di.config import resolve_config_or_env
 
     api_key = resolve_config_or_env(
         daemon_config.api_keys.finnhub_api_key,
