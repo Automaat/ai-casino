@@ -333,6 +333,44 @@ function createDegradationHistoryStore() {
 	return { subscribe, fetch };
 }
 
+// Execution metrics list store (manual fetch)
+function createExecutionMetricsStore() {
+	const { subscribe, set } = writable<T.ExecutionMetricsListResponse | null>(null);
+
+	async function fetch() {
+		try {
+			const data = await api.getExecutionMetrics();
+			set(data);
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch execution metrics:', error);
+			set(null);
+			return null;
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
+// Execution metric detail store (manual fetch)
+function createExecutionMetricDetailStore() {
+	const { subscribe, set } = writable<T.WorkflowExecutionMetrics | null>(null);
+
+	async function fetch(workflowId: string) {
+		try {
+			const data = await api.getExecutionMetricDetail(workflowId);
+			set(data);
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch execution metric detail:', error);
+			set(null);
+			return null;
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
 // Export stores
 export const health = createHealthStore();
 export const stateSummary = createStateSummaryStore();
@@ -349,6 +387,8 @@ export const degradation = createDegradationStore();
 export const events = createEventsStore();
 export const marketEvents = createMarketEventsStore();
 export const degradationHistory = createDegradationHistoryStore();
+export const executionMetrics = createExecutionMetricsStore();
+export const executionMetricDetail = createExecutionMetricDetailStore();
 
 // Derived stores
 export const isDaemonRunning = derived(health, ($health) => $health?.daemon_running ?? false);
