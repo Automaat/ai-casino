@@ -207,7 +207,7 @@ class MarketDataFetcher:
                 last_updated=datetime.now(),
             )
         except Exception as e:
-            logger.error(f"Alpha Vantage fetch failed: {e}")
+            logger.opt(exception=True).error(f"Alpha Vantage fetch failed: {e}")
             raise
 
     @HTTP_RETRY
@@ -233,7 +233,7 @@ class MarketDataFetcher:
                 last_updated=datetime.now(),
             )
         except Exception as e:
-            logger.error(f"yfinance fetch failed: {e}")
+            logger.opt(exception=True).error(f"yfinance fetch failed: {e}")
             raise
 
     @staticmethod
@@ -344,7 +344,7 @@ class MarketDataFetcher:
                 last_updated=datetime.now(),
             )
         except Exception as e:
-            logger.error(f"Intraday fetch failed: {e}")
+            logger.opt(exception=True).error(f"Intraday fetch failed: {e}")
             raise
 
     async def fetch_multi_timeframe(
@@ -386,7 +386,7 @@ class MarketDataFetcher:
                 logger.warning(f"Unsupported timeframe: {tf}")
                 return (tf, None)
             except Exception as e:
-                logger.warning(f"Failed to fetch {tf} data for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)
 
         # Fetch timeframes in parallel using TaskGroup
@@ -443,7 +443,7 @@ class MarketDataFetcher:
                 logger.debug(f"{symbol}: {pct_change:+.2f}%")
 
             except Exception as e:
-                logger.warning(f"Failed to fetch {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch {symbol}: {e}")
                 continue
 
         if not results:

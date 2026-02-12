@@ -80,7 +80,7 @@ class DaemonNotificationHelper:
                     )
                 )
             except Exception as e:
-                logger.error(f"Failed to publish DEGRADATION event: {e}")
+                logger.opt(exception=True).error(f"Failed to publish DEGRADATION event: {e}")
 
     async def maybe_notify_signal(
         self,

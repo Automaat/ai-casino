@@ -97,7 +97,7 @@ class PaperTradingValidator:
             try:
                 simulated_live = self._simulate_live_comparison(paper_metrics)
             except Exception as e:
-                logger.warning(f"Failed to simulate live comparison: {e}")
+                logger.opt(exception=True).warning(f"Failed to simulate live comparison: {e}")
 
         # Generate recommendations
         recommendations = self._generate_recommendations(criteria, simulated_live)
@@ -382,7 +382,7 @@ class PaperTradingValidator:
                 json.dump(report.model_dump(mode="json"), f, indent=2, default=str)
             logger.info(f"Saved paper trading report to {expanded_path}")
         except Exception as e:
-            logger.error(f"Failed to save report: {e}")
+            logger.opt(exception=True).error(f"Failed to save report: {e}")
             raise
 
     def __repr__(self) -> str:

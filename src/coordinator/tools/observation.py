@@ -97,7 +97,7 @@ class SaveObservationTool(BaseTool):
             return f"Observation saved successfully at {timestamp} (category: {category})"
 
         except Exception as e:
-            logger.error(f"Failed to save observation: {e}")
+            logger.opt(exception=True).error(f"Failed to save observation: {e}")
             return f"Failed to save observation: {e}"
 
     def execute(self, **kwargs: str | int | float | bool) -> str:

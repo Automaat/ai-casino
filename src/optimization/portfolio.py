@@ -139,7 +139,7 @@ class PortfolioOptimizer:
                 _raise_optimization_error(message)
 
         except Exception as e:
-            logger.warning(f"Optimization failed, falling back to equal weights: {e}")
+            logger.opt(exception=True).warning(f"Optimization failed, falling back to equal weights: {e}")
             cleaned_weights = {symbol: 1.0 / len(symbols) for symbol in symbols}
             expected_return, volatility, sharpe = 0.0, 0.0, 0.0
 
@@ -208,7 +208,7 @@ class PortfolioOptimizer:
                 _raise_optimization_error(message)
 
         except Exception as e:
-            logger.warning(f"Optimization failed, falling back to equal weights: {e}")
+            logger.opt(exception=True).warning(f"Optimization failed, falling back to equal weights: {e}")
             cleaned_weights = {symbol: 1.0 / len(symbols) for symbol in symbols}
             expected_return, volatility, sharpe = 0.0, 0.0, 0.0
 
@@ -273,7 +273,7 @@ class PortfolioOptimizer:
             weights_dict = dict(zip(symbols, weights, strict=True))
 
         except Exception as e:
-            logger.warning(f"HRP optimization failed, falling back to equal weights: {e}")
+            logger.opt(exception=True).warning(f"HRP optimization failed, falling back to equal weights: {e}")
             weights_dict = {symbol: 1.0 / len(symbols) for symbol in symbols}
             expected_return, volatility, sharpe = 0.0, 0.0, 0.0
 
@@ -400,7 +400,7 @@ class PortfolioOptimizer:
                                 f"@ ${latest_price:.2f} = ${target_value:.2f}"
                             )
                     except Exception as e:
-                        logger.warning(f"Failed to fetch latest price for {symbol}: {e}")
+                        logger.opt(exception=True).warning(f"Failed to fetch latest price for {symbol}: {e}")
                 continue
 
             position = account_info.positions[symbol]
@@ -463,7 +463,7 @@ class PortfolioOptimizer:
                 else:
                     logger.warning(f"Empty data for {symbol}, skipping")
             except Exception as e:
-                logger.warning(f"Failed to fetch data for {symbol}: {e}, skipping")
+                logger.opt(exception=True).warning(f"Failed to fetch data for {symbol}: {e}, skipping")
 
         if len(prices_data) < MIN_SYMBOLS:
             err_msg = f"Insufficient data: only {len(prices_data)}/{len(symbols)} symbols fetched"

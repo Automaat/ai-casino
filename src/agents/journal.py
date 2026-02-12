@@ -261,7 +261,7 @@ class TradeJournalAgent:
                         signal_correct=self._evaluate_signal(record.signal, price_change_pct),
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to fetch closing price for {symbol}: {e}")
+                    logger.opt(exception=True).warning(f"Failed to fetch closing price for {symbol}: {e}")
                     return None
 
         async def safe_fetch_outcome(
@@ -303,7 +303,7 @@ class TradeJournalAgent:
                 "overall_assessment": llm_response.overall_assessment,
             }
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
             return {
                 "winners": [o.symbol for o in outcomes if o.signal_correct],

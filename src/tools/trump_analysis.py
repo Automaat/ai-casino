@@ -103,7 +103,7 @@ class TrumpAnalysisTool(BaseTool):
 
             return self._format_analysis(analysis, days)
         except Exception as e:
-            logger.error(f"Failed to analyze Trump posts: {e}")
+            logger.opt(exception=True).error(f"Failed to analyze Trump posts: {e}")
             return f"Failed to analyze Trump posts: {e}"
 
     def _format_analysis(self, analysis: TrumpAnalysis, days: int) -> str:

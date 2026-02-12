@@ -229,7 +229,7 @@ class DaemonTaskService:
                 task = loop.create_task(publish_coro)
                 task.add_done_callback(_log_event_publish_error)
         except Exception as e:
-            logger.error(f"Failed to publish {event_type} event: {e}")
+            logger.opt(exception=True).error(f"Failed to publish {event_type} event: {e}")
 
     def _reconstruct_rotation_analysis(self, record: SectorRotationRecord) -> SectorRotationAnalysis:
         """Reconstruct SectorRotationAnalysis from state record.
@@ -259,7 +259,7 @@ class DaemonTaskService:
                 sector_enum = Sector[sector_name]
                 etf = sector_enum.value
             except KeyError:
-                logger.warning(f"Unknown sector {sector_name}, skipping")
+                logger.opt(exception=True).warning(f"Unknown sector {sector_name}, skipping")
                 continue
 
             sectors.append(

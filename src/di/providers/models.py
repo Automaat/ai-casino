@@ -248,7 +248,9 @@ def create_coordinator_tool_registry(
             except Exception as e:
                 from loguru import logger
 
-                logger.warning(f"Failed to create signal_outcome_repository for memory: {e}")
+                logger.opt(exception=True).warning(
+                    f"Failed to create signal_outcome_repository for memory: {e}"
+                )
 
         memory = CoordinatorMemory(
             daemon_state=daemon_state,

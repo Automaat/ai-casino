@@ -110,7 +110,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             return status_html, activity_html
 
         except Exception as e:
-            logger.error(f"Live view update failed: {e}")
+            logger.opt(exception=True).error(f"Live view update failed: {e}")
             return [dbc.Alert(f"Error: {e}", color="danger")], []
 
     @app.callback(
@@ -150,7 +150,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             return options
 
         except Exception as e:
-            logger.error(f"Dropdown population failed: {e}")
+            logger.opt(exception=True).error(f"Dropdown population failed: {e}")
             return []
 
     @app.callback(
@@ -257,7 +257,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
             return summary, gantt_fig, waterfall_fig, breakdown_fig, llm_table
 
         except Exception as e:
-            logger.error(f"Historical detail render failed: {e}")
+            logger.opt(exception=True).error(f"Historical detail render failed: {e}")
             empty_fig = go.Figure()
             error_alert = dbc.Alert(f"Error: {e}", color="danger")
             return error_alert, empty_fig, empty_fig, empty_fig, error_alert

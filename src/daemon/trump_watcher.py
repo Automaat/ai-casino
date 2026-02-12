@@ -230,7 +230,7 @@ If no specific stocks are affected, return "NONE".
                     result = await workflow.analyze(symbol, period_days=30)
                     return symbol, result
                 except Exception as e:
-                    logger.error(f"Failed to analyze {symbol}: {e}")
+                    logger.opt(exception=True).error(f"Failed to analyze {symbol}: {e}")
                     return symbol, None
 
         # Wrap tasks to handle exceptions
@@ -355,7 +355,7 @@ If no specific stocks are affected, return "NONE".
             self._emit_signal(signal)
 
         except Exception as e:
-            logger.error(f"Error in cycle: {e}")
+            logger.opt(exception=True).error(f"Error in cycle: {e}")
 
     async def run(self) -> None:
         """Run the watcher daemon."""

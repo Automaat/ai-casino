@@ -71,7 +71,9 @@ class DaemonRebalancer:
                     f"combined universe: {len(universe)} symbols"
                 )
             except Exception as e:
-                logger.warning(f"Failed to fetch current portfolio: {e}, using watchlist only")
+                logger.opt(exception=True).warning(
+                    f"Failed to fetch current portfolio: {e}, using watchlist only"
+                )
 
         # Run optimization
         universe_list = sorted(universe)
@@ -154,7 +156,9 @@ class DaemonRebalancer:
                     logger.warning(f"Order not filled: {rebalance.symbol} {side} {shares}")
 
             except Exception as e:
-                logger.error(f"Failed to execute {rebalance.action} {rebalance.symbol}: {e}")
+                logger.opt(exception=True).error(
+                    f"Failed to execute {rebalance.action} {rebalance.symbol}: {e}"
+                )
 
         logger.info(f"Rebalancing execution: {executed}/{len(rebalances)} orders filled")
         return executed

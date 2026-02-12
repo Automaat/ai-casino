@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import inspect
 import json
+import os
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
@@ -51,8 +52,54 @@ T = TypeVar("T", bound=BaseModel)
 
 _MIN_CONCURRENT_REQUESTS = 1
 _MAX_CONCURRENT_REQUESTS = 20
+_DEFAULT_CONCURRENT_REQUESTS = 5
 
-# Limit concurrent async requests for multi-agent workflows (from config, default 5)
+
+def _parse_max_concurrent_requests() -> int:
+    """Parse and validate LLM_MAX_CONCURRENT environment variable.
+
+    Valid range is 1-20. Falls back to default (5) on invalid values.
+
+    Returns:
+        Validated concurrency limit (1-20)
+    """
+    raw_value = os.getenv("LLM_MAX_CONCURRENT")
+
+    if raw_value is None:
+        return _DEFAULT_CONCURRENT_REQUESTS
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.opt(exception=True).warning(
+            "Invalid LLM_MAX_CONCURRENT value %r; using default %d",
+            raw_value,
+            _DEFAULT_CONCURRENT_REQUESTS,
+        )
+        return _DEFAULT_CONCURRENT_REQUESTS
+
+    if value < _MIN_CONCURRENT_REQUESTS:
+        logger.warning(
+            "LLM_MAX_CONCURRENT value %d is below minimum %d; clamping to %d",
+            value,
+            _MIN_CONCURRENT_REQUESTS,
+            _MIN_CONCURRENT_REQUESTS,
+        )
+        return _MIN_CONCURRENT_REQUESTS
+
+    if value > _MAX_CONCURRENT_REQUESTS:
+        logger.warning(
+            "LLM_MAX_CONCURRENT value %d exceeds maximum %d; clamping to %d",
+            value,
+            _MAX_CONCURRENT_REQUESTS,
+            _MAX_CONCURRENT_REQUESTS,
+        )
+        return _MAX_CONCURRENT_REQUESTS
+
+    return value
+
+
+# Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 5)
 # With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
 # OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
 MAX_CONCURRENT_REQUESTS = 5  # Will be updated via set_max_concurrent()
@@ -449,7 +496,7 @@ class LLMClient:
         try:
             return executor(tool_call.name, tool_call.arguments)
         except Exception as e:
-            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            logger.opt(exception=True).error(f"Tool '{tool_call.name}' execution failed: {e}")
             return f"Tool '{tool_call.name}' failed: {e}"
 
     async def _execute_tool_async(
@@ -483,7 +530,7 @@ class LLMClient:
 
             return result
         except Exception as e:
-            logger.error(f"Tool '{tool_call.name}' execution failed: {e}")
+            logger.opt(exception=True).error(f"Tool '{tool_call.name}' execution failed: {e}")
             return f"Tool '{tool_call.name}' failed: {e}"
 
     async def close(self) -> None:

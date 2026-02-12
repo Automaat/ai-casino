@@ -132,7 +132,7 @@ class SignalOutcomeTracker:
             return close_price
 
         except Exception as e:
-            logger.warning(f"Failed to fetch {horizon} price for {signal.symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch {horizon} price for {signal.symbol}: {e}")
             return None
 
     def _get_early_exits(self, signals: list[SignalUpdateRecord]) -> dict[int, float]:

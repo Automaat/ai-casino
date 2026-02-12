@@ -81,7 +81,9 @@ class FundamentalAnalyst:
                     metrics, llm_response.confidence_keywords
                 )
             except StructuredOutputError as e:
-                logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+                logger.opt(exception=True).warning(
+                    f"Structured output failed, falling back to text parsing: {e}"
+                )
                 interpretation = await self.llm.acomplete(prompt, system=system, temperature=0.5)
                 confidence = self._calculate_confidence(metrics, interpretation)
 
@@ -98,7 +100,7 @@ class FundamentalAnalyst:
             )
 
         except Exception as e:
-            logger.error(f"Fundamental analysis failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Fundamental analysis failed for {symbol}: {e}")
             raise
 
     def _extract_metrics(self, overview: dict[str, Any]) -> FundamentalMetrics:

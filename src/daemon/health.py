@@ -132,12 +132,12 @@ class HealthChecker:
         try:
             self._persist_report(report)
         except Exception as e:
-            logger.error(f"Failed to persist report: {e}")
+            logger.opt(exception=True).error(f"Failed to persist report: {e}")
 
         try:
             self._prune_old_reports()
         except Exception as e:
-            logger.error(f"Failed to prune old reports: {e}")
+            logger.opt(exception=True).error(f"Failed to prune old reports: {e}")
 
         # Send notification if health failures detected
         failed_services = [c for c in checks if c.status == ServiceStatus.UNHEALTHY]
@@ -410,7 +410,7 @@ class HealthChecker:
                 total_expired += expired
                 cache.close()
             except Exception as e:
-                logger.warning(f"Failed to prune cache {cache_dir}: {e}")
+                logger.opt(exception=True).warning(f"Failed to prune cache {cache_dir}: {e}")
 
         return CleanupResult(
             operation="prune_cache",
@@ -485,7 +485,7 @@ class HealthChecker:
             timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
             backup_path = state_path.with_suffix(f".corrupt.{timestamp}")
             state_path.rename(backup_path)
-            logger.error(f"Corrupt state backed up to {backup_path}: {e}")
+            logger.opt(exception=True).error(f"Corrupt state backed up to {backup_path}: {e}")
             return CleanupResult(
                 operation="verify_state",
                 files_affected=1,

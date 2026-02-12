@@ -136,7 +136,7 @@ def optimize_portfolio(
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1) from e
     except Exception as e:
-        logger.error(f"Optimization failed: {e}")
+        logger.opt(exception=True).error(f"Optimization failed: {e}")
         console.print(f"[bold red]Error:[/bold red] Optimization failed: {e}")
         raise typer.Exit(1) from e
 

@@ -245,7 +245,7 @@ class StockScreener:
                             if not df.empty and len(df) >= MIN_MACD_DATA_POINTS:
                                 all_data[sym] = df
             except Exception as e:
-                logger.warning(f"Batch fetch failed: {e}")
+                logger.opt(exception=True).warning(f"Batch fetch failed: {e}")
 
         logger.info(f"Fetched data for {len(all_data)} symbols")
         return all_data

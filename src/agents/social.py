@@ -171,14 +171,14 @@ class SocialSentimentAnalyst:
                     to_date.strftime("%Y-%m-%d"),
                 )
             except Exception as e:
-                logger.warning(f"Finnhub social sentiment fetch failed: {e}")
+                logger.opt(exception=True).warning(f"Finnhub social sentiment fetch failed: {e}")
                 return None
 
         async def fetch_finnhub_news() -> NewsSentimentData | None:
             try:
                 return await asyncio.to_thread(self.finnhub.fetch_sentiment_indicator, symbol)
             except Exception as e:
-                logger.warning(f"Finnhub news sentiment fetch failed: {e}")
+                logger.opt(exception=True).warning(f"Finnhub news sentiment fetch failed: {e}")
                 return None
 
         async def fetch_reddit() -> RedditSentimentData | None:
@@ -191,7 +191,7 @@ class SocialSentimentAnalyst:
                     time_filter="day",
                 )
             except Exception as e:
-                logger.warning(f"Reddit fetch failed: {e}")
+                logger.opt(exception=True).warning(f"Reddit fetch failed: {e}")
                 return None
 
         # Run fetches in parallel using TaskGroup (exceptions handled within fetch functions)
@@ -396,7 +396,7 @@ class SocialSentimentAnalyst:
                 llm_response.confidence_keywords,
             )
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
 
             # Extract sentiment label

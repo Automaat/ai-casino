@@ -55,7 +55,7 @@ class OptimizedParamStore:
 
             logger.info(f"Loaded optimized params for {len(self._data)} symbols")
         except Exception as e:
-            logger.warning(f"Failed to load param store: {e}, starting fresh")
+            logger.opt(exception=True).warning(f"Failed to load param store: {e}, starting fresh")
             self._data = {}
 
     def _save_to_disk(self) -> None:

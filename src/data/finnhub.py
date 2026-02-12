@@ -180,7 +180,7 @@ class FinnhubFetcher:
             return result
 
         except Exception as e:
-            logger.error(f"Finnhub social sentiment fetch failed: {e}")
+            logger.opt(exception=True).error(f"Finnhub social sentiment fetch failed: {e}")
             raise
 
     @HTTP_RETRY
@@ -238,7 +238,7 @@ class FinnhubFetcher:
             return result
 
         except Exception as e:
-            logger.error(f"Finnhub sentiment indicator fetch failed: {e}")
+            logger.opt(exception=True).error(f"Finnhub sentiment indicator fetch failed: {e}")
             raise
 
     def clear_cache(self) -> None:

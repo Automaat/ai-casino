@@ -72,7 +72,7 @@ class HealthCheckTask(TaskExecutor):
                     )
                 )
             except Exception as e:
-                logger.error(f"Failed to publish HEALTH_CHECK event: {e}")
+                logger.opt(exception=True).error(f"Failed to publish HEALTH_CHECK event: {e}")
 
     def get_last_run(self) -> datetime | None:
         """Get last health check timestamp."""

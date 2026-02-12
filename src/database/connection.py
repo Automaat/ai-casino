@@ -37,5 +37,5 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         try:
             yield session
         except Exception as e:
-            logger.error(f"Session error: {e}")
+            logger.opt(exception=True).error(f"Session error: {e}")
             raise

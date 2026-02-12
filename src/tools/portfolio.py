@@ -107,7 +107,7 @@ class OptimizePortfolioTool(BaseTool):
 
             return self._format_result(result)
         except Exception as e:
-            logger.error(f"Optimization failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Optimization failed for {symbol}: {e}")
             return f"Optimization failed for {symbol}: {e}"
 
     def _format_result(self, result: OptimizationResult) -> str:

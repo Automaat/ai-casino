@@ -143,14 +143,14 @@ class CoordinatorMemory:
                         if category is None or record.category == category:
                             records.append(record)
                     except Exception as e:
-                        logger.warning(f"Failed to parse observation record: {e}")
+                        logger.opt(exception=True).warning(f"Failed to parse observation record: {e}")
                         continue
 
             # Return in reverse order (most recent first)
             return list(reversed(records))
 
         except Exception as e:
-            logger.error(f"Failed to read observations: {e}")
+            logger.opt(exception=True).error(f"Failed to read observations: {e}")
             return []
 
     async def get_today_summary(self, max_tokens: int = 500) -> str:

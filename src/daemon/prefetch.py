@@ -113,7 +113,7 @@ class DataPrefetcher:
             market_ok = True
             logger.debug(f"Prefetched market data for {symbol}")
         except Exception as e:
-            logger.warning(f"Failed to prefetch market data for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to prefetch market data for {symbol}: {e}")
 
         # News (uses Marketaux, no AV rate limit concern)
         try:
@@ -127,7 +127,7 @@ class DataPrefetcher:
             news_ok = True
             logger.debug(f"Prefetched {len(articles)} news articles for {symbol}")
         except Exception as e:
-            logger.warning(f"Failed to prefetch news for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to prefetch news for {symbol}: {e}")
 
         # Rate limit sleep before fundamentals (both market and fundamentals use Alpha Vantage)
         time.sleep(AV_RATE_LIMIT_SLEEP)
@@ -140,7 +140,7 @@ class DataPrefetcher:
             fundamentals_ok = True
             logger.debug(f"Prefetched fundamentals for {symbol}")
         except Exception as e:
-            logger.warning(f"Failed to prefetch fundamentals for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to prefetch fundamentals for {symbol}: {e}")
 
         duration_ms = (time.perf_counter() - start) * 1000
         return PrefetchResult(
@@ -188,7 +188,7 @@ class DataPrefetcher:
             logger.info("FinBERT model warmed up")
             return True
         except Exception as e:
-            logger.warning(f"Failed to warm FinBERT: {e}")
+            logger.opt(exception=True).warning(f"Failed to warm FinBERT: {e}")
             return False
 
     def check_api_key_presence(self) -> dict[str, bool]:
@@ -244,7 +244,7 @@ class DataPrefetcher:
                 last_updated=datetime.fromisoformat(cached["last_updated"]),
             )
         except Exception as e:
-            logger.warning(f"Failed to deserialize cached market data for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to deserialize cached market data for {symbol}: {e}")
             return None
 
     def get_cached_news(self, symbol: str) -> list[NewsArticle] | None:
@@ -267,7 +267,7 @@ class DataPrefetcher:
                 raise TypeError(msg)
             return [NewsArticle.model_validate(a) for a in cached]
         except Exception as e:
-            logger.warning(f"Failed to deserialize cached news for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to deserialize cached news for {symbol}: {e}")
             return None
 
     def get_cached_fundamentals(self, symbol: str) -> dict[str, Any] | None:
@@ -289,7 +289,7 @@ class DataPrefetcher:
                 raise TypeError(msg)
             return cached
         except Exception as e:
-            logger.warning(f"Failed to deserialize cached fundamentals for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to deserialize cached fundamentals for {symbol}: {e}")
             return None
 
     def clear_cache(self) -> None:

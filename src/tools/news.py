@@ -80,7 +80,7 @@ class GetNewsTool(BaseTool):
 
             return self._format_articles(symbol.upper(), articles)
         except Exception as e:
-            logger.error(f"Failed to fetch news for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Failed to fetch news for {symbol}: {e}")
             return f"Failed to fetch news for {symbol}: {e}"
 
     def _format_articles(self, symbol: str, articles: list) -> str:

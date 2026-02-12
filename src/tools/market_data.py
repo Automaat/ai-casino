@@ -79,7 +79,7 @@ class GetMarketDataTool(BaseTool):
 
             return self._format_data(data)
         except Exception as e:
-            logger.error(f"Failed to fetch market data for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Failed to fetch market data for {symbol}: {e}")
             return f"Failed to fetch market data for {symbol}: {e}"
 
     def _format_data(self, data: MarketData) -> str:

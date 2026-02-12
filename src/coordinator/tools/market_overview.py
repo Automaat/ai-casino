@@ -99,7 +99,7 @@ class MarketOverviewTool(BaseTool):
             return "\n".join(lines)
 
         except Exception as e:
-            logger.error(f"Market overview failed: {e}")
+            logger.opt(exception=True).error(f"Market overview failed: {e}")
             return f"Failed to fetch market overview: {e}"
 
     def __repr__(self) -> str:

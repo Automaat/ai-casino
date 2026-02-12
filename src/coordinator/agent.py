@@ -159,7 +159,9 @@ class TradingCoordinator:
             return result
 
         except TimeoutError:
-            logger.error(f"Coordinator cycle timeout after {self._config.cycle_timeout_seconds}s")
+            logger.opt(exception=True).error(
+                f"Coordinator cycle timeout after {self._config.cycle_timeout_seconds}s"
+            )
             return CoordinatorCycleResult(
                 summary=f"Cycle timeout after {self._config.cycle_timeout_seconds}s",
                 symbols_analyzed=list(self._symbols_analyzed),
@@ -170,7 +172,7 @@ class TradingCoordinator:
                 cycle_duration_seconds=time.time() - cycle_start,
             )
         except Exception as e:
-            logger.error(f"Coordinator cycle failed: {e}")
+            logger.opt(exception=True).error(f"Coordinator cycle failed: {e}")
             return CoordinatorCycleResult(
                 summary=f"Error: {e!s}",
                 symbols_analyzed=list(self._symbols_analyzed),
@@ -277,7 +279,7 @@ class TradingCoordinator:
         try:
             return await self._tools.aexecute(name, args)
         except Exception as e:
-            logger.error(f"Tool execution failed: {name} - {e}")
+            logger.opt(exception=True).error(f"Tool execution failed: {name} - {e}")
             return f"Error: {e!s}"
 
     def _on_tool_call(self, name: str, args: dict, result: str) -> None:
@@ -415,7 +417,7 @@ class TradingCoordinator:
 
             return "\n".join(lines)
         except Exception as e:
-            logger.warning(f"Failed to get positions summary: {e}")
+            logger.opt(exception=True).warning(f"Failed to get positions summary: {e}")
             return "Positions data unavailable"
 
     def _format_risk_limits(self) -> str:

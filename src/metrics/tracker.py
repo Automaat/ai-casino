@@ -218,7 +218,7 @@ class MetricsTracker(BaseMetricsTracker):
                         self._trades.append(TradeRecord(**data))
             logger.info(f"Loaded {len(self._trades)} trades from {trades_path}")
         except Exception as e:
-            logger.error(f"Failed to load trades: {e}")
+            logger.opt(exception=True).error(f"Failed to load trades: {e}")
             raise
 
     def record_decision(
@@ -449,7 +449,7 @@ class MetricsTracker(BaseMetricsTracker):
                 f.write(trade.model_dump_json() + "\n")
             logger.debug(f"Appended trade to {trades_path}")
         except Exception as e:
-            logger.error(f"Failed to append trade to JSONL: {e}")
+            logger.opt(exception=True).error(f"Failed to append trade to JSONL: {e}")
             raise
 
     def _update_jsonl(self) -> None:
@@ -463,7 +463,7 @@ class MetricsTracker(BaseMetricsTracker):
                     f.write(trade.model_dump_json() + "\n")
             logger.debug(f"Updated {trades_path} with {len(self.trades)} trades")
         except Exception as e:
-            logger.error(f"Failed to update JSONL: {e}")
+            logger.opt(exception=True).error(f"Failed to update JSONL: {e}")
             raise
 
     def save_report(self, path: str = "logs/metrics_summary.json") -> None:
@@ -490,7 +490,7 @@ class MetricsTracker(BaseMetricsTracker):
                 json.dump(report, f, indent=2, default=str)
             logger.info(f"Saved metrics report to {report_path}")
         except Exception as e:
-            logger.error(f"Failed to save report: {e}")
+            logger.opt(exception=True).error(f"Failed to save report: {e}")
             raise
 
     def __repr__(self) -> str:

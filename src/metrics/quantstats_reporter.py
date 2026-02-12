@@ -269,7 +269,7 @@ class QuantStatsReporter:
             )
             logger.info(f"Successfully generated HTML tearsheet: {output_path}")
         except Exception as e:
-            logger.error(f"Failed to generate HTML tearsheet: {e}")
+            logger.opt(exception=True).error(f"Failed to generate HTML tearsheet: {e}")
             raise
 
         return str(output_path)

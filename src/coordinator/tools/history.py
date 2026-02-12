@@ -80,7 +80,7 @@ class AnalysisHistoryTool(BaseTool):
             return asyncio.run(self._memory.get_analysis_history(symbol, days=days))
 
         except Exception as e:
-            logger.error(f"Analysis history retrieval failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Analysis history retrieval failed for {symbol}: {e}")
             return f"Failed to retrieve analysis history for {symbol}: {e}"
 
     def __repr__(self) -> str:

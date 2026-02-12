@@ -270,7 +270,7 @@ class CorrelationAuditor:
                 returns_data[symbol] = returns
 
             except Exception as e:
-                logger.warning(f"Failed to fetch {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch {symbol}: {e}")
                 warnings.append(f"Failed to fetch {symbol}")
 
         if not returns_data:
@@ -567,7 +567,7 @@ class CorrelationAuditor:
             return sum(correlations) / len(correlations) if correlations else 1.0
 
         except Exception as e:
-            logger.warning(f"Failed to calculate avg correlation for {candidate}: {e}")
+            logger.opt(exception=True).warning(f"Failed to calculate avg correlation for {candidate}: {e}")
             return 1.0
 
     def _get_sector(self, symbol: str, warnings: list[str]) -> str:

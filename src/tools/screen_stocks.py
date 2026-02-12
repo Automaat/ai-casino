@@ -105,7 +105,7 @@ class ScreenStocksTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 return future.result()
         except Exception as e:
-            logger.error(f"Screening failed: {e}")
+            logger.opt(exception=True).error(f"Screening failed: {e}")
             return f"Screening failed: {e}"
 
     async def _run_screening(self, criteria: str, universe: str, top_n: int) -> str:

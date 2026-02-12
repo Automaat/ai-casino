@@ -91,7 +91,7 @@ class AnalyzeStockTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 return future.result()
         except Exception as e:
-            logger.error(f"Analysis failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Analysis failed for {symbol}: {e}")
             return f"Analysis failed for {symbol}: {e}"
 
     async def _run_analysis(self, symbol: str, period_days: int) -> str:

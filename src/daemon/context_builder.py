@@ -116,7 +116,7 @@ class DaemonContextBuilder:
             latest_record = self.components.state.sector_rotation_history[-1]
             return self._format_sector_context(latest_record)
         except Exception as e:
-            logger.warning(f"Failed to build sector context: {e}")
+            logger.opt(exception=True).warning(f"Failed to build sector context: {e}")
             return None
 
     def _load_game_plan_context(self) -> str | None:
@@ -146,7 +146,7 @@ class DaemonContextBuilder:
                 f"Reasoning: {plan.reasoning}"
             )
         except Exception as e:
-            logger.warning(f"Failed to load game plan context: {e}")
+            logger.opt(exception=True).warning(f"Failed to load game plan context: {e}")
             return None
 
     def _build_earnings_context(self, symbol: str) -> str | None:
@@ -211,5 +211,5 @@ class DaemonContextBuilder:
             analyzer = DeepPeerAnalyzer(config=config)
             return analyzer.format_context(symbol)
         except Exception as e:
-            logger.warning(f"Failed to build peer context for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to build peer context for {symbol}: {e}")
             return None

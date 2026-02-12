@@ -156,7 +156,7 @@ class AnalysisOrchestrator:
                 self.state.remove_position(symbol)
             return True
         except Exception as e:
-            logger.error(f"Failed to sync positions: {e}")
+            logger.opt(exception=True).error(f"Failed to sync positions: {e}")
             return False
 
     def _prefetch_broker_positions(self) -> dict | None:
@@ -173,7 +173,7 @@ class AnalysisOrchestrator:
             broker_info = broker.get_account_info()
             return broker_info.positions
         except Exception as e:
-            logger.warning(f"Failed to prefetch account info: {e}")
+            logger.opt(exception=True).warning(f"Failed to prefetch account info: {e}")
             return None
 
     def _apply_position_management(self, results: list[TradingWorkflowResult]) -> int:
@@ -204,7 +204,7 @@ class AnalysisOrchestrator:
                                 f"Position action: {action.action_type} {action.symbol} - {action.reason}"
                             )
                 except Exception as e:
-                    logger.error(f"Failed to review position {result.symbol}: {e}")
+                    logger.opt(exception=True).error(f"Failed to review position {result.symbol}: {e}")
 
         return position_actions
 
@@ -234,7 +234,7 @@ class AnalysisOrchestrator:
             if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
                 raise result
             if isinstance(result, Exception):
-                logger.error(f"Analysis failed for {symbol}: {result}")
+                logger.opt(exception=True).error(f"Analysis failed for {symbol}: {result}")
                 self.state.record_error(f"{symbol}: {result}")
                 failed_symbols.append(symbol)
             elif result is None:
@@ -412,7 +412,7 @@ class AnalysisOrchestrator:
             return result
         except Exception as e:
             error_msg = f"Failed to analyze {symbol}: {e}"
-            logger.error(error_msg)
+            logger.opt(exception=True).error(error_msg)
             self.state.record_error(error_msg)
             await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
             return None
@@ -579,7 +579,7 @@ class AnalysisOrchestrator:
             if historical_cache:
                 historical_cache.record_signal_outcome(signal_input)
         except Exception as e:
-            logger.warning(f"Failed to record signal outcome for accuracy tracking: {e}")
+            logger.opt(exception=True).warning(f"Failed to record signal outcome for accuracy tracking: {e}")
 
     async def _publish_event(self, event_type: str, data: dict[str, object]) -> None:
         """Publish event to EventBus.
@@ -593,7 +593,7 @@ class AnalysisOrchestrator:
             try:
                 await event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
             except Exception as e:
-                logger.warning(f"Event publish failed: {e}")
+                logger.opt(exception=True).warning(f"Event publish failed: {e}")
 
     def _extract_sentiment_signal(self, sentiment: SentimentAnalysis | None) -> str | None:
         """Extract sentiment signal.

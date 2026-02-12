@@ -167,7 +167,7 @@ class BrokerManager:
                 merged_watchlist.extend(sorted(added))
                 seen.update(added)
         except Exception as e:
-            logger.warning(f"Failed to fetch positions for watchlist merge: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch positions for watchlist merge: {e}")
 
     def _merge_discovery_candidates(self, merged_watchlist: list[str], seen: set[str]) -> None:
         """Merge discovery candidates or screening results into watchlist."""

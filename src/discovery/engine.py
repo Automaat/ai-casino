@@ -259,7 +259,9 @@ class StockDiscoveryEngine:
                 try:
                     criteria = ScreeningCriteria[criteria_name.upper()]
                 except KeyError:
-                    logger.warning(f"Invalid screening criteria: {criteria_name}, skipping")
+                    logger.opt(exception=True).warning(
+                        f"Invalid screening criteria: {criteria_name}, skipping"
+                    )
                     continue
                 result = self.screener.screen(
                     criteria=criteria,
@@ -289,7 +291,7 @@ class StockDiscoveryEngine:
 
             logger.info(f"Technical screening: {len(candidates)} candidates")
         except Exception as e:
-            logger.error(f"Technical screening failed: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"Technical screening failed: {e}", exc_info=True)
 
         return candidates
 
@@ -370,7 +372,7 @@ class StockDiscoveryEngine:
 
             logger.info(f"Volume spike detection: {len(candidates)} candidates")
         except Exception as e:
-            logger.error(f"Volume spike detection failed: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"Volume spike detection failed: {e}", exc_info=True)
 
         return candidates
 
@@ -406,7 +408,7 @@ class StockDiscoveryEngine:
 
             logger.info(f"Price gap detection: {len(candidates)} candidates")
         except Exception as e:
-            logger.error(f"Price gap detection failed: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"Price gap detection failed: {e}", exc_info=True)
 
         return candidates
 
@@ -529,7 +531,7 @@ class StockDiscoveryEngine:
             return info
 
         except Exception as e:
-            logger.warning(f"Failed to fetch stock info for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch stock info for {symbol}: {e}")
             return {}
 
     def __repr__(self) -> str:

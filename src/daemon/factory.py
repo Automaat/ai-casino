@@ -317,7 +317,7 @@ class DaemonFactory:
                     db_engine = get_db_engine()
                     trade_repository = TradeRepository(db_engine.session())
                 except Exception as e:
-                    logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+                    logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
             metrics_tracker = create_metrics_tracker(trade_repository)
 
@@ -338,7 +338,7 @@ class DaemonFactory:
 
                 logger.info("Paper trading validation passed")
             except Exception as e:
-                logger.error(f"Validation error: {e}")
+                logger.opt(exception=True).error(f"Validation error: {e}")
                 raise
 
             return metrics_tracker
@@ -397,7 +397,7 @@ class DaemonFactory:
                 trade_repository = self._container.trade_repository()
                 logger.debug("Position manager initialized with database engine")
             except Exception as e:
-                logger.warning(f"Failed to initialize position manager database: {e}")
+                logger.opt(exception=True).warning(f"Failed to initialize position manager database: {e}")
 
         position_manager = PositionManager(
             broker,
@@ -559,7 +559,7 @@ class DaemonFactory:
                     db_engine = get_db_engine()
                     trade_repository = TradeRepository(db_engine.session())
                 except Exception as e:
-                    logger.warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
+                    logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
             components.metrics_tracker = create_metrics_tracker(trade_repository)
 

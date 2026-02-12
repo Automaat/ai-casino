@@ -420,7 +420,7 @@ def create_trading_coordinator(
         except Exception as e:
             from loguru import logger
 
-            logger.warning(f"Failed to create signal_outcome_repository for memory: {e}")
+            logger.opt(exception=True).warning(f"Failed to create signal_outcome_repository for memory: {e}")
 
     # Create enhanced memory with multi-tier context
     memory = CoordinatorMemory(

@@ -116,7 +116,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                 "rebalance": rebalance_data,
             }
         except Exception as e:
-            logger.error(f"Portfolio refresh failed: {e}")
+            logger.opt(exception=True).error(f"Portfolio refresh failed: {e}")
             return current_data or {}
 
     @app.callback(

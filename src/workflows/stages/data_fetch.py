@@ -80,7 +80,7 @@ async def _fetch_all_data(
         try:
             return await asyncio.to_thread(config.news_fetcher.fetch_company_news, symbol, limit=10)
         except Exception as e:
-            logger.warning(f"News fetch failed, continuing with empty news: {e}")
+            logger.opt(exception=True).warning(f"News fetch failed, continuing with empty news: {e}")
             return []
 
     async def fetch_trump_safe() -> TrumpPostData | None:
@@ -89,7 +89,7 @@ async def _fetch_all_data(
         try:
             return await asyncio.to_thread(config.trump_fetcher.fetch_recent, hours=24)
         except Exception as e:
-            logger.warning(f"Failed to fetch Trump posts: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch Trump posts: {e}")
             return None
 
     async with asyncio.TaskGroup() as tg:
