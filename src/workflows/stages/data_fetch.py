@@ -78,7 +78,7 @@ async def _fetch_all_data(
 
     async def fetch_news_safe() -> list:
         try:
-            return await asyncio.to_thread(config.news_fetcher.fetch_company_news, symbol, limit=10)
+            return await config.news_fetcher.afetch_company_news(symbol, limit=10)
         except Exception as e:
             logger.opt(exception=True).warning(f"News fetch failed, continuing with empty news: {e}")
             return []

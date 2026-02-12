@@ -1,7 +1,7 @@
 """Tests for NewsData.io fetcher."""
 
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
@@ -58,15 +58,15 @@ def test_get_source_name():
 
 @pytest.mark.asyncio
 async def test_afetch_company_news(sample_newsdata_response):
-    with patch("src.data.newsdata.httpx.Client") as mock_client_class:
+    with patch("src.data.newsdata.httpx.AsyncClient") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_newsdata_response
         mock_response.raise_for_status = Mock()
 
-        mock_client = Mock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         fetcher = NewsDataFetcher(api_key="test-key")
@@ -80,15 +80,15 @@ async def test_afetch_company_news(sample_newsdata_response):
 
 @pytest.mark.asyncio
 async def test_afetch_market_news(sample_newsdata_response):
-    with patch("src.data.newsdata.httpx.Client") as mock_client_class:
+    with patch("src.data.newsdata.httpx.AsyncClient") as mock_client_class:
         mock_response = Mock()
         mock_response.json.return_value = sample_newsdata_response
         mock_response.raise_for_status = Mock()
 
-        mock_client = Mock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         fetcher = NewsDataFetcher(api_key="test-key")
@@ -98,91 +98,92 @@ async def test_afetch_market_news(sample_newsdata_response):
         assert all(isinstance(a, NewsArticle) for a in articles)
 
 
-def test_fetch_company_news_http_error():
-    with patch("src.data.newsdata.httpx.Client") as mock_client_class:
-        mock_client = Mock()
-        mock_client.get.side_effect = httpx.HTTPError("API Error")
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
+@pytest.mark.asyncio
+async def test_fetch_company_news_http_error():
+    with patch("src.data.newsdata.httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("API Error"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         fetcher = NewsDataFetcher(api_key="test-key")
 
         with pytest.raises(httpx.HTTPError):
-            fetcher._fetch_company_sync("AAPL", 10)
+            await fetcher.afetch_company_news("AAPL", 10)
 
 
-def test_fetch_market_news_http_error():
-    with patch("src.data.newsdata.httpx.Client") as mock_client_class:
-        mock_client = Mock()
-        mock_client.get.side_effect = httpx.HTTPError("API Error")
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
+@pytest.mark.asyncio
+async def test_fetch_market_news_http_error():
+    with patch("src.data.newsdata.httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("API Error"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         fetcher = NewsDataFetcher(api_key="test-key")
 
         with pytest.raises(httpx.HTTPError):
-            fetcher._fetch_market_sync(20)
+            await fetcher.afetch_market_news(20)
 
 
-def test_repr(monkeypatch):
-    monkeypatch.delenv("NEWSDATA_API_KEY", raising=False)
+@pytest.mark.asyncio
+async def test_fetch_company_news_skips_invalid_items():
+    invalid_response = {
+        "results": [
+            {"title": "Valid", "link": "https://example.com", "pubDate": "2024-01-15T10:30:00Z"},
+            {"title": "No Link", "pubDate": "2024-01-15T10:30:00Z"},  # Missing link
+            {"link": "https://example.com", "pubDate": "2024-01-15T10:30:00Z"},  # Missing title
+        ]
+    }
 
-    fetcher = NewsDataFetcher(api_key="test-key")
-    assert repr(fetcher) == "NewsDataFetcher(authenticated=True)"
-
-    fetcher_no_key = NewsDataFetcher(api_key="")
-    assert repr(fetcher_no_key) == "NewsDataFetcher(authenticated=False)"
-
-
-def test_fetch_company_news_skips_invalid_items():
-    with patch("src.data.newsdata.httpx.Client") as mock_client_class:
+    with patch("src.data.newsdata.httpx.AsyncClient") as mock_client_class:
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "results": [
-                {"title": "Valid article", "link": "https://example.com", "pubDate": "2024-01-15T10:30:00Z"},
-                {"title": "No link"},  # Missing link
-                {"link": "https://example.com/no-title"},  # Missing title
-                {
-                    "title": "Another valid",
-                    "link": "https://example.com/2",
-                    "pubDate": "2024-01-15T11:00:00Z",
-                },
-            ]
-        }
+        mock_response.json.return_value = invalid_response
         mock_response.raise_for_status = Mock()
 
-        mock_client = Mock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         fetcher = NewsDataFetcher(api_key="test-key")
-        articles = fetcher._fetch_company_sync("AAPL", 10)
-
-        assert len(articles) == 2  # Only valid items
-
-
-def test_fetch_handles_invalid_date():
-    with patch("src.data.newsdata.httpx.Client") as mock_client_class:
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "results": [
-                {"title": "Test", "link": "https://example.com", "pubDate": "invalid-date"},
-            ]
-        }
-        mock_response.raise_for_status = Mock()
-
-        mock_client = Mock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_client_class.return_value = mock_client
-
-        fetcher = NewsDataFetcher(api_key="test-key")
-        articles = fetcher._fetch_company_sync("AAPL", 10)
+        articles = await fetcher.afetch_company_news("AAPL", 10)
 
         assert len(articles) == 1
+        assert articles[0].title == "Valid"
+
+
+@pytest.mark.asyncio
+async def test_fetch_handles_invalid_date():
+    invalid_date_response = {
+        "results": [
+            {
+                "title": "Test Article",
+                "description": "Test",
+                "link": "https://example.com",
+                "pubDate": "invalid-date-format",
+                "source_name": "TestSource",
+            }
+        ]
+    }
+
+    with patch("src.data.newsdata.httpx.AsyncClient") as mock_client_class:
+        mock_response = Mock()
+        mock_response.json.return_value = invalid_date_response
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        fetcher = NewsDataFetcher(api_key="test-key")
+        articles = await fetcher.afetch_company_news("AAPL", 10)
+
+        assert len(articles) == 1
+        assert articles[0].title == "Test Article"
         assert isinstance(articles[0].published_at, datetime)

@@ -1,5 +1,6 @@
 """News tool for fetching stock news."""
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -76,7 +77,22 @@ class GetNewsTool(BaseTool):
 
         try:
             fetcher = self._container.news_fetcher()
-            articles = fetcher.fetch_company_news(symbol.upper(), limit=limit)
+
+            # Handle calling async from sync - detect if event loop is running
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run()
+                articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
+            else:
+                # Event loop already running (e.g., in tests), use run_in_executor
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run, fetcher.afetch_company_news(symbol.upper(), limit=limit)
+                    )
+                    articles = future.result()
 
             return self._format_articles(symbol.upper(), articles)
         except Exception as e:

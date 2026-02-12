@@ -44,10 +44,6 @@ class DuckDuckGoNewsFetcher:
         """
         return await asyncio.to_thread(self._fetch_market_sync, limit)
 
-    def get_source_name(self) -> str:
-        """Return source identifier."""
-        return "duckduckgo"
-
     def _fetch_company_sync(self, symbol: str, limit: int) -> list[NewsArticle]:
         """Fetch company-specific news (sync implementation).
 
@@ -131,6 +127,10 @@ class DuckDuckGoNewsFetcher:
         except Exception as e:
             logger.error(f"DuckDuckGo market news fetch failed: {e}")
             raise
+
+    def get_source_name(self) -> str:
+        """Return source identifier."""
+        return "duckduckgo"
 
     def _parse_date(self, date_str: str | None) -> datetime:
         """Parse date from various formats.

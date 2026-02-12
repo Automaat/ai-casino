@@ -1,7 +1,7 @@
 """Tests for NewsWatcher."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -80,11 +80,13 @@ async def test_fetch_events_breaking_news(news_watcher):
 
     with patch.object(news_watcher, "_init_components"):
         news_watcher._news_fetcher = Mock()
-        news_watcher._news_fetcher.fetch_market_news.return_value = [
-            breaking_article,
-            old_article,
-            normal_article,
-        ]
+        news_watcher._news_fetcher.afetch_market_news = AsyncMock(
+            return_value=[
+                breaking_article,
+                old_article,
+                normal_article,
+            ]
+        )
 
         events = await news_watcher._fetch_events()
 
@@ -109,7 +111,7 @@ async def test_fetch_events_deduplication(news_watcher):
 
     with patch.object(news_watcher, "_init_components"):
         news_watcher._news_fetcher = Mock()
-        news_watcher._news_fetcher.fetch_market_news.return_value = [article]
+        news_watcher._news_fetcher.afetch_market_news = AsyncMock(return_value=[article])
 
         # First fetch
         events1 = await news_watcher._fetch_events()
@@ -138,7 +140,7 @@ async def test_fetch_events_seen_urls_dict(news_watcher):
 
     with patch.object(news_watcher, "_init_components"):
         news_watcher._news_fetcher = Mock()
-        news_watcher._news_fetcher.fetch_market_news.return_value = [article]
+        news_watcher._news_fetcher.afetch_market_news = AsyncMock(return_value=[article])
 
         await news_watcher._fetch_events()
 
@@ -151,7 +153,7 @@ async def test_fetch_events_no_breaking_news(news_watcher):
     """Test when no breaking news is found."""
     with patch.object(news_watcher, "_init_components"):
         news_watcher._news_fetcher = Mock()
-        news_watcher._news_fetcher.fetch_market_news.return_value = []
+        news_watcher._news_fetcher.afetch_market_news = AsyncMock(return_value=[])
 
         events = await news_watcher._fetch_events()
 
@@ -272,15 +274,17 @@ async def test_multi_source_no_fetchers_uses_fallback(mock_historical_cache):
     # Mock the fallback fetcher
     with patch.object(watcher, "_init_components"):
         watcher._news_fetcher = Mock()
-        watcher._news_fetcher.fetch_market_news.return_value = [
-            NewsArticle(
-                title="Breaking: Fallback article",
-                description="Test",
-                url="https://example.com/fallback",
-                published_at=datetime.now(UTC),
-                source="Marketaux",
-            )
-        ]
+        watcher._news_fetcher.afetch_market_news = AsyncMock(
+            return_value=[
+                NewsArticle(
+                    title="Breaking: Fallback article",
+                    description="Test",
+                    url="https://example.com/fallback",
+                    published_at=datetime.now(UTC),
+                    source="Marketaux",
+                )
+            ]
+        )
 
         events = await watcher._fetch_events()
 

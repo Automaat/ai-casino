@@ -135,7 +135,7 @@ async def test_fetch_data(test_container_full, sample_news_articles):
     """Test data fetching."""
     # Override news fetcher to return sample articles
     mock_news_fetcher = MagicMock()
-    mock_news_fetcher.fetch_company_news.return_value = sample_news_articles
+    mock_news_fetcher.afetch_company_news = AsyncMock(return_value=sample_news_articles)
     test_container_full.news_fetcher.override(mock_news_fetcher)
 
     workflow = test_container_full.workflow_momentum(container=test_container_full)

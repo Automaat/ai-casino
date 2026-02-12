@@ -1,7 +1,7 @@
 """Tests for GetNewsTool."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -62,7 +62,7 @@ class TestGetNewsTool:
         tool = GetNewsTool(container=test_container_full)
 
         mock_fetcher = MagicMock()
-        mock_fetcher.fetch_company_news.return_value = sample_articles
+        mock_fetcher.afetch_company_news = AsyncMock(return_value=sample_articles)
         test_container_full.news_fetcher.override(mock_fetcher)
 
         result = tool.execute(symbol="AAPL", limit=5)
@@ -70,38 +70,38 @@ class TestGetNewsTool:
         assert "AAPL" in result
         assert "Apple Announces New Product" in result
         assert "TechNews" in result
-        mock_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+        mock_fetcher.afetch_company_news.assert_called_once_with("AAPL", limit=5)
 
     def test_execute_default_limit(self, test_container_full, sample_articles):
         """Test execution with default limit."""
         tool = GetNewsTool(container=test_container_full)
 
         mock_fetcher = MagicMock()
-        mock_fetcher.fetch_company_news.return_value = sample_articles
+        mock_fetcher.afetch_company_news = AsyncMock(return_value=sample_articles)
         test_container_full.news_fetcher.override(mock_fetcher)
 
         tool.execute(symbol="AAPL")
 
-        mock_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+        mock_fetcher.afetch_company_news.assert_called_once_with("AAPL", limit=5)
 
     def test_execute_uppercase_symbol(self, test_container_full, sample_articles):
         """Test that symbol is uppercased."""
         tool = GetNewsTool(container=test_container_full)
 
         mock_fetcher = MagicMock()
-        mock_fetcher.fetch_company_news.return_value = sample_articles
+        mock_fetcher.afetch_company_news = AsyncMock(return_value=sample_articles)
         test_container_full.news_fetcher.override(mock_fetcher)
 
         tool.execute(symbol="aapl", limit=5)
 
-        mock_fetcher.fetch_company_news.assert_called_once_with("AAPL", limit=5)
+        mock_fetcher.afetch_company_news.assert_called_once_with("AAPL", limit=5)
 
     def test_execute_empty_results(self, test_container_full):
         """Test handling empty news results."""
         tool = GetNewsTool(container=test_container_full)
 
         mock_fetcher = MagicMock()
-        mock_fetcher.fetch_company_news.return_value = []
+        mock_fetcher.afetch_company_news = AsyncMock(return_value=[])
         test_container_full.news_fetcher.override(mock_fetcher)
 
         result = tool.execute(symbol="AAPL")
@@ -113,7 +113,7 @@ class TestGetNewsTool:
         tool = GetNewsTool(container=test_container_full)
 
         mock_fetcher = MagicMock()
-        mock_fetcher.fetch_company_news.side_effect = Exception("API error")
+        mock_fetcher.afetch_company_news = AsyncMock(side_effect=Exception("API error"))
         test_container_full.news_fetcher.override(mock_fetcher)
 
         result = tool.execute(symbol="INVALID")

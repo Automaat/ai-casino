@@ -1,6 +1,5 @@
 """Finnhub news fetcher."""
 
-import asyncio
 from datetime import UTC, datetime
 
 import httpx
@@ -34,36 +33,9 @@ class FinnhubNewsFetcher:
         if not self.api_key:
             logger.warning("finnhub_api_key not set in config - API calls may be limited")
 
+    @HTTP_RETRY
     async def afetch_company_news(self, symbol: str, limit: int = 10) -> list[NewsArticle]:
         """Fetch company-specific news asynchronously.
-
-        Args:
-            symbol: Stock ticker symbol
-            limit: Maximum number of articles
-
-        Returns:
-            List of NewsArticle objects
-        """
-        return await asyncio.to_thread(self._fetch_company_sync, symbol, limit)
-
-    async def afetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
-        """Fetch general market news asynchronously.
-
-        Args:
-            limit: Maximum number of articles
-
-        Returns:
-            List of NewsArticle objects
-        """
-        return await asyncio.to_thread(self._fetch_market_sync, limit)
-
-    def get_source_name(self) -> str:
-        """Return source identifier."""
-        return "finnhub"
-
-    @HTTP_RETRY
-    def _fetch_company_sync(self, symbol: str, limit: int) -> list[NewsArticle]:
-        """Fetch company-specific news (sync implementation).
 
         Args:
             symbol: Stock ticker symbol
@@ -81,8 +53,8 @@ class FinnhubNewsFetcher:
         }
 
         try:
-            with httpx.Client(timeout=30.0) as client:
-                response = client.get(url, params=params)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, params=params)
                 response.raise_for_status()
 
                 data = response.json()
@@ -117,8 +89,8 @@ class FinnhubNewsFetcher:
             raise
 
     @HTTP_RETRY
-    def _fetch_market_sync(self, limit: int) -> list[NewsArticle]:
-        """Fetch general market news (sync implementation).
+    async def afetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
+        """Fetch general market news asynchronously.
 
         Args:
             limit: Maximum number of articles
@@ -135,8 +107,8 @@ class FinnhubNewsFetcher:
         }
 
         try:
-            with httpx.Client(timeout=30.0) as client:
-                response = client.get(url, params=params)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, params=params)
                 response.raise_for_status()
 
                 data = response.json()
@@ -164,6 +136,10 @@ class FinnhubNewsFetcher:
         except httpx.HTTPError as e:
             logger.error(f"Finnhub market news fetch failed: {e}")
             raise
+
+    def get_source_name(self) -> str:
+        """Return source identifier."""
+        return "finnhub"
 
     def __repr__(self) -> str:
         """String representation."""
