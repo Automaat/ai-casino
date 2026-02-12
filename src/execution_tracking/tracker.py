@@ -14,18 +14,20 @@ from src.execution_tracking.models import (
 )
 
 if TYPE_CHECKING:
-    from src.daemon.event_bus import DashboardEvent, EventBus
+    from src.daemon.event_bus import EventBus
 
 # ContextVars for thread-local execution state
 _current_node: ContextVar[str | None] = ContextVar("_current_node", default=None)
 _execution_stack: ContextVar[list[str] | None] = ContextVar("_execution_stack", default=None)
-_workflow_tracker: ContextVar["ExecutionGraphTracker | None"] = ContextVar("_workflow_tracker", default=None)
+_workflow_tracker: ContextVar[ExecutionGraphTracker | None] = ContextVar("_workflow_tracker", default=None)
 
 
 class ExecutionGraphTracker:
     """Tracks execution graph for a workflow with EventBus integration."""
 
-    def __init__(self, workflow_id: str | UUID, symbol: str | None = None, event_bus: "EventBus | None" = None) -> None:
+    def __init__(
+        self, workflow_id: str | UUID, symbol: str | None = None, event_bus: EventBus | None = None
+    ) -> None:
         """Initialize tracker.
 
         Args:

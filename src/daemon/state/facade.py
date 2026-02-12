@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+if TYPE_CHECKING:
+    from src.execution_tracking.models import ExecutionGraph
+    from src.execution_tracking.tracker import ExecutionGraphTracker
+
 from src.daemon.state.managers.data_pipeline import DataPipelineStateManager
 from src.daemon.state.managers.discovery import DiscoveryStateManager
 from src.daemon.state.managers.portfolio import PortfolioStateManager
@@ -70,12 +74,12 @@ class DaemonState(BaseModel):
     snapshots: SnapshotStateManager = Field(default_factory=SnapshotStateManager)
 
     # Execution tracking (in-memory only, not persisted)
-    active_execution_trackers: dict[str, "ExecutionGraphTracker"] = Field(
+    active_execution_trackers: dict[str, ExecutionGraphTracker] = Field(
         default_factory=dict,
         exclude=True,
         description="Active workflow execution trackers by workflow_id",
     )
-    execution_graph_history: deque["ExecutionGraph"] = Field(
+    execution_graph_history: deque[ExecutionGraph] = Field(
         default_factory=lambda: deque(maxlen=50),
         exclude=True,
         description="Recent completed execution graphs (last 50)",
@@ -757,7 +761,7 @@ class DaemonState(BaseModel):
     # Execution Tracking API
     # ===========================
 
-    def add_execution_tracker(self, workflow_id: str, tracker: "ExecutionGraphTracker") -> None:
+    def add_execution_tracker(self, workflow_id: str, tracker: ExecutionGraphTracker) -> None:
         """Add active execution tracker.
 
         Args:
@@ -767,7 +771,7 @@ class DaemonState(BaseModel):
         self.active_execution_trackers[workflow_id] = tracker
         logger.debug(f"Added execution tracker for workflow {workflow_id}")
 
-    def get_execution_tracker(self, workflow_id: str) -> "ExecutionGraphTracker | None":
+    def get_execution_tracker(self, workflow_id: str) -> ExecutionGraphTracker | None:
         """Get active execution tracker.
 
         Args:
@@ -791,7 +795,7 @@ class DaemonState(BaseModel):
                 f"({len(tracker.graph.nodes)} nodes, history size: {len(self.execution_graph_history)})"
             )
 
-    def get_active_execution_graphs(self) -> list["ExecutionGraph"]:
+    def get_active_execution_graphs(self) -> list[ExecutionGraph]:
         """Get all active execution graphs.
 
         Returns:
@@ -799,7 +803,7 @@ class DaemonState(BaseModel):
         """
         return [tracker.graph for tracker in self.active_execution_trackers.values()]
 
-    def get_execution_graph(self, workflow_id: str) -> "ExecutionGraph | None":
+    def get_execution_graph(self, workflow_id: str) -> ExecutionGraph | None:
         """Get execution graph (active or recent).
 
         Args:

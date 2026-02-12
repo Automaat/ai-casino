@@ -34,7 +34,7 @@ def test_track_agent_decorator_sync() -> None:
         assert result == "Analysis for AAPL: test-data"
         assert len(tracker.graph.nodes) == 1
 
-        node = list(tracker.graph.nodes.values())[0]
+        node = next(iter(tracker.graph.nodes.values()))
         assert node.node_type == ExecutionNodeType.AGENT
         assert "TestAnalyst" in node.name  # May include test function path for local classes
         assert node.status == ExecutionStatus.COMPLETED
@@ -60,7 +60,7 @@ async def test_track_agent_decorator_async() -> None:
         assert result == "Async analysis for TSLA: test-data"
         assert len(tracker.graph.nodes) == 1
 
-        node = list(tracker.graph.nodes.values())[0]
+        node = next(iter(tracker.graph.nodes.values()))
         assert node.node_type == ExecutionNodeType.AGENT
         assert "AsyncAnalyst" in node.name  # May include test function path for local classes
         assert node.status == ExecutionStatus.COMPLETED
@@ -86,7 +86,8 @@ def test_track_agent_on_exception() -> None:
     class FailingAnalyst:
         @track_agent
         def analyze(self, symbol: str) -> str:
-            raise ValueError(f"Analysis failed for {symbol}")
+            msg = f"Analysis failed for {symbol}"
+            raise ValueError(msg)
 
     analyst = FailingAnalyst()
 
@@ -95,7 +96,7 @@ def test_track_agent_on_exception() -> None:
             analyst.analyze("AAPL")
 
         assert len(tracker.graph.nodes) == 1
-        node = list(tracker.graph.nodes.values())[0]
+        node = next(iter(tracker.graph.nodes.values()))
         assert node.status == ExecutionStatus.FAILED
         assert "Analysis failed for AAPL" in node.error
 
@@ -107,7 +108,8 @@ async def test_track_agent_async_exception() -> None:
     class AsyncFailingAnalyst:
         @track_agent
         async def analyze(self, symbol: str) -> str:
-            raise RuntimeError(f"Async failure for {symbol}")
+            msg = f"Async failure for {symbol}"
+            raise RuntimeError(msg)
 
     analyst = AsyncFailingAnalyst()
 
@@ -115,7 +117,7 @@ async def test_track_agent_async_exception() -> None:
         with pytest.raises(RuntimeError, match="Async failure for TSLA"):
             await analyst.analyze("TSLA")
 
-        node = list(tracker.graph.nodes.values())[0]
+        node = next(iter(tracker.graph.nodes.values()))
         assert node.status == ExecutionStatus.FAILED
 
 
@@ -124,7 +126,7 @@ def test_track_agent_extracts_symbol_from_kwargs() -> None:
 
     class TestAnalyst:
         @track_agent
-        def analyze(self, data: str, symbol: str) -> str:
+        def analyze(self, _data: str, symbol: str) -> str:
             return f"Analysis for {symbol}"
 
     analyst = TestAnalyst()
@@ -132,7 +134,7 @@ def test_track_agent_extracts_symbol_from_kwargs() -> None:
     with track_workflow("workflow-123") as tracker:
         analyst.analyze("data", symbol="NVDA")
 
-        node = list(tracker.graph.nodes.values())[0]
+        node = next(iter(tracker.graph.nodes.values()))
         assert node.metadata["symbol"] == "NVDA"
 
 
@@ -150,7 +152,7 @@ def test_track_agent_no_symbol() -> None:
         result = analyst.process("test")
 
         assert result == "Processed: test"
-        node = list(tracker.graph.nodes.values())[0]
+        node = next(iter(tracker.graph.nodes.values()))
         assert "symbol" not in node.metadata
 
 

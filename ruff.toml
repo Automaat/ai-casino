@@ -126,6 +126,17 @@ ignore = [
 "src/tui/widgets/*.py" = [
     "PLR2004", # magic values OK for time calculations
 ]
+"src/execution_tracking/decorators.py" = [
+    "ANN401", # Any required for generic decorator wrappers
+    "RET504", # explicit return for clarity in tracking context
+]
+"src/execution_tracking/models.py" = [
+    "ANN401", # Any required for dynamic node updates
+]
+"src/execution_tracking/tracker.py" = [
+    "F841",   # loop variable intentionally captured for scope
+    "RUF006", # fire-and-forget task publishing (event bus handles lifecycle)
+]
 
 [lint.mccabe]
 max-complexity = 10

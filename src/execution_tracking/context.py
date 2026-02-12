@@ -1,7 +1,8 @@
 """Context managers for execution tracking."""
 
+from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
-from typing import Any, AsyncGenerator, Generator
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from loguru import logger
@@ -13,6 +14,9 @@ from src.execution_tracking.tracker import (
     set_current_tracker,
 )
 
+if TYPE_CHECKING:
+    from src.daemon.event_bus import EventBus
+
 
 @contextmanager
 def track_execution(
@@ -20,7 +24,7 @@ def track_execution(
     name: str,
     parent_id: str | None = None,
     metadata: dict[str, Any] | None = None,
-) -> Generator[str | None, None, None]:
+) -> Generator[str | None]:
     """Context manager for tracking execution node (sync version).
 
     Args:
@@ -62,7 +66,7 @@ async def atrack_execution(
     name: str,
     parent_id: str | None = None,
     metadata: dict[str, Any] | None = None,
-) -> AsyncGenerator[str | None, None]:
+) -> AsyncGenerator[str | None]:
     """Context manager for tracking execution node (async version).
 
     Args:
@@ -102,8 +106,8 @@ async def atrack_execution(
 def track_workflow(
     workflow_id: str | UUID,
     symbol: str | None = None,
-    event_bus: Any = None,
-) -> Generator[ExecutionGraphTracker, None, None]:
+    event_bus: EventBus | None = None,
+) -> Generator[ExecutionGraphTracker]:
     """Context manager for tracking entire workflow execution.
 
     Sets up ExecutionGraphTracker in ContextVar for the workflow scope.

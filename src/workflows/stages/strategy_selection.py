@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Coroutine
+from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
@@ -37,7 +37,7 @@ class TradingStrategy(Protocol):
 
 async def _timed_agent_call(
     agent_name: str,
-    coro: Coroutine[Any, Any, T],
+    coro: Awaitable[T],
     collector: ExecutionMetricsCollector | None,
 ) -> T:
     """Wrap an agent coroutine with timing and context var tracking.

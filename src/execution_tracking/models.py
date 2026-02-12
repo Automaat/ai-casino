@@ -36,11 +36,15 @@ class ExecutionNode(BaseModel):
     end_time: datetime | None = None
     duration_ms: float | None = Field(default=None, description="Duration in milliseconds")
     error: str | None = Field(default=None, description="Error message if failed")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional context (args, result summary)")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Additional context (args, result summary)"
+    )
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"ExecutionNode(id={self.node_id}, type={self.node_type}, name={self.name}, status={self.status})"
+        return (
+            f"ExecutionNode(id={self.node_id}, type={self.node_type}, name={self.name}, status={self.status})"
+        )
 
     def complete(self) -> None:
         """Mark node as completed."""
@@ -71,8 +75,7 @@ class ExecutionGraph(BaseModel):
     def __repr__(self) -> str:
         """String representation."""
         return (
-            f"ExecutionGraph(workflow_id={self.workflow_id}, symbol={self.symbol}, "
-            f"nodes={len(self.nodes)})"
+            f"ExecutionGraph(workflow_id={self.workflow_id}, symbol={self.symbol}, nodes={len(self.nodes)})"
         )
 
     def add_node(self, node: ExecutionNode) -> None:
@@ -103,4 +106,6 @@ class ExecutionGraph(BaseModel):
 
     def is_completed(self) -> bool:
         """Check if all nodes completed (success or failure)."""
-        return all(node.status in (ExecutionStatus.COMPLETED, ExecutionStatus.FAILED) for node in self.nodes.values())
+        return all(
+            node.status in (ExecutionStatus.COMPLETED, ExecutionStatus.FAILED) for node in self.nodes.values()
+        )

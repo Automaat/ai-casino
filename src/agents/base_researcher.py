@@ -3,7 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from loguru import logger
 from pydantic import BaseModel
@@ -45,7 +45,7 @@ SECTION_NAMES = {
 }
 
 
-class BaseResearcher(ABC):
+class BaseResearcher(ABC, Generic[TAnalysis]):
     """Base researcher agent with shared logic for thesis construction."""
 
     def __init__(self, llm_client: LLMClient, direction: ResearchDirection, prompt_dir: str) -> None:
@@ -76,7 +76,7 @@ class BaseResearcher(ABC):
         fundamental: FundamentalAnalysis | None,
         comparative: ComparativeAnalysis | None = None,
         trump_analysis: TrumpAnalysis | None = None,
-    ) -> BaseModel:
+    ) -> TAnalysis:
         """Construct thesis from all analyses.
 
         Args:
@@ -138,7 +138,7 @@ class BaseResearcher(ABC):
     @abstractmethod
     def _build_analysis(
         self, thesis: str, key_points: list[str], target: float | None, confidence: float
-    ) -> BaseModel:
+    ) -> TAnalysis:
         """Build analysis result model - must be implemented by subclass.
 
         Args:

@@ -5,7 +5,12 @@ from unittest.mock import Mock
 import pytest
 
 from src.execution_tracking.models import ExecutionNodeType, ExecutionStatus
-from src.execution_tracking.tracker import ExecutionGraphTracker, _current_node, _execution_stack, set_current_tracker
+from src.execution_tracking.tracker import (
+    ExecutionGraphTracker,
+    _current_node,
+    _execution_stack,
+    set_current_tracker,
+)
 
 
 @pytest.fixture(autouse=True)

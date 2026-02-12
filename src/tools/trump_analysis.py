@@ -3,7 +3,7 @@
 import asyncio
 import concurrent.futures
 from collections.abc import Coroutine
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
@@ -99,7 +99,8 @@ class TrumpAnalysisTool(BaseTool):
             analyst = TrumpAnalyst(llm)
 
             # Run async analysis (handles existing event loop)
-            analysis = _run_async(analyst.analyze(post_data.posts))
+            coro = cast("Coroutine[Any, Any, TrumpAnalysis]", analyst.analyze(post_data.posts))
+            analysis = _run_async(coro)
 
             return self._format_analysis(analysis, days)
         except Exception as e:
