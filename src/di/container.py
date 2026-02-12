@@ -199,10 +199,12 @@ class AppContainer(containers.DeclarativeContainer):
 
     metrics_tracker = providers.Singleton(
         model_providers.create_metrics_tracker,
+        daemon_config=daemon_config,
     )
 
     quantstats_reporter = providers.Singleton(
         model_providers.create_quantstats_reporter,
+        daemon_config=daemon_config,
     )
 
     stock_screener = providers.Singleton(

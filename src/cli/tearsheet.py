@@ -149,9 +149,22 @@ async def _generate_and_save_tearsheet(
         benchmark: Benchmark symbol or None
         benchmark_returns: Benchmark returns series or None
     """
+    from pathlib import Path
+
     from src.daemon.config import DaemonConfig
 
-    daemon_config = DaemonConfig()
+    # Load user's YAML config if exists, otherwise defaults
+    default_config_path = Path.home() / ".ai-casino" / "daemon.yaml"
+    try:
+        daemon_config = (
+            DaemonConfig.from_yaml(default_config_path)
+            if default_config_path.exists()
+            else DaemonConfig()
+        )
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to load config, using defaults: {e}")
+        daemon_config = DaemonConfig()
+
     reporter = QuantStatsReporter(daemon_config.metrics.risk_free_rate)
 
     try:

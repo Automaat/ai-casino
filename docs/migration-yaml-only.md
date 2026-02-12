@@ -8,7 +8,10 @@
 
 **After (v1.x):** YAML-only configuration - no env var fallback
 
-**Exceptions:** OS-provided env vars (`TERM_PROGRAM`, `COLORFGBG`) still used for terminal detection.
+**Exceptions:**
+
+- OS-provided env vars (`TERM_PROGRAM`, `COLORFGBG`) are still used for terminal detection.
+- Security-sensitive API key env vars (see list in the "Environment Variable Mapping" section below) are still read as a *fallback only* when the corresponding value is omitted from `daemon.yaml`. If both YAML and env vars are set, **YAML takes precedence**. This fallback is for backward compatibility with existing `.env` setups and is deprecated; you should migrate all API keys into `daemon.yaml`.
 
 ## Migration Steps
 
@@ -208,14 +211,14 @@ rm .env
 | `REDDIT_USER_AGENT`           | `daemon.api_keys.reddit_user_agent`          | Optional                        |
 | `ANTHROPIC_API_KEY`           | `daemon.api_keys.anthropic_api_key`          | Claude LLM                      |
 | `OPENAI_API_KEY`              | `daemon.api_keys.openai_api_key`             | GPT LLM                         |
-| `OPENAI_BASE_URL`             | `daemon.api_keys.openai_base_url`            | Custom endpoint                 |
+| `OPENAI_API_BASE`             | `daemon.api_keys.openai_api_base`            | Custom endpoint                 |
 | `LLM_PROVIDER`                | `daemon.llm.provider`                        | ollama/anthropic/openai         |
 | `LLM_MODEL`                   | `daemon.llm.model`                           | Model ID                        |
 | `LLM_MAX_CONCURRENT`          | `daemon.llm.max_concurrent`                  | 1-20, default 5                 |
 | `OLLAMA_BASE_URL`             | `daemon.llm.ollama_base_url`                 | Default: http://localhost:11434 |
 | `LOG_LEVEL`                   | `daemon.logging.log_level`                   | DEBUG/INFO/WARNING/ERROR        |
 | `RISK_FREE_RATE`              | `daemon.metrics.risk_free_rate`              | Default: 0.02                   |
-| `EXECUTION_METRICS_ENABLED`   | `daemon.metrics.execution_metrics_enabled`   | Default: true                   |
+| `EXECUTION_METRICS`           | `daemon.metrics.execution_metrics_enabled`   | Default: true                   |
 | `PORTFOLIO_SNAPSHOT_ON_TRADE` | `daemon.metrics.portfolio_snapshot_on_trade` | Default: false                  |
 | `AI_CASINO_THEME`             | `daemon.ui.theme`                            | nord-dark/nord-light/null       |
 | `DASHBOARD_HOST`              | `daemon.ui.dashboard_host`                   | Default: 127.0.0.1              |
@@ -268,18 +271,17 @@ daemon:
 
 ### CLI tools fail to start
 
-**Issue:** CLI tools require config file now (no env var fallback).
+**Issue:** Some CLI tools may not honor `daemon.yaml` settings.
 
-**Fix:** Always pass `--config` flag or ensure default path exists:
+**Fix:** Most CLI tools load defaults internally. For tools that support config loading, ensure the default config path exists:
 
 ```bash
-# Explicit config
-python -m src.cli.analyze AAPL --config ~/.ai-casino/daemon.yaml
-
-# Or ensure default exists
+# Create default config location
 mkdir -p ~/.ai-casino
 cp docs/daemon.yaml.example ~/.ai-casino/daemon.yaml
 ```
+
+Note: CLI tools that support YAML config will automatically load from `~/.ai-casino/daemon.yaml` if it exists. Check individual tool documentation for config support.
 
 ### Daemon ignores my settings
 

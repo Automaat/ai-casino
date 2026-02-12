@@ -72,18 +72,27 @@ def dashboard(
     )
 
     try:
-        # Create config - let DashboardConfig handle api_url default
-        # Normalize empty/whitespace-only strings to None so DashboardConfig applies env/default
-        normalized_api_url = None
+        # Start with daemon config values
+        config = DashboardConfig.from_daemon_config(daemon_config)
+
+        # Apply CLI overrides
         if api_url is not None:
             stripped_api_url = api_url.strip()
             if stripped_api_url:
-                normalized_api_url = stripped_api_url
+                config = DashboardConfig(
+                    api_url=stripped_api_url,
+                    port=port,
+                    host=config.host,
+                    refresh_interval=config.refresh_interval,
+                )
 
-        if normalized_api_url is not None:
-            config = DashboardConfig(api_url=normalized_api_url, port=port)
-        else:
-            config = DashboardConfig(port=port)
+        if port != 8050:  # Non-default port specified
+            config = DashboardConfig(
+                api_url=config.api_url,
+                port=port,
+                host=config.host,
+                refresh_interval=config.refresh_interval,
+            )
 
         console.print("[bold cyan]AI Casino Dashboard[/bold cyan]")
         console.print(f"API URL: {config.api_url}")
