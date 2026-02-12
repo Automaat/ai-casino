@@ -34,14 +34,16 @@ class CircuitBreakerRegistry:
 
             return self._breakers[service]
 
-    def get_all_statuses(self) -> dict[str, CircuitBreakerStatus]:
+    async def get_all_statuses(self) -> dict[str, CircuitBreakerStatus]:
         """Get status of all circuit breakers."""
-        return {service: breaker.get_status() for service, breaker in self._breakers.items()}
+        async with self._lock:
+            return {service: breaker.get_status() for service, breaker in self._breakers.items()}
 
-    def get_status(self, service: str) -> CircuitBreakerStatus | None:
+    async def get_status(self, service: str) -> CircuitBreakerStatus | None:
         """Get status of specific circuit breaker."""
-        breaker = self._breakers.get(service)
-        return breaker.get_status() if breaker else None
+        async with self._lock:
+            breaker = self._breakers.get(service)
+            return breaker.get_status() if breaker else None
 
     async def reset(self, service: str) -> bool:
         """Reset circuit breaker to closed state."""

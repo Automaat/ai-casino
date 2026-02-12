@@ -87,7 +87,9 @@ class HealthChecker:
         self.state = state
         self._container = container or create_container()
         self.notification_service = notification_service
-        self._circuit_breaker_registry = circuit_breaker_registry
+        self._circuit_breaker_registry = (
+            circuit_breaker_registry or self._container.circuit_breaker_registry()
+        )
         self._health_dir = Path(config.health.health_dir).expanduser()
         self._archive_dir = Path(config.health.archive_dir).expanduser()
 
@@ -110,7 +112,7 @@ class HealthChecker:
 
         # Add circuit breaker status checks
         if self._circuit_breaker_registry:
-            circuit_checks = self._check_circuit_breakers()
+            circuit_checks = await self._check_circuit_breakers()
             checks.extend(circuit_checks)
 
         # Run cleanup operations
@@ -367,7 +369,7 @@ class HealthChecker:
                 checked_at=datetime.now(UTC),
             )
 
-    def _check_circuit_breakers(self) -> list[ServiceCheckResult]:
+    async def _check_circuit_breakers(self) -> list[ServiceCheckResult]:
         """Check circuit breaker statuses for all services.
 
         Returns:
@@ -377,17 +379,18 @@ class HealthChecker:
             return []
 
         results = []
-        circuit_statuses = self._circuit_breaker_registry.get_all_statuses()
+        circuit_statuses = await self._circuit_breaker_registry.get_all_statuses()
 
         for service, status in circuit_statuses.items():
             if status.state == CircuitBreakerState.OPEN:
-                open_until = status.opened_at
-                if status.opened_at:
-                    timeout_seconds = self.config.api.circuit_breaker.timeout_seconds
-                    open_until = status.opened_at.timestamp() + timeout_seconds
-                    open_until_str = datetime.fromtimestamp(open_until, tz=UTC).strftime(
-                        "%Y-%m-%d %H:%M:%S UTC"
-                    )
+                open_until = getattr(status, "open_until", None)
+                if open_until is not None:
+                    if isinstance(open_until, datetime):
+                        open_until_dt = open_until
+                    else:
+                        # Fallback: handle timestamp-like values defensively
+                        open_until_dt = datetime.fromtimestamp(open_until, tz=UTC)
+                    open_until_str = open_until_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
                 else:
                     open_until_str = "unknown"
 

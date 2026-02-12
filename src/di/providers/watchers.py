@@ -41,9 +41,10 @@ def create_news_watcher(
         from src.di.container import create_container
         from src.di.providers.data import create_news_fetcher
 
-        # Get circuit breaker registry from container
-        _container = container or create_container()
-        circuit_breaker_registry = _container.circuit_breaker_registry()
+        # Get circuit breaker registry from container (reuse existing or create once)
+        if container is None:
+            container = create_container()
+        circuit_breaker_registry = container.circuit_breaker_registry()
 
         fetchers.append(create_news_fetcher(daemon_config, historical_cache, circuit_breaker_registry))
 

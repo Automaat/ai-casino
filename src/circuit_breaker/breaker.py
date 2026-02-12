@@ -60,11 +60,17 @@ class CircuitBreaker:
         async with self._lock:
             await self._check_state()
 
+        was_half_open = self._state == CircuitBreakerState.HALF_OPEN
         try:
             result = await func(*args, **kwargs)
             await self._on_success()
             return result
         except Exception as e:
+            # Decrement half-open calls if exception occurs in HALF_OPEN state
+            if was_half_open:
+                async with self._lock:
+                    self._half_open_calls = max(0, self._half_open_calls - 1)
+
             if self._is_retriable_error(e):
                 await self._on_failure(e)
             raise
@@ -85,11 +91,10 @@ class CircuitBreaker:
         if self._opened_at is None:
             return
 
-        elapsed = (datetime.now(UTC) - self._opened_at).total_seconds()
-        if elapsed >= self._config.timeout_seconds:
+        open_until = self._calculate_open_until()
+        if datetime.now(UTC) >= open_until:
             await self._transition_to_half_open()
         else:
-            open_until = self._calculate_open_until()
             raise CircuitBreakerError(self._service, open_until)
 
     def _calculate_open_until(self) -> datetime:
