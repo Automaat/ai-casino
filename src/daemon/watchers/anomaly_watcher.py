@@ -8,6 +8,7 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -15,6 +16,9 @@ from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 
 @dataclass
@@ -44,7 +48,7 @@ class AnomalyWatcher(EventWatcher):
         historical_cache: HistoricalCache,
         market_fetcher: MarketDataFetcher,
         config: AnomalyWatcherConfig | None = None,
-        container: "AppContainer | None" = None,
+        container: AppContainer | None = None,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,

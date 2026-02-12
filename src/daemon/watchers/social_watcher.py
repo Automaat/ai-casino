@@ -8,7 +8,7 @@ Detects two types of events:
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -16,6 +16,9 @@ from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher, TrendingTicker
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 
 @dataclass
@@ -43,7 +46,7 @@ class SocialWatcher(EventWatcher):
         self,
         historical_cache: HistoricalCache,
         config: SocialWatcherConfig | None = None,
-        container: "AppContainer | None" = None,
+        container: AppContainer | None = None,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,

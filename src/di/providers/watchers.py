@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 def create_news_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
-    container: "AppContainer | None" = None,
+    container: AppContainer | None = None,
 ) -> NewsWatcher | None:
     """Create news watcher with enabled sources.
 
@@ -78,7 +78,7 @@ def create_news_watcher(
 def create_social_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
-    container: "AppContainer | None" = None,
+    container: AppContainer | None = None,
 ) -> SocialWatcher | None:
     """Create social media watcher if enabled.
 
