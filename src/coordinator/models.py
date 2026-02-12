@@ -18,6 +18,25 @@ class PatternDetectionConfig(BaseModel):
         return f"PatternDetectionConfig(enabled={self.enabled}, frequency={self.detection_frequency})"
 
 
+class AdaptiveThresholdConfig(BaseModel):
+    """Adaptive confidence threshold configuration."""
+
+    enabled: bool = False
+    adaptation_interval_cycles: int = Field(default=5, ge=1, le=50)
+    min_sample_size: int = Field(default=20, ge=10, le=100)
+    buy_increase_step: float = Field(default=0.1, ge=0.0, le=0.2)
+    sell_decrease_step: float = Field(default=0.05, ge=0.0, le=0.2)
+    buy_accuracy_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    sell_accuracy_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    weekly_reset_enabled: bool = True
+    max_threshold: float = Field(default=0.95, ge=0.5, le=1.0)
+    min_threshold: float = Field(default=0.5, ge=0.0, le=0.9)
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"AdaptiveThresholdConfig(enabled={self.enabled}, interval={self.adaptation_interval_cycles})"
+
+
 class CoordinatorConfig(BaseModel):
     """Configuration for the coordinator agent."""
 
@@ -47,6 +66,7 @@ class CoordinatorConfig(BaseModel):
         default=0.7, ge=0.0, le=1.0, description="Minimum signal confidence required to execute trade"
     )
     pattern_detection: PatternDetectionConfig = Field(default_factory=PatternDetectionConfig)
+    adaptive_thresholds: AdaptiveThresholdConfig = Field(default_factory=AdaptiveThresholdConfig)
 
     def __repr__(self) -> str:
         """Return string representation."""

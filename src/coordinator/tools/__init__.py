@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from src.agents.critic import CriticAgent
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.memory import CoordinatorMemory
+    from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.di.container import AppContainer
     from src.tools.registry import ToolRegistry
 
@@ -15,6 +16,7 @@ def build_coordinator_registry(
     memory: CoordinatorMemory | None = None,
     coordinator: TradingCoordinator | None = None,
     critic_agent: CriticAgent | None = None,
+    adaptive_threshold_manager: AdaptiveThresholdManager | None = None,
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
 
@@ -25,6 +27,7 @@ def build_coordinator_registry(
         memory: Optional shared memory (creates new if None)
         coordinator: Optional coordinator for reflection tool
         critic_agent: Optional critic agent to reuse (avoids duplicate instances)
+        adaptive_threshold_manager: Optional adaptive threshold manager for execute tool
 
     Returns:
         ToolRegistry with all coordinator tools registered
@@ -77,7 +80,9 @@ def build_coordinator_registry(
     registry.register(MarketOverviewTool(market_fetcher))
     registry.register(AnalyzeSymbolTool(container, coordinator))
     registry.register(PortfolioStatusTool(broker))
-    registry.register(ExecuteTradeTool(broker, daemon_config, confirmation_handler))
+    registry.register(
+        ExecuteTradeTool(broker, daemon_config, confirmation_handler, adaptive_threshold_manager)
+    )
 
     # Use provided memory or create new
     if memory is None:

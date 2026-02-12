@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from src.coordinator.pattern_analyzer import PatternAnalyzer
     from src.daemon.notification_channels import TelegramChannel
     from src.daemon.state import DaemonState
+    from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.models.sentiment import FinBERTSentiment
@@ -384,6 +385,33 @@ def create_pattern_analyzer(
     )
 
 
+def create_adaptive_threshold_manager(
+    daemon_config: DaemonConfig,
+    container: AppContainer,
+) -> AdaptiveThresholdManager | None:
+    """Create adaptive threshold manager if enabled.
+
+    Args:
+        daemon_config: Daemon configuration
+        container: DI container for repositories
+
+    Returns:
+        AdaptiveThresholdManager if enabled, None otherwise
+    """
+    from src.daemon.threshold_adapter import AdaptiveThresholdManager
+
+    if not daemon_config.coordinator.adaptive_thresholds.enabled:
+        return None
+
+    # Get signal outcome repository
+    signal_outcome_repo = container.signal_outcome_repository()
+
+    return AdaptiveThresholdManager(
+        config=daemon_config.coordinator.adaptive_thresholds,
+        signal_outcome_repo=signal_outcome_repo,
+    )
+
+
 def create_trading_coordinator(
     llm_client: LLMClient,
     daemon_config: DaemonConfig,
@@ -431,7 +459,10 @@ def create_trading_coordinator(
     )
 
     # Build temp tool registry without coordinator (for initial creation)
-    tool_registry_temp = build_coordinator_registry(container, memory, coordinator=None)
+    # Note: adaptive_threshold_manager created after registry, pass None initially
+    tool_registry_temp = build_coordinator_registry(
+        container, memory, coordinator=None, adaptive_threshold_manager=None
+    )
 
     # Extract coordinator config
     coordinator_config = daemon_config.coordinator
@@ -457,6 +488,16 @@ def create_trading_coordinator(
     # Get critic agent
     critic_agent = container.critic_agent()
 
+    # Get adaptive threshold manager if enabled
+    adaptive_threshold_manager = None
+    if coordinator_config.adaptive_thresholds.enabled:
+        try:
+            adaptive_threshold_manager = create_adaptive_threshold_manager(daemon_config, container)
+        except Exception as e:
+            from loguru import logger
+
+            logger.opt(exception=True).warning(f"Failed to create adaptive_threshold_manager: {e}")
+
     # Create coordinator with temp registry
     coordinator = TradingCoordinator(
         llm_client=coordinator_llm,
@@ -465,11 +506,14 @@ def create_trading_coordinator(
         config=coordinator_config,
         broker=broker,
         critic_agent=critic_agent,
+        adaptive_threshold_manager=adaptive_threshold_manager,
     )
 
     # Rebuild registry with coordinator reference for reflection tool
-    # Pass critic_agent to avoid creating duplicate instance
-    tool_registry = build_coordinator_registry(container, memory, coordinator, critic_agent)
+    # Pass critic_agent and adaptive_threshold_manager to avoid creating duplicate instances
+    tool_registry = build_coordinator_registry(
+        container, memory, coordinator, critic_agent, adaptive_threshold_manager
+    )
     coordinator._tools = tool_registry  # noqa: SLF001
 
     return coordinator
