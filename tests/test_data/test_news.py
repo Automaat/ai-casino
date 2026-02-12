@@ -87,6 +87,9 @@ async def test_afetch_company_news(sample_news_response):
         assert articles[1].source == "Bloomberg"
 
         mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert call_args[1]["params"]["symbols"] == "AAPL"
+        assert call_args[1]["params"]["limit"] == 10
 
 
 @pytest.mark.asyncio
@@ -109,6 +112,9 @@ async def test_afetch_market_news(sample_news_response):
         assert all(isinstance(a, NewsArticle) for a in articles)
 
         mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert call_args[1]["params"]["limit"] == 20
+        assert "symbols" not in call_args[1]["params"]
 
 
 @pytest.mark.asyncio
