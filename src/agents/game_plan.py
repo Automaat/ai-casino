@@ -20,9 +20,7 @@ class GamePlanLLMResponse(BaseModel):
     priority_symbols: list[str] = Field(description="3-5 priority symbols")
     risk_stance: Literal["AGGRESSIVE", "DEFENSIVE", "NEUTRAL"]
     sector_focus: list[str] = Field(description="1-3 sectors to focus on")
-    key_levels: dict[str, float] = Field(
-        default_factory=dict, description="Symbol->price mappings (optional)"
-    )
+    key_levels: dict[str, float] | None = Field(default=None, description="Symbol->price mappings (optional)")
     reasoning: str = Field(description="Strategic rationale (2-3 sentences)")
     confidence: float = Field(ge=0.0, le=1.0)
 
@@ -107,7 +105,7 @@ class GamePlanAgent:
             priority_symbols = llm_response.priority_symbols
             risk_stance = llm_response.risk_stance
             sector_focus = llm_response.sector_focus
-            key_levels = llm_response.key_levels
+            key_levels = llm_response.key_levels or {}
             reasoning = llm_response.reasoning
             confidence = llm_response.confidence
         except StructuredOutputError as e:

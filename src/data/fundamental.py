@@ -1,6 +1,5 @@
 """Fundamental data fetcher using Alpha Vantage API."""
 
-import os
 from typing import Any
 
 from alpha_vantage.fundamentaldata import FundamentalData
@@ -21,17 +20,16 @@ class FundamentalDataFetcher:
         """Initialize the fundamental data fetcher.
 
         Args:
-            api_key: Alpha Vantage API key (defaults to env var)
+            api_key: Alpha Vantage API key (optional)
             historical_cache: Optional permanent cache for fundamentals
         """
-        self.api_key = api_key or os.getenv("ALPHA_VANTAGE_API_KEY")
+        self.api_key = api_key
         self._cache = historical_cache
-        if not self.api_key:
-            msg = "ALPHA_VANTAGE_API_KEY required for fundamental data"
-            raise ValueError(msg)
-
-        self.fd = FundamentalData(key=self.api_key, output_format="json")
-        logger.info("Initialized FundamentalDataFetcher")
+        self.fd = FundamentalData(key=self.api_key, output_format="json") if self.api_key else None
+        if self.api_key:
+            logger.info("Initialized FundamentalDataFetcher with API key")
+        else:
+            logger.warning("FundamentalDataFetcher initialized without API key - methods will fail")
 
     def fetch_overview(self, symbol: str) -> dict[str, Any]:
         """Fetch company overview with fundamental metrics.
@@ -43,9 +41,13 @@ class FundamentalDataFetcher:
             Dictionary containing 50+ fundamental data fields
 
         Raises:
-            ValueError: If no data available for symbol
+            ValueError: If no data available for symbol or API key missing
             Exception: On API errors
         """
+        if not self.fd:
+            msg = "ALPHA_VANTAGE_API_KEY not configured - cannot fetch fundamental data"
+            raise ValueError(msg)
+
         if self._cache:
             cached = self._cache.get_fundamentals(symbol)
             if cached is not None:

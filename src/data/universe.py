@@ -40,6 +40,12 @@ SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 NASDAQ100_URL = "https://en.wikipedia.org/wiki/Nasdaq-100"
 ISHARES_RUSSELL3000_URL = "https://www.ishares.com/us/products/239714/ishares-russell-3000-etf/1467271812596.ajax?fileType=csv&fileName=IWV_holdings&dataType=fund"
 
+# User-Agent to avoid 403 from Wikipedia/iShares
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
 
 class StockInfo(BaseModel):
     """Stock information from universe."""
@@ -339,7 +345,8 @@ class StockUniverseFetcher:
         Returns:
             List of StockInfo
         """
-        with httpx.Client(timeout=30.0) as client:
+        headers = {"User-Agent": USER_AGENT}
+        with httpx.Client(timeout=30.0, headers=headers) as client:
             response = client.get(SP500_URL)
             response.raise_for_status()
 
@@ -368,7 +375,8 @@ class StockUniverseFetcher:
         Returns:
             List of StockInfo
         """
-        with httpx.Client(timeout=30.0) as client:
+        headers = {"User-Agent": USER_AGENT}
+        with httpx.Client(timeout=30.0, headers=headers) as client:
             response = client.get(NASDAQ100_URL)
             response.raise_for_status()
 
@@ -397,7 +405,8 @@ class StockUniverseFetcher:
         Returns:
             List of StockInfo
         """
-        with httpx.Client(timeout=30.0) as client:
+        headers = {"User-Agent": USER_AGENT}
+        with httpx.Client(timeout=30.0, headers=headers) as client:
             response = client.get(ISHARES_RUSSELL3000_URL)
             response.raise_for_status()
 

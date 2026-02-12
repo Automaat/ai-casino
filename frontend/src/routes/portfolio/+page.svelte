@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
@@ -12,11 +13,12 @@
 
 	$: portfolio = $positions;
 	$: positionsList = portfolio?.positions || [];
-	
+
 	let snapshots: SnapshotRecord[] = [];
 	let loading = true;
 
-	onMount(async () => {
+	async function loadData() {
+		loading = true;
 		try {
 			const data = await api.getSnapshots(30);
 			snapshots = data.snapshots;
@@ -25,7 +27,16 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	onMount(() => {
+		loadData();
 	});
+
+	// Refetch when route changes (handles tab switching)
+	$: if ($page.url.pathname === '/portfolio') {
+		loadData();
+	}
 
 	// Equity curve data
 	$: equityData = snapshots.map(s => ({
