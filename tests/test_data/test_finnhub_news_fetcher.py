@@ -152,7 +152,12 @@ async def test_fetch_company_news_skips_invalid_items():
 async def test_fetch_respects_limit(sample_finnhub_response):
     # Add more items than limit
     extended_response = sample_finnhub_response + [
-        {"headline": f"Article {i}", "url": f"https://example.com/{i}", "datetime": 1705317000, "summary": "Test"}
+        {
+            "headline": f"Article {i}",
+            "url": f"https://example.com/{i}",
+            "datetime": 1705317000,
+            "summary": "Test",
+        }
         for i in range(3, 20)
     ]
 

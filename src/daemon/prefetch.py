@@ -120,7 +120,7 @@ class DataPrefetcher:
         try:
             # Handle calling async from sync - detect if event loop is running
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
             except RuntimeError:
                 # No event loop running, safe to use asyncio.run()
                 articles = asyncio.run(self._news_fetcher.afetch_company_news(symbol))
