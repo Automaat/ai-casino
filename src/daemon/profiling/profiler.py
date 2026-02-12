@@ -1,11 +1,11 @@
 """CPU profiler for daemon cycles using yappi."""
 
 import contextlib
-import io
 import time as time_mod
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -229,10 +229,22 @@ class CycleProfiler:
             metrics: Profiling metrics
             timestamp: Profile timestamp
         """
-        # Save pstats
-        pstats_io = io.BytesIO()
-        stats.save(pstats_io, type="pstat")  # type: ignore[attr-defined]
-        self.storage.save_pstats(cycle_num, pstats_io.getvalue(), timestamp)
+        # Save pstats (yappi requires file path, not BytesIO)
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".pstats") as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            from typing import cast
+
+            import yappi
+
+            yappi_stats = cast(yappi.YFuncStats, stats)
+            yappi_stats.save(str(tmp_path), type="pstat")
+            pstats_data = tmp_path.read_bytes()
+            self.storage.save_pstats(cycle_num, pstats_data, timestamp)
+        finally:
+            tmp_path.unlink()
 
         # Save JSON summary
         json_data = {
