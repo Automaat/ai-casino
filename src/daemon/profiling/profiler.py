@@ -239,7 +239,7 @@ class CycleProfiler:
 
             import yappi
 
-            yappi_stats = cast(yappi.YFuncStats, stats)
+            yappi_stats = cast("yappi.YFuncStats", stats)
             yappi_stats.save(str(tmp_path), type="pstat")
             pstats_data = tmp_path.read_bytes()
             self.storage.save_pstats(cycle_num, pstats_data, timestamp)
