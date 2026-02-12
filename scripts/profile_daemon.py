@@ -35,17 +35,24 @@ from src.daemon.factory import DaemonFactory
 console = Console()
 
 
-def create_profiling_config(stocks: list[str], max_concurrent: int) -> DaemonConfig:
+def create_profiling_config(
+    stocks: list[str], max_concurrent: int, config_file: Path | None = None
+) -> DaemonConfig:
     """Create daemon config with profiling enabled.
 
     Args:
         stocks: List of stock symbols to analyze
         max_concurrent: Max concurrent analyses
+        config_file: Optional config file to load base config from
 
     Returns:
         DaemonConfig with profiling enabled
     """
-    config = DaemonConfig()
+    if config_file:
+        config = DaemonConfig.from_yaml(config_file)
+    else:
+        config = DaemonConfig()
+
     config.watchlist = stocks
     config.market_hours_only = False  # Allow profiling outside market hours
     config.analysis_orchestration.max_concurrent_analyses = max_concurrent
@@ -335,12 +342,18 @@ async def main() -> None:
         action="store_true",
         help="Skip creating GitHub issues",
     )
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=Path,
+        help="Path to daemon config file (loads API keys and settings)",
+    )
     args = parser.parse_args()
 
     stocks = [s.strip() for s in args.stocks.split(",")]
 
     # Create config
-    config = create_profiling_config(stocks, args.max_concurrent)
+    config = create_profiling_config(stocks, args.max_concurrent, args.config)
 
     # Run profiled cycle
     try:
