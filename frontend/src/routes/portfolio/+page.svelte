@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
@@ -33,7 +34,8 @@
 	let rebalance: RebalanceResponse | null = null;
 	let loading = true;
 
-	onMount(async () => {
+	async function loadData() {
+		loading = true;
 		try {
 			const [snapshotsData, rebalanceData] = await Promise.all([
 				api.getSnapshots(30),
@@ -46,7 +48,16 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	onMount(() => {
+		loadData();
 	});
+
+	// Refetch when route changes (handles tab switching)
+	$: if ($page.url.pathname === '/portfolio') {
+		loadData();
+	}
 
 	// Equity curve data
 	$: equityData = snapshots.map(s => ({

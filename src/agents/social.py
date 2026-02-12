@@ -10,7 +10,7 @@ from src.data.finnhub import FinnhubFetcher, NewsSentimentData, SocialSentimentD
 from src.data.reddit import RedditFetcher, RedditSentimentData
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
-from src.models.sentiment import FinBERTSentiment, SentimentScore
+from src.models.sentiment import FinBERTSentiment, SentimentScore, _analyze_batch_worker, _finbert_executor
 from src.prompts import PromptLoader
 
 
@@ -246,7 +246,11 @@ class SocialSentimentAnalyst:
         import asyncio
 
         loop = asyncio.get_running_loop()
-        sentiments: list[SentimentScore] = await loop.run_in_executor(None, self.finbert.analyze_batch, texts)
+        # Use ProcessPoolExecutor for true parallelism (avoids GIL)
+        score_dicts = await loop.run_in_executor(
+            _finbert_executor, _analyze_batch_worker, texts, self.finbert.device
+        )
+        sentiments: list[SentimentScore] = [SentimentScore(**s) for s in score_dicts]
 
         # Weight by upvote_ratio * score
         weighted_sum = 0.0

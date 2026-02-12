@@ -185,3 +185,31 @@ def test_get_finbert_thread_safety():
         assert all(inst is instances[0] for inst in instances)
 
     clear_finbert_sentiment()
+
+
+def test_analyze_batch_worker():
+    """Test worker function returns correct dict schema."""
+    from src.models.sentiment import _analyze_batch_worker
+
+    with (
+        patch("src.models.sentiment.AutoTokenizer.from_pretrained"),
+        patch("src.models.sentiment.AutoModelForSequenceClassification.from_pretrained") as mock_model,
+    ):
+        mock_model.return_value.return_value.logits = torch.tensor([[2.0, 0.5, 0.3], [0.3, 2.0, 0.5]])
+
+        texts = ["Good news", "Bad news"]
+        results = _analyze_batch_worker(texts, device="cpu")
+
+        assert len(results) == 2
+        assert all(isinstance(r, dict) for r in results)
+        assert all(set(r.keys()) == {"positive", "negative", "neutral"} for r in results)
+        assert all(isinstance(r["positive"], float) for r in results)
+
+
+def test_shutdown_finbert_executor_idempotent():
+    """Test executor shutdown is safe to call multiple times."""
+    from src.models.sentiment import shutdown_finbert_executor
+
+    # Should not raise on repeated calls
+    shutdown_finbert_executor()
+    shutdown_finbert_executor()
