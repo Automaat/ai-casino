@@ -199,7 +199,7 @@ class TestHealthEndpoint:
 
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["running"] is True
+        assert data["daemon_running"] is True
         assert data["last_run"] == "2024-01-15T10:30:00+00:00"
         assert isinstance(data["uptime_seconds"], float)
         assert data["uptime_seconds"] >= 0
@@ -229,7 +229,7 @@ class TestHealthEndpoint:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["running"] is False
+        assert data["daemon_running"] is False
 
     def test_health_no_last_run(self, client: TestClient, mock_runner: Mock) -> None:
         """Test health endpoint when no runs yet."""
