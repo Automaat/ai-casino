@@ -186,6 +186,26 @@ class HistoricalCache:
             CREATE INDEX IF NOT EXISTS idx_signal_outcomes_symbol ON signal_outcomes(symbol);
             CREATE INDEX IF NOT EXISTS idx_signal_outcomes_timestamp ON signal_outcomes(timestamp);
         """)
+        self._migrate_signal_outcomes_reasoning_columns()
+
+    def _migrate_signal_outcomes_reasoning_columns(self) -> None:
+        """Add technical_reasoning, sentiment_reasoning, news_reasoning columns if missing."""
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(signal_outcomes)")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+
+        # Migrations for reasoning columns
+        if "technical_reasoning" not in existing_cols:
+            logger.debug("Adding column technical_reasoning to signal_outcomes table")
+            self._conn.execute("ALTER TABLE signal_outcomes ADD COLUMN technical_reasoning TEXT")
+        if "sentiment_reasoning" not in existing_cols:
+            logger.debug("Adding column sentiment_reasoning to signal_outcomes table")
+            self._conn.execute("ALTER TABLE signal_outcomes ADD COLUMN sentiment_reasoning TEXT")
+        if "news_reasoning" not in existing_cols:
+            logger.debug("Adding column news_reasoning to signal_outcomes table")
+            self._conn.execute("ALTER TABLE signal_outcomes ADD COLUMN news_reasoning TEXT")
+
+        self._conn.commit()
 
     def get_ohlcv(self, symbol: str) -> pd.DataFrame:
         """Get all cached OHLCV rows for a symbol.
@@ -782,6 +802,9 @@ class HistoricalCache:
             "technical_signal",
             "sentiment_signal",
             "news_signal",
+            "technical_reasoning",
+            "sentiment_reasoning",
+            "news_reasoning",
             "price_at_1d",
             "price_at_5d",
             "price_at_20d",
