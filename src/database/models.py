@@ -363,3 +363,38 @@ class SignalOutcomeORM(Base):
             f"SignalOutcomeORM(id={self.id}, symbol={self.symbol}, "
             f"signal={self.signal}, timestamp={self.timestamp})"
         )
+
+
+class ExecutionGraphORM(Base):
+    """Execution graph ORM model."""
+
+    __tablename__ = "execution_graphs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    workflow_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    symbol: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    graph_jsonb: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_execution_graphs_workflow_id", "workflow_id"),
+        Index("idx_execution_graphs_symbol", "symbol"),
+        Index("idx_execution_graphs_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"ExecutionGraphORM(id={self.id}, workflow_id={self.workflow_id}, symbol={self.symbol})"

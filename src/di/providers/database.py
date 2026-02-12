@@ -10,6 +10,7 @@ from src.database.engine import DatabaseEngine, MissingDatabaseURLError
 if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.execution_graph import ExecutionGraphRepository
     from src.database.repositories.position import PositionRecordRepository
     from src.database.repositories.position_action import PositionManagementActionRepository
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
@@ -181,3 +182,18 @@ def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalO
 
     session = database_engine.session()
     return SignalOutcomeRepository(session)
+
+
+def create_execution_graph_repository(database_engine: DatabaseEngine) -> ExecutionGraphRepository:
+    """Create ExecutionGraphRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        ExecutionGraphRepository instance
+    """
+    from src.database.repositories.execution_graph import ExecutionGraphRepository
+
+    session = database_engine.session()
+    return ExecutionGraphRepository(session)

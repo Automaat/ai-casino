@@ -32,7 +32,7 @@ class ApiConfig(BaseModel):
         description="TCP port for embedded API server (1-65535)",
     )
     cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:8050"],
+        default_factory=lambda: ["http://localhost:5173", "http://localhost:8050"],
         description="CORS allowed origins for dashboard access",
     )
     circuit_breaker: CircuitBreakerConfig = Field(

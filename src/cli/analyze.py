@@ -417,6 +417,7 @@ async def _analyze_stock(
     workflow = workflow_factory(
         broker=broker,
         metrics_tracker=metrics_tracker,
+        container=container,
     )
 
     console.print(f"\n[bold]Analyzing {symbol}...[/bold]\n")

@@ -159,6 +159,26 @@ export const api = {
 	// Full Config
 	async getFullConfig(): Promise<T.FullConfigResponse> {
 		return fetchAPI<T.FullConfigResponse>('/config/full');
+	},
+
+	// Execution Graphs
+	async getActiveExecutionGraphs(): Promise<T.ActiveExecutionGraphsResponse> {
+		return fetchAPI<T.ActiveExecutionGraphsResponse>('/api/execution/active');
+	},
+
+	async getExecutionGraphHistory(params?: {
+		limit?: number;
+		symbol?: string;
+		days?: number;
+	}): Promise<T.ExecutionGraphHistoryResponse> {
+		const query = new URLSearchParams();
+		if (params?.limit) query.set('limit', params.limit.toString());
+		if (params?.symbol) query.set('symbol', params.symbol);
+		if (params?.days) query.set('days', params.days.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.ExecutionGraphHistoryResponse>(
+			`/api/execution/history${queryString ? `?${queryString}` : ''}`
+		);
 	}
 };
 

@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from src.daemon.api.models import (
+    ActiveExecutionGraphsResponse,
     AnalysesResponse,
     AnalysisRecordResponse,
     ConfigResponse,
@@ -20,6 +21,8 @@ from src.daemon.api.models import (
     DegradationHistoryResponse,
     DegradationResponse,
     EventResponse,
+    ExecutionGraphDetailResponse,
+    ExecutionGraphHistoryResponse,
     ExecutionMetricsListResponse,
     FullConfigResponse,
     GamePlanResponse,
@@ -123,12 +126,14 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     app.state.components = components
     app.state.start_time = datetime.now(UTC)
 
-    # CORS middleware - allow configured dashboard origins
+    # CORS middleware - configured to allow WebSocket connections
+    # Note: Starlette CORSMiddleware has issues with WebSocket when allow_credentials=True
+    # Using allow_credentials=False and validating origin manually in WebSocket handler
     app.add_middleware(
         CORSMiddleware,
         allow_origins=components.config.api.cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "OPTIONS"],
+        allow_credentials=False,  # Must be False for WebSocket to work
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -852,17 +857,144 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             logger.opt(exception=True).error(f"Failed to fetch workflow detail: {e}")
             raise HTTPException(status_code=500, detail="Failed to fetch workflow detail") from e
 
+    @app.get("/api/execution/active", response_model=ActiveExecutionGraphsResponse)
+    async def get_active_execution_graphs() -> ActiveExecutionGraphsResponse:
+        """Get active execution graphs from in-memory trackers."""
+        components: DaemonComponents = app.state.components
+
+        graphs = [
+            tracker.graph.model_dump(mode="json")
+            for tracker in components.state.active_execution_trackers.values()
+        ]
+
+        return ActiveExecutionGraphsResponse(graphs=graphs, count=len(graphs))
+
+    @app.get("/api/execution/{workflow_id}", response_model=ExecutionGraphDetailResponse)
+    async def get_execution_graph(workflow_id: str) -> ExecutionGraphDetailResponse:
+        """Get execution graph by workflow ID.
+
+        Search order: active trackers → in-memory history → database
+
+        Args:
+            workflow_id: Workflow ID to fetch
+
+        Returns:
+            ExecutionGraphDetailResponse with graph data and source
+        """
+        from src.database.connection import get_session
+        from src.database.repositories.execution_graph import ExecutionGraphRepository
+
+        components: DaemonComponents = app.state.components
+
+        # Check active trackers
+        if workflow_id in components.state.active_execution_trackers:
+            tracker = components.state.active_execution_trackers[workflow_id]
+            return ExecutionGraphDetailResponse(
+                workflow_id=workflow_id,
+                graph=tracker.graph.model_dump(mode="json"),
+                source="active",
+            )
+
+        # Check in-memory history
+        for graph in components.state.execution_graph_history:
+            if str(graph.workflow_id) == workflow_id:
+                return ExecutionGraphDetailResponse(
+                    workflow_id=workflow_id,
+                    graph=graph.model_dump(mode="json"),
+                    source="memory",
+                )
+
+        # Check database
+        try:
+            async with get_session() as session:
+                repo = ExecutionGraphRepository(session)
+                graph = await repo.get_by_workflow_id(workflow_id)
+
+                if graph:
+                    return ExecutionGraphDetailResponse(
+                        workflow_id=workflow_id,
+                        graph=graph.model_dump(mode="json"),
+                        source="database",
+                    )
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to fetch from DB: {e}")
+
+        raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+
+    @app.get("/api/execution/history", response_model=ExecutionGraphHistoryResponse)
+    async def get_execution_graph_history(
+        limit: int = 50,
+        symbol: str | None = None,
+        days: int | None = None,
+    ) -> ExecutionGraphHistoryResponse:
+        """Get paginated execution graph history.
+
+        Args:
+            limit: Max results (1-500)
+            symbol: Filter by symbol
+            days: Filter by last N days
+
+        Returns:
+            ExecutionGraphHistoryResponse with graphs and metadata
+        """
+        from src.database.connection import get_session
+        from src.database.engine import MissingDatabaseURLError
+        from src.database.repositories.execution_graph import ExecutionGraphRepository
+
+        limit = max(1, min(limit, 500))
+
+        try:
+            async with get_session() as session:
+                repo = ExecutionGraphRepository(session)
+
+                if days:
+                    from datetime import UTC, datetime, timedelta
+
+                    start = datetime.now(UTC) - timedelta(days=days)
+                    end = datetime.now(UTC)
+                    graphs = await repo.get_by_date_range(start, end, symbol, limit)
+                else:
+                    graphs = await repo.list_recent(limit, symbol)
+
+                return ExecutionGraphHistoryResponse(
+                    graphs=[g.model_dump(mode="json") for g in graphs],
+                    count=len(graphs),
+                    database_enabled=True,
+                )
+        except MissingDatabaseURLError:
+            logger.debug("Database not configured, returning empty history")
+            return ExecutionGraphHistoryResponse(
+                graphs=[],
+                count=0,
+                database_enabled=False,
+            )
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to fetch history: {e}")
+            raise HTTPException(status_code=500, detail="Failed to fetch execution graph history") from e
+
     @app.websocket("/ws/events")
     async def websocket_events(websocket: WebSocket) -> None:
         """Stream real-time events to dashboard."""
         components: DaemonComponents = app.state.components
 
+        # Accept connection first (FastAPI CORSMiddleware doesn't handle WebSocket properly)
+        await websocket.accept()
+
+        # Validate origin after accepting
+        origin = websocket.headers.get("origin")
+        allowed_origins = components.config.api.cors_origins
+
         if not components.event_bus:
+            logger.warning("WebSocket rejected - EventBus not available")
             await websocket.close(code=1011, reason="EventBus not available")
             return
 
-        await websocket.accept()
-        logger.info(f"WebSocket connected: {websocket.client}")
+        if origin not in allowed_origins:
+            logger.warning(f"WebSocket rejected - invalid origin: {origin}")
+            await websocket.close(code=1008, reason="Invalid origin")
+            return
+
+        logger.info(f"WebSocket connected from {origin}")
 
         subscriber_id, event_queue = await components.event_bus.subscribe()
 
