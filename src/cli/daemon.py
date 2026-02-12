@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -45,11 +46,14 @@ def daemon(
         console.print(f"[bold red]Config error:[/bold red] {e}")
         raise typer.Exit(1) from e
 
+    # Override log level from environment variable if set (for dev/docker)
+    log_level = os.getenv("LOG_LEVEL", daemon_config.logging.log_level)
+
     logger.remove()
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=daemon_config.logging.log_level,
+        level=log_level,
         filter=sanitize_log_record,
     )
 
