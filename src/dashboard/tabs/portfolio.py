@@ -167,7 +167,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                 try:
                     pv = snapshots[-1].get("portfolio_value", 0.0)
                     portfolio_value = float(pv) if pv is not None else 0.0
-                except (ValueError, TypeError, IndexError):
+                except ValueError, TypeError, IndexError:
                     portfolio_value = 0.0
 
             # If no snapshots, calculate from positions
@@ -177,7 +177,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                         float(p.get("current_qty", 0) or 0) * float(p.get("current_price", 0) or 0)
                         for p in positions
                     )
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     portfolio_value = 0.0
 
             num_positions = len(positions)
@@ -190,7 +190,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
                         float(p.get("current_qty", 0) or 0) * float(p.get("current_price", 0) or 0)
                         for p in positions
                     )
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     position_value = 0.0
 
             cash = max(0.0, portfolio_value - position_value)
