@@ -11,6 +11,10 @@ services:
     environment:
       - LOG_LEVEL=DEBUG
 
+  finbert:
+    environment:
+      - FINBERT_LOG_LEVEL=DEBUG
+
   frontend:
     # Use Vite dev server with HMR instead of nginx
     build:
