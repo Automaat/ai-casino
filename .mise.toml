@@ -50,7 +50,23 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run daemon with API enabled"
+description = "Run dev environment with Docker Compose (live reload, uses daemon-production.yaml)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build"
+
+[tasks."dev:down"]
+description = "Stop dev environment"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down"
+
+[tasks."dev:logs"]
+description = "View dev environment logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f"
+
+[tasks."dev:restart"]
+description = "Restart dev daemon (after code changes)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml restart daemon"
+
+[tasks."dev:local"]
+description = "Run daemon locally with ollama (old dev mode)"
 run = "uv run python -m src.main daemon --config daemon-dev.yaml"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
