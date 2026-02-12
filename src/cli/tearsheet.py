@@ -157,9 +157,7 @@ async def _generate_and_save_tearsheet(
     default_config_path = Path.home() / ".ai-casino" / "daemon.yaml"
     try:
         daemon_config = (
-            DaemonConfig.from_yaml(default_config_path)
-            if default_config_path.exists()
-            else DaemonConfig()
+            DaemonConfig.from_yaml(default_config_path) if default_config_path.exists() else DaemonConfig()
         )
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to load config, using defaults: {e}")
