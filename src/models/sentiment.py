@@ -3,6 +3,7 @@
 # NOTE: This module intentionally imports torch at module level (it USES torch for inference).
 # Environment config handled by src/models/torch_config.py before import cascade reaches here.
 
+import atexit
 import threading
 from concurrent.futures import ProcessPoolExecutor
 
@@ -213,6 +214,11 @@ def shutdown_finbert_executor() -> None:
     """Shutdown the process pool executor (for cleanup).
 
     Should be called at application shutdown to properly cleanup worker processes.
+    Registered with atexit for automatic cleanup, but can be called explicitly.
     """
     _finbert_executor.shutdown(wait=True)
     logger.debug("FinBERT executor shutdown")
+
+
+# Register shutdown handler for deterministic cleanup
+atexit.register(shutdown_finbert_executor)

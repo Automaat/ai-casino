@@ -5,7 +5,6 @@ Compares serial vs parallel FinBERT inference for multiple stocks.
 
 import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from loguru import logger
 
@@ -126,4 +125,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    from src.models.sentiment import shutdown_finbert_executor
+
+    try:
+        asyncio.run(main())
+    finally:
+        shutdown_finbert_executor()
