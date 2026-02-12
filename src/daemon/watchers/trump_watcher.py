@@ -4,6 +4,7 @@ Polls Trump's Truth Social feed every 5 minutes, deduplicates via post ID tracki
 and triggers LLM triage + analysis for relevant posts.
 """
 
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
@@ -73,7 +74,7 @@ class TrumpWatcher(EventWatcher):
 
         # Truth Social fetcher (lazy init)
         self._truth_fetcher: TruthSocialFetcher | None = None
-        self._seen_post_ids: set[str] = set()
+        self._seen_post_ids: deque[str] = deque(maxlen=500)  # Auto-evict oldest
         self._last_post_id: str | None = None
 
         logger.info(
@@ -104,6 +105,9 @@ class TrumpWatcher(EventWatcher):
         else:
             data = self._truth_fetcher.fetch_since(self._last_check)
 
+        # Update last check timestamp after successful fetch
+        self._last_check = data.fetched_at
+
         if not data.posts:
             return []
 
@@ -112,7 +116,7 @@ class TrumpWatcher(EventWatcher):
         for post in data.posts:
             if post.id not in self._seen_post_ids:
                 new_posts.append(post)
-                self._seen_post_ids.add(post.id)
+                self._seen_post_ids.append(post.id)
 
         if new_posts:
             self._last_post_id = new_posts[0].id
