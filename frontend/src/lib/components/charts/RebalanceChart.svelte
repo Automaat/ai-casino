@@ -30,9 +30,7 @@
 		const option: EChartsOption = {
 			backgroundColor: 'transparent',
 			title: {
-				text: 'Rebalance Analysis',
 				subtext: 'Green = Underweight, Red = Overweight',
-				textStyle: { color: '#e2e8f0', fontSize: 16 },
 				subtextStyle: { color: '#94a3b8', fontSize: 12 }
 			},
 			tooltip: {

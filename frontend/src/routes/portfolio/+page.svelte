@@ -22,7 +22,7 @@
 		...p,
 		market_value: p.current_qty * p.current_price,
 		unrealized_pnl: (p.current_price - p.entry_price) * p.current_qty,
-		unrealized_pnl_percent: ((p.current_price / p.entry_price) - 1) * 100
+		unrealized_pnl_percent: p.entry_price ? ((p.current_price / p.entry_price) - 1) * 100 : 0
 	}));
 
 	// Portfolio totals
@@ -130,7 +130,7 @@
 		{
 			key: 'current_stop_loss',
 			label: 'Stop Loss',
-			format: (value: number) => formatCurrency(value)
+			format: (value: number) => (value === 0 ? 'Not set' : formatCurrency(value))
 		},
 		{
 			key: 'entry_confidence',
@@ -183,7 +183,8 @@
 		/>
 		<MetricCard
 			title="Position Age"
-			value={positionAgeDistribution}
+			value="Distribution"
+			subtitle={positionAgeDistribution}
 			icon="📅"
 		/>
 	</div>
