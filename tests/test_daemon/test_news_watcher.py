@@ -120,13 +120,13 @@ async def test_fetch_events_deduplication(news_watcher):
         assert len(events2) == 0  # Deduplicated
 
 
-async def test_fetch_events_rolling_window(news_watcher):
-    """Test that seen_urls maintains rolling window of 100 via deque maxlen."""
+async def test_fetch_events_seen_urls_dict(news_watcher):
+    """Test that seen_urls tracks URL-to-source mapping."""
     now = datetime.now(UTC)
 
-    # Add 110 URLs to seen_urls (deque auto-evicts oldest)
-    for i in range(110):
-        news_watcher._seen_urls.append(f"https://example.com/{i}")
+    # Add URLs to seen_urls dict
+    for i in range(10):
+        news_watcher._seen_urls[f"https://example.com/{i}"] = "marketaux"
 
     article = NewsArticle(
         title="Breaking: New announcement",
@@ -142,8 +142,9 @@ async def test_fetch_events_rolling_window(news_watcher):
 
         await news_watcher._fetch_events()
 
-    # Deque with maxlen=100 auto-limits to 100 entries
-    assert len(news_watcher._seen_urls) == 100
+        # New URL should be added
+        assert "https://example.com/new" in news_watcher._seen_urls
+        assert news_watcher._seen_urls["https://example.com/new"] == "marketaux"
 
 
 async def test_fetch_events_no_breaking_news(news_watcher):
@@ -164,3 +165,124 @@ def test_repr(news_watcher):
     assert "NewsWatcher" in repr_str
     assert "300s" in repr_str
     assert "15m" in repr_str
+
+
+@pytest.mark.asyncio
+async def test_multi_source_deduplication(mock_historical_cache):
+    """Test weighted deduplication across multiple sources."""
+    from unittest.mock import AsyncMock
+
+    from src.data.base_news_fetcher import BaseNewsFetcher
+
+    # Mock marketaux fetcher (highest weight)
+    mock_marketaux = AsyncMock(spec=BaseNewsFetcher)
+    mock_marketaux.get_source_name.return_value = "marketaux"
+    mock_marketaux.afetch_market_news.return_value = [
+        NewsArticle(
+            title="Breaking: Article 1",
+            description="Important news",
+            url="https://example.com/1",
+            published_at=datetime.now(UTC),
+            source="Bloomberg",
+        )
+    ]
+
+    # Mock duckduckgo fetcher (lowest weight)
+    mock_duckduckgo = AsyncMock(spec=BaseNewsFetcher)
+    mock_duckduckgo.get_source_name.return_value = "duckduckgo"
+    mock_duckduckgo.afetch_market_news.return_value = [
+        NewsArticle(
+            title="Breaking: Article 1 DDG",
+            description="Different description",
+            url="https://example.com/1",  # Same URL
+            published_at=datetime.now(UTC),
+            source="DDG Source",
+        ),
+        NewsArticle(
+            title="Breaking: Article 2",
+            description="Unique DDG article",
+            url="https://example.com/2",
+            published_at=datetime.now(UTC),
+            source="DDG Source",
+        ),
+    ]
+
+    watcher = NewsWatcher(
+        historical_cache=mock_historical_cache,
+        fetchers=[mock_marketaux, mock_duckduckgo],
+    )
+
+    events = await watcher._fetch_events()
+
+    # Should keep marketaux article (higher weight) + unique DDG article
+    urls = [e.article.url for e in events]
+    assert "https://example.com/1" in urls
+    assert "https://example.com/2" in urls
+
+    # Verify marketaux source kept for duplicate URL
+    event1 = next(e for e in events if e.article.url == "https://example.com/1")
+    assert event1.source == "marketaux"
+
+
+@pytest.mark.asyncio
+async def test_multi_source_handles_fetcher_failure(mock_historical_cache):
+    """Test graceful degradation when one fetcher fails."""
+    from unittest.mock import AsyncMock
+
+    import httpx
+
+    from src.data.base_news_fetcher import BaseNewsFetcher
+
+    mock_marketaux = AsyncMock(spec=BaseNewsFetcher)
+    mock_marketaux.get_source_name.return_value = "marketaux"
+    mock_marketaux.afetch_market_news.side_effect = httpx.HTTPError("API down")
+
+    mock_finnhub = AsyncMock(spec=BaseNewsFetcher)
+    mock_finnhub.get_source_name.return_value = "finnhub"
+    mock_finnhub.afetch_market_news.return_value = [
+        NewsArticle(
+            title="Breaking: Finnhub article",
+            description="Announcement",
+            url="https://example.com/finnhub",
+            published_at=datetime.now(UTC),
+            source="Finnhub",
+        )
+    ]
+
+    watcher = NewsWatcher(
+        historical_cache=mock_historical_cache,
+        fetchers=[mock_marketaux, mock_finnhub],
+    )
+
+    events = await watcher._fetch_events()
+
+    # Should get finnhub article despite marketaux failure
+    assert len(events) > 0
+    assert events[0].source == "finnhub"
+
+
+@pytest.mark.asyncio
+async def test_multi_source_no_fetchers_uses_fallback(mock_historical_cache):
+    """Test fallback to single Marketaux fetcher when no fetchers provided."""
+    watcher = NewsWatcher(
+        historical_cache=mock_historical_cache,
+        breaking_threshold_minutes=15,
+    )
+
+    # Mock the fallback fetcher
+    with patch.object(watcher, "_init_components"):
+        watcher._news_fetcher = Mock()
+        watcher._news_fetcher.fetch_market_news.return_value = [
+            NewsArticle(
+                title="Breaking: Fallback article",
+                description="Test",
+                url="https://example.com/fallback",
+                published_at=datetime.now(UTC),
+                source="Marketaux",
+            )
+        ]
+
+        events = await watcher._fetch_events()
+
+    assert len(events) > 0
+    assert events[0].source == "marketaux"

@@ -106,6 +106,23 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
     )
 
+    newsdata_fetcher = providers.Singleton(
+        data_providers.create_newsdata_fetcher,
+        daemon_config=daemon_config,
+        historical_cache=historical_cache,
+    )
+
+    finnhub_news_fetcher = providers.Singleton(
+        data_providers.create_finnhub_news_fetcher,
+        daemon_config=daemon_config,
+        historical_cache=historical_cache,
+    )
+
+    duckduckgo_news_fetcher = providers.Singleton(
+        data_providers.create_duckduckgo_news_fetcher,
+        historical_cache=historical_cache,
+    )
+
     reddit_fetcher = providers.Singleton(
         data_providers.create_reddit_fetcher,
         daemon_config=daemon_config,

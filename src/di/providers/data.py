@@ -2,6 +2,7 @@
 
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
+from src.data.base_news_fetcher import BaseNewsFetcher
 from src.data.broker import AlpacaBroker
 from src.data.comparative import ComparativeDataFetcher
 from src.data.earnings import EarningsCalendarFetcher
@@ -281,5 +282,50 @@ def create_alpaca_broker(
         api_key=api_key,
         secret_key=secret_key,
         paper=(trading_mode == "paper"),
+        historical_cache=historical_cache,
+    )
+
+
+def create_newsdata_fetcher(
+    daemon_config: DaemonConfig,
+    historical_cache: HistoricalCache,
+) -> BaseNewsFetcher:
+    """Create NewsDataFetcher with resolved config."""
+    from src.data.newsdata import NewsDataFetcher
+
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.newsdata_api_key,
+        "NEWSDATA_API_KEY",
+    )
+    return NewsDataFetcher(
+        api_key=api_key,
+        historical_cache=historical_cache,
+    )
+
+
+def create_finnhub_news_fetcher(
+    daemon_config: DaemonConfig,
+    historical_cache: HistoricalCache,
+) -> BaseNewsFetcher:
+    """Create FinnhubNewsFetcher with resolved config."""
+    from src.data.finnhub_news import FinnhubNewsFetcher
+
+    api_key = resolve_config_or_env(
+        daemon_config.api_keys.finnhub_api_key,
+        "FINNHUB_API_KEY",
+    )
+    return FinnhubNewsFetcher(
+        api_key=api_key,
+        historical_cache=historical_cache,
+    )
+
+
+def create_duckduckgo_news_fetcher(
+    historical_cache: HistoricalCache,
+) -> BaseNewsFetcher:
+    """Create DuckDuckGoNewsFetcher (no API key needed)."""
+    from src.data.duckduckgo_news import DuckDuckGoNewsFetcher
+
+    return DuckDuckGoNewsFetcher(
         historical_cache=historical_cache,
     )
