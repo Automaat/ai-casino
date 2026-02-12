@@ -20,7 +20,7 @@ services:
     volumes:
       - ./frontend/src:/app/src:ro
       - ./frontend/static:/app/static:ro
-      - ./frontend/.svelte-kit:/app/.svelte-kit:ro
+      - ./frontend/.svelte-kit:/app/.svelte-kit
       - ./frontend/package.json:/app/package.json:ro
       - ./frontend/package-lock.json:/app/package-lock.json:ro
       - ./frontend/svelte.config.js:/app/svelte.config.js:ro
