@@ -107,18 +107,6 @@ def chat() -> None:
 
 
 @app.command()
-def dashboard(
-    api_url: Annotated[str | None, typer.Option("--api-url", help="Daemon API URL")] = None,
-    port: Annotated[int, typer.Option("--port", "-p", help="Dashboard server port")] = 8050,
-    debug: Annotated[bool, typer.Option("--debug", "-d", help="Enable debug mode")] = False,
-) -> None:
-    """Launch Dash dashboard for daemon monitoring."""
-    from src.cli.dashboard import dashboard as dashboard_impl
-
-    return dashboard_impl(api_url, port, debug)
-
-
-@app.command()
 def tearsheet(
     symbol: Annotated[str, typer.Argument(help="Stock ticker symbol")],
     period: Annotated[str, typer.Option("--period", "-p", help="Time period")] = "1y",
