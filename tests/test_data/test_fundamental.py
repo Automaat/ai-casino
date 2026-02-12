@@ -1,6 +1,5 @@
 """Tests for FundamentalDataFetcher."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,18 +16,19 @@ class TestFundamentalDataFetcher:
 
         assert fetcher.api_key == "test_key"
 
-    @patch.dict(os.environ, {"ALPHA_VANTAGE_API_KEY": "env_key"})
-    def test_initialization_from_env(self):
-        """Test initialization from environment variable."""
+    def test_initialization_missing_api_key(self):
+        """Test initialization succeeds without API key but fd is None."""
         fetcher = FundamentalDataFetcher()
 
-        assert fetcher.api_key == "env_key"
+        assert fetcher.api_key is None
+        assert fetcher.fd is None
 
-    @patch.dict(os.environ, {}, clear=True)
-    def test_initialization_missing_api_key(self):
-        """Test initialization raises when API key missing."""
-        with pytest.raises(ValueError, match="ALPHA_VANTAGE_API_KEY required"):
-            FundamentalDataFetcher()
+    def test_fetch_overview_without_api_key_raises(self):
+        """Test fetch raises when API key not configured."""
+        fetcher = FundamentalDataFetcher()
+
+        with pytest.raises(ValueError, match="ALPHA_VANTAGE_API_KEY not configured"):
+            fetcher.fetch_overview("AAPL")
 
     @patch("src.data.fundamental.FundamentalData")
     def test_fetch_overview_success(self, mock_fd_class, sample_fundamental_overview):
@@ -91,10 +91,8 @@ class TestFundamentalDataFetcher:
 
     def test_repr_no_api_key(self):
         """Test repr when no API key."""
-        with patch.dict(os.environ, {"ALPHA_VANTAGE_API_KEY": "key"}):
-            fetcher = FundamentalDataFetcher()
-            fetcher.api_key = None
+        fetcher = FundamentalDataFetcher()
 
-            repr_str = repr(fetcher)
+        repr_str = repr(fetcher)
 
-            assert "api_key=None" in repr_str
+        assert "api_key=None" in repr_str

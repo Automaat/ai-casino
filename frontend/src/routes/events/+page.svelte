@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { events, marketEvents, degradationHistory, analyses, risk, degradation } from '$lib/stores/dashboard';
 	import { formatDate } from '$lib/utils/format';
@@ -221,17 +222,28 @@
 	}
 
 	// Load data
-	onMount(() => {
+	function loadData() {
 		events.fetch({ limit: 100 });
 		marketEvents.fetch({ limit: 100 });
 		degradationHistory.fetch({ limit: 50 });
 		analyses.fetch({ limit: 100 });
 		risk.fetch();
+	}
+
+	onMount(() => {
+		loadData();
 
 		return () => {
 			degradationChart?.dispose();
 			degradationChart = null;
 		};
+	});
+
+	// Refetch when route changes (handles tab switching)
+	$effect(() => {
+		if ($page.url.pathname === '/events') {
+			loadData();
+		}
 	});
 
 	// Initialize degradation chart reactively when container becomes available

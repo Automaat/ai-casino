@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
@@ -9,9 +10,9 @@
 
 	let selectedSymbol = '';
 	let selectedSignal = '';
-	
+
 	$: allAnalyses = $analyses || [];
-	
+
 	// Filter analyses
 	$: filteredAnalyses = allAnalyses.filter(a => {
 		if (selectedSymbol && a.symbol !== selectedSymbol) return false;
@@ -22,9 +23,18 @@
 	// Unique symbols for filter
 	$: symbols = [...new Set(allAnalyses.map(a => a.symbol))].sort();
 
-	onMount(async () => {
+	async function loadData() {
 		await analyses.fetch({ limit: 100 });
+	}
+
+	onMount(() => {
+		loadData();
 	});
+
+	// Refetch when route changes (handles tab switching)
+	$: if ($page.url.pathname === '/signals') {
+		loadData();
+	}
 
 	const columns = [
 		{ 
