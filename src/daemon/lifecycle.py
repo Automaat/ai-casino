@@ -45,6 +45,7 @@ class DaemonLifecycle:
 
                 # Initialize global database singleton for get_session() calls
                 from src.database.connection import _DatabaseEngineHolder
+
                 _DatabaseEngineHolder.instance = database_engine
                 logger.info("Global database singleton initialized")
         except Exception as e:

@@ -62,6 +62,7 @@ def daemon(
         event_bus = None
         if daemon_config.api.enabled:
             from src.daemon.event_bus import EventBus
+
             event_bus = EventBus(history_size=1000)
             logger.info("EventBus initialized for API WebSocket streaming")
 

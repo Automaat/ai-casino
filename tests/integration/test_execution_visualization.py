@@ -1,11 +1,11 @@
 """E2E tests for execution tracking visualization."""
 
 import asyncio
-import json
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
+from loguru import logger
 
 from src.daemon.api.app import create_api_app
 from src.daemon.event_bus import DashboardEvent, EventBus, EventType
@@ -22,6 +22,7 @@ def mock_daemon_components():
     config = DaemonConfig()
     config.database.enable_persistence = False
     config.api.enabled = True
+    config.api.cors_origins = ["testclient"]  # Allow TestClient origin
 
     # Create components
     components = Mock(spec=DaemonComponents)
@@ -131,7 +132,7 @@ async def test_execution_node_websocket_events(mock_daemon_components):
 
     # Connect WebSocket (using TestClient WebSocket support)
     with TestClient(app) as client:
-        with client.websocket_connect("/ws/events") as websocket:
+        with client.websocket_connect("/ws/events", headers={"origin": "testclient"}) as websocket:
             # Publish events via EventBus
             await mock_daemon_components.event_bus.publish(node_start_event)
             await mock_daemon_components.event_bus.publish(node_complete_event)
@@ -147,8 +148,8 @@ async def test_execution_node_websocket_events(mock_daemon_components):
                     data = websocket.receive_json()
                     if data.get("type") != "ping":  # Skip ping messages
                         received_events.append(data)
-            except Exception:
-                pass  # Timeout or connection closed
+            except Exception as e:
+                logger.opt(exception=True).warning(f"WebSocket receive failed: {e}")
 
             # Verify events received
             assert len(received_events) >= 2
