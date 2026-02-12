@@ -164,7 +164,9 @@ class DegradationPolicy:
                 halt_reason="No market data (Alpha Vantage down)",
             )
 
-        if any("llm" in s for s in unhealthy):
+        # Check if configured LLM provider is unhealthy (ignore other providers)
+        configured_llm_service = f"llm_{self.config.llm.provider}"
+        if configured_llm_service in unhealthy:
             return DegradationContext(
                 tier=DegradationTier.HALTED,
                 available_agents=set(),

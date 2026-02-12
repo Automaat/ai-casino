@@ -183,9 +183,9 @@ def test_halted_mode_llm_down(policy):
                 checked_at=datetime.now(UTC),
             ),
             ServiceCheckResult(
-                service="llm_anthropic",
+                service="llm_ollama",
                 status=ServiceStatus.UNHEALTHY,
-                message="API key invalid",
+                message="Connection refused",
                 duration_ms=100.0,
                 checked_at=datetime.now(UTC),
             ),
