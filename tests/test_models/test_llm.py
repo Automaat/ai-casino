@@ -46,7 +46,7 @@ def mock_anthropic_provider():
         yield mock, provider
 
 
-def test_llm_client_init_ollama(mock_ollama_provider, monkeypatch):
+def test_llm_client_init_ollama(mock_ollama_provider):
     client = LLMClient(provider="ollama", model="qwen3:14b")
 
     assert client.provider == "ollama"
@@ -54,7 +54,7 @@ def test_llm_client_init_ollama(mock_ollama_provider, monkeypatch):
     mock_ollama_provider[0].assert_called_once_with(model="qwen3:14b", base_url="http://localhost:11434")
 
 
-def test_llm_client_init_anthropic(mock_anthropic_provider, monkeypatch):
+def test_llm_client_init_anthropic(mock_anthropic_provider):
     client = LLMClient(provider="anthropic", model="claude-sonnet-4-20250514")
 
     assert client.provider == "anthropic"
@@ -62,7 +62,7 @@ def test_llm_client_init_anthropic(mock_anthropic_provider, monkeypatch):
     mock_anthropic_provider[0].assert_called_once_with(model="claude-sonnet-4-20250514", api_key=None)
 
 
-def test_llm_client_init_openai(mock_openai_provider, monkeypatch):
+def test_llm_client_init_openai(mock_openai_provider):
     client = LLMClient(provider="openai", model="gpt-4o")
 
     assert client.provider == "openai"
@@ -70,7 +70,7 @@ def test_llm_client_init_openai(mock_openai_provider, monkeypatch):
     mock_openai_provider[0].assert_called_once_with(model="gpt-4o", api_key=None, base_url=None)
 
 
-def test_llm_client_init_openai_custom_api_base(mock_openai_provider, monkeypatch):
+def test_llm_client_init_openai_custom_api_base(mock_openai_provider):
     client = LLMClient(
         provider="openai",
         model="hf:moonshotai/Kimi-K2.5",
@@ -89,7 +89,7 @@ def test_llm_client_unsupported_provider(monkeypatch):
         LLMClient(provider="invalid", model="test-model")
 
 
-def test_complete_with_system_prompt(mock_ollama_provider, monkeypatch):
+def test_complete_with_system_prompt(mock_ollama_provider):
     _, provider = mock_ollama_provider
 
     client = LLMClient(provider="ollama", model="qwen3:14b")
@@ -105,7 +105,7 @@ def test_complete_with_system_prompt(mock_ollama_provider, monkeypatch):
     assert call_args[0][1] == 0.5
 
 
-def test_complete_without_system_prompt(mock_ollama_provider, monkeypatch):
+def test_complete_without_system_prompt(mock_ollama_provider):
     _, provider = mock_ollama_provider
 
     client = LLMClient(provider="ollama", model="qwen3:14b")
@@ -116,7 +116,7 @@ def test_complete_without_system_prompt(mock_ollama_provider, monkeypatch):
     assert call_args[0][0] == [{"role": "user", "content": "Test prompt"}]
 
 
-def test_chat(mock_ollama_provider, monkeypatch):
+def test_chat(mock_ollama_provider):
     _, provider = mock_ollama_provider
 
     client = LLMClient(provider="ollama", model="qwen3:14b")
@@ -137,7 +137,7 @@ def test_chat(mock_ollama_provider, monkeypatch):
     assert call_args[0][1] == 0.3
 
 
-def test_complete_handles_exception(mock_ollama_provider, monkeypatch):
+def test_complete_handles_exception(mock_ollama_provider):
     _, provider = mock_ollama_provider
     provider.acomplete = AsyncMock(side_effect=Exception("API Error"))
 
@@ -147,7 +147,7 @@ def test_complete_handles_exception(mock_ollama_provider, monkeypatch):
         client.complete("Test prompt")
 
 
-def test_repr(mock_ollama_provider, monkeypatch):
+def test_repr(mock_ollama_provider):
     client = LLMClient(provider="ollama", model="qwen3:14b")
 
     assert repr(client) == "LLMClient(provider=ollama, model=qwen3:14b)"
@@ -181,7 +181,7 @@ class TestCompleteWithTools:
         return executor
 
     def test_complete_with_tools_no_tool_calls(
-        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+        self, mock_openai_provider, sample_tools, mock_tool_executor
     ):
         """Test when LLM returns without tool calls."""
         _, provider = mock_openai_provider
@@ -201,7 +201,7 @@ class TestCompleteWithTools:
         assert provider.acomplete_with_tools.call_count == 1
 
     def test_complete_with_tools_executes_tool(
-        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+        self, mock_openai_provider, sample_tools, mock_tool_executor
     ):
         """Test tool execution and final response."""
         _, provider = mock_openai_provider
@@ -224,12 +224,9 @@ class TestCompleteWithTools:
         assert provider.acomplete_with_tools.call_count == 2
 
     def test_complete_with_tools_max_calls_limit(
-        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+        self, mock_openai_provider, sample_tools, mock_tool_executor
     ):
         """Test max_tool_calls limit is respected."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         tool_call = ToolCall(id="call_123", name="get_weather", arguments={"location": "NYC"})
@@ -281,12 +278,9 @@ class TestAcompleteWithTools:
         return executor
 
     async def test_acomplete_with_tools_no_tool_calls(
-        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+        self, mock_openai_provider, sample_tools, mock_tool_executor
     ):
         """Test async when LLM returns without tool calls."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
         provider.acomplete_with_tools = AsyncMock(return_value=("No tools needed", None))
 
@@ -297,12 +291,9 @@ class TestAcompleteWithTools:
         assert result == "No tools needed"
 
     async def test_acomplete_with_tools_executes_tool(
-        self, mock_openai_provider, monkeypatch, sample_tools, mock_tool_executor
+        self, mock_openai_provider, sample_tools, mock_tool_executor
     ):
         """Test async tool execution."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         tool_call = ToolCall(id="call_456", name="search", arguments={"query": "python testing"})
@@ -341,11 +332,8 @@ class TestAsyncToolExecutor:
         ]
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_sync_executor(self, mock_openai_provider, monkeypatch, sample_tools):
+    async def test_acomplete_with_tools_sync_executor(self, mock_openai_provider, sample_tools):
         """Test backward compatibility with sync executor."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         def sync_executor(name: str, args: dict) -> str:
@@ -366,11 +354,8 @@ class TestAsyncToolExecutor:
         assert result == "Analysis complete"
 
     @pytest.mark.asyncio
-    async def test_acomplete_with_tools_async_executor(self, mock_openai_provider, monkeypatch, sample_tools):
+    async def test_acomplete_with_tools_async_executor(self, mock_openai_provider, sample_tools):
         """Test new async executor support."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         async def async_executor(name: str, args: dict) -> str:
@@ -393,12 +378,9 @@ class TestAsyncToolExecutor:
 
     @pytest.mark.asyncio
     async def test_acomplete_with_tools_multiple_async_calls(
-        self, mock_openai_provider, monkeypatch, sample_tools
+        self, mock_openai_provider, sample_tools
     ):
         """Test multiple tool calls with async executor."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         call_count = 0
@@ -427,12 +409,9 @@ class TestAsyncToolExecutor:
 
     @pytest.mark.asyncio
     async def test_acomplete_with_tools_sync_executor_error(
-        self, mock_openai_provider, monkeypatch, sample_tools
+        self, mock_openai_provider, sample_tools
     ):
         """Test error handling with failing sync executor."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         def failing_sync_executor(name: str, args: dict) -> str:
@@ -457,12 +436,9 @@ class TestAsyncToolExecutor:
 
     @pytest.mark.asyncio
     async def test_acomplete_with_tools_async_executor_error(
-        self, mock_openai_provider, monkeypatch, sample_tools
+        self, mock_openai_provider, sample_tools
     ):
         """Test error handling with failing async executor."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         async def failing_async_executor(name: str, args: dict) -> str:
@@ -488,12 +464,9 @@ class TestAsyncToolExecutor:
 
     @pytest.mark.asyncio
     async def test_acomplete_with_tools_sync_returning_awaitable(
-        self, mock_openai_provider, monkeypatch, sample_tools
+        self, mock_openai_provider, sample_tools
     ):
         """Test sync function that returns awaitable (edge case)."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         async def inner_async(symbol: str) -> str:
@@ -521,12 +494,9 @@ class TestAsyncToolExecutor:
 
     @pytest.mark.asyncio
     async def test_acomplete_with_tools_callback_with_async_executor(
-        self, mock_openai_provider, monkeypatch, sample_tools
+        self, mock_openai_provider, sample_tools
     ):
         """Test on_tool_call callback invoked correctly with async executor."""
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.delenv("OPENAI_API_BASE", raising=False)
         _, provider = mock_openai_provider
 
         async def async_executor(name: str, args: dict) -> str:
@@ -562,19 +532,19 @@ class TestAsyncToolExecutor:
 class TestSupportsTools:
     """Tests for supports_tools property."""
 
-    def test_supports_tools_anthropic(self, mock_anthropic_provider, monkeypatch):
+    def test_supports_tools_anthropic(self, mock_anthropic_provider):
         _ = mock_anthropic_provider  # Fixture required to mock provider creation
 
         client = LLMClient(provider="anthropic", model="claude-sonnet-4-20250514")
         assert client.supports_tools is True
 
-    def test_supports_tools_openai(self, mock_openai_provider, monkeypatch):
+    def test_supports_tools_openai(self, mock_openai_provider):
         _ = mock_openai_provider  # Fixture required to mock provider creation
 
         client = LLMClient(provider="openai", model="gpt-4o")
         assert client.supports_tools is True
 
-    def test_supports_tools_ollama(self, mock_ollama_provider, monkeypatch):
+    def test_supports_tools_ollama(self, mock_ollama_provider):
         _ = mock_ollama_provider  # Fixture required to mock provider creation
 
         client = LLMClient(provider="ollama", model="qwen3:14b")
@@ -613,21 +583,21 @@ class TestStructuredOutput:
             mock.return_value = provider
             yield mock, provider
 
-    def test_supports_structured_output_ollama(self, mock_ollama_provider_structured, monkeypatch):
+    def test_supports_structured_output_ollama(self, mock_ollama_provider_structured):
         """Test supports_structured_output for Ollama."""
         _ = mock_ollama_provider_structured
 
         client = LLMClient(provider="ollama", model="qwen3:14b")
         assert client.supports_structured_output is True
 
-    def test_supports_structured_output_openai(self, mock_openai_provider_structured, monkeypatch):
+    def test_supports_structured_output_openai(self, mock_openai_provider_structured):
         """Test supports_structured_output for OpenAI."""
         _ = mock_openai_provider_structured
 
         client = LLMClient(provider="openai", model="gpt-4o")
         assert client.supports_structured_output is True
 
-    def test_structured_returns_validated_model(self, mock_ollama_provider_structured, monkeypatch):
+    def test_structured_returns_validated_model(self, mock_ollama_provider_structured):
         """Test structured output returns validated Pydantic model."""
         _, provider = mock_ollama_provider_structured
 
@@ -642,7 +612,7 @@ class TestStructuredOutput:
         assert result.confidence == 0.85
         provider.astructured.assert_called_once()
 
-    async def test_astructured_returns_validated_model(self, mock_ollama_provider_structured, monkeypatch):
+    async def test_astructured_returns_validated_model(self, mock_ollama_provider_structured):
         """Test async structured output returns validated Pydantic model."""
         _, provider = mock_ollama_provider_structured
 
@@ -655,7 +625,7 @@ class TestStructuredOutput:
         assert result == expected
         provider.astructured.assert_called_once()
 
-    def test_structured_raises_on_error(self, mock_ollama_provider_structured, monkeypatch):
+    def test_structured_raises_on_error(self, mock_ollama_provider_structured):
         """Test structured output raises StructuredOutputError on failure."""
         _, provider = mock_ollama_provider_structured
 
@@ -670,7 +640,7 @@ class TestStructuredOutput:
         assert "Validation failed" in str(exc_info.value)
         assert exc_info.value.raw_response == '{"invalid": "json"}'
 
-    def test_structured_passes_system_prompt(self, mock_ollama_provider_structured, monkeypatch):
+    def test_structured_passes_system_prompt(self, mock_ollama_provider_structured):
         """Test structured output passes system prompt correctly."""
         _, provider = mock_ollama_provider_structured
 

@@ -25,7 +25,7 @@ from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 class TradingWorkflow:
     """Orchestrate multi-agent trading analysis."""
 
-    def __init__(self, config: WorkflowConfig, components: WorkflowComponents) -> None:  # noqa: PLR0915
+    def __init__(self, config: WorkflowConfig, components: WorkflowComponents) -> None:
         """Initialize trading workflow.
 
         Args:

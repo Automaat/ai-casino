@@ -404,8 +404,6 @@ def create_trading_coordinator(
     Returns:
         Configured TradingCoordinator
     """
-    import os
-
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.memory import CoordinatorMemory
     from src.coordinator.tools import build_coordinator_registry

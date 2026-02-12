@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import inspect
 import json
-import os
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
