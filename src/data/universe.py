@@ -200,11 +200,19 @@ class StockUniverseFetcher:
             Dict mapping symbol to {price, avg_volume, market_cap}
         """
         logger.info(f"Fetching metadata for {len(symbols)} symbols")
+
+        # Validate symbols before sending to yfinance
+        invalid_symbols = [s for s in symbols if " " in s or len(s) > 6]
+        if invalid_symbols:
+            logger.error(f"INVALID SYMBOLS (spaces/too long): {invalid_symbols[:10]}")
+
         all_data: dict[str, dict[str, float]] = {}
 
         # Stage 1: Batch fetch OHLCV data for price and volume
         for i in range(0, len(symbols), batch_size):
             batch = symbols[i : i + batch_size]
+            logger.debug(f"Batch symbols (first 5): {batch[:5]}")
+
             try:
                 batch_num = i // batch_size + 1
                 total_batches = (len(symbols) + batch_size - 1) // batch_size
@@ -360,14 +368,19 @@ class StockUniverseFetcher:
             for row in table.find_all("tr")[1:]:  # Skip header
                 cols = row.find_all("td")
                 if len(cols) >= 4:
-                    symbol = cols[0].get_text(strip=True).replace(".", "-")  # BRK.B -> BRK-B
-                    name = cols[1].get_text(strip=True)
+                    raw_symbol = cols[0].get_text(strip=True)
+                    raw_name = cols[1].get_text(strip=True)
+                    symbol = raw_symbol.replace(".", "-")  # BRK.B -> BRK-B
+                    name = raw_name
                     sector = cols[3].get_text(strip=True)
                     industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
 
                     # Validate: symbol should not contain spaces and should be short
                     if " " in symbol or len(symbol) > 6:
-                        logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                        logger.warning(
+                            f"S&P500 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
+                            f"symbol='{symbol}' name='{name}'"
+                        )
                         continue
 
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
@@ -395,14 +408,19 @@ class StockUniverseFetcher:
             for row in table.find_all("tr")[1:]:  # Skip header
                 cols = row.find_all("td")
                 if len(cols) >= 3:
-                    name = cols[0].get_text(strip=True)
-                    symbol = cols[1].get_text(strip=True).replace(".", "-")
+                    raw_name = cols[0].get_text(strip=True)
+                    raw_symbol = cols[1].get_text(strip=True)
+                    name = raw_name
+                    symbol = raw_symbol.replace(".", "-")
                     sector = cols[2].get_text(strip=True)
                     industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
 
                     # Validate: symbol should not contain spaces and should be short
                     if " " in symbol or len(symbol) > 6:
-                        logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                        logger.warning(
+                            f"NASDAQ100 INVALID: col0='{raw_name}' col1='{raw_symbol}' -> "
+                            f"symbol='{symbol}' name='{name}'"
+                        )
                         continue
 
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
