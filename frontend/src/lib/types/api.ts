@@ -253,3 +253,43 @@ export interface ExecutionMetric {
 export interface ExecutionMetricsListResponse {
 	metrics: ExecutionMetric[];
 }
+
+export interface LLMCallMetric {
+	timestamp: string;
+	agent_name: string;
+	method: string;
+	provider: string;
+	model: string;
+	latency_ms: number;
+	input_tokens: number | null;
+	output_tokens: number | null;
+	estimated_cost_usd: number | null;
+	success: boolean;
+	error: string | null;
+}
+
+export interface AgentTimingMetric {
+	agent_name: string;
+	latency_ms: number;
+	llm_calls: number;
+}
+
+export interface PipelineStageMetric {
+	stage: string;
+	latency_ms: number;
+}
+
+export interface WorkflowExecutionMetrics {
+	workflow_id: string;
+	symbol: string;
+	timestamp: string;
+	total_latency_ms: number;
+	llm_calls: LLMCallMetric[];
+	agent_timings: AgentTimingMetric[];
+	pipeline_stages: PipelineStageMetric[];
+	total_input_tokens: number;
+	total_output_tokens: number;
+	total_estimated_cost_usd: number;
+	provider: string;
+	model: string;
+}

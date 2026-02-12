@@ -12,9 +12,9 @@
 	const HIGH_DRAWDOWN_THRESHOLD = 0.10;
 
 	// Filters
-	let selectedCategories: string[] = ['ANALYSIS', 'NEWS', 'SOCIAL', 'ANOMALY', 'ERROR'];
-	let startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-	let endDate = new Date().toISOString().split('T')[0];
+	let selectedCategories = $state<string[]>(['ANALYSIS', 'NEWS', 'SOCIAL', 'ANOMALY', 'ERROR']);
+	let startDate = $state(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+	let endDate = $state(new Date().toISOString().split('T')[0]);
 
 	// Combined events
 	type CombinedEvent = {
@@ -28,12 +28,12 @@
 		icon: string;
 	};
 
-	let allEvents: CombinedEvent[] = [];
-	let filteredEvents: CombinedEvent[] = [];
-	let availableCategories: string[] = [];
+	let allEvents = $state<CombinedEvent[]>([]);
+	let filteredEvents = $state<CombinedEvent[]>([]);
+	let availableCategories = $state<string[]>([]);
 
 	// Degradation chart
-	let degradationChartContainer = null as unknown as HTMLElement;
+	let degradationChartContainer = $state<HTMLElement | null>(null as unknown as HTMLElement);
 	let degradationChart: ECharts | null = null;
 
 	// Warnings
@@ -43,9 +43,9 @@
 		message: string;
 		details: string;
 	}
-	let warnings: Warning[] = [];
+	let warnings = $state<Warning[]>([]);
 
-	$: {
+	$effect(() => {
 		// Combine system and market events
 		allEvents = [];
 
@@ -69,10 +69,10 @@
 
 		// Apply filters
 		filteredEvents = applyFilters(allEvents, selectedCategories, startDate, endDate);
-	}
+	});
 
 	// Generate warnings
-	$: {
+	$effect(() => {
 		warnings = [];
 
 		// Check degradation
@@ -116,7 +116,7 @@
 				details: `Risk status: ${$risk.risk_status}`
 			});
 		}
-	}
+	});
 
 	function processSystemEvent(event: SystemEvent): CombinedEvent {
 		const category = categorizeEvent(event.event_type);
@@ -235,16 +235,20 @@
 	});
 
 	// Initialize degradation chart reactively when container becomes available
-	$: if (degradationChartContainer && !degradationChart) {
-		degradationChart = echarts.init(degradationChartContainer, 'dark');
-		if ($degradationHistory) {
+	$effect(() => {
+		if (degradationChartContainer && !degradationChart) {
+			degradationChart = echarts.init(degradationChartContainer, 'dark');
+			if ($degradationHistory) {
+				updateDegradationChart();
+			}
+		}
+	});
+
+	$effect(() => {
+		if (degradationChart && $degradationHistory) {
 			updateDegradationChart();
 		}
-	}
-
-	$: if (degradationChart && $degradationHistory) {
-		updateDegradationChart();
-	}
+	});
 
 	function updateDegradationChart() {
 		if (!degradationChart || !$degradationHistory?.records || $degradationHistory.records.length === 0) {
