@@ -202,8 +202,27 @@ class DaemonFactory:
         news_watcher = None
         social_watcher = None
         if self.config.news_watcher.enabled or self.config.social_watcher.enabled:
-            news_watcher = self._container.news_watcher() if self.config.news_watcher.enabled else None
-            social_watcher = self._container.social_watcher() if self.config.social_watcher.enabled else None
+            # Call provider functions directly to pass container (providers.Self() doesn't work reliably)
+            from src.di.providers import watchers as watcher_providers
+
+            news_watcher = (
+                watcher_providers.create_news_watcher(
+                    self._container.historical_cache(),
+                    self.config,
+                    self._container,
+                )
+                if self.config.news_watcher.enabled
+                else None
+            )
+            social_watcher = (
+                watcher_providers.create_social_watcher(
+                    self._container.historical_cache(),
+                    self.config,
+                    self._container,
+                )
+                if self.config.social_watcher.enabled
+                else None
+            )
             logger.info("Event watchers initialized")
 
         # Phase 13: Assemble components

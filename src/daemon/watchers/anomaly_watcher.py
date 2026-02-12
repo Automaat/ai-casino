@@ -8,6 +8,7 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -15,6 +16,9 @@ from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 
 @dataclass
@@ -44,6 +48,7 @@ class AnomalyWatcher(EventWatcher):
         historical_cache: HistoricalCache,
         market_fetcher: MarketDataFetcher,
         config: AnomalyWatcherConfig | None = None,
+        container: AppContainer | None = None,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,
@@ -60,6 +65,7 @@ class AnomalyWatcher(EventWatcher):
             historical_cache: Shared cache for market data
             market_fetcher: Market data fetcher for Alpha Vantage
             config: Configuration (uses defaults if not provided)
+            container: Optional DI container (auto-created if not provided)
             **Individual params for backward compatibility (prefer config object)
         """
         # Backward compat: construct config from individual params if provided
@@ -116,7 +122,7 @@ class AnomalyWatcher(EventWatcher):
             cooldown_minutes=cfg.cooldown_minutes,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
-        super().__init__(base_config, historical_cache)
+        super().__init__(base_config, historical_cache, container=container)
         self._market_fetcher = market_fetcher
         self.volume_spike_multiplier = cfg.volume_spike_multiplier
         self.price_move_threshold_pct = cfg.price_move_threshold_pct

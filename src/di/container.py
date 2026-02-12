@@ -399,12 +399,14 @@ class AppContainer(containers.DeclarativeContainer):
         watcher_providers.create_news_watcher,
         historical_cache=historical_cache,
         daemon_config=daemon_config,
+        container=providers.Self(),
     )
 
     social_watcher = providers.Singleton(
         watcher_providers.create_social_watcher,
         historical_cache=historical_cache,
         daemon_config=daemon_config,
+        container=providers.Self(),
     )
 
 

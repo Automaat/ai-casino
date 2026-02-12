@@ -7,7 +7,7 @@ deduplicates via URL tracking, and triggers LLM triage + analysis for relevant e
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from loguru import logger
 
@@ -16,6 +16,9 @@ from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, NewsEvent
 from src.data.base_news_fetcher import BaseNewsFetcher
 from src.data.news import NewsFetcher
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 
 @dataclass
@@ -81,6 +84,7 @@ class NewsWatcher(EventWatcher):
         fetchers: list[BaseNewsFetcher] | None = None,
         source_weights: dict[str, float] | None = None,
         config: NewsWatcherConfig | None = None,
+        container: AppContainer | None = None,
         **kwargs: int | float,
     ) -> None:
         """Initialize news watcher.
@@ -90,6 +94,7 @@ class NewsWatcher(EventWatcher):
             fetchers: List of news fetchers (uses Marketaux fallback if not provided)
             source_weights: Custom source weights for deduplication
             config: Configuration (uses defaults if not provided)
+            container: Optional DI container (auto-created if not provided)
             **kwargs: Backward compat params (poll_interval, relevance_threshold, etc.)
         """
         # Backward compat: construct config from kwargs if provided
@@ -114,7 +119,7 @@ class NewsWatcher(EventWatcher):
             cooldown_minutes=cfg.cooldown_minutes,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
-        super().__init__(base_config, historical_cache)
+        super().__init__(base_config, historical_cache, container=container)
         self.breaking_threshold_minutes = cfg.breaking_threshold_minutes
         self._fetchers = fetchers or []
         self._weights = source_weights or self.SOURCE_WEIGHTS

@@ -8,7 +8,7 @@ Detects two types of events:
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -16,6 +16,9 @@ from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher, TrendingTicker
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
 
 
 @dataclass
@@ -43,6 +46,7 @@ class SocialWatcher(EventWatcher):
         self,
         historical_cache: HistoricalCache,
         config: SocialWatcherConfig | None = None,
+        container: AppContainer | None = None,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,
@@ -57,6 +61,7 @@ class SocialWatcher(EventWatcher):
         Args:
             historical_cache: Shared cache for social data
             config: Configuration (uses defaults if not provided)
+            container: Optional DI container (auto-created if not provided)
             **Individual params for backward compatibility (prefer config object)
         """
         # Backward compat: construct config from individual params if provided
@@ -107,7 +112,7 @@ class SocialWatcher(EventWatcher):
             cooldown_minutes=cfg.cooldown_minutes,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
-        super().__init__(base_config, historical_cache)
+        super().__init__(base_config, historical_cache, container=container)
         self.volume_spike_threshold = cfg.volume_spike_threshold
         self.viral_score_threshold = cfg.viral_score_threshold
         self.viral_upvote_ratio = cfg.viral_upvote_ratio
