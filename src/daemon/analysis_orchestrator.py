@@ -500,6 +500,14 @@ class AnalysisOrchestrator:
         rsi = result.technical.rsi if result.technical else None
         macd_hist = result.technical.macd_hist if result.technical else None
 
+        technical_reasoning = result.technical.interpretation if result.technical else None
+        sentiment_reasoning = result.sentiment.summary if result.sentiment else None
+        news_reasoning = (
+            f"{result.news.impact_assessment}\n\nRecommendation: {result.news.recommendation}"
+            if result.news
+            else None
+        )
+
         self.state.record_analysis(
             symbol=symbol,
             signal=result.decision.action.value,
@@ -510,6 +518,9 @@ class AnalysisOrchestrator:
             rsi=rsi,
             macd_hist=macd_hist,
             reasoning=result.decision.reasoning,
+            technical_analysis_reasoning=technical_reasoning,
+            sentiment_analysis_reasoning=sentiment_reasoning,
+            news_analysis_reasoning=news_reasoning,
         )
 
     async def _record_signal_outcome(self, symbol: str, result: TradingWorkflowResult) -> None:
@@ -549,6 +560,13 @@ class AnalysisOrchestrator:
                 technical_signal=result.technical.signal.value,
                 sentiment_signal=self._extract_sentiment_signal(result.sentiment),
                 news_signal=self._extract_news_signal(result.news),
+                technical_reasoning=result.technical.interpretation if result.technical else None,
+                sentiment_reasoning=result.sentiment.summary if result.sentiment else None,
+                news_reasoning=(
+                    f"{result.news.impact_assessment}\n\nRecommendation: {result.news.recommendation}"
+                    if result.news
+                    else None
+                ),
             )
             await self._signal_outcome_repo.record_signal(input_data)
         except Exception as e:
@@ -574,6 +592,13 @@ class AnalysisOrchestrator:
                 technical_signal=result.technical.signal.value,
                 sentiment_signal=self._extract_sentiment_signal(result.sentiment),
                 news_signal=self._extract_news_signal(result.news),
+                technical_reasoning=result.technical.interpretation if result.technical else None,
+                sentiment_reasoning=result.sentiment.summary if result.sentiment else None,
+                news_reasoning=(
+                    f"{result.news.impact_assessment}\n\nRecommendation: {result.news.recommendation}"
+                    if result.news
+                    else None
+                ),
             )
             historical_cache = self.historical_cache
             if historical_cache:

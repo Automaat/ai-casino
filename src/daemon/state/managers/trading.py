@@ -31,6 +31,9 @@ class AnalysisRecordInput:
     rsi: float | None = None
     macd_hist: float | None = None
     reasoning: list[str] | None = None
+    technical_analysis_reasoning: str | None = None
+    sentiment_analysis_reasoning: str | None = None
+    news_analysis_reasoning: str | None = None
 
 
 class TradingStateManager(StateManager):
@@ -73,6 +76,9 @@ class TradingStateManager(StateManager):
             rsi=input_data.rsi,
             macd_hist=input_data.macd_hist,
             reasoning=input_data.reasoning or [],
+            technical_analysis_reasoning=input_data.technical_analysis_reasoning,
+            sentiment_analysis_reasoning=input_data.sentiment_analysis_reasoning,
+            news_analysis_reasoning=input_data.news_analysis_reasoning,
         )
 
         # Persist to database if repository available

@@ -92,6 +92,9 @@ class TestSignalOutcomeRepository:
         orm.technical_signal = "BUY"
         orm.sentiment_signal = "BUY"
         orm.news_signal = "HOLD"
+        orm.technical_reasoning = "Strong momentum"
+        orm.sentiment_reasoning = "Positive sentiment"
+        orm.news_reasoning = "Good news"
         orm.price_at_1d = None
         orm.price_at_5d = Decimal("155.0")
         orm.price_at_20d = None

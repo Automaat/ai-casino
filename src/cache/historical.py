@@ -48,6 +48,9 @@ class SignalOutcomeInput:
     technical_signal: str | None = None
     sentiment_signal: str | None = None
     news_signal: str | None = None
+    technical_reasoning: str | None = None
+    sentiment_reasoning: str | None = None
+    news_reasoning: str | None = None
 
 
 class HistoricalCache:
@@ -169,6 +172,9 @@ class HistoricalCache:
                 technical_signal TEXT,
                 sentiment_signal TEXT,
                 news_signal TEXT,
+                technical_reasoning TEXT,
+                sentiment_reasoning TEXT,
+                news_reasoning TEXT,
                 price_at_1d REAL,
                 price_at_5d REAL,
                 price_at_20d REAL,
@@ -630,6 +636,9 @@ class HistoricalCache:
                 technical_signal=kwargs.get("technical_signal"),  # type: ignore[arg-type]
                 sentiment_signal=kwargs.get("sentiment_signal"),  # type: ignore[arg-type]
                 news_signal=kwargs.get("news_signal"),  # type: ignore[arg-type]
+                technical_reasoning=kwargs.get("technical_reasoning"),  # type: ignore[arg-type]
+                sentiment_reasoning=kwargs.get("sentiment_reasoning"),  # type: ignore[arg-type]
+                news_reasoning=kwargs.get("news_reasoning"),  # type: ignore[arg-type]
             )
         if input_data is None:
             msg = "Either input_data or individual parameters must be provided"
@@ -638,8 +647,9 @@ class HistoricalCache:
             self._conn.execute(
                 "INSERT OR IGNORE INTO signal_outcomes "
                 "(symbol, timestamp, signal, confidence, price_at_signal, "
-                "strategy_used, regime, trading_session, technical_signal, sentiment_signal, news_signal) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "strategy_used, regime, trading_session, technical_signal, sentiment_signal, news_signal, "
+                "technical_reasoning, sentiment_reasoning, news_reasoning) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     input_data.symbol,
                     input_data.timestamp.isoformat(),
@@ -652,6 +662,9 @@ class HistoricalCache:
                     input_data.technical_signal,
                     input_data.sentiment_signal,
                     input_data.news_signal,
+                    input_data.technical_reasoning,
+                    input_data.sentiment_reasoning,
+                    input_data.news_reasoning,
                 ),
             )
             self._conn.commit()

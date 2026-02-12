@@ -49,6 +49,9 @@ class AnalysisRecordResponse(BaseModel):
     rsi: float | None = None
     macd_hist: float | None = None
     reasoning: list[str] = Field(default_factory=list)
+    technical_analysis_reasoning: str | None = None
+    sentiment_analysis_reasoning: str | None = None
+    news_analysis_reasoning: str | None = None
 
 
 class AnalysesResponse(BaseModel):

@@ -24,6 +24,9 @@ class AnalysisRecord(BaseModel):
     rsi: float | None = None
     macd_hist: float | None = None
     reasoning: list[str] = Field(default_factory=list)
+    technical_analysis_reasoning: str | None = None
+    sentiment_analysis_reasoning: str | None = None
+    news_analysis_reasoning: str | None = None
 
 
 class ScreeningRecord(BaseModel):
@@ -237,6 +240,9 @@ class SignalOutcome(BaseModel):
     technical_signal: str | None = None
     sentiment_signal: str | None = None
     news_signal: str | None = None
+    technical_reasoning: str | None = None
+    sentiment_reasoning: str | None = None
+    news_reasoning: str | None = None
     price_at_1d: float | None = None
     price_at_5d: float | None = None
     price_at_20d: float | None = None
