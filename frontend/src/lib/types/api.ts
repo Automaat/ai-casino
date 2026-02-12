@@ -19,7 +19,7 @@ export interface StateSummaryResponse {
 	recent_analyses: AnalysisRecordResponse[];
 	total_trades: number;
 	positions_count: number;
-	win_rate: number;
+	win_rate: number | null;
 	error_count: number;
 	degradation_tier: string;
 }

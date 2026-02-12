@@ -165,9 +165,23 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         # Calculate positions count and win rate
         positions_count = len(components.state.active_positions)
 
-        # Win rate calculation (TODO: implement proper trade tracking)
-        # For now, return 0.0 as we need proper closed trade tracking
-        win_rate = 0.0
+        # Win rate calculation - try to derive from closed trades if available
+        win_rate = None
+        closed_trades = getattr(components.state, "closed_trades", None)
+        if closed_trades:
+            total_closed = len(closed_trades)
+            wins = 0
+            for trade in closed_trades:
+                # Try common profit-like attributes
+                pnl = getattr(trade, "pnl", None)
+                if pnl is None:
+                    pnl = getattr(trade, "profit", None)
+                if pnl is None:
+                    continue
+                if pnl > 0:
+                    wins += 1
+            if total_closed > 0:
+                win_rate = wins / total_closed
 
         # Get recent analyses (last 50), convert to dicts
         recent_analyses = [
@@ -380,7 +394,13 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 )
         except MissingDatabaseURLError:
             logger.debug("DATABASE_URL not configured, returning empty snapshots")
-            return SnapshotsResponse(snapshots=[], count=0, database_enabled=False, has_trades=False)
+            has_trades = components.state.total_trades > 0
+            return SnapshotsResponse(
+                snapshots=[],
+                count=0,
+                database_enabled=database_enabled,
+                has_trades=has_trades,
+            )
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to fetch snapshots: {e}")
             raise HTTPException(status_code=500, detail="Failed to fetch portfolio snapshots") from e

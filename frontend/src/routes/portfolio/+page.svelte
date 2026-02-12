@@ -37,12 +37,22 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const [snaps, rebal] = await Promise.all([
+			const results = await Promise.allSettled([
 				api.getSnapshots(30),
 				api.getRebalance()
 			]);
-			snapshotsData = snaps;
-			rebalance = rebal;
+
+			if (results[0].status === 'fulfilled') {
+				snapshotsData = results[0].value;
+			} else {
+				console.error('Failed to load snapshots:', results[0].reason);
+			}
+
+			if (results[1].status === 'fulfilled') {
+				rebalance = results[1].value;
+			} else {
+				console.error('Failed to load rebalance:', results[1].reason);
+			}
 		} catch (error) {
 			console.error('Failed to load portfolio data:', error);
 		} finally {
@@ -213,12 +223,12 @@
 				/>
 			{:else if loading}
 				<div class="text-center py-12 text-gray-600">Loading...</div>
-			{:else if !snapshotsData?.database_enabled}
+			{:else if snapshotsData && snapshotsData.database_enabled === false}
 				<div class="text-center py-12 text-gray-600">
 					<div class="font-medium">Database persistence disabled</div>
 					<div class="text-sm mt-2">Enable in daemon config: <code class="bg-gray-100 px-1 rounded">database.enable_persistence: true</code></div>
 				</div>
-			{:else if !snapshotsData?.has_trades}
+			{:else if snapshotsData && snapshotsData.has_trades === false}
 				<div class="text-center py-12 text-gray-600">
 					<div class="font-medium">No trades executed yet</div>
 					<div class="text-sm mt-2">Equity curve will populate after first trade execution</div>
@@ -244,7 +254,7 @@
 			<RebalanceChart allocations={rebalance.allocations} height={350} />
 		{:else if loading}
 			<div class="text-center py-12 text-gray-600">Loading...</div>
-		{:else if !rebalance?.enabled}
+		{:else if rebalance && rebalance.enabled === false}
 			<div class="text-center py-12 text-gray-600">
 				<div class="font-medium">Rebalancing disabled</div>
 				<div class="text-sm mt-2">Enable in daemon config: <code class="bg-gray-100 px-1 rounded">rebalancing.enabled: true</code></div>

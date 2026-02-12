@@ -22,7 +22,7 @@ class StateSummaryResponse(BaseModel):
     recent_analyses: list[dict] = Field(description="Recent analysis records", default_factory=list)
     total_trades: int = Field(description="Total trades executed")
     positions_count: int = Field(description="Number of active positions")
-    win_rate: float = Field(description="Win rate (0.0-1.0)")
+    win_rate: float | None = Field(default=None, description="Win rate (0.0-1.0), null if unavailable")
     error_count: int = Field(description="Total errors recorded")
     degradation_tier: str = Field(description="Current degradation tier")
     trading_mode: str = Field(description="Current trading mode (paper/live)")
