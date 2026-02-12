@@ -252,3 +252,50 @@ def test_fetch_market_news_retries_on_timeout(sample_news_response):
 
         assert len(articles) == 2
         assert mock_client.get.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_afetch_company_news(sample_news_response):
+    with patch("src.data.news.httpx.Client") as mock_client_class:
+        mock_response = Mock()
+        mock_response.json.return_value = sample_news_response
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        fetcher = NewsFetcher(api_key="test-key")
+        articles = await fetcher.afetch_company_news("AAPL", 10)
+
+        assert len(articles) == 2
+        assert all(isinstance(a, NewsArticle) for a in articles)
+        assert articles[0].title == "Apple announces new product"
+        assert articles[1].source == "Bloomberg"
+
+
+@pytest.mark.asyncio
+async def test_afetch_market_news(sample_news_response):
+    with patch("src.data.news.httpx.Client") as mock_client_class:
+        mock_response = Mock()
+        mock_response.json.return_value = sample_news_response
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        fetcher = NewsFetcher(api_key="test-key")
+        articles = await fetcher.afetch_market_news(limit=20)
+
+        assert len(articles) == 2
+        assert all(isinstance(a, NewsArticle) for a in articles)
+
+
+def test_get_source_name():
+    fetcher = NewsFetcher()
+    assert fetcher.get_source_name() == "marketaux"

@@ -505,6 +505,27 @@ daemon:
     # Maximum concurrent re-analyses
     max_concurrent_analyses: 2
 
+    # Multi-source news fetching (fetch from multiple providers in parallel)
+    # Deduplication: when same URL from multiple sources, keep highest-weighted
+    # Source weights: marketaux=1.0, finnhub=0.9, newsdata=0.8, duckduckgo=0.5
+    sources:
+      # Marketaux (primary, 100 req/day free tier)
+      # Best quality, use for primary coverage
+      enable_marketaux: true
+
+      # Finnhub (company + general news, free tier available)
+      # Good quality, supplement Marketaux
+      enable_finnhub: false
+
+      # NewsData.io (200 credits/day free tier)
+      # Broader coverage, lower priority than Marketaux/Finnhub
+      enable_newsdata: false
+
+      # DuckDuckGo News Search (unlimited, no API key required)
+      # Lowest priority (noisier results), use as fallback
+      # Good for when other sources are rate-limited
+      enable_duckduckgo: false
+
   social_watcher:
     # Social media watcher (monitor Reddit for viral posts)
     enabled: false
@@ -856,8 +877,9 @@ daemon:
   # ========================================
   api_keys:
     # Data providers
-    # alpha_vantage_api_key: "YOUR_KEY_HERE"  # Required for alpha_vantage market data
-    # marketaux_api_key: "YOUR_KEY_HERE"      # Optional for news data
+    # alpha_vantage_api_key: "YOUR_KEY_HERE"  # Falls back to ALPHA_VANTAGE_API_KEY
+    # marketaux_api_key: "YOUR_KEY_HERE"      # Falls back to MARKETAUX_API_KEY
+    # newsdata_api_key: "YOUR_KEY_HERE"       # Falls back to NEWSDATA_API_KEY (NewsData.io)
 
     # Broker credentials (paper and live)
     # alpaca_api_key: "YOUR_KEY_HERE"         # Live trading credentials
