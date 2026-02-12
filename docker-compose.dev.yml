@@ -6,7 +6,7 @@
 
 services:
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.5.4
     container_name: ai-casino-ollama-dev
     restart: unless-stopped
     ports:
@@ -36,11 +36,16 @@ services:
     volumes:
       - ./src:/app/src:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
-      - ./daemon-dev.yaml:/root/.ai-casino/daemon.yaml:ro  # Use dev config
+      - ./daemon-dev.yaml:/root/.ai-casino/daemon-production.yaml:ro  # Dev config at path expected by daemon CMD
     environment:
       - LOG_LEVEL=DEBUG
     depends_on:
-      - ollama
+      postgres:
+        condition: service_healthy
+      finbert:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
 
   finbert:
     environment:
