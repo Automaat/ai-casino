@@ -41,12 +41,31 @@ mise install
 # Install Python dependencies
 uv sync
 
-# Copy environment template
-cp .env.example .env
+# Copy configuration template
+cp docs/daemon.yaml.example ~/.ai-casino/daemon.yaml
 
-# Edit .env with your API keys
-# Required: ALPHA_VANTAGE_API_KEY
-# Optional: MARKETAUX_API_KEY, ALPACA_API_KEY
+# Edit config with your API keys
+vim ~/.ai-casino/daemon.yaml
+```
+
+### Configuration
+
+All configuration is YAML-based in `~/.ai-casino/daemon.yaml`:
+
+```yaml
+daemon:
+  llm:
+    provider: "ollama"  # or "anthropic", "openai"
+    model: "qwen3:14b"
+
+  api_keys:
+    # Required for market data
+    alpha_vantage_api_key: "YOUR_KEY_HERE"
+
+    # Optional
+    marketaux_api_key: "YOUR_KEY_HERE"
+    alpaca_paper_api_key: "YOUR_KEY_HERE"
+    alpaca_paper_secret_key: "YOUR_SECRET_HERE"
 ```
 
 ### LLM Setup
@@ -54,39 +73,41 @@ cp .env.example .env
 #### Option 1: Local Development (Ollama)
 
 ```bash
-# Start Ollama server in background
+# Start Ollama server
 mise ollama:start
 
-# Check Ollama status
-mise ollama:status
-
-# Pull LLM model
+# Pull model
 ollama pull qwen3:14b
 
-# In .env:
-LLM_PROVIDER=ollama
-LLM_MODEL=qwen3:14b
-
-# Stop Ollama when done
-mise ollama:stop
+# In daemon.yaml:
+# llm:
+#   provider: "ollama"
+#   model: "qwen3:14b"
+#   ollama_base_url: "http://localhost:11434"
 ```
 
 #### Option 2: Production (Claude)
 
-```bash
-# In .env:
-LLM_PROVIDER=anthropic
-LLM_MODEL=claude-sonnet-4-20250514
-ANTHROPIC_API_KEY=sk-ant-...
+```yaml
+# In daemon.yaml:
+llm:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+
+api_keys:
+  anthropic_api_key: "sk-ant-..."
 ```
 
 #### Option 3: Production (OpenAI)
 
-```bash
-# In .env:
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o
-OPENAI_API_KEY=sk-...
+```yaml
+# In daemon.yaml:
+llm:
+  provider: "openai"
+  model: "gpt-4o"
+
+api_keys:
+  openai_api_key: "sk-..."
 ```
 
 ## Usage

@@ -597,9 +597,10 @@ daemon:
     rate_limit_per_symbol_minutes: 60
 
     telegram:
-      # Telegram bot token (or set TELEGRAM_BOT_TOKEN env var)
+      # Telegram bot token and chat ID
+      # Get bot token from @BotFather on Telegram
+      # Get chat ID from @userinfobot
       # bot_token: "your_bot_token_here"
-      # Telegram chat ID (or set TELEGRAM_CHAT_ID env var)
       # chat_id: "your_chat_id_here"
 
   analysis_orchestration:
@@ -718,9 +719,71 @@ daemon:
     # cors_origins: ["http://localhost:8050", "http://localhost:5173", "http://localhost:3000"]
 
   # LLM Provider Configuration (optional, falls back to environment variables)
+  # ========================================
+  # METRICS CONFIGURATION
+  # ========================================
+  metrics:
+    # Annual risk-free rate for Sharpe ratio calculation (0.0-0.10)
+    # Default: 0.02 (2% - typical US Treasury rate)
+    risk_free_rate: 0.02
+
+    # Enable execution metrics collection for workflow performance
+    # Tracks LLM calls, latency, token usage, costs
+    execution_metrics_enabled: true
+
+    # Capture full portfolio snapshot after each trade execution
+    # Useful for detailed performance analysis but increases storage
+    portfolio_snapshot_on_trade: false
+
+  # ========================================
+  # UI CONFIGURATION
+  # ========================================
+  ui:
+    # Theme override (nord-dark, nord-light, or null for auto-detect)
+    # Auto-detect uses terminal settings (TERM_PROGRAM, COLORFGBG)
+    theme: null
+
+    # Dashboard web server settings
+    dashboard_host: "127.0.0.1"
+    dashboard_port: 8050
+
+    # Daemon API URL for dashboard to connect to
+    daemon_api_url: "http://localhost:8484"
+
+    # Dashboard refresh interval in milliseconds (1000-60000)
+    dashboard_refresh_interval: 5000
+
+  # ========================================
+  # LOGGING CONFIGURATION
+  # ========================================
+  logging:
+    # Log level: DEBUG, INFO, WARNING, ERROR
+    # DEBUG: Verbose output including LLM prompts/responses
+    # INFO: Standard operational logs (recommended)
+    # WARNING: Only warnings and errors
+    # ERROR: Only errors
+    log_level: "INFO"
+
+  # ========================================
+  # LLM CONFIGURATION
+  # ========================================
   llm:
-    # provider: "ollama"      # Falls back to LLM_PROVIDER (ollama, anthropic, openai)
-    # model: "qwen3:14b"      # Falls back to LLM_MODEL
+    # LLM provider: ollama (local), anthropic (Claude), openai (GPT)
+    provider: "ollama"
+
+    # Model name
+    # Ollama: qwen3:14b, llama3.1:8b, etc.
+    # Anthropic: claude-sonnet-4-20250514, claude-haiku-4-20250414
+    # OpenAI: gpt-4o, gpt-4o-mini
+    model: "qwen3:14b"
+
+    # Maximum concurrent LLM requests (1-20)
+    # Controls parallelism in multi-agent workflows
+    # Higher = faster analysis but more resource intensive
+    max_concurrent: 5
+
+    # Ollama base URL (only for ollama provider)
+    ollama_base_url: "http://localhost:11434"
 
   # Data Sources Configuration
   data_sources:
@@ -788,24 +851,27 @@ daemon:
 
   # API Keys Configuration (optional, falls back to environment variables)
   # Config keys take priority over env vars when both are present
+  # ========================================
+  # API KEYS CONFIGURATION
+  # ========================================
   api_keys:
     # Data providers
-    # alpha_vantage_api_key: "YOUR_KEY_HERE"  # Falls back to ALPHA_VANTAGE_API_KEY
-    # marketaux_api_key: "YOUR_KEY_HERE"      # Falls back to MARKETAUX_API_KEY
+    # alpha_vantage_api_key: "YOUR_KEY_HERE"  # Required for alpha_vantage market data
+    # marketaux_api_key: "YOUR_KEY_HERE"      # Optional for news data
 
     # Broker credentials (paper and live)
-    # alpaca_api_key: "YOUR_KEY_HERE"         # Falls back to ALPACA_API_KEY
-    # alpaca_secret_key: "YOUR_SECRET_HERE"   # Falls back to ALPACA_SECRET_KEY
-    # alpaca_paper_api_key: "YOUR_PAPER_KEY_HERE"      # Falls back to ALPACA_PAPER_API_KEY (optional override)
-    # alpaca_paper_secret_key: "YOUR_PAPER_SECRET_HERE"  # Falls back to ALPACA_PAPER_SECRET_KEY (optional override)
+    # alpaca_api_key: "YOUR_KEY_HERE"         # Live trading credentials
+    # alpaca_secret_key: "YOUR_SECRET_HERE"
+    # alpaca_paper_api_key: "YOUR_PAPER_KEY_HERE"      # Paper trading override (optional)
+    # alpaca_paper_secret_key: "YOUR_PAPER_SECRET_HERE"
 
-    # Not yet supported (config model accepts but DaemonRunner doesn't use):
-    # finnhub_api_key: "YOUR_KEY_HERE"        # Falls back to FINNHUB_API_KEY
-    # reddit_client_id: "YOUR_CLIENT_ID"      # Falls back to REDDIT_CLIENT_ID
-    # reddit_client_secret: "YOUR_CLIENT_SECRET"  # Falls back to REDDIT_CLIENT_SECRET
-    # reddit_user_agent: "ai-casino/1.0"      # Falls back to REDDIT_USER_AGENT
+    # Additional data sources (optional)
+    # finnhub_api_key: "YOUR_KEY_HERE"        # For fundamental/earnings data
+    # reddit_client_id: "YOUR_CLIENT_ID"      # For social sentiment
+    # reddit_client_secret: "YOUR_CLIENT_SECRET"
+    # reddit_user_agent: "ai-casino/1.0"
 
-    # LLM providers (choose one based on LLM_PROVIDER setting)
-    # anthropic_api_key: "YOUR_ANTHROPIC_KEY"  # Falls back to ANTHROPIC_API_KEY
-    # openai_api_key: "YOUR_OPENAI_KEY"       # Falls back to OPENAI_API_KEY
-    # openai_api_base: "https://api.openai.com/v1"  # Falls back to OPENAI_API_BASE (optional custom endpoint)
+    # LLM providers (required based on llm.provider setting)
+    # anthropic_api_key: "YOUR_ANTHROPIC_KEY"  # Required if provider=anthropic
+    # openai_api_key: "YOUR_OPENAI_KEY"       # Required if provider=openai
+    # openai_api_base: "https://api.openai.com/v1"  # Custom endpoint (optional)

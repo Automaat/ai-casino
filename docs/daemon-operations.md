@@ -171,41 +171,24 @@ daemon:
 | `screening.watchlist_name` | `str` | `"daemon-screening"` | Watchlist file name for exports |
 | `state.state_file` | `str` | `"~/.ai-casino/daemon-state.json"` | State persistence path |
 
-### Environment Variables
+### Configuration
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ALPHA_VANTAGE_API_KEY` | Yes | — | Market data API key |
-| `MARKETAUX_API_KEY` | No | — | News data API key |
-| `FINNHUB_API_KEY` | No | — | Finnhub social sentiment API key |
-| `REDDIT_CLIENT_ID` | No | — | Reddit API client ID |
-| `REDDIT_CLIENT_SECRET` | No | — | Reddit API client secret |
-| `REDDIT_USER_AGENT` | No | `ai-casino/1.0` | Reddit API user agent |
-| `ALPACA_API_KEY` | No | — | Broker API key (live trading) |
-| `ALPACA_SECRET_KEY` | No | — | Broker secret key (live trading) |
-| `ALPACA_PAPER_API_KEY` | No | — | Broker API key (paper trading) |
-| `ALPACA_PAPER_SECRET_KEY` | No | — | Broker secret key (paper trading) |
-| `ALPACA_BASE_URL` | No | `https://paper-api.alpaca.markets` | Alpaca API base URL |
-| `DATABASE_URL` | No | — | Database connection URL (SQLite/PostgreSQL) |
-| `LLM_PROVIDER` | No | `ollama` | LLM provider (ollama/anthropic/openai) |
-| `LLM_MODEL` | No | `qwen3:14b` | LLM model name |
-| `LLM_MAX_CONCURRENT` | No | `5` | Max concurrent LLM calls (1-20) |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API key |
-| `OPENAI_API_KEY` | No | — | OpenAI API key |
-| `OPENAI_API_BASE` | No | — | Custom OpenAI API base URL |
-| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
-| `MAX_POSITION_RISK` | No | `2.0` | Max risk per trade (%) |
-| `MAX_EXPOSURE` | No | `80.0` | Max total exposure (%) |
-| `MAX_SINGLE_POSITION` | No | `20.0` | Max single position (%) |
-| `RISK_FREE_RATE` | No | `0.02` | Risk-free rate for metrics (2%) |
-| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token for notifications |
-| `TELEGRAM_CHAT_ID` | No | — | Telegram chat ID for notifications |
-| `DAEMON_API_URL` | No | `http://localhost:8484` | Daemon API URL for dashboard |
-| `DASHBOARD_HOST` | No | `127.0.0.1` | Dashboard web server host |
-| `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG/INFO/WARNING/ERROR) |
-| `EXECUTION_METRICS` | No | `true` | Enable execution metrics collection |
-| `PORTFOLIO_SNAPSHOT_ON_TRADE` | No | `false` | Snapshot portfolio state before trades |
-| `AI_CASINO_THEME` | No | — | TUI theme override |
+All daemon configuration is YAML-based. See `docs/daemon.yaml.example` for comprehensive documentation.
+
+**Key configuration sections:**
+
+| Section           | Purpose                                   |
+|:------------------|:------------------------------------------|
+| `llm`             | LLM provider, model, concurrency settings |
+| `api_keys`        | API keys for data providers and brokers   |
+| `logging`         | Log level configuration                   |
+| `metrics`         | Performance metrics and risk-free rate    |
+| `ui`              | Dashboard and TUI theme settings          |
+| `database`        | PostgreSQL persistence configuration      |
+| `position_sizing` | Risk management limits                    |
+| `notifications`   | Telegram notification settings            |
+
+See [Configuration Guide](../README.md#configuration) for setup instructions.
 
 ### After-Hours Screening
 
