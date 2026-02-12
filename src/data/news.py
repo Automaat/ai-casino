@@ -53,9 +53,9 @@ class NewsFetcher:
         self,
         api_key: str | None = None,
         historical_cache: HistoricalCache | None = None,
-        circuit_breaker: "CircuitBreaker | None" = None,
-        circuit_breaker_registry: "CircuitBreakerRegistry | None" = None,
-        circuit_breaker_config: "CircuitBreakerConfig | None" = None,
+        circuit_breaker: CircuitBreaker | None = None,
+        circuit_breaker_registry: CircuitBreakerRegistry | None = None,
+        circuit_breaker_config: CircuitBreakerConfig | None = None,
     ) -> None:
         """Initialize news fetcher.
 
