@@ -5,7 +5,6 @@ services:
   daemon:
     # Mount source code for live reload (restart daemon after code changes)
     volumes:
-      - ${HOME}/.ai-casino:/root/.ai-casino
       - ./src:/app/src:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
     environment:
@@ -30,6 +29,8 @@ services:
       - ./frontend/svelte.config.js:/app/svelte.config.js:ro
       - ./frontend/vite.config.ts:/app/vite.config.ts:ro
       - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+    # Override base ports: dev uses Vite (5173) instead of nginx (8050:80)
+    # Compose merges lists, but different target ports prevent conflicts
     ports:
       - "5173:5173"
     healthcheck:
