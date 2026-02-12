@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from src.cache.historical import HistoricalCache
-from src.daemon.events import EventSignal, NewsEvent, Sentiment, TriageResult, Urgency
+from src.daemon.events import EventSignal, Sentiment, TriageResult, Urgency
 from src.daemon.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
 from src.data.base_news_fetcher import BaseNewsFetcher
 from src.data.news import NewsArticle
