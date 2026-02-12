@@ -546,6 +546,27 @@ daemon:
     # Maximum concurrent re-analyses
     max_concurrent_analyses: 2
 
+  trump_watcher:
+    # Trump Truth Social watcher (monitor market-relevant Trump posts)
+    # Polls CNN's Truth Social archive for Trump's posts
+    # Triggers LLM triage to identify affected stocks
+    enabled: false
+    # Polling interval (minutes, 1-60)
+    # Default: 5 (Trump posts can move markets quickly)
+    poll_interval_minutes: 5
+    # Relevance score threshold (0.0-1.0)
+    # Only analyze events above this relevance
+    # Default: 0.7 (fairly selective)
+    relevance_threshold: 0.7
+    # Cooldown between re-analyses (minutes, 1-120)
+    # Prevents re-analyzing same stock too frequently
+    # Default: 15 (prevent analysis storms)
+    cooldown_minutes: 15
+    # Maximum concurrent re-analyses
+    # Limits parallel stock analyses per cycle
+    # Default: 2 (balance speed vs resource usage)
+    max_concurrent_analyses: 2
+
   filings_watcher:
     # SEC filings watcher (monitor 8-K, 4, 13D filings)
     enabled: false

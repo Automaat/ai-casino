@@ -16,8 +16,8 @@ from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.event_watcher import EventWatcher
 from src.daemon.runner import DaemonRunner
-from src.daemon.trump_watcher import TrumpWatcher
-from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher
+from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher, TrumpWatcher
+from src.daemon.watchers.trump_watcher import TrumpWatcherConfig
 from src.di.container import create_container
 from src.utils.logging import sanitize_log_record
 
@@ -69,10 +69,10 @@ def daemon(
 
 
 def trump_daemon(
-    poll_interval: Annotated[int, typer.Option("--interval", "-i", help="Poll interval in seconds")] = 60,
+    poll_interval: Annotated[int, typer.Option("--interval", "-i", help="Poll interval in minutes")] = 5,
     max_analyses: Annotated[
         int, typer.Option("--max-analyses", "-m", help="Max stocks to analyze per signal")
-    ] = 5,
+    ] = 2,
 ) -> None:
     """Run Trump social media watcher daemon.
 
@@ -92,7 +92,14 @@ def trump_daemon(
 
     try:
         container = create_container()
-        watcher = TrumpWatcher(poll_interval=poll_interval, max_analyses=max_analyses, container=container)
+        historical_cache = container.historical_cache()
+
+        config = TrumpWatcherConfig(
+            poll_interval=poll_interval * 60,
+            max_concurrent_analyses=max_analyses,
+        )
+
+        watcher = TrumpWatcher(historical_cache=historical_cache, config=config, container=container)
         asyncio.run(watcher.run())
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Trump watcher interrupted[/bold yellow]")

@@ -166,6 +166,9 @@ class DaemonLifecycle:
         if self.components.social_watcher:
             watchers.append(("SocialWatcher", self.components.social_watcher))
 
+        if self.components.trump_watcher:
+            watchers.append(("TrumpWatcher", self.components.trump_watcher))
+
         if not watchers:
             return
 
@@ -198,6 +201,8 @@ class DaemonLifecycle:
                 self.components.news_watcher.running = False
             if self.components.social_watcher:
                 self.components.social_watcher.running = False
+            if self.components.trump_watcher:
+                self.components.trump_watcher.running = False
 
             # Wait for tasks to complete (up to 5 seconds)
             _done, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)

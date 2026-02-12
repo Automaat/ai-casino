@@ -42,6 +42,7 @@ def minimal_daemon_components(mock_news_watcher):
     components.state = DaemonState()
     components.news_watcher = mock_news_watcher
     components.social_watcher = None
+    components.trump_watcher = None
     components.position_manager = None
 
     return components
@@ -165,6 +166,7 @@ async def test_multiple_watchers_run_independently():
     components.state = DaemonState()
     components.news_watcher = news_watcher
     components.social_watcher = social_watcher
+    components.trump_watcher = None
     components.position_manager = None
 
     lifecycle = DaemonLifecycle(components)
@@ -214,6 +216,7 @@ async def test_shutdown_waits_then_cancels():
     components.state = DaemonState()
     components.news_watcher = mock_watcher
     components.social_watcher = None
+    components.trump_watcher = None
     components.position_manager = None
 
     lifecycle = DaemonLifecycle(components)

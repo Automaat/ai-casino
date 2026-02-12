@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.daemon.watchers.news_watcher import NewsWatcher
     from src.daemon.watchers.social_watcher import SocialWatcher
+    from src.daemon.watchers.trump_watcher import TrumpWatcher
     from src.di.container import AppContainer
     from src.discovery.engine import StockDiscoveryEngine
 
@@ -81,6 +82,7 @@ class DaemonComponents:
     coordinator: TradingCoordinator | None = None
     news_watcher: NewsWatcher | None = None
     social_watcher: SocialWatcher | None = None
+    trump_watcher: TrumpWatcher | None = None
 
 
 class DaemonFactory:
@@ -199,31 +201,7 @@ class DaemonFactory:
             profiler = self._create_profiler()
 
         # Phase 12: Event watchers (if enabled)
-        news_watcher = None
-        social_watcher = None
-        if self.config.news_watcher.enabled or self.config.social_watcher.enabled:
-            # Call provider functions directly to pass container (providers.Self() doesn't work reliably)
-            from src.di.providers import watchers as watcher_providers
-
-            news_watcher = (
-                watcher_providers.create_news_watcher(
-                    self._container.historical_cache(),
-                    self.config,
-                    self._container,
-                )
-                if self.config.news_watcher.enabled
-                else None
-            )
-            social_watcher = (
-                watcher_providers.create_social_watcher(
-                    self._container.historical_cache(),
-                    self.config,
-                    self._container,
-                )
-                if self.config.social_watcher.enabled
-                else None
-            )
-            logger.info("Event watchers initialized")
+        news_watcher, social_watcher, trump_watcher = self._create_event_watchers(historical_cache)
 
         # Phase 13: Assemble components
         components = DaemonComponents(
@@ -253,6 +231,7 @@ class DaemonFactory:
             profiler=profiler,
             news_watcher=news_watcher,
             social_watcher=social_watcher,
+            trump_watcher=trump_watcher,
         )
 
         # Phase 14: Create task runner (needs components reference)
@@ -555,6 +534,55 @@ class DaemonFactory:
 
         logger.info(f"Profiler enabled: {profiler}")
         return profiler
+
+    def _create_event_watchers(
+        self, historical_cache: HistoricalCache
+    ) -> tuple[NewsWatcher | None, SocialWatcher | None, TrumpWatcher | None]:
+        """Create event watchers based on config.
+
+        Args:
+            historical_cache: Historical cache for deduplication
+
+        Returns:
+            Tuple of (news_watcher, social_watcher, trump_watcher)
+        """
+        news_watcher = None
+        social_watcher = None
+        trump_watcher = None
+
+        if not (
+            self.config.news_watcher.enabled
+            or self.config.social_watcher.enabled
+            or self.config.trump_watcher.enabled
+        ):
+            return news_watcher, social_watcher, trump_watcher
+
+        # Call provider functions directly to pass container (providers.Self() doesn't work reliably)
+        from src.di.providers import watchers as watcher_providers
+
+        if self.config.news_watcher.enabled:
+            news_watcher = watcher_providers.create_news_watcher(
+                historical_cache,
+                self.config,
+                self._container,
+            )
+
+        if self.config.social_watcher.enabled:
+            social_watcher = watcher_providers.create_social_watcher(
+                historical_cache,
+                self.config,
+                self._container,
+            )
+
+        if self.config.trump_watcher.enabled:
+            trump_watcher = watcher_providers.create_trump_watcher(
+                historical_cache,
+                self.config,
+                self._container,
+            )
+
+        logger.info("Event watchers initialized")
+        return news_watcher, social_watcher, trump_watcher
 
     def init_workflow(self, components: DaemonComponents) -> TradingWorkflow:
         """Initialize trading workflow (lazy).
