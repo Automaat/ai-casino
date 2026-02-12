@@ -179,6 +179,9 @@ class AlpacaBroker:
     ) -> OrderStatus:
         """Submit market order with optional stop loss.
 
+        Automatically cancels conflicting pending SELL orders before placing new SELL orders
+        to prevent "insufficient qty available" errors.
+
         Args:
             symbol: Stock ticker symbol
             qty: Number of shares to trade
@@ -200,6 +203,10 @@ class AlpacaBroker:
         else:
             msg = f"Invalid order side: {side!r}. Expected 'buy' or 'sell'."
             raise ValueError(msg)
+
+        # Check for conflicting pending SELL orders
+        if normalized_side == "sell":
+            self._cancel_pending_sell_orders(symbol)
 
         try:
             order_data = MarketOrderRequest(
@@ -321,6 +328,62 @@ class AlpacaBroker:
             msg = f"Failed to submit order: {e}"
             logger.opt(exception=True).error(msg)
             raise BrokerAPIError(msg) from e
+
+    def _cancel_pending_sell_orders(self, symbol: str) -> None:
+        """Cancel pending SELL orders for symbol to free up shares.
+
+        Args:
+            symbol: Stock ticker symbol
+        """
+        open_orders = self.get_open_orders(symbol)
+        pending_sell_orders = [o for o in open_orders if o.side == OrderSide.SELL and o.symbol == symbol]
+
+        if not pending_sell_orders:
+            return
+
+        pending_qty = sum(float(o.qty or 0) for o in pending_sell_orders)
+        logger.warning(
+            f"{symbol}: {len(pending_sell_orders)} pending SELL orders hold "
+            f"{pending_qty:.0f} shares, cancelling"
+        )
+
+        for order in pending_sell_orders:
+            order_id = str(order.id)
+            try:
+                self.cancel_order(order_id)
+                logger.info(f"Cancelled conflicting order {order_id} for {symbol}")
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to cancel order {order_id}: {e}")
+
+    def get_open_orders(self, symbol: str | None = None) -> list[Order]:
+        """Get all open orders, optionally filtered by symbol.
+
+        Args:
+            symbol: Optional symbol filter
+
+        Returns:
+            List of open orders
+        """
+        try:
+            from alpaca.trading.enums import QueryOrderStatus
+            from alpaca.trading.requests import GetOrdersRequest
+
+            request = GetOrdersRequest(
+                status=QueryOrderStatus.OPEN,
+                symbols=[symbol] if symbol else None,
+            )
+            orders = self.client.get_orders(filter=request)
+
+            # Handle both list and dict responses
+            if isinstance(orders, list):
+                return orders
+            if isinstance(orders, dict):
+                logger.warning(f"Unexpected dict response from get_orders: {orders}")
+                return []
+            return []
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to get open orders: {e}")
+            return []
 
     def cancel_order(self, order_id: str) -> None:
         """Cancel an existing order.
