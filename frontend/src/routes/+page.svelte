@@ -3,6 +3,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
+	import BarChart from '$lib/components/charts/BarChart.svelte';
 	import ServiceHealthBadge from '$lib/components/ui/ServiceHealthBadge.svelte';
 	import GamePlanCard from '$lib/components/ui/GamePlanCard.svelte';
 	import WatchlistBreakdown from '$lib/components/ui/WatchlistBreakdown.svelte';
@@ -15,7 +16,7 @@
 		degradation
 	} from '$lib/stores/dashboard';
 	import { formatPercent, formatDateShort } from '$lib/utils/format';
-	import type { AnalysisRecordResponse } from '$lib/types/api';
+	import type { AnalysisRecordResponse, Signal } from '$lib/types/api';
 
 	$: summary = $stateSummary;
 	$: services = $serviceHealth;
@@ -32,6 +33,39 @@
 			time: formatDateShort(a.timestamp),
 			value: a.confidence
 		}));
+
+	// Histogram: analyses per hour (last 24 hours)
+	$: analysesPerHour = (() => {
+		const now = new Date();
+		const hourBuckets: Record<string, { count: number; bySignal: Record<Signal, number> }> = {};
+
+		// Initialize 24 hour buckets
+		for (let i = 23; i >= 0; i--) {
+			const hourDate = new Date(now.getTime() - i * 60 * 60 * 1000);
+			const hourLabel = `${hourDate.getHours().toString().padStart(2, '0')}:00`;
+			hourBuckets[hourLabel] = { count: 0, bySignal: { BUY: 0, SELL: 0, HOLD: 0 } };
+		}
+
+		// Count analyses per hour
+		recentAnalyses.forEach(analysis => {
+			const analysisDate = new Date(analysis.timestamp);
+			const hoursSince = Math.floor((now.getTime() - analysisDate.getTime()) / (60 * 60 * 1000));
+			if (hoursSince < 24 && hoursSince >= 0) {
+				const hourLabel = `${analysisDate.getHours().toString().padStart(2, '0')}:00`;
+				if (hourBuckets[hourLabel]) {
+					hourBuckets[hourLabel].count++;
+					hourBuckets[hourLabel].bySignal[analysis.signal]++;
+				}
+			}
+		});
+
+		// Convert to array format for chart
+		return Object.entries(hourBuckets).map(([label, data]) => ({
+			label,
+			value: data.count,
+			color: data.count > 0 ? '#3b82f6' : '#334155'
+		}));
+	})();
 
 	const analysisColumns = [
 		{
@@ -112,6 +146,23 @@
 				height={300}
 				color="#3b82f6"
 				yAxisLabel="Confidence"
+			/>
+		{:else}
+			<div class="text-center py-12 text-slate-400">
+				No analysis data available
+			</div>
+		{/if}
+	</Card>
+
+	<!-- Analyses Per Hour Histogram -->
+	<Card title="Analyses Per Hour (Last 24h)">
+		{#if analysesPerHour.length > 0}
+			<BarChart
+				data={analysesPerHour}
+				height={300}
+				defaultColor="#3b82f6"
+				yAxisLabel="Count"
+				xAxisLabel="Hour"
 			/>
 		{:else}
 			<div class="text-center py-12 text-slate-400">
