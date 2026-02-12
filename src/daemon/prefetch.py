@@ -118,7 +118,20 @@ class DataPrefetcher:
 
         # News (uses Marketaux, no AV rate limit concern)
         try:
-            articles = asyncio.run(self._news_fetcher.afetch_company_news(symbol))
+            # Handle calling async from sync - detect if event loop is running
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run()
+                articles = asyncio.run(self._news_fetcher.afetch_company_news(symbol))
+            else:
+                # Event loop already running, use run_in_executor
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._news_fetcher.afetch_company_news(symbol))
+                    articles = future.result()
+
             key = self._cache_key("news", symbol)
             self._cache.set(
                 key,
