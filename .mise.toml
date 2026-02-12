@@ -34,7 +34,8 @@ depends = ["format:check", "lint", "typecheck", "test"]
 
 [tasks.audit]
 description = "Run pip-audit to check for CVEs"
-run = "uv run --all-extras pip-audit"
+# CVE-2025-69872: diskcache pickle vulnerability - mitigated via JSONDisk (see src/data/websearch.py)
+run = "uv run --all-extras pip-audit --ignore-vuln CVE-2025-69872"
 
 [tasks."ollama:start"]
 description = "Start Ollama server in background"
