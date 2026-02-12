@@ -42,20 +42,16 @@ def test_market_data_latest_volume(sample_df):
     assert market_data.latest_volume == 1200000
 
 
-def test_fetcher_init_alpha_vantage(monkeypatch):
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
-
+def test_fetcher_init_alpha_vantage():
     with patch("src.data.market.TimeSeries") as mock_ts:
-        fetcher = MarketDataFetcher(use_alpha_vantage=True)
+        fetcher = MarketDataFetcher(api_key="test-key", use_alpha_vantage=True)
 
         assert fetcher.use_alpha_vantage is True
         mock_ts.assert_called_once_with(key="test-key", output_format="pandas")
 
 
-def test_fetcher_init_alpha_vantage_no_key(monkeypatch):
-    monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
-
-    with pytest.raises(ValueError, match="ALPHA_VANTAGE_API_KEY not set"):
+def test_fetcher_init_alpha_vantage_no_key():
+    with pytest.raises(ValueError, match="alpha_vantage_api_key not set in config"):
         MarketDataFetcher(use_alpha_vantage=True)
 
 
@@ -64,15 +60,13 @@ def test_fetcher_init_yfinance():
     assert fetcher.use_alpha_vantage is False
 
 
-def test_fetch_daily_alpha_vantage(monkeypatch, sample_df):
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
-
+def test_fetch_daily_alpha_vantage(sample_df):
     with patch("src.data.market.TimeSeries") as mock_ts:
         mock_instance = MagicMock()
         mock_ts.return_value = mock_instance
         mock_instance.get_daily.return_value = (sample_df.copy(), {})
 
-        fetcher = MarketDataFetcher(use_alpha_vantage=True)
+        fetcher = MarketDataFetcher(api_key="test-key", use_alpha_vantage=True)
         result = fetcher.fetch_daily("AAPL")
 
         assert result.symbol == "AAPL"
@@ -108,15 +102,14 @@ def test_fetch_daily_yfinance_empty():
             fetcher.fetch_daily("AAPL")
 
 
-def test_fetch_intraday(monkeypatch, sample_df):
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
+def test_fetch_intraday(sample_df):
 
     with patch("src.data.market.TimeSeries") as mock_ts:
         mock_instance = MagicMock()
         mock_ts.return_value = mock_instance
         mock_instance.get_intraday.return_value = (sample_df.copy(), {})
 
-        fetcher = MarketDataFetcher(use_alpha_vantage=True)
+        fetcher = MarketDataFetcher(api_key="test-key", use_alpha_vantage=True)
         result = fetcher.fetch_intraday("AAPL", interval="5min")
 
         assert result.symbol == "AAPL"
@@ -141,8 +134,7 @@ def test_repr():
         assert repr(fetcher) == "MarketDataFetcher(source=yfinance)"
 
 
-def test_fetch_alpha_vantage_retries_on_error(monkeypatch, sample_df):
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
+def test_fetch_alpha_vantage_retries_on_error(sample_df):
 
     with patch("src.data.market.TimeSeries") as mock_ts:
         mock_instance = MagicMock()
@@ -152,7 +144,7 @@ def test_fetch_alpha_vantage_retries_on_error(monkeypatch, sample_df):
             (sample_df.copy(), {}),
         ]
 
-        fetcher = MarketDataFetcher(use_alpha_vantage=True)
+        fetcher = MarketDataFetcher(api_key="test-key", use_alpha_vantage=True)
         result = fetcher.fetch_daily("AAPL")
 
         assert result.symbol == "AAPL"
@@ -189,8 +181,7 @@ def test_fetch_yfinance_no_retry_on_value_error():
         assert mock_instance.history.call_count == 1
 
 
-def test_fetch_intraday_retries_on_error(monkeypatch, sample_df):
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
+def test_fetch_intraday_retries_on_error(sample_df):
 
     with patch("src.data.market.TimeSeries") as mock_ts:
         mock_instance = MagicMock()
@@ -200,22 +191,21 @@ def test_fetch_intraday_retries_on_error(monkeypatch, sample_df):
             (sample_df.copy(), {}),
         ]
 
-        fetcher = MarketDataFetcher(use_alpha_vantage=True)
+        fetcher = MarketDataFetcher(api_key="test-key", use_alpha_vantage=True)
         result = fetcher.fetch_intraday("AAPL", interval="5min")
 
         assert result.symbol == "AAPL"
         assert mock_instance.get_intraday.call_count == 2
 
 
-def test_fetch_alpha_vantage_exhausts_retries(monkeypatch):
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
+def test_fetch_alpha_vantage_exhausts_retries():
 
     with patch("src.data.market.TimeSeries") as mock_ts:
         mock_instance = MagicMock()
         mock_ts.return_value = mock_instance
         mock_instance.get_daily.side_effect = Exception("API error")
 
-        fetcher = MarketDataFetcher(use_alpha_vantage=True)
+        fetcher = MarketDataFetcher(api_key="test-key", use_alpha_vantage=True)
 
         with pytest.raises(Exception, match="API error"):
             fetcher.fetch_daily("AAPL")

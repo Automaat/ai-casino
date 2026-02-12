@@ -34,11 +34,6 @@ def test_fetcher_init_with_key():
     assert fetcher.api_key == "test-key"
 
 
-def test_fetcher_init_from_env(monkeypatch):
-    monkeypatch.setenv("FINNHUB_API_KEY", "env-key")
-    fetcher = FinnhubNewsFetcher()
-    assert fetcher.api_key == "env-key"
-
 
 def test_fetcher_init_no_key(monkeypatch):
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)

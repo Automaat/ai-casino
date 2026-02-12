@@ -38,11 +38,6 @@ def test_fetcher_init_with_key():
     assert fetcher.api_key == "test-key"
 
 
-def test_fetcher_init_from_env(monkeypatch):
-    monkeypatch.setenv("NEWSDATA_API_KEY", "env-key")
-    fetcher = NewsDataFetcher()
-    assert fetcher.api_key == "env-key"
-
 
 def test_fetcher_init_no_key(monkeypatch):
     monkeypatch.delenv("NEWSDATA_API_KEY", raising=False)

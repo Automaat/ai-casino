@@ -54,8 +54,7 @@ def mock_indicator_response():
 @pytest.fixture
 def fetcher(tmp_path):
     """Create FinnhubFetcher with temp cache dir and mock API key."""
-    with patch.dict("os.environ", {"FINNHUB_API_KEY": "test_api_key"}):
-        return FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+    return FinnhubFetcher(api_key="test_api_key", cache_dir=str(tmp_path / "cache"))
 
 
 class TestSocialSentimentEntry:
@@ -174,14 +173,12 @@ class TestFinnhubFetcher:
     def test_repr_shows_auth_status(self, tmp_path):
         """Test __repr__ shows authentication status."""
         # Authenticated
-        with patch.dict("os.environ", {"FINNHUB_API_KEY": "test"}):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache1"))
-            assert "authenticated=True" in repr(fetcher)
+        fetcher = FinnhubFetcher(api_key="test", cache_dir=str(tmp_path / "cache1"))
+        assert "authenticated=True" in repr(fetcher)
 
         # Not authenticated
-        with patch.dict("os.environ", {}, clear=True):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache2"))
-            assert "authenticated=False" in repr(fetcher)
+        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache2"))
+        assert "authenticated=False" in repr(fetcher)
 
     def test_cache_key_deterministic(self, fetcher):
         """Test cache key generation is deterministic."""

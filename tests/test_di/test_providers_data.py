@@ -75,10 +75,6 @@ def test_create_market_fetcher_alpha_vantage(monkeypatch, mock_historical_cache)
     assert fetcher.use_alpha_vantage is True
 
 
-def test_create_market_fetcher_env_fallback(monkeypatch, mock_historical_cache):
-    """Test MarketDataFetcher API key falls back to env var when using Alpha Vantage."""
-    from src.daemon.config import DataSourcesConfig
-
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
     config = DaemonConfig(data_sources=DataSourcesConfig(market_data="alpha_vantage"))
     fetcher = data_providers.create_market_fetcher(config, mock_historical_cache)
@@ -96,12 +92,6 @@ def test_create_news_fetcher(mock_daemon_config, mock_historical_cache):
     assert fetcher.api_key == "test_mx_key"
 
 
-def test_create_news_fetcher_env_fallback(monkeypatch, mock_historical_cache):
-    """Test NewsFetcher API key falls back to env var."""
-    monkeypatch.setenv("MARKETAUX_API_KEY", "env_key")
-    config = DaemonConfig()
-    fetcher = data_providers.create_news_fetcher(config, mock_historical_cache)
-
     assert isinstance(fetcher, NewsFetcher)
 
 
@@ -114,12 +104,6 @@ def test_create_fundamental_fetcher(mock_daemon_config, mock_historical_cache):
     assert fetcher.api_key == "test_av_key"
 
 
-def test_create_fundamental_fetcher_env_fallback(monkeypatch, mock_historical_cache):
-    """Test FundamentalDataFetcher API key falls back to env var."""
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
-    config = DaemonConfig()
-    fetcher = data_providers.create_fundamental_fetcher(config, mock_historical_cache)
-
     assert isinstance(fetcher, FundamentalDataFetcher)
 
 
@@ -131,12 +115,6 @@ def test_create_finnhub_fetcher(mock_daemon_config):
     assert fetcher._api_key == "test_fh_key"
 
 
-def test_create_finnhub_fetcher_env_fallback(monkeypatch):
-    """Test FinnhubFetcher API key falls back to env var."""
-    monkeypatch.setenv("FINNHUB_API_KEY", "env_key")
-    config = DaemonConfig()
-    fetcher = data_providers.create_finnhub_fetcher(config)
-
     assert isinstance(fetcher, FinnhubFetcher)
 
 
@@ -147,14 +125,6 @@ def test_create_reddit_fetcher(mock_daemon_config, mock_historical_cache):
     assert isinstance(fetcher, RedditFetcher)
     assert fetcher._historical_cache is mock_historical_cache
 
-
-def test_create_reddit_fetcher_env_fallback(monkeypatch, mock_historical_cache):
-    """Test RedditFetcher credentials fall back to env vars."""
-    monkeypatch.setenv("REDDIT_CLIENT_ID", "env_id")
-    monkeypatch.setenv("REDDIT_CLIENT_SECRET", "env_secret")
-    monkeypatch.setenv("REDDIT_USER_AGENT", "env_agent")
-    config = DaemonConfig()
-    fetcher = data_providers.create_reddit_fetcher(config, mock_historical_cache)
 
     assert isinstance(fetcher, RedditFetcher)
 
@@ -242,12 +212,5 @@ def test_create_alpaca_broker_live(mock_historical_cache):
     assert broker.paper is False
     assert broker._cache is mock_historical_cache
 
-
-def test_create_alpaca_broker_env_fallback(monkeypatch, mock_historical_cache):
-    """Test AlpacaBroker credentials fall back to env vars."""
-    monkeypatch.setenv("ALPACA_API_KEY", "env_key")
-    monkeypatch.setenv("ALPACA_SECRET_KEY", "env_secret")
-    config = DaemonConfig()
-    broker = data_providers.create_alpaca_broker(config, mock_historical_cache)
 
     assert isinstance(broker, AlpacaBroker)
