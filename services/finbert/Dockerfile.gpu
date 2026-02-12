@@ -1,5 +1,5 @@
 # Multi-stage build for GPU-optimized FinBERT service
-FROM nvidia/cuda:12.9.1-runtime-ubuntu22.04 AS builder
+FROM nvidia/cuda:13.1.1-runtime-ubuntu22.04 AS builder
 
 # Install Python 3.12 and build tools
 RUN apt-get update && \
@@ -29,7 +29,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --user -r /tmp/requirements.txt
 
 # Runtime stage
-FROM nvidia/cuda:12.9.1-runtime-ubuntu22.04
+FROM nvidia/cuda:13.1.1-runtime-ubuntu22.04
 
 # Install Python 3.12 and curl
 RUN apt-get update && \
