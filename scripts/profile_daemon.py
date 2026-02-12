@@ -47,6 +47,7 @@ def create_profiling_config(stocks: list[str], max_concurrent: int) -> DaemonCon
     """
     config = DaemonConfig()
     config.watchlist = stocks
+    config.market_hours_only = False  # Allow profiling outside market hours
     config.analysis_orchestration.max_concurrent_analyses = max_concurrent
     config.profiling.enabled = True
     config.profiling.output_dir = "~/.ai-casino/profiles/benchmark"
