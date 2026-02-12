@@ -50,13 +50,32 @@ async def _tearsheet_async(
         period: Time period specification
         benchmark: Benchmark symbol or None
     """
-    from src.di.container import create_container
-
     console.print(f"\n[bold cyan]Generating tearsheet for {symbol}[/bold cyan]")
 
     period_days = _parse_period(period)
     console.print(f"Period: {period} ({period_days} days)")
 
+    filtered_trades = await _load_and_filter_trades(symbol, period_days)
+    if not filtered_trades:
+        return
+
+    console.print(f"Found {len(filtered_trades)} closed trades")
+
+    benchmark_returns = await _fetch_benchmark_data(benchmark, period_days)
+
+    await _generate_and_save_tearsheet(symbol, filtered_trades, benchmark, benchmark_returns)
+
+
+async def _load_and_filter_trades(symbol: str, period_days: int) -> list:
+    """Load all trades and filter by symbol and period.
+
+    Args:
+        symbol: Stock ticker symbol
+        period_days: Number of days to filter (-1 for all)
+
+    Returns:
+        List of filtered closed trades
+    """
     tracker = create_metrics_tracker()
 
     if hasattr(tracker, "trades"):
@@ -73,7 +92,7 @@ async def _tearsheet_async(
 
     if not symbol_trades:
         console.print(f"[red]No closed trades found for {symbol}[/red]")
-        return
+        return []
 
     if period_days != -1:
         cutoff = datetime.now(UTC) - timedelta(days=period_days)
@@ -82,24 +101,54 @@ async def _tearsheet_async(
         filtered_trades = symbol_trades
 
     if not filtered_trades:
-        console.print(f"[red]No trades in period {period} for {symbol}[/red]")
-        return
+        console.print(f"[red]No trades in period for {symbol}[/red]")
+        return []
 
-    console.print(f"Found {len(filtered_trades)} closed trades")
+    return filtered_trades
 
-    benchmark_returns = None
-    if benchmark:
-        console.print(f"Fetching benchmark data for {benchmark}...")
-        try:
-            container = create_container()
-            fetcher = container.yfinance_market_fetcher()
-            benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, fetcher)
-            console.print(f"[green]Benchmark data fetched ({len(benchmark_returns)} days)[/green]")
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to fetch benchmark data: {e}")
-            console.print("[yellow]Warning: Could not fetch benchmark data, continuing without[/yellow]")
-            benchmark = None
 
+async def _fetch_benchmark_data(benchmark: str | None, period_days: int) -> pd.Series | None:
+    """Fetch benchmark returns data if benchmark specified.
+
+    Args:
+        benchmark: Benchmark symbol or None
+        period_days: Number of days to fetch
+
+    Returns:
+        pandas Series with returns or None
+    """
+    if not benchmark:
+        return None
+
+    console.print(f"Fetching benchmark data for {benchmark}...")
+    try:
+        from src.di.container import create_container
+
+        container = create_container()
+        fetcher = container.yfinance_market_fetcher()
+        benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, fetcher)
+        console.print(f"[green]Benchmark data fetched ({len(benchmark_returns)} days)[/green]")
+        return benchmark_returns
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to fetch benchmark data: {e}")
+        console.print("[yellow]Warning: Could not fetch benchmark data, continuing without[/yellow]")
+        return None
+
+
+async def _generate_and_save_tearsheet(
+    symbol: str,
+    trades: list,
+    benchmark: str | None,
+    benchmark_returns: pd.Series | None,
+) -> None:
+    """Generate tearsheet and save to database.
+
+    Args:
+        symbol: Stock ticker symbol
+        trades: List of closed trades
+        benchmark: Benchmark symbol or None
+        benchmark_returns: Benchmark returns series or None
+    """
     from src.daemon.config import DaemonConfig
 
     daemon_config = DaemonConfig()
@@ -108,7 +157,7 @@ async def _tearsheet_async(
     try:
         tearsheet_obj = reporter.generate_tearsheet(
             symbol=symbol,
-            trades=filtered_trades,
+            trades=trades,
             benchmark_symbol=benchmark,
             benchmark_returns=benchmark_returns,
         )
