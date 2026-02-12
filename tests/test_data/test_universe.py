@@ -246,6 +246,91 @@ class TestStockUniverseFetcher:
         assert universe.stocks[0].symbol == "AAPL"
         assert universe.stocks[3].symbol == "BRK-B"  # . replaced with -
 
+    @patch("src.data.universe.httpx.Client")
+    def test_fetch_sp500_filters_invalid_symbols(self, mock_client_class, universe_fetcher):
+        """Test S&P 500 scraper filters symbols with spaces or length > 6."""
+        mock_html = """
+        <table id="constituents">
+            <tr><th>Symbol</th><th>Security</th><th>CIK</th><th>GICS Sector</th><th>Sub-Industry</th></tr>
+            <tr><td>AAPL</td><td>Apple Inc.</td><td>123</td><td>Tech</td><td>Hardware</td></tr>
+            <tr><td>INVALID SYMBOL</td><td>Bad Co</td><td>456</td><td>Tech</td><td>Software</td></tr>
+            <tr><td>TOOLONG</td><td>Too Long Inc</td><td>789</td><td>Tech</td><td>Services</td></tr>
+        </table>
+        """
+        mock_response = MagicMock()
+        mock_response.text = mock_html
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        universe = universe_fetcher.fetch_sp500()
+
+        assert len(universe.stocks) == 1
+        assert universe.stocks[0].symbol == "AAPL"
+
+    @patch("src.data.universe.httpx.Client")
+    def test_fetch_nasdaq100_filters_invalid_symbols(self, mock_client_class, universe_fetcher):
+        """Test NASDAQ 100 scraper filters symbols with spaces or length > 6."""
+        mock_html = """
+        <table id="constituents">
+            <tr><th>Company</th><th>Ticker</th><th>GICS Sector</th><th>GICS Sub-Industry</th></tr>
+            <tr><td>Apple Inc.</td><td>AAPL</td><td>Tech</td><td>Hardware</td></tr>
+            <tr><td>Bad Co</td><td>BAD TICK</td><td>Tech</td><td>Software</td></tr>
+            <tr><td>Too Long Inc</td><td>TOOLONG</td><td>Tech</td><td>Services</td></tr>
+        </table>
+        """
+        mock_response = MagicMock()
+        mock_response.text = mock_html
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        universe = universe_fetcher.fetch_nasdaq100()
+
+        assert len(universe.stocks) == 1
+        assert universe.stocks[0].symbol == "AAPL"
+
+    @patch("src.data.universe.httpx.Client")
+    def test_fetch_russell3000_filters_invalid_symbols(self, mock_client_class, universe_fetcher):
+        """Test Russell 3000 scraper filters symbols with spaces or length > 6."""
+        mock_csv = """Header1,Header2
+Header3,Header4
+Metadata,Row1
+Metadata,Row2
+Metadata,Row3
+Metadata,Row4
+Metadata,Row5
+Metadata,Row6
+Metadata,Row7
+Metadata,Row8
+Ticker,Name,Sector,Weight
+AAPL,"Apple Inc","Tech",3.5
+INVALID SYMBOL,"Bad Company","Tech",1.2
+TOOLONG,"Too Long Inc","Tech",0.8
+"""
+        mock_response = MagicMock()
+        mock_response.text = mock_csv
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        universe = universe_fetcher.fetch_russell3000()
+
+        assert len(universe.stocks) == 1
+        assert universe.stocks[0].symbol == "AAPL"
+
     @patch("src.data.universe.yf.download")
     @patch("src.data.universe.yf.Ticker")
     def test_fetch_us_liquid_default_filters(

@@ -4,7 +4,9 @@
 
 import type * as T from '$lib/types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8484';
+// Use Docker service name for SSR (server-side), localhost for browser (client-side)
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+	(typeof window === 'undefined' ? 'http://daemon:8484' : 'http://localhost:8484');
 
 class APIError extends Error {
 	constructor(

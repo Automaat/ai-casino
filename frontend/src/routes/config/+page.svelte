@@ -6,7 +6,7 @@
 	import { formatConfigValue, getSectionEnabled, sortConfigKeys } from '$lib/utils/config';
 	import type * as T from '$lib/types/api';
 
-	$: cfg = $config;
+	const cfg = $derived($config);
 
 	interface SectionInfo {
 		key: string;
@@ -80,7 +80,7 @@
 		}
 	];
 
-	$: accordionItems = cfg ? categories.map(category => ({
+	const accordionItems = $derived(cfg ? categories.map(category => ({
 		id: category.title.toLowerCase().replace(/\s+/g, '-'),
 		title: category.title,
 		content: () => {
@@ -89,7 +89,7 @@
 				config: cfg
 			};
 		}
-	})) : [];
+	})) : []);
 </script>
 
 <svelte:head>
