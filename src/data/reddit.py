@@ -5,6 +5,7 @@ import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import praw
 import praw.models
@@ -297,6 +298,18 @@ class RedditFetcher:
             RedditSentimentData with posts and aggregates
         """
         logger.info(f"Fetching Reddit mentions for {symbol}")
+
+        if not self._client_id or not self._client_secret:
+            logger.warning(f"Reddit credentials not configured - skipping {symbol} mentions")
+            return RedditSentimentData(
+                symbol=symbol,
+                posts=[],
+                mention_count=0,
+                avg_score=0.0,
+                avg_upvote_ratio=0.0,
+                fetched_at=datetime.now(),
+            )
+
         subreddits = subreddits or DEFAULT_SUBREDDITS
 
         cache_key = self._cache_key("mentions", symbol, ",".join(subreddits), str(limit), time_filter)
@@ -362,6 +375,34 @@ class RedditFetcher:
 
         return tickers
 
+    def _aggregate_ticker_data(
+        self, reddit: praw.Reddit, subreddits: list[str], limit: int
+    ) -> dict[str, dict[str, Any]]:
+        """Aggregate ticker mentions from subreddits."""
+        ticker_data: dict[str, dict[str, Any]] = {}
+
+        for subreddit_name in subreddits:
+            subreddit = reddit.subreddit(subreddit_name)
+
+            for submission in subreddit.hot(limit=limit):
+                text = f"{submission.title} {submission.selftext or ''}"
+                tickers = self._extract_tickers(text)
+
+                if not tickers:
+                    continue
+
+                post = self._submission_to_post(submission)
+
+                for ticker in tickers:
+                    if ticker not in ticker_data:
+                        ticker_data[ticker] = {"posts": [], "total_score": 0, "ratios": []}
+
+                    ticker_data[ticker]["posts"].append(post)
+                    ticker_data[ticker]["total_score"] += submission.score
+                    ticker_data[ticker]["ratios"].append(submission.upvote_ratio)
+
+        return ticker_data
+
     @HTTP_RETRY
     def fetch_trending_tickers(
         self,
@@ -380,6 +421,11 @@ class RedditFetcher:
             List of TrendingTicker sorted by mention_count
         """
         logger.info("Fetching trending tickers from Reddit")
+
+        if not self._client_id or not self._client_secret:
+            logger.warning("Reddit credentials not configured - skipping trending tickers")
+            return []
+
         subreddits = subreddits or DEFAULT_SUBREDDITS
 
         cache_key = self._cache_key("trending", ",".join(subreddits), str(limit), str(min_mentions))
@@ -390,29 +436,7 @@ class RedditFetcher:
 
         try:
             reddit = self._get_reddit()
-
-            # Aggregate by ticker: {symbol: {"posts": [], "total_score": 0, "ratios": []}}
-            ticker_data: dict[str, dict] = {}
-
-            for subreddit_name in subreddits:
-                subreddit = reddit.subreddit(subreddit_name)
-
-                for submission in subreddit.hot(limit=limit):
-                    text = f"{submission.title} {submission.selftext or ''}"
-                    tickers = self._extract_tickers(text)
-
-                    if not tickers:
-                        continue
-
-                    post = self._submission_to_post(submission)
-
-                    for ticker in tickers:
-                        if ticker not in ticker_data:
-                            ticker_data[ticker] = {"posts": [], "total_score": 0, "ratios": []}
-
-                        ticker_data[ticker]["posts"].append(post)
-                        ticker_data[ticker]["total_score"] += submission.score
-                        ticker_data[ticker]["ratios"].append(submission.upvote_ratio)
+            ticker_data = self._aggregate_ticker_data(reddit, subreddits, limit)
 
             # Build results
             results: list[TrendingTicker] = []

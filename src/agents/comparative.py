@@ -6,6 +6,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.data.comparative import ComparativeData, ComparativeDataFetcher
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 
@@ -64,6 +65,7 @@ class ComparativeAnalyst:
         self._prompts = PromptLoader("comparative")
         logger.info("Initialized ComparativeAnalyst")
 
+    @track_agent
     async def analyze(self, symbol: str) -> ComparativeAnalysis:
         """Perform comparative analysis on a stock.
 

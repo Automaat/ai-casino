@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.data.news import NewsArticle
+from src.execution_tracking import track_agent
 from src.models.sentiment import _analyze_batch_worker, _finbert_executor
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ class SentimentAnalyst:
         self.finbert = finbert
         logger.info("Initialized SentimentAnalyst")
 
+    @track_agent
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
         """Analyze sentiment from news articles.
 

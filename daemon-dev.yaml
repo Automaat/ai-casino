@@ -12,13 +12,16 @@ daemon:
     port: 8484
     cors_origins: ["http://localhost:8050", "http://localhost:5173", "http://localhost:4173"]
 
-  # Disable database for local dev (use JSON file instead)
+  # Database configuration for dev (connects to postgres container)
   database:
-    enabled: false
+    database_url: "postgresql+asyncpg://ai_casino:ai_casino_secure_pass_2025@postgres:5432/ai_casino"
+    enable_persistence: true
+    pool_size: 5
+    max_overflow: 10
 
-# LLM Configuration (dev uses Ollama for free local inference)
-llm:
-  provider: "ollama"
-  model: "qwen3:14b"
-  ollama_base_url: "http://ollama:11434"  # Container hostname for docker-compose
-  max_concurrent: 5
+  # LLM Configuration (dev uses Ollama for free local inference)
+  llm:
+    provider: "ollama"
+    model: "qwen3:14b"
+    ollama_base_url: "http://ollama:11434"  # Container hostname for docker-compose
+    max_concurrent: 5

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.models import FundamentalMetrics
 from src.data.fundamental import FundamentalDataFetcher
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -50,6 +51,7 @@ class FundamentalAnalyst:
         self._prompts = PromptLoader("fundamental")
         logger.info("Initialized FundamentalAnalyst")
 
+    @track_agent
     async def analyze(self, symbol: str, current_price: float | None = None) -> FundamentalAnalysis:
         """Perform fundamental analysis on a company.
 

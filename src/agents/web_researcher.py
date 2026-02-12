@@ -7,6 +7,7 @@ from enum import StrEnum
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 from src.tools.websearch import WebSearchTool
@@ -72,6 +73,7 @@ class WebResearchAgent:
         self._prompts = PromptLoader("web_researcher")
         logger.info(f"Initialized WebResearchAgent (tools_enabled={llm_client.supports_tools})")
 
+    @track_agent
     async def research(
         self,
         symbol: str,

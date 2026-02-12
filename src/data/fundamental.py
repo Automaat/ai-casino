@@ -45,8 +45,8 @@ class FundamentalDataFetcher:
             Exception: On API errors
         """
         if not self.fd:
-            msg = "ALPHA_VANTAGE_API_KEY not configured - cannot fetch fundamental data"
-            raise ValueError(msg)
+            logger.warning(f"ALPHA_VANTAGE_API_KEY not configured - skipping {symbol} fundamental data")
+            return {}
 
         if self._cache:
             cached = self._cache.get_fundamentals(symbol)

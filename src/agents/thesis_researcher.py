@@ -1,21 +1,21 @@
 """Unified thesis researcher agent supporting both bullish and bearish analysis."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, model_validator
 
 from src.agents.base_researcher import BaseResearcher, ResearchDirection
+from src.agents.comparative import ComparativeAnalysis
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.trump import TrumpAnalysis
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.strategies.signal import Signal
-
-if TYPE_CHECKING:
-    from src.agents.comparative import ComparativeAnalysis
-    from src.agents.trump import TrumpAnalysis
 
 
 class ResearchLLMResponse(BaseModel):
@@ -238,7 +238,7 @@ class BearishConfidenceCalculator(ConfidenceCalculator):
         return max(0.0, min(1.0, confidence))
 
 
-class ThesisResearcher(BaseResearcher):
+class ThesisResearcher(BaseResearcher[ResearchAnalysis]):
     """Unified thesis researcher supporting both bullish and bearish analysis."""
 
     def __init__(self, llm_client: LLMClient, direction: ResearchDirection) -> None:
@@ -267,6 +267,7 @@ class ThesisResearcher(BaseResearcher):
         """LLM response model type."""
         return ResearchLLMResponse
 
+    @track_agent  # pyrefly: ignore[bad-override]  # Decorator changes Awaitable->Coroutine signature
     async def analyze(
         self,
         symbol: str,
@@ -282,13 +283,9 @@ class ThesisResearcher(BaseResearcher):
         Returns:
             ResearchAnalysis with thesis, key points, target, confidence
         """
-        from typing import cast
-
-        result = await super().analyze(
+        return await super().analyze(
             symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
         )
-        # _build_analysis override guarantees ResearchAnalysis type
-        return cast("ResearchAnalysis", result)
 
     def _build_analysis(
         self, thesis: str, key_points: list[str], target: float | None, confidence: float

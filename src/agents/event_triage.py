@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.daemon.events import BaseEvent, Sentiment, TriageResult, Urgency
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -46,6 +47,7 @@ class EventTriageAgent:
         self._prompts = PromptLoader("event_triage")
         logger.info("Initialized EventTriageAgent")
 
+    @track_agent
     async def analyze(self, event: BaseEvent) -> TriageResult:
         """Triage an event to determine if analysis is warranted.
 

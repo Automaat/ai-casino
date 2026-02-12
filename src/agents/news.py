@@ -4,6 +4,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.data.news import NewsArticle
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -38,6 +39,7 @@ class NewsAnalyst:
         self._prompts = PromptLoader("news")
         logger.info("Initialized NewsAnalyst")
 
+    @track_agent
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> NewsAnalysis:
         """Analyze news articles for trading implications.
 

@@ -1,7 +1,7 @@
 """Finnhub social sentiment data fetcher."""
 
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -133,8 +133,13 @@ class FinnhubFetcher:
             return SocialSentimentData.model_validate(cached)
 
         if not self._api_key:
-            msg = "Finnhub API key not configured"
-            raise ValueError(msg)
+            logger.warning(f"Finnhub API key not configured - skipping {symbol} social sentiment")
+            return SocialSentimentData(
+                symbol=symbol,
+                reddit=[],
+                twitter=[],
+                fetched_at=datetime.now(tz=UTC),
+            )
 
         try:
             params = {"symbol": symbol, "token": self._api_key}
@@ -201,8 +206,16 @@ class FinnhubFetcher:
             return NewsSentimentData.model_validate(cached)
 
         if not self._api_key:
-            msg = "Finnhub API key not configured"
-            raise ValueError(msg)
+            logger.warning(f"Finnhub API key not configured - skipping {symbol} sentiment indicator")
+            return NewsSentimentData(
+                symbol=symbol,
+                buzz=BuzzData(articles_in_last_week=0, buzz=0.0, weekly_average=0.0),
+                company_news_score=0.0,
+                sector_avg_bullish_percent=0.0,
+                sector_avg_news_score=0.0,
+                sentiment=SentimentBreakdown(bearish_percent=0.0, bullish_percent=0.0),
+                fetched_at=datetime.now(tz=UTC),
+            )
 
         try:
             params = {"symbol": symbol, "token": self._api_key}

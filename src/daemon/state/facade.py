@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,10 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from src.execution_tracking.models import ExecutionGraph
+    from src.execution_tracking.tracker import ExecutionGraphTracker
 
 from src.daemon.state.managers.data_pipeline import DataPipelineStateManager
 from src.daemon.state.managers.discovery import DiscoveryStateManager
@@ -50,6 +55,8 @@ if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.execution_tracking.models import ExecutionGraph
+    from src.execution_tracking.tracker import ExecutionGraphTracker
 
 
 class DaemonState(BaseModel):
@@ -65,6 +72,18 @@ class DaemonState(BaseModel):
     discovery: DiscoveryStateManager = Field(default_factory=DiscoveryStateManager)
     strategy: StrategyStateManager = Field(default_factory=StrategyStateManager)
     snapshots: SnapshotStateManager = Field(default_factory=SnapshotStateManager)
+
+    # Execution tracking (in-memory only, not persisted)
+    active_execution_trackers: dict[str, ExecutionGraphTracker] = Field(
+        default_factory=dict,
+        exclude=True,
+        description="Active workflow execution trackers by workflow_id",
+    )
+    execution_graph_history: deque[ExecutionGraph] = Field(
+        default_factory=lambda: deque(maxlen=50),
+        exclude=True,
+        description="Recent completed execution graphs (last 50)",
+    )
 
     @model_validator(mode="wrap")
     @classmethod
@@ -737,6 +756,72 @@ class DaemonState(BaseModel):
     def snapshot_portfolio(self, snapshot: PortfolioSnapshot) -> None:
         """Delegate to snapshot manager."""
         self.snapshots.snapshot_portfolio(snapshot)
+
+    # ===========================
+    # Execution Tracking API
+    # ===========================
+
+    def add_execution_tracker(self, workflow_id: str, tracker: ExecutionGraphTracker) -> None:
+        """Add active execution tracker.
+
+        Args:
+            workflow_id: Workflow ID
+            tracker: ExecutionGraphTracker instance
+        """
+        self.active_execution_trackers[workflow_id] = tracker
+        logger.debug(f"Added execution tracker for workflow {workflow_id}")
+
+    def get_execution_tracker(self, workflow_id: str) -> ExecutionGraphTracker | None:
+        """Get active execution tracker.
+
+        Args:
+            workflow_id: Workflow ID
+
+        Returns:
+            ExecutionGraphTracker if active, None otherwise
+        """
+        return self.active_execution_trackers.get(workflow_id)
+
+    def remove_execution_tracker(self, workflow_id: str) -> None:
+        """Remove active execution tracker and archive graph.
+
+        Args:
+            workflow_id: Workflow ID
+        """
+        if tracker := self.active_execution_trackers.pop(workflow_id, None):
+            self.execution_graph_history.append(tracker.graph)
+            logger.debug(
+                f"Archived execution graph for workflow {workflow_id} "
+                f"({len(tracker.graph.nodes)} nodes, history size: {len(self.execution_graph_history)})"
+            )
+
+    def get_active_execution_graphs(self) -> list[ExecutionGraph]:
+        """Get all active execution graphs.
+
+        Returns:
+            List of active execution graphs
+        """
+        return [tracker.graph for tracker in self.active_execution_trackers.values()]
+
+    def get_execution_graph(self, workflow_id: str) -> ExecutionGraph | None:
+        """Get execution graph (active or recent).
+
+        Args:
+            workflow_id: Workflow ID
+
+        Returns:
+            ExecutionGraph if found, None otherwise
+        """
+        # Check active first
+        if tracker := self.active_execution_trackers.get(workflow_id):
+            return tracker.graph
+
+        # Check history
+        for graph in self.execution_graph_history:
+            if str(graph.workflow_id) == workflow_id:
+                return graph
+
+        return None
 
     def __repr__(self) -> str:
         """Return string representation."""

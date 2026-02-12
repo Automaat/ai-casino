@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from src.data.finnhub import FinnhubFetcher, NewsSentimentData, SocialSentimentData
 from src.data.reddit import RedditFetcher, RedditSentimentData
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.models.sentiment import FinBERTSentiment, SentimentScore, _analyze_batch_worker, _finbert_executor
@@ -60,6 +61,7 @@ class SocialSentimentAnalyst:
         self._prompts = PromptLoader("social")
         logger.info("Initialized SocialSentimentAnalyst")
 
+    @track_agent
     async def analyze(self, symbol: str) -> SocialSentimentAnalysis:
         """Analyze social sentiment from multiple sources.
 

@@ -6,6 +6,7 @@ import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -59,6 +60,7 @@ class TechnicalAnalyst:
         self._prompt_loader = PromptLoader("technical")
         logger.info(f"Initialized TechnicalAnalyst (strategy={self._strategy_type})")
 
+    @track_agent
     async def analyze(
         self,
         symbol: str,

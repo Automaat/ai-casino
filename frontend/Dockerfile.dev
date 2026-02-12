@@ -1,6 +1,9 @@
 # Development Dockerfile for Svelte frontend with HMR
 FROM node:24-alpine
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 # Install dependencies
