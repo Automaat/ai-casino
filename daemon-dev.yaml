@@ -20,5 +20,5 @@ daemon:
 llm:
   provider: "ollama"
   model: "qwen3:14b"
-  base_url: "http://localhost:11434"
+  base_url: "http://ollama:11434"  # Container hostname for docker-compose
   max_concurrent: 5
