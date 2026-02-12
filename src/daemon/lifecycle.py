@@ -176,7 +176,7 @@ class DaemonLifecycle:
                     return
                 exc = t.exception()
                 if exc is not None:
-                    logger.opt(exception=exc).error(f"{watcher_name} crashed")
+                    logger.opt(exception=exc).error(f"{watcher_name} crashed: {exc}")
 
             task = asyncio.create_task(watcher.run())
             task.add_done_callback(_log_watcher_task_result)

@@ -82,6 +82,10 @@ ignore = [
     "SLF001",  # private member access OK for testing
     "ARG001",  # unused args OK in fixtures
     "DTZ",     # timezone not critical in test data
+    "ASYNC110", # allow while+sleep in test mocks simulating watchers
+    "TRY003",  # allow long exception messages in tests
+    "EM101",   # allow string literals in exceptions in tests
+    "F841",    # allow unused variables in tests (e.g., mock_logger for patching)
 ]
 "src/agents/*.py" = [
     "PLR2004", # magic values OK in thresholds/heuristics
