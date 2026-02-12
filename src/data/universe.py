@@ -247,6 +247,7 @@ class StockUniverseFetcher:
 
     def _fetch_market_caps(self, symbols: list[str]) -> dict[str, float]:
         """Fetch market caps in parallel."""
+
         def fetch_market_cap(symbol: str) -> tuple[str, float]:
             try:
                 ticker = yf.Ticker(symbol)
