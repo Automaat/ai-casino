@@ -92,7 +92,9 @@ def mock_finbert():
     return mock
 
 
-async def test_analyze_full_data(test_container, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert):
+async def test_analyze_full_data(
+    test_container, mock_finnhub_fetcher, mock_reddit_fetcher, mock_finbert, mocker
+):
     """Test analysis with all sources available."""
 
     async def astructured_response(*args, **kwargs):
@@ -102,10 +104,14 @@ async def test_analyze_full_data(test_container, mock_finnhub_fetcher, mock_redd
             confidence_keywords=["strong", "clear"],
         )
 
+    # Mock run_in_executor to avoid ProcessPoolExecutor pickling issues
+    async def mock_executor(executor, fn, *args):
+        # Return mock sentiment scores directly
+        return [{"positive": 0.7, "neutral": 0.2, "negative": 0.1} for _ in range(5)]
+
     analyst = test_container.social_sentiment_analyst()
     analyst.finnhub_fetcher = mock_finnhub_fetcher
     analyst.reddit_fetcher = mock_reddit_fetcher
-    analyst.finbert = mock_finbert
     analyst.llm.astructured = AsyncMock(side_effect=astructured_response)
 
     # Mock _fetch_all_sources to return the expected data
@@ -117,6 +123,11 @@ async def test_analyze_full_data(test_container, mock_finnhub_fetcher, mock_redd
         )
 
     analyst._fetch_all_sources = fetch_all_mock
+
+    # Patch run_in_executor on the event loop
+    mocker.patch("asyncio.get_running_loop").return_value.run_in_executor = AsyncMock(
+        side_effect=mock_executor
+    )
 
     result = await analyst.analyze("AAPL")
 
@@ -131,17 +142,26 @@ async def test_analyze_full_data(test_container, mock_finnhub_fetcher, mock_redd
     assert 0.0 <= result.confidence <= 1.0
 
 
-async def test_analyze_missing_finnhub(test_container, mock_reddit_fetcher, mock_finbert):
+async def test_analyze_missing_finnhub(test_container, mock_reddit_fetcher, mock_finbert, mocker):
     """Test analysis when Finnhub fails."""
+
+    # Mock run_in_executor to avoid ProcessPoolExecutor pickling issues
+    async def mock_executor(executor, fn, *args):
+        return [{"positive": 0.7, "neutral": 0.2, "negative": 0.1} for _ in range(5)]
+
     analyst = test_container.social_sentiment_analyst()
     analyst.reddit_fetcher = mock_reddit_fetcher
-    analyst.finbert = mock_finbert
 
     # Make Finnhub fail
     async def fetch_all_mock(symbol):
         return None, None, mock_reddit_fetcher.fetch_mentions(symbol)
 
     analyst._fetch_all_sources = fetch_all_mock
+
+    # Patch run_in_executor
+    mocker.patch("asyncio.get_running_loop").return_value.run_in_executor = AsyncMock(
+        side_effect=mock_executor
+    )
 
     result = await analyst.analyze("AAPL")
 
@@ -357,14 +377,13 @@ def test_compute_confidence_low():
     assert confidence <= 0.5
 
 
-async def test_compute_reddit_sentiment_weighted():
+async def test_compute_reddit_sentiment_weighted(mocker):
     """Test Reddit sentiment weighting."""
     analyst = SocialSentimentAnalyst(MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
-    # Mock FinBERT to return positive sentiment
-    analyst.finbert.analyze_batch.return_value = [
-        SentimentScore(positive=0.8, neutral=0.1, negative=0.1, label="positive", score=0.7) for _ in range(2)
-    ]
+    # Mock run_in_executor to avoid ProcessPoolExecutor pickling issues
+    async def mock_executor(executor, fn, *args):
+        return [{"positive": 0.8, "neutral": 0.1, "negative": 0.1} for _ in range(2)]
 
     posts = [
         RedditPost(
@@ -398,6 +417,11 @@ async def test_compute_reddit_sentiment_weighted():
         avg_score=75.0,
         avg_upvote_ratio=0.8,
         fetched_at=datetime.now(tz=UTC),
+    )
+
+    # Patch run_in_executor
+    mocker.patch("asyncio.get_running_loop").return_value.run_in_executor = AsyncMock(
+        side_effect=mock_executor
     )
 
     sentiment = await analyst._compute_reddit_sentiment(reddit_data)
