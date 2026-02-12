@@ -79,7 +79,7 @@ class GetSocialSentimentTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 return future.result()
         except Exception as e:
-            logger.error(f"Social sentiment analysis failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Social sentiment analysis failed for {symbol}: {e}")
             return f"Social sentiment analysis failed for {symbol}: {e}"
 
     async def _run_analysis(self, symbol: str) -> str:

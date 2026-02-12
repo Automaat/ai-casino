@@ -108,7 +108,7 @@ class EventBus:
                 )
 
         except Exception as e:
-            logger.error(f"EventBus publish failed: {e}")
+            logger.opt(exception=True).error(f"EventBus publish failed: {e}")
 
     def get_history(self, limit: int | None = None) -> list[DashboardEvent]:
         """Get event history, newest first.

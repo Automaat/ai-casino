@@ -108,7 +108,7 @@ class TechnicalAnalyst:
             interpretation = llm_response.interpretation
             confidence_keywords = llm_response.confidence_keywords
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
             interpretation = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
             confidence_keywords = []
 
@@ -164,7 +164,9 @@ class TechnicalAnalyst:
                 interpretation = llm_response.interpretation
                 confidence_keywords = llm_response.confidence_keywords
             except StructuredOutputError as e:
-                logger.warning(f"Structured output failed for {timeframe}, falling back: {e}")
+                logger.opt(exception=True).warning(
+                    f"Structured output failed for {timeframe}, falling back: {e}"
+                )
                 interpretation = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.3)
                 confidence_keywords = []
 
@@ -272,7 +274,7 @@ class TechnicalAnalyst:
         try:
             return await self.llm.acomplete(user, system=system, temperature=0.3)
         except Exception as e:
-            logger.error(f"Failed to generate multi-timeframe interpretation: {e}")
+            logger.opt(exception=True).error(f"Failed to generate multi-timeframe interpretation: {e}")
             raise
 
     def _build_prompt(

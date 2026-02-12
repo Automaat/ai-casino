@@ -111,7 +111,7 @@ class GamePlanAgent:
             reasoning = llm_response.reasoning
             confidence = llm_response.confidence
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back: {e}")
             text_response = await self.llm.acomplete(prompt, system=system, temperature=0.7)
             priority_symbols = []
             risk_stance = "NEUTRAL"
@@ -144,7 +144,7 @@ class GamePlanAgent:
         try:
             return self.market_fetcher.fetch_overnight_futures(symbols)
         except Exception as e:
-            logger.warning(f"Futures unavailable: {e}")
+            logger.opt(exception=True).warning(f"Futures unavailable: {e}")
             return {}
 
     def _fetch_premarket_movers(self, watchlist: list[str]) -> str:
@@ -195,7 +195,7 @@ class GamePlanAgent:
             return " | ".join(result) if result else "Flat pre-market"
 
         except Exception as e:
-            logger.warning(f"Pre-market movers failed: {e}")
+            logger.opt(exception=True).warning(f"Pre-market movers failed: {e}")
             return "Pre-market data unavailable"
 
     def _format_futures(self, futures: dict[str, float]) -> str:

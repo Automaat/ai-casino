@@ -73,7 +73,7 @@ class ProfileStorage:
             logger.debug(f"Saved pstats: {filepath}")
             return filepath
         except OSError as e:
-            logger.error(f"Failed to save pstats: {e}")
+            logger.opt(exception=True).error(f"Failed to save pstats: {e}")
             raise
 
     def save_json(self, cycle_num: int, metrics: dict, timestamp: datetime) -> Path:
@@ -98,7 +98,7 @@ class ProfileStorage:
             logger.debug(f"Saved JSON: {filepath}")
             return filepath
         except OSError as e:
-            logger.error(f"Failed to save JSON: {e}")
+            logger.opt(exception=True).error(f"Failed to save JSON: {e}")
             raise
 
     def cleanup(self) -> None:
@@ -148,7 +148,7 @@ class ProfileStorage:
                         json_path.unlink()
                     logger.debug(f"Removed excess file: {filepath.name}")
                 except OSError as e:
-                    logger.warning(f"Failed to remove {filepath}: {e}")
+                    logger.opt(exception=True).warning(f"Failed to remove {filepath}: {e}")
 
             logger.info(f"Cleaned up {excess} excess profile files")
 
@@ -177,7 +177,7 @@ class ProfileStorage:
                 removed_mb += size_mb
                 logger.debug(f"Removed file to free disk: {filepath.name}")
             except OSError as e:
-                logger.warning(f"Failed to remove {filepath}: {e}")
+                logger.opt(exception=True).warning(f"Failed to remove {filepath}: {e}")
 
         if removed_mb > 0:
             logger.info(f"Freed {removed_mb:.1f}MB of disk space")

@@ -75,7 +75,7 @@ class StateManager(BaseModel):
             )
             logger.info(f"All pending {self.__class__.__name__} tasks completed")
         except TimeoutError:
-            logger.warning(
+            logger.opt(exception=True).warning(
                 f"{self.__class__.__name__} tasks timed out after {timeout_seconds}s, cancelling..."
             )
             for task in self._pending_tasks:

@@ -155,7 +155,7 @@ class DaemonStressTester:
                 returns_dict[symbol] = returns
 
             except Exception as e:
-                logger.error(f"[STRESS TEST] Failed to fetch {symbol}: {e}")
+                logger.opt(exception=True).error(f"[STRESS TEST] Failed to fetch {symbol}: {e}")
                 msg = f"Cannot fetch historical data for {symbol}: {e}"
                 raise ValueError(msg) from e
 

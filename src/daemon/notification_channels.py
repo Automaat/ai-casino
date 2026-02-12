@@ -60,7 +60,9 @@ class TelegramChannel(NotificationChannel):
             try:
                 data = response.json()
             except ValueError:
-                logger.error(f"Telegram API returned non-JSON response: {response.text!r}")
+                logger.opt(exception=True).error(
+                    f"Telegram API returned non-JSON response: {response.text!r}"
+                )
                 return False
 
             ok = data.get("ok")

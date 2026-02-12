@@ -91,7 +91,7 @@ class GenerateTearsheetTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 return future.result()
         except Exception as e:
-            logger.error(f"Tearsheet generation failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Tearsheet generation failed for {symbol}: {e}")
             return f"Tearsheet generation failed for {symbol}: {e}"
 
     async def _run_tearsheet(self, symbol: str, period: str, benchmark: str) -> str:
@@ -166,7 +166,7 @@ class GenerateTearsheetTool(BaseTool):
             if close is not None and not close.empty:
                 return close.pct_change().fillna(0.0)
         except Exception as e:
-            logger.warning(f"Failed to fetch benchmark data: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch benchmark data: {e}")
         return None
 
     def _parse_period(self, period: str) -> int:
@@ -184,7 +184,7 @@ class GenerateTearsheetTool(BaseTool):
         try:
             return int(period)
         except ValueError:
-            logger.warning(f"Unknown period '{period}', using 1y")
+            logger.opt(exception=True).warning(f"Unknown period '{period}', using 1y")
             return 365
 
     def _format_result(self, tearsheet: TearSheet) -> str:

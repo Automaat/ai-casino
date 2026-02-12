@@ -159,7 +159,7 @@ class ExecuteTradeTool(BaseTool):
             return "\n".join(lines)
 
         except Exception as e:
-            logger.error(f"Trade execution failed: {e}")
+            logger.opt(exception=True).error(f"Trade execution failed: {e}")
             return f"Failed to execute trade: {e}"
 
     async def aexecute(self, **kwargs: str | int | float | bool) -> str:
@@ -313,7 +313,7 @@ class ExecuteTradeTool(BaseTool):
             return "\n".join(lines)
 
         except Exception as e:
-            logger.error(f"Trade execution failed: {e}")
+            logger.opt(exception=True).error(f"Trade execution failed: {e}")
             return f"Failed to execute trade: {e}"
 
     def __repr__(self) -> str:

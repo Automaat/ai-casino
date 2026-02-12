@@ -120,7 +120,7 @@ class StopLossCalculator:
             if atr_col in df.columns:
                 return float(df[atr_col].iloc[-1])
         except Exception as e:
-            logger.warning(f"ATR calculation failed: {e}")
+            logger.opt(exception=True).warning(f"ATR calculation failed: {e}")
         return None
 
     def _get_adaptive_multiplier(self, context: RiskContext | None) -> float:

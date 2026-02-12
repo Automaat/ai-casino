@@ -238,7 +238,7 @@ class DaemonRunner:
 
             await self.event_bus.publish(DashboardEvent(event_type=EventType[event_type], data=data))
         except Exception as e:
-            logger.error(f"Failed to publish {event_type} event: {e}")
+            logger.opt(exception=True).error(f"Failed to publish {event_type} event: {e}")
 
     def _evaluate_degradation(self) -> DegradationContext:
         """Load latest health report and evaluate degradation tier."""
@@ -255,7 +255,7 @@ class DaemonRunner:
                     with report_files[0].open() as f:
                         health_report = HealthReport.model_validate(json.load(f))
                 except Exception as e:
-                    logger.warning(f"Failed to load health report: {e}")
+                    logger.opt(exception=True).warning(f"Failed to load health report: {e}")
 
         policy = DegradationPolicy(self.config)
         return policy.evaluate_degradation(health_report)

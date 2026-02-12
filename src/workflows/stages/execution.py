@@ -85,7 +85,9 @@ async def execute_trade(
             warnings.append(f"Order submission failed: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error submitting order for {input_data.symbol}: {e}")
+            logger.opt(exception=True).error(
+                f"Unexpected error submitting order for {input_data.symbol}: {e}"
+            )
             warnings.append(f"Order submission error: {e}")
             return None
 
@@ -123,7 +125,7 @@ async def create_portfolio_snapshot(
         await snapshot_repository.create(snapshot)
         logger.info("Captured portfolio snapshot (trigger=TRADE)")
     except Exception as e:
-        logger.error(f"Failed to capture portfolio snapshot: {e}")
+        logger.opt(exception=True).error(f"Failed to capture portfolio snapshot: {e}")
 
 
 async def notify_trade_execution(

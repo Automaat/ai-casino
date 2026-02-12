@@ -137,10 +137,10 @@ class NewsFetcher:
 
             except httpx.HTTPStatusError as e:
                 self._log_rate_limit_headers(e.response, symbol)
-                logger.error(f"News fetch failed: {e}")
+                logger.opt(exception=True).error(f"News fetch failed: {e}")
                 raise
             except httpx.HTTPError as e:
-                logger.error(f"News fetch failed: {e}")
+                logger.opt(exception=True).error(f"News fetch failed: {e}")
                 raise
 
     @HTTP_RETRY
@@ -187,7 +187,7 @@ class NewsFetcher:
                 return articles
 
         except httpx.HTTPError as e:
-            logger.error(f"Market news fetch failed: {e}")
+            logger.opt(exception=True).error(f"Market news fetch failed: {e}")
             raise
 
     def __repr__(self) -> str:

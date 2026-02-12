@@ -171,7 +171,7 @@ class MetaAgent:
                     weights[key] += PERFORMANCE_WEIGHT_BOOST * recent_score
 
         except Exception as e:
-            logger.warning(f"Failed to calculate performance metrics: {e}")
+            logger.opt(exception=True).warning(f"Failed to calculate performance metrics: {e}")
 
     async def select_strategy(
         self,

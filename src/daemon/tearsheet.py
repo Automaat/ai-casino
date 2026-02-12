@@ -67,7 +67,7 @@ class DaemonTearsheetGenerator:
             logger.info(f"Generated tearsheet: {tearsheet.html_report_path}")
             return tearsheet
         except Exception as e:
-            logger.error(f"Failed to generate tearsheet: {e}")
+            logger.opt(exception=True).error(f"Failed to generate tearsheet: {e}")
             raise
 
     def _convert_analyses_to_trades(self, analyses: list[AnalysisRecord]) -> list[TradeRecord]:
@@ -243,7 +243,7 @@ class DaemonTearsheetGenerator:
             return price
 
         except Exception as e:
-            logger.warning(f"Failed to fetch price for {symbol} at {timestamp}: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch price for {symbol} at {timestamp}: {e}")
             return None
 
     def _fetch_benchmark_returns(self, benchmark_symbol: str, trades: list[TradeRecord]) -> pd.Series | None:
@@ -275,7 +275,7 @@ class DaemonTearsheetGenerator:
             logger.info(f"Fetched {len(returns)} days of benchmark returns")
             return returns
         except Exception as e:
-            logger.warning(f"Failed to fetch benchmark data: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch benchmark data: {e}")
             return None
 
     def cleanup_old_tearsheets(self, retention_days: int = 30) -> None:
@@ -301,7 +301,7 @@ class DaemonTearsheetGenerator:
                     deleted_count += 1
                     logger.debug(f"Deleted old tearsheet: {tearsheet_file.name}")
             except Exception as e:
-                logger.warning(f"Failed to delete {tearsheet_file}: {e}")
+                logger.opt(exception=True).warning(f"Failed to delete {tearsheet_file}: {e}")
 
         if deleted_count > 0:
             logger.info(f"Cleaned up {deleted_count} old tearsheets (retention: {retention_days} days)")

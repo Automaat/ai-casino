@@ -74,7 +74,7 @@ class DaemonOptimizer:
                 strategy_name=strategy_name,
             )
         except Exception as e:
-            logger.error(f"Optimization failed for {symbol}/{strategy_name}: {e}")
+            logger.opt(exception=True).error(f"Optimization failed for {symbol}/{strategy_name}: {e}")
             return None
 
         # Validate trade count via metrics
@@ -84,7 +84,9 @@ class DaemonOptimizer:
             metrics = result.best_metrics or {}
             validation_trades = int(metrics.get("total_trades", 0))
         except Exception as e:
-            logger.warning(f"Validation metrics inspection failed for {symbol}/{strategy_name}: {e}")
+            logger.opt(exception=True).warning(
+                f"Validation metrics inspection failed for {symbol}/{strategy_name}: {e}"
+            )
             validation_trades = 0
 
         if validation_trades < self._min_trades:

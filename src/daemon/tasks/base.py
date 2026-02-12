@@ -109,6 +109,6 @@ class TaskExecutor(ABC):
             logger.info(f"{self.task_name} completed in {duration:.1f}s")
         except Exception as e:
             error_msg = f"{self.task_name} failed: {e}"
-            logger.error(error_msg)
+            logger.opt(exception=True).error(error_msg)
             self.components.state.record_error(error_msg)
             raise

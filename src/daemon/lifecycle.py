@@ -43,7 +43,7 @@ class DaemonLifecycle:
                 await database_engine.ensure_migrated()
                 logger.info("Database migrations applied successfully")
         except Exception as e:
-            logger.error(f"Database initialization failed: {e}")
+            logger.opt(exception=True).error(f"Database initialization failed: {e}")
             if self.components.config.database.enable_persistence:
                 raise  # Fail fast if persistence enabled but DB unavailable
 
@@ -83,26 +83,28 @@ class DaemonLifecycle:
             try:
                 await self.components.position_manager.wait_for_pending_tasks(timeout_seconds=5.0)
             except Exception as e:
-                logger.warning(f"Error waiting for position persistence tasks: {e}")
+                logger.opt(exception=True).warning(f"Error waiting for position persistence tasks: {e}")
 
         # Wait for other state manager background tasks to complete
         if self.components.state.discovery:
             try:
                 await self.components.state.discovery.wait_for_pending_tasks(timeout_seconds=5.0)
             except Exception as e:
-                logger.warning(f"Error waiting for discovery state persistence tasks: {e}")
+                logger.opt(exception=True).warning(
+                    f"Error waiting for discovery state persistence tasks: {e}"
+                )
 
         if self.components.state.snapshots:
             try:
                 await self.components.state.snapshots.wait_for_pending_tasks(timeout_seconds=5.0)
             except Exception as e:
-                logger.warning(f"Error waiting for snapshot state persistence tasks: {e}")
+                logger.opt(exception=True).warning(f"Error waiting for snapshot state persistence tasks: {e}")
 
         if self.components.state.trading:
             try:
                 await self.components.state.trading.wait_for_pending_tasks(timeout_seconds=5.0)
             except Exception as e:
-                logger.warning(f"Error waiting for trading state persistence tasks: {e}")
+                logger.opt(exception=True).warning(f"Error waiting for trading state persistence tasks: {e}")
 
         # Save final state
         self.components.state.save(self.components.config.state.state_file)
@@ -138,7 +140,7 @@ class DaemonLifecycle:
                 f"{self.components.config.api.port}[/bold cyan]"
             )
         except Exception as e:
-            logger.error(f"Failed to start API server: {e}")
+            logger.opt(exception=True).error(f"Failed to start API server: {e}")
             self._api_server = None
 
     async def _stop_api_server(self) -> None:
@@ -152,7 +154,7 @@ class DaemonLifecycle:
                 else:
                     logger.error("API server thread did not exit cleanly")
             except Exception as e:
-                logger.error(f"Error stopping API server: {e}")
+                logger.opt(exception=True).error(f"Error stopping API server: {e}")
 
     def _start_watchers(self) -> None:
         """Start event watchers as background tasks."""
@@ -206,7 +208,7 @@ class DaemonLifecycle:
                 await asyncio.gather(*pending, return_exceptions=True)
             logger.info("Event watchers stopped")
         except Exception as e:
-            logger.error(f"Error stopping watchers: {e}")
+            logger.opt(exception=True).error(f"Error stopping watchers: {e}")
         finally:
             # Clear references to watcher tasks after shutdown attempt
             self._watcher_tasks.clear()

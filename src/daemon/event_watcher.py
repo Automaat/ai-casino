@@ -155,7 +155,7 @@ class EventWatcher(ABC):
                     result = await workflow.analyze(symbol, period_days=30)
                     return symbol, result
                 except Exception as e:
-                    logger.error(f"Failed to analyze {symbol}: {e}")
+                    logger.opt(exception=True).error(f"Failed to analyze {symbol}: {e}")
                     return symbol, None
 
         # Wrap tasks to handle exceptions
@@ -244,7 +244,7 @@ class EventWatcher(ABC):
             try:
                 self._signal_callback(signal)
             except Exception as e:
-                logger.error(f"Signal callback failed: {e}")
+                logger.opt(exception=True).error(f"Signal callback failed: {e}")
 
     async def _triage_events(self, events: list[BaseEvent]) -> list[TriageResult | BaseException]:
         """Triage events with LLM in parallel."""

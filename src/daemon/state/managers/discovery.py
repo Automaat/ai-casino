@@ -61,7 +61,7 @@ class DiscoveryStateManager(StateManager):
                     task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
                     logger.debug(f"Scheduled discovery history persistence to database: {candidate.symbol}")
                 except Exception as e:
-                    logger.error(f"Failed to schedule discovery history persistence: {e}")
+                    logger.opt(exception=True).error(f"Failed to schedule discovery history persistence: {e}")
                     raise
 
             # Keep in-memory list (capped for transition period)

@@ -95,7 +95,7 @@ class RunBacktestTool(BaseTool):
 
             return self._format_result(result)
         except Exception as e:
-            logger.error(f"Backtest failed for {symbol}: {e}")
+            logger.opt(exception=True).error(f"Backtest failed for {symbol}: {e}")
             return f"Backtest failed for {symbol}: {e}"
 
     def _format_result(self, result: BacktestResult) -> str:

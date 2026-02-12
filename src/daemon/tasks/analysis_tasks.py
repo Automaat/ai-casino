@@ -94,7 +94,7 @@ class DiscoveryTask(TaskExecutor):
                 account_info = await asyncio.to_thread(self.components.broker.get_account_info)
                 current_positions = account_info.positions  # type: ignore[assignment]
             except Exception as e:
-                logger.warning(f"Failed to fetch positions: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch positions: {e}")
 
         sector_context = None
         if self.components.state.sector_rotation_history:
@@ -201,7 +201,7 @@ class SectorRotationTask(TaskExecutor):
                 position_symbols = list(account_info.positions.keys())
                 flagged = daemon_rotation.flag_weak_positions(position_symbols, analysis)
             except Exception as e:
-                logger.warning(f"Failed to flag positions: {e}")
+                logger.opt(exception=True).warning(f"Failed to flag positions: {e}")
 
         sector_strengths = {s.sector: s.relative_strength for s in analysis.sectors}
         sector_momenta = {s.sector: s.momentum.value for s in analysis.sectors}
@@ -265,7 +265,7 @@ class SectorRotationTask(TaskExecutor):
 
                 task.add_done_callback(_log_error)
         except Exception as e:
-            logger.error(f"Failed to publish {event_type} event: {e}")
+            logger.opt(exception=True).error(f"Failed to publish {event_type} event: {e}")
 
 
 class PeerAnalysisTask(TaskExecutor):

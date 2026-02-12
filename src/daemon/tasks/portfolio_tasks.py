@@ -119,7 +119,7 @@ class OptimizationTask(TaskExecutor):
 
                 task.add_done_callback(_log_error)
         except Exception as e:
-            logger.error(f"Failed to publish {event_type} event: {e}")
+            logger.opt(exception=True).error(f"Failed to publish {event_type} event: {e}")
 
 
 class RebalancingTask(TaskExecutor):

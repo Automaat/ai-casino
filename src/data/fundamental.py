@@ -76,7 +76,7 @@ class FundamentalDataFetcher:
                 return data
 
             except Exception as e:
-                logger.error(f"Failed to fetch fundamental data for {symbol}: {e}")
+                logger.opt(exception=True).error(f"Failed to fetch fundamental data for {symbol}: {e}")
                 raise
 
     def __repr__(self) -> str:

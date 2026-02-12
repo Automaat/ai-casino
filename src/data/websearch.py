@@ -143,7 +143,7 @@ class WebSearchFetcher:
             return response
 
         except Exception as e:
-            logger.error(f"Web search failed: {e}")
+            logger.opt(exception=True).error(f"Web search failed: {e}")
             raise
 
     @HTTP_RETRY
@@ -200,7 +200,7 @@ class WebSearchFetcher:
             return response
 
         except Exception as e:
-            logger.error(f"News search failed: {e}")
+            logger.opt(exception=True).error(f"News search failed: {e}")
             raise
 
     def clear_cache(self) -> None:

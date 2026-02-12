@@ -179,7 +179,7 @@ class ScreeningTask(TaskExecutor):
                 )
                 logger.info("Applied sector rotation weighting to screening candidates")
             except Exception as e:
-                logger.warning(f"Failed to apply sector weighting: {e}")
+                logger.opt(exception=True).warning(f"Failed to apply sector weighting: {e}")
 
         # Log top 5 to console
         self._log_screening_results(results_to_save[:5])

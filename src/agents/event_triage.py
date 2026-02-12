@@ -83,7 +83,7 @@ class EventTriageAgent:
             return result
 
         except StructuredOutputError as e:
-            logger.warning(f"Triage structured output failed for {event.event_id}: {e}")
+            logger.opt(exception=True).warning(f"Triage structured output failed for {event.event_id}: {e}")
             # Fallback to low relevance (skip analysis)
             return TriageResult(
                 event_id=event.event_id,

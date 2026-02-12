@@ -195,7 +195,7 @@ class PositionManager:
                 self._pending_tasks.add(task)
                 task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
             except Exception as e:
-                logger.error(f"Failed to persist new position to database: {e}")
+                logger.opt(exception=True).error(f"Failed to persist new position to database: {e}")
                 raise
 
     async def _async_persist_position_create(self, position: PositionRecord) -> None:
@@ -217,7 +217,7 @@ class PositionManager:
                 self._pending_tasks.add(task)
                 task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
             except Exception as e:
-                logger.error(f"Failed to update position in database: {e}")
+                logger.opt(exception=True).error(f"Failed to update position in database: {e}")
                 raise
 
     async def _async_persist_position_update(self, position: PositionRecord) -> None:
@@ -239,7 +239,7 @@ class PositionManager:
                 self._pending_tasks.add(task)
                 task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
             except Exception as e:
-                logger.error(f"Failed to delete position from database: {e}")
+                logger.opt(exception=True).error(f"Failed to delete position from database: {e}")
                 raise
 
     async def _async_persist_position_delete(self, symbol: str) -> None:
@@ -329,7 +329,9 @@ class PositionManager:
             )
             return datetime.now(UTC), 0.75, "BUY"
         except Exception as e:
-            logger.error(f"Failed to load entry metadata for {symbol}: {e}, using defaults")
+            logger.opt(exception=True).error(
+                f"Failed to load entry metadata for {symbol}: {e}, using defaults"
+            )
             return datetime.now(UTC), 0.75, "BUY"
 
     def _calculate_profit_targets(self, entry_price: float) -> list[float]:
@@ -385,7 +387,9 @@ class PositionManager:
             action.order_id = order.order_id
             logger.info(f"Executed {action.action_type}: {position.symbol} x{action.qty_sold}")
         except Exception as e:
-            logger.error(f"Failed to execute {action.action_type} for {position.symbol}: {e}")
+            logger.opt(exception=True).error(
+                f"Failed to execute {action.action_type} for {position.symbol}: {e}"
+            )
             action.executed = False
 
     def _execute_actions(self, position: PositionRecord, actions: list[PositionManagementAction]) -> None:
@@ -406,7 +410,7 @@ class PositionManager:
                         f"Persisted position action to database: {action.symbol} {action.action_type}"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to persist position action to database: {e}")
+                    logger.opt(exception=True).error(f"Failed to persist position action to database: {e}")
                     raise  # Fail fast per user requirement
 
     async def _async_persist_action(self, action: PositionManagementAction) -> None:
@@ -690,7 +694,9 @@ class PositionManager:
                 self.broker.cancel_order(position.stop_loss_order_id)
                 logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
             except Exception as e:
-                logger.error(f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}")
+                logger.opt(exception=True).error(
+                    f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}"
+                )
                 return None
 
         # Verify position still exists and get current price
@@ -738,7 +744,7 @@ class PositionManager:
             logger.info(f"Updated stop-loss: {position.symbol} → ${new_stop_loss:.2f}")
             return order.order_id
         except Exception as e:
-            logger.error(f"Failed to submit new stop-loss: {e}")
+            logger.opt(exception=True).error(f"Failed to submit new stop-loss: {e}")
             return None
 
     async def wait_for_pending_tasks(self, timeout_seconds: float = 5.0) -> None:
@@ -760,7 +766,9 @@ class PositionManager:
             )
             logger.info("All pending position persistence tasks completed")
         except TimeoutError:
-            logger.warning(f"Position persistence tasks timed out after {timeout_seconds}s, cancelling...")
+            logger.opt(exception=True).warning(
+                f"Position persistence tasks timed out after {timeout_seconds}s, cancelling..."
+            )
             for task in self._pending_tasks:
                 if not task.done():
                     task.cancel()

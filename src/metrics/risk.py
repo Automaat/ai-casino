@@ -177,7 +177,7 @@ def _calculate_var_internal(returns: list[float]) -> VaRMetrics:
             var_95=float(var_95), var_99=float(var_99), cvar_95=float(cvar_95), cvar_99=float(cvar_99)
         )
     except Exception as e:
-        logger.error(f"VaR calculation failed: {e}")
+        logger.opt(exception=True).error(f"VaR calculation failed: {e}")
         raise
 
 
@@ -217,7 +217,7 @@ def _calculate_drawdown_internal(returns: list[float]) -> DrawdownMetrics:
             max_drawdown_duration_days=duration,
         )
     except Exception as e:
-        logger.error(f"Drawdown calculation failed: {e}")
+        logger.opt(exception=True).error(f"Drawdown calculation failed: {e}")
         raise
 
 
@@ -275,7 +275,7 @@ class RiskMetricsCalculator:
             logger.debug(f"CVaR at {confidence * 100:.0f}% confidence: {cvar:.4f}")
             return float(cvar)
         except Exception as e:
-            logger.error(f"CVaR calculation failed: {e}")
+            logger.opt(exception=True).error(f"CVaR calculation failed: {e}")
             raise
 
     def calculate_cdar(self, returns: list[float]) -> DrawdownMetrics:

@@ -71,7 +71,7 @@ class NewsAnalyst:
             impact = llm_response.impact_assessment
             recommendation = llm_response.recommendation
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
             key_themes = self._extract_themes(response)
             impact = self._extract_section(response, "impact")

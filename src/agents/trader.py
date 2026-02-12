@@ -170,7 +170,7 @@ class TraderAgent:
             risk_level = llm_response.risk_level
             reasoning = llm_response.reasoning
         except StructuredOutputError as e:
-            logger.warning(f"Structured output failed, falling back to text parsing: {e}")
+            logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
             response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.5)
             action = self._extract_action(response, technical.signal)
             confidence = self._extract_confidence(response, technical, sentiment, bullish, bearish, action)

@@ -212,7 +212,7 @@ class AnomalyWatcher(EventWatcher):
                     self._update_volume_baseline(symbol, avg_vol)
                     logger.debug(f"Established baseline for {symbol}: {avg_vol:,.0f}")
             except Exception as e:
-                logger.warning(f"Failed to establish baseline for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Failed to establish baseline for {symbol}: {e}")
                 return None
 
         if symbol not in self._volume_baselines:
@@ -265,7 +265,7 @@ class AnomalyWatcher(EventWatcher):
                     self._previous_close_cache[symbol] = prev_close
                     logger.debug(f"Cached prev close for {symbol}: ${prev_close:.2f}")
             except Exception as e:
-                logger.warning(f"Failed to fetch prev close for {symbol}: {e}")
+                logger.opt(exception=True).warning(f"Failed to fetch prev close for {symbol}: {e}")
                 return None
 
         if symbol not in self._previous_close_cache:
@@ -303,7 +303,7 @@ class AnomalyWatcher(EventWatcher):
         try:
             intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
         except Exception as e:
-            logger.warning(f"Failed to fetch intraday for {symbol}: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch intraday for {symbol}: {e}")
             return None
 
         if intraday.data.empty:
@@ -387,7 +387,7 @@ class AnomalyWatcher(EventWatcher):
                 if event:
                     events.append(cast("BaseEvent", event))
             except Exception as e:
-                logger.error(f"Error processing {symbol}: {e}")
+                logger.opt(exception=True).error(f"Error processing {symbol}: {e}")
                 continue
 
         return events

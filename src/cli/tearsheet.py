@@ -96,7 +96,7 @@ async def _tearsheet_async(
             benchmark_returns = await _fetch_benchmark_returns(benchmark, period_days, fetcher)
             console.print(f"[green]Benchmark data fetched ({len(benchmark_returns)} days)[/green]")
         except Exception as e:
-            logger.warning(f"Failed to fetch benchmark data: {e}")
+            logger.opt(exception=True).warning(f"Failed to fetch benchmark data: {e}")
             console.print("[yellow]Warning: Could not fetch benchmark data, continuing without[/yellow]")
             benchmark = None
 
@@ -119,7 +119,7 @@ async def _tearsheet_async(
             await _save_to_database(tearsheet_obj)
 
     except Exception as e:
-        logger.error(f"Tearsheet generation failed: {e}")
+        logger.opt(exception=True).error(f"Tearsheet generation failed: {e}")
         console.print(f"[red]Error: {e}[/red]")
         raise
 
@@ -147,7 +147,7 @@ def _parse_period(period: str) -> int:
     try:
         return int(period)
     except ValueError:
-        logger.warning(f"Unknown period '{period}', using 1y")
+        logger.opt(exception=True).warning(f"Unknown period '{period}', using 1y")
         return 365
 
 
@@ -280,5 +280,5 @@ async def _save_to_database(tearsheet: TearSheet) -> None:
             await repo.create(tearsheet)
             console.print("[green]Tearsheet saved to database[/green]")
     except Exception as e:
-        logger.warning(f"Failed to save tearsheet to database: {e}")
+        logger.opt(exception=True).warning(f"Failed to save tearsheet to database: {e}")
         console.print(f"[yellow]Warning: Could not save to database: {e}[/yellow]")

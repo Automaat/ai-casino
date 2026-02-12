@@ -155,7 +155,7 @@ class TradingChatApp(App):
                     self._history = json.load(f)
                     self._history = self._history[-50:]
             except Exception as e:
-                logger.warning(f"Failed to load history: {e}")
+                logger.opt(exception=True).warning(f"Failed to load history: {e}")
                 self._history = []
 
     def _save_history(self) -> None:
@@ -165,7 +165,7 @@ class TradingChatApp(App):
             with HISTORY_FILE.open("w") as f:
                 json.dump(self._history[-100:], f, indent=2)
         except Exception as e:
-            logger.warning(f"Failed to save history: {e}")
+            logger.opt(exception=True).warning(f"Failed to save history: {e}")
 
     def compose(self) -> ComposeResult:
         """Compose the app layout."""

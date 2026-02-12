@@ -75,7 +75,7 @@ def load_recent_metrics(path: Path, limit: int = 50) -> list[CoordinatorCycleMet
             try:
                 metrics_list.append(CoordinatorCycleMetrics.model_validate_json(line))
             except Exception as e:
-                logger.warning(f"Failed to parse metrics line: {e}")
+                logger.opt(exception=True).warning(f"Failed to parse metrics line: {e}")
                 continue
 
         # Reverse to get most recent first
