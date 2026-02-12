@@ -24,6 +24,7 @@ class NotificationsConfig(BaseModel):
             NotificationTrigger.RISK_REJECTION,
             NotificationTrigger.PORTFOLIO_VAR_BREACH,
             NotificationTrigger.HEALTH_FAILURE,
+            NotificationTrigger.AGENT_ALERT,
         ]
     )
     rate_limit_enabled: bool = True

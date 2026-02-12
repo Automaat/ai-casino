@@ -56,17 +56,37 @@ class NotificationFormatter:
         Returns:
             Formatted markdown string
         """
-        if message.trigger == NotificationTrigger.SIGNAL:
-            return NotificationFormatter._format_signal(message)
-        if message.trigger == NotificationTrigger.RISK_REJECTION:
-            return NotificationFormatter._format_risk_rejection(message)
-        if message.trigger == NotificationTrigger.PORTFOLIO_VAR_BREACH:
-            return NotificationFormatter._format_var_breach(message)
-        if message.trigger == NotificationTrigger.HEALTH_FAILURE:
-            return NotificationFormatter._format_health_failure(message)
-        if message.trigger == NotificationTrigger.PAPER_TRADING_READY:
-            return NotificationFormatter._format_paper_trading_ready(message)
+        # Dispatch to specialized formatters
+        formatters = {
+            NotificationTrigger.SIGNAL: NotificationFormatter._format_signal,
+            NotificationTrigger.RISK_REJECTION: NotificationFormatter._format_risk_rejection,
+            NotificationTrigger.PORTFOLIO_VAR_BREACH: NotificationFormatter._format_var_breach,
+            NotificationTrigger.HEALTH_FAILURE: NotificationFormatter._format_health_failure,
+            NotificationTrigger.PAPER_TRADING_READY: NotificationFormatter._format_paper_trading_ready,
+            NotificationTrigger.AGENT_ALERT: NotificationFormatter._format_agent_alert,
+        }
+
+        formatter = formatters.get(message.trigger)
+        if formatter:
+            return formatter(message)
+
+        # Fallback for unknown triggers
         return f"*{message.title}*\n\n{message.body}"
+
+    @staticmethod
+    def _format_agent_alert(message: NotificationMessage) -> str:
+        """Format agent alert notification.
+
+        Args:
+            message: Notification message
+
+        Returns:
+            Formatted markdown string
+        """
+        # Agent-provided content may contain markdown chars - escape for safe delivery
+        title_escaped = NotificationFormatter._escape_markdown(message.title)
+        body_escaped = NotificationFormatter._escape_markdown(message.body)
+        return f"*{title_escaped}*\n\n{body_escaped}"
 
     @staticmethod
     def _format_signal(message: NotificationMessage) -> str:

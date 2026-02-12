@@ -76,7 +76,7 @@ class NotificationTool(BaseTool):
             ),
         )
 
-    def execute(self, **kwargs: str | int | float | bool) -> str:
+    def execute(self, **kwargs: str | int | float | bool | dict | object) -> str:
         """Execute notification synchronously (not supported).
 
         Args:
@@ -91,7 +91,7 @@ class NotificationTool(BaseTool):
         msg = "NotificationTool requires async execution via aexecute()"
         raise NotImplementedError(msg)
 
-    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+    async def aexecute(self, **kwargs: str | int | float | bool | dict | object) -> str:
         """Execute notification tool asynchronously.
 
         Args:
@@ -106,22 +106,16 @@ class NotificationTool(BaseTool):
         priority = str(kwargs.get("priority", "MEDIUM")).upper()
         context = kwargs.get("context", {})
 
-        # Validate title length
-        if len(title) > MAX_TITLE_LENGTH:
-            return f"Error: Title must be max {MAX_TITLE_LENGTH} characters"
-
-        # Validate message length
-        if len(message) > MAX_MESSAGE_LENGTH:
-            return f"Error: Message must be max {MAX_MESSAGE_LENGTH} characters"
-
-        # Validate priority enum
-        if priority not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
-            return f"Error: Invalid priority '{priority}'. Must be LOW, MEDIUM, HIGH, or CRITICAL"
+        # Validate inputs (combined to reduce return statements)
+        validation_error = self._validate_inputs(title, message, priority)
+        if validation_error:
+            return validation_error
 
         # Extract metadata from context
         if isinstance(context, dict):
             symbol = context.get("symbol", "N/A")
-            workflow_stage = context.get("stage", "unknown")
+            # Prefer explicit workflow_stage, fall back to legacy stage key, then unknown
+            workflow_stage = context.get("workflow_stage", context.get("stage", "unknown"))
         else:
             symbol = "N/A"
             workflow_stage = "unknown"
@@ -155,6 +149,29 @@ class NotificationTool(BaseTool):
             # Log warning but return success to LLM (don't crash agent workflow)
             logger.opt(exception=True).warning(f"Notification failed but continuing: {e}")
             return f"Notification queued: {title} (channel may be unavailable)"
+
+    def _validate_inputs(self, title: str, message: str, priority: str) -> str | None:
+        """Validate tool inputs.
+
+        Args:
+            title: Notification title
+            message: Notification message
+            priority: Priority level
+
+        Returns:
+            Error message if validation fails, None otherwise
+        """
+        if not title.strip():
+            return "Error: Title cannot be empty"
+        if not message.strip():
+            return "Error: Message cannot be empty"
+        if len(title) > MAX_TITLE_LENGTH:
+            return f"Error: Title must be max {MAX_TITLE_LENGTH} characters"
+        if len(message) > MAX_MESSAGE_LENGTH:
+            return f"Error: Message must be max {MAX_MESSAGE_LENGTH} characters"
+        if priority not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
+            return f"Error: Invalid priority '{priority}'. Must be LOW, MEDIUM, HIGH, or CRITICAL"
+        return None
 
     def __repr__(self) -> str:
         """String representation."""

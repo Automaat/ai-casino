@@ -231,3 +231,60 @@ def test_notification_tool_sync_execute_raises(notification_tool: NotificationTo
 def test_notification_tool_repr(notification_tool: NotificationTool) -> None:
     """Test string representation."""
     assert repr(notification_tool) == "NotificationTool()"
+
+
+@pytest.mark.asyncio
+async def test_notification_tool_validates_empty_title(notification_tool: NotificationTool) -> None:
+    """Test empty title validation."""
+    result = await notification_tool.aexecute(
+        title="   ",
+        message="Test message",
+    )
+
+    assert "error" in result.lower()
+    assert "title" in result.lower()
+    assert "empty" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_notification_tool_validates_empty_message(notification_tool: NotificationTool) -> None:
+    """Test empty message validation."""
+    result = await notification_tool.aexecute(
+        title="Test Title",
+        message="   ",
+    )
+
+    assert "error" in result.lower()
+    assert "message" in result.lower()
+    assert "empty" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_notification_tool_workflow_stage_fallback(
+    notification_tool: NotificationTool, mock_notification_service: NotificationService
+) -> None:
+    """Test workflow_stage preferred over legacy stage key."""
+    # Test with workflow_stage key
+    result = await notification_tool.aexecute(
+        title="Test",
+        message="Test message",
+        context={"workflow_stage": "execution", "stage": "analysis"},
+    )
+
+    assert "sent successfully" in result.lower()
+    call_args = mock_notification_service.notify.call_args
+    notification_msg = call_args[0][1]
+    assert notification_msg.metadata["workflow_stage"] == "execution"
+
+    # Test with only stage key (legacy)
+    mock_notification_service.notify.reset_mock()
+    result = await notification_tool.aexecute(
+        title="Test",
+        message="Test message",
+        context={"stage": "analysis"},
+    )
+
+    assert "sent successfully" in result.lower()
+    call_args = mock_notification_service.notify.call_args
+    notification_msg = call_args[0][1]
+    assert notification_msg.metadata["workflow_stage"] == "analysis"

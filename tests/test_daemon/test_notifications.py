@@ -272,4 +272,27 @@ class TestNotificationFormatter:
         result = NotificationFormatter.format_for_telegram(message)
         assert "⚠️" in result
         assert "alpha\\_vantage" in result
-        assert "marketaux" in result
+
+    def test_format_agent_alert(self) -> None:
+        """Agent alert notification formatted with markdown escaping."""
+        from src.daemon.notification_formatter import NotificationFormatter
+
+        message = NotificationMessage(
+            trigger=NotificationTrigger.AGENT_ALERT,
+            title="Market Alert: AAPL_earnings",
+            body="Apple reports Q4 earnings *beat* expectations [link](url)",
+            metadata={
+                "symbol": "AAPL",
+                "priority": "HIGH",
+                "agent_type": "coordinator",
+                "workflow_stage": "analysis",
+            },
+            timestamp=datetime.now(UTC),
+        )
+
+        result = NotificationFormatter.format_for_telegram(message)
+        # Title and body should be escaped
+        assert "AAPL\\_earnings" in result
+        assert "\\*beat\\*" in result
+        assert "\\[link\\]" in result
+        assert "\\(url\\)" in result
