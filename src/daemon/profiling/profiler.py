@@ -144,7 +144,7 @@ class CycleProfiler:
         top_functions = self._extract_top_functions(stats)
 
         # Calculate percentiles
-        all_cumtimes = [s.cumtime for s in stats]
+        all_cumtimes = [s.ttot for s in stats]
         p50, p95, p99 = self._calculate_percentiles(all_cumtimes)
 
         # Create metrics
@@ -182,9 +182,9 @@ class CycleProfiler:
             top_funcs.append(
                 FunctionStats(
                     function=function_name,
-                    cumtime=stat.cumtime,
-                    ncalls=stat.ncalls,
-                    percall=stat.cumtime / stat.ncalls if stat.ncalls > 0 else 0.0,
+                    cumtime=stat.ttot,
+                    ncalls=stat.ncall,
+                    percall=stat.ttot / stat.ncall if stat.ncall > 0 else 0.0,
                 )
             )
         return top_funcs

@@ -86,25 +86,16 @@ async def run_profiled_cycle(config: DaemonConfig) -> tuple[float, Path]:
     Returns:
         Tuple of (duration_seconds, profile_dir)
     """
-    factory = DaemonFactory(config)
-    components = factory.create_components()
+    from src.daemon.runner import DaemonRunner
 
-    # Import here to avoid circular dependency
-    from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
-
-    cycle_orchestrator = DaemonCycleOrchestrator(
-        components=components,
-        task_runner=components.task_runner,
-        runner=None,
-        profiler=components.profiler,
-    )
+    runner = DaemonRunner(config)
 
     console.print("[bold green]Starting profiled daemon cycle...[/bold green]")
     console.print(f"Analyzing: {', '.join(config.watchlist)}")
     console.print(f"Max concurrent: {config.analysis_orchestration.max_concurrent_analyses}")
 
     start_time = asyncio.get_event_loop().time()
-    await cycle_orchestrator.run_cycle()
+    await runner._run_cycle()
     duration = asyncio.get_event_loop().time() - start_time
 
     console.print(f"[green]✓[/green] Cycle complete in {duration:.2f}s")
