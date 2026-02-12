@@ -243,9 +243,8 @@ export interface FullConfigResponse {
 export interface ExecutionMetric {
 	workflow_id: string;
 	symbol: string;
-	start_time: string;
-	end_time: string;
-	duration_seconds: number;
+	timestamp: string;
+	total_latency_ms: number;
 	success: boolean;
 	error?: string;
 }

@@ -149,7 +149,9 @@ export const api = {
 	},
 
 	async getExecutionMetricDetail(workflowId: string): Promise<T.WorkflowExecutionMetrics> {
-		return fetchAPI<T.WorkflowExecutionMetrics>(`/api/execution-metrics/${workflowId}`);
+		return fetchAPI<T.WorkflowExecutionMetrics>(
+			`/api/execution-metrics/${encodeURIComponent(workflowId)}`
+		);
 	},
 
 	// Full Config

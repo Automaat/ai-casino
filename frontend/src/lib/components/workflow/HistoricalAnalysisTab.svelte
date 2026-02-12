@@ -41,7 +41,9 @@
 <div class="space-y-6">
 	<!-- Workflow Selector -->
 	<Card title="Select Workflow Execution">
+		<label for="workflow-selector" class="sr-only">Select workflow execution</label>
 		<select
+			id="workflow-selector"
 			class="w-full bg-slate-700 text-slate-100 border border-slate-600 rounded px-4 py-2"
 			bind:value={selectedWorkflowId}
 			onchange={() => handleWorkflowSelection(selectedWorkflowId)}
@@ -49,7 +51,7 @@
 			<option value="">-- Select a workflow execution --</option>
 			{#each metricsList as metric}
 				<option value={metric.workflow_id}>
-					{metric.symbol} @ {formatTimestamp(metric.start_time)} ({formatDuration(metric.duration_seconds)}s)
+					{metric.symbol} @ {formatTimestamp(metric.timestamp)} ({formatDuration(metric.total_latency_ms / 1000)}s)
 				</option>
 			{/each}
 		</select>

@@ -3,7 +3,6 @@
 	import { events } from '$lib/stores/dashboard';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
-	import type { SystemEvent } from '$lib/types/api';
 
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 
