@@ -39,12 +39,14 @@ def create_llm_client(
     Returns:
         Configured LLMClient
     """
+    from src.di.config import resolve_config_or_env
+
     provider = daemon_config.llm.provider or "ollama"
 
     if provider == "anthropic":
-        api_key = daemon_config.api_keys.anthropic_api_key
+        api_key = resolve_config_or_env(daemon_config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
     elif provider == "openai":
-        api_key = daemon_config.api_keys.openai_api_key
+        api_key = resolve_config_or_env(daemon_config.api_keys.openai_api_key, "OPENAI_API_KEY")
     else:
         api_key = None
 

@@ -54,8 +54,7 @@ def mock_indicator_response():
 @pytest.fixture
 def fetcher(tmp_path):
     """Create FinnhubFetcher with temp cache dir and mock API key."""
-    with patch.dict("os.environ", {"FINNHUB_API_KEY": "test_api_key"}):
-        return FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+    return FinnhubFetcher(cache_dir=str(tmp_path / "cache"), api_key="test_api_key")
 
 
 class TestSocialSentimentEntry:
@@ -155,10 +154,9 @@ class TestFinnhubFetcher:
     def test_init_creates_cache_dir(self, tmp_path):
         """Test that init creates cache directory."""
         cache_dir = tmp_path / "new_cache"
-        with patch.dict("os.environ", {"FINNHUB_API_KEY": "test"}):
-            fetcher = FinnhubFetcher(cache_dir=str(cache_dir))
-            assert cache_dir.exists()
-            assert fetcher._cache_dir == cache_dir
+        fetcher = FinnhubFetcher(cache_dir=str(cache_dir), api_key="test")
+        assert cache_dir.exists()
+        assert fetcher._cache_dir == cache_dir
 
     def test_init_with_explicit_key(self, tmp_path):
         """Test init with explicit API key."""
@@ -167,21 +165,18 @@ class TestFinnhubFetcher:
 
     def test_init_without_key_logs_warning(self, tmp_path):
         """Test that missing API key logs warning."""
-        with patch.dict("os.environ", {}, clear=True):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
-            assert fetcher._api_key is None
+        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+        assert fetcher._api_key is None
 
     def test_repr_shows_auth_status(self, tmp_path):
         """Test __repr__ shows authentication status."""
         # Authenticated
-        with patch.dict("os.environ", {"FINNHUB_API_KEY": "test"}):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache1"))
-            assert "authenticated=True" in repr(fetcher)
+        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache1"), api_key="test")
+        assert "authenticated=True" in repr(fetcher)
 
         # Not authenticated
-        with patch.dict("os.environ", {}, clear=True):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache2"))
-            assert "authenticated=False" in repr(fetcher)
+        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache2"))
+        assert "authenticated=False" in repr(fetcher)
 
     def test_cache_key_deterministic(self, fetcher):
         """Test cache key generation is deterministic."""
@@ -248,10 +243,9 @@ class TestFetchSocialSentiment:
 
     def test_raises_without_api_key(self, tmp_path):
         """Test that fetch raises ValueError without API key."""
-        with patch.dict("os.environ", {}, clear=True):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
-            with pytest.raises(ValueError, match="API key not configured"):
-                fetcher.fetch_social_sentiment("AAPL")
+        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+        with pytest.raises(ValueError, match="API key not configured"):
+            fetcher.fetch_social_sentiment("AAPL")
 
     def test_retries_on_timeout(self, fetcher, mock_social_response):
         """Test that timeout errors trigger retry."""
@@ -320,10 +314,9 @@ class TestFetchSentimentIndicator:
 
     def test_raises_without_api_key(self, tmp_path):
         """Test that fetch raises ValueError without API key."""
-        with patch.dict("os.environ", {}, clear=True):
-            fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
-            with pytest.raises(ValueError, match="API key not configured"):
-                fetcher.fetch_sentiment_indicator("AAPL")
+        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+        with pytest.raises(ValueError, match="API key not configured"):
+            fetcher.fetch_sentiment_indicator("AAPL")
 
     def test_retries_on_connection_error(self, fetcher, mock_indicator_response):
         """Test that connection errors trigger retry."""

@@ -87,6 +87,23 @@ class BrokerManager:
                     self.state.current_trading_mode = "paper"
                     self.state.paper_trading_start_date = datetime.now(UTC)
                     logger.warning("Switched to paper mode, reset start date")
+        else:
+            # Watchlist-only mode: Try to init broker for position merging if credentials present
+            api_key = self.config.api_keys.alpaca_paper_api_key or self.config.api_keys.alpaca_api_key
+            secret_key = self.config.api_keys.alpaca_paper_secret_key or self.config.api_keys.alpaca_secret_key
+
+            if api_key and secret_key:
+                try:
+                    self.broker = AlpacaBroker(
+                        api_key=api_key,
+                        secret_key=secret_key,
+                        paper=True,
+                        historical_cache=self._historical_cache,
+                    )
+                    logger.info("Alpaca broker initialized for watchlist merging (read-only)")
+                except Exception as e:
+                    logger.warning(f"Failed to init broker for watchlist merging: {e}")
+                    self.broker = None
 
     def get_merged_watchlist(self) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates.

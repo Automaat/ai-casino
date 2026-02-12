@@ -147,39 +147,44 @@ def test_get_merged_watchlist_empty_positions(sample_config: DaemonConfig, mock_
 @patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_with_credentials(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test broker initialization for watchlist merging when credentials present."""
-    with patch.dict(os.environ, {"ALPACA_API_KEY": "test_key", "ALPACA_SECRET_KEY": "test_secret"}):
-        runner = DaemonRunner(sample_config)
+    sample_config.api_keys.alpaca_paper_api_key = TEST_API_KEY
+    sample_config.api_keys.alpaca_paper_secret_key = TEST_SECRET_KEY
+    runner = DaemonRunner(sample_config)
 
-        assert runner.broker is not None
-        mock_broker_class.assert_called_once_with(paper=True, historical_cache=ANY)
+    assert runner.broker is not None
+    mock_broker_class.assert_called_once_with(
+        api_key=TEST_API_KEY,
+        secret_key=TEST_SECRET_KEY,
+        paper=True,
+        historical_cache=ANY,
+    )
 
 
 @patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_no_credentials(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test broker not initialized without credentials."""
-    with patch.dict(os.environ, {}, clear=True):
-        runner = DaemonRunner(sample_config)
+    runner = DaemonRunner(sample_config)
 
-        assert runner.broker is None
-        mock_broker_class.assert_not_called()
+    assert runner.broker is None
+    mock_broker_class.assert_not_called()
 
 
 @patch("src.daemon.broker_manager.AlpacaBroker")
 def test_broker_init_failure(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test daemon continues if broker init fails with auto_trade=false."""
     mock_broker_class.side_effect = ValueError("Invalid credentials")
+    sample_config.api_keys.alpaca_paper_api_key = "bad_key"
+    sample_config.api_keys.alpaca_paper_secret_key = "bad_secret"
+    runner = DaemonRunner(sample_config)
 
-    with patch.dict(os.environ, {"ALPACA_API_KEY": "bad_key", "ALPACA_SECRET_KEY": "bad_secret"}):
-        runner = DaemonRunner(sample_config)
-
-        assert runner.broker is None
+    assert runner.broker is None
 
 
 def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None:
     """Test auto_trade=true raises ValueError when keys missing."""
     sample_config.auto_trade = True
 
-    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="auto_trade with"):
+    with pytest.raises(ValueError, match="auto_trade with"):
         DaemonRunner(sample_config)
 
 
@@ -187,24 +192,24 @@ def test_auto_trade_fails_fast_without_keys(sample_config: DaemonConfig) -> None
 def test_auto_trade_inits_broker(mock_broker_class: Mock, sample_config: DaemonConfig) -> None:
     """Test auto_trade=true initializes broker when keys present."""
     sample_config.auto_trade = True
+    sample_config.api_keys.alpaca_paper_api_key = TEST_API_KEY
+    sample_config.api_keys.alpaca_paper_secret_key = TEST_SECRET_KEY
+    runner = DaemonRunner(sample_config)
 
-    with patch.dict(os.environ, {"ALPACA_API_KEY": TEST_API_KEY, "ALPACA_SECRET_KEY": TEST_SECRET_KEY}):
-        runner = DaemonRunner(sample_config)
-
-        assert runner.broker is not None
-        mock_broker_class.assert_called_once_with(
-            api_key=TEST_API_KEY,
-            secret_key=TEST_SECRET_KEY,
-            paper=True,
-            historical_cache=ANY,
-        )
+    assert runner.broker is not None
+    mock_broker_class.assert_called_once_with(
+        api_key=TEST_API_KEY,
+        secret_key=TEST_SECRET_KEY,
+        paper=True,
+        historical_cache=ANY,
+    )
 
 
 async def test_analyze_watchlist_uses_merged(
-    sample_config: DaemonConfig, mock_broker: Mock, monkeypatch: pytest.MonkeyPatch
+    sample_config: DaemonConfig, mock_broker: Mock
 ) -> None:
     """Test _analyze_watchlist uses merged watchlist."""
-    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
+    sample_config.api_keys.alpha_vantage_api_key = "test_key"
 
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
@@ -585,7 +590,6 @@ class TestSectorRotationIntegration:
 
         assert not rotation_called
 
-    @patch.dict(os.environ, {}, clear=True)
     async def test_run_sector_rotation_records_state(self, sample_config: DaemonConfig) -> None:
         """Test run_sector_rotation records analysis in state."""
         from datetime import UTC, datetime
@@ -630,7 +634,6 @@ class TestSectorRotationIntegration:
         assert len(runner.state.sector_rotation_history) == 1
         assert runner.state.sector_rotation_history[0].leading_sectors == ["TECHNOLOGY"]
 
-    @patch.dict(os.environ, {}, clear=True)
     async def test_run_sector_rotation_dedup(self, sample_config: DaemonConfig) -> None:
         """Test sector rotation deduplication (skip if already ran today)."""
         from datetime import datetime

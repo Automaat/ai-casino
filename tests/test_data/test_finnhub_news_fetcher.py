@@ -34,14 +34,12 @@ def test_fetcher_init_with_key():
     assert fetcher.api_key == "test-key"
 
 
-def test_fetcher_init_from_env(monkeypatch):
-    monkeypatch.setenv("FINNHUB_API_KEY", "env-key")
-    fetcher = FinnhubNewsFetcher()
+def test_fetcher_init_from_env():
+    fetcher = FinnhubNewsFetcher(api_key="env-key")
     assert fetcher.api_key == "env-key"
 
 
-def test_fetcher_init_no_key(monkeypatch):
-    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
+def test_fetcher_init_no_key():
     fetcher = FinnhubNewsFetcher()
     assert fetcher.api_key == ""
 
@@ -121,9 +119,7 @@ def test_fetch_market_news_http_error():
             fetcher._fetch_market_sync(20)
 
 
-def test_repr(monkeypatch):
-    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
-
+def test_repr():
     fetcher = FinnhubNewsFetcher(api_key="test-key")
     assert repr(fetcher) == "FinnhubNewsFetcher(authenticated=True)"
 
