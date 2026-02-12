@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.daemon.watchers.news_watcher import NewsWatcher
     from src.daemon.watchers.social_watcher import SocialWatcher
+    from src.daemon.watchers.trump_watcher import TrumpWatcher
     from src.di.container import AppContainer
     from src.discovery.engine import StockDiscoveryEngine
 
@@ -81,6 +82,7 @@ class DaemonComponents:
     coordinator: TradingCoordinator | None = None
     news_watcher: NewsWatcher | None = None
     social_watcher: SocialWatcher | None = None
+    trump_watcher: TrumpWatcher | None = None
 
 
 class DaemonFactory:
@@ -201,7 +203,12 @@ class DaemonFactory:
         # Phase 12: Event watchers (if enabled)
         news_watcher = None
         social_watcher = None
-        if self.config.news_watcher.enabled or self.config.social_watcher.enabled:
+        trump_watcher = None
+        if (
+            self.config.news_watcher.enabled
+            or self.config.social_watcher.enabled
+            or self.config.trump_watcher.enabled
+        ):
             # Call provider functions directly to pass container (providers.Self() doesn't work reliably)
             from src.di.providers import watchers as watcher_providers
 
@@ -221,6 +228,15 @@ class DaemonFactory:
                     self._container,
                 )
                 if self.config.social_watcher.enabled
+                else None
+            )
+            trump_watcher = (
+                watcher_providers.create_trump_watcher(
+                    self._container.historical_cache(),
+                    self.config,
+                    self._container,
+                )
+                if self.config.trump_watcher.enabled
                 else None
             )
             logger.info("Event watchers initialized")
@@ -253,6 +269,7 @@ class DaemonFactory:
             profiler=profiler,
             news_watcher=news_watcher,
             social_watcher=social_watcher,
+            trump_watcher=trump_watcher,
         )
 
         # Phase 14: Create task runner (needs components reference)

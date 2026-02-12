@@ -70,3 +70,14 @@ class AnomalyWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+
+
+class TrumpWatcherConfig(BaseModel):
+    """Configuration for Trump social media watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=5, ge=1, le=60)
+    max_analyses: int = Field(default=5, ge=1, le=20)
+    relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    cooldown_minutes: int = Field(default=15, ge=1, le=120)
+    max_concurrent_analyses: int = Field(default=2, ge=1, le=10)

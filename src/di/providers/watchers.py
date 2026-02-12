@@ -8,6 +8,7 @@ from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.watchers.news_watcher import NewsWatcher
 from src.daemon.watchers.social_watcher import SocialWatcher
+from src.daemon.watchers.trump_watcher import TrumpWatcher
 from src.data.base_news_fetcher import BaseNewsFetcher
 
 if TYPE_CHECKING:
@@ -111,5 +112,35 @@ def create_social_watcher(
         viral_score_threshold=config.viral_score_threshold,
         viral_upvote_ratio=config.viral_upvote_ratio,
         subreddits=config.subreddits,
+        max_concurrent_analyses=config.max_concurrent_analyses,
+    )
+
+
+def create_trump_watcher(
+    historical_cache: HistoricalCache,
+    daemon_config: DaemonConfig,
+    container: AppContainer | None = None,
+) -> TrumpWatcher | None:
+    """Create Trump Truth Social watcher if enabled.
+
+    Args:
+        historical_cache: Historical cache for data persistence
+        daemon_config: Daemon configuration
+        container: Optional DI container (auto-created if not provided)
+
+    Returns:
+        TrumpWatcher instance if enabled, None otherwise
+    """
+    config = daemon_config.trump_watcher
+    if not config.enabled:
+        logger.debug("TrumpWatcher disabled in config")
+        return None
+
+    return TrumpWatcher(
+        historical_cache=historical_cache,
+        container=container,
+        poll_interval=config.poll_interval_minutes * 60,
+        relevance_threshold=config.relevance_threshold,
+        cooldown_minutes=config.cooldown_minutes,
         max_concurrent_analyses=config.max_concurrent_analyses,
     )

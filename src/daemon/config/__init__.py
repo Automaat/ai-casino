@@ -16,6 +16,7 @@ from src.daemon.config.analysis import (
     NewsSourcesConfig,
     NewsWatcherConfig,
     SocialWatcherConfig,
+    TrumpWatcherConfig,
 )
 from src.daemon.config.base import NotificationTrigger, TradingMode
 from src.daemon.config.infrastructure import (
@@ -103,6 +104,7 @@ __all__ = [
     "StateConfig",
     "TelegramNotificationConfig",
     "TradingMode",
+    "TrumpWatcherConfig",
 ]
 
 
@@ -142,6 +144,7 @@ class DaemonConfig(BaseModel):
     analysis_orchestration: AnalysisOrchestratorConfig = Field(default_factory=AnalysisOrchestratorConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
+    trump_watcher: TrumpWatcherConfig = Field(default_factory=TrumpWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
@@ -197,6 +200,7 @@ class DaemonConfig(BaseModel):
         analysis_orchestration_data = daemon_data.pop("analysis_orchestration", {}) or {}
         news_watcher_data = daemon_data.pop("news_watcher", {}) or {}
         social_watcher_data = daemon_data.pop("social_watcher", {}) or {}
+        trump_watcher_data = daemon_data.pop("trump_watcher", {}) or {}
         filings_watcher_data = daemon_data.pop("filings_watcher", {}) or {}
         anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {}) or {}
         api_data = daemon_data.pop("api", {}) or {}
@@ -258,6 +262,7 @@ class DaemonConfig(BaseModel):
                 **news_watcher_data, sources=NewsSourcesConfig(**news_sources_data)
             ),
             social_watcher=SocialWatcherConfig(**social_watcher_data),
+            trump_watcher=TrumpWatcherConfig(**trump_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
             anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
             api=ApiConfig(**api_data, circuit_breaker=CircuitBreakerConfig(**circuit_breaker_data)),

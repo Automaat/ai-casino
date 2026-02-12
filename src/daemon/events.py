@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from src.data.news import NewsArticle
 from src.data.reddit import RedditPost
+from src.data.truth_social import TruthPost
 from src.workflows.types import TradingWorkflowResult
 
 
@@ -185,6 +186,31 @@ class Gap(BaseModel):
         return f"Gap({self.gap_direction} {abs(self.gap_pct):.1f}%)"
 
 
+class TrumpEvent(BaseModel):
+    """Trump Truth Social post event."""
+
+    event_id: str = Field(description="Post ID")
+    event_type: Literal["trump"] = "trump"
+    timestamp: datetime
+    source: str = "truth_social"
+    post: TruthPost
+
+    def to_prompt_text(self) -> str:
+        """Format Trump post for triage."""
+        return (
+            f"TRUMP TRUTH SOCIAL POST:\n"
+            f"Posted: {self.post.created_at}\n"
+            f"Content: {self.post.content}\n"
+            f"Engagement: {self.post.likes} likes, {self.post.reposts} reposts\n"
+            f"URL: {self.post.url}"
+        )
+
+    def __repr__(self) -> str:
+        """String representation."""
+        content_preview = self.post.content[:50].replace("\n", " ")
+        return f"TrumpEvent(content={content_preview}...)"
+
+
 class AnomalyEvent(BaseModel):
     """Market data anomaly event (volume spike, price move, gap)."""
 
@@ -262,7 +288,9 @@ class TriageResult(BaseModel):
 class EventSignal(BaseModel):
     """Signal emitted after triage + analysis."""
 
-    event: NewsEvent | SocialEvent | FilingEvent | AnomalyEvent = Field(discriminator="event_type")
+    event: NewsEvent | SocialEvent | TrumpEvent | FilingEvent | AnomalyEvent = Field(
+        discriminator="event_type"
+    )
     triage: TriageResult
     analyses: dict[str, TradingWorkflowResult] = Field(description="Symbol -> analysis result")
     signal_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
