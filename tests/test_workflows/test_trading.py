@@ -1,7 +1,7 @@
 """Tests for trading workflow."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -158,8 +158,18 @@ async def test_run_technical_analysis(test_container, sample_ohlcv_data):
     assert isinstance(result, TechnicalAnalysis)
 
 
-async def test_run_sentiment_analysis(test_container, sample_news_articles):
+async def test_run_sentiment_analysis(test_container, sample_news_articles, mocker):
     """Test sentiment analysis component."""
+
+    # Mock run_in_executor to avoid ProcessPoolExecutor pickling issues
+    async def mock_executor(executor, fn, *args):
+        # Return mock sentiment scores for the 3 articles
+        return [{"positive": 0.7, "neutral": 0.2, "negative": 0.1} for _ in range(3)]
+
+    mocker.patch("asyncio.get_running_loop").return_value.run_in_executor = AsyncMock(
+        side_effect=mock_executor
+    )
+
     workflow = test_container.workflow_momentum(container=test_container)
     result = await workflow.sentiment_analyst.analyze("AAPL", sample_news_articles)
 
