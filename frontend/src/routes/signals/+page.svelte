@@ -10,13 +10,61 @@
 
 	let selectedSymbol = '';
 	let selectedSignal = '';
+	let startDate = '';
+	let endDate = '';
 
 	$: allAnalyses = $analyses || [];
+
+	// Date range presets
+	function setDatePreset(preset: 'today' | '7days' | '30days' | 'all') {
+		const now = new Date();
+		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+		switch (preset) {
+			case 'today':
+				startDate = today.toISOString().split('T')[0];
+				endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+				break;
+			case '7days':
+				startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+				endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+				break;
+			case '30days':
+				startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+				endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+				break;
+			case 'all':
+				startDate = '';
+				endDate = '';
+				break;
+		}
+	}
+
+	function clearFilters() {
+		selectedSymbol = '';
+		selectedSignal = '';
+		startDate = '';
+		endDate = '';
+	}
 
 	// Filter analyses
 	$: filteredAnalyses = allAnalyses.filter(a => {
 		if (selectedSymbol && a.symbol !== selectedSymbol) return false;
 		if (selectedSignal && a.signal !== selectedSignal) return false;
+
+		// Date range filter
+		if (startDate || endDate) {
+			const timestamp = new Date(a.timestamp);
+			if (startDate) {
+				const start = new Date(startDate);
+				if (timestamp < start) return false;
+			}
+			if (endDate) {
+				const end = new Date(endDate);
+				if (timestamp > end) return false;
+			}
+		}
+
 		return true;
 	});
 
@@ -77,36 +125,108 @@
 <div class="space-y-8">
 	<!-- Filters -->
 	<Card title="Filters">
-		<div class="flex gap-4">
-			<div class="flex-1">
-				<label for="symbol-filter" class="block text-sm font-medium text-slate-400 mb-2">
-					Symbol
+		<div class="space-y-4">
+			<!-- Quick Presets -->
+			<div>
+				<label class="block text-sm font-medium text-slate-400 mb-2">
+					Quick Presets
 				</label>
-				<select
-					id="symbol-filter"
-					bind:value={selectedSymbol}
-					class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-				>
-					<option value="">All Symbols</option>
-					{#each symbols as symbol}
-						<option value={symbol}>{symbol}</option>
-					{/each}
-				</select>
+				<div class="flex gap-2">
+					<button
+						on:click={() => setDatePreset('today')}
+						class="px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-100 text-sm transition-colors"
+					>
+						Today
+					</button>
+					<button
+						on:click={() => setDatePreset('7days')}
+						class="px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-100 text-sm transition-colors"
+					>
+						Last 7 days
+					</button>
+					<button
+						on:click={() => setDatePreset('30days')}
+						class="px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-100 text-sm transition-colors"
+					>
+						Last 30 days
+					</button>
+					<button
+						on:click={() => setDatePreset('all')}
+						class="px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-100 text-sm transition-colors"
+					>
+						All time
+					</button>
+				</div>
 			</div>
-			<div class="flex-1">
-				<label for="signal-filter" class="block text-sm font-medium text-slate-400 mb-2">
-					Signal
-				</label>
-				<select
-					id="signal-filter"
-					bind:value={selectedSignal}
-					class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+			<!-- Date Range -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div>
+					<label for="start-date" class="block text-sm font-medium text-slate-400 mb-2">
+						Start Date
+					</label>
+					<input
+						id="start-date"
+						type="date"
+						bind:value={startDate}
+						class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label for="end-date" class="block text-sm font-medium text-slate-400 mb-2">
+						End Date
+					</label>
+					<input
+						id="end-date"
+						type="date"
+						bind:value={endDate}
+						class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+			</div>
+
+			<!-- Symbol and Signal Filters -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div>
+					<label for="symbol-filter" class="block text-sm font-medium text-slate-400 mb-2">
+						Symbol
+					</label>
+					<select
+						id="symbol-filter"
+						bind:value={selectedSymbol}
+						class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="">All Symbols</option>
+						{#each symbols as symbol}
+							<option value={symbol}>{symbol}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="signal-filter" class="block text-sm font-medium text-slate-400 mb-2">
+						Signal
+					</label>
+					<select
+						id="signal-filter"
+						bind:value={selectedSignal}
+						class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="">All Signals</option>
+						<option value="BUY">BUY</option>
+						<option value="SELL">SELL</option>
+						<option value="HOLD">HOLD</option>
+					</select>
+				</div>
+			</div>
+
+			<!-- Clear Filters Button -->
+			<div>
+				<button
+					on:click={clearFilters}
+					class="px-4 py-2 bg-red-900 hover:bg-red-800 border border-red-700 rounded-lg text-slate-100 text-sm transition-colors"
 				>
-					<option value="">All Signals</option>
-					<option value="BUY">BUY</option>
-					<option value="SELL">SELL</option>
-					<option value="HOLD">HOLD</option>
-				</select>
+					Clear All Filters
+				</button>
 			</div>
 		</div>
 	</Card>
