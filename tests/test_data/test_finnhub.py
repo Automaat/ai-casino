@@ -241,11 +241,13 @@ class TestFetchSocialSentiment:
             assert params["from"] == "2024-01-01"
             assert params["to"] == "2024-01-31"
 
-    def test_raises_without_api_key(self, tmp_path):
-        """Test that fetch raises ValueError without API key."""
+    def test_returns_empty_without_api_key(self, tmp_path):
+        """Test that fetch returns empty data without API key."""
         fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
-        with pytest.raises(ValueError, match="API key not configured"):
-            fetcher.fetch_social_sentiment("AAPL")
+        result = fetcher.fetch_social_sentiment("AAPL")
+        assert result.symbol == "AAPL"
+        assert result.reddit == []
+        assert result.twitter == []
 
     def test_retries_on_timeout(self, fetcher, mock_social_response):
         """Test that timeout errors trigger retry."""
@@ -312,11 +314,14 @@ class TestFetchSentimentIndicator:
 
             assert mock_client.return_value.__enter__.return_value.get.call_count == 1
 
-    def test_raises_without_api_key(self, tmp_path):
-        """Test that fetch raises ValueError without API key."""
+    def test_returns_empty_without_api_key(self, tmp_path):
+        """Test that fetch returns empty data without API key."""
         fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
-        with pytest.raises(ValueError, match="API key not configured"):
-            fetcher.fetch_sentiment_indicator("AAPL")
+        result = fetcher.fetch_sentiment_indicator("AAPL")
+        assert result.symbol == "AAPL"
+        assert result.company_news_score == 0.0
+        assert result.buzz.articles_in_last_week == 0
+        assert result.sentiment.bullish_percent == 0.0
 
     def test_retries_on_connection_error(self, fetcher, mock_indicator_response):
         """Test that connection errors trigger retry."""

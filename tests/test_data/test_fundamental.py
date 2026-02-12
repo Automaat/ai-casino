@@ -23,12 +23,12 @@ class TestFundamentalDataFetcher:
         assert fetcher.api_key is None
         assert fetcher.fd is None
 
-    def test_fetch_overview_without_api_key_raises(self):
-        """Test fetch raises when API key not configured."""
+    def test_fetch_overview_without_api_key_returns_empty(self):
+        """Test fetch returns empty dict when API key not configured."""
         fetcher = FundamentalDataFetcher()
 
-        with pytest.raises(ValueError, match="ALPHA_VANTAGE_API_KEY not configured"):
-            fetcher.fetch_overview("AAPL")
+        result = fetcher.fetch_overview("AAPL")
+        assert result == {}
 
     @patch("src.data.fundamental.FundamentalData")
     def test_fetch_overview_success(self, mock_fd_class, sample_fundamental_overview):
