@@ -1,6 +1,7 @@
 """Data fetcher providers for DI container."""
 
 from src.cache.historical import HistoricalCache
+from src.circuit_breaker import CircuitBreakerRegistry
 from src.daemon.config import DaemonConfig
 from src.daemon.notifications import NotificationService
 from src.data.base_news_fetcher import BaseNewsFetcher
@@ -76,12 +77,14 @@ def create_yfinance_market_fetcher(historical_cache: HistoricalCache) -> MarketD
 def create_news_fetcher(
     daemon_config: DaemonConfig,
     historical_cache: HistoricalCache,
+    circuit_breaker_registry: CircuitBreakerRegistry,
 ) -> NewsFetcher:
     """Create NewsFetcher with resolved config.
 
     Args:
         daemon_config: Daemon configuration
         historical_cache: Shared historical cache
+        circuit_breaker_registry: Circuit breaker registry
 
     Returns:
         Configured NewsFetcher
@@ -95,6 +98,8 @@ def create_news_fetcher(
     return NewsFetcher(
         api_key=api_key,
         historical_cache=historical_cache,
+        circuit_breaker_registry=circuit_breaker_registry,
+        circuit_breaker_config=daemon_config.api.circuit_breaker,
     )
 
 

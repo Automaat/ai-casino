@@ -15,6 +15,7 @@ from src.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
     from src.agents.critic import CriticAgent
+    from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker
     from src.workflows.types import TradingWorkflowResult
 
@@ -38,6 +39,7 @@ class TradingCoordinator:
         config: CoordinatorConfig,
         broker: AlpacaBroker,
         critic_agent: CriticAgent,
+        adaptive_threshold_manager: AdaptiveThresholdManager | None = None,
     ) -> None:
         """Initialize coordinator.
 
@@ -48,6 +50,7 @@ class TradingCoordinator:
             config: Coordinator configuration
             broker: Broker for portfolio context
             critic_agent: Critic agent for decision evaluation
+            adaptive_threshold_manager: Optional adaptive threshold manager
         """
         self._llm = llm_client
         self._tools = tool_registry
@@ -55,6 +58,7 @@ class TradingCoordinator:
         self._config = config
         self._broker = broker
         self._critic_agent = critic_agent  # Used by ReflectOnDecisionTool
+        self._adaptive_threshold_manager = adaptive_threshold_manager
         self._prompts = PromptLoader("coordinator")
         self._last_cycle_summary = "No previous cycle"
 
@@ -64,6 +68,7 @@ class TradingCoordinator:
         self._trades_proposed = 0
         self._trades_executed = 0
         self._game_plan_generated = False
+        self._cycle_counter = 0
 
         # Reflection tracking (reset per cycle)
         self._reflection_counters: dict[str, int] = {}
@@ -114,7 +119,17 @@ class TradingCoordinator:
         # Track cycle duration
         cycle_start = time.time()
 
+        # Increment cycle counter
+        self._cycle_counter += 1
+
         try:
+            # Update adaptive thresholds if needed
+            if (
+                self._adaptive_threshold_manager
+                and self._cycle_counter % self._config.adaptive_thresholds.adaptation_interval_cycles == 0
+            ):
+                await self._update_adaptive_thresholds()
+
             # Build prompts
             system_prompt = await self._build_system_prompt(watchlist, degradation_context)
             user_prompt = await self._build_cycle_prompt(watchlist, trading_session)
@@ -434,6 +449,21 @@ class TradingCoordinator:
 - **Min Confidence to Trade**: {self._config.min_confidence_to_trade:.0%}
 - **Confirmation Mode**: {self._config.confirmation_mode}
 """
+
+    async def _update_adaptive_thresholds(self) -> None:
+        """Update adaptive thresholds based on recent accuracy."""
+        if not self._adaptive_threshold_manager:
+            return
+
+        try:
+            thresholds = await self._adaptive_threshold_manager.update_thresholds()
+            logger.info(
+                f"Adaptive thresholds: BUY={thresholds.buy_threshold:.2f}, "
+                f"SELL={thresholds.sell_threshold:.2f} "
+                f"(updated {thresholds.adaptation_count} times)"
+            )
+        except Exception as e:
+            logger.opt(exception=True).error(f"Threshold adaptation failed: {e}")
 
     def __repr__(self) -> str:
         """String representation."""

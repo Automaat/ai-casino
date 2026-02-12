@@ -3,6 +3,7 @@
 import pytest
 
 from src.cache.historical import HistoricalCache
+from src.circuit_breaker.registry import CircuitBreakerRegistry
 from src.daemon.config import ApiKeysConfig, DaemonConfig, TradingMode
 from src.data.broker import AlpacaBroker
 from src.data.comparative import ComparativeDataFetcher
@@ -42,6 +43,12 @@ def mock_historical_cache(tmp_path) -> HistoricalCache:
     """Create temporary historical cache."""
     db_path = tmp_path / "test.db"
     return HistoricalCache(db_path=str(db_path))
+
+
+@pytest.fixture
+def mock_circuit_breaker_registry() -> CircuitBreakerRegistry:
+    """Create circuit breaker registry for testing."""
+    return CircuitBreakerRegistry()
 
 
 def test_create_historical_cache(tmp_path, monkeypatch):
@@ -87,20 +94,22 @@ def test_create_market_fetcher_env_fallback(monkeypatch, mock_historical_cache):
     assert fetcher.use_alpha_vantage is True
 
 
-def test_create_news_fetcher(mock_daemon_config, mock_historical_cache):
+def test_create_news_fetcher(mock_daemon_config, mock_historical_cache, mock_circuit_breaker_registry):
     """Test NewsFetcher creation with config."""
-    fetcher = data_providers.create_news_fetcher(mock_daemon_config, mock_historical_cache)
+    fetcher = data_providers.create_news_fetcher(
+        mock_daemon_config, mock_historical_cache, mock_circuit_breaker_registry
+    )
 
     assert isinstance(fetcher, NewsFetcher)
     assert fetcher._cache is mock_historical_cache
     assert fetcher.api_key == "test_mx_key"
 
 
-def test_create_news_fetcher_env_fallback(monkeypatch, mock_historical_cache):
+def test_create_news_fetcher_env_fallback(monkeypatch, mock_historical_cache, mock_circuit_breaker_registry):
     """Test NewsFetcher API key falls back to env var."""
     monkeypatch.setenv("MARKETAUX_API_KEY", "env_key")
     config = DaemonConfig()
-    fetcher = data_providers.create_news_fetcher(config, mock_historical_cache)
+    fetcher = data_providers.create_news_fetcher(config, mock_historical_cache, mock_circuit_breaker_registry)
 
     assert isinstance(fetcher, NewsFetcher)
 

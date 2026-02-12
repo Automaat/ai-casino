@@ -709,6 +709,52 @@ daemon:
       # Higher threshold = more reliable patterns but fewer insights
       min_sample_size: 10
 
+    # Adaptive confidence thresholds (self-regulating execution)
+    adaptive_thresholds:
+      # Enable threshold adaptation based on rolling accuracy
+      # When enabled, confidence thresholds adjust based on recent trade outcomes
+      # BUY threshold increases when accuracy drops, SELL threshold decreases when accuracy improves
+      enabled: false
+
+      # Adapt thresholds every N coordinator cycles (1-50)
+      # Higher interval = less frequent updates, more stable thresholds
+      # Example: 5 = adapt every 5th cycle
+      adaptation_interval_cycles: 5
+
+      # Minimum decisions per signal type for adaptation (10-100)
+      # Requires this many recent BUY/SELL decisions before adjusting thresholds
+      # Higher sample size = more reliable accuracy metrics but slower adaptation
+      min_sample_size: 20
+
+      # BUY threshold increase step when accuracy < buy_accuracy_threshold (0.0-0.2)
+      # Example: 0.1 = increase threshold by 10% when BUY accuracy is low
+      buy_increase_step: 0.1
+
+      # SELL threshold decrease step when accuracy > sell_accuracy_threshold (0.0-0.2)
+      # Example: 0.05 = decrease threshold by 5% when SELL accuracy is high
+      sell_decrease_step: 0.05
+
+      # Target accuracy thresholds (0.0-1.0)
+      # BUY threshold increases if accuracy falls below this value
+      # Example: 0.5 = increase BUY threshold if hit rate < 50%
+      buy_accuracy_threshold: 0.5
+
+      # SELL threshold decreases if accuracy exceeds this value
+      # Example: 0.7 = decrease SELL threshold if hit rate > 70%
+      sell_accuracy_threshold: 0.7
+
+      # Reset thresholds weekly to prevent over-fitting
+      # After 7 days, thresholds return to min_threshold baseline
+      weekly_reset_enabled: true
+
+      # Threshold bounds (safety limits)
+      # Upper cap - prevents threshold from becoming too restrictive (0.5-1.0)
+      max_threshold: 0.95
+
+      # Lower floor - prevents threshold from becoming too permissive (0.0-0.9)
+      # Also serves as initial/reset value for both BUY and SELL
+      min_threshold: 0.5
+
     # ===== EXAMPLES =====
     #
     # CONSERVATIVE (manual approval):
@@ -744,6 +790,36 @@ daemon:
     # CORS allowed origins for dashboard access
     # Add additional origins if dashboard runs on different ports
     # cors_origins: ["http://localhost:8050", "http://localhost:5173", "http://localhost:3000"]
+
+    # Circuit breaker configuration for external API calls
+    circuit_breaker:
+      # Consecutive failures before opening circuit (1-20)
+      # Opens circuit after N consecutive retriable errors (402, 429, 5xx, timeouts)
+      failure_threshold: 3
+
+      # Successful requests in half-open to close circuit (1-5)
+      # Number of successful test requests needed to restore normal operation
+      success_threshold: 1
+
+      # Default timeout before testing recovery (60-86400)
+      # Used for errors not in specific categories below
+      timeout_seconds: 3600
+
+      # Timeout for quota errors - 402 Payment Required (300-172800)
+      # 3600 = 1 hour (balance between retry frequency and quota recovery)
+      quota_error_timeout_seconds: 3600
+
+      # Timeout for rate limit errors - 429 Too Many Requests (60-86400)
+      # 300 = 5 minutes (typical rate limit window)
+      rate_limit_timeout_seconds: 300
+
+      # Timeout for server errors - 503/504 (30-3600)
+      # 60 = 1 minute (transient server issues)
+      server_error_timeout_seconds: 60
+
+      # Max concurrent test requests in half-open state (1-5)
+      # Limits how many requests can test recovery simultaneously
+      half_open_max_calls: 1
 
   # ========================================
   # METRICS CONFIGURATION

@@ -1,0 +1,40 @@
+# Development overrides for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  daemon:
+    # Mount source code for live reload (restart daemon after code changes)
+    volumes:
+      - ./src:/app/src:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+
+  finbert:
+    environment:
+      - FINBERT_LOG_LEVEL=DEBUG
+
+  frontend:
+    # Use Vite dev server with HMR instead of nginx
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/static:/app/static:ro
+      - ./frontend/.svelte-kit:/app/.svelte-kit
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/package-lock.json:/app/package-lock.json:ro
+      - ./frontend/svelte.config.js:/app/svelte.config.js:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+    # Override base ports: dev uses Vite (5173) instead of nginx (8050:80)
+    # Compose merges lists, but different target ports prevent conflicts
+    ports:
+      - "5173:5173"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5173"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

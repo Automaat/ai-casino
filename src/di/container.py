@@ -7,6 +7,7 @@ from dependency_injector import containers, providers
 from src.agents.base_researcher import ResearchDirection
 from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
+from src.di.providers import circuit_breaker as circuit_breaker_providers
 from src.di.providers import daemon as daemon_providers
 from src.di.providers import data as data_providers
 from src.di.providers import database as database_providers
@@ -77,6 +78,11 @@ class AppContainer(containers.DeclarativeContainer):
         database_engine=database_engine,
     )
 
+    # Circuit breaker registry - Singleton
+    circuit_breaker_registry = providers.Singleton(
+        circuit_breaker_providers.create_circuit_breaker_registry,
+    )
+
     # Data fetchers - all Singleton
     market_fetcher = providers.Singleton(
         data_providers.create_market_fetcher,
@@ -93,6 +99,7 @@ class AppContainer(containers.DeclarativeContainer):
         data_providers.create_news_fetcher,
         daemon_config=daemon_config,
         historical_cache=historical_cache,
+        circuit_breaker_registry=circuit_breaker_registry,
     )
 
     fundamental_fetcher = providers.Singleton(

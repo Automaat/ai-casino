@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
+import pandas as pd
 import yfinance as yf
 from bs4 import BeautifulSoup
 from diskcache import Cache
@@ -185,7 +186,91 @@ class StockUniverseFetcher:
         logger.info(f"Fetched {len(stocks)} Russell 3000 stocks")
         return universe
 
-    def _fetch_batch_metadata(  # noqa: C901, PLR0912
+    def _validate_symbols(self, symbols: list[str]) -> None:
+        """Validate symbols before sending to yfinance."""
+        invalid_symbols = [s for s in symbols if " " in s or len(s) > 6]
+        if invalid_symbols:
+            logger.error(f"INVALID SYMBOLS (spaces/too long): {invalid_symbols[:10]}")
+
+    def _parse_single_symbol_data(
+        self,
+        symbol: str,
+        data: pd.DataFrame,
+    ) -> dict[str, dict[str, float]]:
+        """Parse single symbol OHLCV data."""
+        result: dict[str, dict[str, float]] = {}
+        if not data.empty and "Close" in data.columns:
+            price = float(data["Close"].iloc[-1])
+            avg_volume = float(data["Volume"].tail(30).mean())
+            result[symbol] = {"price": price, "avg_volume": avg_volume, "market_cap": 0.0}
+        return result
+
+    def _parse_multi_symbol_data(
+        self,
+        batch: list[str],
+        data: pd.DataFrame,
+    ) -> dict[str, dict[str, float]]:
+        """Parse multi-symbol OHLCV data."""
+        result: dict[str, dict[str, float]] = {}
+        for symbol in batch:
+            try:
+                if symbol not in data.columns.get_level_values(0):
+                    continue
+                symbol_data = data[symbol]
+                if symbol_data.empty or "Close" not in symbol_data.columns:
+                    continue
+                price = float(symbol_data["Close"].iloc[-1])
+                avg_volume = float(symbol_data["Volume"].tail(30).mean())
+                result[symbol] = {"price": price, "avg_volume": avg_volume, "market_cap": 0.0}
+            except Exception as e:
+                logger.debug(f"Failed to parse {symbol}: {e}")
+        return result
+
+    def _fetch_ohlcv_batch(
+        self,
+        batch: list[str],
+        batch_num: int,
+        total_batches: int,
+    ) -> dict[str, dict[str, float]]:
+        """Fetch OHLCV data for a batch of symbols."""
+        logger.debug(f"Batch symbols (first 5): {batch[:5]}")
+        logger.debug(f"Fetching OHLCV batch {batch_num}/{total_batches}")
+
+        data = yf.download(batch, period="3mo", progress=False, group_by="ticker", threads=True)
+
+        if data.empty:
+            return {}
+
+        if len(batch) == 1:
+            return self._parse_single_symbol_data(batch[0], data)
+        return self._parse_multi_symbol_data(batch, data)
+
+    def _fetch_market_caps(self, symbols: list[str]) -> dict[str, float]:
+        """Fetch market caps in parallel."""
+
+        def fetch_market_cap(symbol: str) -> tuple[str, float]:
+            try:
+                ticker = yf.Ticker(symbol)
+                market_cap = ticker.info.get("marketCap", 0)
+                return symbol, float(market_cap) if market_cap else 0.0
+            except Exception as e:
+                logger.debug(f"Failed to fetch market cap for {symbol}: {e}")
+                return symbol, 0.0
+
+        result: dict[str, float] = {}
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(fetch_market_cap, sym): sym for sym in symbols}
+            for completed, future in enumerate(as_completed(futures), start=1):
+                if completed % 100 == 0:
+                    logger.debug(f"Stage 2: Fetched market cap {completed}/{len(symbols)}")
+                try:
+                    symbol, market_cap = future.result()
+                    result[symbol] = market_cap
+                except Exception as e:
+                    logger.debug(f"Failed to get market cap result: {e}")
+        return result
+
+    def _fetch_batch_metadata(
         self,
         symbols: list[str],
         batch_size: int = 50,
@@ -200,68 +285,28 @@ class StockUniverseFetcher:
             Dict mapping symbol to {price, avg_volume, market_cap}
         """
         logger.info(f"Fetching metadata for {len(symbols)} symbols")
+        self._validate_symbols(symbols)
+
         all_data: dict[str, dict[str, float]] = {}
 
         # Stage 1: Batch fetch OHLCV data for price and volume
         for i in range(0, len(symbols), batch_size):
             batch = symbols[i : i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(symbols) + batch_size - 1) // batch_size
+
             try:
-                batch_num = i // batch_size + 1
-                total_batches = (len(symbols) + batch_size - 1) // batch_size
-                logger.debug(f"Fetching OHLCV batch {batch_num}/{total_batches}")
-                data = yf.download(batch, period="3mo", progress=False, group_by="ticker", threads=True)
-
-                if data.empty:
-                    continue
-
-                # Handle single symbol vs multiple symbols response structure
-                if len(batch) == 1:
-                    symbol = batch[0]
-                    if not data.empty and "Close" in data.columns:
-                        price = float(data["Close"].iloc[-1])
-                        avg_volume = float(data["Volume"].tail(30).mean())
-                        all_data[symbol] = {"price": price, "avg_volume": avg_volume, "market_cap": 0.0}
-                else:
-                    for symbol in batch:
-                        try:
-                            if symbol not in data.columns.get_level_values(0):
-                                continue
-                            symbol_data = data[symbol]
-                            if symbol_data.empty or "Close" not in symbol_data.columns:
-                                continue
-                            price = float(symbol_data["Close"].iloc[-1])
-                            avg_volume = float(symbol_data["Volume"].tail(30).mean())
-                            all_data[symbol] = {"price": price, "avg_volume": avg_volume, "market_cap": 0.0}
-                        except Exception as e:
-                            logger.debug(f"Failed to parse {symbol}: {e}")
-                            continue
-
+                batch_data = self._fetch_ohlcv_batch(batch, batch_num, total_batches)
+                all_data.update(batch_data)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to fetch OHLCV batch: {e}")
-                continue
 
         logger.info(f"Stage 1: Fetched OHLCV for {len(all_data)} symbols")
 
         # Stage 2: Fetch market cap in parallel for survivors
-        def fetch_market_cap(symbol: str) -> tuple[str, float]:
-            try:
-                ticker = yf.Ticker(symbol)
-                market_cap = ticker.info.get("marketCap", 0)
-                return symbol, float(market_cap) if market_cap else 0.0
-            except Exception as e:
-                logger.debug(f"Failed to fetch market cap for {symbol}: {e}")
-                return symbol, 0.0
-
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(fetch_market_cap, sym): sym for sym in all_data}
-            for completed, future in enumerate(as_completed(futures), start=1):
-                if completed % 100 == 0:
-                    logger.debug(f"Stage 2: Fetched market cap {completed}/{len(all_data)}")
-                try:
-                    symbol, market_cap = future.result()
-                    all_data[symbol]["market_cap"] = market_cap
-                except Exception as e:
-                    logger.debug(f"Failed to get market cap result: {e}")
+        market_caps = self._fetch_market_caps(list(all_data.keys()))
+        for symbol, market_cap in market_caps.items():
+            all_data[symbol]["market_cap"] = market_cap
 
         logger.info(f"Stage 2: Fetched market cap for {len(all_data)} symbols")
         return all_data
@@ -360,10 +405,20 @@ class StockUniverseFetcher:
             for row in table.find_all("tr")[1:]:  # Skip header
                 cols = row.find_all("td")
                 if len(cols) >= 4:
-                    symbol = cols[0].get_text(strip=True).replace(".", "-")  # BRK.B -> BRK-B
-                    name = cols[1].get_text(strip=True)
+                    raw_symbol = cols[0].get_text(strip=True)
+                    raw_name = cols[1].get_text(strip=True)
+                    symbol = raw_symbol.replace(".", "-")  # BRK.B -> BRK-B
+                    name = raw_name
                     sector = cols[3].get_text(strip=True)
                     industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
+
+                    # Validate: symbol should not contain spaces and should be short
+                    if " " in symbol or len(symbol) > 6:
+                        logger.warning(
+                            f"S&P500 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
+                            f"symbol='{symbol}' name='{name}'"
+                        )
+                        continue
 
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
 
@@ -390,10 +445,20 @@ class StockUniverseFetcher:
             for row in table.find_all("tr")[1:]:  # Skip header
                 cols = row.find_all("td")
                 if len(cols) >= 3:
-                    name = cols[0].get_text(strip=True)
-                    symbol = cols[1].get_text(strip=True).replace(".", "-")
+                    raw_name = cols[0].get_text(strip=True)
+                    raw_symbol = cols[1].get_text(strip=True)
+                    name = raw_name
+                    symbol = raw_symbol.replace(".", "-")
                     sector = cols[2].get_text(strip=True)
                     industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
+
+                    # Validate: symbol should not contain spaces and should be short
+                    if " " in symbol or len(symbol) > 6:
+                        logger.warning(
+                            f"NASDAQ100 INVALID: col0='{raw_name}' col1='{raw_symbol}' -> "
+                            f"symbol='{symbol}' name='{name}'"
+                        )
+                        continue
 
                     stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
 
@@ -431,6 +496,11 @@ class StockUniverseFetcher:
 
                 # Handle BRK.B -> BRK-B conversion
                 symbol = ticker.replace(".", "-")
+
+                # Validate: symbol should not contain spaces and should be short
+                if " " in symbol or len(symbol) > 6:
+                    logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                    continue
 
                 stocks.append(
                     StockInfo(

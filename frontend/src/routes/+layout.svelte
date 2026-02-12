@@ -14,18 +14,20 @@
 		{ id: 'config', label: 'Config', href: '/config' }
 	];
 
-	$: currentPath = $page.url.pathname;
-	$: activeTab = currentPath === '/' ? 'overview'
+	const currentPath = $derived($page.url.pathname);
+	const activeTab = $derived(
+		currentPath === '/' ? 'overview'
 		: currentPath.startsWith('/portfolio') ? 'portfolio'
 		: currentPath.startsWith('/signals') ? 'signals'
 		: currentPath.startsWith('/risk') ? 'risk'
 		: currentPath.startsWith('/events') ? 'events'
 		: currentPath.startsWith('/workflow') ? 'workflow'
 		: currentPath.startsWith('/config') ? 'config'
-		: 'overview';
+		: 'overview'
+	);
 
-	$: daemonStatus = $health?.daemon_running ? 'Running' : 'Stopped';
-	$: statusColor = $health?.daemon_running ? 'text-green-600' : 'text-red-600';
+	const daemonStatus = $derived($health?.daemon_running ? 'Running' : 'Stopped');
+	const statusColor = $derived($health?.daemon_running ? 'text-green-600' : 'text-red-600');
 </script>
 
 <div class="min-h-screen bg-white">

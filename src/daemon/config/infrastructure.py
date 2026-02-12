@@ -5,6 +5,8 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator
 
+from src.circuit_breaker.models import CircuitBreakerConfig
+
 
 class PrefetchConfig(BaseModel):
     """Configuration for after-hours data prefetching."""
@@ -32,6 +34,10 @@ class ApiConfig(BaseModel):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:8050"],
         description="CORS allowed origins for dashboard access",
+    )
+    circuit_breaker: CircuitBreakerConfig = Field(
+        default_factory=CircuitBreakerConfig,
+        description="Circuit breaker configuration for external API calls",
     )
 
     @field_validator("cors_origins")

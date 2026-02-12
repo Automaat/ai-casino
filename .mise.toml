@@ -50,7 +50,23 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run daemon with API enabled"
+description = "Run dev environment with Docker Compose (live reload, uses daemon-production.yaml)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build"
+
+[tasks."dev:down"]
+description = "Stop dev environment"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down"
+
+[tasks."dev:logs"]
+description = "View dev environment logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f"
+
+[tasks."dev:restart"]
+description = "Restart dev daemon (after code changes)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml restart daemon"
+
+[tasks."dev:local"]
+description = "Run daemon locally with ollama (old dev mode)"
 run = "uv run python -m src.main daemon --config daemon-dev.yaml"
 env = { LLM_PROVIDER = "ollama", LLM_MODEL = "qwen3:14b" }
 
@@ -101,40 +117,6 @@ run = "docker compose logs -f"
 [tasks."prod:restart"]
 description = "Restart production daemon"
 run = "docker compose restart"
-
-[tasks."prod:svelte"]
-description = "Run production daemon with Svelte frontend (Docker Compose, uses ~/.ai-casino/daemon-production.yaml)"
-run = "docker compose -f docker-compose.svelte.yml up --build"
-
-[tasks."prod:svelte:down"]
-description = "Stop Svelte production stack"
-run = "docker compose -f docker-compose.svelte.yml down"
-
-[tasks."prod:svelte:logs"]
-description = "View Svelte production logs"
-run = "docker compose -f docker-compose.svelte.yml logs -f"
-
-[tasks."prod:svelte:restart"]
-description = "Restart Svelte production stack"
-run = "docker compose -f docker-compose.svelte.yml restart"
-
-[tasks."prod:svelte:local"]
-description = "Run daemon with Svelte frontend (local, dev config + prod build)"
-run = """
-  trap 'pkill -P $$' EXIT
-  echo "Starting daemon with dev config..."
-  uv run python -m src.main daemon --config daemon-dev.yaml &
-  DAEMON_PID=$!
-  echo "Daemon started (PID: $DAEMON_PID)"
-  sleep 3
-  echo "Installing frontend dependencies..."
-  cd frontend && npm ci
-  echo "Building Svelte frontend..."
-  npm run build
-  echo "Starting Svelte frontend at http://localhost:4173"
-  npm run preview -- --host 0.0.0.0
-"""
-env = { NODE_ENV = "production" }
 
 [tasks."dev:svelte"]
 description = "Run daemon with Svelte frontend (dev mode)"
