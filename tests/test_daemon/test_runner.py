@@ -317,9 +317,21 @@ async def test_analyze_symbol_records_executed_trade(
     mock_result.decision.reasoning = ["Strong momentum", "High volume"]
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.order = mock_order
+    mock_result.risk = Mock()
+    mock_result.risk.current_price = 150.0
+    mock_result.strategy_used = "momentum"
+    mock_result.regime = None
     mock_result.technical = Mock()
+    mock_result.technical.signal.value = "BUY"
     mock_result.technical.rsi = 45.0
     mock_result.technical.macd_hist = 0.5
+    mock_result.technical.interpretation = "Strong momentum"
+    mock_result.sentiment = Mock()
+    mock_result.sentiment.overall_sentiment = "positive"
+    mock_result.sentiment.summary = "Positive sentiment"
+    mock_result.news = Mock()
+    mock_result.news.impact_assessment = "Good news"
+    mock_result.news.recommendation = "Buy"
 
     mock_workflow = AsyncMock()
     mock_workflow.analyze.return_value = mock_result
@@ -336,11 +348,14 @@ async def test_analyze_symbol_records_executed_trade(
         signal="BUY",
         confidence=0.85,
         executed=True,
-        trading_session="REGULAR",
+        trading_session=TradingSession.REGULAR,
         is_paper_trade=True,
         rsi=45.0,
         macd_hist=0.5,
         reasoning=["Strong momentum", "High volume"],
+        technical_analysis_reasoning="Strong momentum",
+        sentiment_analysis_reasoning="Positive sentiment",
+        news_analysis_reasoning="Good news\n\nRecommendation: Buy",
     )
 
 
@@ -358,9 +373,21 @@ async def test_analyze_symbol_records_not_executed(
     mock_result.decision.reasoning = ["Neutral signals", "Wait for confirmation"]
     mock_result.trading_session = TradingSession.REGULAR
     mock_result.order = None
+    mock_result.risk = Mock()
+    mock_result.risk.current_price = 160.0
+    mock_result.strategy_used = "momentum"
+    mock_result.regime = None
     mock_result.technical = Mock()
+    mock_result.technical.signal.value = "HOLD"
     mock_result.technical.rsi = 55.0
     mock_result.technical.macd_hist = -0.2
+    mock_result.technical.interpretation = "Neutral signals"
+    mock_result.sentiment = Mock()
+    mock_result.sentiment.overall_sentiment = "neutral"
+    mock_result.sentiment.summary = "Mixed sentiment"
+    mock_result.news = Mock()
+    mock_result.news.impact_assessment = "Neutral news"
+    mock_result.news.recommendation = "Hold"
 
     mock_workflow = AsyncMock()
     mock_workflow.analyze.return_value = mock_result
@@ -377,11 +404,14 @@ async def test_analyze_symbol_records_not_executed(
         signal="HOLD",
         confidence=0.6,
         executed=False,
-        trading_session="REGULAR",
+        trading_session=TradingSession.REGULAR,
         is_paper_trade=True,
         rsi=55.0,
         macd_hist=-0.2,
         reasoning=["Neutral signals", "Wait for confirmation"],
+        technical_analysis_reasoning="Neutral signals",
+        sentiment_analysis_reasoning="Mixed sentiment",
+        news_analysis_reasoning="Neutral news\n\nRecommendation: Hold",
     )
 
 
@@ -692,6 +722,12 @@ async def test_runner_publishes_analysis_events(sample_config: DaemonConfig, eve
         mock_result.technical.signal = Signal.BUY
         mock_result.technical.rsi = 35.0
         mock_result.technical.macd_hist = 0.8
+        mock_result.technical.interpretation = "Strong buy signal"
+        mock_result.sentiment = Mock()
+        mock_result.sentiment.summary = "Positive sentiment"
+        mock_result.news = Mock()
+        mock_result.news.impact_assessment = "Good news"
+        mock_result.news.recommendation = "Buy"
         mock_workflow.analyze = AsyncMock(return_value=mock_result)
         mock_init_workflow.return_value = mock_workflow
 

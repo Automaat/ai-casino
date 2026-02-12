@@ -48,6 +48,9 @@ class SignalOutcomeInput:
     technical_signal: str | None = None
     sentiment_signal: str | None = None
     news_signal: str | None = None
+    technical_reasoning: str | None = None
+    sentiment_reasoning: str | None = None
+    news_reasoning: str | None = None
 
 
 class HistoricalCache:
@@ -169,6 +172,9 @@ class HistoricalCache:
                 technical_signal TEXT,
                 sentiment_signal TEXT,
                 news_signal TEXT,
+                technical_reasoning TEXT,
+                sentiment_reasoning TEXT,
+                news_reasoning TEXT,
                 price_at_1d REAL,
                 price_at_5d REAL,
                 price_at_20d REAL,
@@ -180,6 +186,26 @@ class HistoricalCache:
             CREATE INDEX IF NOT EXISTS idx_signal_outcomes_symbol ON signal_outcomes(symbol);
             CREATE INDEX IF NOT EXISTS idx_signal_outcomes_timestamp ON signal_outcomes(timestamp);
         """)
+        self._migrate_signal_outcomes_reasoning_columns()
+
+    def _migrate_signal_outcomes_reasoning_columns(self) -> None:
+        """Add technical_reasoning, sentiment_reasoning, news_reasoning columns if missing."""
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(signal_outcomes)")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+
+        # Migrations for reasoning columns
+        if "technical_reasoning" not in existing_cols:
+            logger.debug("Adding column technical_reasoning to signal_outcomes table")
+            self._conn.execute("ALTER TABLE signal_outcomes ADD COLUMN technical_reasoning TEXT")
+        if "sentiment_reasoning" not in existing_cols:
+            logger.debug("Adding column sentiment_reasoning to signal_outcomes table")
+            self._conn.execute("ALTER TABLE signal_outcomes ADD COLUMN sentiment_reasoning TEXT")
+        if "news_reasoning" not in existing_cols:
+            logger.debug("Adding column news_reasoning to signal_outcomes table")
+            self._conn.execute("ALTER TABLE signal_outcomes ADD COLUMN news_reasoning TEXT")
+
+        self._conn.commit()
 
     def get_ohlcv(self, symbol: str) -> pd.DataFrame:
         """Get all cached OHLCV rows for a symbol.
@@ -630,6 +656,9 @@ class HistoricalCache:
                 technical_signal=kwargs.get("technical_signal"),  # type: ignore[arg-type]
                 sentiment_signal=kwargs.get("sentiment_signal"),  # type: ignore[arg-type]
                 news_signal=kwargs.get("news_signal"),  # type: ignore[arg-type]
+                technical_reasoning=kwargs.get("technical_reasoning"),  # type: ignore[arg-type]
+                sentiment_reasoning=kwargs.get("sentiment_reasoning"),  # type: ignore[arg-type]
+                news_reasoning=kwargs.get("news_reasoning"),  # type: ignore[arg-type]
             )
         if input_data is None:
             msg = "Either input_data or individual parameters must be provided"
@@ -638,8 +667,9 @@ class HistoricalCache:
             self._conn.execute(
                 "INSERT OR IGNORE INTO signal_outcomes "
                 "(symbol, timestamp, signal, confidence, price_at_signal, "
-                "strategy_used, regime, trading_session, technical_signal, sentiment_signal, news_signal) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "strategy_used, regime, trading_session, technical_signal, sentiment_signal, news_signal, "
+                "technical_reasoning, sentiment_reasoning, news_reasoning) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     input_data.symbol,
                     input_data.timestamp.isoformat(),
@@ -652,6 +682,9 @@ class HistoricalCache:
                     input_data.technical_signal,
                     input_data.sentiment_signal,
                     input_data.news_signal,
+                    input_data.technical_reasoning,
+                    input_data.sentiment_reasoning,
+                    input_data.news_reasoning,
                 ),
             )
             self._conn.commit()
@@ -769,6 +802,9 @@ class HistoricalCache:
             "technical_signal",
             "sentiment_signal",
             "news_signal",
+            "technical_reasoning",
+            "sentiment_reasoning",
+            "news_reasoning",
             "price_at_1d",
             "price_at_5d",
             "price_at_20d",

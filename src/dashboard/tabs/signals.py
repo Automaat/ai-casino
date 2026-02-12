@@ -140,6 +140,9 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
                         "is_paper_trade": a.is_paper_trade,
                         "trading_session": a.trading_session,
                         "reasoning": a.reasoning,
+                        "technical_analysis_reasoning": a.technical_analysis_reasoning,
+                        "sentiment_analysis_reasoning": a.sentiment_analysis_reasoning,
+                        "news_analysis_reasoning": a.news_analysis_reasoning,
                     }
                     for a in analyses_resp.analyses
                 ],
@@ -307,12 +310,8 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
                 )
             )
 
-            # Reasoning collapse row (hidden by default)
-            reasoning_content = (
-                html.Ul([html.Li(r) for r in analysis.get("reasoning", [])])
-                if analysis.get("reasoning")
-                else html.P("No reasoning available", className="text-muted fst-italic")
-            )
+            # Reasoning collapse row (hidden by default) - structured by agent
+            reasoning_content = _build_reasoning_content(analysis)
 
             table_rows.append(
                 html.Tr(
@@ -320,13 +319,7 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901
                         html.Td(
                             dbc.Collapse(
                                 dbc.Card(
-                                    dbc.CardBody(
-                                        [
-                                            html.Strong("Decision Reasoning:"),
-                                            reasoning_content,
-                                        ],
-                                        className="bg-light",
-                                    ),
+                                    dbc.CardBody(reasoning_content, className="bg-light"),
                                     className="border-0",
                                 ),
                                 id={"type": "collapse", "index": idx},
@@ -576,3 +569,65 @@ def _build_macd_histogram(analyses: list) -> dbc.Alert | dcc.Graph:
     )
 
     return dcc.Graph(figure=fig)
+
+
+def _build_reasoning_content(analysis: dict) -> html.Div | html.P:
+    """Build structured reasoning content with agent-specific sections.
+
+    Args:
+        analysis: Analysis dict with reasoning fields
+
+    Returns:
+        Reasoning content component
+    """
+    reasoning_sections = []
+
+    if analysis.get("technical_analysis_reasoning"):
+        reasoning_sections.append(
+            html.Div(
+                [
+                    html.Strong("📊 Technical Analysis:", className="text-primary"),
+                    html.P(analysis["technical_analysis_reasoning"], className="mt-2 mb-3"),
+                ]
+            )
+        )
+
+    if analysis.get("sentiment_analysis_reasoning"):
+        reasoning_sections.append(
+            html.Div(
+                [
+                    html.Strong("💭 Sentiment Analysis:", className="text-info"),
+                    html.P(analysis["sentiment_analysis_reasoning"], className="mt-2 mb-3"),
+                ]
+            )
+        )
+
+    if analysis.get("news_analysis_reasoning"):
+        reasoning_sections.append(
+            html.Div(
+                [
+                    html.Strong("📰 News Analysis:", className="text-warning"),
+                    html.P(
+                        analysis["news_analysis_reasoning"],
+                        className="mt-2 mb-3",
+                        style={"white-space": "pre-wrap"},
+                    ),
+                ]
+            )
+        )
+
+    if analysis.get("reasoning"):
+        reasoning_sections.append(
+            html.Div(
+                [
+                    html.Strong("🎯 Final Decision:", className="text-success"),
+                    html.Ul([html.Li(r) for r in analysis["reasoning"]], className="mt-2 mb-0"),
+                ]
+            )
+        )
+
+    return (
+        html.Div(reasoning_sections)
+        if reasoning_sections
+        else html.P("No reasoning available", className="text-muted fst-italic")
+    )

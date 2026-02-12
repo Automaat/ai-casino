@@ -33,6 +33,9 @@ class SignalRecordInput(BaseModel):
     technical_signal: str | None = Field(default=None, description="Technical analysis signal")
     sentiment_signal: str | None = Field(default=None, description="Sentiment analysis signal")
     news_signal: str | None = Field(default=None, description="News analysis signal")
+    technical_reasoning: str | None = Field(default=None, description="Technical analysis interpretation")
+    sentiment_reasoning: str | None = Field(default=None, description="Sentiment analysis summary")
+    news_reasoning: str | None = Field(default=None, description="News impact assessment")
 
 
 class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
@@ -69,6 +72,9 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             technical_signal=input_data.technical_signal,
             sentiment_signal=input_data.sentiment_signal,
             news_signal=input_data.news_signal,
+            technical_reasoning=input_data.technical_reasoning,
+            sentiment_reasoning=input_data.sentiment_reasoning,
+            news_reasoning=input_data.news_reasoning,
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
@@ -436,6 +442,9 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             technical_signal=orm.technical_signal,
             sentiment_signal=orm.sentiment_signal,
             news_signal=orm.news_signal,
+            technical_reasoning=orm.technical_reasoning,
+            sentiment_reasoning=orm.sentiment_reasoning,
+            news_reasoning=orm.news_reasoning,
             price_at_1d=float(orm.price_at_1d) if orm.price_at_1d is not None else None,
             price_at_5d=float(orm.price_at_5d) if orm.price_at_5d is not None else None,
             price_at_20d=float(orm.price_at_20d) if orm.price_at_20d is not None else None,

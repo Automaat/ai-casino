@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, text
+from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -315,6 +315,9 @@ class SignalOutcomeORM(Base):
     technical_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
     sentiment_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
     news_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    technical_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sentiment_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    news_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     price_at_1d: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
     price_at_5d: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
     price_at_20d: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
