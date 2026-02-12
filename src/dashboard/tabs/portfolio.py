@@ -24,6 +24,8 @@ def render(client: DaemonAPIClient) -> list:  # noqa: ARG001
     return [
         dcc.Store(id="portfolio-data-store", data=None),
         html.Div(id="portfolio-timestamp", className="text-muted small mb-3", children="Last updated: -"),
+        html.Div(id="portfolio-account-cards"),
+        html.Hr(),
         html.H4("Portfolio Overview"),
         html.Hr(),
         html.Div(id="portfolio-equity-curve"),
@@ -137,6 +139,105 @@ def register_callbacks(app: Dash) -> None:  # noqa: C901, PLR0915
         ts = datetime.fromisoformat(data["timestamp"])
         age = (datetime.now(UTC) - ts).total_seconds()
         return f"Last updated: {age:.0f}s ago"
+
+    @app.callback(
+        Output("portfolio-account-cards", "children"),
+        Input("portfolio-data-store", "data"),
+    )
+    def update_account_cards(data: dict | None) -> dbc.Row:
+        """Update account summary cards.
+
+        Args:
+            data: Store data
+
+        Returns:
+            Account cards row
+        """
+        # Default values when no data is available
+        portfolio_value = 0.0
+        cash = 0.0
+        num_positions = 0
+
+        if data and isinstance(data, dict):
+            positions = data.get("positions", [])
+            snapshots = data.get("snapshots", [])
+
+            # Calculate portfolio value from latest snapshot or from positions
+            if snapshots:
+                try:
+                    pv = snapshots[-1].get("portfolio_value", 0.0)
+                    portfolio_value = float(pv) if pv is not None else 0.0
+                except ValueError, TypeError, IndexError:
+                    portfolio_value = 0.0
+
+            # If no snapshots, calculate from positions
+            if portfolio_value == 0.0 and positions:
+                try:
+                    portfolio_value = sum(
+                        float(p.get("current_qty", 0) or 0) * float(p.get("current_price", 0) or 0)
+                        for p in positions
+                    )
+                except ValueError, TypeError:
+                    portfolio_value = 0.0
+
+            num_positions = len(positions)
+
+            # Calculate cash (portfolio value minus position values)
+            position_value = 0.0
+            if positions:
+                try:
+                    position_value = sum(
+                        float(p.get("current_qty", 0) or 0) * float(p.get("current_price", 0) or 0)
+                        for p in positions
+                    )
+                except ValueError, TypeError:
+                    position_value = 0.0
+
+            cash = max(0.0, portfolio_value - position_value)
+
+        cards = [
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.Div("💰", style={"fontSize": "2rem", "textAlign": "right"}),
+                            html.H5("Portfolio Value", className="card-title text-muted"),
+                            html.H2(f"${portfolio_value:,.2f}"),
+                        ]
+                    ),
+                    className="mb-3",
+                ),
+                width=4,
+            ),
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.Div("💵", style={"fontSize": "2rem", "textAlign": "right"}),
+                            html.H5("Cash", className="card-title text-muted"),
+                            html.H2(f"${cash:,.2f}"),
+                        ]
+                    ),
+                    className="mb-3",
+                ),
+                width=4,
+            ),
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.Div("📊", style={"fontSize": "2rem", "textAlign": "right"}),
+                            html.H5("Positions", className="card-title text-muted"),
+                            html.H2(str(num_positions)),
+                        ]
+                    ),
+                    className="mb-3",
+                ),
+                width=4,
+            ),
+        ]
+
+        return dbc.Row(cards)
 
     @app.callback(
         Output("portfolio-positions-header", "children"),

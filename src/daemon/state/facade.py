@@ -247,6 +247,9 @@ class DaemonState(BaseModel):
         rsi: float | None = None,
         macd_hist: float | None = None,
         reasoning: list[str] | None = None,
+        technical_analysis_reasoning: str | None = None,
+        sentiment_analysis_reasoning: str | None = None,
+        news_analysis_reasoning: str | None = None,
     ) -> None:
         """Delegate to trading manager."""
         from src.daemon.state.managers.trading import AnalysisRecordInput
@@ -261,6 +264,9 @@ class DaemonState(BaseModel):
             rsi=rsi,
             macd_hist=macd_hist,
             reasoning=reasoning,
+            technical_analysis_reasoning=technical_analysis_reasoning,
+            sentiment_analysis_reasoning=sentiment_analysis_reasoning,
+            news_analysis_reasoning=news_analysis_reasoning,
         )
         self.trading.record_analysis(input_data)
 
