@@ -12,6 +12,7 @@ from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolPa
 if TYPE_CHECKING:
     from src.coordinator.confirmation import TradeConfirmationHandler
     from src.daemon.config import DaemonConfig
+    from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker
 
 MIN_RATIONALE_LENGTH: Final[int] = 10
@@ -25,6 +26,7 @@ class ExecuteTradeTool(BaseTool):
         broker: AlpacaBroker,
         daemon_config: DaemonConfig,
         confirmation_handler: TradeConfirmationHandler | None = None,
+        adaptive_threshold_manager: AdaptiveThresholdManager | None = None,
     ) -> None:
         """Initialize tool with broker and config.
 
@@ -32,10 +34,12 @@ class ExecuteTradeTool(BaseTool):
             broker: Alpaca broker instance
             daemon_config: Daemon configuration for trading mode
             confirmation_handler: Optional confirmation handler for manual mode
+            adaptive_threshold_manager: Optional adaptive threshold manager
         """
         self._broker = broker
         self._daemon_config = daemon_config
         self._confirmation_handler = confirmation_handler
+        self._adaptive_threshold_manager = adaptive_threshold_manager
 
     @property
     def name(self) -> str:
@@ -62,8 +66,9 @@ class ExecuteTradeTool(BaseTool):
                 name=self.name,
                 description=(
                     "Execute a market order (BUY or SELL) with optional stop loss. "
-                    "Requires rationale for trade decision. In LIVE mode, requires user confirmation. "
-                    "In PAPER mode, executes automatically."
+                    "Requires confidence (0.0-1.0) for threshold validation and rationale for "
+                    "trade decision. In LIVE mode, requires user confirmation. In PAPER mode, "
+                    "executes automatically."
                 ),
                 parameters=ToolParametersSchema(
                     properties={
@@ -79,6 +84,10 @@ class ExecuteTradeTool(BaseTool):
                             type="integer",
                             description="Number of shares to trade (minimum: 1)",
                         ),
+                        "confidence": ToolParameter(
+                            type="number",
+                            description="Decision confidence (0.0-1.0) for threshold validation",
+                        ),
                         "stop_loss_price": ToolParameter(
                             type="number",
                             description="Optional stop loss price",
@@ -88,7 +97,7 @@ class ExecuteTradeTool(BaseTool):
                             description="Trading rationale (minimum 10 characters)",
                         ),
                     },
-                    required=["symbol", "action", "quantity", "rationale"],
+                    required=["symbol", "action", "quantity", "confidence", "rationale"],
                 ),
             ),
         )
@@ -98,7 +107,7 @@ class ExecuteTradeTool(BaseTool):
 
         Args:
             **kwargs: Tool arguments (symbol: str, action: str, quantity: int,
-                     stop_loss_price: float | None, rationale: str)
+                     confidence: float, stop_loss_price: float | None, rationale: str)
 
         Returns:
             Order status with details
@@ -167,7 +176,7 @@ class ExecuteTradeTool(BaseTool):
 
         Args:
             **kwargs: Tool arguments (symbol: str, action: str, quantity: int,
-                     stop_loss_price: float | None, rationale: str)
+                     confidence: float, stop_loss_price: float | None, rationale: str)
 
         Returns:
             Order status with details or confirmation status
@@ -175,12 +184,17 @@ class ExecuteTradeTool(BaseTool):
         symbol = str(kwargs["symbol"]).upper()
         action = str(kwargs["action"]).upper()
         quantity = int(kwargs["quantity"])
+        confidence = float(kwargs["confidence"])
         stop_loss_price = kwargs.get("stop_loss_price")
         rationale = str(kwargs["rationale"])
 
         # Validate inputs (consolidated)
         if validation_error := self._validate_inputs(quantity, action, rationale):
             return validation_error
+
+        # Validate confidence against adaptive threshold
+        if threshold_error := await self._check_adaptive_threshold(action, confidence):
+            return threshold_error
 
         # Convert stop loss to float if provided
         stop_loss_float = float(stop_loss_price) if stop_loss_price is not None else None
@@ -212,6 +226,40 @@ class ExecuteTradeTool(BaseTool):
             return f"Error: Invalid action '{action}'. Must be BUY or SELL"
         if len(rationale) < MIN_RATIONALE_LENGTH:
             return f"Error: Rationale must be at least {MIN_RATIONALE_LENGTH} characters"
+        return None
+
+    async def _check_adaptive_threshold(
+        self,
+        signal_type: str,
+        confidence: float,
+    ) -> str | None:
+        """Validate confidence against adaptive threshold.
+
+        Args:
+            signal_type: BUY/SELL
+            confidence: Decision confidence (0.0-1.0)
+
+        Returns:
+            Error message if rejected, None if passes
+        """
+        if not self._adaptive_threshold_manager:
+            # Fallback to static threshold
+            min_conf = self._daemon_config.coordinator.min_confidence_to_trade
+            if confidence < min_conf:
+                return f"Confidence {confidence:.0%} below threshold {min_conf:.0%}"
+            return None
+
+        threshold = self._adaptive_threshold_manager.get_threshold(signal_type)
+        if confidence < threshold:
+            logger.info(
+                f"Rejected {signal_type}: confidence {confidence:.0%} "
+                f"below adaptive threshold {threshold:.0%}"
+            )
+            return (
+                f"Confidence {confidence:.0%} below adaptive {signal_type} "
+                f"threshold {threshold:.0%} (adapts based on recent accuracy)"
+            )
+
         return None
 
     async def _handle_confirmation(

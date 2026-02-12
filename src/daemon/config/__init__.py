@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 # Re-export all config classes (backward compatibility)
 from src.circuit_breaker.models import CircuitBreakerConfig
 from src.coordinator import CoordinatorConfig
+from src.coordinator.models import AdaptiveThresholdConfig, PatternDetectionConfig
 from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
     AnomalyWatcherConfig,
@@ -218,6 +219,12 @@ class DaemonConfig(BaseModel):
         # Extract nested circuit_breaker config from api
         circuit_breaker_data = api_data.pop("circuit_breaker", {}) or {}
 
+        # Extract nested adaptive_thresholds config from coordinator
+        adaptive_thresholds_data = coordinator_data.pop("adaptive_thresholds", {}) or {}
+
+        # Extract nested pattern_detection config from coordinator
+        pattern_detection_data = coordinator_data.pop("pattern_detection", {}) or {}
+
         return cls(
             **daemon_data,
             paper_trading=PaperTradingConfig(**paper_trading_data),
@@ -259,7 +266,11 @@ class DaemonConfig(BaseModel):
             api_keys=ApiKeysConfig(**api_keys_data),
             data_sources=DataSourcesConfig(**data_sources_data),
             database=DatabaseConfig(**database_data),
-            coordinator=CoordinatorConfig(**coordinator_data),
+            coordinator=CoordinatorConfig(
+                **coordinator_data,
+                adaptive_thresholds=AdaptiveThresholdConfig(**adaptive_thresholds_data),
+                pattern_detection=PatternDetectionConfig(**pattern_detection_data),
+            ),
             profiling=ProfilingConfig(**profiling_data),
             metrics=MetricsConfig(**metrics_data),
             logging=LoggingConfig(**logging_data),
