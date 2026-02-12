@@ -127,7 +127,7 @@ async def test_watcher_lifecycle_single_cycle(
     integration_watcher._triage_agent = mock_triage_agent
     integration_watcher._workflow = mock_workflow
 
-    # Patch _emit_signal to avoid EventSignal validation
+    # Patch _emit_signal to suppress actual signal emission/side effects
     with patch.object(integration_watcher, "_emit_signal") as mock_emit:
         # Run single cycle
         await integration_watcher._run_cycle()

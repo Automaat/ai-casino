@@ -53,7 +53,8 @@ async def test_lifecycle_starts_watchers_on_startup(minimal_daemon_components):
     """Test watcher tasks created on startup."""
     lifecycle = DaemonLifecycle(minimal_daemon_components)
 
-    await lifecycle.startup()
+    with patch("signal.signal"):  # Prevent global signal handler mutation
+        await lifecycle.startup()
 
     # Verify watcher task was created
     assert len(lifecycle._watcher_tasks) == 1
@@ -69,7 +70,8 @@ async def test_lifecycle_stops_watchers_on_shutdown(minimal_daemon_components):
     """Test watchers stopped on shutdown."""
     lifecycle = DaemonLifecycle(minimal_daemon_components)
 
-    await lifecycle.startup()
+    with patch("signal.signal"):  # Prevent global signal handler mutation
+        await lifecycle.startup()
     assert len(lifecycle._watcher_tasks) == 1
     task = lifecycle._watcher_tasks[0]
 
@@ -99,7 +101,7 @@ async def test_watcher_crash_logged_not_propagated(minimal_daemon_components):
     lifecycle = DaemonLifecycle(minimal_daemon_components)
 
     # Patch logger to verify error logged
-    with patch("src.daemon.lifecycle.logger") as mock_logger:
+    with patch("src.daemon.lifecycle.logger") as mock_logger, patch("signal.signal"):
         await lifecycle.startup()
 
         # Wait for watcher to crash
@@ -111,6 +113,13 @@ async def test_watcher_crash_logged_not_propagated(minimal_daemon_components):
         # Trigger done callback
         exc = lifecycle._watcher_tasks[0].exception()
         assert isinstance(exc, ValueError)
+
+        # Verify the crash was logged via logger.opt(...).error(...)
+        mock_logger.opt.assert_called()
+        mock_logger.opt.return_value.error.assert_called()
+        error_args, _ = mock_logger.opt.return_value.error.call_args
+        if error_args:
+            assert "Test watcher crash" in str(error_args[0])
 
     # Cleanup
     await lifecycle.shutdown()
@@ -160,7 +169,8 @@ async def test_multiple_watchers_run_independently():
 
     lifecycle = DaemonLifecycle(components)
 
-    await lifecycle.startup()
+    with patch("signal.signal"):  # Prevent global signal handler mutation
+        await lifecycle.startup()
 
     # Let both run for a bit
     await asyncio.sleep(0.3)
@@ -177,6 +187,7 @@ async def test_multiple_watchers_run_independently():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.slow
 async def test_shutdown_waits_then_cancels():
     """Test shutdown waits 5s then cancels slow watchers."""
     from src.daemon.config import DaemonConfig
@@ -207,7 +218,8 @@ async def test_shutdown_waits_then_cancels():
 
     lifecycle = DaemonLifecycle(components)
 
-    await lifecycle.startup()
+    with patch("signal.signal"):  # Prevent global signal handler mutation
+        await lifecycle.startup()
     await asyncio.sleep(0.1)  # Let watcher start
 
     # Shutdown - should timeout and cancel
