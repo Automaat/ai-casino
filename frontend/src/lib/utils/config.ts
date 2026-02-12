@@ -13,7 +13,7 @@ export function formatConfigValue(value: unknown): FormattedValue {
 		return {
 			type: 'null',
 			display: 'None',
-			color: 'text-slate-500'
+			color: 'text-gray-500'
 		};
 	}
 
@@ -21,7 +21,7 @@ export function formatConfigValue(value: unknown): FormattedValue {
 		return {
 			type: 'boolean',
 			display: value ? '✓' : '✗',
-			color: value ? 'text-green-400' : 'text-red-400'
+			color: value ? 'text-green-600' : 'text-red-600'
 		};
 	}
 
@@ -30,7 +30,7 @@ export function formatConfigValue(value: unknown): FormattedValue {
 			return {
 				type: 'list',
 				display: '[]',
-				color: 'text-slate-500'
+				color: 'text-gray-500'
 			};
 		}
 		return {
@@ -44,7 +44,7 @@ export function formatConfigValue(value: unknown): FormattedValue {
 		return {
 			type: 'dict',
 			display: `${keys.length} items`,
-			color: 'text-slate-500'
+			color: 'text-gray-500'
 		};
 	}
 

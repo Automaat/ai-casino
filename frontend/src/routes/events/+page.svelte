@@ -181,7 +181,7 @@
 			case 'INFO':
 				return { color: '#3b82f6', icon: '🔵' };
 			case 'TRADE':
-				return { color: '#22c55e', icon: '🟢' };
+				return { color: '#16a34a', icon: '🟢' };
 			case 'SYSTEM':
 			default:
 				return { color: '#6b7280', icon: '⚪' };
@@ -249,7 +249,7 @@
 	// Initialize degradation chart reactively when container becomes available
 	$effect(() => {
 		if (degradationChartContainer && !degradationChart) {
-			degradationChart = echarts.init(degradationChartContainer, 'dark');
+			degradationChart = echarts.init(degradationChartContainer);
 			if ($degradationHistory) {
 				updateDegradationChart();
 			}
@@ -269,7 +269,7 @@
 
 		const tierOrder = ['FULL', 'DEGRADED', 'MINIMAL', 'HALTED'];
 		const tierColors: Record<string, string> = {
-			FULL: '#22c55e',
+			FULL: '#16a34a',
 			DEGRADED: '#fbbf24',
 			MINIMAL: '#f97316',
 			HALTED: '#ef4444'
@@ -284,13 +284,13 @@
 			backgroundColor: 'transparent',
 			title: {
 				text: 'API Degradation Timeline',
-				textStyle: { color: '#e2e8f0', fontSize: 14 }
+				textStyle: { color: '#374151', fontSize: 14 }
 			},
 			tooltip: {
 				trigger: 'axis',
-				backgroundColor: '#1e293b',
-				borderColor: '#334155',
-				textStyle: { color: '#e2e8f0' },
+				backgroundColor: '#ffffff',
+				borderColor: '#e5e7eb',
+				textStyle: { color: '#374151' },
 				formatter: (params: any) => {
 					const p = Array.isArray(params) ? params[0] : params;
 					return `<b>${p.value}</b><br/>${p.name}<br/>${services[p.dataIndex]}`;
@@ -305,14 +305,14 @@
 			xAxis: {
 				type: 'category',
 				data: timestamps,
-				axisLine: { lineStyle: { color: '#334155' } },
-				axisLabel: { color: '#94a3b8', rotate: 45 }
+				axisLine: { lineStyle: { color: '#d1d5db' } },
+				axisLabel: { color: '#6b7280', rotate: 45 }
 			},
 			yAxis: {
 				type: 'category',
 				data: tierOrder,
-				axisLine: { lineStyle: { color: '#334155' } },
-				axisLabel: { color: '#94a3b8' }
+				axisLine: { lineStyle: { color: '#d1d5db' } },
+				axisLabel: { color: '#6b7280' }
 			},
 			series: [
 				{
@@ -341,14 +341,14 @@
 	<!-- Warnings Banner -->
 	{#if warnings.length > 0}
 		<div class="space-y-2">
-			<h2 class="text-xl font-semibold text-slate-100">⚠️ Active Warnings</h2>
+			<h2 class="text-xl font-semibold text-black">⚠️ Active Warnings</h2>
 			{#each warnings as warning}
-				<div class="{warning.severity === 'danger' ? 'bg-red-900/20 border-red-700' : 'bg-yellow-900/20 border-yellow-700'} border rounded-lg p-4">
+				<div class="{warning.severity === 'danger' ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300'} border rounded-lg p-4">
 					<div class="flex items-start gap-3">
 						<span class="text-2xl">{warning.icon}</span>
 						<div>
-							<p class="font-semibold text-slate-100">{warning.message}</p>
-							<p class="text-sm text-slate-400 mt-1">{warning.details}</p>
+							<p class="font-semibold text-black">{warning.message}</p>
+							<p class="text-sm text-gray-600 mt-1">{warning.details}</p>
 						</div>
 					</div>
 				</div>
@@ -368,44 +368,44 @@
 		<div class="space-y-4">
 			<div>
 				<!-- svelte-ignore a11y_label_has_associated_control -->
-				<label class="block text-sm font-medium text-slate-400 mb-2">
+				<label class="block text-sm font-medium text-gray-600 mb-2">
 					Event Types
 				</label>
 				<div class="flex flex-wrap gap-2">
 					{#each availableCategories as category}
-						<label class="flex items-center gap-2 px-3 py-2 bg-slate-700 rounded-lg cursor-pointer hover:bg-slate-600 transition-colors">
+						<label class="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
 							<input
 								type="checkbox"
 								bind:group={selectedCategories}
 								value={category}
-								class="rounded border-slate-500 text-blue-500 focus:ring-blue-500"
+								class="rounded border-gray-400 text-blue-700 focus:ring-blue-700"
 							/>
-							<span class="text-sm text-slate-200">{category}</span>
+							<span class="text-sm text-gray-800">{category}</span>
 						</label>
 					{/each}
 				</div>
 			</div>
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<div>
-					<label for="start-date" class="block text-sm font-medium text-slate-400 mb-2">
+					<label for="start-date" class="block text-sm font-medium text-gray-600 mb-2">
 						Start Date
 					</label>
 					<input
 						id="start-date"
 						type="date"
 						bind:value={startDate}
-						class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-700"
 					/>
 				</div>
 				<div>
-					<label for="end-date" class="block text-sm font-medium text-slate-400 mb-2">
+					<label for="end-date" class="block text-sm font-medium text-gray-600 mb-2">
 						End Date
 					</label>
 					<input
 						id="end-date"
 						type="date"
 						bind:value={endDate}
-						class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-700"
 					/>
 				</div>
 			</div>
@@ -417,18 +417,18 @@
 		{#if filteredEvents.length > 0}
 			<div class="overflow-x-auto">
 				<table class="w-full text-sm">
-					<thead class="border-b border-slate-700">
+					<thead class="border-b border-gray-300">
 						<tr>
-							<th class="text-left py-3 px-4 font-medium text-slate-400">Timestamp</th>
-							<th class="text-left py-3 px-4 font-medium text-slate-400">Type</th>
-							<th class="text-left py-3 px-4 font-medium text-slate-400">Category</th>
-							<th class="text-left py-3 px-4 font-medium text-slate-400">Details</th>
+							<th class="text-left py-3 px-4 font-medium text-gray-600">Timestamp</th>
+							<th class="text-left py-3 px-4 font-medium text-gray-600">Type</th>
+							<th class="text-left py-3 px-4 font-medium text-gray-600">Category</th>
+							<th class="text-left py-3 px-4 font-medium text-gray-600">Details</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each filteredEvents.slice(0, 100) as event}
-							<tr class="border-b border-slate-800 hover:bg-slate-800/50">
-								<td class="py-3 px-4 font-mono text-xs text-slate-300">
+							<tr class="border-b border-gray-200 hover:bg-gray-50">
+								<td class="py-3 px-4 font-mono text-xs text-gray-700">
 									{formatDate(event.timestamp)}
 								</td>
 								<td class="py-3 px-4">
@@ -439,10 +439,10 @@
 										</span>
 									</div>
 								</td>
-								<td class="py-3 px-4 text-xs text-slate-400">
+								<td class="py-3 px-4 text-xs text-gray-600">
 									{event.category}
 								</td>
-								<td class="py-3 px-4 text-xs text-slate-300">
+								<td class="py-3 px-4 text-xs text-gray-700">
 									{truncate(event.details)}
 								</td>
 							</tr>
@@ -451,7 +451,7 @@
 				</table>
 			</div>
 		{:else}
-			<div class="text-center py-12 text-slate-400">
+			<div class="text-center py-12 text-gray-600">
 				No events match the selected filters.
 			</div>
 		{/if}

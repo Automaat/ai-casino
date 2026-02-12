@@ -64,14 +64,14 @@
 			backgroundColor: 'transparent',
 			title: {
 				text: chartTitle,
-				textStyle: { color: '#e2e8f0', fontSize: 14 },
+				textStyle: { color: '#000000', fontSize: 14 },
 				left: 'center'
 			},
 			tooltip: {
 				position: 'top',
-				backgroundColor: '#1e293b',
-				borderColor: '#334155',
-				textStyle: { color: '#e2e8f0' },
+				backgroundColor: '#ffffff',
+				borderColor: '#d1d5db',
+				textStyle: { color: '#000000' },
 				formatter: (params: any) => {
 					const sectorIdx = params.data[1];
 					const ticker = sortedSectors[sectorIdx];
@@ -96,13 +96,13 @@
 				type: 'category',
 				data: ['Relative Strength'],
 				splitArea: { show: false },
-				axisLabel: { color: '#94a3b8', fontSize: 12 }
+				axisLabel: { color: '#4b5563', fontSize: 12 }
 			},
 			yAxis: {
 				type: 'category',
 				data: yAxisLabels,
 				splitArea: { show: true },
-				axisLabel: { color: '#94a3b8', fontSize: 11 }
+				axisLabel: { color: '#4b5563', fontSize: 11 }
 			},
 			visualMap: {
 				min: 0,
@@ -112,9 +112,9 @@
 				left: 'center',
 				bottom: '3%',
 				inRange: {
-					color: ['#ef4444', '#f59e0b', '#84cc16', '#10b981']
+					color: ['#ef4444', '#f59e0b', '#84cc16', '#059669']
 				},
-				textStyle: { color: '#94a3b8' },
+				textStyle: { color: '#4b5563' },
 				formatter: '{value}%' as any
 			},
 			series: [
@@ -125,14 +125,14 @@
 					label: {
 						show: true,
 						formatter: (params: any) => `${params.data[2].toFixed(1)}%`,
-						color: '#e2e8f0',
+						color: '#000000',
 						fontSize: 11
 					},
 					emphasis: {
 						itemStyle: {
 							shadowBlur: 10,
 							shadowColor: 'rgba(0, 0, 0, 0.5)',
-							borderColor: '#e2e8f0',
+							borderColor: '#000000',
 							borderWidth: 2
 						}
 					},
@@ -140,7 +140,7 @@
 						borderColor: ((params: any) => {
 							const sectorIdx = params.data[1];
 							const ticker = sortedSectors[sectorIdx];
-							return (leadingSectors?.includes(ticker) ?? false) ? '#fbbf24' : '#334155';
+							return (leadingSectors?.includes(ticker) ?? false) ? '#fbbf24' : '#d1d5db';
 						}) as any,
 						borderWidth: ((params: any) => {
 							const sectorIdx = params.data[1];
@@ -156,7 +156,7 @@
 	}
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 		updateChart();
 
 		const resizeObserver = new ResizeObserver(() => {

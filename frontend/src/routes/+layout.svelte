@@ -25,25 +25,25 @@
 		: 'overview';
 
 	$: daemonStatus = $health?.daemon_running ? 'Running' : 'Stopped';
-	$: statusColor = $health?.daemon_running ? 'text-green-400' : 'text-red-400';
+	$: statusColor = $health?.daemon_running ? 'text-green-600' : 'text-red-600';
 </script>
 
-<div class="min-h-screen bg-slate-900">
+<div class="min-h-screen bg-white">
 	<!-- Header -->
-	<header class="bg-slate-800 border-b border-slate-700">
+	<header class="bg-gray-50 border-b border-gray-300">
 		<div class="container mx-auto px-6 py-4">
 			<div class="flex items-center justify-between">
 				<div>
-					<h1 class="text-2xl font-bold text-slate-100">AI Casino</h1>
-					<p class="text-sm text-slate-400">Multi-Agent Trading System</p>
+					<h1 class="text-2xl font-bold text-black">AI Casino</h1>
+					<p class="text-sm text-gray-600">Multi-Agent Trading System</p>
 				</div>
 				<div class="flex items-center gap-4">
 					<div class="text-sm">
-						<span class="text-slate-400">Daemon:</span>
+						<span class="text-gray-600">Daemon:</span>
 						<span class="ml-2 font-medium {statusColor}">{daemonStatus}</span>
 					</div>
 					{#if $health?.uptime_seconds}
-						<div class="text-sm text-slate-400">
+						<div class="text-sm text-gray-600">
 							Uptime: {Math.floor($health.uptime_seconds / 3600)}h {Math.floor(($health.uptime_seconds % 3600) / 60)}m
 						</div>
 					{/if}
@@ -53,7 +53,7 @@
 	</header>
 
 	<!-- Navigation -->
-	<div class="bg-slate-800 border-b border-slate-700">
+	<div class="bg-gray-50 border-b border-gray-300">
 		<div class="container mx-auto px-6">
 			<Tabs {tabs} {activeTab} />
 		</div>
@@ -65,8 +65,8 @@
 	</main>
 
 	<!-- Footer -->
-	<footer class="bg-slate-800 border-t border-slate-700 mt-12">
-		<div class="container mx-auto px-6 py-4 text-center text-sm text-slate-400">
+	<footer class="bg-gray-50 border-t border-gray-300 mt-12">
+		<div class="container mx-auto px-6 py-4 text-center text-sm text-gray-600">
 			SvelteKit + TypeScript + ECharts + Lightweight Charts
 		</div>
 	</footer>

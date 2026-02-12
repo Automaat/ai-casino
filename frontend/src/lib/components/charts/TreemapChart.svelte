@@ -24,9 +24,10 @@
 
 		const option: EChartsOption = {
 			backgroundColor: 'transparent',
+			color: ['#e5e7eb', '#d1d5db', '#9ca3af', '#6b7280', '#4b5563'],
 			title: {
 				text: title,
-				textStyle: { color: '#e2e8f0', fontSize: 16 }
+				textStyle: { color: '#000000', fontSize: 16 }
 			},
 			tooltip: {
 				formatter: (params: any) => {
@@ -44,10 +45,10 @@
 						formatter: (params: any) => {
 							return `${params.name}\n$${params.value.toLocaleString()}`;
 						},
-						color: '#e2e8f0'
+						color: '#000000'
 					},
 					itemStyle: {
-						borderColor: '#1e293b',
+						borderColor: '#ffffff',
 						borderWidth: 2
 					},
 					levels: [
@@ -61,7 +62,7 @@
 							itemStyle: {
 								gapWidth: 1
 							},
-							colorSaturation: [0.35, 0.5]
+							colorSaturation: [0.15, 0.25]
 						}
 					],
 					visualDimension: 0,
@@ -75,7 +76,7 @@
 	}
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 		updateChart();
 
 		const resizeObserver = new ResizeObserver(() => {

@@ -14,7 +14,7 @@
 	let chart: ECharts | null = null;
 
 	onMount(() => {
-		chart = echarts.init(chartContainer, 'dark');
+		chart = echarts.init(chartContainer);
 
 		const resizeObserver = new ResizeObserver(() => {
 			chart?.resize();
@@ -33,16 +33,16 @@
 				backgroundColor: 'transparent',
 				tooltip: {
 					trigger: 'axis',
-					backgroundColor: '#1e293b',
-					borderColor: '#334155',
-					textStyle: { color: '#e2e8f0' },
+					backgroundColor: '#ffffff',
+					borderColor: '#e5e7eb',
+					textStyle: { color: '#374151' },
 					axisPointer: {
 						type: 'cross'
 					}
 				},
 				legend: {
 					data: ['Latency (ms)', 'LLM Calls'],
-					textStyle: { color: '#94a3b8' },
+					textStyle: { color: '#6b7280' },
 					top: 0
 				},
 				grid: {
@@ -55,24 +55,24 @@
 				xAxis: {
 					type: 'category',
 					data: data.map(a => a.agent_name),
-					axisLine: { lineStyle: { color: '#334155' } },
-					axisLabel: { color: '#94a3b8', rotate: 45 }
+					axisLine: { lineStyle: { color: '#d1d5db' } },
+					axisLabel: { color: '#6b7280', rotate: 45 }
 				},
 				yAxis: [
 					{
 						type: 'value',
 						name: 'Latency (ms)',
-						nameTextStyle: { color: '#94a3b8' },
-						axisLine: { lineStyle: { color: '#334155' } },
-						axisLabel: { color: '#94a3b8' },
-						splitLine: { lineStyle: { color: '#334155' } }
+						nameTextStyle: { color: '#6b7280' },
+						axisLine: { lineStyle: { color: '#d1d5db' } },
+						axisLabel: { color: '#6b7280' },
+						splitLine: { lineStyle: { color: '#e5e7eb' } }
 					},
 					{
 						type: 'value',
 						name: 'LLM Calls',
-						nameTextStyle: { color: '#94a3b8' },
-						axisLine: { lineStyle: { color: '#334155' } },
-						axisLabel: { color: '#94a3b8' },
+						nameTextStyle: { color: '#6b7280' },
+						axisLine: { lineStyle: { color: '#d1d5db' } },
+						axisLabel: { color: '#6b7280' },
 						splitLine: { show: false }
 					}
 				],
@@ -88,8 +88,8 @@
 						name: 'LLM Calls',
 						type: 'line',
 						data: data.map(a => a.llm_calls),
-						itemStyle: { color: '#10b981' },
-						lineStyle: { color: '#10b981', width: 2 },
+						itemStyle: { color: '#059669' },
+						lineStyle: { color: '#059669', width: 2 },
 						yAxisIndex: 1
 					}
 				]

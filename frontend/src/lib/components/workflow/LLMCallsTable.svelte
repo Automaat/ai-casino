@@ -25,8 +25,8 @@
 
 <div class="overflow-x-auto">
 	{#if data && data.length > 0}
-		<table class="w-full text-sm text-left text-slate-300">
-			<thead class="text-xs text-slate-400 uppercase bg-slate-700">
+		<table class="w-full text-sm text-left text-gray-700">
+			<thead class="text-xs text-gray-600 uppercase bg-gray-100">
 				<tr>
 					<th class="px-4 py-3">Time</th>
 					<th class="px-4 py-3">Agent</th>
@@ -41,7 +41,7 @@
 			</thead>
 			<tbody>
 				{#each data as call}
-					<tr class="border-b border-slate-700 hover:bg-slate-700/50">
+					<tr class="border-b border-gray-300 hover:bg-gray-100/50">
 						<td class="px-4 py-3 whitespace-nowrap">{formatTimestamp(call.timestamp)}</td>
 						<td class="px-4 py-3">{call.agent_name}</td>
 						<td class="px-4 py-3">{call.method}</td>
@@ -52,9 +52,9 @@
 						<td class="px-4 py-3 text-right">{formatCost(call.estimated_cost_usd)}</td>
 						<td class="px-4 py-3 text-center">
 							{#if call.success}
-								<span class="text-green-400">✓</span>
+								<span class="text-green-600">✓</span>
 							{:else}
-								<span class="text-red-400" title={call.error || 'Unknown error'}>✗</span>
+								<span class="text-red-600" title={call.error || 'Unknown error'}>✗</span>
 							{/if}
 						</td>
 					</tr>
@@ -62,6 +62,6 @@
 			</tbody>
 		</table>
 	{:else}
-		<p class="text-slate-400 text-center py-8">No LLM calls recorded</p>
+		<p class="text-gray-600 text-center py-8">No LLM calls recorded</p>
 	{/if}
 </div>

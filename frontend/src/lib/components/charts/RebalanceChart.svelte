@@ -24,14 +24,14 @@
 
 		// Color-code current bars: green for underweight, red for overweight
 		const barColors = deltas.map(d =>
-			d < 0 ? '#10b981' : d > 0 ? '#ef4444' : '#6b7280'
+			d < 0 ? '#059669' : d > 0 ? '#ef4444' : '#6b7280'
 		);
 
 		const option: EChartsOption = {
 			backgroundColor: 'transparent',
 			title: {
 				subtext: 'Green = Underweight, Red = Overweight',
-				subtextStyle: { color: '#94a3b8', fontSize: 12 }
+				subtextStyle: { color: '#4b5563', fontSize: 12 }
 			},
 			tooltip: {
 				trigger: 'axis',
@@ -55,21 +55,21 @@
 			},
 			legend: {
 				data: ['Target', 'Current'],
-				textStyle: { color: '#e2e8f0' }
+				textStyle: { color: '#000000' }
 			},
 			xAxis: {
 				type: 'category',
 				data: symbols,
-				axisLabel: { color: '#e2e8f0' },
-				axisLine: { lineStyle: { color: '#475569' } }
+				axisLabel: { color: '#000000' },
+				axisLine: { lineStyle: { color: '#9ca3af' } }
 			},
 			yAxis: {
 				type: 'value',
 				name: 'Weight (%)',
-				nameTextStyle: { color: '#e2e8f0' },
-				axisLabel: { color: '#e2e8f0' },
-				axisLine: { lineStyle: { color: '#475569' } },
-				splitLine: { lineStyle: { color: '#334155' } }
+				nameTextStyle: { color: '#000000' },
+				axisLabel: { color: '#000000' },
+				axisLine: { lineStyle: { color: '#9ca3af' } },
+				splitLine: { lineStyle: { color: '#e5e7eb' } }
 			},
 			series: [
 				{
@@ -94,7 +94,7 @@
 
 	onMount(() => {
 		if (chartContainer) {
-			chart = echarts.init(chartContainer, 'dark');
+			chart = echarts.init(chartContainer);
 			updateChart();
 
 			const resizeObserver = new ResizeObserver(() => {
