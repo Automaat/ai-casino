@@ -259,10 +259,9 @@ class HealthChecker:
 
     async def _check_llm(self) -> ServiceCheckResult:
         """Check LLM provider connectivity."""
-        # Use config provider if set, fallback to env var
-        provider = self.config.llm.provider or os.getenv("LLM_PROVIDER", "ollama")
+        provider = self.config.llm.provider
 
-        # Check API keys from config first, then env vars
+        # Check API keys from config (with env var fallback for sensitive data)
         anthropic_key = self.config.api_keys.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
         openai_key = self.config.api_keys.openai_api_key or os.getenv("OPENAI_API_KEY")
 

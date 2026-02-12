@@ -1,5 +1,6 @@
 """Model providers for DI container."""
 
+import os
 from typing import TYPE_CHECKING
 
 from src.daemon.config import DaemonConfig
@@ -44,10 +45,11 @@ def create_llm_client(
 
     provider = daemon_config.llm.provider
 
+    # API keys: use config value or fall back to env var
     if provider == "anthropic":
-        api_key = daemon_config.api_keys.anthropic_api_key
+        api_key = daemon_config.api_keys.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
     elif provider == "openai":
-        api_key = daemon_config.api_keys.openai_api_key
+        api_key = daemon_config.api_keys.openai_api_key or os.getenv("OPENAI_API_KEY")
     else:
         api_key = None
 
@@ -56,7 +58,7 @@ def create_llm_client(
         model=daemon_config.llm.model,
         base_url=daemon_config.llm.ollama_base_url,
         api_key=api_key,
-        openai_base_url=daemon_config.api_keys.openai_api_base,
+        openai_base_url=daemon_config.api_keys.openai_api_base or os.getenv("OPENAI_API_BASE"),
     )
 
     if metrics_collector is not None:

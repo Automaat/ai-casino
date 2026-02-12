@@ -118,6 +118,7 @@ def test_generator_initialization():
 def test_generator_initialization_with_market_fetcher(mock_market_fetcher):
     """Test generator initializes with market fetcher."""
     generator = DaemonTearsheetGenerator(
+        risk_free_rate=0.02,
         market_fetcher=mock_market_fetcher,
     )
     assert generator.market_fetcher is mock_market_fetcher
@@ -267,5 +268,5 @@ def test_repr():
     generator = DaemonTearsheetGenerator(risk_free_rate=0.02)
     assert "no broker" in repr(generator)
 
-    generator = DaemonTearsheetGenerator(broker=MagicMock())
+    generator = DaemonTearsheetGenerator(risk_free_rate=0.02, broker=MagicMock())
     assert "with broker" in repr(generator)
