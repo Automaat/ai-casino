@@ -40,6 +40,7 @@ def build_coordinator_registry(
     from src.coordinator.tools.observation import SaveObservationTool
     from src.coordinator.tools.portfolio import PortfolioStatusTool
     from src.tools import GetMarketDataTool, ScreenStocksTool
+    from src.tools.notification import NotificationTool
     from src.tools.registry import ToolRegistry
 
     registry = ToolRegistry()
@@ -53,6 +54,7 @@ def build_coordinator_registry(
     market_fetcher = container.market_fetcher()
     broker = container.alpaca_broker()
     daemon_config = container.daemon_config()
+    notification_service = container.notification_service()
 
     # Create confirmation handler if Telegram configured
     confirmation_handler = None
@@ -78,6 +80,7 @@ def build_coordinator_registry(
     registry.register(AnalyzeSymbolTool(container, coordinator))
     registry.register(PortfolioStatusTool(broker))
     registry.register(ExecuteTradeTool(broker, daemon_config, confirmation_handler))
+    registry.register(NotificationTool(notification_service))
 
     # Use provided memory or create new
     if memory is None:

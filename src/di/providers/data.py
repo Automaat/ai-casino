@@ -2,6 +2,7 @@
 
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
+from src.daemon.notifications import NotificationService
 from src.data.base_news_fetcher import BaseNewsFetcher
 from src.data.broker import AlpacaBroker
 from src.data.comparative import ComparativeDataFetcher
@@ -342,3 +343,15 @@ def create_duckduckgo_news_fetcher(
     return DuckDuckGoNewsFetcher(
         historical_cache=historical_cache,
     )
+
+
+def create_notification_service(daemon_config: DaemonConfig) -> NotificationService:
+    """Create NotificationService with resolved config.
+
+    Args:
+        daemon_config: Daemon configuration
+
+    Returns:
+        Configured NotificationService
+    """
+    return NotificationService(daemon_config.notifications)

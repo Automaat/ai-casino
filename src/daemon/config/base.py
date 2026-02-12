@@ -18,3 +18,4 @@ class NotificationTrigger(StrEnum):
     PORTFOLIO_VAR_BREACH = "portfolio_var_breach"
     HEALTH_FAILURE = "health_failure"
     PAPER_TRADING_READY = "paper_trading_ready"
+    AGENT_ALERT = "agent_alert"

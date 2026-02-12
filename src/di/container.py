@@ -156,6 +156,11 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
     )
 
+    notification_service = providers.Singleton(
+        data_providers.create_notification_service,
+        daemon_config=daemon_config,
+    )
+
     # Model providers
     llm_client = providers.Factory(
         model_providers.create_llm_client,
