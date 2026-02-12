@@ -5,9 +5,9 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from src.coordinator import CoordinatorConfig
-
 # Re-export all config classes (backward compatibility)
+from src.circuit_breaker.models import CircuitBreakerConfig
+from src.coordinator import CoordinatorConfig
 from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
     AnomalyWatcherConfig,
@@ -215,6 +215,9 @@ class DaemonConfig(BaseModel):
         # Extract nested sources config from news_watcher
         news_sources_data = news_watcher_data.pop("sources", {}) or {}
 
+        # Extract nested circuit_breaker config from api
+        circuit_breaker_data = api_data.pop("circuit_breaker", {}) or {}
+
         return cls(
             **daemon_data,
             paper_trading=PaperTradingConfig(**paper_trading_data),
@@ -250,7 +253,7 @@ class DaemonConfig(BaseModel):
             social_watcher=SocialWatcherConfig(**social_watcher_data),
             filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
             anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
-            api=ApiConfig(**api_data),
+            api=ApiConfig(**api_data, circuit_breaker=CircuitBreakerConfig(**circuit_breaker_data)),
             llm=LLMConfig(**llm_data),
             finbert=FinBERTConfig(**finbert_data),
             api_keys=ApiKeysConfig(**api_keys_data),

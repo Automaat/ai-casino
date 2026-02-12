@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import httpx
 from dotenv import load_dotenv
@@ -11,6 +12,9 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from src.cache.historical import HistoricalCache
 from src.metrics.execution import timed_operation
+
+if TYPE_CHECKING:
+    from src.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry
 
 load_dotenv()
 
@@ -50,17 +54,39 @@ class NewsFetcher:
         self,
         api_key: str | None = None,
         historical_cache: HistoricalCache | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
+        circuit_breaker_registry: CircuitBreakerRegistry | None = None,
+        circuit_breaker_config: CircuitBreakerConfig | None = None,
     ) -> None:
         """Initialize news fetcher.
 
         Args:
             api_key: Marketaux API key. Defaults to env variable.
             historical_cache: Optional permanent cache for news articles
+            circuit_breaker: Optional circuit breaker instance (direct injection)
+            circuit_breaker_registry: Optional registry for lazy breaker creation
+            circuit_breaker_config: Optional config for lazy breaker creation
         """
         self.api_key = api_key or ""
         self._cache = historical_cache
+        self._circuit_breaker = circuit_breaker
+        self._circuit_breaker_registry = circuit_breaker_registry
+        self._circuit_breaker_config = circuit_breaker_config
         if not self.api_key:
             logger.warning("marketaux_api_key not set in config - API calls may be limited")
+
+    async def _ensure_circuit_breaker(self) -> None:
+        """Lazily initialize circuit breaker from registry."""
+        if (
+            self._circuit_breaker is None
+            and self._circuit_breaker_registry is not None
+            and self._circuit_breaker_config is not None
+        ):
+            self._circuit_breaker = await self._circuit_breaker_registry.get_breaker(
+                "marketaux",
+                self._circuit_breaker_config,
+            )
+            logger.debug("Initialized circuit breaker for marketaux")
 
     def _log_rate_limit_headers(self, response: httpx.Response, symbol: str = "") -> None:
         """Log Marketaux rate limit headers.
@@ -91,6 +117,14 @@ class NewsFetcher:
         Returns:
             List of NewsArticle objects
         """
+        await self._ensure_circuit_breaker()
+
+        if self._circuit_breaker:
+            return await self._circuit_breaker.call(
+                self._fetch_with_breaker_company,
+                symbol,
+                limit,
+            )
         return await asyncio.to_thread(self._fetch_company_news_sync, symbol, limit)
 
     async def afetch_market_news(self, limit: int = 20) -> list[NewsArticle]:
@@ -102,6 +136,21 @@ class NewsFetcher:
         Returns:
             List of NewsArticle objects
         """
+        await self._ensure_circuit_breaker()
+
+        if self._circuit_breaker:
+            return await self._circuit_breaker.call(
+                self._fetch_with_breaker_market,
+                limit,
+            )
+        return await asyncio.to_thread(self._fetch_market_news_sync, limit)
+
+    async def _fetch_with_breaker_company(self, symbol: str, limit: int) -> list[NewsArticle]:
+        """Wrapper for circuit breaker - company news."""
+        return await asyncio.to_thread(self._fetch_company_news_sync, symbol, limit)
+
+    async def _fetch_with_breaker_market(self, limit: int) -> list[NewsArticle]:
+        """Wrapper for circuit breaker - market news."""
         return await asyncio.to_thread(self._fetch_market_news_sync, limit)
 
     def get_source_name(self) -> str:
