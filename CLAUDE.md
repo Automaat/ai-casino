@@ -67,7 +67,7 @@ tests/               # Full mirror of src structure
 **CRITICAL: YAML-only configuration**
 
 - **NEVER** use environment variables for config in this project
-- **ALWAYS** configure via `~/.ai-casino/daemon.yaml`
+- **ALWAYS** configure via `~/.ai-casino/daemon-production.yaml`
 - Environment variables only allowed as fallbacks in DI provider functions (`resolve_config_or_env`)
 - docker-compose.yml must NOT set config via environment variables
 
@@ -1031,11 +1031,11 @@ source .venv/bin/activate
 
 ### Configuration
 
-**Primary source:** `~/.ai-casino/daemon.yaml` - YAML-only configuration (see `docs/daemon.yaml.example`)
+**Primary config:** `~/.ai-casino/daemon-production.yaml` - YAML-only configuration (see `docs/daemon.yaml.example`)
 
 **Configuration hierarchy:**
 
-1. **daemon.yaml** (only source) - all config must be here
+1. **daemon-production.yaml** (only source) - all config must be here
 2. DI container resolves config
 3. Environment variables as fallback ONLY in DI providers (via `resolve_config_or_env`)
 
@@ -1052,7 +1052,7 @@ source .venv/bin/activate
 
 **ALWAYS configure via:**
 
-- ✅ `~/.ai-casino/daemon.yaml`
+- ✅ `~/.ai-casino/daemon-production.yaml`
 - ✅ DI container reads from `daemon_config`
 - ✅ `resolve_config_or_env()` for API keys with env fallback
 
