@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.data.truth_social import TruthPost
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -115,6 +116,7 @@ class TrumpAnalyst:
         self._prompts = PromptLoader("trump")
         logger.info("Initialized TrumpAnalyst")
 
+    @track_agent
     async def analyze(self, posts: list[TruthPost]) -> TrumpAnalysis:
         """Analyze Trump posts for trading implications.
 

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
+from src.execution_tracking import track_agent
 from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
 from src.strategies.ensemble import EnsembleStrategy
@@ -173,6 +174,7 @@ class MetaAgent:
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to calculate performance metrics: {e}")
 
+    @track_agent
     async def select_strategy(
         self,
         symbol: str,

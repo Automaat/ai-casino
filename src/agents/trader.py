@@ -15,6 +15,7 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -61,6 +62,7 @@ class TraderAgent:
         self._prompts = PromptLoader("trader")
         logger.info("Initialized TraderAgent")
 
+    @track_agent
     async def decide(
         self,
         symbol: str,

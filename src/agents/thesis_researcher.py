@@ -10,6 +10,7 @@ from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.strategies.signal import Signal
 
@@ -267,6 +268,7 @@ class ThesisResearcher(BaseResearcher):
         """LLM response model type."""
         return ResearchLLMResponse
 
+    @track_agent
     async def analyze(
         self,
         symbol: str,

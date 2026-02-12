@@ -1,27 +1,52 @@
-# Development overrides for docker-compose.yml (cloud LLM)
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Development overrides for docker-compose.yml (with Ollama)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev-ollama.yml up
 #
-# Uses cloud LLM providers (Anthropic/OpenAI) - no local Ollama
-# Set ANTHROPIC_API_KEY or OPENAI_API_KEY in daemon-dev-cloud.yaml
+# After first start, pull qwen3:14b model (~8GB):
+#   docker exec ai-casino-ollama-dev ollama pull qwen3:14b
+#
+# Requires: ~/.ai-casino/daemon-dev.yaml with Ollama config
 
 services:
-  postgres:
-    # Override postgres password to match production config
-    environment:
-      - POSTGRES_PASSWORD=ai_casino_secure_pass_2025
+  ollama:
+    image: ollama/ollama:0.16.0
+    container_name: ai-casino-ollama-dev
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist models on host (qwen3:14b is ~8GB)
+      - ${HOME}/.ai-casino/ollama-models:/root/.ollama
+    networks:
+      - ai-casino-net
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Uncomment for GPU support (NVIDIA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   daemon:
     # Mount source code for live reload (restart daemon after code changes)
     volumes:
       - ./src:/app/src:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
-      - ${HOME}/.ai-casino:/root/.ai-casino  # Use actual user config (daemon-production.yaml)
+      - ${HOME}/.ai-casino/daemon-dev.yaml:/root/.ai-casino/daemon-production.yaml:ro  # Ollama dev config
     environment:
       - LOG_LEVEL=DEBUG
     depends_on:
       postgres:
         condition: service_healthy
       finbert:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
 
   finbert:

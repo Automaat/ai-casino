@@ -2,6 +2,7 @@
 
 from loguru import logger
 
+from src.execution_tracking import ExecutionNodeType, atrack_execution, track_execution
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition
 
@@ -63,7 +64,10 @@ class ToolRegistry:
             raise KeyError(msg)
 
         logger.info(f"Executing tool: {name} with args: {args}")
-        return tool.execute(**args)
+
+        # Track tool execution
+        with track_execution(ExecutionNodeType.TOOL, name, metadata={"args": args}):
+            return tool.execute(**args)
 
     async def aexecute(self, name: str, args: dict) -> str:
         """Execute a tool asynchronously by name.
@@ -84,7 +88,10 @@ class ToolRegistry:
             raise KeyError(msg)
 
         logger.info(f"Executing tool: {name} with args: {args}")
-        return await tool.aexecute(**args)
+
+        # Track tool execution
+        async with atrack_execution(ExecutionNodeType.TOOL, name, metadata={"args": args}):
+            return await tool.aexecute(**args)
 
     def requires_confirmation(self, name: str) -> bool:
         """Check if tool requires user confirmation.

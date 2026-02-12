@@ -297,6 +297,18 @@ class RedditFetcher:
             RedditSentimentData with posts and aggregates
         """
         logger.info(f"Fetching Reddit mentions for {symbol}")
+
+        if not self._client_id or not self._client_secret:
+            logger.warning(f"Reddit credentials not configured - skipping {symbol} mentions")
+            return RedditSentimentData(
+                symbol=symbol,
+                posts=[],
+                mention_count=0,
+                avg_score=0.0,
+                avg_upvote_ratio=0.0,
+                fetched_at=datetime.now(),
+            )
+
         subreddits = subreddits or DEFAULT_SUBREDDITS
 
         cache_key = self._cache_key("mentions", symbol, ",".join(subreddits), str(limit), time_filter)
@@ -380,6 +392,11 @@ class RedditFetcher:
             List of TrendingTicker sorted by mention_count
         """
         logger.info("Fetching trending tickers from Reddit")
+
+        if not self._client_id or not self._client_secret:
+            logger.warning("Reddit credentials not configured - skipping trending tickers")
+            return []
+
         subreddits = subreddits or DEFAULT_SUBREDDITS
 
         cache_key = self._cache_key("trending", ",".join(subreddits), str(limit), str(min_mentions))

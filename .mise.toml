@@ -50,12 +50,20 @@ description = "Check if Ollama is running"
 run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is not running'"
 
 [tasks.dev]
-description = "Run dev environment with Docker Compose (live reload, uses daemon-production.yaml)"
+description = "Run dev environment (cloud LLM, uses ~/.ai-casino/daemon-production.yaml)"
 run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build"
+
+[tasks."dev:ollama"]
+description = "Run dev environment with Ollama (uses ~/.ai-casino/daemon-dev.yaml)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev-ollama.yml up --build"
 
 [tasks."dev:down"]
 description = "Stop dev environment"
 run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down"
+
+[tasks."dev:ollama:down"]
+description = "Stop dev environment (Ollama)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev-ollama.yml down"
 
 [tasks."dev:logs"]
 description = "View dev environment logs"
