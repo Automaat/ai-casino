@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -116,6 +116,42 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
     Returns:
         FastAPI app
     """
+    # Dependency: Create fresh repositories for each API request
+    # This ensures repositories are bound to the API server's event loop
+    def get_fresh_state():
+        """Create fresh state with new repositories for this request's event loop."""
+        from src.daemon.state import DaemonState
+        from src.daemon.state.repositories import RepositoryBundle
+
+        # Create fresh repositories in current (API server) event loop
+        repos = RepositoryBundle(
+            metadata_repository=components.container.metadata_repository(),
+            analysis_repository=components.container.analysis_repository(),
+            position_repository=components.container.position_repository(),
+            action_repository=components.container.position_action_repository(),
+            optimization_repository=components.container.optimization_repository(),
+            rebalancing_repository=components.container.rebalancing_repository(),
+            sector_rotation_repository=components.container.sector_rotation_repository(),
+            peer_analysis_repository=components.container.peer_analysis_repository(),
+            correlation_audit_repository=components.container.correlation_audit_repository(),
+            risk_report_repository=components.container.risk_report_repository(),
+            monte_carlo_repository=components.container.monte_carlo_repository(),
+            prefetch_repository=components.container.prefetch_repository(),
+            screening_repository=components.container.screening_repository(),
+            earnings_repository=components.container.earnings_calendar_repository(),
+            profiling_repository=components.container.profiling_repository(),
+            discovery_repository=components.container.discovery_repository(),
+            active_discovery_repository=components.container.active_discovery_repository(),
+            game_plan_repository=components.container.game_plan_repository(),
+            degradation_repository=components.container.degradation_repository(),
+            snapshot_repository=components.container.snapshot_repository(),
+        )
+
+        # Create temporary state instance with fresh repositories
+        state = DaemonState()
+        state.set_repositories(repos)
+        return state
+
     app = FastAPI(
         title="AI Casino Daemon API",
         description="Read-only monitoring API for trading daemon",
@@ -138,27 +174,20 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
     )
 
     @app.get("/health", response_model=HealthResponse)
-    async def health() -> HealthResponse:
+    async def health(state: DaemonState = Depends(get_fresh_state)) -> HealthResponse:
         """Get daemon health status."""
         components: DaemonComponents = app.state.components
         uptime = (datetime.now(UTC) - app.state.start_time).total_seconds()
 
         # Determine health status from degradation tier
         degradation_tier = "FULL"
-        last_run = None
-
-        try:
-            degradation_history = await components.state.get_degradation_history(limit=1)
-            if degradation_history:
-                degradation_tier = degradation_history[-1].tier
-
-            last_run = await components.state.get_last_run()
-        except Exception:
-            # DB temporarily unavailable due to concurrent operations - still healthy
-            pass
+        degradation_history = await state.get_degradation_history(limit=1)
+        if degradation_history:
+            degradation_tier = degradation_history[-1].tier
 
         status = "healthy" if degradation_tier == "FULL" else "degraded"
 
+        last_run = await state.get_last_run()
         return HealthResponse(
             status=status,
             uptime_seconds=uptime,
@@ -167,65 +196,52 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
         )
 
     @app.get("/state/summary", response_model=StateSummaryResponse)
-    async def state_summary() -> StateSummaryResponse:
+    async def state_summary(state: DaemonState = Depends(get_fresh_state)) -> StateSummaryResponse:
         """Get daemon state summary."""
         components: DaemonComponents = app.state.components
 
-        try:
-            # Get current degradation tier
-            degradation_tier = "FULL"
-            degradation_history = await components.state.get_degradation_history(limit=1)
-            if degradation_history:
-                degradation_tier = degradation_history[-1].tier
+        # Get current degradation tier
+        degradation_tier = "FULL"
+        degradation_history = await state.get_degradation_history(limit=1)
+        if degradation_history:
+            degradation_tier = degradation_history[-1].tier
 
-            # Calculate positions count
-            active_positions = await components.state.get_active_positions()
-            positions_count = len(active_positions)
+        # Calculate positions count
+        active_positions = await state.get_active_positions()
+        positions_count = len(active_positions)
 
-            # Win rate calculation - not available in current state (would need trades history)
-            win_rate = None
+        # Win rate calculation - not available in current state (would need trades history)
+        win_rate = None
 
-            # Get recent analyses (last 50), convert to dicts
-            all_analyses = await components.state.get_analyses(limit=50)
-            recent_analyses = [
-                analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
-                for analysis in all_analyses
-            ]
+        # Get recent analyses (last 50), convert to dicts
+        all_analyses = await state.get_analyses(limit=50)
+        recent_analyses = [
+            analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
+            for analysis in all_analyses
+        ]
 
-            total_analyses = await components.state.get_total_analyses()
-            total_trades = await components.state.get_total_trades()
-            errors = await components.state.get_errors()
-            trading_mode = await components.state.get_current_trading_mode()
+        total_analyses = await state.get_total_analyses()
+        total_trades = await state.get_total_trades()
+        errors = await state.get_errors()
+        trading_mode = await state.get_current_trading_mode()
 
-            return StateSummaryResponse(
-                total_analyses=total_analyses,
-                recent_analyses=recent_analyses,
-                total_trades=total_trades,
-                positions_count=positions_count,
-                win_rate=win_rate,
-                error_count=len(errors),
-                degradation_tier=degradation_tier,
-                trading_mode=trading_mode,
-            )
-        except (RuntimeError, Exception):
-            # Event loop or DB errors - return minimal safe response
-            return StateSummaryResponse(
-                total_analyses=0,
-                recent_analyses=[],
-                total_trades=0,
-                positions_count=0,
-                win_rate=None,
-                error_count=0,
-                degradation_tier="FULL",
-                trading_mode=components.config.trading_mode.value,
-            )
+        return StateSummaryResponse(
+            total_analyses=total_analyses,
+            recent_analyses=recent_analyses,
+            total_trades=total_trades,
+            positions_count=positions_count,
+            win_rate=win_rate,
+            error_count=len(errors),
+            degradation_tier=degradation_tier,
+            trading_mode=trading_mode,
+        )
 
     @app.get("/config", response_model=ConfigResponse)
-    async def config() -> ConfigResponse:
+    async def config(state: DaemonState = Depends(get_fresh_state)) -> ConfigResponse:
         """Get daemon configuration (no secrets)."""
         components: DaemonComponents = app.state.components
 
-        trading_mode = await components.state.get_current_trading_mode()
+        trading_mode = await state.get_current_trading_mode()
         return ConfigResponse(
             watchlist=components.config.watchlist,
             interval_minutes=components.config.interval_minutes,
@@ -236,7 +252,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
         )
 
     @app.get("/config/full", response_model=FullConfigResponse)
-    async def config_full() -> FullConfigResponse:
+    async def config_full(state: DaemonState = Depends(get_fresh_state)) -> FullConfigResponse:
         """Get full daemon configuration with masked sensitive fields."""
         components: DaemonComponents = app.state.components
         cfg = components.config
@@ -271,7 +287,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
             market_hours_only=cfg.market_hours_only,
             auto_trade=cfg.auto_trade,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
-            trading_mode=await components.state.get_current_trading_mode(),
+            trading_mode=await state.get_current_trading_mode(),
             paper_trading=cfg.paper_trading.model_dump(),
             schedule=cfg.schedule.model_dump(),
             state=cfg.state.model_dump(),
