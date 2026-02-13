@@ -11,6 +11,7 @@ from src.agents.risk import RiskAssessment
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.social import SocialSentimentAnalysis
 from src.agents.supervisor import SupervisorDecision
+from src.agents.supervisor.models import AnalysisRoutingDecision
 from src.agents.technical import TechnicalAnalysis
 from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.agents.trader import TradingDecision
@@ -82,6 +83,7 @@ class TradingWorkflowResult(BaseModel):
     degradation_tier: str | None = None
     degradation_confidence_penalty: float | None = None
     supervisor_decision: SupervisorDecision | None = None
+    supervisor_routing: AnalysisRoutingDecision | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

@@ -71,7 +71,7 @@ class TradingSupervisor:
             )
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, using default: {e}")
-            decision = self._default_routing(context)
+            decision = self.default_routing(context)
 
         logger.info(
             f"Routing: {len(decision.required_analyses)} required, "
@@ -126,8 +126,8 @@ class TradingSupervisor:
         )
         return weights
 
-    def _default_routing(self, context: PlanningContext) -> AnalysisRoutingDecision:
-        """Fallback when LLM fails.
+    def default_routing(self, context: PlanningContext) -> AnalysisRoutingDecision:
+        """Fallback routing decision for timeout or LLM failure.
 
         Args:
             context: Planning context

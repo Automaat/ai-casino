@@ -164,7 +164,7 @@ async def test_synthesize_results_fallback(test_container):
     assert "fallback" in weights.reasoning.lower()
 
 
-def test_default_routing(test_container):
+def testdefault_routing(test_container):
     """Test default routing logic."""
     supervisor = test_container.supervisor()
 
@@ -181,7 +181,7 @@ def test_default_routing(test_container):
         time_budget_ms=30000,
     )
 
-    decision = supervisor._default_routing(context)
+    decision = supervisor.default_routing(context)
 
     # Required analyses
     assert AnalysisType.TECHNICAL in decision.required_analyses
@@ -195,7 +195,7 @@ def test_default_routing(test_container):
     assert AnalysisType.SOCIAL_SENTIMENT in decision.optional_analyses
 
 
-def test_default_routing_rate_limited(test_container):
+def testdefault_routing_rate_limited(test_container):
     """Test default routing skips fundamental when rate limited."""
     supervisor = test_container.supervisor()
 
@@ -212,13 +212,13 @@ def test_default_routing_rate_limited(test_container):
         time_budget_ms=20000,
     )
 
-    decision = supervisor._default_routing(context)
+    decision = supervisor.default_routing(context)
 
     assert AnalysisType.FUNDAMENTAL in decision.skip_analyses
     assert "rate limit" in decision.skip_analyses[AnalysisType.FUNDAMENTAL].lower()
 
 
-def test_default_routing_trump_posts(test_container):
+def testdefault_routing_trump_posts(test_container):
     """Test default routing includes trump when posts available."""
     supervisor = test_container.supervisor()
 
@@ -235,7 +235,7 @@ def test_default_routing_trump_posts(test_container):
         time_budget_ms=20000,
     )
 
-    decision = supervisor._default_routing(context)
+    decision = supervisor.default_routing(context)
 
     assert AnalysisType.TRUMP in decision.optional_analyses
 

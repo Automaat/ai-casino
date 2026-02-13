@@ -54,6 +54,7 @@ class TradingWorkflow:
         self.snapshot_repository = components.snapshot_repository
         self.notification_service = components.notification_service
         self._container = components.container
+        self.analysis_orchestrator_config = components.analysis_orchestrator_config
 
         # Initialize components
         self._initialize_trump_components(components)
@@ -62,6 +63,7 @@ class TradingWorkflow:
         self._initialize_agents(components)
         self._initialize_risk_validation(components)
         self._initialize_backtest_runner()
+        self._initialize_supervisor()
 
         mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
         trump_str = "+trump" if self.trump_mode else ""
@@ -128,6 +130,13 @@ class TradingWorkflow:
         if self.pre_trade_backtest_config and self.pre_trade_backtest_config.enabled:
             self.vectorbt_runner = VectorBTRunner()
             logger.info("VectorBTRunner initialized for pre-trade validation")
+
+    def _initialize_supervisor(self) -> None:
+        """Initialize trading supervisor for conditional analysis routing."""
+        from src.agents.supervisor import TradingSupervisor
+
+        self.supervisor = TradingSupervisor(self.llm_client)
+        logger.debug("TradingSupervisor initialized")
 
     async def analyze(
         self,

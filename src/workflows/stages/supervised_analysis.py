@@ -1,0 +1,520 @@
+"""Supervised analysis stage implementation with conditional execution."""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from collections.abc import Coroutine
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+from loguru import logger
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from src.agents.comparative import ComparativeAnalyst
+    from src.agents.fundamental import FundamentalAnalyst
+    from src.agents.news import NewsAnalyst
+    from src.agents.sentiment import SentimentAnalyst
+    from src.agents.social import SocialSentimentAnalyst
+    from src.agents.technical import TechnicalAnalyst
+    from src.agents.thesis_researcher import ThesisResearcher
+    from src.agents.trump import TrumpAnalyst
+    from src.agents.web_researcher import WebResearchAgent
+    from src.data.news import NewsArticle
+    from src.metrics.execution import ExecutionMetricsCollector
+    from src.strategies.timeframe import MultiTimeframeData
+
+from src.agents.supervisor.models import AnalysisRoutingDecision, AnalysisType
+from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
+from src.workflows.stages.strategy_selection import _timed_agent_call
+
+T = TypeVar("T")
+
+
+class _WorkerTask:
+    """Wrapper for worker task with metadata."""
+
+    def __init__(
+        self,
+        analysis_type: AnalysisType,
+        task: asyncio.Task[Any],
+        category: str,
+    ) -> None:
+        self.analysis_type = analysis_type
+        self.task = task
+        self.category = category
+
+
+def _create_worker_if_needed(
+    analysis_type: AnalysisType,
+    required: set[AnalysisType],
+    optional: set[AnalysisType],
+    coro: Coroutine[Any, Any, Any],
+) -> _WorkerTask | None:
+    """Create worker task if analysis is required or optional.
+
+    Args:
+        analysis_type: Type of analysis
+        required: Set of required analysis types
+        optional: Set of optional analysis types
+        coro: Coroutine to execute
+
+    Returns:
+        WorkerTask if needed, None otherwise
+    """
+    if analysis_type not in required and analysis_type not in optional:
+        return None
+    category = "required" if analysis_type in required else "optional"
+    task = asyncio.create_task(coro)
+    return _WorkerTask(analysis_type, task, category)
+
+
+def _validate_input_data(input_data: AnalysisInput) -> None:
+    """Validate input data, raise on critical errors."""
+    if input_data.market_data is None:
+        msg = "market_data is None, cannot run analyses"
+        raise ValueError(msg)
+    if input_data.news_articles is None:
+        logger.warning("news_articles is None; sentiment/news analyses may be skipped")
+
+
+async def _execute_workers_with_gather(
+    tasks: list[_WorkerTask],
+    timeout_ms: int,
+) -> dict[AnalysisType, Any]:
+    """Execute workers using asyncio.gather with timeout and error handling.
+
+    Args:
+        tasks: List of worker tasks with metadata
+        timeout_ms: Timeout in milliseconds
+
+    Returns:
+        Dict mapping analysis type to result (None for failures)
+
+    Raises:
+        Exception: If a required worker fails
+    """
+    output: dict[AnalysisType, Any] = {}
+
+    if not tasks:
+        return output
+
+    task_list = [t.task for t in tasks]
+
+    # NOTE:
+    # We intentionally use asyncio.gather(..., return_exceptions=True) here
+    # instead of asyncio.TaskGroup (as used in analysis.py). This allows us
+    # to collect exceptions as results so we can:
+    #   * handle failures on a per-worker basis, and
+    #   * distinguish between required and optional workers when deciding
+    #     whether to propagate or log-and-suppress an error.
+    # This per-task exception handling depends on the return_exceptions
+    # behaviour and is the reason this function deviates from the TaskGroup
+    # pattern used elsewhere in the codebase.
+    try:
+        gather_coro = asyncio.gather(*task_list, return_exceptions=True)
+        results = await asyncio.wait_for(gather_coro, timeout=timeout_ms / 1000)
+    except TimeoutError:
+        logger.warning(f"Worker execution timed out after {timeout_ms}ms, cancelling tasks")
+        for worker_task in tasks:
+            if not worker_task.task.done():
+                worker_task.task.cancel()
+        await asyncio.gather(*task_list, return_exceptions=True)
+        raise
+
+    for worker_task, result in zip(tasks, results, strict=True):
+        analysis_type = worker_task.analysis_type
+        category = worker_task.category
+
+        # Control-flow exceptions - propagate immediately
+        if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+            raise result
+
+        # Worker failures
+        if isinstance(result, Exception):
+            if category == "required":
+                logger.opt(exception=result).error(f"Required worker {analysis_type.value} failed")
+                raise result
+            logger.opt(exception=result).warning(f"Optional worker {analysis_type.value} failed")
+            output[analysis_type] = None
+        else:
+            output[analysis_type] = result
+
+    return output
+
+
+def _setup_workers_group1(
+    input_data: AnalysisInput,
+    required: set[AnalysisType],
+    optional: set[AnalysisType],
+    technical_analyst: TechnicalAnalyst,
+    sentiment_analyst: SentimentAnalyst,
+    news_analyst: NewsAnalyst,
+    fundamental_analyst: FundamentalAnalyst,
+    comparative_analyst: ComparativeAnalyst,
+    web_researcher: WebResearchAgent,
+    social_analyst: SocialSentimentAnalyst,
+    trump_mode: bool,
+    trump_analyst: TrumpAnalyst | None,
+    collector: ExecutionMetricsCollector | None,
+) -> list[_WorkerTask]:
+    """Setup worker tasks for group 1 analyses."""
+    tasks: list[_WorkerTask] = []
+
+    # Cast after validation - we already validated in run_supervised_analyses
+    market_data = cast("pd.DataFrame | MultiTimeframeData", input_data.market_data)
+    news_articles = cast("list[NewsArticle]", input_data.news_articles)
+    trump_posts = input_data.trump_posts or None
+
+    # Technical analysis
+    worker = _create_worker_if_needed(
+        AnalysisType.TECHNICAL,
+        required,
+        optional,
+        _timed_agent_call(
+            "technical",
+            technical_analyst.analyze(
+                input_data.symbol,
+                market_data,
+                enable_multi_timeframe=input_data.enable_multi_timeframe,
+            ),
+            collector,
+        ),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # Sentiment analysis
+    worker = _create_worker_if_needed(
+        AnalysisType.SENTIMENT,
+        required,
+        optional,
+        _timed_agent_call(
+            "sentiment", sentiment_analyst.analyze(input_data.symbol, news_articles), collector
+        ),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # News analysis
+    worker = _create_worker_if_needed(
+        AnalysisType.NEWS,
+        required,
+        optional,
+        _timed_agent_call("news", news_analyst.analyze(input_data.symbol, news_articles), collector),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # Fundamental analysis
+    worker = _create_worker_if_needed(
+        AnalysisType.FUNDAMENTAL,
+        required,
+        optional,
+        _timed_agent_call(
+            "fundamental",
+            fundamental_analyst.analyze(input_data.symbol, input_data.get_current_price()),
+            collector,
+        ),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # Comparative analysis
+    worker = _create_worker_if_needed(
+        AnalysisType.COMPARATIVE,
+        required,
+        optional,
+        _timed_agent_call("comparative", comparative_analyst.analyze(input_data.symbol), collector),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # Web research
+    worker = _create_worker_if_needed(
+        AnalysisType.WEB_RESEARCH,
+        required,
+        optional,
+        _timed_agent_call("web_research", web_researcher.research(input_data.symbol), collector),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # Social sentiment
+    worker = _create_worker_if_needed(
+        AnalysisType.SOCIAL_SENTIMENT,
+        required,
+        optional,
+        _timed_agent_call("social", social_analyst.analyze(input_data.symbol), collector),
+    )
+    if worker:
+        tasks.append(worker)
+
+    # Trump analysis
+    if trump_mode and trump_analyst and trump_posts:
+        worker = _create_worker_if_needed(
+            AnalysisType.TRUMP,
+            required,
+            optional,
+            _timed_agent_call("trump", trump_analyst.analyze(trump_posts), collector),
+        )
+        if worker:
+            tasks.append(worker)
+
+    return tasks
+
+
+async def _run_supervised_group1(
+    input_data: AnalysisInput,
+    routing_decision: AnalysisRoutingDecision,
+    technical_analyst: TechnicalAnalyst,
+    sentiment_analyst: SentimentAnalyst,
+    news_analyst: NewsAnalyst,
+    fundamental_analyst: FundamentalAnalyst,
+    comparative_analyst: ComparativeAnalyst,
+    web_researcher: WebResearchAgent,
+    social_analyst: SocialSentimentAnalyst,
+    trump_mode: bool,
+    trump_analyst: TrumpAnalyst | None,
+    collector: ExecutionMetricsCollector | None,
+    timeout_ms: int,
+) -> dict[AnalysisType, Any]:
+    """Run first group of analyses based on routing decision.
+
+    Args:
+        input_data: Analysis input
+        routing_decision: Supervisor routing decision
+        technical_analyst: Technical analyst
+        sentiment_analyst: Sentiment analyst
+        news_analyst: News analyst
+        fundamental_analyst: Fundamental analyst
+        comparative_analyst: Comparative analyst
+        web_researcher: Web research agent
+        social_analyst: Social sentiment analyst
+        trump_mode: Enable Trump analysis
+        trump_analyst: Trump analyst
+        collector: Optional metrics collector
+        timeout_ms: Timeout in milliseconds
+
+    Returns:
+        Dict mapping analysis type to result
+    """
+    required = set(routing_decision.required_analyses)
+    optional = set(routing_decision.optional_analyses)
+
+    # Log skipped analyses
+    for analysis_type, reason in routing_decision.skip_analyses.items():
+        logger.info(f"Skipped {analysis_type.value}: {reason}")
+
+    # Setup all worker tasks
+    tasks = _setup_workers_group1(
+        input_data,
+        required,
+        optional,
+        technical_analyst,
+        sentiment_analyst,
+        news_analyst,
+        fundamental_analyst,
+        comparative_analyst,
+        web_researcher,
+        social_analyst,
+        trump_mode,
+        trump_analyst,
+        collector,
+    )
+
+    # Execute workers
+    logger.info(
+        f"Running {len(tasks)} workers "
+        f"({len([t for t in tasks if t.category == 'required'])} required, "
+        f"{len([t for t in tasks if t.category == 'optional'])} optional)"
+    )
+
+    return await _execute_workers_with_gather(tasks, timeout_ms)
+
+
+async def _run_supervised_research(
+    symbol: str,
+    results: dict[AnalysisType, Any],
+    routing_decision: AnalysisRoutingDecision,
+    bullish_researcher: ThesisResearcher,
+    bearish_researcher: ThesisResearcher,
+    collector: ExecutionMetricsCollector | None,
+    timeout_ms: int,
+) -> dict[AnalysisType, Any]:
+    """Run research analyses based on routing decision.
+
+    Args:
+        symbol: Stock ticker
+        results: Results from group 1 analyses
+        routing_decision: Supervisor routing decision
+        bullish_researcher: Bullish researcher
+        bearish_researcher: Bearish researcher
+        collector: Optional metrics collector
+        timeout_ms: Timeout in milliseconds
+
+    Returns:
+        Dict mapping analysis type to result
+    """
+    required = set(routing_decision.required_analyses)
+    optional = set(routing_decision.optional_analyses)
+
+    # Extract results
+    technical = results.get(AnalysisType.TECHNICAL)
+    sentiment = results.get(AnalysisType.SENTIMENT)
+    news = results.get(AnalysisType.NEWS)
+    fundamental = results.get(AnalysisType.FUNDAMENTAL)
+    comparative = results.get(AnalysisType.COMPARATIVE)
+    trump = results.get(AnalysisType.TRUMP)
+
+    tasks: list[_WorkerTask] = []
+
+    # Bullish research
+    if AnalysisType.BULLISH_RESEARCH in required or AnalysisType.BULLISH_RESEARCH in optional:
+        category = "required" if AnalysisType.BULLISH_RESEARCH in required else "optional"
+        coro = _timed_agent_call(
+            "bullish_researcher",
+            bullish_researcher.analyze(symbol, technical, sentiment, news, fundamental, comparative, trump),
+            collector,
+        )
+        task = asyncio.create_task(coro)
+        tasks.append(_WorkerTask(AnalysisType.BULLISH_RESEARCH, task, category))
+
+    # Bearish research
+    if AnalysisType.BEARISH_RESEARCH in required or AnalysisType.BEARISH_RESEARCH in optional:
+        category = "required" if AnalysisType.BEARISH_RESEARCH in required else "optional"
+        coro = _timed_agent_call(
+            "bearish_researcher",
+            bearish_researcher.analyze(symbol, technical, sentiment, news, fundamental, comparative, trump),
+            collector,
+        )
+        task = asyncio.create_task(coro)
+        tasks.append(_WorkerTask(AnalysisType.BEARISH_RESEARCH, task, category))
+
+    if not tasks:
+        return {}
+
+    logger.info(
+        f"Running {len(tasks)} research workers "
+        f"({len([t for t in tasks if t.category == 'required'])} required, "
+        f"{len([t for t in tasks if t.category == 'optional'])} optional)"
+    )
+
+    return await _execute_workers_with_gather(tasks, timeout_ms)
+
+
+def _build_output(
+    results: dict[AnalysisType, Any],
+    research_results: dict[AnalysisType, Any],
+    warnings: list[str],
+) -> AnalysisOutput:
+    """Build final analysis output from results.
+
+    Args:
+        results: Results from group 1 analyses
+        research_results: Results from research analyses
+        warnings: Accumulated warnings
+
+    Returns:
+        AnalysisOutput with all analyses
+    """
+    return AnalysisOutput(
+        technical_analysis=results.get(AnalysisType.TECHNICAL),
+        sentiment_analysis=results.get(AnalysisType.SENTIMENT),
+        news_analysis=results.get(AnalysisType.NEWS),
+        trump_analysis=results.get(AnalysisType.TRUMP),
+        fundamental_analysis=results.get(AnalysisType.FUNDAMENTAL),
+        comparative_analysis=results.get(AnalysisType.COMPARATIVE),
+        web_research=results.get(AnalysisType.WEB_RESEARCH),
+        social_sentiment_analysis=results.get(AnalysisType.SOCIAL_SENTIMENT),
+        bullish_research=research_results.get(AnalysisType.BULLISH_RESEARCH),
+        bearish_research=research_results.get(AnalysisType.BEARISH_RESEARCH),
+        warnings=warnings,
+    )
+
+
+async def run_supervised_analyses(
+    input_data: AnalysisInput,
+    routing_decision: AnalysisRoutingDecision,
+    technical_analyst: TechnicalAnalyst,
+    sentiment_analyst: SentimentAnalyst,
+    news_analyst: NewsAnalyst,
+    fundamental_analyst: FundamentalAnalyst,
+    comparative_analyst: ComparativeAnalyst,
+    web_researcher: WebResearchAgent,
+    social_analyst: SocialSentimentAnalyst,
+    bullish_researcher: ThesisResearcher,
+    bearish_researcher: ThesisResearcher,
+    trump_mode: bool,
+    trump_analyst: TrumpAnalyst | None,
+    collector: ExecutionMetricsCollector | None = None,
+    timeout_ms: int = 30000,
+) -> AnalysisOutput:
+    """Execute analyses based on supervisor routing decision.
+
+    Three categories:
+    - Required (fail-fast on error)
+    - Optional (graceful degradation)
+    - Skipped (don't execute, log reasoning)
+
+    Args:
+        input_data: Analysis input with symbol, market data, news, trump posts
+        routing_decision: Supervisor routing decision
+        technical_analyst: Technical analyst with selected strategy
+        sentiment_analyst: Sentiment analyst
+        news_analyst: News analyst
+        fundamental_analyst: Fundamental analyst
+        comparative_analyst: Comparative analyst
+        web_researcher: Web research agent
+        social_analyst: Social sentiment analyst
+        bullish_researcher: Bullish researcher
+        bearish_researcher: Bearish researcher
+        trump_mode: Enable Trump analysis
+        trump_analyst: Trump analyst (required if trump_mode=True)
+        collector: Optional metrics collector
+        timeout_ms: Timeout for worker execution in milliseconds
+
+    Returns:
+        AnalysisOutput with all analyses
+    """
+    warnings: list[str] = []
+    _validate_input_data(input_data)
+
+    if not input_data.news_articles:
+        logger.warning(f"No news articles available for {input_data.symbol}, analyses may be degraded")
+        warnings.append("No news articles available - sentiment and news analyses degraded")
+
+    # Run group 1 analyses
+    start = time.perf_counter()
+    group1_results = await _run_supervised_group1(
+        input_data,
+        routing_decision,
+        technical_analyst,
+        sentiment_analyst,
+        news_analyst,
+        fundamental_analyst,
+        comparative_analyst,
+        web_researcher,
+        social_analyst,
+        trump_mode,
+        trump_analyst,
+        collector,
+        timeout_ms,
+    )
+    logger.debug(f"Group 1 analyses completed in {(time.perf_counter() - start) * 1000:.0f}ms")
+
+    # Run group 2 research
+    start = time.perf_counter()
+    research_results = await _run_supervised_research(
+        input_data.symbol,
+        group1_results,
+        routing_decision,
+        bullish_researcher,
+        bearish_researcher,
+        collector,
+        timeout_ms,
+    )
+    logger.debug(f"Research analyses completed in {(time.perf_counter() - start) * 1000:.0f}ms")
+
+    return _build_output(group1_results, research_results, warnings)
