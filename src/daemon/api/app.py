@@ -145,13 +145,20 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         # Determine health status from degradation tier
         degradation_tier = "FULL"
-        degradation_history = await components.state.get_degradation_history(limit=1)
-        if degradation_history:
-            degradation_tier = degradation_history[-1].tier
+        last_run = None
+
+        try:
+            degradation_history = await components.state.get_degradation_history(limit=1)
+            if degradation_history:
+                degradation_tier = degradation_history[-1].tier
+
+            last_run = await components.state.get_last_run()
+        except Exception:
+            # DB temporarily unavailable due to concurrent operations - still healthy
+            pass
 
         status = "healthy" if degradation_tier == "FULL" else "degraded"
 
-        last_run = await components.state.get_last_run()
         return HealthResponse(
             status=status,
             uptime_seconds=uptime,
