@@ -52,6 +52,7 @@ class TradingWorkflow:
         self.broker = components.broker
         self.metrics_tracker = components.metrics_tracker
         self.snapshot_repository = components.snapshot_repository
+        self.execution_metric_repository = components.execution_metric_repository
         self.notification_service = components.notification_service
         self._container = components.container
         self.analysis_orchestrator_config = components.analysis_orchestrator_config
@@ -389,7 +390,12 @@ class TradingWorkflow:
             risk_assessment=state["risk_assessment"],
             trading_session=state.get("trading_session", TradingSession.REGULAR),
         )
-        execution_output = await execution.execute_trade(execution_input, self.broker)
+        execution_output = await execution.execute_trade(
+            execution_input,
+            self.broker,
+            self.market_fetcher,
+            self.execution_metric_repository,
+        )
 
         return {**state, "order_status": execution_output.order_status}
 

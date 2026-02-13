@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from src.database.repositories.discovery import DiscoveryHistoryRepository
     from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
     from src.database.repositories.execution_graph import ExecutionGraphRepository
+    from src.database.repositories.execution_metric import ExecutionMetricRepository
     from src.database.repositories.game_plan import GamePlanRecordRepository
     from src.database.repositories.metadata import MetadataRepository
     from src.database.repositories.monte_carlo import MonteCarloRecordRepository
@@ -451,3 +452,18 @@ def create_active_discovery_repository(database_engine: DatabaseEngine) -> Activ
 
     session = database_engine.session()
     return ActiveDiscoveryCandidateRepository(session)
+
+
+def create_execution_metric_repository(database_engine: DatabaseEngine) -> ExecutionMetricRepository:
+    """Create ExecutionMetricRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        ExecutionMetricRepository instance
+    """
+    from src.database.repositories.execution_metric import ExecutionMetricRepository
+
+    session = database_engine.session()
+    return ExecutionMetricRepository(session)
