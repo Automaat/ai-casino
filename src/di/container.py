@@ -358,6 +358,16 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
     )
 
+    sentiment_worker = providers.Factory(
+        worker_providers.create_sentiment_worker,
+        finbert=finbert_sentiment,
+    )
+
+    news_worker = providers.Factory(
+        worker_providers.create_news_worker,
+        llm_client=llm_client,
+    )
+
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides
     # Note: container must be passed explicitly when calling these factories
     # (providers.Self() doesn't work reliably with Factory providers)

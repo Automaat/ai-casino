@@ -1,4 +1,4 @@
-"""Sentiment Analysis Agent."""
+"""Sentiment Analysis Worker - Pydantic AI migration POC."""
 
 import asyncio
 from typing import TYPE_CHECKING
@@ -7,8 +7,8 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.data.news import NewsArticle
-from src.execution_tracking import track_agent
 from src.models.sentiment import _analyze_batch_worker, get_finbert_executor
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.models.sentiment import SentimentScore
@@ -26,22 +26,21 @@ class SentimentAnalysis(BaseModel):
     summary: str
 
 
-class SentimentAnalyst:
-    """Agent for analyzing sentiment from news articles."""
+class SentimentWorker:
+    """Sentiment analysis worker - Pydantic AI migration POC."""
 
     POSITIVE_THRESHOLD = 0.2
     NEGATIVE_THRESHOLD = -0.2
 
     def __init__(self, finbert: object) -> None:
-        """Initialize sentiment analyst.
+        """Initialize sentiment worker.
 
         Args:
             finbert: FinBERT sentiment analyzer (local or remote, provides analyze_batch method)
         """
         self.finbert = finbert
-        logger.info("Initialized SentimentAnalyst")
+        logger.info("Initialized SentimentWorker (POC)")
 
-    @track_agent
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
         """Analyze sentiment from news articles.
 
@@ -87,14 +86,7 @@ class SentimentAnalyst:
         neutral_count = sum(1 for s in scores if s.dominant == "neutral")
         total = len(scores)
 
-        summary = self._generate_summary(
-            symbol,
-            sentiment_label,
-            overall_score,
-            positive_count,
-            negative_count,
-            total,
-        )
+        summary = self._generate_summary(symbol, sentiment_label, overall_score, scores)
 
         logger.info(
             f"Sentiment: {sentiment_label} (score={overall_score:.2f}, "
@@ -141,13 +133,7 @@ class SentimentAnalyst:
         return "neutral"
 
     def _generate_summary(
-        self,
-        symbol: str,
-        sentiment: str,
-        score: float,
-        positive: int,
-        negative: int,
-        total: int,
+        self, symbol: str, sentiment: str, score: float, scores: list[SentimentScore]
     ) -> str:
         """Generate human-readable summary.
 
@@ -155,19 +141,44 @@ class SentimentAnalyst:
             symbol: Stock ticker
             sentiment: Overall sentiment label
             score: Sentiment score
-            positive: Number of positive articles
-            negative: Number of negative articles
-            total: Total articles
+            scores: List of sentiment scores
 
         Returns:
             Summary text
         """
+        positive = sum(1 for s in scores if s.dominant == "positive")
+        negative = sum(1 for s in scores if s.dominant == "negative")
+        total = len(scores)
         return (
             f"News sentiment for {symbol} is {sentiment} (score: {score:.2f}). "
             f"Out of {total} articles analyzed: {positive} positive, "
             f"{negative} negative, {total - positive - negative} neutral."
         )
 
+    def get_tool_definition(self) -> ToolDefinition:
+        """Get tool definition for supervisor integration.
+
+        Returns:
+            Tool definition
+        """
+        return ToolDefinition(
+            type="function",
+            function=ToolFunction(
+                name="analyze_sentiment",
+                description="Analyze sentiment from news articles using FinBERT",
+                parameters=ToolParametersSchema(
+                    type="object",
+                    properties={
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol",
+                        ),
+                    },
+                    required=["symbol"],
+                ),
+            ),
+        )
+
     def __repr__(self) -> str:
         """String representation."""
-        return "SentimentAnalyst(model=FinBERT)"
+        return "SentimentWorker(model=FinBERT)"
