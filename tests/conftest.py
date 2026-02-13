@@ -30,6 +30,14 @@ from src.strategies.signal import Signal
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
 
 
+@pytest.fixture(scope="session", autouse=True)
+def set_test_database_url():
+    """Set DATABASE_URL for all tests using in-memory SQLite."""
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+    yield
+    os.environ.pop("DATABASE_URL", None)
+
+
 @pytest.fixture
 def sample_ohlcv_data():
     """Sample OHLCV data for testing."""

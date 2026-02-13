@@ -1,18 +1,13 @@
 """DaemonState facade maintaining backward compatibility."""
 
-# ruff: noqa: D102  # Properties delegate to managers for backward compatibility
-
 from __future__ import annotations
 
-import json
 from collections import deque
-from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from src.execution_tracking.models import ExecutionGraph
@@ -20,11 +15,15 @@ if TYPE_CHECKING:
 
 from src.daemon.state.managers.data_pipeline import DataPipelineStateManager
 from src.daemon.state.managers.discovery import DiscoveryStateManager
-from src.daemon.state.managers.portfolio import PortfolioStateManager
+from src.daemon.state.managers.portfolio import (
+    CorrelationAuditInput,
+    PortfolioRebalancingInput,
+    PortfolioStateManager,
+)
 from src.daemon.state.managers.positions import PositionStateManager
 from src.daemon.state.managers.snapshots import SnapshotStateManager
 from src.daemon.state.managers.strategy import StrategyStateManager
-from src.daemon.state.managers.trading import TradingStateManager
+from src.daemon.state.managers.trading import AnalysisRecordInput, TradingStateManager
 from src.daemon.state.models import (
     AnalysisRecord,
     CorrelationAuditRecord,
@@ -36,7 +35,6 @@ from src.daemon.state.models import (
     MonteCarloRecord,
     OptimizationRecord,
     PeerAnalysisRecord,
-    PortfolioAllocationRecord,
     PortfolioRebalancingRecord,
     PortfolioSnapshot,
     PrefetchRecord,
@@ -45,18 +43,15 @@ from src.daemon.state.models import (
     ScreeningRecord,
     SectorRotationRecord,
 )
+from src.daemon.state.repositories import RepositoryBundle
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
 from src.execution_tracking.tracker import ExecutionGraphTracker
 from src.screening.screener import ScreeningResult
-from src.strategies.session import TradingSession
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.discovery import DiscoveryHistoryRepository
-    from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
 
 class DaemonState(BaseModel):
@@ -85,340 +80,165 @@ class DaemonState(BaseModel):
         description="Recent completed execution graphs (last 50)",
     )
 
-    @model_validator(mode="wrap")
-    @classmethod
-    def _distribute_fields_to_managers(  # noqa: C901, PLR0912  # Backward compat, can't simplify
-        cls, values: dict, handler: Callable[[dict], DaemonState]
-    ) -> DaemonState:
-        """Distribute old-style constructor fields to appropriate managers for backward compatibility."""
-        if isinstance(values, dict):
-            # Extract manager-specific fields
-            trading_fields = {}
-            positions_fields = {}
-            portfolio_fields = {}
-            data_pipeline_fields = {}
-            discovery_fields = {}
-            strategy_fields = {}
-
-            # Trading fields
-            for field in [
-                "last_run",
-                "analyses",
-                "total_analyses",
-                "total_trades",
-                "paper_trading_start_date",
-                "current_trading_mode",
-                "last_journal_date",
-                "last_signal_tracking",
-            ]:
-                if field in values:
-                    trading_fields[field] = values.pop(field)
-
-            # Position fields
-            for field in ["active_positions", "position_management_history"]:
-                if field in values:
-                    positions_fields[field] = values.pop(field)
-
-            # Portfolio fields
-            for field in [
-                "last_optimization",
-                "optimization_history",
-                "last_portfolio_rebalancing",
-                "portfolio_rebalancing_history",
-                "active_target_allocations",
-                "last_sector_rotation",
-                "sector_rotation_history",
-                "last_peer_analysis",
-                "peer_analysis_history",
-                "last_correlation_audit",
-                "correlation_audit_history",
-                "last_risk_report",
-                "risk_report_history",
-                "monte_carlo_tests",
-                "last_tearsheet",
-            ]:
-                if field in values:
-                    portfolio_fields[field] = values.pop(field)
-
-            # Data pipeline fields
-            for field in [
-                "last_prefetch",
-                "prefetch_history",
-                "last_pre_market_refresh",
-                "last_after_hours_screening",
-                "screening_history",
-                "last_earnings_fetch",
-                "earnings_calendar_history",
-                "profiling_history",
-            ]:
-                if field in values:
-                    data_pipeline_fields[field] = values.pop(field)
-
-            # Discovery fields
-            for field in ["last_discovery", "discovery_history", "active_discovery_candidates"]:
-                if field in values:
-                    discovery_fields[field] = values.pop(field)
-
-            # Strategy fields
-            for field in [
-                "last_game_plan",
-                "game_plan_history",
-                "last_degradation",
-                "degradation_history",
-                "market_events",
-                "last_health_check",
-                "errors",
-            ]:
-                if field in values:
-                    strategy_fields[field] = values.pop(field)
-
-            # Create managers with extracted fields
-            if trading_fields:
-                values["trading"] = TradingStateManager(**trading_fields)
-            if positions_fields:
-                values["positions"] = PositionStateManager(**positions_fields)
-            if portfolio_fields:
-                values["portfolio"] = PortfolioStateManager(**portfolio_fields)
-            if data_pipeline_fields:
-                values["data_pipeline"] = DataPipelineStateManager(**data_pipeline_fields)
-            if discovery_fields:
-                values["discovery"] = DiscoveryStateManager(**discovery_fields)
-            if strategy_fields:
-                values["strategy"] = StrategyStateManager(**strategy_fields)
-
-        # Call default handler to create instance
-        return handler(values)
-
-    def set_repositories(
-        self,
-        analysis_repository: AnalysisRecordRepository | None = None,
-        discovery_repository: DiscoveryHistoryRepository | None = None,
-        snapshot_repository: PortfolioSnapshotRepository | None = None,
-    ) -> None:
-        """Inject database repositories after loading state.
+    def set_repositories(self, repos: RepositoryBundle) -> None:
+        """Inject all database repositories into managers.
 
         Args:
-            analysis_repository: Analysis record repository
-            discovery_repository: Discovery history repository
-            snapshot_repository: Portfolio snapshot repository
+            repos: Bundle containing all 20 repositories
         """
-        if analysis_repository:
-            self.trading.set_repository(analysis_repository)
-        if discovery_repository:
-            self.discovery.set_repository(discovery_repository)
-        if snapshot_repository:
-            self.snapshots.set_repository(snapshot_repository)
-        logger.debug("Repositories injected into DaemonState")
+        # TradingStateManager
+        self.trading.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            analysis_repository=repos.analysis_repository,
+        )
 
-    @classmethod
-    def load(cls, path: str) -> DaemonState:
-        """Load state from JSON file.
+        # PositionStateManager
+        self.positions.set_repositories(
+            position_repository=repos.position_repository,
+            position_action_repository=repos.action_repository,
+        )
 
-        Args:
-            path: Path to state file (supports ~ expansion)
+        # PortfolioStateManager
+        self.portfolio.set_repositories(repos)
 
-        Returns:
-            DaemonState instance
-        """
-        expanded_path = Path(path).expanduser()
+        # DataPipelineStateManager
+        self.data_pipeline.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            prefetch_repository=repos.prefetch_repository,
+            screening_repository=repos.screening_repository,
+            earnings_repository=repos.earnings_repository,
+            profiling_repository=repos.profiling_repository,
+        )
 
-        if not expanded_path.exists():
-            logger.info(f"No existing state at {expanded_path}, starting fresh")
-            return cls()
+        # DiscoveryStateManager
+        self.discovery.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            discovery_repository=repos.discovery_repository,
+            active_discovery_repository=repos.active_discovery_repository,
+        )
 
-        try:
-            with expanded_path.open() as f:
-                data = json.load(f)
-            logger.info(f"Loaded daemon state from {expanded_path}")
-            return cls.model_validate(data)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to load state: {e}, starting fresh")
-            return cls()
+        # StrategyStateManager
+        self.strategy.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            game_plan_repository=repos.game_plan_repository,
+            degradation_repository=repos.degradation_repository,
+        )
 
-    def save(self, path: str) -> None:
-        """Save state to JSON file.
+        # SnapshotStateManager
+        self.snapshots.set_repository(repos.snapshot_repository)
 
-        Args:
-            path: Path to state file (supports ~ expansion)
-        """
-        expanded_path = Path(path).expanduser()
-        expanded_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            with expanded_path.open("w") as f:
-                json.dump(self.model_dump(mode="json"), f, indent=2, default=str)
-            logger.debug(f"Saved daemon state to {expanded_path}")
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to save state: {e}")
+        logger.debug("All repositories injected into DaemonState managers")
 
     # ===================
     # Trading Manager API
     # ===================
 
-    def record_analysis(  # noqa: PLR0913 - Facade maintains backward compat, delegates to clean manager
-        self,
-        symbol: str,
-        signal: str,
-        confidence: float,
-        executed: bool = False,
-        trading_session: TradingSession = TradingSession.REGULAR,
-        is_paper_trade: bool = True,
-        rsi: float | None = None,
-        macd_hist: float | None = None,
-        reasoning: list[str] | None = None,
-        technical_analysis_reasoning: str | None = None,
-        sentiment_analysis_reasoning: str | None = None,
-        news_analysis_reasoning: str | None = None,
-    ) -> None:
+    async def record_analysis(self, input_data: AnalysisRecordInput) -> None:
         """Delegate to trading manager."""
-        from src.daemon.state.managers.trading import AnalysisRecordInput
+        await self.trading.record_analysis(input_data)
 
-        input_data = AnalysisRecordInput(
-            symbol=symbol,
-            signal=signal,
-            confidence=confidence,
-            executed=executed,
-            trading_session=trading_session,
-            is_paper_trade=is_paper_trade,
-            rsi=rsi,
-            macd_hist=macd_hist,
-            reasoning=reasoning,
-            technical_analysis_reasoning=technical_analysis_reasoning,
-            sentiment_analysis_reasoning=sentiment_analysis_reasoning,
-            news_analysis_reasoning=news_analysis_reasoning,
-        )
-        self.trading.record_analysis(input_data)
+    async def get_last_run(self) -> datetime | None:
+        """Get last run timestamp."""
+        return await self.trading.get_last_run()
 
-    @property
-    def last_run(self) -> datetime | None:
-        return self.trading.last_run
+    async def set_last_run(self, value: datetime | None) -> None:
+        """Set last run timestamp."""
+        await self.trading.set_last_run(value)
 
-    @last_run.setter
-    def last_run(self, value: datetime | None) -> None:
-        self.trading.last_run = value
+    async def get_analyses(self, limit: int = 1000) -> list[AnalysisRecord]:
+        """Get recent analyses."""
+        return await self.trading.get_analyses(limit)
 
-    @property
-    def analyses(self) -> list[AnalysisRecord]:
-        return self.trading.analyses
+    async def get_total_analyses(self) -> int:
+        """Get total analyses count."""
+        return await self.trading.get_total_analyses()
 
-    @analyses.setter
-    def analyses(self, value: list[AnalysisRecord]) -> None:
-        self.trading.analyses = value
+    async def get_total_trades(self) -> int:
+        """Get total trades count."""
+        return await self.trading.get_total_trades()
 
-    @property
-    def total_analyses(self) -> int:
-        return self.trading.total_analyses
+    async def get_paper_trading_start_date(self) -> datetime | None:
+        """Get paper trading start date."""
+        return await self.trading.get_paper_trading_start_date()
 
-    @property
-    def total_trades(self) -> int:
-        return self.trading.total_trades
+    async def set_paper_trading_start_date(self, value: datetime | None) -> None:
+        """Set paper trading start date."""
+        await self.trading.set_paper_trading_start_date(value)
 
-    @property
-    def paper_trading_start_date(self) -> datetime | None:
-        return self.trading.paper_trading_start_date
+    async def get_current_trading_mode(self) -> str:
+        """Get current trading mode."""
+        return await self.trading.get_current_trading_mode()
 
-    @paper_trading_start_date.setter
-    def paper_trading_start_date(self, value: datetime | None) -> None:
-        self.trading.paper_trading_start_date = value
+    async def set_current_trading_mode(self, value: str) -> None:
+        """Set current trading mode."""
+        await self.trading.set_current_trading_mode(value)
 
-    @property
-    def current_trading_mode(self) -> str:
-        return self.trading.current_trading_mode
+    async def get_last_journal_date(self) -> str | None:
+        """Get last journal date."""
+        return await self.trading.get_last_journal_date()
 
-    @current_trading_mode.setter
-    def current_trading_mode(self, value: str) -> None:
-        self.trading.current_trading_mode = value
+    async def set_last_journal_date(self, value: str | None) -> None:
+        """Set last journal date."""
+        await self.trading.set_last_journal_date(value)
 
-    @property
-    def last_journal_date(self) -> str | None:
-        return self.trading.last_journal_date
+    async def get_last_signal_tracking(self) -> datetime | None:
+        """Get last signal tracking timestamp."""
+        return await self.trading.get_last_signal_tracking()
 
-    @last_journal_date.setter
-    def last_journal_date(self, value: str | None) -> None:
-        self.trading.last_journal_date = value
-
-    @property
-    def last_signal_tracking(self) -> datetime | None:
-        return self.trading.last_signal_tracking
-
-    @last_signal_tracking.setter
-    def last_signal_tracking(self, value: datetime | None) -> None:
-        self.trading.last_signal_tracking = value
+    async def set_last_signal_tracking(self, value: datetime | None) -> None:
+        """Set last signal tracking timestamp."""
+        await self.trading.set_last_signal_tracking(value)
 
     # ===================
     # Position Manager API
     # ===================
 
-    def add_position(self, position: PositionRecord) -> None:
+    async def add_position(self, position: PositionRecord) -> None:
         """Delegate to position manager."""
-        self.positions.add_position(position)
+        await self.positions.add_position(position)
 
-    def remove_position(self, symbol: str) -> None:
+    async def remove_position(self, symbol: str) -> None:
         """Delegate to position manager."""
-        self.positions.remove_position(symbol)
+        await self.positions.remove_position(symbol)
 
-    def update_position(self, position: PositionRecord) -> None:
+    async def update_position(self, position: PositionRecord) -> None:
         """Delegate to position manager."""
-        self.positions.update_position(position)
+        await self.positions.update_position(position)
 
-    def record_position_action(self, action: PositionManagementAction) -> None:
+    async def record_position_action(self, action: PositionManagementAction) -> None:
         """Delegate to position manager."""
-        self.positions.record_position_action(action)
+        await self.positions.record_position_action(action)
 
-    def get_position(self, symbol: str) -> PositionRecord | None:
+    async def get_position(self, symbol: str) -> PositionRecord | None:
         """Delegate to position manager."""
-        return self.positions.get_position(symbol)
+        return await self.positions.get_position(symbol)
 
-    @property
-    def active_positions(self) -> dict[str, dict]:
-        return self.positions.active_positions
+    async def get_active_positions(self) -> dict[str, dict]:
+        """Get active positions."""
+        return await self.positions.get_active_positions()
 
-    @active_positions.setter
-    def active_positions(self, value: dict[str, dict]) -> None:
-        self.positions.active_positions = value
-
-    @property
-    def position_management_history(self) -> list[dict]:
-        return self.positions.position_management_history
+    async def get_position_management_history(self) -> list[dict]:
+        """Get position management history."""
+        return await self.positions.get_position_management_history()
 
     # ===================
     # Portfolio Manager API
     # ===================
 
-    def record_optimization(
+    async def record_optimization(
         self,
         symbols_optimized: list[str],
         symbols_skipped: list[str],
         total_time_seconds: float,
     ) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_optimization(symbols_optimized, symbols_skipped, total_time_seconds)
+        await self.portfolio.record_optimization(symbols_optimized, symbols_skipped, total_time_seconds)
 
-    def record_portfolio_rebalancing(  # noqa: PLR0913 - Facade maintains backward compat
-        self,
-        method: str,
-        allocations: list[PortfolioAllocationRecord],
-        expected_return: float,
-        expected_volatility: float,
-        sharpe_ratio: float,
-        rebalances_executed: int,
-        rebalances_pending: int,
-    ) -> None:
+    async def record_portfolio_rebalancing(self, input_data: PortfolioRebalancingInput) -> None:
         """Delegate to portfolio manager."""
-        from src.daemon.state.managers.portfolio import PortfolioRebalancingInput
+        await self.portfolio.record_portfolio_rebalancing(input_data)
 
-        input_data = PortfolioRebalancingInput(
-            method=method,
-            allocations=allocations,
-            expected_return=expected_return,
-            expected_volatility=expected_volatility,
-            sharpe_ratio=sharpe_ratio,
-            rebalances_executed=rebalances_executed,
-            rebalances_pending=rebalances_pending,
-        )
-        self.portfolio.record_portfolio_rebalancing(input_data)
-
-    def record_sector_rotation(
+    async def record_sector_rotation(
         self,
         leading_sectors: list[str],
         lagging_sectors: list[str],
@@ -427,11 +247,11 @@ class DaemonState(BaseModel):
         flagged_positions: list[str] | None = None,
     ) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_sector_rotation(
+        await self.portfolio.record_sector_rotation(
             leading_sectors, lagging_sectors, sector_strengths, sector_momenta, flagged_positions
         )
 
-    def record_peer_analysis(
+    async def record_peer_analysis(
         self,
         symbols_analyzed: list[str],
         rankings: dict[str, int],
@@ -440,131 +260,103 @@ class DaemonState(BaseModel):
         total_duration_seconds: float,
     ) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_peer_analysis(
+        await self.portfolio.record_peer_analysis(
             symbols_analyzed, rankings, swap_recommendations, total_peers, total_duration_seconds
         )
 
-    def record_correlation_audit(  # noqa: PLR0913 - Facade maintains backward compat
-        self,
-        num_positions: int,
-        num_correlated_pairs: int,
-        max_correlation: float,
-        avg_correlation: float,
-        diversification_ratio: float,
-        num_substitutions: int,
-        total_duration_seconds: float,
-    ) -> None:
+    async def record_correlation_audit(self, input_data: CorrelationAuditInput) -> None:
         """Delegate to portfolio manager."""
-        from src.daemon.state.managers.portfolio import CorrelationAuditInput
+        await self.portfolio.record_correlation_audit(input_data)
 
-        input_data = CorrelationAuditInput(
-            num_positions=num_positions,
-            num_correlated_pairs=num_correlated_pairs,
-            max_correlation=max_correlation,
-            avg_correlation=avg_correlation,
-            diversification_ratio=diversification_ratio,
-            num_substitutions=num_substitutions,
-            total_duration_seconds=total_duration_seconds,
-        )
-        self.portfolio.record_correlation_audit(input_data)
-
-    def record_risk_report(self, report: RiskReportRecord) -> None:
+    async def record_risk_report(self, report: RiskReportRecord) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_risk_report(report)
+        await self.portfolio.record_risk_report(report)
 
-    def record_monte_carlo_test(self, record: MonteCarloRecord, max_records: int = 52) -> None:
+    async def record_monte_carlo_test(self, record: MonteCarloRecord) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_monte_carlo_test(record, max_records)
+        await self.portfolio.record_monte_carlo_test(record)
 
-    def record_tearsheet(self, symbol: str, html_path: str) -> None:
+    async def record_tearsheet(self, symbol: str, html_path: str) -> None:
         """Delegate to portfolio manager."""
-        self.portfolio.record_tearsheet(symbol, html_path)
+        await self.portfolio.record_tearsheet(symbol, html_path)
 
-    @property
-    def last_optimization(self) -> datetime | None:
-        return self.portfolio.last_optimization
+    async def get_last_optimization(self) -> datetime | None:
+        """Get last optimization timestamp."""
+        return await self.portfolio.get_last_optimization()
 
-    @property
-    def optimization_history(self) -> list[OptimizationRecord]:
-        return self.portfolio.optimization_history
+    async def get_optimization_history(self, limit: int = 10) -> list[OptimizationRecord]:
+        """Get optimization history."""
+        return await self.portfolio.get_optimization_history(limit)
 
-    @property
-    def last_portfolio_rebalancing(self) -> datetime | None:
-        return self.portfolio.last_portfolio_rebalancing
+    async def get_last_portfolio_rebalancing(self) -> datetime | None:
+        """Get last rebalancing timestamp."""
+        return await self.portfolio.get_last_portfolio_rebalancing()
 
-    @property
-    def portfolio_rebalancing_history(self) -> list[PortfolioRebalancingRecord]:
-        return self.portfolio.portfolio_rebalancing_history
+    async def get_rebalancing_history(self, limit: int = 30) -> list[PortfolioRebalancingRecord]:
+        """Get rebalancing history."""
+        return await self.portfolio.get_rebalancing_history(limit)
 
-    @property
-    def active_target_allocations(self) -> dict[str, float] | None:
-        return self.portfolio.active_target_allocations
+    async def get_active_target_allocations(self) -> dict[str, float] | None:
+        """Get active target allocations."""
+        return await self.portfolio.get_active_target_allocations()
 
-    @active_target_allocations.setter
-    def active_target_allocations(self, value: dict[str, float] | None) -> None:
-        self.portfolio.active_target_allocations = value
+    async def set_active_target_allocations(self, value: dict[str, float] | None) -> None:
+        """Set active target allocations."""
+        await self.portfolio.set_active_target_allocations(value)
 
-    @property
-    def last_sector_rotation(self) -> datetime | None:
-        return self.portfolio.last_sector_rotation
+    async def get_last_sector_rotation(self) -> datetime | None:
+        """Get last sector rotation timestamp."""
+        return await self.portfolio.get_last_sector_rotation()
 
-    @last_sector_rotation.setter
-    def last_sector_rotation(self, value: datetime | None) -> None:
-        self.portfolio.last_sector_rotation = value
+    async def set_last_sector_rotation(self, value: datetime | None) -> None:
+        """Set last sector rotation timestamp."""
+        await self.portfolio.set_last_sector_rotation(value)
 
-    @property
-    def sector_rotation_history(self) -> list[SectorRotationRecord]:
-        return self.portfolio.sector_rotation_history
+    async def get_sector_rotation_history(self, limit: int = 30) -> list[SectorRotationRecord]:
+        """Get sector rotation history."""
+        return await self.portfolio.get_sector_rotation_history(limit)
 
-    @sector_rotation_history.setter
-    def sector_rotation_history(self, value: list[SectorRotationRecord]) -> None:
-        self.portfolio.sector_rotation_history = value
+    async def get_last_peer_analysis(self) -> datetime | None:
+        """Get last peer analysis timestamp."""
+        return await self.portfolio.get_last_peer_analysis()
 
-    @property
-    def last_peer_analysis(self) -> datetime | None:
-        return self.portfolio.last_peer_analysis
+    async def get_peer_analysis_history(self, limit: int = 10) -> list[PeerAnalysisRecord]:
+        """Get peer analysis history."""
+        return await self.portfolio.get_peer_analysis_history(limit)
 
-    @property
-    def peer_analysis_history(self) -> list[PeerAnalysisRecord]:
-        return self.portfolio.peer_analysis_history
+    async def get_last_correlation_audit(self) -> datetime | None:
+        """Get last correlation audit timestamp."""
+        return await self.portfolio.get_last_correlation_audit()
 
-    @property
-    def last_correlation_audit(self) -> datetime | None:
-        return self.portfolio.last_correlation_audit
+    async def set_last_correlation_audit(self, value: datetime | None) -> None:
+        """Set last correlation audit timestamp."""
+        await self.portfolio.set_last_correlation_audit(value)
 
-    @last_correlation_audit.setter
-    def last_correlation_audit(self, value: datetime | None) -> None:
-        self.portfolio.last_correlation_audit = value
+    async def get_correlation_audit_history(self, limit: int = 10) -> list[CorrelationAuditRecord]:
+        """Get correlation audit history."""
+        return await self.portfolio.get_correlation_audit_history(limit)
 
-    @property
-    def correlation_audit_history(self) -> list[CorrelationAuditRecord]:
-        return self.portfolio.correlation_audit_history
+    async def get_last_risk_report(self) -> datetime | None:
+        """Get last risk report timestamp."""
+        return await self.portfolio.get_last_risk_report()
 
-    @property
-    def last_risk_report(self) -> datetime | None:
-        return self.portfolio.last_risk_report
+    async def get_risk_report_history(self, limit: int = 30) -> list[RiskReportRecord]:
+        """Get risk report history."""
+        return await self.portfolio.get_risk_report_history(limit)
 
-    @property
-    def risk_report_history(self) -> list[RiskReportRecord]:
-        return self.portfolio.risk_report_history
+    async def get_monte_carlo_tests(self, limit: int = 52) -> list[MonteCarloRecord]:
+        """Get Monte Carlo tests."""
+        return await self.portfolio.get_monte_carlo_tests(limit)
 
-    @risk_report_history.setter
-    def risk_report_history(self, value: list[RiskReportRecord]) -> None:
-        self.portfolio.risk_report_history = value
-
-    @property
-    def monte_carlo_tests(self) -> list[MonteCarloRecord]:
-        return self.portfolio.monte_carlo_tests
-
-    @property
-    def last_tearsheet(self) -> datetime | None:
-        return self.portfolio.last_tearsheet
+    async def get_last_tearsheet(self) -> datetime | None:
+        """Get last tearsheet timestamp."""
+        return await self.portfolio.get_last_tearsheet()
 
     # ===================
     # Data Pipeline Manager API
     # ===================
 
-    def record_prefetch(
+    async def record_prefetch(
         self,
         symbols_prefetched: int,
         symbols_failed: int,
@@ -572,11 +364,11 @@ class DaemonState(BaseModel):
         total_duration_seconds: float,
     ) -> None:
         """Delegate to data pipeline manager."""
-        self.data_pipeline.record_prefetch(
+        await self.data_pipeline.record_prefetch(
             symbols_prefetched, symbols_failed, finbert_ready, total_duration_seconds
         )
 
-    def record_after_hours_screening(
+    async def record_after_hours_screening(
         self,
         criteria: str,
         universe: str,
@@ -585,176 +377,169 @@ class DaemonState(BaseModel):
         screened_at: datetime | None = None,
     ) -> None:
         """Delegate to data pipeline manager."""
-        self.data_pipeline.record_after_hours_screening(criteria, universe, candidates, top_n, screened_at)
+        await self.data_pipeline.record_after_hours_screening(
+            criteria, universe, candidates, top_n, screened_at
+        )
 
-    def record_earnings_fetch(
+    async def record_earnings_fetch(
         self,
         events: list[EarningsEventRecord],
         symbols_fetched: int,
         symbols_failed: int,
     ) -> None:
         """Delegate to data pipeline manager."""
-        self.data_pipeline.record_earnings_fetch(events, symbols_fetched, symbols_failed)
+        await self.data_pipeline.record_earnings_fetch(events, symbols_fetched, symbols_failed)
 
-    def record_profiling(self, metrics: object) -> None:
+    async def record_profiling(self, metrics: object) -> None:
         """Delegate to data pipeline manager."""
-        self.data_pipeline.record_profiling(metrics)
+        await self.data_pipeline.record_profiling(metrics)
 
-    @property
-    def last_prefetch(self) -> datetime | None:
-        return self.data_pipeline.last_prefetch
+    async def get_last_prefetch(self) -> datetime | None:
+        """Get last prefetch timestamp."""
+        return await self.data_pipeline.get_last_prefetch()
 
-    @last_prefetch.setter
-    def last_prefetch(self, value: datetime | None) -> None:
-        self.data_pipeline.last_prefetch = value
+    async def set_last_prefetch(self, value: datetime | None) -> None:
+        """Set last prefetch timestamp."""
+        await self.data_pipeline.set_last_prefetch(value)
 
-    @property
-    def last_pre_market_refresh(self) -> datetime | None:
-        return self.data_pipeline.last_pre_market_refresh
+    async def get_last_pre_market_refresh(self) -> datetime | None:
+        """Get last pre-market refresh timestamp."""
+        return await self.data_pipeline.get_last_pre_market_refresh()
 
-    @last_pre_market_refresh.setter
-    def last_pre_market_refresh(self, value: datetime | None) -> None:
-        self.data_pipeline.last_pre_market_refresh = value
+    async def set_last_pre_market_refresh(self, value: datetime | None) -> None:
+        """Set last pre-market refresh timestamp."""
+        await self.data_pipeline.set_last_pre_market_refresh(value)
 
-    @property
-    def prefetch_history(self) -> list[PrefetchRecord]:
-        return self.data_pipeline.prefetch_history
+    async def get_prefetch_history(self, limit: int = 10) -> list[PrefetchRecord]:
+        """Get prefetch history."""
+        return await self.data_pipeline.get_prefetch_history(limit)
 
-    @property
-    def last_after_hours_screening(self) -> datetime | None:
-        return self.data_pipeline.last_after_hours_screening
+    async def get_last_after_hours_screening(self) -> datetime | None:
+        """Get last after-hours screening timestamp."""
+        return await self.data_pipeline.get_last_after_hours_screening()
 
-    @last_after_hours_screening.setter
-    def last_after_hours_screening(self, value: datetime | None) -> None:
-        self.data_pipeline.last_after_hours_screening = value
+    async def set_last_after_hours_screening(self, value: datetime | None) -> None:
+        """Set last after-hours screening timestamp."""
+        await self.data_pipeline.set_last_after_hours_screening(value)
 
-    @property
-    def screening_history(self) -> list[ScreeningRecord]:
-        return self.data_pipeline.screening_history
+    async def get_screening_history(self, limit: int = 10) -> list[ScreeningRecord]:
+        """Get screening history."""
+        return await self.data_pipeline.get_screening_history(limit)
 
-    @screening_history.setter
-    def screening_history(self, value: list[ScreeningRecord]) -> None:
-        self.data_pipeline.screening_history = value
+    async def get_last_earnings_fetch(self) -> datetime | None:
+        """Get last earnings fetch timestamp."""
+        return await self.data_pipeline.get_last_earnings_fetch()
 
-    @property
-    def last_earnings_fetch(self) -> datetime | None:
-        return self.data_pipeline.last_earnings_fetch
+    async def get_earnings_calendar_history(self, limit: int = 10) -> list[EarningsCalendarRecord]:
+        """Get earnings calendar history."""
+        return await self.data_pipeline.get_earnings_calendar_history(limit)
 
-    @property
-    def earnings_calendar_history(self) -> list[EarningsCalendarRecord]:
-        return self.data_pipeline.earnings_calendar_history
-
-    @property
-    def profiling_history(self) -> list[ProfilingRecord]:
-        return self.data_pipeline.profiling_history
+    async def get_profiling_history(self, limit: int = 10) -> list[ProfilingRecord]:
+        """Get profiling history."""
+        return await self.data_pipeline.get_profiling_history(limit)
 
     # ===================
     # Discovery Manager API
     # ===================
 
-    def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
+    async def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
         """Delegate to discovery manager."""
-        self.discovery.record_discovery(candidates, added_symbols)
+        await self.discovery.record_discovery(candidates, added_symbols)
 
-    def expire_stale_candidates(self) -> list[str]:
+    async def expire_stale_candidates(self) -> list[str]:
         """Delegate to discovery manager."""
-        return self.discovery.expire_stale_candidates()
+        return await self.discovery.expire_stale_candidates()
 
-    def get_active_discovery_symbols(self) -> list[str]:
+    async def get_active_discovery_symbols(self) -> list[str]:
         """Delegate to discovery manager."""
-        return self.discovery.get_active_discovery_symbols()
+        return await self.discovery.get_active_discovery_symbols()
 
-    @property
-    def last_discovery(self) -> datetime | None:
-        return self.discovery.last_discovery
+    async def get_last_discovery(self) -> datetime | None:
+        """Get last discovery timestamp."""
+        return await self.discovery.get_last_discovery()
 
-    @last_discovery.setter
-    def last_discovery(self, value: datetime | None) -> None:
-        self.discovery.last_discovery = value
+    async def set_last_discovery(self, value: datetime | None) -> None:
+        """Set last discovery timestamp."""
+        await self.discovery.set_last_discovery(value)
 
-    @property
-    def discovery_history(self) -> list[DiscoveryHistoryRecord]:
-        return self.discovery.discovery_history
+    async def get_discovery_history(self, limit: int = 10) -> list[DiscoveryHistoryRecord]:
+        """Get discovery history."""
+        return await self.discovery.get_discovery_history(limit)
 
-    @property
-    def active_discovery_candidates(self) -> list[DiscoveryCandidate]:
-        return self.discovery.active_discovery_candidates
+    async def get_active_discovery_candidates(self) -> list[DiscoveryCandidate]:
+        """Get active discovery candidates."""
+        return await self.discovery.get_active_discovery_candidates()
 
-    @active_discovery_candidates.setter
-    def active_discovery_candidates(self, value: list[DiscoveryCandidate]) -> None:
-        self.discovery.active_discovery_candidates = value
+    async def set_active_discovery_candidates(self, value: list[DiscoveryCandidate]) -> None:
+        """Set active discovery candidates."""
+        await self.discovery.set_active_discovery_candidates(value)
 
     # ===================
     # Strategy Manager API
     # ===================
 
-    def record_game_plan(
+    async def record_game_plan(
         self,
         priority_symbols: list[str],
         risk_stance: str,
         sector_focus: list[str],
     ) -> None:
         """Delegate to strategy manager."""
-        self.strategy.record_game_plan(priority_symbols, risk_stance, sector_focus)
+        await self.strategy.record_game_plan(priority_symbols, risk_stance, sector_focus)
 
-    def record_degradation(self, context: DegradationContext) -> None:
+    async def record_degradation(self, context: DegradationContext) -> None:
         """Delegate to strategy manager."""
-        self.strategy.record_degradation(context)
+        await self.strategy.record_degradation(context)
 
-    def record_error(self, error: str) -> None:
+    async def record_error(self, error: str) -> None:
         """Delegate to strategy manager."""
-        self.strategy.record_error(error)
+        await self.strategy.record_error(error)
 
-    @property
-    def last_game_plan(self) -> datetime | None:
-        return self.strategy.last_game_plan
+    async def get_last_game_plan(self) -> datetime | None:
+        """Get last game plan timestamp."""
+        return await self.strategy.get_last_game_plan()
 
-    @property
-    def game_plan_history(self) -> list[GamePlanRecord]:
-        return self.strategy.game_plan_history
+    async def get_game_plan_history(self, limit: int = 10) -> list[GamePlanRecord]:
+        """Get game plan history."""
+        return await self.strategy.get_game_plan_history(limit)
 
-    @game_plan_history.setter
-    def game_plan_history(self, value: list[GamePlanRecord]) -> None:
-        self.strategy.game_plan_history = value
+    async def get_last_degradation(self) -> datetime | None:
+        """Get last degradation timestamp."""
+        return await self.strategy.get_last_degradation()
 
-    @property
-    def last_degradation(self) -> datetime | None:
-        return self.strategy.last_degradation
+    async def get_degradation_history(self, limit: int = 30) -> list[DegradationRecord]:
+        """Get degradation history."""
+        return await self.strategy.get_degradation_history(limit)
 
-    @property
-    def degradation_history(self) -> list[DegradationRecord]:
-        return self.strategy.degradation_history
+    async def get_market_events(self, limit: int | None = None) -> list[dict]:
+        """Get market events.
 
-    @degradation_history.setter
-    def degradation_history(self, value: list[DegradationRecord]) -> None:
-        self.strategy.degradation_history = value
+        Args:
+            limit: Max number of events to return (optional)
 
-    @property
-    def market_events(self) -> list[dict]:
-        return self.strategy.market_events
+        Returns:
+            List of market events
+        """
+        return await self.strategy.get_market_events(limit=limit)
 
-    @property
-    def last_health_check(self) -> datetime | None:
-        return self.strategy.last_health_check
+    async def get_last_health_check(self) -> datetime | None:
+        """Get last health check timestamp."""
+        return await self.strategy.get_last_health_check()
 
-    @last_health_check.setter
-    def last_health_check(self, value: datetime | None) -> None:
-        self.strategy.last_health_check = value
+    async def set_last_health_check(self, value: datetime | None) -> None:
+        """Set last health check timestamp."""
+        await self.strategy.set_last_health_check(value)
 
-    @property
-    def errors(self) -> list[str]:
-        return self.strategy.errors
-
-    @errors.setter
-    def errors(self, value: list[str]) -> None:
-        self.strategy.errors = value
+    async def get_errors(self) -> list[str]:
+        """Get errors."""
+        return await self.strategy.get_errors()
 
     # ===================
     # Snapshot Manager API
     # ===================
 
     def snapshot_portfolio(self, snapshot: PortfolioSnapshot) -> None:
-        """Delegate to snapshot manager."""
+        """Delegate to snapshot manager (fires async task internally)."""
         self.snapshots.snapshot_portfolio(snapshot)
 
     # ===========================
@@ -802,6 +587,26 @@ class DaemonState(BaseModel):
             List of active execution graphs
         """
         return [tracker.graph for tracker in self.active_execution_trackers.values()]
+
+    async def get_active_execution_trackers(self) -> dict[str, ExecutionGraphTracker]:
+        """Get active execution trackers.
+
+        Returns:
+            Dict of active execution trackers by workflow_id
+        """
+        return self.active_execution_trackers.copy()
+
+    async def get_execution_graph_history(self, limit: int = 1000) -> list[ExecutionGraph]:
+        """Get execution graph history.
+
+        Args:
+            limit: Max number of graphs to return
+
+        Returns:
+            List of recent execution graphs
+        """
+        history_list = list(self.execution_graph_history)
+        return history_list[-limit:] if limit > 0 else history_list
 
     def get_execution_graph(self, workflow_id: str) -> ExecutionGraph | None:
         """Get execution graph (active or recent).
@@ -866,4 +671,4 @@ class DaemonState(BaseModel):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"DaemonState(analyses={self.total_analyses}, trades={self.total_trades})"
+        return "DaemonState()"

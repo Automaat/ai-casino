@@ -48,3 +48,25 @@ class DiscoveryResult(BaseModel):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"DiscoveryResult(candidates={len(self.candidates)}, total={self.total_discovered})"
+
+
+class DiscoverySourceDetail(BaseModel):
+    """Detailed discovery source information."""
+
+    source_type: str
+    weight: float
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class ActiveDiscoveryCandidate(BaseModel):
+    """Active discovery candidate in volatile state."""
+
+    symbol: str
+    discovered_at: datetime
+    composite_score: float
+    sources: list[DiscoverySourceDetail]
+    ttl_expires_at: datetime
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"ActiveDiscoveryCandidate(symbol={self.symbol}, score={self.composite_score:.2f})"

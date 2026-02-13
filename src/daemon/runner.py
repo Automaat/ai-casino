@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -182,9 +181,9 @@ class DaemonRunner:
             raise RuntimeError(msg)
         return self._components.workflow
 
-    def get_merged_watchlist(self) -> list[str]:
+    async def get_merged_watchlist(self) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates."""
-        return self._broker_manager.get_merged_watchlist()
+        return await self._broker_manager.get_merged_watchlist()
 
     async def _analyze_watchlist(
         self,
@@ -193,12 +192,9 @@ class DaemonRunner:
     ) -> list[TradingWorkflowResult]:
         """Analyze all symbols in watchlist (delegates to orchestrator)."""
         # Build target allocations from last rebalancing (if recent)
+        # NOTE: Requires async state access after JSON elimination
+        # TODO: Implement using await self.state.get_active_target_allocations()
         target_allocations = None
-        if self.state.active_target_allocations and self.state.last_portfolio_rebalancing:
-            days_old = (datetime.now(UTC) - self.state.last_portfolio_rebalancing).days
-            if days_old < self.config.analysis_orchestration.target_allocation_ttl_days:
-                target_allocations = self.state.active_target_allocations
-                logger.info(f"Using target allocations from {days_old} days ago")
 
         # Delegate to orchestrator
         orchestrator = self._init_analysis_orchestrator()
@@ -322,7 +318,7 @@ class DaemonRunner:
                 break
             except Exception as e:
                 logger.exception(f"Error in daemon loop: {e}")
-                self.state.record_error(str(e))
+                await self.state.record_error(str(e))
                 await asyncio.sleep(60)
 
         # Shutdown

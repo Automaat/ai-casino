@@ -1,16 +1,12 @@
 """CLI command for paper trading validation."""
 
 import sys
-from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from src.daemon.config import DaemonConfig
-from src.daemon.paper_trading_validator import PaperTradingValidator, ReadinessReport
-from src.daemon.state import DaemonState
-from src.metrics.tracker import MetricsTracker
+from src.daemon.paper_trading_validator import ReadinessReport
 
 app = typer.Typer(help="Validate paper trading readiness for live promotion")
 console = Console()
@@ -96,46 +92,13 @@ def validate_paper_trading(config_path: str = "daemon.yaml") -> int:
         Exit code (0=ready, 1=not ready, 2=error)
     """
     try:
-        # Load config and state
-        config = DaemonConfig.from_yaml(Path(config_path))
-        state = DaemonState.load(config.state.state_file)
-
-        # Initialize tracker and validator
-        metrics_tracker = MetricsTracker(config.metrics.risk_free_rate)
-        validator = PaperTradingValidator(
-            config=config.paper_trading,
-            state=state,
-            metrics_tracker=metrics_tracker,
+        # NOTE: This CLI command requires async rewrite after JSON state elimination
+        # See PR description: TUI/CLI are expected to be broken
+        msg = (
+            "validate_paper_trading requires async rewrite after JSON state elimination. "
+            "Use daemon API endpoints or wait for CLI refactor."
         )
-
-        # Run assessment
-        console.print("[bold]Assessing paper trading readiness...[/bold]\n")
-        report = validator.assess_readiness()
-
-        # Display readiness status
-        if report.ready_for_live:
-            console.print("[bold green]✓ READY FOR LIVE TRADING[/bold green]\n")
-        else:
-            console.print("[bold red]✗ NOT READY FOR LIVE TRADING[/bold red]\n")
-
-        # Display summary
-        console.print(
-            f"[bold]Assessment Date:[/bold] {report.assessment_date.strftime('%Y-%m-%d %H:%M:%S UTC')}"
-        )
-        console.print(f"[bold]Paper Trading Duration:[/bold] {report.paper_trading_duration_days} days")
-        console.print(f"[bold]Total Trades Executed:[/bold] {report.total_paper_trades}\n")
-
-        # Display sections
-        _display_criteria_table(report)
-        _display_metrics(report)
-        _display_simulated_live(report)
-        _display_recommendations(report)
-
-        # Save report
-        validator.save_report(report)
-        console.print("[dim]Report saved to ~/.ai-casino/paper-trading-report.json[/dim]")
-
-        return 0 if report.ready_for_live else 1
+        raise NotImplementedError(msg)
 
     except FileNotFoundError:
         console.print(f"[red]Error: Config file not found: {config_path}[/red]")

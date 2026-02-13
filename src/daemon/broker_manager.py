@@ -37,7 +37,7 @@ class BrokerManager:
         status = "configured" if self.broker else "not_configured"
         return f"BrokerManager(broker={status})"
 
-    def initialize_broker(self) -> None:
+    async def initialize_broker(self) -> None:
         """Initialize Alpaca broker based on config.
 
         Handles both auto_trade mode and watchlist-only mode.
@@ -81,11 +81,13 @@ class BrokerManager:
 
             # Initialize paper trading start date
             if self.config.trading_mode.value == "paper":
-                if self.state.paper_trading_start_date is None:
-                    self.state.paper_trading_start_date = datetime.now(UTC)
-                if self.state.current_trading_mode != "paper":
-                    self.state.current_trading_mode = "paper"
-                    self.state.paper_trading_start_date = datetime.now(UTC)
+                paper_start = await self.state.get_paper_trading_start_date()
+                if paper_start is None:
+                    await self.state.set_paper_trading_start_date(datetime.now(UTC))
+                trading_mode = await self.state.get_current_trading_mode()
+                if trading_mode != "paper":
+                    await self.state.set_current_trading_mode("paper")
+                    await self.state.set_paper_trading_start_date(datetime.now(UTC))
                     logger.warning("Switched to paper mode, reset start date")
         else:
             # Watchlist-only mode: Try to init broker for position merging if credentials present
@@ -107,7 +109,7 @@ class BrokerManager:
                     logger.warning(f"Failed to init broker for watchlist merging: {e}")
                     self.broker = None
 
-    def get_merged_watchlist(self) -> list[str]:
+    async def get_merged_watchlist(self) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates.
 
         Returns:
@@ -130,7 +132,7 @@ class BrokerManager:
         self._merge_broker_positions(merged_watchlist, seen)
 
         # Source 3: active discovery candidates (ordered by score)
-        self._merge_discovery_candidates(merged_watchlist, seen)
+        await self._merge_discovery_candidates(merged_watchlist, seen)
 
         return merged_watchlist
 
@@ -156,30 +158,33 @@ class BrokerManager:
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to fetch positions for watchlist merge: {e}")
 
-    def _merge_discovery_candidates(self, merged_watchlist: list[str], seen: set[str]) -> None:
+    async def _merge_discovery_candidates(self, merged_watchlist: list[str], seen: set[str]) -> None:
         """Merge discovery candidates or screening results into watchlist."""
-        if self.config.discovery.enabled and self.state.active_discovery_candidates:
+        active_candidates = await self.state.get_active_discovery_candidates()
+        if self.config.discovery.enabled and active_candidates:
             # Expire stale candidates first
-            expired = self.state.expire_stale_candidates()
+            expired = await self.state.expire_stale_candidates()
             if expired:
                 logger.info(f"Expired {len(expired)} discovery candidates: {expired}")
 
             # Add active candidates (already sorted by score in discovery engine)
-            discovery_symbols = [
-                c.symbol for c in self.state.active_discovery_candidates if c.symbol not in seen
-            ]
+            # Refresh active candidates after expiration
+            active_candidates = await self.state.get_active_discovery_candidates()
+            discovery_symbols = [c.symbol for c in active_candidates if c.symbol not in seen]
             if discovery_symbols:
                 logger.info(f"Merged {len(discovery_symbols)} discovery candidates: {discovery_symbols}")
                 merged_watchlist.extend(discovery_symbols)
                 seen.update(discovery_symbols)
-        elif self.config.screening.enabled and self.state.screening_history:
-            # Fallback to old screening (backward compatible)
-            latest = self.state.screening_history[-1]
-            new_symbols = [s for s in latest.top_symbols if s not in seen]
-            if new_symbols:
-                logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
-                merged_watchlist.extend(new_symbols)
-                seen.update(new_symbols)
+        elif self.config.screening.enabled:
+            screening_history = await self.state.get_screening_history(limit=1)
+            if screening_history:
+                # Fallback to old screening (backward compatible)
+                latest = screening_history[-1]
+                new_symbols = [s for s in latest.top_symbols if s not in seen]
+                if new_symbols:
+                    logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
+                    merged_watchlist.extend(new_symbols)
+                    seen.update(new_symbols)
 
     def is_available(self) -> bool:
         """Check if broker available.

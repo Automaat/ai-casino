@@ -74,21 +74,21 @@ class HealthCheckTask(TaskExecutor):
             except Exception as e:
                 logger.opt(exception=True).error(f"Failed to publish HEALTH_CHECK event: {e}")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last health check timestamp."""
-        return self.components.state.last_health_check
+        return await self.components.state.get_last_health_check()
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record health check completion."""
-        self.components.state.last_health_check = datetime.now(tz=self.components.scheduler.timezone)
+        await self.components.state.set_last_health_check(datetime.now(tz=self.components.scheduler.timezone))
 
-    def should_skip_today(self) -> bool:
+    async def should_skip_today(self) -> bool:
         """Custom dedup: check interval instead of daily.
 
         Returns:
             True if check interval hasn't elapsed
         """
-        last_run = self.get_last_run()
+        last_run = await self.get_last_run()
         if not last_run:
             return False
 
@@ -116,13 +116,13 @@ class SignalTrackingTask(TaskExecutor):
         stats = await asyncio.to_thread(tracker.update_outcomes)
         console.print(f"[dim]Signal tracking: {stats}[/dim]")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last signal tracking timestamp."""
-        return self.components.state.last_signal_tracking
+        return await self.components.state.get_last_signal_tracking()
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record signal tracking completion."""
-        self.components.state.last_signal_tracking = datetime.now(UTC)
+        await self.components.state.set_last_signal_tracking(datetime.now(UTC))
 
 
 class MonteCarloTask(TaskExecutor):
@@ -166,26 +166,25 @@ class MonteCarloTask(TaskExecutor):
                 f"VaR95={self._record.var_95:.1%}"
             )
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last Monte Carlo test timestamp."""
-        if not self.components.state.monte_carlo_tests:
+        monte_carlo_tests = await self.components.state.get_monte_carlo_tests()
+        if not monte_carlo_tests:
             return None
-        return self.components.state.monte_carlo_tests[-1].timestamp
+        return monte_carlo_tests[-1].timestamp
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record Monte Carlo test completion."""
         if self._record:
-            self.components.state.record_monte_carlo_test(
-                self._record, self.components.config.monte_carlo.max_history_records
-            )
+            await self.components.state.record_monte_carlo_test(self._record)
 
-    def should_skip_today(self) -> bool:
+    async def should_skip_today(self) -> bool:
         """Custom dedup: check last run within 6 hours.
 
         Returns:
             True if ran within last 6 hours
         """
-        last_run = self.get_last_run()
+        last_run = await self.get_last_run()
         if not last_run:
             return False
 

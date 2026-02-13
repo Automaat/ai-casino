@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from pydantic import Field
+from loguru import logger
+from pydantic import PrivateAttr
 
 from src.daemon.state.managers.base import StateManager
 from src.daemon.state.models import (
@@ -16,56 +18,140 @@ from src.daemon.state.models import (
 )
 from src.screening.screener import ScreeningResult
 
+if TYPE_CHECKING:
+    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+    from src.database.repositories.metadata import MetadataRepository
+    from src.database.repositories.prefetch import PrefetchRecordRepository
+    from src.database.repositories.profiling import ProfilingRecordRepository
+    from src.database.repositories.screening import ScreeningRecordRepository
+
 
 class DataPipelineStateManager(StateManager):
     """Background data operations (prefetch, screening, earnings)."""
 
-    # Prefetch
-    last_prefetch: datetime | None = None
-    prefetch_history: list[PrefetchRecord] = Field(default_factory=list)
-    last_pre_market_refresh: datetime | None = None
+    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
+    _prefetch_repository: PrefetchRecordRepository | None = PrivateAttr(default=None)
+    _screening_repository: ScreeningRecordRepository | None = PrivateAttr(default=None)
+    _earnings_repository: EarningsCalendarRecordRepository | None = PrivateAttr(default=None)
+    _profiling_repository: ProfilingRecordRepository | None = PrivateAttr(default=None)
 
-    # Screening
-    last_after_hours_screening: datetime | None = None
-    screening_history: list[ScreeningRecord] = Field(default_factory=list)
+    _prefetch_cache: list[PrefetchRecord] | None = PrivateAttr(default=None)
+    _screening_cache: list[ScreeningRecord] | None = PrivateAttr(default=None)
+    _earnings_cache: list[EarningsCalendarRecord] | None = PrivateAttr(default=None)
+    _profiling_cache: list[ProfilingRecord] | None = PrivateAttr(default=None)
 
-    # Earnings
-    last_earnings_fetch: datetime | None = None
-    earnings_calendar_history: list[EarningsCalendarRecord] = Field(default_factory=list)
+    def set_repositories(
+        self,
+        metadata_repository: MetadataRepository,
+        prefetch_repository: PrefetchRecordRepository,
+        screening_repository: ScreeningRecordRepository,
+        earnings_repository: EarningsCalendarRecordRepository,
+        profiling_repository: ProfilingRecordRepository,
+    ) -> None:
+        """Inject repositories."""
+        self._metadata_repository = metadata_repository
+        self._prefetch_repository = prefetch_repository
+        self._screening_repository = screening_repository
+        self._earnings_repository = earnings_repository
+        self._profiling_repository = profiling_repository
+        logger.debug("DataPipelineStateManager repositories injected")
 
-    # Profiling
-    profiling_history: list[ProfilingRecord] = Field(default_factory=list)
+    async def get_last_prefetch(self) -> datetime | None:
+        """Get last prefetch timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get_datetime("data_pipeline.last_prefetch")
 
-    def record_prefetch(
+    async def set_last_prefetch(self, value: datetime | None) -> None:
+        """Set last prefetch timestamp in DB."""
+        if self._metadata_repository and value is not None:
+            await self._metadata_repository.set("data_pipeline.last_prefetch", value)
+
+    async def get_last_pre_market_refresh(self) -> datetime | None:
+        """Get last pre-market refresh timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get_datetime("data_pipeline.last_pre_market_refresh")
+
+    async def set_last_pre_market_refresh(self, value: datetime | None) -> None:
+        """Set last pre-market refresh timestamp in DB."""
+        if self._metadata_repository and value is not None:
+            await self._metadata_repository.set("data_pipeline.last_pre_market_refresh", value)
+
+    async def get_last_after_hours_screening(self) -> datetime | None:
+        """Get last after-hours screening timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get_datetime("data_pipeline.last_after_hours_screening")
+
+    async def set_last_after_hours_screening(self, value: datetime | None) -> None:
+        """Set last after-hours screening timestamp in DB."""
+        if self._metadata_repository and value is not None:
+            await self._metadata_repository.set("data_pipeline.last_after_hours_screening", value)
+
+    async def get_last_earnings_fetch(self) -> datetime | None:
+        """Get last earnings fetch timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get_datetime("data_pipeline.last_earnings_fetch")
+
+    async def get_prefetch_history(self, limit: int = 30) -> list[PrefetchRecord]:
+        """Get prefetch history with lazy loading."""
+        if not self._prefetch_repository:
+            return []
+        if self._prefetch_cache is None:
+            self._prefetch_cache = await self._prefetch_repository.get_recent(limit)
+        return self._prefetch_cache
+
+    async def get_screening_history(self, limit: int = 30) -> list[ScreeningRecord]:
+        """Get screening history with lazy loading."""
+        if not self._screening_repository:
+            return []
+        if self._screening_cache is None:
+            self._screening_cache = await self._screening_repository.get_recent(limit)
+        return self._screening_cache
+
+    async def get_earnings_calendar_history(self, limit: int = 10) -> list[EarningsCalendarRecord]:
+        """Get earnings calendar history with lazy loading."""
+        if not self._earnings_repository:
+            return []
+        if self._earnings_cache is None:
+            self._earnings_cache = await self._earnings_repository.get_recent(limit)
+        return self._earnings_cache
+
+    async def get_profiling_history(self, limit: int = 100) -> list[ProfilingRecord]:
+        """Get profiling history with lazy loading."""
+        if not self._profiling_repository:
+            return []
+        if self._profiling_cache is None:
+            self._profiling_cache = await self._profiling_repository.get_recent(limit)
+        return self._profiling_cache
+
+    async def record_prefetch(
         self,
         symbols_prefetched: int,
         symbols_failed: int,
         finbert_ready: bool,
         total_duration_seconds: float,
     ) -> None:
-        """Record a data prefetch run.
-
-        Args:
-            symbols_prefetched: Number of symbols successfully prefetched
-            symbols_failed: Number of symbols that failed
-            finbert_ready: Whether FinBERT was warmed up
-            total_duration_seconds: Total prefetch duration
-        """
+        """Record a data prefetch run."""
         now = datetime.now(UTC)
-
-        self.prefetch_history.append(
-            PrefetchRecord(
-                timestamp=now,
-                symbols_prefetched=symbols_prefetched,
-                symbols_failed=symbols_failed,
-                finbert_ready=finbert_ready,
-                total_duration_seconds=total_duration_seconds,
-            )
+        record = PrefetchRecord(
+            timestamp=now,
+            symbols_prefetched=symbols_prefetched,
+            symbols_failed=symbols_failed,
+            finbert_ready=finbert_ready,
+            total_duration_seconds=total_duration_seconds,
         )
-        self.last_prefetch = now
-        self.prefetch_history = self._cap_history(self.prefetch_history, 30, 30)
 
-    def record_after_hours_screening(
+        if self._prefetch_repository:
+            await self._prefetch_repository.create(record)
+        if self._metadata_repository:
+            await self._metadata_repository.set("data_pipeline.last_prefetch", now)
+
+        self._prefetch_cache = None
+
+    async def record_after_hours_screening(
         self,
         criteria: str,
         universe: str,
@@ -73,63 +159,49 @@ class DataPipelineStateManager(StateManager):
         top_n: int = 10,
         screened_at: datetime | None = None,
     ) -> None:
-        """Record after-hours screening results.
-
-        Args:
-            criteria: Screening criteria
-            universe: Universe screened
-            candidates: Candidate list (typically top-N from screening)
-            top_n: Number of top symbols to track
-            screened_at: Timestamp when screening was performed (defaults to now)
-        """
+        """Record after-hours screening results."""
         now = datetime.now(UTC)
         top_symbols = [c.symbol for c in candidates[:top_n]]
-
-        self.screening_history.append(
-            ScreeningRecord(
-                timestamp=now,
-                criteria=criteria,
-                universe=universe,
-                top_symbols=top_symbols,
-                candidates=candidates[:top_n],
-                screened_at=screened_at or now,
-            )
+        record = ScreeningRecord(
+            timestamp=now,
+            criteria=criteria,
+            universe=universe,
+            top_symbols=top_symbols,
+            candidates=candidates[:top_n],
+            screened_at=screened_at or now,
         )
-        self.last_after_hours_screening = now
-        self.screening_history = self._cap_history(self.screening_history, 30, 30)
 
-    def record_earnings_fetch(
+        if self._screening_repository:
+            await self._screening_repository.create(record)
+        if self._metadata_repository:
+            await self._metadata_repository.set("data_pipeline.last_after_hours_screening", now)
+
+        self._screening_cache = None
+
+    async def record_earnings_fetch(
         self,
         events: list[EarningsEventRecord],
         symbols_fetched: int,
         symbols_failed: int,
     ) -> None:
-        """Record an earnings calendar fetch run.
-
-        Args:
-            events: Earnings event records
-            symbols_fetched: Number of symbols with earnings data
-            symbols_failed: Number of symbols that failed to fetch
-        """
+        """Record an earnings calendar fetch run."""
         now = datetime.now(UTC)
-
-        self.earnings_calendar_history.append(
-            EarningsCalendarRecord(
-                timestamp=now,
-                events=events,
-                symbols_fetched=symbols_fetched,
-                symbols_failed=symbols_failed,
-            )
+        record = EarningsCalendarRecord(
+            timestamp=now,
+            events=events,
+            symbols_fetched=symbols_fetched,
+            symbols_failed=symbols_failed,
         )
-        self.last_earnings_fetch = now
-        self.earnings_calendar_history = self._cap_history(self.earnings_calendar_history, 10, 10)
 
-    def record_profiling(self, metrics: object) -> None:
-        """Record profiling metrics from cycle.
+        if self._earnings_repository:
+            await self._earnings_repository.create(record)
+        if self._metadata_repository:
+            await self._metadata_repository.set("data_pipeline.last_earnings_fetch", now)
 
-        Args:
-            metrics: ProfilingMetrics object (typed as object to avoid circular import)
-        """
+        self._earnings_cache = None
+
+    async def record_profiling(self, metrics: object) -> None:
+        """Record profiling metrics from cycle."""
         from src.daemon.profiling.metrics import ProfilingMetrics
 
         if not isinstance(metrics, ProfilingMetrics):
@@ -150,9 +222,11 @@ class DataPipelineStateManager(StateManager):
             top_function_cumtime=top_cumtime,
         )
 
-        self.profiling_history.append(record)
-        self.profiling_history = self._cap_history(self.profiling_history, 100, 100)
+        if self._profiling_repository:
+            await self._profiling_repository.create(record)
+
+        self._profiling_cache = None
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"DataPipelineStateManager(prefetches={len(self.prefetch_history)})"
+        return "DataPipelineStateManager()"

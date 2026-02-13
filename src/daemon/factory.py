@@ -131,11 +131,40 @@ class DaemonFactory:
         """
         # Phase 1: Core infrastructure
         historical_cache = self._container.historical_cache()
-        state = DaemonState.load(self.config.state.state_file)
+        state = DaemonState()
+
+        # Inject all repositories via RepositoryBundle
+        from src.daemon.state.repositories import RepositoryBundle
+
+        repos = RepositoryBundle(
+            metadata_repository=self._container.metadata_repository(),
+            analysis_repository=self._container.analysis_repository(),
+            position_repository=self._container.position_repository(),
+            action_repository=self._container.action_repository(),
+            optimization_repository=self._container.optimization_repository(),
+            rebalancing_repository=self._container.rebalancing_repository(),
+            sector_rotation_repository=self._container.sector_rotation_repository(),
+            peer_analysis_repository=self._container.peer_analysis_repository(),
+            correlation_audit_repository=self._container.correlation_audit_repository(),
+            risk_report_repository=self._container.risk_report_repository(),
+            monte_carlo_repository=self._container.monte_carlo_repository(),
+            prefetch_repository=self._container.prefetch_repository(),
+            screening_repository=self._container.screening_repository(),
+            earnings_repository=self._container.earnings_repository(),
+            profiling_repository=self._container.profiling_repository(),
+            discovery_repository=self._container.discovery_repository(),
+            active_discovery_repository=self._container.active_discovery_repository(),
+            game_plan_repository=self._container.game_plan_repository(),
+            degradation_repository=self._container.degradation_repository(),
+            snapshot_repository=self._container.snapshot_repository(),
+        )
+        state.set_repositories(repos)
 
         # Phase 2: Broker setup
+        import asyncio
+
         broker_manager = BrokerManager(self.config, state, historical_cache)
-        broker_manager.initialize_broker()
+        asyncio.run(broker_manager.initialize_broker())
         broker = broker_manager.broker
 
         # Phase 3: Scheduler
@@ -326,7 +355,9 @@ class DaemonFactory:
             )
 
             try:
-                report = validator.assess_readiness()
+                import asyncio
+
+                report = asyncio.run(validator.assess_readiness())
 
                 if not report.ready_for_live:
                     failed = [c.name for c in report.criteria if not c.passed]

@@ -145,16 +145,18 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         # Determine health status from degradation tier
         degradation_tier = "FULL"
-        if components.state.degradation_history:
-            degradation_tier = components.state.degradation_history[-1].tier
+        degradation_history = await components.state.get_degradation_history(limit=1)
+        if degradation_history:
+            degradation_tier = degradation_history[-1].tier
 
         status = "healthy" if degradation_tier == "FULL" else "degraded"
 
+        last_run = await components.state.get_last_run()
         return HealthResponse(
             status=status,
             uptime_seconds=uptime,
             daemon_running=components.running,
-            last_run=components.state.last_run.isoformat() if components.state.last_run else None,
+            last_run=last_run.isoformat() if last_run else None,
         )
 
     @app.get("/state/summary", response_model=StateSummaryResponse)
@@ -164,45 +166,38 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         # Get current degradation tier
         degradation_tier = "FULL"
-        if components.state.degradation_history:
-            degradation_tier = components.state.degradation_history[-1].tier
+        degradation_history = await components.state.get_degradation_history(limit=1)
+        if degradation_history:
+            degradation_tier = degradation_history[-1].tier
 
-        # Calculate positions count and win rate
-        positions_count = len(components.state.active_positions)
+        # Calculate positions count
+        active_positions = await components.state.get_active_positions()
+        positions_count = len(active_positions)
 
-        # Win rate calculation - try to derive from closed trades if available
+        # Win rate calculation - not available in current state (would need trades history)
         win_rate = None
-        closed_trades = getattr(components.state, "closed_trades", None)
-        if closed_trades:
-            total_closed = len(closed_trades)
-            wins = 0
-            for trade in closed_trades:
-                # Try common profit-like attributes
-                pnl = getattr(trade, "pnl", None)
-                if pnl is None:
-                    pnl = getattr(trade, "profit", None)
-                if pnl is None:
-                    continue
-                if pnl > 0:
-                    wins += 1
-            if total_closed > 0:
-                win_rate = wins / total_closed
 
         # Get recent analyses (last 50), convert to dicts
+        all_analyses = await components.state.get_analyses(limit=50)
         recent_analyses = [
             analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
-            for analysis in components.state.trading.analyses[-50:]
+            for analysis in all_analyses
         ]
 
+        total_analyses = await components.state.get_total_analyses()
+        total_trades = await components.state.get_total_trades()
+        errors = await components.state.get_errors()
+        trading_mode = await components.state.get_current_trading_mode()
+
         return StateSummaryResponse(
-            total_analyses=components.state.total_analyses,
+            total_analyses=total_analyses,
             recent_analyses=recent_analyses,
-            total_trades=components.state.total_trades,
+            total_trades=total_trades,
             positions_count=positions_count,
             win_rate=win_rate,
-            error_count=len(components.state.errors),
+            error_count=len(errors),
             degradation_tier=degradation_tier,
-            trading_mode=components.state.current_trading_mode,
+            trading_mode=trading_mode,
         )
 
     @app.get("/config", response_model=ConfigResponse)
@@ -210,12 +205,13 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         """Get daemon configuration (no secrets)."""
         components: DaemonComponents = app.state.components
 
+        trading_mode = await components.state.get_current_trading_mode()
         return ConfigResponse(
             watchlist=components.config.watchlist,
             interval_minutes=components.config.interval_minutes,
             market_hours_only=components.config.market_hours_only,
             auto_trade=components.config.auto_trade,
-            trading_mode=components.state.current_trading_mode,
+            trading_mode=trading_mode,
             pre_market_enabled=components.config.schedule.enable_pre_market,
         )
 
@@ -255,7 +251,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             market_hours_only=cfg.market_hours_only,
             auto_trade=cfg.auto_trade,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
-            trading_mode=components.state.current_trading_mode,
+            trading_mode=await components.state.get_current_trading_mode(),
             paper_trading=cfg.paper_trading.model_dump(),
             schedule=cfg.schedule.model_dump(),
             state=cfg.state.model_dump(),
@@ -293,16 +289,18 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         components: DaemonComponents = app.state.components
         limit = max(0, min(limit, 500))
 
-        analyses = list(reversed(components.state.analyses))
+        all_analyses = await components.state.get_analyses(limit=1000)
+        analyses = list(reversed(all_analyses))
 
         if symbol:
             analyses = [a for a in analyses if a.symbol == symbol]
 
         analyses = analyses[:limit]
 
+        total_analyses = await components.state.get_total_analyses()
         return AnalysesResponse(
             analyses=[AnalysisRecordResponse(**a.model_dump()) for a in analyses],
-            total_count=components.state.total_analyses,
+            total_count=total_analyses,
             returned_count=len(analyses),
         )
 
@@ -316,8 +314,9 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         async with get_broker_account_info_cached(components) as account_info:
             broker_positions = account_info["positions"] if account_info else {}
 
+            active_positions = await components.state.get_active_positions()
             positions = []
-            for symbol, pos_dict in dict(components.state.active_positions).items():
+            for symbol, pos_dict in dict(active_positions).items():
                 try:
                     pos = PositionRecord.model_validate(pos_dict)
 
@@ -389,7 +388,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 ]
 
                 # Check if we have any trade history
-                has_trades = len(snapshot_records) > 0 or components.state.total_trades > 0
+                total_trades = await components.state.get_total_trades()
+                has_trades = len(snapshot_records) > 0 or total_trades > 0
 
                 return SnapshotsResponse(
                     snapshots=snapshot_records,
@@ -399,7 +399,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 )
         except MissingDatabaseURLError:
             logger.debug("DATABASE_URL not configured, returning empty snapshots")
-            has_trades = components.state.total_trades > 0
+            total_trades = await components.state.get_total_trades()
+            has_trades = total_trades > 0
             return SnapshotsResponse(
                 snapshots=[],
                 count=0,
@@ -419,10 +420,11 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         rebalancing_enabled = components.config.rebalancing.enabled
 
         # If disabled or no history, return status-only response
-        if not rebalancing_enabled or not components.state.portfolio_rebalancing_history:
+        rebalancing_history = await components.state.get_rebalancing_history(limit=1)
+        if not rebalancing_enabled or not rebalancing_history:
             return RebalanceResponse(enabled=rebalancing_enabled)
 
-        latest = components.state.portfolio_rebalancing_history[-1]
+        latest = rebalancing_history[-1]
 
         async with get_broker_account_info_cached(components) as account_info:
             broker_positions = account_info["positions"] if account_info else {}
@@ -462,20 +464,22 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         """Get merged watchlist."""
         components: DaemonComponents = app.state.components
 
-        symbols = components.broker_manager.get_merged_watchlist()
+        symbols = await components.broker_manager.get_merged_watchlist()
 
         config_count = len([s for s in components.config.watchlist if s in symbols])
 
         broker_count = 0
         try:
-            broker_symbols = set(dict(components.state.active_positions).keys())
+            active_positions = await components.state.get_active_positions()
+            broker_symbols = set(dict(active_positions).keys())
             broker_count = len([s for s in broker_symbols if s in symbols])
         except Exception as e:
             logger.opt(exception=True).warning(f"Unable to derive broker symbols for watchlist: {e}")
 
         screening_count = 0
-        if components.config.screening.enabled and components.state.screening_history:
-            latest = components.state.screening_history[-1]
+        screening_history = await components.state.get_screening_history(limit=1)
+        if components.config.screening.enabled and screening_history:
+            latest = screening_history[-1]
             screening_count = len([s for s in latest.top_symbols if s in symbols])
 
         return WatchlistResponse(
@@ -493,10 +497,11 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         """Get latest risk report."""
         components: DaemonComponents = app.state.components
 
-        if not components.state.risk_report_history:
+        risk_history = await components.state.get_risk_report_history(limit=1)
+        if not risk_history:
             return None
 
-        latest = components.state.risk_report_history[-1]
+        latest = risk_history[-1]
 
         return RiskReportResponse(
             timestamp=latest.timestamp,
@@ -513,6 +518,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     async def get_risk_history() -> RiskHistoryResponse:
         """Get historical risk reports."""
         components: DaemonComponents = app.state.components
+        all_reports = await components.state.get_risk_report_history(limit=1000)
         reports = [
             RiskReportResponse(
                 timestamp=r.timestamp,
@@ -524,7 +530,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 max_drawdown=r.max_drawdown,
                 risk_status=r.risk_status,
             )
-            for r in components.state.risk_report_history
+            for r in all_reports
         ]
         return RiskHistoryResponse(reports=reports, count=len(reports))
 
@@ -532,9 +538,10 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     async def get_sector_rotation() -> SectorRotationResponse | None:
         """Get latest sector rotation analysis."""
         components: DaemonComponents = app.state.components
-        if not components.state.sector_rotation_history:
+        rotation_history = await components.state.get_sector_rotation_history(limit=1)
+        if not rotation_history:
             return None
-        latest = components.state.sector_rotation_history[-1]
+        latest = rotation_history[-1]
         return SectorRotationResponse(
             timestamp=latest.timestamp,
             leading_sectors=latest.leading_sectors,
@@ -575,7 +582,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         """Get current degradation status."""
         components: DaemonComponents = app.state.components
 
-        if not components.state.degradation_history:
+        degradation_history = await components.state.get_degradation_history(limit=1)
+        if not degradation_history:
             return DegradationResponse(
                 tier="FULL",
                 unavailable_services=[],
@@ -583,7 +591,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 halt_reason=None,
             )
 
-        latest = components.state.degradation_history[-1]
+        latest = degradation_history[-1]
 
         return DegradationResponse(
             tier=latest.tier,
@@ -659,10 +667,11 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         components: DaemonComponents = app.state.components
 
-        if not components.config.game_plan.enabled or not components.state.game_plan_history:
+        game_plan_history = await components.state.get_game_plan_history(limit=1)
+        if not components.config.game_plan.enabled or not game_plan_history:
             return None
 
-        latest = components.state.game_plan_history[-1]
+        latest = game_plan_history[-1]
 
         def _load_plan_file() -> dict | None:
             plan_dir = Path(components.config.game_plan.plan_dir).expanduser()
@@ -718,7 +727,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         if limit <= 0:
             events = []
         else:
-            events = components.state.market_events[-limit:] if components.state.market_events else []
+            market_events = await components.state.get_market_events(limit=limit)
+            events = market_events
 
         return MarketEventsResponse(events=events, returned_count=len(events))
 
@@ -731,9 +741,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         if limit <= 0:
             history = []
         else:
-            history = (
-                components.state.degradation_history[-limit:] if components.state.degradation_history else []
-            )
+            history = await components.state.get_degradation_history(limit=limit)
 
         return DegradationHistoryResponse(
             records=[r.model_dump(mode="json") for r in history],
@@ -862,10 +870,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         """Get active execution graphs from in-memory trackers."""
         components: DaemonComponents = app.state.components
 
-        graphs = [
-            tracker.graph.model_dump(mode="json")
-            for tracker in components.state.active_execution_trackers.values()
-        ]
+        active_trackers = await components.state.get_active_execution_trackers()
+        graphs = [tracker.graph.model_dump(mode="json") for tracker in active_trackers.values()]
 
         return ActiveExecutionGraphsResponse(graphs=graphs, count=len(graphs))
 
@@ -887,8 +893,9 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         components: DaemonComponents = app.state.components
 
         # Check active trackers
-        if workflow_id in components.state.active_execution_trackers:
-            tracker = components.state.active_execution_trackers[workflow_id]
+        active_trackers = await components.state.get_active_execution_trackers()
+        if workflow_id in active_trackers:
+            tracker = active_trackers[workflow_id]
             return ExecutionGraphDetailResponse(
                 workflow_id=workflow_id,
                 graph=tracker.graph.model_dump(mode="json"),
@@ -896,7 +903,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             )
 
         # Check in-memory history
-        for graph in components.state.execution_graph_history:
+        execution_history = await components.state.get_execution_graph_history(limit=1000)
+        for graph in execution_history:
             if str(graph.workflow_id) == workflow_id:
                 return ExecutionGraphDetailResponse(
                     workflow_id=workflow_id,

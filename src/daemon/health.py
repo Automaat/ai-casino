@@ -408,35 +408,12 @@ class HealthChecker:
 
     def _archive_old_analyses(self) -> CleanupResult:
         """Archive analyses older than archive_days from state."""
-        cutoff = datetime.now(UTC) - timedelta(days=self.config.health.archive_days)
-        old = [a for a in self.state.analyses if a.timestamp < cutoff]
-
-        if not old:
-            return CleanupResult(
-                operation="archive_analyses",
-                files_affected=0,
-                bytes_freed=0,
-                message="No old analyses to archive",
-            )
-
-        self._archive_dir.mkdir(parents=True, exist_ok=True)
-        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
-        archive_path = self._archive_dir / f"analyses-{date_str}.jsonl"
-
-        bytes_written = 0
-        with archive_path.open("a") as f:
-            for record in old:
-                line = record.model_dump_json() + "\n"
-                f.write(line)
-                bytes_written += len(line.encode())
-
-        self.state.analyses = [a for a in self.state.analyses if a.timestamp >= cutoff]
-
+        # NOTE: No longer needed - analyses are in database with automatic cleanup
         return CleanupResult(
             operation="archive_analyses",
-            files_affected=1,
-            bytes_freed=bytes_written,
-            message=f"Archived {len(old)} analyses to {archive_path.name}",
+            files_affected=0,
+            bytes_freed=0,
+            message="Analyses archival handled by database retention policy",
         )
 
     def _prune_stale_cache(self) -> CleanupResult:

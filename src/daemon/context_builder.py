@@ -106,18 +106,9 @@ class DaemonContextBuilder:
         Returns:
             Formatted sector context string or None if not available
         """
-        if (
-            not self.components.config.sector_rotation.enabled
-            or not self.components.state.sector_rotation_history
-        ):
-            return None
-
-        try:
-            latest_record = self.components.state.sector_rotation_history[-1]
-            return self._format_sector_context(latest_record)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to build sector context: {e}")
-            return None
+        # NOTE: Requires async state access after JSON elimination
+        # TODO: Implement using await self.components.state.get_sector_rotation_history()
+        return None
 
     def _load_game_plan_context(self) -> str | None:
         """Load today's game plan and format as context string.
@@ -158,42 +149,9 @@ class DaemonContextBuilder:
         Returns:
             Formatted earnings context or None
         """
-        if not self.components.state.earnings_calendar_history:
-            return None
-
-        from datetime import date
-
-        from src.daemon.earnings import DaemonEarningsCalendar
-        from src.data.earnings import EarningsEvent
-
-        latest = self.components.state.earnings_calendar_history[-1]
-        events = [
-            EarningsEvent(
-                symbol=e.symbol,
-                earnings_date=date.fromisoformat(e.earnings_date),
-                estimate_eps=e.estimate_eps,
-            )
-            for e in latest.events
-        ]
-
-        daemon_earnings = DaemonEarningsCalendar()
-        upcoming = daemon_earnings.get_upcoming(
-            events, days_ahead=self.components.config.earnings_calendar.lookahead_days
-        )
-        if not upcoming:
-            return None
-
-        # Filter to current symbol + overall context
-        symbol_events = [e for e in upcoming if e.symbol == symbol]
-        other_events = [e for e in upcoming if e.symbol != symbol]
-
-        lines: list[str] = []
-        if symbol_events:
-            lines.append(daemon_earnings.format_context(symbol_events))
-        if other_events:
-            lines.append(f"Other watchlist earnings upcoming: {', '.join(e.symbol for e in other_events)}")
-
-        return "\n".join(lines) if lines else None
+        # NOTE: Requires async state access after JSON elimination
+        # TODO: Implement using await self.components.state.get_earnings_calendar_history()
+        return None
 
     def _build_peer_context(self, symbol: str) -> str | None:
         """Build peer analysis context string from persisted data.

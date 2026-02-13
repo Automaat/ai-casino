@@ -142,6 +142,21 @@ ignore = [
     "F841",   # loop variable intentionally captured for scope
     "RUF006", # fire-and-forget task publishing (event bus handles lifecycle)
 ]
+"src/daemon/tasks/*.py" = [
+    "ARG002", # unused method args OK in abstract method implementations
+]
+"src/daemon/context_builder.py" = [
+    "ARG002", # unused args OK in stub implementations awaiting feature completion
+]
+"src/daemon/state/managers/discovery.py" = [
+    "ARG002", # unused args OK for future pagination support
+]
+"src/daemon/task_service.py" = [
+    "ARG002", # unused args OK in methods awaiting async state migration
+]
+"src/tui/commands.py" = [
+    "ARG002", # unused args OK in command handlers with reserved parameters
+]
 
 [lint.mccabe]
 max-complexity = 10
