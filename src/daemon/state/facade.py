@@ -86,17 +86,11 @@ class DaemonState(BaseModel):
         Args:
             repos: Bundle containing all 20 repositories
         """
-        # TradingStateManager
-        self.trading.set_repositories(
-            metadata_repository=repos.metadata_repository,
-            analysis_repository=repos.analysis_repository,
-        )
+        # TradingStateManager - uses fresh sessions per operation
+        self.trading.enable_database()
 
-        # PositionStateManager
-        self.positions.set_repositories(
-            position_repository=repos.position_repository,
-            position_action_repository=repos.action_repository,
-        )
+        # PositionStateManager - needs database engine for fresh sessions
+        # Note: set_repositories is deprecated, engine injection happens in factory
 
         # PortfolioStateManager
         self.portfolio.set_repositories(repos)
@@ -117,12 +111,8 @@ class DaemonState(BaseModel):
             active_discovery_repository=repos.active_discovery_repository,
         )
 
-        # StrategyStateManager
-        self.strategy.set_repositories(
-            metadata_repository=repos.metadata_repository,
-            game_plan_repository=repos.game_plan_repository,
-            degradation_repository=repos.degradation_repository,
-        )
+        # StrategyStateManager - uses fresh sessions per operation
+        self.strategy.enable_database()
 
         # SnapshotStateManager
         self.snapshots.set_repository(repos.snapshot_repository)

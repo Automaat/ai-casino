@@ -207,8 +207,9 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
                 degradation_tier=degradation_tier,
                 trading_mode=trading_mode,
             )
-        except RuntimeError, Exception:
-            # Event loop or DB errors - return minimal safe response
+        except Exception as e:
+            # DB errors - return minimal safe response
+            logger.opt(exception=True).warning(f"Failed to fetch state summary: {e}")
             return StateSummaryResponse(
                 total_analyses=0,
                 recent_analyses=[],
@@ -669,7 +670,8 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
                 for check in raw_checks
             ]
 
-            overall_status = report_data.get("overall_status", "HEALTHY")
+            overall_status_raw = report_data.get("overall_status", "HEALTHY")
+            overall_status = str(overall_status_raw) if overall_status_raw else "HEALTHY"
             return ServiceHealthResponse(
                 overall_status=overall_status,
                 service_checks=service_checks,

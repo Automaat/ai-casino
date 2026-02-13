@@ -133,6 +133,12 @@ class DaemonFactory:
         historical_cache = self._container.historical_cache()
         state = DaemonState()
 
+        # Set global database engine singleton for get_session() calls
+        from src.database.connection import _DatabaseEngineHolder
+
+        database_engine = self._container.database_engine()
+        _DatabaseEngineHolder.instance = database_engine
+
         # Inject all repositories via RepositoryBundle
         from src.daemon.state.repositories import RepositoryBundle
 
@@ -159,6 +165,9 @@ class DaemonFactory:
             snapshot_repository=self._container.snapshot_repository(),
         )
         state.set_repositories(repos)
+
+        # Inject database engine into position manager for fresh sessions
+        state.positions.set_database_engine(database_engine)
 
         # Phase 2: Broker setup
         import asyncio
@@ -416,23 +425,14 @@ class DaemonFactory:
 
         from src.daemon.positions import PositionManager
 
-        # Get database engine and trade repository from container if database is available
-        database_engine = None
-        trade_repository = None
-
-        if os.getenv("DATABASE_URL") or self.config.database.database_url:
-            try:
-                database_engine = self._container.database_engine()
-                trade_repository = self._container.trade_repository()
-                logger.debug("Position manager initialized with database engine")
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Failed to initialize position manager database: {e}")
-
+        # Defer database engine creation to lifecycle.startup() to avoid event loop issues
+        # PositionManager will get database_engine=None initially
+        # It will be set later in lifecycle.startup() after event loop is running
         position_manager = PositionManager(
             broker,
             self.config.position_management,
-            database_engine=database_engine,
-            trade_repository=trade_repository,
+            database_engine=None,
+            trade_repository=None,
         )
         logger.info("Position management enabled")
         return position_manager

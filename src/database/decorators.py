@@ -1,6 +1,5 @@
 """Decorators for database operations."""
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar, cast
@@ -28,7 +27,7 @@ def handle_event_loop_error(func: Callable[..., Awaitable[T]]) -> Callable[..., 
     """
 
     @wraps(func)
-    async def wrapper(self: "BaseRepository[Any]", *args: Any, **kwargs: Any) -> T:
+    async def wrapper(self: BaseRepository[Any], *args: Any, **kwargs: Any) -> T:
         try:
             return await func(self, *args, **kwargs)
         except RuntimeError as e:
@@ -47,4 +46,4 @@ def handle_event_loop_error(func: Callable[..., Awaitable[T]]) -> Callable[..., 
             logger.opt(exception=True).error(f"Database operation failed: {e}")
             raise
 
-    return cast(Callable[..., Awaitable[T]], wrapper)
+    return cast("Callable[..., Awaitable[T]]", wrapper)

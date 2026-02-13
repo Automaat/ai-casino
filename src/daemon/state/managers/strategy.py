@@ -13,55 +13,78 @@ from src.daemon.state.models import DegradationRecord, GamePlanRecord
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
-    from src.database.repositories.degradation import DegradationRecordRepository
-    from src.database.repositories.game_plan import GamePlanRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
 
 
 class StrategyStateManager(StateManager):
     """Daily planning, degradation tracking, error logging."""
 
-    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
-    _game_plan_repository: GamePlanRecordRepository | None = PrivateAttr(default=None)
-    _degradation_repository: DegradationRecordRepository | None = PrivateAttr(default=None)
-
+    _database_enabled: bool = PrivateAttr(default=False)
     _game_plan_cache: list[GamePlanRecord] | None = PrivateAttr(default=None)
     _degradation_cache: list[DegradationRecord] | None = PrivateAttr(default=None)
 
-    def set_repositories(
-        self,
-        metadata_repository: MetadataRepository,
-        game_plan_repository: GamePlanRecordRepository,
-        degradation_repository: DegradationRecordRepository,
-    ) -> None:
-        """Inject repositories."""
-        self._metadata_repository = metadata_repository
-        self._game_plan_repository = game_plan_repository
-        self._degradation_repository = degradation_repository
-        logger.debug("StrategyStateManager repositories injected")
+    def enable_database(self) -> None:
+        """Enable database persistence."""
+        self._database_enabled = True
+        logger.debug("StrategyStateManager database enabled")
 
     async def get_last_game_plan(self) -> datetime | None:
         """Get last game plan timestamp from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_datetime("strategy.last_game_plan")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("strategy.last_game_plan")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last game plan: {e}")
+            return None
 
     async def get_last_degradation(self) -> datetime | None:
         """Get last degradation timestamp from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_datetime("strategy.last_degradation")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("strategy.last_degradation")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last degradation: {e}")
+            return None
 
     async def get_last_health_check(self) -> datetime | None:
         """Get last health check timestamp from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_datetime("strategy.last_health_check")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("strategy.last_health_check")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last health check: {e}")
+            return None
 
     async def set_last_health_check(self, value: datetime | None) -> None:
         """Set last health check timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("strategy.last_health_check", value)
+        if not self._database_enabled or value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("strategy.last_health_check", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last health check: {e}")
 
     async def get_market_events(self, limit: int | None = None) -> list[dict]:
         """Get market events from DB metadata.
@@ -72,35 +95,71 @@ class StrategyStateManager(StateManager):
         Returns:
             List of market events
         """
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return []
-        value = await self._metadata_repository.get("strategy.market_events")
-        events = value if isinstance(value, list) else []
-        if limit is not None and limit > 0:
-            return events[-limit:]
-        return events
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                value = await repo.get("strategy.market_events")
+                events = value if isinstance(value, list) else []
+                if limit is not None and limit > 0:
+                    return events[-limit:]
+                return events
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get market events: {e}")
+            return []
 
     async def get_errors(self) -> list[str]:
         """Get errors from DB metadata."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return []
-        value = await self._metadata_repository.get("strategy.errors")
-        return value if isinstance(value, list) else []
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                value = await repo.get("strategy.errors")
+                return value if isinstance(value, list) else []
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get errors: {e}")
+            return []
 
     async def get_game_plan_history(self, limit: int = 30) -> list[GamePlanRecord]:
         """Get game plan history with lazy loading."""
-        if not self._game_plan_repository:
+        if not self._database_enabled:
             return []
         if self._game_plan_cache is None:
-            self._game_plan_cache = await self._game_plan_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+                from src.database.repositories.game_plan import GamePlanRecordRepository
+
+                async with get_session() as session:
+                    repo = GamePlanRecordRepository(session)
+                    self._game_plan_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get game plan history: {e}")
+                return []
         return self._game_plan_cache
 
     async def get_degradation_history(self, limit: int = 100) -> list[DegradationRecord]:
         """Get degradation history with lazy loading."""
-        if not self._degradation_repository:
+        if not self._database_enabled:
             return []
         if self._degradation_cache is None:
-            self._degradation_cache = await self._degradation_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+                from src.database.repositories.degradation import DegradationRecordRepository
+
+                async with get_session() as session:
+                    repo = DegradationRecordRepository(session)
+                    self._degradation_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get degradation history: {e}")
+                return []
         return self._degradation_cache
 
     async def record_game_plan(
@@ -118,12 +177,23 @@ class StrategyStateManager(StateManager):
             sector_focus=sector_focus,
         )
 
-        if self._game_plan_repository:
-            await self._game_plan_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("strategy.last_game_plan", now)
+        if not self._database_enabled:
+            self._game_plan_cache = None
+            return
 
-        self._game_plan_cache = None
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.game_plan import GamePlanRecordRepository
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                game_plan_repo = GamePlanRecordRepository(session)
+                metadata_repo = MetadataRepository(session)
+                await game_plan_repo.create(record)
+                await metadata_repo.set("strategy.last_game_plan", now)
+            self._game_plan_cache = None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record game plan: {e}")
 
     async def record_degradation(self, context: DegradationContext) -> None:
         """Record degradation event."""
@@ -136,30 +206,51 @@ class StrategyStateManager(StateManager):
             halt_reason=context.halt_reason,
         )
 
-        if self._degradation_repository:
-            await self._degradation_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("strategy.last_degradation", now)
+        if not self._database_enabled:
+            self._degradation_cache = None
+            return
 
-        self._degradation_cache = None
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.degradation import DegradationRecordRepository
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                degradation_repo = DegradationRecordRepository(session)
+                metadata_repo = MetadataRepository(session)
+                await degradation_repo.create(record)
+                await metadata_repo.set("strategy.last_degradation", now)
+            self._degradation_cache = None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record degradation: {e}")
 
     async def record_error(self, error: str) -> None:
         """Record an error to metadata."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return
 
         timestamp = datetime.now(tz=UTC).isoformat()
         error_entry = f"{timestamp}: {error}"
 
-        # Get existing errors
-        errors = await self.get_errors()
-        errors.append(error_entry)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
 
-        # Cap at 100 errors
-        if len(errors) > 100:
-            errors = errors[-50:]
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                # Get existing errors
+                value = await repo.get("strategy.errors")
+                errors = value if isinstance(value, list) else []
+                errors.append(error_entry)
 
-        await self._metadata_repository.set("strategy.errors", errors)
+                # Cap at 100 errors
+                if len(errors) > 100:
+                    errors = errors[-50:]
+
+                await repo.set("strategy.errors", errors)
+        except Exception as e:
+            # Don't log with exception=True to avoid infinite recursion
+            logger.warning(f"Failed to record error to database: {e}")
 
     def __repr__(self) -> str:
         """Return string representation."""
