@@ -95,6 +95,7 @@ def integration_watcher(mock_historical_cache, mock_multi_source_fetchers):
         cooldown_minutes=15,
         breaking_threshold_minutes=15,
         max_concurrent_analyses=2,
+        period_days=30,
     )
     return NewsWatcher(
         historical_cache=mock_historical_cache,

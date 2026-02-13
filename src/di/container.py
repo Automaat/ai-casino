@@ -13,6 +13,7 @@ from src.di.providers import data as data_providers
 from src.di.providers import database as database_providers
 from src.di.providers import models as model_providers
 from src.di.providers import watchers as watcher_providers
+from src.di.providers import workers as worker_providers
 from src.di.providers import workflows as workflow_providers
 
 
@@ -348,6 +349,12 @@ class AppContainer(containers.DeclarativeContainer):
         agent_providers.create_trading_coordinator,
         llm_client=llm_client,
         daemon_config=daemon_config,
+    )
+
+    # Workers (Pydantic AI pattern)
+    technical_worker = providers.Factory(
+        worker_providers.create_technical_worker,
+        llm_client=llm_client,
     )
 
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides

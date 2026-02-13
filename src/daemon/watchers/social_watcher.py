@@ -33,6 +33,7 @@ class SocialWatcherConfig:
     viral_upvote_ratio: float = 0.8
     subreddits: list[str] = field(default_factory=lambda: ["wallstreetbets", "stocks"])
     max_concurrent_analyses: int = 2
+    period_days: int = 60
 
 
 class SocialWatcher(EventWatcher):
@@ -111,6 +112,7 @@ class SocialWatcher(EventWatcher):
             relevance_threshold=cfg.relevance_threshold,
             cooldown_minutes=cfg.cooldown_minutes,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
+            period_days=cfg.period_days,
         )
         super().__init__(base_config, historical_cache, container=container)
         self.volume_spike_threshold = cfg.volume_spike_threshold
