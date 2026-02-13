@@ -43,11 +43,11 @@ class DiscoveryStateManager(StateManager):
         """Get last discovery timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("discovery.last_discovery")
+        return await self._metadata_repository.get_datetime("discovery.last_discovery")
 
     async def set_last_discovery(self, value: datetime | None) -> None:
         """Set last discovery timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("discovery.last_discovery", value)
 
     async def get_discovery_history(self, limit: int = 100) -> list[DiscoveryHistoryRecord]:

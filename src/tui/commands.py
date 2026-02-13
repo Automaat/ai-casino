@@ -624,10 +624,18 @@ Type freely to chat about markets or ask questions."""
         if not symbols:
             return CommandResult(success=False, message="Usage: /candidates add SYMBOL [SYMBOL...]")
 
-        if not state.screening_history:
+        # Get screening history via manager API
+        screening_history = getattr(state, "screening_history", None)
+        if screening_history is None:
+            return CommandResult(
+                success=False,
+                message="TUI screening candidates deprecated. Use daemon API endpoints.",
+            )
+
+        if not screening_history:
             return CommandResult(success=False, message="No screening candidates available.")
 
-        latest = state.screening_history[-1]
+        latest = screening_history[-1]
         exporter = ScreeningExporter()
 
         # Find matching candidates and add to watchlist

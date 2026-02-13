@@ -95,64 +95,63 @@ class PortfolioStateManager(StateManager):
         """Get last optimization timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_optimization")
+        return await self._metadata_repository.get_datetime("portfolio.last_optimization")
 
     async def get_last_portfolio_rebalancing(self) -> datetime | None:
         """Get last rebalancing timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_portfolio_rebalancing")
+        return await self._metadata_repository.get_datetime("portfolio.last_portfolio_rebalancing")
 
     async def get_last_sector_rotation(self) -> datetime | None:
         """Get last sector rotation timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_sector_rotation")
+        return await self._metadata_repository.get_datetime("portfolio.last_sector_rotation")
 
     async def get_last_peer_analysis(self) -> datetime | None:
         """Get last peer analysis timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_peer_analysis")
+        return await self._metadata_repository.get_datetime("portfolio.last_peer_analysis")
 
     async def get_last_correlation_audit(self) -> datetime | None:
         """Get last correlation audit timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_correlation_audit")
+        return await self._metadata_repository.get_datetime("portfolio.last_correlation_audit")
 
     async def get_last_risk_report(self) -> datetime | None:
         """Get last risk report timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_risk_report")
+        return await self._metadata_repository.get_datetime("portfolio.last_risk_report")
 
     async def get_last_tearsheet(self) -> datetime | None:
         """Get last tearsheet timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("portfolio.last_tearsheet")
+        return await self._metadata_repository.get_datetime("portfolio.last_tearsheet")
 
     async def get_active_target_allocations(self) -> dict[str, float] | None:
         """Get active target allocations from DB."""
         if not self._metadata_repository:
             return None
-        value = await self._metadata_repository.get("portfolio.active_target_allocations")
-        return value if isinstance(value, dict) else None
+        return await self._metadata_repository.get_dict("portfolio.active_target_allocations")
 
     async def set_active_target_allocations(self, value: dict[str, float] | None) -> None:
         """Set active target allocations in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("portfolio.active_target_allocations", value)
 
     async def set_last_sector_rotation(self, value: datetime | None) -> None:
         """Set last sector rotation timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("portfolio.last_sector_rotation", value)
 
     async def set_last_correlation_audit(self, value: datetime | None) -> None:
         """Set last correlation audit timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("portfolio.last_correlation_audit", value)
 
     async def get_optimization_history(self, limit: int = 10) -> list[OptimizationRecord]:

@@ -44,23 +44,23 @@ class StrategyStateManager(StateManager):
         """Get last game plan timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("strategy.last_game_plan")
+        return await self._metadata_repository.get_datetime("strategy.last_game_plan")
 
     async def get_last_degradation(self) -> datetime | None:
         """Get last degradation timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("strategy.last_degradation")
+        return await self._metadata_repository.get_datetime("strategy.last_degradation")
 
     async def get_last_health_check(self) -> datetime | None:
         """Get last health check timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("strategy.last_health_check")
+        return await self._metadata_repository.get_datetime("strategy.last_health_check")
 
     async def set_last_health_check(self, value: datetime | None) -> None:
         """Set last health check timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("strategy.last_health_check", value)
 
     async def get_market_events(self, limit: int | None = None) -> list[dict]:

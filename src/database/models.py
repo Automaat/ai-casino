@@ -220,7 +220,7 @@ class DiscoveryHistoryRecordORM(Base):
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     discovered_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     composite_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
-    sources: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    sources: Mapped[list] = mapped_column(JSONB, nullable=False)
     added_to_watchlist: Mapped[bool] = mapped_column(Boolean, nullable=False)
     ttl_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     first_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -859,7 +859,7 @@ class ActiveDiscoveryCandidateORM(Base):
     symbol: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
     discovered_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     composite_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
-    sources: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    sources: Mapped[list] = mapped_column(JSONB, nullable=False)
     ttl_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),

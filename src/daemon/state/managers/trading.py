@@ -62,43 +62,43 @@ class TradingStateManager(StateManager):
         """Get last run timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("trading.last_run")
+        return await self._metadata_repository.get_datetime("trading.last_run")
 
     async def set_last_run(self, value: datetime | None) -> None:
         """Set last run timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("trading.last_run", value)
 
     async def get_total_analyses(self) -> int:
         """Get total analyses count from DB."""
         if not self._metadata_repository:
             return 0
-        value = await self._metadata_repository.get("trading.total_analyses")
+        value = await self._metadata_repository.get_int("trading.total_analyses")
         return value if value is not None else 0
 
     async def get_total_trades(self) -> int:
         """Get total trades count from DB."""
         if not self._metadata_repository:
             return 0
-        value = await self._metadata_repository.get("trading.total_trades")
+        value = await self._metadata_repository.get_int("trading.total_trades")
         return value if value is not None else 0
 
     async def get_paper_trading_start_date(self) -> datetime | None:
         """Get paper trading start date from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("trading.paper_trading_start_date")
+        return await self._metadata_repository.get_datetime("trading.paper_trading_start_date")
 
     async def set_paper_trading_start_date(self, value: datetime | None) -> None:
         """Set paper trading start date in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("trading.paper_trading_start_date", value)
 
     async def get_current_trading_mode(self) -> str:
         """Get current trading mode from DB."""
         if not self._metadata_repository:
             return "paper"
-        value = await self._metadata_repository.get("trading.current_trading_mode")
+        value = await self._metadata_repository.get_str("trading.current_trading_mode")
         return value if value is not None else "paper"
 
     async def set_current_trading_mode(self, value: str) -> None:
@@ -110,22 +110,22 @@ class TradingStateManager(StateManager):
         """Get last journal date from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("trading.last_journal_date")
+        return await self._metadata_repository.get_str("trading.last_journal_date")
 
     async def set_last_journal_date(self, value: str | None) -> None:
         """Set last journal date in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("trading.last_journal_date", value)
 
     async def get_last_signal_tracking(self) -> datetime | None:
         """Get last signal tracking timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("trading.last_signal_tracking")
+        return await self._metadata_repository.get_datetime("trading.last_signal_tracking")
 
     async def set_last_signal_tracking(self, value: datetime | None) -> None:
         """Set last signal tracking timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("trading.last_signal_tracking", value)
 
     async def get_analyses(self, limit: int = 1000) -> list[AnalysisRecord]:

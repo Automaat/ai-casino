@@ -6,11 +6,13 @@ Usage:
 
 import argparse
 import asyncio
+import json
 from pathlib import Path
 
 from loguru import logger
 
-from src.daemon.state import DaemonState
+from src.daemon.positions import PositionManagementAction
+from src.daemon.state.models import AnalysisRecord, DiscoveryHistoryRecord
 from src.database.engine import DatabaseEngine
 from src.database.repositories.analysis import AnalysisRecordRepository
 from src.database.repositories.discovery import DiscoveryHistoryRepository
@@ -18,28 +20,30 @@ from src.database.repositories.position_action import PositionManagementActionRe
 
 
 async def backfill_analyses(
-    state: DaemonState,
+    analyses_data: list[dict],
     repository: AnalysisRecordRepository,
 ) -> tuple[int, int]:
-    """Backfill analysis records from daemon state JSON.
+    """Backfill analysis records from JSON data.
 
     Args:
-        state: Loaded daemon state
+        analyses_data: List of analysis dicts from JSON
         repository: Analysis record repository
 
     Returns:
         Tuple of (success_count, error_count)
     """
-    logger.info(f"Backfilling {len(state.analyses)} analysis records")
+    logger.info(f"Backfilling {len(analyses_data)} analysis records")
     success = 0
     errors = 0
 
-    for analysis in state.analyses:
+    for analysis_dict in analyses_data:
         try:
+            analysis = AnalysisRecord.model_validate(analysis_dict)
             await repository.create(analysis)
             success += 1
         except Exception as e:
-            logger.opt(exception=True).error(f"Failed to backfill analysis {analysis.symbol}: {e}")
+            symbol = analysis_dict.get("symbol", "unknown")
+            logger.opt(exception=True).error(f"Failed to backfill analysis {symbol}: {e}")
             errors += 1
 
     logger.info(f"Analysis backfill complete: {success} success, {errors} errors")
@@ -47,28 +51,30 @@ async def backfill_analyses(
 
 
 async def backfill_discovery_history(
-    state: DaemonState,
+    discovery_data: list[dict],
     repository: DiscoveryHistoryRepository,
 ) -> tuple[int, int]:
-    """Backfill discovery history records from daemon state JSON.
+    """Backfill discovery history records from JSON data.
 
     Args:
-        state: Loaded daemon state
+        discovery_data: List of discovery dicts from JSON
         repository: Discovery history repository
 
     Returns:
         Tuple of (success_count, error_count)
     """
-    logger.info(f"Backfilling {len(state.discovery_history)} discovery history records")
+    logger.info(f"Backfilling {len(discovery_data)} discovery history records")
     success = 0
     errors = 0
 
-    for record in state.discovery_history:
+    for record_dict in discovery_data:
         try:
+            record = DiscoveryHistoryRecord.model_validate(record_dict)
             await repository.create(record)
             success += 1
         except Exception as e:
-            logger.opt(exception=True).error(f"Failed to backfill discovery {record.symbol}: {e}")
+            symbol = record_dict.get("symbol", "unknown")
+            logger.opt(exception=True).error(f"Failed to backfill discovery {symbol}: {e}")
             errors += 1
 
     logger.info(f"Discovery history backfill complete: {success} success, {errors} errors")
@@ -76,25 +82,23 @@ async def backfill_discovery_history(
 
 
 async def backfill_position_actions(
-    state: DaemonState,
+    actions_data: list[dict],
     repository: PositionManagementActionRepository,
 ) -> tuple[int, int]:
-    """Backfill position management actions from daemon state JSON.
+    """Backfill position management actions from JSON data.
 
     Args:
-        state: Loaded daemon state
+        actions_data: List of action dicts from JSON
         repository: Position action repository
 
     Returns:
         Tuple of (success_count, error_count)
     """
-    from src.daemon.positions import PositionManagementAction
-
-    logger.info(f"Backfilling {len(state.position_management_history)} position actions")
+    logger.info(f"Backfilling {len(actions_data)} position actions")
     success = 0
     errors = 0
 
-    for action_dict in state.position_management_history:
+    for action_dict in actions_data:
         try:
             action = PositionManagementAction.model_validate(action_dict)
             await repository.create(action)
@@ -119,12 +123,18 @@ async def run_backfill(state_file: str, database_url: str) -> dict[str, tuple[in
     """
     logger.info(f"Starting backfill from {state_file}")
 
-    # Load state from JSON
-    state = DaemonState.load(state_file)
+    # Load JSON directly
+    with Path(state_file).open() as f:
+        state_data = json.load(f)
+
+    analyses_data = state_data.get("analyses", [])
+    discovery_data = state_data.get("discovery_history", [])
+    actions_data = state_data.get("position_management_history", [])
+
     logger.info(
-        f"Loaded state: {len(state.analyses)} analyses, "
-        f"{len(state.discovery_history)} discoveries, "
-        f"{len(state.position_management_history)} position actions"
+        f"Loaded state: {len(analyses_data)} analyses, "
+        f"{len(discovery_data)} discoveries, "
+        f"{len(actions_data)} position actions"
     )
 
     # Initialize database engine
@@ -134,24 +144,24 @@ async def run_backfill(state_file: str, database_url: str) -> dict[str, tuple[in
     results = {}
 
     # Backfill analyses
-    if state.analyses:
+    if analyses_data:
         session = engine.session()
         analysis_repo = AnalysisRecordRepository(session)
-        results["analyses"] = await backfill_analyses(state, analysis_repo)
+        results["analyses"] = await backfill_analyses(analyses_data, analysis_repo)
         await session.close()
 
     # Backfill discovery history
-    if state.discovery_history:
+    if discovery_data:
         session = engine.session()
         discovery_repo = DiscoveryHistoryRepository(session)
-        results["discovery_history"] = await backfill_discovery_history(state, discovery_repo)
+        results["discovery_history"] = await backfill_discovery_history(discovery_data, discovery_repo)
         await session.close()
 
     # Backfill position actions
-    if state.position_management_history:
+    if actions_data:
         session = engine.session()
         position_action_repo = PositionManagementActionRepository(session)
-        results["position_actions"] = await backfill_position_actions(state, position_action_repo)
+        results["position_actions"] = await backfill_position_actions(actions_data, position_action_repo)
         await session.close()
 
     await engine.close()

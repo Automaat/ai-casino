@@ -34,7 +34,7 @@ class MetadataRepository(BaseRepository[dict]):
 
     async def get_by_id(self, entity_id: str) -> dict | None:
         """Get metadata by key (use get instead)."""
-        return await self.get(entity_id)
+        return await self.get_dict(entity_id)
 
     async def get(self, key: str) -> datetime | int | str | float | list | dict | None:
         """Get metadata value by key.
@@ -66,6 +66,54 @@ class MetadataRepository(BaseRepository[dict]):
                 return value
 
         return value
+
+    async def get_datetime(self, key: str) -> datetime | None:
+        """Get datetime value by key with type narrowing.
+
+        Args:
+            key: Metadata key
+
+        Returns:
+            datetime value or None
+        """
+        value = await self.get(key)
+        return value if isinstance(value, datetime) else None
+
+    async def get_str(self, key: str) -> str | None:
+        """Get string value by key with type narrowing.
+
+        Args:
+            key: Metadata key
+
+        Returns:
+            str value or None
+        """
+        value = await self.get(key)
+        return value if isinstance(value, str) else None
+
+    async def get_int(self, key: str) -> int | None:
+        """Get int value by key with type narrowing.
+
+        Args:
+            key: Metadata key
+
+        Returns:
+            int value or None
+        """
+        value = await self.get(key)
+        return value if isinstance(value, int) else None
+
+    async def get_dict(self, key: str) -> dict | None:
+        """Get dict value by key with type narrowing.
+
+        Args:
+            key: Metadata key
+
+        Returns:
+            dict value or None
+        """
+        value = await self.get(key)
+        return value if isinstance(value, dict) else None
 
     async def set(self, key: str, value: datetime | int | str | float | list | dict) -> None:
         """Set metadata value by key.

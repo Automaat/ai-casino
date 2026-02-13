@@ -60,40 +60,40 @@ class DataPipelineStateManager(StateManager):
         """Get last prefetch timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("data_pipeline.last_prefetch")
+        return await self._metadata_repository.get_datetime("data_pipeline.last_prefetch")
 
     async def set_last_prefetch(self, value: datetime | None) -> None:
         """Set last prefetch timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("data_pipeline.last_prefetch", value)
 
     async def get_last_pre_market_refresh(self) -> datetime | None:
         """Get last pre-market refresh timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("data_pipeline.last_pre_market_refresh")
+        return await self._metadata_repository.get_datetime("data_pipeline.last_pre_market_refresh")
 
     async def set_last_pre_market_refresh(self, value: datetime | None) -> None:
         """Set last pre-market refresh timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("data_pipeline.last_pre_market_refresh", value)
 
     async def get_last_after_hours_screening(self) -> datetime | None:
         """Get last after-hours screening timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("data_pipeline.last_after_hours_screening")
+        return await self._metadata_repository.get_datetime("data_pipeline.last_after_hours_screening")
 
     async def set_last_after_hours_screening(self, value: datetime | None) -> None:
         """Set last after-hours screening timestamp in DB."""
-        if self._metadata_repository:
+        if self._metadata_repository and value is not None:
             await self._metadata_repository.set("data_pipeline.last_after_hours_screening", value)
 
     async def get_last_earnings_fetch(self) -> datetime | None:
         """Get last earnings fetch timestamp from DB."""
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get("data_pipeline.last_earnings_fetch")
+        return await self._metadata_repository.get_datetime("data_pipeline.last_earnings_fetch")
 
     async def get_prefetch_history(self, limit: int = 30) -> list[PrefetchRecord]:
         """Get prefetch history with lazy loading."""
