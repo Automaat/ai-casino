@@ -21,11 +21,11 @@ if TYPE_CHECKING:
     from src.agents.thesis_researcher import ThesisResearcher
     from src.agents.trump import TrumpAnalyst
     from src.agents.web_researcher import WebResearchAgent
+    from src.data.news import NewsArticle
     from src.metrics.execution import ExecutionMetricsCollector
+    from src.strategies.timeframe import MultiTimeframeData
 
 from src.agents.supervisor.models import AnalysisRoutingDecision, AnalysisType
-from src.data.news import NewsArticle
-from src.strategies.timeframe import MultiTimeframeData
 from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
 from src.workflows.stages.strategy_selection import _timed_agent_call
 
@@ -76,8 +76,7 @@ def _validate_input_data(input_data: AnalysisInput) -> None:
         msg = "market_data is None, cannot run analyses"
         raise ValueError(msg)
     if input_data.news_articles is None:
-        msg = "news_articles is None, cannot run sentiment/news analyses"
-        raise ValueError(msg)
+        logger.warning("news_articles is None; sentiment/news analyses may be skipped")
 
 
 async def _execute_workers_with_gather(
@@ -103,6 +102,16 @@ async def _execute_workers_with_gather(
 
     task_list = [t.task for t in tasks]
 
+    # NOTE:
+    # We intentionally use asyncio.gather(..., return_exceptions=True) here
+    # instead of asyncio.TaskGroup (as used in analysis.py). This allows us
+    # to collect exceptions as results so we can:
+    #   * handle failures on a per-worker basis, and
+    #   * distinguish between required and optional workers when deciding
+    #     whether to propagate or log-and-suppress an error.
+    # This per-task exception handling depends on the return_exceptions
+    # behaviour and is the reason this function deviates from the TaskGroup
+    # pattern used elsewhere in the codebase.
     try:
         gather_coro = asyncio.gather(*task_list, return_exceptions=True)
         results = await asyncio.wait_for(gather_coro, timeout=timeout_ms / 1000)

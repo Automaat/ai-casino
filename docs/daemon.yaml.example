@@ -709,11 +709,6 @@ daemon:
     # Time allowed for all workers to complete
     worker_execution_timeout_ms: 30000
 
-    # Fail immediately if required worker fails (default: true)
-    # When true, pipeline fails fast on required worker errors
-    # When false, attempts to continue with partial results
-    fail_fast_required: true
-
   # ========================================
   # COORDINATOR AGENT (EXPERIMENTAL)
   # ========================================

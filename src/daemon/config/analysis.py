@@ -19,7 +19,6 @@ class AnalysisOrchestratorConfig(BaseModel):
     worker_execution_timeout_ms: int = Field(
         default=30000, ge=10000, le=60000, description="Timeout for worker execution phase"
     )
-    fail_fast_required: bool = Field(default=True, description="Fail immediately if required worker fails")
 
 
 class NewsSourcesConfig(BaseModel):

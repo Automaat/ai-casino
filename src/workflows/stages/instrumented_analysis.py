@@ -343,7 +343,7 @@ async def _run_analyses_with_validation(
             )
         except TimeoutError:
             logger.warning("Supervisor planning timed out, using default routing")
-            routing_decision = ctx.workflow.supervisor._default_routing(planning_context)
+            routing_decision = ctx.workflow.supervisor.default_routing(planning_context)
 
         _record_stage(ctx.collector, "supervisor_planning", start_planning)
 
