@@ -180,17 +180,25 @@ class BaseMetricsTracker(ABC):
 
 
 class MetricsTracker(BaseMetricsTracker):
-    """Tracker for recording trades and calculating performance metrics."""
+    """DEPRECATED: In-memory tracker for recording trades and calculating performance metrics.
+
+    This class is deprecated in favor of DatabaseMetricsTracker. Use the DI container's
+    metrics_tracker provider which returns DatabaseMetricsTracker backed by PostgreSQL.
+
+    All JSONL file operations have been removed. Trades are stored in memory only.
+    """
 
     def __init__(self, risk_free_rate: float) -> None:
         """Initialize metrics tracker.
+
+        DEPRECATED: Use DatabaseMetricsTracker via DI container instead.
 
         Args:
             risk_free_rate: Annual risk-free rate for Sharpe ratio
         """
         super().__init__(risk_free_rate)
         self._trades: list[TradeRecord] = []
-        self._load_trades()
+        logger.warning("MetricsTracker is deprecated - use DatabaseMetricsTracker via DI container")
         logger.info(f"Initialized MetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
 
     @property
@@ -202,24 +210,6 @@ class MetricsTracker(BaseMetricsTracker):
     def trades(self, value: list[TradeRecord]) -> None:
         """Set trade records."""
         self._trades = value
-
-    def _load_trades(self) -> None:
-        """Load trades from JSONL file."""
-        trades_path = Path("logs/trades.jsonl")
-        if not trades_path.exists():
-            logger.info("No existing trades file found, starting fresh")
-            return
-
-        try:
-            with trades_path.open() as f:
-                for line in f:
-                    if line.strip():
-                        data = json.loads(line)
-                        self._trades.append(TradeRecord(**data))
-            logger.info(f"Loaded {len(self._trades)} trades from {trades_path}")
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to load trades: {e}")
-            raise
 
     def record_decision(
         self,
@@ -263,8 +253,6 @@ class MetricsTracker(BaseMetricsTracker):
         )
 
         self._trades.append(trade)
-        self._append_to_jsonl(trade)
-
         return trade
 
     def simulate_exits(self, current_prices: dict[str, float]) -> list[TradeRecord]:
@@ -305,9 +293,6 @@ class MetricsTracker(BaseMetricsTracker):
             if should_close:
                 trade.close_trade(current_price)
                 closed_trades.append(trade)
-
-        if closed_trades:
-            self._update_jsonl()
 
         return closed_trades
 
@@ -434,37 +419,6 @@ class MetricsTracker(BaseMetricsTracker):
             start_date=now,
             end_date=now,
         )
-
-    def _append_to_jsonl(self, trade: TradeRecord) -> None:
-        """Append trade to JSONL file.
-
-        Args:
-            trade: Trade record to append
-        """
-        trades_path = Path("logs/trades.jsonl")
-        trades_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            with trades_path.open("a") as f:
-                f.write(trade.model_dump_json() + "\n")
-            logger.debug(f"Appended trade to {trades_path}")
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to append trade to JSONL: {e}")
-            raise
-
-    def _update_jsonl(self) -> None:
-        """Rewrite entire JSONL file with current trades."""
-        trades_path = Path("logs/trades.jsonl")
-        trades_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            with trades_path.open("w") as f:
-                for trade in self.trades:
-                    f.write(trade.model_dump_json() + "\n")
-            logger.debug(f"Updated {trades_path} with {len(self.trades)} trades")
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to update JSONL: {e}")
-            raise
 
     def save_report(self, path: str = "logs/metrics_summary.json") -> None:
         """Generate and save metrics report.

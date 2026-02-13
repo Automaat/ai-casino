@@ -17,7 +17,7 @@ from src.database.repositories.trade import TradeRepository
 from src.metrics.tracker import TradeRecord
 
 
-async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> int:
+async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> tuple[int, int]:
     """Migrate trades from JSONL file to database.
 
     Args:
@@ -25,33 +25,58 @@ async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> int:
         db_engine: Database engine
 
     Returns:
-        Number of trades migrated
+        Tuple of (migrated count, skipped count)
     """
     if not jsonl_path.exists():
         logger.warning(f"JSONL file not found: {jsonl_path}")
-        return 0
+        return 0, 0
 
     await db_engine.ensure_migrated()
 
     async with db_engine.session() as session:
         repo = TradeRepository(session)
         migrated = 0
+        skipped = 0
+
+        existing_trades = await repo.get_all()
+        existing_keys = {
+            (t.timestamp.isoformat(), t.symbol, t.action.value, float(t.entry_price))
+            for t in existing_trades
+        }
 
         with jsonl_path.open() as f:
-            for line in f:
+            for line_num, line in enumerate(f, 1):
                 if not line.strip():
                     continue
 
                 try:
                     data = json.loads(line)
                     trade = TradeRecord(**data)
+
+                    trade_key = (
+                        trade.timestamp.isoformat(),
+                        trade.symbol,
+                        trade.action.value,
+                        float(trade.entry_price),
+                    )
+
+                    if trade_key in existing_keys:
+                        skipped += 1
+                        logger.debug(
+                            f"Skipped duplicate trade: {trade.symbol} {trade.action.value} "
+                            f"at {trade.timestamp}"
+                        )
+                        continue
+
                     await repo.create(trade)
                     migrated += 1
                     logger.debug(f"Migrated trade: {trade.symbol} {trade.action.value}")
                 except Exception as e:
-                    logger.error(f"Failed to migrate trade: {e}")
+                    logger.opt(exception=True).error(
+                        f"Failed to migrate trade at line {line_num}: {e}"
+                    )
 
-    return migrated
+    return migrated, skipped
 
 
 async def main() -> None:
@@ -67,10 +92,12 @@ async def main() -> None:
     db_engine = DatabaseEngine(database_url)
 
     try:
-        count = await migrate_trades(jsonl_path, db_engine)
-        logger.info(f"Migration complete: {count} trades migrated")
+        migrated, skipped = await migrate_trades(jsonl_path, db_engine)
+        logger.info(
+            f"Migration complete: {migrated} trades migrated, {skipped} duplicates skipped"
+        )
 
-        if count > 0:
+        if migrated > 0:
             backup_path = jsonl_path.with_suffix(".jsonl.bak")
             jsonl_path.rename(backup_path)
             logger.info(f"Original file backed up to {backup_path}")

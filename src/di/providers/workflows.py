@@ -19,7 +19,7 @@ from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.database.repositories.snapshot import PortfolioSnapshotRepository
 from src.metrics.portfolio_var import PortfolioVaRCalculator
-from src.metrics.tracker import MetricsTracker
+from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.optimization.param_store import OptimizedParamStore
@@ -44,7 +44,7 @@ class WorkflowFactoryParams:
     daemon_config: DaemonConfig
     container: Any  # AppContainer, typed as Any for flexibility
     broker: AlpacaBroker | None = None
-    metrics_tracker: MetricsTracker | None = None
+    metrics_tracker: BaseMetricsTracker | None = None
     param_store: OptimizedParamStore | None = None
     snapshot_repository: PortfolioSnapshotRepository | None = None
     notification_service: NotificationService | None = None
@@ -193,7 +193,7 @@ def create_workflow_meta_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
     broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
+    metrics_tracker: BaseMetricsTracker | None = None,
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
@@ -233,7 +233,7 @@ def create_workflow_momentum_wrapper(  # noqa: PLR0913 - DI adapter, delegates t
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
     broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
+    metrics_tracker: BaseMetricsTracker | None = None,
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
@@ -273,7 +273,7 @@ def create_workflow_trump_wrapper(  # noqa: PLR0913 - DI adapter, delegates to c
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
     broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
+    metrics_tracker: BaseMetricsTracker | None = None,
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
@@ -313,7 +313,7 @@ def create_workflow_full_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
     broker: AlpacaBroker | None = None,
-    metrics_tracker: MetricsTracker | None = None,
+    metrics_tracker: BaseMetricsTracker | None = None,
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
