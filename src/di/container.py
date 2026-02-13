@@ -277,6 +277,11 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
     )
 
+    supervisor = providers.Singleton(
+        agent_providers.create_supervisor,
+        llm_client=llm_client,
+    )
+
     bullish_researcher = providers.Factory(
         agent_providers.create_thesis_researcher,
         llm_client=llm_client,

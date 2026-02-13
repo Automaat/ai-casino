@@ -1,0 +1,14 @@
+Completed analyses:
+{analyses_summary}
+
+For each analysis, assign reliability weight (0.0-1.0):
+- 1.0 = High confidence, good data quality
+- 0.5 = Moderate confidence or limited data
+- 0.0 = Low confidence or suspicious results
+
+Identify:
+1. Conflicts: Where analyses disagree
+2. Consensus: Where analyses align strongly
+3. Confidence adjustment: Overall reliability (0.5-1.5x)
+
+Output AnalysisWeights with reasoning.
