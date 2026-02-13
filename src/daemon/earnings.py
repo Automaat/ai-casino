@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from loguru import logger
 
-from src.daemon.models import EarningsFlags
+from src.agents.models import EarningsFlags
 from src.data.earnings import EarningsCalendar, EarningsCalendarFetcher, EarningsEvent
 
 

@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
+    from src.data.earnings import EarningsCalendarFetcher
+    from src.data.fundamental import FundamentalDataFetcher
+    from src.workers.fundamental import FundamentalWorker
     from src.workers.news import NewsWorker
     from src.workers.sentiment import SentimentWorker
     from src.workers.technical import TechnicalWorker
@@ -50,3 +53,23 @@ def create_news_worker(llm_client: LLMClient) -> NewsWorker:
     from src.workers.news import NewsWorker
 
     return NewsWorker(llm_client)
+
+
+def create_fundamental_worker(
+    llm_client: LLMClient,
+    fundamental_fetcher: FundamentalDataFetcher,
+    earnings_fetcher: EarningsCalendarFetcher,
+) -> FundamentalWorker:
+    """Create FundamentalWorker with LLM client and fetchers.
+
+    Args:
+        llm_client: LLM client for generating interpretations
+        fundamental_fetcher: Fundamental data fetcher
+        earnings_fetcher: Earnings calendar fetcher
+
+    Returns:
+        Configured FundamentalWorker
+    """
+    from src.workers.fundamental import FundamentalWorker
+
+    return FundamentalWorker(llm_client, fundamental_fetcher, earnings_fetcher)

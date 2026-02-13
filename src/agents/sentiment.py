@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.data.news import NewsArticle
 from src.execution_tracking import track_agent
@@ -24,6 +24,7 @@ class SentimentAnalysis(BaseModel):
     neutral_ratio: float
     article_count: int
     summary: str
+    confidence: float = Field(description="Confidence score (0.0-1.0)", ge=0.0, le=1.0)
 
 
 class SentimentAnalyst:
@@ -64,6 +65,7 @@ class SentimentAnalyst:
                 neutral_ratio=1.0,
                 article_count=0,
                 summary="No news articles available for analysis",
+                confidence=0.0,
             )
 
         texts = [f"{article.title}. {article.description}" for article in articles]
@@ -101,6 +103,9 @@ class SentimentAnalyst:
             f"pos={positive_count}, neg={negative_count})"
         )
 
+        # Calculate confidence from sentiment strength (stronger sentiment = higher confidence)
+        confidence = abs(overall_score)
+
         return SentimentAnalysis(
             overall_sentiment=sentiment_label,
             sentiment_score=overall_score,
@@ -109,6 +114,7 @@ class SentimentAnalyst:
             neutral_ratio=neutral_count / total,
             article_count=total,
             summary=summary,
+            confidence=confidence,
         )
 
     def _aggregate_sentiment(self, scores: list[SentimentScore]) -> float:

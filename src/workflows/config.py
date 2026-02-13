@@ -10,7 +10,7 @@ from src.daemon.config import PreTradeBacktestingConfig
 if TYPE_CHECKING:
     from src.agents.risk import PortfolioVaRConfig
     from src.cache.historical import HistoricalCache
-    from src.daemon.config import PositionSizingConfig
+    from src.daemon.config import PositionSizingConfig, RiskValidationConfig
     from src.daemon.notifications import NotificationService
     from src.data.broker import AlpacaBroker
     from src.data.fundamental import FundamentalDataFetcher
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from src.models.llm import LLMClient
     from src.models.sentiment import FinBERTSentiment
     from src.optimization.param_store import OptimizedParamStore
+    from src.validators.risk import RiskValidator
 
 
 class WorkflowConfig(BaseModel):
@@ -69,6 +70,8 @@ class WorkflowComponents:
     portfolio_var_config: PortfolioVaRConfig | None = None
     notification_service: NotificationService | None = None
     position_sizing_config: PositionSizingConfig | None = None
+    risk_validation_config: RiskValidationConfig | None = None
+    risk_validator: RiskValidator | None = None
 
     def __repr__(self) -> str:
         """String representation."""
@@ -83,6 +86,8 @@ class WorkflowComponents:
                 self.portfolio_var_config is not None,
                 self.notification_service is not None,
                 self.position_sizing_config is not None,
+                self.risk_validation_config is not None,
+                self.risk_validator is not None,
             ]
         )
         return f"WorkflowComponents(required=6, optional={optional_count})"

@@ -1,0 +1,6 @@
+Analyze fundamental data for {symbol}:
+
+{metrics_section}
+
+Earnings Calendar:
+{earnings_section}

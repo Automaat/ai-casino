@@ -106,7 +106,7 @@ async def select_strategy(
     )
 
 
-async def validate_strategy_with_backtest(  # noqa: PLR0913
+async def validate_strategy_with_backtest(
     symbol: str,
     strategy: TradingStrategy,
     strategy_name: str,

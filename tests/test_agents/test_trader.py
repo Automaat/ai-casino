@@ -33,12 +33,14 @@ async def test_trader_agent_decide(test_container, sample_bullish_research, samp
         neutral_ratio=0.2,
         article_count=10,
         summary="Positive news sentiment",
+        confidence=0.75,
     )
 
     news = NewsAnalysis(
         key_themes=["Growth", "Innovation"],
         impact_assessment="Positive outlook",
         recommendation="Consider buying",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -103,6 +105,7 @@ def test_extract_confidence_from_response(test_container, sample_bullish_researc
         neutral_ratio=0.2,
         article_count=5,
         summary="Test",
+        confidence=0.75,
     )
 
     response = "Confidence: 0.85\nStrong signals"
@@ -133,6 +136,7 @@ def test_extract_confidence_fallback(test_container, sample_bullish_research, sa
         neutral_ratio=0.3,
         article_count=5,
         summary="Test",
+        confidence=0.75,
     )
 
     response = "No confidence mentioned"
@@ -181,12 +185,14 @@ async def test_decide_owns_position_true(test_container, sample_bullish_research
         neutral_ratio=0.4,
         article_count=5,
         summary="Mixed sentiment",
+        confidence=0.75,
     )
 
     news = NewsAnalysis(
         key_themes=["Stable"],
         impact_assessment="Neutral outlook",
         recommendation="Hold position",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -236,12 +242,14 @@ async def test_decide_owns_position_false(test_container, sample_bullish_researc
         neutral_ratio=0.4,
         article_count=5,
         summary="Mixed sentiment",
+        confidence=0.75,
     )
 
     news = NewsAnalysis(
         key_themes=["Stable"],
         impact_assessment="Neutral outlook",
         recommendation="Hold position",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -296,12 +304,14 @@ async def test_prompt_includes_portfolio_context(
         neutral_ratio=0.2,
         article_count=10,
         summary="Positive",
+        confidence=0.75,
     )
 
     news = NewsAnalysis(
         key_themes=["Growth"],
         impact_assessment="Positive",
         recommendation="Buy",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -400,6 +410,7 @@ def test_extract_confidence_action_aware_buy(test_container):
         neutral_ratio=0.3,
         article_count=5,
         summary="Test",
+        confidence=0.75,
     )
 
     bullish = BullishResearchAnalysis(
@@ -447,6 +458,7 @@ def test_extract_confidence_action_aware_sell(test_container):
         neutral_ratio=0.3,
         article_count=5,
         summary="Test",
+        confidence=0.75,
     )
 
     bullish = BullishResearchAnalysis(
@@ -494,6 +506,7 @@ def test_extract_confidence_action_aware_hold(test_container):
         neutral_ratio=0.34,
         article_count=5,
         summary="Test",
+        confidence=0.75,
     )
 
     bullish = BullishResearchAnalysis(

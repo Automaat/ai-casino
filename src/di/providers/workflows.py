@@ -28,6 +28,7 @@ from src.workflows.config import WorkflowComponents, WorkflowConfig
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
+    from src.validators.risk import RiskValidator
 
 
 @dataclass
@@ -67,11 +68,20 @@ def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRCo
     )
 
 
+def _create_risk_validator(daemon_config: DaemonConfig) -> RiskValidator:
+    """Create RiskValidator from daemon risk_validation config."""
+    from src.validators.risk import RiskValidator
+
+    return RiskValidator(daemon_config.risk_validation)
+
+
 def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
     """Create TradingWorkflow with meta-agent enabled."""
     portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
     pre_trade_backtest_config = params.daemon_config.pre_trade_backtesting
     position_sizing_config = params.daemon_config.position_sizing
+    risk_validation_config = params.daemon_config.risk_validation
+    risk_validator = _create_risk_validator(params.daemon_config)
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -97,6 +107,8 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
         portfolio_var_config=portfolio_var_config,
         notification_service=params.notification_service,
         position_sizing_config=position_sizing_config,
+        risk_validation_config=risk_validation_config,
+        risk_validator=risk_validator,
     )
 
     return TradingWorkflow(config, components)
@@ -107,6 +119,8 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
     portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
     pre_trade_backtest_config = params.daemon_config.pre_trade_backtesting
     position_sizing_config = params.daemon_config.position_sizing
+    risk_validation_config = params.daemon_config.risk_validation
+    risk_validator = _create_risk_validator(params.daemon_config)
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -132,6 +146,8 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
         portfolio_var_config=portfolio_var_config,
         notification_service=params.notification_service,
         position_sizing_config=position_sizing_config,
+        risk_validation_config=risk_validation_config,
+        risk_validator=risk_validator,
     )
 
     return TradingWorkflow(config, components)
@@ -142,6 +158,8 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
     portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
     pre_trade_backtest_config = params.daemon_config.pre_trade_backtesting
     position_sizing_config = params.daemon_config.position_sizing
+    risk_validation_config = params.daemon_config.risk_validation
+    risk_validator = _create_risk_validator(params.daemon_config)
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -167,6 +185,8 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
         portfolio_var_config=portfolio_var_config,
         notification_service=params.notification_service,
         position_sizing_config=position_sizing_config,
+        risk_validation_config=risk_validation_config,
+        risk_validator=risk_validator,
     )
 
     return TradingWorkflow(config, components)

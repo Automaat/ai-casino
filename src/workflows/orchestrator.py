@@ -1,11 +1,14 @@
 """Trading workflow orchestrator coordinating all stages."""
 
-from typing import TYPE_CHECKING, Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
+    from src.di.container import AppContainer
 
 from src.agents.fundamental import FundamentalAnalyst
 from src.agents.sentiment import SentimentAnalyst
@@ -32,9 +35,6 @@ class TradingWorkflow:
             config: Workflow behavior configuration
             components: Injected dependencies
         """
-        from src.agents.meta import MetaAgent
-        from src.agents.risk import RiskManagementAgent
-
         # Extract config
         self.use_ensemble = config.use_ensemble
         self.use_meta_agent = config.use_meta_agent
@@ -55,29 +55,48 @@ class TradingWorkflow:
         self.notification_service = components.notification_service
         self._container = components.container
 
-        # Trump mode components
+        # Initialize components
+        self._initialize_trump_components(components)
+        self._initialize_meta_agent(components)
+        self._initialize_default_strategy()
+        self._initialize_agents(components)
+        self._initialize_risk_validation(components)
+        self._initialize_backtest_runner()
+
+        mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
+        trump_str = "+trump" if self.trump_mode else ""
+        logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
+
+    def _initialize_trump_components(self, components: WorkflowComponents) -> None:
+        """Initialize Trump mode components."""
         self.trump_fetcher: TruthSocialFetcher | None = None
         self.trump_analyst: TrumpAnalyst | None = None
         if self.trump_mode:
             self.trump_fetcher = TruthSocialFetcher(historical_cache=components.historical_cache)
             self.trump_analyst = self._container.trump_analyst()
 
-        # Meta-agent for dynamic strategy selection
+    def _initialize_meta_agent(self, components: WorkflowComponents) -> None:
+        """Initialize meta-agent for dynamic strategy selection."""
+        from src.agents.meta import MetaAgent
+
         self.meta_agent: MetaAgent | None = None
         if self.use_meta_agent:
             self.meta_agent = self._container.meta_agent()
-            # Override metrics_tracker and param_store if provided
             if components.metrics_tracker is not None:
                 self.meta_agent.metrics_tracker = components.metrics_tracker
             if components.param_store is not None:
                 self.meta_agent.param_store = components.param_store
 
-        # Default strategy (used if meta-agent disabled)
+    def _initialize_default_strategy(self) -> None:
+        """Initialize default strategy based on config."""
         self._default_strategy: MomentumStrategy | EnsembleStrategy = (
             EnsembleStrategy() if self.use_ensemble else MomentumStrategy()
         )
 
-        # Instantiate agents using container
+    def _initialize_agents(self, components: WorkflowComponents) -> None:
+        """Initialize all analysis and trading agents."""
+        from src.agents.risk import RiskManagementAgent
+
         self.sentiment_analyst = SentimentAnalyst(components.finbert)
         self.news_analyst = self._container.news_analyst()
         self.fundamental_analyst = FundamentalAnalyst(components.llm_client, components.fundamental_fetcher)
@@ -94,10 +113,16 @@ class TradingWorkflow:
             position_sizing_config=components.position_sizing_config,
         )
 
-        mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
-        trump_str = "+trump" if self.trump_mode else ""
-        logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
+    def _initialize_risk_validation(self, components: WorkflowComponents) -> None:
+        """Initialize risk validation components."""
+        from src.daemon.config import RiskValidationConfig
+        from src.validators.risk import RiskValidator
 
+        self.risk_validation_config = components.risk_validation_config or RiskValidationConfig()
+        self.risk_validator = components.risk_validator or RiskValidator(self.risk_validation_config)
+
+    def _initialize_backtest_runner(self) -> None:
+        """Initialize VectorBT runner for pre-trade validation."""
         self._target_allocations: dict[str, float] | None = None
         self.vectorbt_runner: VectorBTRunner | None = None
         if self.pre_trade_backtest_config and self.pre_trade_backtest_config.enabled:
@@ -200,11 +225,15 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
-        from src.workflows.stages.instrumented_analysis import run_instrumented_analysis
-
-        return await run_instrumented_analysis(
-            self, symbol, period_days, trading_session, collector, extra_context
+        from src.workflows.stages.instrumented_analysis import (
+            AnalysisRequest,
+            AnalysisRequestParams,
+            run_instrumented_analysis,
         )
+
+        params = AnalysisRequestParams(period_days, trading_session, extra_context)
+        request = AnalysisRequest(cast("Any", self), symbol, params, collector)
+        return await run_instrumented_analysis(request)
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
         """Set target portfolio allocations for position sizing.
@@ -215,6 +244,33 @@ class TradingWorkflow:
         self._target_allocations = allocations
         if allocations:
             logger.info(f"Set target allocations for {len(allocations)} symbols")
+
+    def get_target_allocation(self, symbol: str) -> float | None:
+        """Get target allocation for a symbol.
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            Target portfolio weight or None
+        """
+        return self._target_allocations.get(symbol) if self._target_allocations else None
+
+    def get_default_strategy(self) -> MomentumStrategy | EnsembleStrategy:
+        """Get default strategy instance.
+
+        Returns:
+            Default strategy (momentum or ensemble)
+        """
+        return self._default_strategy
+
+    def get_container(self) -> AppContainer:
+        """Get DI container instance.
+
+        Returns:
+            Dependency injection container
+        """
+        return self._container
 
     # Backward compatibility methods for tests
     async def _fetch_data(

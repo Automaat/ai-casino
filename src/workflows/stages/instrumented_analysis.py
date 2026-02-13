@@ -1,7 +1,9 @@
 """Instrumented analysis pipeline with metrics collection."""
 
+from __future__ import annotations
+
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -15,32 +17,139 @@ from src.workflows.models.data_fetch import FetchDataOutput
 from src.workflows.models.decision import DecisionContext, DecisionInput, DecisionOutput
 from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOutput
 from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
+from src.workflows.models.risk_validation import RiskValidationInput, RiskValidationOutput
 from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
 from src.workflows.stages import analysis, data_fetch, decision, execution, risk, strategy_selection
+from src.workflows.stages.risk_validation import validate_analyses_stage
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
+if TYPE_CHECKING:
+    from src.agents.technical import TechnicalAnalyst
+    from src.daemon.degradation import DegradationContext
+    from src.workflows.orchestrator import TradingWorkflow
 
-async def run_instrumented_analysis(  # noqa: PLR0913
-    workflow: Any,  # noqa: ANN401
-    symbol: str,
-    period_days: int,
-    trading_session: TradingSession,
-    collector: ExecutionMetricsCollector | None,
-    extra_context: WorkflowExtraContext | None = None,
-) -> TradingWorkflowResult:
+
+class AnalysisRequestParams:
+    """Bundle of analysis request parameters."""
+
+    def __init__(
+        self, period_days: int, trading_session: TradingSession, extra_context: WorkflowExtraContext | None
+    ) -> None:
+        """Initialize request parameters.
+
+        Args:
+            period_days: Days of historical data
+            trading_session: Trading session type
+            extra_context: Optional workflow context
+        """
+        self.period_days = period_days
+        self.trading_session = trading_session
+        self.extra_context = extra_context
+
+
+class AnalysisRequest:
+    """Request for instrumented analysis."""
+
+    def __init__(
+        self,
+        workflow: TradingWorkflow,
+        symbol: str,
+        params: AnalysisRequestParams,
+        collector: ExecutionMetricsCollector | None = None,
+    ) -> None:
+        """Initialize analysis request.
+
+        Args:
+            workflow: TradingWorkflow instance
+            symbol: Stock ticker symbol
+            params: Request parameters bundle
+            collector: Optional metrics collector
+        """
+        self.workflow = workflow
+        self.symbol = symbol
+        self.period_days = params.period_days
+        self.trading_session = params.trading_session
+        self.extra_context = params.extra_context
+        self.collector = collector
+
+
+class _ExecutionContext:
+    """Bundle of common execution parameters."""
+
+    def __init__(
+        self,
+        workflow: TradingWorkflow,
+        symbol: str,
+        trading_session: TradingSession,
+        collector: ExecutionMetricsCollector | None,
+    ) -> None:
+        self.workflow = workflow
+        self.symbol = symbol
+        self.trading_session = trading_session
+        self.collector = collector
+
+
+class _ContextBundle:
+    """Bundle of decision and degradation contexts."""
+
+    def __init__(
+        self, decision_context: DecisionContext, degradation_context: DegradationContext | None
+    ) -> None:
+        self.decision_context = decision_context
+        self.degradation_context = degradation_context
+
+
+class _PreparationResult:
+    """Bundle of preparation stage outputs."""
+
+    def __init__(
+        self,
+        data_output: FetchDataOutput,
+        account_output: AccountInfoOutput,
+        strategy_output: StrategySelectionOutput,
+        backtest_output: BacktestValidationOutput,
+        technical_analyst: TechnicalAnalyst,
+    ) -> None:
+        self.data_output = data_output
+        self.account_output = account_output
+        self.strategy_output = strategy_output
+        self.backtest_output = backtest_output
+        self.technical_analyst = technical_analyst
+
+
+class _AnalysisResult:
+    """Bundle of analysis stage outputs."""
+
+    def __init__(
+        self, analysis_output: AnalysisOutput, validation_output: RiskValidationOutput | None
+    ) -> None:
+        self.analysis_output = analysis_output
+        self.validation_output = validation_output
+
+
+class _ExecutionResult:
+    """Bundle of execution stage outputs."""
+
+    def __init__(
+        self,
+        decision_output: DecisionOutput,
+        risk_output: RiskAssessmentOutput,
+        execution_output: TradeExecutionOutput | None,
+    ) -> None:
+        self.decision_output = decision_output
+        self.risk_output = risk_output
+        self.execution_output = execution_output
+
+
+async def run_instrumented_analysis(request: AnalysisRequest) -> TradingWorkflowResult:
     """Run analysis pipeline with optional metrics instrumentation.
 
     Args:
-        workflow: TradingWorkflow instance
-        symbol: Stock ticker symbol
-        period_days: Days of historical data
-        trading_session: Trading session type (REGULAR or PRE_MARKET)
-        collector: Optional metrics collector
-        extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
+        request: Analysis request with all parameters
     """
     from src.daemon.degradation import DegradationTier
 
-    ctx = extra_context or WorkflowExtraContext()
+    ctx = request.extra_context or WorkflowExtraContext()
     degradation_context = ctx.degradation_context
 
     # Check if halted
@@ -50,274 +159,339 @@ async def run_instrumented_analysis(  # noqa: PLR0913
 
     enable_multi_timeframe = bool(ctx.enable_multi_timeframe)
 
-    # Stage 1: Fetch data
-    start = time.perf_counter()
+    exec_ctx = _ExecutionContext(request.workflow, request.symbol, request.trading_session, request.collector)
+    context_bundle = _ContextBundle(
+        decision_context=DecisionContext(
+            sector_rotation=ctx.sector_rotation_context,
+            earnings=ctx.earnings_context,
+            peer_analysis=ctx.peer_analysis_context,
+            game_plan=ctx.game_plan_context,
+            position=ctx.position_context,
+        ),
+        degradation_context=degradation_context,
+    )
+
+    # Stage 1-4: Fetch data and prepare strategy
+    prep_result = await _fetch_and_prepare_strategy(exec_ctx, request.period_days, enable_multi_timeframe)
+
+    # Stage 5-5.5: Run analyses and validation
+    analysis_result = await _run_analyses_with_validation(
+        exec_ctx, prep_result, enable_multi_timeframe, context_bundle.degradation_context
+    )
+
+    # Stage 6-8: Make decision, assess risk, and execute
+    execution_result = await _make_decision_and_execute(
+        exec_ctx, prep_result, analysis_result, context_bundle
+    )
+
+    # Log final result
+    logger.info(
+        f"Workflow complete: {execution_result.decision_output.final_decision.action.value} "
+        f"(confidence={execution_result.decision_output.final_decision.confidence:.2f}, "
+        f"risk_approved={execution_result.risk_output.risk_assessment.validation.approved})"
+    )
+
+    # Build result
+    return await _build_and_persist_result(
+        exec_ctx, prep_result, analysis_result, execution_result, context_bundle
+    )
+
+
+async def _fetch_and_prepare_strategy(
+    ctx: _ExecutionContext, period_days: int, enable_multi_timeframe: bool
+) -> _PreparationResult:
+    """Fetch data and prepare strategy (stages 1-4).
+
+    Args:
+        ctx: Execution context
+        period_days: Historical data period
+        enable_multi_timeframe: Whether to enable multi-timeframe analysis
+
+    Returns:
+        Preparation result bundle
+    """
     from src.workflows.stages.data_fetch import DataFetchConfig
 
+    # Stage 1: Fetch data
+    start = time.perf_counter()
     data_output = await data_fetch.fetch_data(
-        symbol,
+        ctx.symbol,
         period_days,
-        trading_session,
+        ctx.trading_session,
         config=DataFetchConfig(
-            market_fetcher=workflow.market_fetcher,
-            news_fetcher=workflow.news_fetcher,
+            market_fetcher=ctx.workflow.market_fetcher,
+            news_fetcher=ctx.workflow.news_fetcher,
             enable_multi_timeframe=enable_multi_timeframe,
-            trump_mode=workflow.trump_mode,
-            trump_fetcher=workflow.trump_fetcher,
+            trump_mode=ctx.workflow.trump_mode,
+            trump_fetcher=ctx.workflow.trump_fetcher,
         ),
     )
-    _record_stage(collector, "fetch_data", start)
+    _record_stage(ctx.collector, "fetch_data", start)
 
     # Stage 2: Fetch account info
     start = time.perf_counter()
-    account_output = await data_fetch.fetch_account_info(workflow.broker)
-    _record_stage(collector, "fetch_account_info", start)
+    account_output = await data_fetch.fetch_account_info(ctx.workflow.broker)
+    _record_stage(ctx.collector, "fetch_account_info", start)
 
     # Stage 3: Select strategy
     start = time.perf_counter()
-    strategy_input = StrategySelectionInput(symbol=symbol, market_data=data_output.market_data)
+    strategy_input = StrategySelectionInput(symbol=ctx.symbol, market_data=data_output.market_data)
     strategy_output = await strategy_selection.select_strategy(
         strategy_input,
-        workflow.meta_agent,
-        workflow._default_strategy,  # noqa: SLF001
-        workflow.use_ensemble,
-        collector,
+        ctx.workflow.meta_agent,
+        ctx.workflow.get_default_strategy(),
+        ctx.workflow.use_ensemble,
+        ctx.collector,
     )
-    _record_stage(collector, "strategy_selection", start)
+    _record_stage(ctx.collector, "strategy_selection", start)
 
     # Stage 4: Validate strategy with backtest
     start = time.perf_counter()
     backtest_output = await strategy_selection.validate_strategy_with_backtest(
-        symbol,
+        ctx.symbol,
         strategy_output.strategy_instance,
         strategy_output.strategy_name,
         strategy_input,
-        workflow.pre_trade_backtest_config,
-        workflow.vectorbt_runner,
-        collector,
+        ctx.workflow.pre_trade_backtest_config,
+        ctx.workflow.vectorbt_runner,
+        ctx.collector,
     )
-    _record_stage(collector, "backtest_validation", start)
+    _record_stage(ctx.collector, "backtest_validation", start)
 
-    # Create TechnicalAnalyst with selected strategy via DI container
-    technical_analyst = workflow._container.technical_analyst()(  # noqa: SLF001
-        strategy_output.strategy_instance
+    # Create TechnicalAnalyst with selected strategy
+    container = ctx.workflow.get_container()
+    technical_analyst = container.technical_analyst()(strategy_output.strategy_instance)
+
+    return _PreparationResult(
+        data_output, account_output, strategy_output, backtest_output, technical_analyst
     )
 
+
+async def _run_analyses_with_validation(
+    ctx: _ExecutionContext,
+    prep_result: _PreparationResult,
+    enable_multi_timeframe: bool,
+    degradation_context: DegradationContext | None,
+) -> _AnalysisResult:
+    """Run analyses and validation (stages 5-5.5).
+
+    Args:
+        ctx: Execution context
+        prep_result: Preparation result from previous stages
+        enable_multi_timeframe: Whether multi-timeframe is enabled
+        degradation_context: Degradation context
+
+    Returns:
+        Analysis result bundle
+    """
     # Stage 5: Run analyses
     start = time.perf_counter()
     analysis_input = AnalysisInput(
-        symbol=symbol,
-        market_data=data_output.market_data,
-        news_articles=data_output.news_articles,
-        trump_posts=data_output.trump_posts,
+        symbol=ctx.symbol,
+        market_data=prep_result.data_output.market_data,
+        news_articles=prep_result.data_output.news_articles,
+        trump_posts=prep_result.data_output.trump_posts,
         enable_multi_timeframe=enable_multi_timeframe,
     )
     analysis_output = await analysis.run_analyses(
         analysis_input,
-        technical_analyst,
-        workflow.sentiment_analyst,
-        workflow.news_analyst,
-        workflow.fundamental_analyst,
-        workflow.comparative_analyst,
-        workflow.web_researcher,
-        workflow.social_analyst,
-        workflow.bullish_researcher,
-        workflow.bearish_researcher,
-        workflow.trump_mode,
-        workflow.trump_analyst,
-        collector,
+        prep_result.technical_analyst,
+        ctx.workflow.sentiment_analyst,
+        ctx.workflow.news_analyst,
+        ctx.workflow.fundamental_analyst,
+        ctx.workflow.comparative_analyst,
+        ctx.workflow.web_researcher,
+        ctx.workflow.social_analyst,
+        ctx.workflow.bullish_researcher,
+        ctx.workflow.bearish_researcher,
+        ctx.workflow.trump_mode,
+        ctx.workflow.trump_analyst,
+        ctx.collector,
     )
-    _record_stage(collector, "analyses", start)
+    _record_stage(ctx.collector, "analyses", start)
 
+    # Stage 5.5: Validate analyses
+    start = time.perf_counter()
+    validation_output: RiskValidationOutput | None = None
+    if ctx.workflow.risk_validation_config.enabled:
+        validation_input = RiskValidationInput(
+            symbol=ctx.symbol,
+            trading_session=ctx.trading_session,
+            technical_analysis=analysis_output.technical_analysis,
+            sentiment_analysis=analysis_output.sentiment_analysis,
+            news_analysis=analysis_output.news_analysis,
+            fundamental_analysis=analysis_output.fundamental_analysis,
+            bullish_research=analysis_output.bullish_research,
+            bearish_research=analysis_output.bearish_research,
+            market_data=prep_result.data_output.market_data,
+            degradation_context=degradation_context,
+        )
+        validation_output = validate_analyses_stage(validation_input, ctx.workflow.risk_validator)
+        _record_stage(ctx.collector, "risk_validation", start)
+
+        if not validation_output.validation_result.approved:
+            logger.warning(
+                f"Risk validation WARNING for {ctx.symbol}: {validation_output.validation_result.warnings}"
+            )
+
+    return _AnalysisResult(analysis_output, validation_output)
+
+
+async def _make_decision_and_execute(
+    ctx: _ExecutionContext,
+    prep_result: _PreparationResult,
+    analysis_result: _AnalysisResult,
+    context_bundle: _ContextBundle,
+) -> _ExecutionResult:
+    """Make decision, assess risk, and execute trade (stages 6-8).
+
+    Args:
+        ctx: Execution context
+        prep_result: Preparation result from earlier stages
+        analysis_result: Analysis result from earlier stages
+        context_bundle: Decision and degradation contexts
+
+    Returns:
+        Execution result bundle
+    """
     # Stage 6: Make decision
     start = time.perf_counter()
-    decision_context = DecisionContext(
-        sector_rotation=ctx.sector_rotation_context,
-        earnings=ctx.earnings_context,
-        peer_analysis=ctx.peer_analysis_context,
-        game_plan=ctx.game_plan_context,
-        position=ctx.position_context,
-    )
     decision_input = DecisionInput(
-        symbol=symbol,
-        technical=analysis_output.technical_analysis,
-        sentiment=analysis_output.sentiment_analysis,
-        news=analysis_output.news_analysis,
-        bullish=analysis_output.bullish_research,
-        bearish=analysis_output.bearish_research,
-        fundamental=analysis_output.fundamental_analysis,
-        comparative=analysis_output.comparative_analysis,
-        trump=analysis_output.trump_analysis,
-        account_info=account_output.account_info,
-        context=decision_context,
-        backtest_validation=backtest_output.backtest_validation,
-        degradation_context=degradation_context,
+        symbol=ctx.symbol,
+        technical=analysis_result.analysis_output.technical_analysis,
+        sentiment=analysis_result.analysis_output.sentiment_analysis,
+        news=analysis_result.analysis_output.news_analysis,
+        bullish=analysis_result.analysis_output.bullish_research,
+        bearish=analysis_result.analysis_output.bearish_research,
+        fundamental=analysis_result.analysis_output.fundamental_analysis,
+        comparative=analysis_result.analysis_output.comparative_analysis,
+        trump=analysis_result.analysis_output.trump_analysis,
+        account_info=prep_result.account_output.account_info,
+        context=context_bundle.decision_context,
+        backtest_validation=prep_result.backtest_output.backtest_validation,
+        degradation_context=context_bundle.degradation_context,
+        validation_context=analysis_result.validation_output,
     )
-    decision_output = await decision.make_decision(decision_input, workflow.trader, collector)
-    _record_stage(collector, "decision", start)
+    decision_output = await decision.make_decision(decision_input, ctx.workflow.trader, ctx.collector)
+    _record_stage(ctx.collector, "decision", start)
 
     # Stage 7: Assess risk
     start = time.perf_counter()
-    # Get target weight from allocations if available
-    target_weight = (
-        workflow._target_allocations.get(symbol)  # noqa: SLF001
-        if workflow._target_allocations  # noqa: SLF001
-        else None
-    )
+    target_weight = ctx.workflow.get_target_allocation(ctx.symbol)
     risk_input = RiskAssessmentInput(
-        symbol=symbol,
-        market_data=data_output.market_data,
+        symbol=ctx.symbol,
+        market_data=prep_result.data_output.market_data,
         final_decision=decision_output.final_decision,
-        account_info=account_output.account_info,
-        broker_positions=account_output.broker_positions,
-        portfolio_value=account_output.portfolio_value,
+        account_info=prep_result.account_output.account_info,
+        broker_positions=prep_result.account_output.broker_positions,
+        portfolio_value=prep_result.account_output.portfolio_value,
         target_portfolio_weight=target_weight,
-        backtest_validation=backtest_output.backtest_validation,
-        degradation_context=degradation_context,
-        broker_api_failed=account_output.broker_api_failed,
+        backtest_validation=prep_result.backtest_output.backtest_validation,
+        degradation_context=context_bundle.degradation_context,
+        broker_api_failed=prep_result.account_output.broker_api_failed,
     )
-    risk_output = await risk.assess_risk(risk_input, workflow.risk_manager)
-    _record_stage(collector, "risk_assessment", start)
+    risk_output = await risk.assess_risk(risk_input, ctx.workflow.risk_manager)
+    _record_stage(ctx.collector, "risk_assessment", start)
 
-    # Notify if trade rejected by risk gate (only during regular hours when trades can execute)
+    # Notify if trade rejected (only during regular hours)
     if (
         risk_output.risk_assessment
         and decision_output.final_decision
         and not risk_output.risk_assessment.validation.approved
         and decision_output.final_decision.action != Signal.HOLD
-        and workflow.notification_service
-        and trading_session == TradingSession.REGULAR
+        and ctx.workflow.notification_service
+        and ctx.trading_session == TradingSession.REGULAR
     ):
         await execution.notify_trade_execution(
-            symbol,
+            ctx.symbol,
             decision_output.final_decision,
             risk_output.risk_assessment,
-            workflow.notification_service,
+            ctx.workflow.notification_service,
         )
 
     # Stage 8: Execute trade
     execution_output = None
     if (
-        workflow.broker
+        ctx.workflow.broker
         and risk_output.risk_assessment
         and decision_output.final_decision
         and risk_output.risk_assessment.validation.approved
         and decision_output.final_decision.action != Signal.HOLD
     ):
         execution_input = TradeExecutionInput(
-            symbol=symbol,
+            symbol=ctx.symbol,
             final_decision=decision_output.final_decision,
             risk_assessment=risk_output.risk_assessment,
-            trading_session=trading_session,
+            trading_session=ctx.trading_session,
         )
-        execution_output = await execution.execute_trade(execution_input, workflow.broker)
+        execution_output = await execution.execute_trade(execution_input, ctx.workflow.broker)
 
-    # Log final result
-    logger.info(
-        f"Workflow complete: {decision_output.final_decision.action.value} "
-        f"(confidence={decision_output.final_decision.confidence:.2f}, "
-        f"risk_approved={risk_output.risk_assessment.validation.approved})"
-    )
-
-    # Build result
-    return await _build_and_persist_result(
-        workflow,
-        symbol,
-        data_output,
-        account_output,
-        strategy_output,
-        backtest_output,
-        analysis_output,
-        decision_output,
-        risk_output,
-        execution_output,
-        decision_context,
-        degradation_context,
-        target_weight,
-        trading_session,
-        collector,
-    )
+    return _ExecutionResult(decision_output, risk_output, execution_output)
 
 
-async def _build_and_persist_result(  # noqa: PLR0913
-    workflow: Any,  # noqa: ANN401
-    symbol: str,
-    data_output: FetchDataOutput,
-    account_output: AccountInfoOutput,
-    strategy_output: StrategySelectionOutput,
-    backtest_output: BacktestValidationOutput,
-    analysis_output: AnalysisOutput,
-    decision_output: DecisionOutput,
-    risk_output: RiskAssessmentOutput,
-    execution_output: TradeExecutionOutput | None,
-    decision_context: DecisionContext,
-    degradation_context: Any,  # noqa: ANN401
-    target_weight: float | None,  # noqa: ARG001
-    trading_session: TradingSession,
-    collector: ExecutionMetricsCollector | None,
+async def _build_and_persist_result(
+    ctx: _ExecutionContext,
+    prep_result: _PreparationResult,
+    analysis_result: _AnalysisResult,
+    execution_result: _ExecutionResult,
+    context_bundle: _ContextBundle,
 ) -> TradingWorkflowResult:
     """Build workflow result and persist metrics/snapshots.
 
     Args:
-        workflow: TradingWorkflow instance
-        symbol: Stock ticker
-        data_output: Data fetch output
-        account_output: Account info output
-        strategy_output: Strategy selection output
-        backtest_output: Backtest validation output
-        analysis_output: Analysis output
-        decision_output: Decision output
-        risk_output: Risk assessment output
-        execution_output: Execution output
-        decision_context: Decision context
-        degradation_context: Degradation context
-        target_weight: Target portfolio weight
-        trading_session: Trading session type
-        collector: Optional metrics collector
+        ctx: Execution context
+        prep_result: Preparation result from earlier stages
+        analysis_result: Analysis result from earlier stages
+        execution_result: Execution result from earlier stages
+        context_bundle: Decision and degradation contexts
     """
     from src.metrics.db_tracker import DatabaseMetricsTracker
     from src.metrics.execution import persist_jsonl
 
-    execution_metrics = collector.finalize() if collector else None
+    execution_metrics = ctx.collector.finalize() if ctx.collector else None
 
     # Extract degradation fields
-    degradation_tier = degradation_context.tier.value if degradation_context else None
+    degradation_tier = (
+        context_bundle.degradation_context.tier.value if context_bundle.degradation_context else None
+    )
     degradation_confidence_penalty = (
-        (1 - degradation_context.confidence_adjustment) if degradation_context else None
+        (1 - context_bundle.degradation_context.confidence_adjustment)
+        if context_bundle.degradation_context
+        else None
     )
 
     # Aggregate warnings
     all_warnings = []
-    all_warnings.extend(data_output.warnings)
-    all_warnings.extend(account_output.warnings)
-    all_warnings.extend(backtest_output.warnings)
-    all_warnings.extend(analysis_output.warnings)
-    if execution_output:
-        all_warnings.extend(execution_output.warnings)
+    all_warnings.extend(prep_result.data_output.warnings)
+    all_warnings.extend(prep_result.account_output.warnings)
+    all_warnings.extend(prep_result.backtest_output.warnings)
+    all_warnings.extend(analysis_result.analysis_output.warnings)
+    if execution_result.execution_output:
+        all_warnings.extend(execution_result.execution_output.warnings)
 
     result = TradingWorkflowResult(
-        symbol=symbol,
-        trading_session=trading_session,
-        technical=analysis_output.technical_analysis,
-        sentiment=analysis_output.sentiment_analysis,
-        news=analysis_output.news_analysis,
-        trump=analysis_output.trump_analysis,
-        fundamental=analysis_output.fundamental_analysis,
-        comparative=analysis_output.comparative_analysis,
-        web_research=analysis_output.web_research,
-        social_sentiment=analysis_output.social_sentiment_analysis,
-        bullish=analysis_output.bullish_research,
-        bearish=analysis_output.bearish_research,
-        decision=decision_output.final_decision,
-        risk=risk_output.risk_assessment,
-        order=execution_output.order_status if execution_output else None,
-        regime=strategy_output.regime_analysis,
-        strategy_used=strategy_output.strategy_name,
+        symbol=ctx.symbol,
+        trading_session=ctx.trading_session,
+        technical=analysis_result.analysis_output.technical_analysis,
+        sentiment=analysis_result.analysis_output.sentiment_analysis,
+        news=analysis_result.analysis_output.news_analysis,
+        trump=analysis_result.analysis_output.trump_analysis,
+        fundamental=analysis_result.analysis_output.fundamental_analysis,
+        comparative=analysis_result.analysis_output.comparative_analysis,
+        web_research=analysis_result.analysis_output.web_research,
+        social_sentiment=analysis_result.analysis_output.social_sentiment_analysis,
+        bullish=analysis_result.analysis_output.bullish_research,
+        bearish=analysis_result.analysis_output.bearish_research,
+        decision=execution_result.decision_output.final_decision,
+        risk=execution_result.risk_output.risk_assessment,
+        order=execution_result.execution_output.order_status if execution_result.execution_output else None,
+        regime=prep_result.strategy_output.regime_analysis,
+        strategy_used=prep_result.strategy_output.strategy_name,
         warnings=all_warnings,
-        earnings_context=decision_context.earnings,
-        peer_analysis_context=decision_context.peer_analysis,
+        earnings_context=context_bundle.decision_context.earnings,
+        peer_analysis_context=context_bundle.decision_context.peer_analysis,
         execution_metrics=execution_metrics,
-        backtest_validation=backtest_output.backtest_validation,
+        backtest_validation=prep_result.backtest_output.backtest_validation,
         degradation_tier=degradation_tier,
         degradation_confidence_penalty=degradation_confidence_penalty,
     )
@@ -328,32 +502,32 @@ async def _build_and_persist_result(  # noqa: PLR0913
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to persist execution metrics (continuing): {e}")
 
-    if workflow.metrics_tracker:
+    if ctx.workflow.metrics_tracker:
         try:
-            is_paper = workflow.broker.paper if workflow.broker else True
-            if isinstance(workflow.metrics_tracker, DatabaseMetricsTracker):
-                await workflow.metrics_tracker.record_decision_async(
-                    result, strategy_name=strategy_output.strategy_name, is_paper_trade=is_paper
+            is_paper = ctx.workflow.broker.paper if ctx.workflow.broker else True
+            if isinstance(ctx.workflow.metrics_tracker, DatabaseMetricsTracker):
+                await ctx.workflow.metrics_tracker.record_decision_async(
+                    result, strategy_name=prep_result.strategy_output.strategy_name, is_paper_trade=is_paper
                 )
             else:
-                workflow.metrics_tracker.record_decision(
-                    result, strategy_name=strategy_output.strategy_name, is_paper_trade=is_paper
+                ctx.workflow.metrics_tracker.record_decision(
+                    result, strategy_name=prep_result.strategy_output.strategy_name, is_paper_trade=is_paper
                 )
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to record metrics (continuing): {e}")
 
     if (
-        workflow.snapshot_on_trade
-        and workflow.snapshot_repository
-        and risk_output.risk_assessment
-        and decision_output.final_decision
-        and risk_output.risk_assessment.validation.approved
-        and decision_output.final_decision.action != Signal.HOLD
+        ctx.workflow.snapshot_on_trade
+        and ctx.workflow.snapshot_repository
+        and execution_result.risk_output.risk_assessment
+        and execution_result.decision_output.final_decision
+        and execution_result.risk_output.risk_assessment.validation.approved
+        and execution_result.decision_output.final_decision.action != Signal.HOLD
     ):
         await execution.create_portfolio_snapshot(
-            symbol,
-            account_output.account_info,
-            workflow.snapshot_repository,
+            ctx.symbol,
+            prep_result.account_output.account_info,
+            ctx.workflow.snapshot_repository,
         )
 
     return result

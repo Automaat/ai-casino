@@ -59,6 +59,7 @@ def sample_sentiment_analysis(direction):
             neutral_ratio=0.2,
             article_count=10,
             summary="Positive sentiment across articles",
+            confidence=0.75,
         )
     return SentimentAnalysis(
         overall_sentiment="NEGATIVE",
@@ -68,6 +69,7 @@ def sample_sentiment_analysis(direction):
         neutral_ratio=0.2,
         article_count=10,
         summary="Negative sentiment across articles",
+        confidence=0.75,
     )
 
 
@@ -79,11 +81,13 @@ def sample_news_analysis(direction):
             key_themes=["earnings", "growth", "innovation"],
             impact_assessment="Very positive - strong fundamentals",
             recommendation="Consider buying on positive momentum",
+            confidence=0.8,
         )
     return NewsAnalysis(
         key_themes=["losses", "decline", "risks"],
         impact_assessment="Very negative - weak fundamentals",
         recommendation="Consider selling on negative momentum",
+        confidence=0.8,
     )
 
 
@@ -302,6 +306,7 @@ class TestThesisResearcher:
                 neutral_ratio=0.2,
                 article_count=10,
                 summary="Negative sentiment",
+                confidence=0.75,
             )
             expected_confidence = 0.9  # Base 0.5 + SELL 0.15 + neg sent 0.1 + overvalued 0.1 + high debt 0.05
 
@@ -330,6 +335,7 @@ class TestThesisResearcher:
             neutral_ratio=0.34,
             article_count=5,
             summary="Neutral sentiment",
+            confidence=0.75,
         )
         fundamental = FundamentalAnalysis(
             valuation="FAIRLY_VALUED",
@@ -366,6 +372,7 @@ class TestThesisResearcher:
                 neutral_ratio=0.2,
                 article_count=15,
                 summary="Negative sentiment",
+                confidence=0.75,
             )
             fundamental = FundamentalAnalysis(
                 valuation="OVERVALUED",
@@ -393,6 +400,7 @@ class TestThesisResearcher:
                 neutral_ratio=0.2,
                 article_count=10,
                 summary="Positive sentiment",
+                confidence=0.75,
             )
             fundamental = FundamentalAnalysis(
                 valuation="UNDERVALUED",

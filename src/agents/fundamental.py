@@ -5,7 +5,7 @@ from typing import Any
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.agents.models import FundamentalMetrics
+from src.agents.models import EarningsFlags, FundamentalMetrics
 from src.data.fundamental import FundamentalDataFetcher
 from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
@@ -26,6 +26,7 @@ class FundamentalAnalysis(BaseModel):
     """Fundamental analysis result."""
 
     valuation: str  # UNDERVALUED | FAIRLY_VALUED | OVERVALUED
+    earnings_flags: EarningsFlags | None = None
     pe_ratio: float | None
     eps: float | None
     revenue_growth_yoy: float | None

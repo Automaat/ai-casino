@@ -14,6 +14,7 @@ from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearc
 from src.agents.trader import TradingDecision
 from src.agents.trump import TrumpAnalysis
 from src.daemon.degradation import DegradationContext
+from src.workflows.models.risk_validation import RiskValidationOutput
 from src.workflows.types import BacktestValidation
 
 
@@ -43,6 +44,7 @@ class DecisionInput(BaseModel):
     context: DecisionContext
     backtest_validation: BacktestValidation | None
     degradation_context: DegradationContext | None
+    validation_context: RiskValidationOutput | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

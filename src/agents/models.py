@@ -1,5 +1,7 @@
 """Typed models for agent components."""
 
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 
@@ -34,3 +36,22 @@ class FundamentalMetrics(BaseModel):
     def __repr__(self) -> str:
         """String representation."""
         return f"FundamentalMetrics(pe={self.pe_ratio}, eps={self.eps}, completeness={self.completeness_ratio:.1%})"
+
+
+class EarningsFlags(BaseModel):
+    """Earnings calendar flags."""
+
+    upcoming_earnings: bool = Field(description="Whether earnings report is upcoming")
+    days_until_earnings: int | None = Field(default=None, description="Days until earnings report")
+    pre_earnings_zone: str | None = Field(default=None, description="Pre-earnings zone (T-1 or T-3)")
+    earnings_date: date | None = Field(default=None, description="Date of earnings report")
+    estimate_eps: float | None = Field(default=None, description="Estimated EPS for earnings")
+
+    def __repr__(self) -> str:
+        """String representation."""
+        if not self.upcoming_earnings:
+            return "EarningsFlags(upcoming=False)"
+        return (
+            f"EarningsFlags(upcoming=True, days={self.days_until_earnings}, "
+            f"zone={self.pre_earnings_zone}, date={self.earnings_date}, estimate_eps={self.estimate_eps})"
+        )

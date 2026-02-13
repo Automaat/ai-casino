@@ -44,11 +44,13 @@ def mock_workflow_result_approved():
             neutral_ratio=0.2,
             article_count=5,
             summary="Strong positive sentiment",
+            confidence=0.75,
         ),
         news=NewsAnalysis(
             key_themes=["earnings", "growth"],
             impact_assessment="POSITIVE",
             recommendation="BUY",
+            confidence=0.75,
         ),
         fundamental=FundamentalAnalysis(
             valuation="FAIRLY_VALUED",
@@ -136,11 +138,13 @@ def mock_workflow_result_rejected():
             neutral_ratio=0.2,
             article_count=3,
             summary="Negative sentiment",
+            confidence=0.75,
         ),
         news=NewsAnalysis(
             key_themes=["volatility"],
             impact_assessment="NEGATIVE",
             recommendation="SELL",
+            confidence=0.75,
         ),
         fundamental=FundamentalAnalysis(
             valuation="OVERVALUED",

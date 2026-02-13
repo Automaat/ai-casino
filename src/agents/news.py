@@ -24,6 +24,7 @@ class NewsAnalysis(BaseModel):
     key_themes: list[str]
     impact_assessment: str
     recommendation: str
+    confidence: float = Field(description="Confidence score (0.0-1.0)", ge=0.0, le=1.0)
 
 
 class NewsAnalyst:
@@ -58,6 +59,7 @@ class NewsAnalyst:
                 key_themes=["No recent news"],
                 impact_assessment="Insufficient data for assessment",
                 recommendation="Wait for more information",
+                confidence=0.0,
             )
 
         headlines_text = self._format_articles(articles)
@@ -81,10 +83,22 @@ class NewsAnalyst:
 
         logger.info(f"News analysis complete: {len(key_themes)} themes identified")
 
+        # Calculate confidence from themes count and recommendation clarity
+        theme_confidence = min(len(key_themes) / 5.0, 1.0)  # Max confidence at 5+ themes
+        rec_lower = recommendation.lower()
+        if any(word in rec_lower for word in ["buy", "sell", "strong"]):
+            rec_confidence = 0.8
+        elif any(word in rec_lower for word in ["hold", "wait", "insufficient"]):
+            rec_confidence = 0.4
+        else:
+            rec_confidence = 0.6
+        confidence = (theme_confidence + rec_confidence) / 2
+
         return NewsAnalysis(
             key_themes=key_themes,
             impact_assessment=impact,
             recommendation=recommendation,
+            confidence=confidence,
         )
 
     def _format_articles(self, articles: list[NewsArticle]) -> str:
