@@ -29,7 +29,6 @@ class PositionRecordRepository(BaseRepository[PositionRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized PositionRecordRepository")
 
     async def create(self, entity: PositionRecord) -> PositionRecord:
         """Create new position record.
