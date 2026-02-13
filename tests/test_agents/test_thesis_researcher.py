@@ -59,6 +59,7 @@ def sample_sentiment_analysis(direction):
             neutral_ratio=0.2,
             article_count=10,
             summary="Positive sentiment across articles",
+            confidence=0.75,
         )
     return SentimentAnalysis(
         overall_sentiment="NEGATIVE",
@@ -68,6 +69,7 @@ def sample_sentiment_analysis(direction):
         neutral_ratio=0.2,
         article_count=10,
         summary="Negative sentiment across articles",
+        confidence=0.75,
     )
 
 
@@ -79,11 +81,13 @@ def sample_news_analysis(direction):
             key_themes=["earnings", "growth", "innovation"],
             impact_assessment="Very positive - strong fundamentals",
             recommendation="Consider buying on positive momentum",
+            confidence=0.8,
         )
     return NewsAnalysis(
         key_themes=["losses", "decline", "risks"],
         impact_assessment="Very negative - weak fundamentals",
         recommendation="Consider selling on negative momentum",
+        confidence=0.8,
     )
 
 

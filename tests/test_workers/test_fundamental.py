@@ -1,6 +1,6 @@
 """Tests for fundamental worker."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -34,7 +34,8 @@ def mock_earnings_calendar_upcoming():
                 earnings_date=date.today() + timedelta(days=3),
                 estimate_eps=3.50,
             )
-        ]
+        ],
+        fetched_at=datetime.now(),
     )
 
 
@@ -48,7 +49,8 @@ def mock_earnings_calendar_past():
                 earnings_date=date.today() - timedelta(days=2),
                 estimate_eps=3.50,
             )
-        ]
+        ],
+        fetched_at=datetime.now(),
     )
 
 
@@ -62,14 +64,15 @@ def mock_earnings_calendar_far():
                 earnings_date=date.today() + timedelta(days=7),
                 estimate_eps=3.50,
             )
-        ]
+        ],
+        fetched_at=datetime.now(),
     )
 
 
 @pytest.fixture
 def mock_earnings_calendar_empty():
     """No earnings events."""
-    return EarningsCalendar(events=[])
+    return EarningsCalendar(events=[], fetched_at=datetime.now())
 
 
 @pytest.fixture

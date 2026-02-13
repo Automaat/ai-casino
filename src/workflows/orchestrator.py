@@ -1,6 +1,8 @@
 """Trading workflow orchestrator coordinating all stages."""
 
-from typing import TYPE_CHECKING, Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
@@ -230,7 +232,7 @@ class TradingWorkflow:
         )
 
         params = AnalysisRequestParams(period_days, trading_session, extra_context)
-        request = AnalysisRequest(self, symbol, params, collector)
+        request = AnalysisRequest(cast(Any, self), symbol, params, collector)
         return await run_instrumented_analysis(request)
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:

@@ -203,6 +203,7 @@ async def test_make_decision(test_container, sample_bullish_research, sample_bea
             neutral_ratio=0.2,
             article_count=10,
             summary="Positive",
+            confidence=0.75,
         ),
         "news_analysis": NewsAnalysis(
             key_themes=["Growth"],
@@ -477,6 +478,7 @@ async def test_account_info_passed_to_trader(
             neutral_ratio=0.4,
             article_count=5,
             summary="Mixed",
+            confidence=0.75,
         ),
         "news_analysis": NewsAnalysis(
             key_themes=["Stable"],

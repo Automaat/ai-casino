@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
-    from src.data.earnings import EarningsFetcher
+    from src.data.earnings import EarningsCalendarFetcher
     from src.data.fundamental import FundamentalDataFetcher
     from src.workers.fundamental import FundamentalWorker
     from src.workers.news import NewsWorker
@@ -58,7 +58,7 @@ def create_news_worker(llm_client: LLMClient) -> NewsWorker:
 def create_fundamental_worker(
     llm_client: LLMClient,
     fundamental_fetcher: FundamentalDataFetcher,
-    earnings_fetcher: EarningsFetcher,
+    earnings_fetcher: EarningsCalendarFetcher,
 ) -> FundamentalWorker:
     """Create FundamentalWorker with LLM client and fetchers.
 

@@ -28,6 +28,7 @@ from src.workflows.config import WorkflowComponents, WorkflowConfig
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
+    from src.validators.risk import RiskValidator
 
 
 @dataclass
@@ -67,7 +68,7 @@ def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRCo
     )
 
 
-def _create_risk_validator(daemon_config: DaemonConfig) -> object:
+def _create_risk_validator(daemon_config: DaemonConfig) -> "RiskValidator":
     """Create RiskValidator from daemon risk_validation config."""
     from src.validators.risk import RiskValidator
 

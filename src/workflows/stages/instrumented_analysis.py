@@ -1,5 +1,7 @@
 """Instrumented analysis pipeline with metrics collection."""
 
+from __future__ import annotations
+
 import time
 from typing import TYPE_CHECKING
 
@@ -50,7 +52,7 @@ class AnalysisRequest:
 
     def __init__(
         self,
-        workflow: "TradingWorkflow",
+        workflow: TradingWorkflow,
         symbol: str,
         params: AnalysisRequestParams,
         collector: ExecutionMetricsCollector | None = None,

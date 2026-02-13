@@ -44,6 +44,7 @@ def mock_workflow_result_approved():
             neutral_ratio=0.2,
             article_count=5,
             summary="Strong positive sentiment",
+            confidence=0.75,
         ),
         news=NewsAnalysis(
             key_themes=["earnings", "growth"],
@@ -136,6 +137,7 @@ def mock_workflow_result_rejected():
             neutral_ratio=0.2,
             article_count=3,
             summary="Negative sentiment",
+            confidence=0.75,
         ),
         news=NewsAnalysis(
             key_themes=["volatility"],

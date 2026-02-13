@@ -83,6 +83,7 @@ def mock_workflow_result():
             neutral_ratio=0.2,
             article_count=5,
             summary="Strong positive sentiment",
+            confidence=0.75,
         ),
         news=NewsAnalysis(
             key_themes=["earnings", "growth"],
@@ -218,6 +219,7 @@ class TestRecordDecisionAsync:
                 neutral_ratio=0.2,
                 article_count=3,
                 summary="Negative sentiment",
+                confidence=0.75,
             ),
             news=NewsAnalysis(
                 key_themes=["volatility"],

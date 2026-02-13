@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 import pandas as pd
 from loguru import logger
@@ -350,7 +351,7 @@ class RiskValidator:
         aggregate_confidence: float,
         signal_consistency: SignalConsistency,
         degradation_context: DegradationContext | None,
-    ) -> str:
+    ) -> Literal["LOW", "MEDIUM", "HIGH"]:
         """Determine risk level based on validation results.
 
         Args:
