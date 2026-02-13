@@ -10,6 +10,17 @@ class AnalysisOrchestratorConfig(BaseModel):
     target_allocation_ttl_days: int = Field(default=7, ge=1, le=30)
     enable_position_sync: bool = True
 
+    enable_supervisor_routing: bool = Field(
+        default=False, description="Enable supervisor-driven conditional worker execution"
+    )
+    supervisor_planning_timeout_ms: int = Field(
+        default=5000, ge=1000, le=10000, description="Timeout for supervisor planning phase"
+    )
+    worker_execution_timeout_ms: int = Field(
+        default=30000, ge=10000, le=60000, description="Timeout for worker execution phase"
+    )
+    fail_fast_required: bool = Field(default=True, description="Fail immediately if required worker fails")
+
 
 class NewsSourcesConfig(BaseModel):
     """News source configuration."""

@@ -697,6 +697,23 @@ daemon:
     # Enable position syncing with broker before analysis
     enable_position_sync: true
 
+    # Supervisor-driven conditional execution (default: disabled for backward compatibility)
+    # When enabled, TradingSupervisor determines which analyses to run based on context
+    enable_supervisor_routing: false
+
+    # Supervisor planning timeout in milliseconds (1000-10000, default: 5000)
+    # Time allowed for supervisor to decide which analyses to run
+    supervisor_planning_timeout_ms: 5000
+
+    # Worker execution timeout in milliseconds (10000-60000, default: 30000)
+    # Time allowed for all workers to complete
+    worker_execution_timeout_ms: 30000
+
+    # Fail immediately if required worker fails (default: true)
+    # When true, pipeline fails fast on required worker errors
+    # When false, attempts to continue with partial results
+    fail_fast_required: true
+
   # ========================================
   # COORDINATOR AGENT (EXPERIMENTAL)
   # ========================================

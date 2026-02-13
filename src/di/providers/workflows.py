@@ -82,6 +82,7 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
     position_sizing_config = params.daemon_config.position_sizing
     risk_validation_config = params.daemon_config.risk_validation
     risk_validator = _create_risk_validator(params.daemon_config)
+    analysis_orchestrator_config = params.daemon_config.analysis_orchestration
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -109,6 +110,7 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
         position_sizing_config=position_sizing_config,
         risk_validation_config=risk_validation_config,
         risk_validator=risk_validator,
+        analysis_orchestrator_config=analysis_orchestrator_config,
     )
 
     return TradingWorkflow(config, components)
@@ -121,6 +123,7 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
     position_sizing_config = params.daemon_config.position_sizing
     risk_validation_config = params.daemon_config.risk_validation
     risk_validator = _create_risk_validator(params.daemon_config)
+    analysis_orchestrator_config = params.daemon_config.analysis_orchestration
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -148,6 +151,7 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
         position_sizing_config=position_sizing_config,
         risk_validation_config=risk_validation_config,
         risk_validator=risk_validator,
+        analysis_orchestrator_config=analysis_orchestrator_config,
     )
 
     return TradingWorkflow(config, components)
@@ -160,6 +164,7 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
     position_sizing_config = params.daemon_config.position_sizing
     risk_validation_config = params.daemon_config.risk_validation
     risk_validator = _create_risk_validator(params.daemon_config)
+    analysis_orchestrator_config = params.daemon_config.analysis_orchestration
 
     config = WorkflowConfig(
         use_ensemble=False,
@@ -187,6 +192,7 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
         position_sizing_config=position_sizing_config,
         risk_validation_config=risk_validation_config,
         risk_validator=risk_validator,
+        analysis_orchestrator_config=analysis_orchestrator_config,
     )
 
     return TradingWorkflow(config, components)

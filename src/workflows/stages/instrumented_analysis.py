@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING
 
@@ -19,13 +20,22 @@ from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOu
 from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
 from src.workflows.models.risk_validation import RiskValidationInput, RiskValidationOutput
 from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
-from src.workflows.stages import analysis, data_fetch, decision, execution, risk, strategy_selection
+from src.workflows.stages import (
+    analysis,
+    data_fetch,
+    decision,
+    execution,
+    risk,
+    strategy_selection,
+    supervised_analysis,
+)
 from src.workflows.stages.risk_validation import validate_analyses_stage
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 if TYPE_CHECKING:
     from src.agents.technical import TechnicalAnalyst
     from src.daemon.degradation import DegradationContext
+    from src.data.broker import BrokerPosition
     from src.workflows.orchestrator import TradingWorkflow
 
 
@@ -121,10 +131,14 @@ class _AnalysisResult:
     """Bundle of analysis stage outputs."""
 
     def __init__(
-        self, analysis_output: AnalysisOutput, validation_output: RiskValidationOutput | None
+        self,
+        analysis_output: AnalysisOutput,
+        validation_output: RiskValidationOutput | None,
+        supervisor_routing: object | None = None,
     ) -> None:
         self.analysis_output = analysis_output
         self.validation_output = validation_output
+        self.supervisor_routing = supervisor_routing
 
 
 class _ExecutionResult:
@@ -267,6 +281,13 @@ async def _fetch_and_prepare_strategy(
     )
 
 
+def _check_owns_position(positions: dict[str, BrokerPosition] | None, symbol: str) -> bool:
+    """Check if currently own position in symbol."""
+    if not positions:
+        return False
+    return symbol in positions
+
+
 async def _run_analyses_with_validation(
     ctx: _ExecutionContext,
     prep_result: _PreparationResult,
@@ -284,6 +305,8 @@ async def _run_analyses_with_validation(
     Returns:
         Analysis result bundle
     """
+    from src.agents.supervisor.models import PlanningContext
+
     # Stage 5: Run analyses
     start = time.perf_counter()
     analysis_input = AnalysisInput(
@@ -293,25 +316,77 @@ async def _run_analyses_with_validation(
         trump_posts=prep_result.data_output.trump_posts,
         enable_multi_timeframe=enable_multi_timeframe,
     )
-    analysis_output = await analysis.run_analyses(
-        analysis_input,
-        prep_result.technical_analyst,
-        ctx.workflow.sentiment_analyst,
-        ctx.workflow.news_analyst,
-        ctx.workflow.fundamental_analyst,
-        ctx.workflow.comparative_analyst,
-        ctx.workflow.web_researcher,
-        ctx.workflow.social_analyst,
-        ctx.workflow.bullish_researcher,
-        ctx.workflow.bearish_researcher,
-        ctx.workflow.trump_mode,
-        ctx.workflow.trump_analyst,
-        ctx.collector,
-    )
+
+    routing_decision = None
+    config = ctx.workflow.analysis_orchestrator_config
+
+    if config and config.enable_supervisor_routing:
+        # Supervisor-driven conditional execution
+        start_planning = time.perf_counter()
+        planning_context = PlanningContext(
+            symbol=ctx.symbol,
+            regime=prep_result.strategy_output.regime_analysis,
+            trading_session=ctx.trading_session,
+            owns_position=_check_owns_position(prep_result.account_output.broker_positions, ctx.symbol),
+            news_count=len(prep_result.data_output.news_articles or []),
+            fundamental_available=True,
+            social_available=True,
+            trump_count=len(prep_result.data_output.trump_posts or []),
+            fundamental_rate_limit=False,  # TODO: Check circuit breaker
+            time_budget_ms=config.worker_execution_timeout_ms,
+        )
+
+        try:
+            routing_decision = await asyncio.wait_for(
+                ctx.workflow.supervisor.plan_analyses(planning_context, symbol=ctx.symbol),
+                timeout=config.supervisor_planning_timeout_ms / 1000,
+            )
+        except TimeoutError:
+            logger.warning("Supervisor planning timed out, using default routing")
+            routing_decision = ctx.workflow.supervisor._default_routing(planning_context)
+
+        _record_stage(ctx.collector, "supervisor_planning", start_planning)
+
+        # Run supervised analyses
+        analysis_output = await supervised_analysis.run_supervised_analyses(
+            analysis_input,
+            routing_decision,
+            prep_result.technical_analyst,
+            ctx.workflow.sentiment_analyst,
+            ctx.workflow.news_analyst,
+            ctx.workflow.fundamental_analyst,
+            ctx.workflow.comparative_analyst,
+            ctx.workflow.web_researcher,
+            ctx.workflow.social_analyst,
+            ctx.workflow.bullish_researcher,
+            ctx.workflow.bearish_researcher,
+            ctx.workflow.trump_mode,
+            ctx.workflow.trump_analyst,
+            ctx.collector,
+            timeout_ms=config.worker_execution_timeout_ms,
+        )
+    else:
+        # Traditional unconditional execution
+        analysis_output = await analysis.run_analyses(
+            analysis_input,
+            prep_result.technical_analyst,
+            ctx.workflow.sentiment_analyst,
+            ctx.workflow.news_analyst,
+            ctx.workflow.fundamental_analyst,
+            ctx.workflow.comparative_analyst,
+            ctx.workflow.web_researcher,
+            ctx.workflow.social_analyst,
+            ctx.workflow.bullish_researcher,
+            ctx.workflow.bearish_researcher,
+            ctx.workflow.trump_mode,
+            ctx.workflow.trump_analyst,
+            ctx.collector,
+        )
+
     _record_stage(ctx.collector, "analyses", start)
 
     # Stage 5.5: Validate analyses
-    start = time.perf_counter()
+    start_validation = time.perf_counter()
     validation_output: RiskValidationOutput | None = None
     if ctx.workflow.risk_validation_config.enabled:
         validation_input = RiskValidationInput(
@@ -327,14 +402,14 @@ async def _run_analyses_with_validation(
             degradation_context=degradation_context,
         )
         validation_output = validate_analyses_stage(validation_input, ctx.workflow.risk_validator)
-        _record_stage(ctx.collector, "risk_validation", start)
+        _record_stage(ctx.collector, "risk_validation", start_validation)
 
         if not validation_output.validation_result.approved:
             logger.warning(
                 f"Risk validation WARNING for {ctx.symbol}: {validation_output.validation_result.warnings}"
             )
 
-    return _AnalysisResult(analysis_output, validation_output)
+    return _AnalysisResult(analysis_output, validation_output, routing_decision)
 
 
 async def _make_decision_and_execute(
@@ -494,6 +569,7 @@ async def _build_and_persist_result(
         backtest_validation=prep_result.backtest_output.backtest_validation,
         degradation_tier=degradation_tier,
         degradation_confidence_penalty=degradation_confidence_penalty,
+        supervisor_routing=analysis_result.supervisor_routing,
     )
 
     if execution_metrics:
