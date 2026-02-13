@@ -69,8 +69,20 @@ class MetadataRepository(BaseRepository[dict]):
                     return value
 
             return value
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
+        except (RuntimeError, ValueError) as e:
+            # RuntimeError: event loop binding issues
+            # ValueError: asyncpg connection in bad state after event loop issues
+            error_msg = str(e)
+            should_recreate = (
+                isinstance(e, RuntimeError) and ("bound to a different event loop" in error_msg or "attached to a different loop" in error_msg)
+            ) or (isinstance(e, ValueError) and "not enough values to unpack" in error_msg)
+
+            if should_recreate:
+                logger.warning(f"Database error in get({key}), recreating session: {type(e).__name__}")
+                from src.database.connection import get_db_engine
+
+                engine = get_db_engine()
+                self._session = engine.session()
                 # Retry with new session
                 return await self.get(key)
             raise
@@ -151,8 +163,20 @@ class MetadataRepository(BaseRepository[dict]):
 
             await self._session.commit()
             logger.debug(f"Set metadata: {key} = {value}")
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
+        except (RuntimeError, ValueError) as e:
+            # RuntimeError: event loop binding issues
+            # ValueError: asyncpg connection in bad state after event loop issues
+            error_msg = str(e)
+            should_recreate = (
+                isinstance(e, RuntimeError) and ("bound to a different event loop" in error_msg or "attached to a different loop" in error_msg)
+            ) or (isinstance(e, ValueError) and "not enough values to unpack" in error_msg)
+
+            if should_recreate:
+                logger.warning(f"Database error in set({key}), recreating session: {type(e).__name__}")
+                from src.database.connection import get_db_engine
+
+                engine = get_db_engine()
+                self._session = engine.session()
                 # Retry with new session
                 await self.set(key, value)
                 return
