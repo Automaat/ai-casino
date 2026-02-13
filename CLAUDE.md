@@ -151,11 +151,12 @@ Never skip/disable on failure - fix properly, re-run until clean.
 <!-- Explain how this was done and potentially alternatives considered and discarded -->
 
 ## Supporting documentation
-Fix: #{issue_number}
+Fix: #123
 <!-- Include MADR or related PRs if applicable -->
 ```
 
 **ALWAYS link an issue** - create one if needed before PR
+**ALWAYS prefix issue numbers with `#`** - Use `Fix: #123` not `Fix: 123`
 
 ---
 
