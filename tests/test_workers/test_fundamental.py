@@ -171,7 +171,9 @@ async def test_fundamental_worker_earnings_flagging_past(
 ):
     """Test earnings flagging: 2 days ago (should flag, within ±5 days)."""
     mock_fundamental_worker.fundamental_fetcher.fetch_overview = Mock(return_value=mock_fundamental_overview)
-    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(return_value=mock_earnings_calendar_past)
+    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(
+        return_value=mock_earnings_calendar_past
+    )
 
     mock_llm_response = Mock(
         interpretation="Test interpretation.",
@@ -193,7 +195,9 @@ async def test_fundamental_worker_earnings_flagging_far(
 ):
     """Test earnings flagging: 7 days out (should NOT flag, outside 5-day window)."""
     mock_fundamental_worker.fundamental_fetcher.fetch_overview = Mock(return_value=mock_fundamental_overview)
-    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(return_value=mock_earnings_calendar_far)
+    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(
+        return_value=mock_earnings_calendar_far
+    )
 
     mock_llm_response = Mock(
         interpretation="Test interpretation.",
@@ -215,7 +219,9 @@ async def test_fundamental_worker_earnings_flagging_no_events(
 ):
     """Test earnings flagging: no events (should NOT flag)."""
     mock_fundamental_worker.fundamental_fetcher.fetch_overview = Mock(return_value=mock_fundamental_overview)
-    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(return_value=mock_earnings_calendar_empty)
+    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(
+        return_value=mock_earnings_calendar_empty
+    )
 
     mock_llm_response = Mock(
         interpretation="Test interpretation.",
@@ -237,7 +243,9 @@ async def test_fundamental_worker_missing_pe_ratio(mock_fundamental_worker, mock
     }
 
     mock_fundamental_worker.fundamental_fetcher.fetch_overview = Mock(return_value=overview_no_pe)
-    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(return_value=mock_earnings_calendar_empty)
+    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(
+        return_value=mock_earnings_calendar_empty
+    )
 
     mock_llm_response = Mock(
         interpretation="Limited data available.",
@@ -258,7 +266,9 @@ async def test_fundamental_worker_confidence_high_completeness(
 ):
     """Test confidence calculation with high data completeness and positive keywords."""
     mock_fundamental_worker.fundamental_fetcher.fetch_overview = Mock(return_value=mock_fundamental_overview)
-    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(return_value=mock_earnings_calendar_empty)
+    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(
+        return_value=mock_earnings_calendar_empty
+    )
 
     mock_llm_response = Mock(
         interpretation="Strong analysis.",
@@ -286,7 +296,9 @@ async def test_fundamental_worker_confidence_low_completeness(
     }
 
     mock_fundamental_worker.fundamental_fetcher.fetch_overview = Mock(return_value=sparse_overview)
-    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(return_value=mock_earnings_calendar_empty)
+    mock_fundamental_worker.earnings_fetcher.fetch_earnings_dates = Mock(
+        return_value=mock_earnings_calendar_empty
+    )
 
     mock_llm_response = Mock(
         interpretation="Limited data, uncertain analysis.",
