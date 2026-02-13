@@ -7,6 +7,7 @@ from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.signal import Signal
 from src.strategies.trend_following import TrendFollowingStrategy
+from src.tools.models import ToolDefinition
 from src.workers.technical import TechnicalAnalysis
 
 
@@ -15,7 +16,8 @@ def test_technical_worker_init(test_container):
     worker = test_container.technical_worker()
 
     assert worker.llm_client is not None
-    assert worker._prompts is not None
+    tool_def = worker.get_tool_definition()
+    assert tool_def is not None
 
 
 async def test_technical_worker_analyze_momentum(test_container, sample_ohlcv_data):
@@ -135,11 +137,12 @@ def test_technical_worker_tool_definition(test_container):
 
     tool_def = worker.get_tool_definition()
 
-    assert tool_def["type"] == "function"
-    assert tool_def["function"]["name"] == "analyze_technical"
-    assert "symbol" in tool_def["function"]["parameters"]["properties"]
-    assert "strategy" in tool_def["function"]["parameters"]["properties"]
-    assert "enable_multi_timeframe" in tool_def["function"]["parameters"]["properties"]
+    assert isinstance(tool_def, ToolDefinition)
+    assert tool_def.type == "function"
+    assert tool_def.function.name == "analyze_technical"
+    assert "symbol" in tool_def.function.parameters.properties
+    assert "strategy" in tool_def.function.parameters.properties
+    assert "enable_multi_timeframe" in tool_def.function.parameters.properties
 
 
 def test_technical_worker_repr(test_container):

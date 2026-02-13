@@ -17,6 +17,7 @@ from src.strategies.momentum import MomentumIndicators, MomentumStrategy
 from src.strategies.signal import Signal
 from src.strategies.timeframe import MultiTimeframeAnalysis, MultiTimeframeData, Timeframe, TimeframeResult
 from src.strategies.trend_following import TrendFollowingIndicators, TrendFollowingStrategy
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 
 class TechnicalLLMResponse(BaseModel):
@@ -63,23 +64,6 @@ class TechnicalWorker:
         self._prompts = PromptLoader("technical")
         logger.info("Initialized TechnicalWorker (stateless, POC)")
 
-    def _strategy_to_prompt_type(self, strategy_name: str) -> str:
-        """Map strategy class name to prompt type.
-
-        Args:
-            strategy_name: Strategy class name (e.g., MomentumStrategy)
-
-        Returns:
-            Prompt type (e.g., momentum, trend_following)
-        """
-        mapping = {
-            "MomentumStrategy": "momentum",
-            "TrendFollowingStrategy": "trend_following",
-            "MeanReversionStrategy": "mean_reversion",
-            "EnsembleStrategy": "ensemble",
-        }
-        return mapping.get(strategy_name, "momentum")
-
     async def analyze(
         self,
         symbol: str,
@@ -124,7 +108,7 @@ class TechnicalWorker:
         latest_close = float(daily_data["Close"].iloc[-1])
 
         # Build prompt
-        prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
+        prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators, strategy)
 
         # Try structured output with fallback
         try:
@@ -182,7 +166,7 @@ class TechnicalWorker:
             signal, indicators = await asyncio.to_thread(generate_signal, data)
             latest_close = float(data["Close"].iloc[-1])
 
-            prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators)
+            prompt, system_prompt = self._build_prompt(symbol, latest_close, signal, indicators, strategy)
 
             try:
                 llm_response = await self.llm_client.astructured(
@@ -309,7 +293,12 @@ class TechnicalWorker:
             raise
 
     def _build_prompt(
-        self, symbol: str, latest_close: float, signal: Signal, indicators: IndicatorsType
+        self,
+        symbol: str,
+        latest_close: float,
+        signal: Signal,
+        indicators: IndicatorsType,
+        strategy: StrategyType,
     ) -> tuple[str, str]:
         """Build appropriate prompt based on strategy type.
 
@@ -318,6 +307,7 @@ class TechnicalWorker:
             latest_close: Latest closing price
             signal: Trading signal
             indicators: Strategy indicators
+            strategy: Trading strategy (for extracting configured parameters)
 
         Returns:
             Tuple of (user_prompt, system_prompt)
@@ -325,15 +315,17 @@ class TechnicalWorker:
         if isinstance(indicators, EnsembleResult):
             prompt_type = "ensemble"
             prompt_vars = self._build_ensemble_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(indicators, TrendFollowingIndicators):
+        elif isinstance(indicators, TrendFollowingIndicators) and isinstance(
+            strategy, TrendFollowingStrategy
+        ):
             prompt_type = "trend_following"
-            prompt_vars = self._build_trend_following_vars(symbol, latest_close, signal, indicators)
+            prompt_vars = self._build_trend_following_vars(symbol, latest_close, signal, indicators, strategy)
         elif isinstance(indicators, MeanReversionIndicators):
             prompt_type = "mean_reversion"
             prompt_vars = self._build_mean_reversion_vars(symbol, latest_close, signal, indicators)
-        elif isinstance(indicators, MomentumIndicators):
+        elif isinstance(indicators, MomentumIndicators) and isinstance(strategy, MomentumStrategy):
             prompt_type = "momentum"
-            prompt_vars = self._build_momentum_vars(symbol, latest_close, signal, indicators)
+            prompt_vars = self._build_momentum_vars(symbol, latest_close, signal, indicators, strategy)
         else:
             msg = f"Unexpected indicators type: {type(indicators)}"
             raise TypeError(msg)
@@ -426,7 +418,12 @@ class TechnicalWorker:
         return 0.5
 
     def _build_momentum_vars(
-        self, symbol: str, latest_close: float, signal: Signal, indicators: MomentumIndicators
+        self,
+        symbol: str,
+        latest_close: float,
+        signal: Signal,
+        indicators: MomentumIndicators,
+        strategy: MomentumStrategy,
     ) -> dict[str, str]:
         """Build variables for momentum prompt.
 
@@ -435,12 +432,11 @@ class TechnicalWorker:
             latest_close: Latest closing price
             signal: Trading signal
             indicators: Momentum indicators
+            strategy: Momentum strategy (for configured parameters)
 
         Returns:
             Variables dictionary
         """
-        # Get strategy from indicators (not stored in worker)
-        # Use default values for prompt
         rsi_status = (
             "OVERSOLD"
             if indicators.rsi_oversold
@@ -453,10 +449,10 @@ class TechnicalWorker:
         return {
             "symbol": symbol,
             "latest_close": f"{latest_close:.2f}",
-            "rsi_period": "14",  # Default
+            "rsi_period": str(strategy.rsi_period),
             "rsi": f"{indicators.rsi:.2f}",
-            "rsi_oversold": "30",  # Default
-            "rsi_overbought": "70",  # Default
+            "rsi_oversold": str(int(strategy.rsi_oversold)),
+            "rsi_overbought": str(int(strategy.rsi_overbought)),
             "rsi_status": rsi_status,
             "macd": f"{indicators.macd:.4f}",
             "macd_signal": f"{indicators.macd_signal:.4f}",
@@ -466,7 +462,12 @@ class TechnicalWorker:
         }
 
     def _build_trend_following_vars(
-        self, symbol: str, latest_close: float, signal: Signal, indicators: TrendFollowingIndicators
+        self,
+        symbol: str,
+        latest_close: float,
+        signal: Signal,
+        indicators: TrendFollowingIndicators,
+        strategy: TrendFollowingStrategy,
     ) -> dict[str, str]:
         """Build variables for trend following prompt.
 
@@ -475,6 +476,7 @@ class TechnicalWorker:
             latest_close: Latest closing price
             signal: Trading signal
             indicators: Trend following indicators
+            strategy: Trend following strategy (for configured parameters)
 
         Returns:
             Variables dictionary
@@ -489,14 +491,14 @@ class TechnicalWorker:
         return {
             "symbol": symbol,
             "latest_close": f"{latest_close:.2f}",
-            "sma_fast": "50",  # Default
+            "sma_fast": str(strategy.sma_fast),
             "sma_fast_value": f"{indicators.sma_fast:.2f}",
-            "sma_slow": "200",  # Default
+            "sma_slow": str(strategy.sma_slow),
             "sma_slow_value": f"{indicators.sma_slow:.2f}",
             "cross_status": cross_status,
-            "adx_period": "14",  # Default
+            "adx_period": str(strategy.adx_period),
             "adx": f"{indicators.adx:.2f}",
-            "adx_threshold": "25",  # Default
+            "adx_threshold": str(int(strategy.adx_threshold)),
             "trend_strength": trend_strength,
             "plus_di": f"{indicators.plus_di:.2f}",
             "minus_di": f"{indicators.minus_di:.2f}",
@@ -602,36 +604,36 @@ class TechnicalWorker:
 
         return min(confidence, 0.95)
 
-    def get_tool_definition(self) -> dict:
+    def get_tool_definition(self) -> ToolDefinition:
         """Get tool definition for supervisor integration.
 
         Returns:
-            Tool definition dictionary
+            Tool definition
         """
-        return {
-            "type": "function",
-            "function": {
-                "name": "analyze_technical",
-                "description": "Perform technical analysis using RSI/MACD/SMA indicators",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {"type": "string", "description": "Stock ticker symbol"},
-                        "strategy": {
-                            "type": "string",
-                            "enum": ["momentum", "trend_following", "mean_reversion", "ensemble"],
-                            "description": "Trading strategy to use",
-                        },
-                        "enable_multi_timeframe": {
-                            "type": "boolean",
-                            "default": False,
-                            "description": "Enable multi-timeframe analysis",
-                        },
+        return ToolDefinition(
+            type="function",
+            function=ToolFunction(
+                name="analyze_technical",
+                description="Perform technical analysis using RSI/MACD/SMA indicators",
+                parameters=ToolParametersSchema(
+                    type="object",
+                    properties={
+                        "symbol": ToolParameter(type="string", description="Stock ticker symbol"),
+                        "strategy": ToolParameter(
+                            type="string",
+                            enum=["momentum", "trend_following", "mean_reversion", "ensemble"],
+                            description="Trading strategy to use",
+                        ),
+                        "enable_multi_timeframe": ToolParameter(
+                            type="boolean",
+                            default=False,
+                            description="Enable multi-timeframe analysis",
+                        ),
                     },
-                    "required": ["symbol", "strategy"],
-                },
-            },
-        }
+                    required=["symbol", "strategy"],
+                ),
+            ),
+        )
 
     def __repr__(self) -> str:
         """String representation."""

@@ -1,4 +1,4 @@
-"""Workers package - Pydantic AI-based agent implementations."""
+"""Workers package - AI-based worker implementations."""
 
 from src.workers.technical import TechnicalWorker
 
