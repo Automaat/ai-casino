@@ -687,16 +687,14 @@ Type freely to chat about markets or ask questions."""
         )
 
     def _handle_candidates_clear(self, state: DaemonState, state_file: str) -> CommandResult:
-        """Clear old screening candidates."""
-        cleared = len(state.screening_history)
-        state.screening_history = []
-        state.last_after_hours_screening = None
-        state.save(state_file)
+        """Clear old screening candidates.
 
+        NOTE: This command is broken after PostgreSQL migration.
+        State is now DB-backed with async operations. Needs rewrite.
+        """
         return CommandResult(
-            success=True,
-            message=f"Cleared {cleared} screening record(s).",
-            data={"cleared": cleared},
+            success=False,
+            message="Command deprecated - state is now database-backed (requires async rewrite).",
         )
 
     def _format_candidates(self, record: ScreeningRecord | dict) -> str:

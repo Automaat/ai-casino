@@ -167,8 +167,7 @@ class DaemonCycleOrchestrator:
                 await self._notification_helper.notify_degradation(degradation_context, self.components)
 
             # Record in state
-            self.components.state.record_degradation(degradation_context)
-            self.components.state.save(self.components.config.state.state_file)
+            await self.components.state.record_degradation(degradation_context)
 
             return CycleResult(
                 sleep_seconds=60,
@@ -276,9 +275,6 @@ class DaemonCycleOrchestrator:
             },
         )
 
-        # Save state (coordinator memory auto-saves observations)
-        self.components.state.save(self.components.config.state.state_file)
-
         # Convert to CycleResult
         return CycleResult(
             sleep_seconds=self.components.config.interval_minutes * 60,
@@ -325,9 +321,6 @@ class DaemonCycleOrchestrator:
                 "duration_seconds": round(cycle_duration, 2),
             },
         )
-
-        # Save state
-        self.components.state.save(self.components.config.state.state_file)
 
         return CycleResult(
             sleep_seconds=self.components.config.interval_minutes * 60,

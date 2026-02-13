@@ -44,7 +44,9 @@ daemon:
     enable_after_hours: false
 
   state:
-    # State persistence file (deprecated - use database for production)
+    # State persistence file (DEPRECATED - no longer used)
+    # All daemon state is now persisted to PostgreSQL automatically
+    # This field is ignored and may be removed in future versions
     state_file: "~/.ai-casino/daemon-state.json"
 
     # Database cleanup configuration

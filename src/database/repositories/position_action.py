@@ -92,6 +92,28 @@ class PositionManagementActionRepository(BaseRepository[PositionManagementAction
         )
         return [self._to_action(orm) for orm in result.scalars().all()]
 
+    async def get_recent(
+        self,
+        symbol: str | None = None,
+        limit: int = 100,
+    ) -> list[PositionManagementAction]:
+        """Get recent position actions with optional symbol filter.
+
+        Args:
+            symbol: Optional symbol filter
+            limit: Maximum number of actions to return
+
+        Returns:
+            List of recent PositionManagementActions
+        """
+        stmt = select(PositionManagementActionORM).order_by(PositionManagementActionORM.timestamp.desc())
+        if symbol:
+            stmt = stmt.where(PositionManagementActionORM.symbol == symbol)
+        stmt = stmt.limit(limit)
+
+        result = await self._session.execute(stmt)
+        return [self._to_action(orm) for orm in result.scalars().all()]
+
     async def get_recent_actions(self, days: int = 30) -> list[PositionManagementAction]:
         """Get recent position actions across all symbols.
 

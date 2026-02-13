@@ -103,12 +103,11 @@ class TaskExecutor(ABC):
             duration = time_mod.time() - start_time
 
             self.record_success(duration)
-            self.components.state.save(self.components.config.state.state_file)
 
             console.print(f"\n[dim]Complete ({duration:.0f}s)[/dim]\n")
             logger.info(f"{self.task_name} completed in {duration:.1f}s")
         except Exception as e:
             error_msg = f"{self.task_name} failed: {e}"
             logger.opt(exception=True).error(error_msg)
-            self.components.state.record_error(error_msg)
+            await self.components.state.record_error(error_msg)
             raise

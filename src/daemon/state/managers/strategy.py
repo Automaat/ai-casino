@@ -5,90 +5,147 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from pydantic import Field
+from loguru import logger
+from pydantic import PrivateAttr
 
 from src.daemon.state.managers.base import StateManager
 from src.daemon.state.models import DegradationRecord, GamePlanRecord
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
+    from src.database.repositories.degradation import DegradationRecordRepository
+    from src.database.repositories.game_plan import GamePlanRecordRepository
+    from src.database.repositories.metadata import MetadataRepository
 
 
 class StrategyStateManager(StateManager):
     """Daily planning, degradation tracking, error logging."""
 
-    # Game plan
-    last_game_plan: datetime | None = None
-    game_plan_history: list[GamePlanRecord] = Field(default_factory=list)
+    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
+    _game_plan_repository: GamePlanRecordRepository | None = PrivateAttr(default=None)
+    _degradation_repository: DegradationRecordRepository | None = PrivateAttr(default=None)
 
-    # Degradation
-    last_degradation: datetime | None = None
-    degradation_history: list[DegradationRecord] = Field(default_factory=list)
+    _game_plan_cache: list[GamePlanRecord] | None = PrivateAttr(default=None)
+    _degradation_cache: list[DegradationRecord] | None = PrivateAttr(default=None)
 
-    # Events
-    market_events: list[dict] = Field(default_factory=list)
+    def set_repositories(
+        self,
+        metadata_repository: MetadataRepository,
+        game_plan_repository: GamePlanRecordRepository,
+        degradation_repository: DegradationRecordRepository,
+    ) -> None:
+        """Inject repositories."""
+        self._metadata_repository = metadata_repository
+        self._game_plan_repository = game_plan_repository
+        self._degradation_repository = degradation_repository
+        logger.debug("StrategyStateManager repositories injected")
 
-    # Health
-    last_health_check: datetime | None = None
+    async def get_last_game_plan(self) -> datetime | None:
+        """Get last game plan timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("strategy.last_game_plan")
 
-    # Errors
-    errors: list[str] = Field(default_factory=list)
+    async def get_last_degradation(self) -> datetime | None:
+        """Get last degradation timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("strategy.last_degradation")
 
-    def record_game_plan(
+    async def get_last_health_check(self) -> datetime | None:
+        """Get last health check timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("strategy.last_health_check")
+
+    async def get_market_events(self) -> list[dict]:
+        """Get market events from DB metadata."""
+        if not self._metadata_repository:
+            return []
+        value = await self._metadata_repository.get("strategy.market_events")
+        return value if isinstance(value, list) else []
+
+    async def get_errors(self) -> list[str]:
+        """Get errors from DB metadata."""
+        if not self._metadata_repository:
+            return []
+        value = await self._metadata_repository.get("strategy.errors")
+        return value if isinstance(value, list) else []
+
+    async def get_game_plan_history(self, limit: int = 30) -> list[GamePlanRecord]:
+        """Get game plan history with lazy loading."""
+        if not self._game_plan_repository:
+            return []
+        if self._game_plan_cache is None:
+            self._game_plan_cache = await self._game_plan_repository.get_recent(limit)
+        return self._game_plan_cache
+
+    async def get_degradation_history(self, limit: int = 100) -> list[DegradationRecord]:
+        """Get degradation history with lazy loading."""
+        if not self._degradation_repository:
+            return []
+        if self._degradation_cache is None:
+            self._degradation_cache = await self._degradation_repository.get_recent(limit)
+        return self._degradation_cache
+
+    async def record_game_plan(
         self,
         priority_symbols: list[str],
         risk_stance: str,
         sector_focus: list[str],
     ) -> None:
-        """Record game plan generation.
-
-        Args:
-            priority_symbols: Priority symbols for the day
-            risk_stance: Risk stance (AGGRESSIVE/DEFENSIVE/NEUTRAL)
-            sector_focus: Sector focus list
-        """
+        """Record game plan generation."""
         now = datetime.now(UTC)
-
-        self.game_plan_history.append(
-            GamePlanRecord(
-                timestamp=now,
-                priority_symbols=priority_symbols,
-                risk_stance=risk_stance,
-                sector_focus=sector_focus,
-            )
+        record = GamePlanRecord(
+            timestamp=now,
+            priority_symbols=priority_symbols,
+            risk_stance=risk_stance,
+            sector_focus=sector_focus,
         )
-        self.last_game_plan = now
-        self.game_plan_history = self._cap_history(self.game_plan_history, 30, 30)
 
-    def record_degradation(self, context: DegradationContext) -> None:
-        """Record degradation event.
+        if self._game_plan_repository:
+            await self._game_plan_repository.create(record)
+        if self._metadata_repository:
+            await self._metadata_repository.set("strategy.last_game_plan", now)
 
-        Args:
-            context: Degradation context
-        """
+        self._game_plan_cache = None
+
+    async def record_degradation(self, context: DegradationContext) -> None:
+        """Record degradation event."""
         now = datetime.now(UTC)
-        self.degradation_history.append(
-            DegradationRecord(
-                timestamp=now,
-                tier=context.tier.value,
-                unavailable_services=context.unavailable_services,
-                confidence_adjustment=context.confidence_adjustment,
-                halt_reason=context.halt_reason,
-            )
+        record = DegradationRecord(
+            timestamp=now,
+            tier=context.tier.value,
+            unavailable_services=context.unavailable_services,
+            confidence_adjustment=context.confidence_adjustment,
+            halt_reason=context.halt_reason,
         )
-        self.last_degradation = now
-        self.degradation_history = self._cap_history(self.degradation_history, 100, 100)
 
-    def record_error(self, error: str) -> None:
-        """Record an error.
+        if self._degradation_repository:
+            await self._degradation_repository.create(record)
+        if self._metadata_repository:
+            await self._metadata_repository.set("strategy.last_degradation", now)
 
-        Args:
-            error: Error message
-        """
+        self._degradation_cache = None
+
+    async def record_error(self, error: str) -> None:
+        """Record an error to metadata."""
+        if not self._metadata_repository:
+            return
+
         timestamp = datetime.now(tz=UTC).isoformat()
-        self.errors.append(f"{timestamp}: {error}")
-        self.errors = self._cap_history(self.errors, 100, 50)
+        error_entry = f"{timestamp}: {error}"
+
+        # Get existing errors
+        errors = await self.get_errors()
+        errors.append(error_entry)
+
+        # Cap at 100 errors
+        if len(errors) > 100:
+            errors = errors[-50:]
+
+        await self._metadata_repository.set("strategy.errors", errors)
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"StrategyStateManager(errors={len(self.errors)})"
+        return "StrategyStateManager()"

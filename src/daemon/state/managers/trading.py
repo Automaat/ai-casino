@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import Field, PrivateAttr
+from pydantic import PrivateAttr
 
-from src.daemon.state.managers.base import StateManager, _make_task_cleanup_callback
+from src.daemon.state.managers.base import StateManager
 from src.daemon.state.models import AnalysisRecord
 from src.strategies.session import TradingSession
 
 if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.metadata import MetadataRepository
 
 
 @dataclass
@@ -39,27 +39,86 @@ class AnalysisRecordInput:
 class TradingStateManager(StateManager):
     """Trading signal tracking and paper trading metrics."""
 
-    last_run: datetime | None = None
-    analyses: list[AnalysisRecord] = Field(default_factory=list)
-    total_analyses: int = 0
-    total_trades: int = 0
-    paper_trading_start_date: datetime | None = None
-    current_trading_mode: str = "paper"
-    last_journal_date: str | None = None
-    last_signal_tracking: datetime | None = None
-
     _analysis_repository: AnalysisRecordRepository | None = PrivateAttr(default=None)
+    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
+    _analysis_cache: list[AnalysisRecord] | None = PrivateAttr(default=None)
 
-    def set_repository(self, repository: AnalysisRecordRepository) -> None:
-        """Inject analysis repository.
+    def set_repositories(
+        self,
+        analysis_repository: AnalysisRecordRepository,
+        metadata_repository: MetadataRepository,
+    ) -> None:
+        """Inject repositories.
 
         Args:
-            repository: Analysis record repository
+            analysis_repository: Analysis record repository
+            metadata_repository: Metadata repository
         """
-        self._analysis_repository = repository
-        logger.debug("Analysis repository injected")
+        self._analysis_repository = analysis_repository
+        self._metadata_repository = metadata_repository
+        logger.debug("TradingStateManager repositories injected")
 
-    def record_analysis(self, input_data: AnalysisRecordInput) -> None:
+    async def get_last_run(self) -> datetime | None:
+        """Get last run timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("trading.last_run")
+
+    async def get_total_analyses(self) -> int:
+        """Get total analyses count from DB."""
+        if not self._metadata_repository:
+            return 0
+        value = await self._metadata_repository.get("trading.total_analyses")
+        return value if value is not None else 0
+
+    async def get_total_trades(self) -> int:
+        """Get total trades count from DB."""
+        if not self._metadata_repository:
+            return 0
+        value = await self._metadata_repository.get("trading.total_trades")
+        return value if value is not None else 0
+
+    async def get_paper_trading_start_date(self) -> datetime | None:
+        """Get paper trading start date from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("trading.paper_trading_start_date")
+
+    async def get_current_trading_mode(self) -> str:
+        """Get current trading mode from DB."""
+        if not self._metadata_repository:
+            return "paper"
+        value = await self._metadata_repository.get("trading.current_trading_mode")
+        return value if value is not None else "paper"
+
+    async def get_last_journal_date(self) -> str | None:
+        """Get last journal date from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("trading.last_journal_date")
+
+    async def get_last_signal_tracking(self) -> datetime | None:
+        """Get last signal tracking timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("trading.last_signal_tracking")
+
+    async def get_analyses(self, limit: int = 1000) -> list[AnalysisRecord]:
+        """Get recent analyses with lazy loading.
+
+        Args:
+            limit: Maximum number of records to return
+
+        Returns:
+            List of recent AnalysisRecords
+        """
+        if not self._analysis_repository:
+            return []
+        if self._analysis_cache is None:
+            self._analysis_cache = await self._analysis_repository.get_recent(limit)
+        return self._analysis_cache
+
+    async def record_analysis(self, input_data: AnalysisRecordInput) -> None:
         """Record an analysis result.
 
         Args:
@@ -81,28 +140,23 @@ class TradingStateManager(StateManager):
             news_analysis_reasoning=input_data.news_analysis_reasoning,
         )
 
-        # Persist to database if repository available
+        # Immediate DB write
         if self._analysis_repository:
-            try:
-                task = asyncio.create_task(self._analysis_repository.create(record))  # type: ignore[bad-argument-type]
-                self._pending_tasks.add(task)
-                task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
-                logger.debug(
-                    f"Scheduled analysis record persistence to database: "
-                    f"{input_data.symbol} {input_data.signal}"
-                )
-            except Exception as e:
-                logger.opt(exception=True).error(f"Failed to schedule analysis record persistence: {e}")
-                raise
+            await self._analysis_repository.create(record)
+            logger.debug(f"Persisted analysis record: {input_data.symbol} {input_data.signal}")
 
-        # Keep in-memory list (capped for transition period)
-        self.analyses.append(record)
-        self.total_analyses += 1
-        if input_data.executed:
-            self.total_trades += 1
-        self.last_run = datetime.now(UTC)
+        # Update metadata counters
+        if self._metadata_repository:
+            total = await self.get_total_analyses()
+            await self._metadata_repository.set("trading.total_analyses", total + 1)
+            await self._metadata_repository.set("trading.last_run", datetime.now(UTC))
 
-        self.analyses = self._cap_history(self.analyses, 1000, 500)
+            if input_data.executed:
+                trades = await self.get_total_trades()
+                await self._metadata_repository.set("trading.total_trades", trades + 1)
+
+        # Invalidate cache
+        self._analysis_cache = None
 
     def __repr__(self) -> str:
         """Return string representation."""

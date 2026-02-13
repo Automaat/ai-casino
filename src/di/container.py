@@ -84,6 +84,86 @@ class AppContainer(containers.DeclarativeContainer):
         database_engine=database_engine,
     )
 
+    tearsheet_repository = providers.Factory(
+        database_providers.create_tearsheet_repository,
+        database_engine=database_engine,
+    )
+
+    metadata_repository = providers.Factory(
+        database_providers.create_metadata_repository,
+        database_engine=database_engine,
+    )
+
+    optimization_repository = providers.Factory(
+        database_providers.create_optimization_repository,
+        database_engine=database_engine,
+    )
+
+    rebalancing_repository = providers.Factory(
+        database_providers.create_rebalancing_repository,
+        database_engine=database_engine,
+    )
+
+    sector_rotation_repository = providers.Factory(
+        database_providers.create_sector_rotation_repository,
+        database_engine=database_engine,
+    )
+
+    peer_analysis_repository = providers.Factory(
+        database_providers.create_peer_analysis_repository,
+        database_engine=database_engine,
+    )
+
+    correlation_audit_repository = providers.Factory(
+        database_providers.create_correlation_audit_repository,
+        database_engine=database_engine,
+    )
+
+    risk_report_repository = providers.Factory(
+        database_providers.create_risk_report_repository,
+        database_engine=database_engine,
+    )
+
+    monte_carlo_repository = providers.Factory(
+        database_providers.create_monte_carlo_repository,
+        database_engine=database_engine,
+    )
+
+    prefetch_repository = providers.Factory(
+        database_providers.create_prefetch_repository,
+        database_engine=database_engine,
+    )
+
+    screening_repository = providers.Factory(
+        database_providers.create_screening_repository,
+        database_engine=database_engine,
+    )
+
+    earnings_calendar_repository = providers.Factory(
+        database_providers.create_earnings_calendar_repository,
+        database_engine=database_engine,
+    )
+
+    profiling_repository = providers.Factory(
+        database_providers.create_profiling_repository,
+        database_engine=database_engine,
+    )
+
+    game_plan_repository = providers.Factory(
+        database_providers.create_game_plan_repository,
+        database_engine=database_engine,
+    )
+
+    degradation_repository = providers.Factory(
+        database_providers.create_degradation_repository,
+        database_engine=database_engine,
+    )
+
+    active_discovery_repository = providers.Factory(
+        database_providers.create_active_discovery_repository,
+        database_engine=database_engine,
+    )
+
     # Circuit breaker registry - Singleton
     circuit_breaker_registry = providers.Singleton(
         circuit_breaker_providers.create_circuit_breaker_registry,

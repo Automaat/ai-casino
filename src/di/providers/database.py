@@ -8,13 +8,29 @@ from src.daemon.config import DaemonConfig
 from src.database.engine import DatabaseEngine, MissingDatabaseURLError
 
 if TYPE_CHECKING:
+    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
     from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+    from src.database.repositories.degradation import DegradationRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
     from src.database.repositories.execution_graph import ExecutionGraphRepository
+    from src.database.repositories.game_plan import GamePlanRecordRepository
+    from src.database.repositories.metadata import MetadataRepository
+    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+    from src.database.repositories.optimization import OptimizationRecordRepository
+    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
     from src.database.repositories.position import PositionRecordRepository
     from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.repositories.prefetch import PrefetchRecordRepository
+    from src.database.repositories.profiling import ProfilingRecordRepository
+    from src.database.repositories.rebalancing import RebalancingRecordRepository
+    from src.database.repositories.risk_report import RiskReportRecordRepository
+    from src.database.repositories.screening import ScreeningRecordRepository
+    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.database.repositories.tearsheet import TearSheetRepository
     from src.database.repositories.trade import TradeRepository
 
 
@@ -195,3 +211,243 @@ def create_execution_graph_repository(database_engine: DatabaseEngine) -> Execut
 
     session = database_engine.session()
     return ExecutionGraphRepository(session)
+
+
+def create_tearsheet_repository(database_engine: DatabaseEngine) -> TearSheetRepository:
+    """Create TearSheetRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        TearSheetRepository instance
+    """
+    from src.database.repositories.tearsheet import TearSheetRepository
+
+    session = database_engine.session()
+    return TearSheetRepository(session)
+
+
+def create_metadata_repository(database_engine: DatabaseEngine) -> MetadataRepository:
+    """Create MetadataRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        MetadataRepository instance
+    """
+    from src.database.repositories.metadata import MetadataRepository
+
+    session = database_engine.session()
+    return MetadataRepository(session)
+
+
+def create_optimization_repository(database_engine: DatabaseEngine) -> OptimizationRecordRepository:
+    """Create OptimizationRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        OptimizationRecordRepository instance
+    """
+    from src.database.repositories.optimization import OptimizationRecordRepository
+
+    session = database_engine.session()
+    return OptimizationRecordRepository(session)
+
+
+def create_rebalancing_repository(database_engine: DatabaseEngine) -> RebalancingRecordRepository:
+    """Create RebalancingRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        RebalancingRecordRepository instance
+    """
+    from src.database.repositories.rebalancing import RebalancingRecordRepository
+
+    session = database_engine.session()
+    return RebalancingRecordRepository(session)
+
+
+def create_sector_rotation_repository(database_engine: DatabaseEngine) -> SectorRotationRecordRepository:
+    """Create SectorRotationRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        SectorRotationRecordRepository instance
+    """
+    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
+
+    session = database_engine.session()
+    return SectorRotationRecordRepository(session)
+
+
+def create_peer_analysis_repository(database_engine: DatabaseEngine) -> PeerAnalysisRecordRepository:
+    """Create PeerAnalysisRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        PeerAnalysisRecordRepository instance
+    """
+    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
+
+    session = database_engine.session()
+    return PeerAnalysisRecordRepository(session)
+
+
+def create_correlation_audit_repository(database_engine: DatabaseEngine) -> CorrelationAuditRecordRepository:
+    """Create CorrelationAuditRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        CorrelationAuditRecordRepository instance
+    """
+    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+
+    session = database_engine.session()
+    return CorrelationAuditRecordRepository(session)
+
+
+def create_risk_report_repository(database_engine: DatabaseEngine) -> RiskReportRecordRepository:
+    """Create RiskReportRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        RiskReportRecordRepository instance
+    """
+    from src.database.repositories.risk_report import RiskReportRecordRepository
+
+    session = database_engine.session()
+    return RiskReportRecordRepository(session)
+
+
+def create_monte_carlo_repository(database_engine: DatabaseEngine) -> MonteCarloRecordRepository:
+    """Create MonteCarloRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        MonteCarloRecordRepository instance
+    """
+    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+
+    session = database_engine.session()
+    return MonteCarloRecordRepository(session)
+
+
+def create_prefetch_repository(database_engine: DatabaseEngine) -> PrefetchRecordRepository:
+    """Create PrefetchRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        PrefetchRecordRepository instance
+    """
+    from src.database.repositories.prefetch import PrefetchRecordRepository
+
+    session = database_engine.session()
+    return PrefetchRecordRepository(session)
+
+
+def create_screening_repository(database_engine: DatabaseEngine) -> ScreeningRecordRepository:
+    """Create ScreeningRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        ScreeningRecordRepository instance
+    """
+    from src.database.repositories.screening import ScreeningRecordRepository
+
+    session = database_engine.session()
+    return ScreeningRecordRepository(session)
+
+
+def create_earnings_calendar_repository(database_engine: DatabaseEngine) -> EarningsCalendarRecordRepository:
+    """Create EarningsCalendarRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        EarningsCalendarRecordRepository instance
+    """
+    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+
+    session = database_engine.session()
+    return EarningsCalendarRecordRepository(session)
+
+
+def create_profiling_repository(database_engine: DatabaseEngine) -> ProfilingRecordRepository:
+    """Create ProfilingRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        ProfilingRecordRepository instance
+    """
+    from src.database.repositories.profiling import ProfilingRecordRepository
+
+    session = database_engine.session()
+    return ProfilingRecordRepository(session)
+
+
+def create_game_plan_repository(database_engine: DatabaseEngine) -> GamePlanRecordRepository:
+    """Create GamePlanRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        GamePlanRecordRepository instance
+    """
+    from src.database.repositories.game_plan import GamePlanRecordRepository
+
+    session = database_engine.session()
+    return GamePlanRecordRepository(session)
+
+
+def create_degradation_repository(database_engine: DatabaseEngine) -> DegradationRecordRepository:
+    """Create DegradationRecordRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        DegradationRecordRepository instance
+    """
+    from src.database.repositories.degradation import DegradationRecordRepository
+
+    session = database_engine.session()
+    return DegradationRecordRepository(session)
+
+
+def create_active_discovery_repository(database_engine: DatabaseEngine) -> ActiveDiscoveryCandidateRepository:
+    """Create ActiveDiscoveryCandidateRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        ActiveDiscoveryCandidateRepository instance
+    """
+    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+
+    session = database_engine.session()
+    return ActiveDiscoveryCandidateRepository(session)

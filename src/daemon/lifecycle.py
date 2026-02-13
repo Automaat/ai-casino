@@ -112,9 +112,6 @@ class DaemonLifecycle:
             except Exception as e:
                 logger.opt(exception=True).warning(f"Error waiting for trading state persistence tasks: {e}")
 
-        # Save final state
-        self.components.state.save(self.components.config.state.state_file)
-
         console.print("\n[bold yellow]Daemon stopped[/bold yellow]")
         logger.info("Daemon shutdown complete")
 

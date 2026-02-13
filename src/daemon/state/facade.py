@@ -4,15 +4,13 @@
 
 from __future__ import annotations
 
-import json
 from collections import deque
-from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from src.execution_tracking.models import ExecutionGraph
@@ -54,9 +52,52 @@ from src.strategies.session import TradingSession
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
+    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
     from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+    from src.database.repositories.degradation import DegradationRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+    from src.database.repositories.game_plan import GamePlanRecordRepository
+    from src.database.repositories.metadata import MetadataRepository
+    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+    from src.database.repositories.optimization import OptimizationRecordRepository
+    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
+    from src.database.repositories.position import PositionRecordRepository
+    from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.repositories.prefetch import PrefetchRecordRepository
+    from src.database.repositories.profiling import ProfilingRecordRepository
+    from src.database.repositories.rebalancing import RebalancingRecordRepository
+    from src.database.repositories.risk_report import RiskReportRecordRepository
+    from src.database.repositories.screening import ScreeningRecordRepository
+    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+
+
+@dataclass
+class RepositoryBundle:
+    """Bundle of all repositories for dependency injection."""
+
+    metadata_repository: MetadataRepository
+    analysis_repository: AnalysisRecordRepository
+    position_repository: PositionRecordRepository
+    action_repository: PositionManagementActionRepository
+    optimization_repository: OptimizationRecordRepository
+    rebalancing_repository: RebalancingRecordRepository
+    sector_rotation_repository: SectorRotationRecordRepository
+    peer_analysis_repository: PeerAnalysisRecordRepository
+    correlation_audit_repository: CorrelationAuditRecordRepository
+    risk_report_repository: RiskReportRecordRepository
+    monte_carlo_repository: MonteCarloRecordRepository
+    prefetch_repository: PrefetchRecordRepository
+    screening_repository: ScreeningRecordRepository
+    earnings_repository: EarningsCalendarRecordRepository
+    profiling_repository: ProfilingRecordRepository
+    discovery_repository: DiscoveryHistoryRepository
+    active_discovery_repository: ActiveDiscoveryCandidateRepository
+    game_plan_repository: GamePlanRecordRepository
+    degradation_repository: DegradationRecordRepository
+    snapshot_repository: PortfolioSnapshotRepository
 
 
 class DaemonState(BaseModel):
@@ -85,171 +126,66 @@ class DaemonState(BaseModel):
         description="Recent completed execution graphs (last 50)",
     )
 
-    @model_validator(mode="wrap")
-    @classmethod
-    def _distribute_fields_to_managers(  # noqa: C901, PLR0912  # Backward compat, can't simplify
-        cls, values: dict, handler: Callable[[dict], DaemonState]
-    ) -> DaemonState:
-        """Distribute old-style constructor fields to appropriate managers for backward compatibility."""
-        if isinstance(values, dict):
-            # Extract manager-specific fields
-            trading_fields = {}
-            positions_fields = {}
-            portfolio_fields = {}
-            data_pipeline_fields = {}
-            discovery_fields = {}
-            strategy_fields = {}
 
-            # Trading fields
-            for field in [
-                "last_run",
-                "analyses",
-                "total_analyses",
-                "total_trades",
-                "paper_trading_start_date",
-                "current_trading_mode",
-                "last_journal_date",
-                "last_signal_tracking",
-            ]:
-                if field in values:
-                    trading_fields[field] = values.pop(field)
-
-            # Position fields
-            for field in ["active_positions", "position_management_history"]:
-                if field in values:
-                    positions_fields[field] = values.pop(field)
-
-            # Portfolio fields
-            for field in [
-                "last_optimization",
-                "optimization_history",
-                "last_portfolio_rebalancing",
-                "portfolio_rebalancing_history",
-                "active_target_allocations",
-                "last_sector_rotation",
-                "sector_rotation_history",
-                "last_peer_analysis",
-                "peer_analysis_history",
-                "last_correlation_audit",
-                "correlation_audit_history",
-                "last_risk_report",
-                "risk_report_history",
-                "monte_carlo_tests",
-                "last_tearsheet",
-            ]:
-                if field in values:
-                    portfolio_fields[field] = values.pop(field)
-
-            # Data pipeline fields
-            for field in [
-                "last_prefetch",
-                "prefetch_history",
-                "last_pre_market_refresh",
-                "last_after_hours_screening",
-                "screening_history",
-                "last_earnings_fetch",
-                "earnings_calendar_history",
-                "profiling_history",
-            ]:
-                if field in values:
-                    data_pipeline_fields[field] = values.pop(field)
-
-            # Discovery fields
-            for field in ["last_discovery", "discovery_history", "active_discovery_candidates"]:
-                if field in values:
-                    discovery_fields[field] = values.pop(field)
-
-            # Strategy fields
-            for field in [
-                "last_game_plan",
-                "game_plan_history",
-                "last_degradation",
-                "degradation_history",
-                "market_events",
-                "last_health_check",
-                "errors",
-            ]:
-                if field in values:
-                    strategy_fields[field] = values.pop(field)
-
-            # Create managers with extracted fields
-            if trading_fields:
-                values["trading"] = TradingStateManager(**trading_fields)
-            if positions_fields:
-                values["positions"] = PositionStateManager(**positions_fields)
-            if portfolio_fields:
-                values["portfolio"] = PortfolioStateManager(**portfolio_fields)
-            if data_pipeline_fields:
-                values["data_pipeline"] = DataPipelineStateManager(**data_pipeline_fields)
-            if discovery_fields:
-                values["discovery"] = DiscoveryStateManager(**discovery_fields)
-            if strategy_fields:
-                values["strategy"] = StrategyStateManager(**strategy_fields)
-
-        # Call default handler to create instance
-        return handler(values)
-
-    def set_repositories(
-        self,
-        analysis_repository: AnalysisRecordRepository | None = None,
-        discovery_repository: DiscoveryHistoryRepository | None = None,
-        snapshot_repository: PortfolioSnapshotRepository | None = None,
-    ) -> None:
-        """Inject database repositories after loading state.
+    def set_repositories(self, repos: RepositoryBundle) -> None:
+        """Inject all database repositories into managers.
 
         Args:
-            analysis_repository: Analysis record repository
-            discovery_repository: Discovery history repository
-            snapshot_repository: Portfolio snapshot repository
+            repos: Bundle containing all 20 repositories
         """
-        if analysis_repository:
-            self.trading.set_repository(analysis_repository)
-        if discovery_repository:
-            self.discovery.set_repository(discovery_repository)
-        if snapshot_repository:
-            self.snapshots.set_repository(snapshot_repository)
-        logger.debug("Repositories injected into DaemonState")
+        # TradingStateManager
+        self.trading.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            analysis_repository=repos.analysis_repository,
+        )
 
-    @classmethod
-    def load(cls, path: str) -> DaemonState:
-        """Load state from JSON file.
+        # PositionStateManager
+        self.positions.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            position_repository=repos.position_repository,
+            action_repository=repos.action_repository,
+        )
 
-        Args:
-            path: Path to state file (supports ~ expansion)
+        # PortfolioStateManager
+        self.portfolio.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            optimization_repository=repos.optimization_repository,
+            rebalancing_repository=repos.rebalancing_repository,
+            sector_rotation_repository=repos.sector_rotation_repository,
+            peer_analysis_repository=repos.peer_analysis_repository,
+            correlation_audit_repository=repos.correlation_audit_repository,
+            risk_report_repository=repos.risk_report_repository,
+            monte_carlo_repository=repos.monte_carlo_repository,
+        )
 
-        Returns:
-            DaemonState instance
-        """
-        expanded_path = Path(path).expanduser()
+        # DataPipelineStateManager
+        self.data_pipeline.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            prefetch_repository=repos.prefetch_repository,
+            screening_repository=repos.screening_repository,
+            earnings_repository=repos.earnings_repository,
+            profiling_repository=repos.profiling_repository,
+        )
 
-        if not expanded_path.exists():
-            logger.info(f"No existing state at {expanded_path}, starting fresh")
-            return cls()
+        # DiscoveryStateManager
+        self.discovery.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            discovery_repository=repos.discovery_repository,
+            active_discovery_repository=repos.active_discovery_repository,
+        )
 
-        try:
-            with expanded_path.open() as f:
-                data = json.load(f)
-            logger.info(f"Loaded daemon state from {expanded_path}")
-            return cls.model_validate(data)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to load state: {e}, starting fresh")
-            return cls()
+        # StrategyStateManager
+        self.strategy.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            game_plan_repository=repos.game_plan_repository,
+            degradation_repository=repos.degradation_repository,
+        )
 
-    def save(self, path: str) -> None:
-        """Save state to JSON file.
+        # SnapshotStateManager
+        self.snapshots.set_repository(repos.snapshot_repository)
 
-        Args:
-            path: Path to state file (supports ~ expansion)
-        """
-        expanded_path = Path(path).expanduser()
-        expanded_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.debug("All repositories injected into DaemonState managers")
 
-        try:
-            with expanded_path.open("w") as f:
-                json.dump(self.model_dump(mode="json"), f, indent=2, default=str)
-            logger.debug(f"Saved daemon state to {expanded_path}")
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to save state: {e}")
 
     # ===================
     # Trading Manager API

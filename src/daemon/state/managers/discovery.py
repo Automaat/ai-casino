@@ -2,47 +2,68 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import Field, PrivateAttr
+from pydantic import PrivateAttr
 
-from src.daemon.state.managers.base import StateManager, _make_task_cleanup_callback
+from src.daemon.state.managers.base import StateManager
 from src.daemon.state.models import DiscoveryHistoryRecord
-from src.discovery.models import DiscoveryCandidate
+from src.discovery.models import ActiveDiscoveryCandidate, DiscoveryCandidate, DiscoverySourceDetail
 
 if TYPE_CHECKING:
+    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.metadata import MetadataRepository
 
 
 class DiscoveryStateManager(StateManager):
     """Stock discovery with TTL management."""
 
-    last_discovery: datetime | None = None
-    discovery_history: list[DiscoveryHistoryRecord] = Field(default_factory=list)
-    active_discovery_candidates: list[DiscoveryCandidate] = Field(default_factory=list)
-
+    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
     _discovery_repository: DiscoveryHistoryRepository | None = PrivateAttr(default=None)
+    _active_discovery_repository: ActiveDiscoveryCandidateRepository | None = PrivateAttr(default=None)
 
-    def set_repository(self, repository: DiscoveryHistoryRepository) -> None:
-        """Inject discovery repository.
+    _discovery_cache: list[DiscoveryHistoryRecord] | None = PrivateAttr(default=None)
 
-        Args:
-            repository: Discovery history repository
-        """
-        self._discovery_repository = repository
-        logger.debug("Discovery repository injected")
+    def set_repositories(
+        self,
+        metadata_repository: MetadataRepository,
+        discovery_repository: DiscoveryHistoryRepository,
+        active_discovery_repository: ActiveDiscoveryCandidateRepository,
+    ) -> None:
+        """Inject repositories."""
+        self._metadata_repository = metadata_repository
+        self._discovery_repository = discovery_repository
+        self._active_discovery_repository = active_discovery_repository
+        logger.debug("DiscoveryStateManager repositories injected")
 
-    def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
-        """Record discovery run and update active candidates.
+    async def get_last_discovery(self) -> datetime | None:
+        """Get last discovery timestamp from DB."""
+        if not self._metadata_repository:
+            return None
+        return await self._metadata_repository.get("discovery.last_discovery")
 
-        Args:
-            candidates: Discovery candidates to record
-            added_symbols: Symbols actually added to watchlist
-        """
-        # Add new history records
+    async def get_discovery_history(self, limit: int = 100) -> list[DiscoveryHistoryRecord]:
+        """Get discovery history with lazy loading."""
+        if not self._discovery_repository:
+            return []
+        if self._discovery_cache is None:
+            self._discovery_cache = await self._discovery_repository.get_recent(limit)
+        return self._discovery_cache
+
+    async def get_active_discovery_candidates(self) -> list[ActiveDiscoveryCandidate]:
+        """Get all active discovery candidates from DB."""
+        if not self._active_discovery_repository:
+            return []
+        return await self._active_discovery_repository.get_all_active()
+
+    async def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
+        """Record discovery run and update active candidates."""
+        now = datetime.now(UTC)
+
+        # Add history records to DB
         for candidate in candidates:
             history_record = DiscoveryHistoryRecord(
                 symbol=candidate.symbol,
@@ -53,63 +74,61 @@ class DiscoveryStateManager(StateManager):
                 ttl_expires_at=candidate.ttl_expires_at,
             )
 
-            # Persist to database if repository available
             if self._discovery_repository:
-                try:
-                    task = asyncio.create_task(self._discovery_repository.create(history_record))  # type: ignore[bad-argument-type]
-                    self._pending_tasks.add(task)
-                    task.add_done_callback(_make_task_cleanup_callback(self._pending_tasks))
-                    logger.debug(f"Scheduled discovery history persistence to database: {candidate.symbol}")
-                except Exception as e:
-                    logger.opt(exception=True).error(f"Failed to schedule discovery history persistence: {e}")
-                    raise
+                await self._discovery_repository.create(history_record)
 
-            # Keep in-memory list (capped for transition period)
-            self.discovery_history.append(history_record)
+        # Update active candidates in DB
+        if self._active_discovery_repository:
+            for candidate in candidates:
+                # Convert DiscoverySource enums to DiscoverySourceDetail
+                sources = [
+                    DiscoverySourceDetail(
+                        source_type=str(source.value),
+                        weight=candidate.source_scores.get(str(source.value), 0.0),
+                        metadata={},
+                    )
+                    for source in candidate.sources
+                ]
 
-        # Update active candidates (replace old with new)
-        self.active_discovery_candidates = candidates
+                active_candidate = ActiveDiscoveryCandidate(
+                    symbol=candidate.symbol,
+                    discovered_at=candidate.discovery_timestamp,
+                    composite_score=candidate.composite_score,
+                    sources=sources,
+                    ttl_expires_at=candidate.ttl_expires_at,
+                )
 
-        # Limit history to last 100 records
-        self.discovery_history = self._cap_history(self.discovery_history, 100, 100)
+                # Check if exists, update or create
+                existing = await self._active_discovery_repository.get_by_symbol(candidate.symbol)
+                if existing:
+                    await self._active_discovery_repository.delete_by_symbol(candidate.symbol)
+                await self._active_discovery_repository.create(active_candidate)
+
+        # Update metadata
+        if self._metadata_repository:
+            await self._metadata_repository.set("discovery.last_discovery", now)
+
+        # Invalidate cache
+        self._discovery_cache = None
 
         logger.info(f"Recorded discovery: {len(candidates)} candidates, {len(added_symbols)} added")
 
-    def expire_stale_candidates(self) -> list[str]:
-        """Remove candidates past TTL, return expired symbols.
+    async def expire_stale_candidates(self) -> list[str]:
+        """Remove candidates past TTL, return expired symbols."""
+        if not self._active_discovery_repository:
+            return []
 
-        Returns:
-            List of expired symbols
-        """
         now = datetime.now(UTC)
-        expired_symbols: list[str] = []
+        deleted_count = await self._active_discovery_repository.delete_expired(now)
 
-        # Filter out expired candidates
-        active_candidates: list[DiscoveryCandidate] = []
-        for candidate in self.active_discovery_candidates:
-            ttl_expires_at = candidate.ttl_expires_at
-            if ttl_expires_at.tzinfo is None:
-                ttl_expires_at = ttl_expires_at.replace(tzinfo=UTC)
-            if ttl_expires_at > now:
-                active_candidates.append(candidate)
-            else:
-                expired_symbols.append(candidate.symbol)
+        logger.info(f"Expired {deleted_count} discovery candidates")
+        return []  # Return empty list since we don't track individual expired symbols
 
-        self.active_discovery_candidates = active_candidates
-
-        if expired_symbols:
-            logger.info(f"Expired {len(expired_symbols)} discovery candidates")
-
-        return expired_symbols
-
-    def get_active_discovery_symbols(self) -> list[str]:
-        """Get symbols from active discovery candidates.
-
-        Returns:
-            List of active discovery symbols
-        """
-        return [c.symbol for c in self.active_discovery_candidates]
+    async def get_active_discovery_symbols(self) -> list[str]:
+        """Get symbols from active discovery candidates."""
+        candidates = await self.get_active_discovery_candidates()
+        return [c.symbol for c in candidates]
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"DiscoveryStateManager(active={len(self.active_discovery_candidates)})"
+        return "DiscoveryStateManager()"

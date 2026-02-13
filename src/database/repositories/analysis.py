@@ -74,6 +74,20 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         orm = result.scalar_one_or_none()
         return self._to_record(orm) if orm else None
 
+    async def get_recent(self, limit: int = 1000) -> list[AnalysisRecord]:
+        """Get recent analysis records.
+
+        Args:
+            limit: Maximum number of records to return
+
+        Returns:
+            List of recent AnalysisRecords
+        """
+        result = await self._session.execute(
+            select(AnalysisRecordORM).order_by(AnalysisRecordORM.timestamp.desc()).limit(limit)
+        )
+        return [self._to_record(orm) for orm in result.scalars().all()]
+
     async def get_by_symbol(self, symbol: str, limit: int = 100) -> list[AnalysisRecord]:
         """Get analysis records for specific symbol.
 

@@ -127,8 +127,7 @@ stateDiagram-v2
 
     RunningCycle --> Analyzing: _analyze_watchlist()
     Analyzing --> LogResults: _log_results()
-    LogResults --> SaveState: state.save()
-    SaveState --> Sleeping: sleep(interval_minutes * 60)
+    LogResults --> Sleeping: sleep(interval_minutes * 60)
     Sleeping --> WaitingForMarket: market_hours_only=true
     Sleeping --> RunningCycle: market_hours_only=false
 
@@ -140,7 +139,7 @@ stateDiagram-v2
     Analyzing --> Shutdown: CancelledError
     Sleeping --> Shutdown: SIGINT/SIGTERM
 
-    Shutdown --> [*]: state.save()
+    Shutdown --> [*]: wait_for_pending_tasks()
 ```
 
 **Key transitions:**
