@@ -187,12 +187,10 @@ async def test_trader_can_decide_despite_warnings(weak_analyses):
         sentiment=decision_input.sentiment,
         news=decision_input.news,
         fundamental=decision_input.fundamental,
-        bullish=decision_input.bullish or BullishResearchAnalysis(
-            thesis="", key_strengths=[], target_upside=0.0, confidence=0.5
-        ),
-        bearish=decision_input.bearish or BearishResearchAnalysis(
-            thesis="", key_weaknesses=[], target_downside=0.0, confidence=0.5
-        ),
+        bullish=decision_input.bullish
+        or BullishResearchAnalysis(thesis="", key_strengths=[], target_upside=0.0, confidence=0.5),
+        bearish=decision_input.bearish
+        or BearishResearchAnalysis(thesis="", key_weaknesses=[], target_downside=0.0, confidence=0.5),
         comparative=decision_input.comparative,
         backtest_validation=decision_input.backtest_validation,
         degradation_context=decision_input.degradation_context,
