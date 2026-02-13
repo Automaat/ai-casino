@@ -47,11 +47,20 @@
 		if (simulation) {
 			simulation.stop();
 		}
+		if (tooltip) {
+			tooltip.remove();
+		}
 	});
 
 	function initChart() {
 		const width = svgContainer.clientWidth;
 		const height = svgContainer.clientHeight;
+
+		// Validate non-zero dimensions before D3 init
+		if (width === 0 || height === 0) {
+			console.warn('Container has zero dimensions, deferring chart initialization');
+			return;
+		}
 
 		// Create SVG
 		svg = d3.select(svgContainer)

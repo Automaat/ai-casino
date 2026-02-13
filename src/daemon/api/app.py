@@ -989,6 +989,12 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
             await websocket.close(code=1011, reason="EventBus not available")
             return
 
+        # Explicitly check for None origin (security monitoring)
+        if origin is None:
+            logger.warning("WebSocket rejected - null origin (potential security issue)")
+            await websocket.close(code=1008, reason="Invalid origin")
+            return
+
         if origin not in allowed_origins:
             logger.warning(f"WebSocket rejected - invalid origin: {origin}")
             await websocket.close(code=1008, reason="Invalid origin")
@@ -1008,8 +1014,11 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                     # Ping client to detect disconnect
                     try:
                         await websocket.send_json({"type": "ping"})
-                    except Exception:
+                    except WebSocketDisconnect:
                         logger.info("Client disconnected during ping")
+                        break
+                    except Exception as e:
+                        logger.opt(exception=True).error(f"Unexpected error during ping: {e}")
                         break
 
         except WebSocketDisconnect:

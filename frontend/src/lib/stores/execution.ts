@@ -147,7 +147,7 @@ function createExecutionStore() {
 	// Disconnect from WebSocket
 	function disconnect() {
 		if (reconnectTimeout !== null) {
-			clearTimeout(reconnectTimeout);
+			window.clearTimeout(reconnectTimeout);
 			reconnectTimeout = null;
 		}
 		if (ws) {

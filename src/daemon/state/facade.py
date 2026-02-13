@@ -834,20 +834,28 @@ class DaemonState(BaseModel):
 
         completed_ids = []
 
+        # Collect completed graphs first
+        completed_graphs = []
         for workflow_id, tracker in self.active_execution_trackers.items():
             if tracker.graph.is_completed():
-                # Persist to database (non-blocking)
-                try:
-                    async with get_session() as session:
-                        repo = ExecutionGraphRepository(session)
-                        await repo.create(tracker.graph)
-                        logger.info(f"Persisted execution graph: {workflow_id}")
-                except Exception as e:
-                    logger.opt(exception=True).error(f"Failed to persist graph {workflow_id}: {e}")
+                completed_graphs.append((workflow_id, tracker.graph))
 
-                # Move to in-memory history
-                self.execution_graph_history.append(tracker.graph)
-                completed_ids.append(workflow_id)
+        # Persist all in single session (reduces connection overhead)
+        if completed_graphs:
+            try:
+                async with get_session() as session:
+                    repo = ExecutionGraphRepository(session)
+                    for workflow_id, graph in completed_graphs:
+                        try:
+                            await repo.create(graph)
+                            logger.info(f"Persisted execution graph: {workflow_id}")
+                            # Move to history only on success
+                            self.execution_graph_history.append(graph)
+                            completed_ids.append(workflow_id)
+                        except Exception as e:
+                            logger.opt(exception=True).error(f"Failed to persist graph {workflow_id}: {e}")
+            except Exception as e:
+                logger.opt(exception=True).error(f"Failed to create database session: {e}")
 
         # Remove from active trackers
         for workflow_id in completed_ids:

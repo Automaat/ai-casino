@@ -12,3 +12,9 @@ CREATE TABLE IF NOT EXISTS execution_graphs (
 CREATE INDEX IF NOT EXISTS idx_execution_graphs_workflow_id ON execution_graphs(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_execution_graphs_symbol ON execution_graphs(symbol) WHERE symbol IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_execution_graphs_created_at ON execution_graphs(created_at DESC);
+
+-- Rollback instructions (for production safety):
+-- DROP INDEX IF EXISTS idx_execution_graphs_created_at;
+-- DROP INDEX IF EXISTS idx_execution_graphs_symbol;
+-- DROP INDEX IF EXISTS idx_execution_graphs_workflow_id;
+-- DROP TABLE IF EXISTS execution_graphs;
