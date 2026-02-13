@@ -4,15 +4,14 @@ import asyncio
 from unittest.mock import Mock
 
 import pytest
-
-pytestmark = pytest.mark.skip(reason="Integration tests need rewrite for async state")
-
 from fastapi.testclient import TestClient
 from loguru import logger
 
 from src.daemon.api.app import create_api_app
 from src.daemon.event_bus import DashboardEvent, EventBus, EventType
 from src.execution_tracking.models import ExecutionGraph, ExecutionNode, ExecutionNodeType, ExecutionStatus
+
+pytestmark = pytest.mark.skip(reason="Integration tests need rewrite for async state")
 
 
 @pytest.fixture
