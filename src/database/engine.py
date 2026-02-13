@@ -23,19 +23,15 @@ class DatabaseEngine:
     def __init__(
         self,
         database_url: str | None = None,
-        pool_size: int = 5,
-        max_overflow: int = 10,
         pool_pre_ping: bool = True,
     ) -> None:
         """Initialize database engine.
 
         Uses NullPool to avoid event loop issues when API server runs in separate thread.
-        Each request creates a fresh connection - pool_size/max_overflow ignored.
+        Each request creates a fresh connection.
 
         Args:
             database_url: PostgreSQL connection URL (or from DATABASE_URL env)
-            pool_size: Ignored (using NullPool)
-            max_overflow: Ignored (using NullPool)
             pool_pre_ping: Verify connections before use
 
         Raises:
