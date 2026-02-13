@@ -142,6 +142,7 @@ Never skip/disable on failure - fix properly, re-run until clean.
 ### Pull Requests
 
 **Format:**
+
 ```markdown
 ## Motivation
 <!-- Why are we doing this change -->
@@ -150,7 +151,7 @@ Never skip/disable on failure - fix properly, re-run until clean.
 <!-- Explain how this was done and potentially alternatives considered and discarded -->
 
 ## Supporting documentation
-Fixes #<issue-number>
+Fix: #{issue_number}
 <!-- Include MADR or related PRs if applicable -->
 ```
 
