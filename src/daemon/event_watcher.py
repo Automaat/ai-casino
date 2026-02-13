@@ -152,7 +152,7 @@ class EventWatcher(ABC):
         async def analyze_one(symbol: str) -> tuple[str, TradingWorkflowResult | None]:
             async with semaphore:
                 try:
-                    result = await workflow.analyze(symbol, period_days=30)
+                    result = await workflow.analyze(symbol, period_days=60)
                     return symbol, result
                 except Exception as e:
                     logger.opt(exception=True).error(f"Failed to analyze {symbol}: {e}")
