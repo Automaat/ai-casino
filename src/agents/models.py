@@ -43,6 +43,7 @@ class EarningsFlags(BaseModel):
 
     upcoming_earnings: bool = Field(description="Whether earnings report is upcoming")
     days_until_earnings: int | None = Field(default=None, description="Days until earnings report")
+    pre_earnings_zone: str | None = Field(default=None, description="Pre-earnings zone (T-1 or T-3)")
     earnings_date: date | None = Field(default=None, description="Date of earnings report")
     estimate_eps: float | None = Field(default=None, description="Estimated EPS for earnings")
 
@@ -52,5 +53,5 @@ class EarningsFlags(BaseModel):
             return "EarningsFlags(upcoming=False)"
         return (
             f"EarningsFlags(upcoming=True, days={self.days_until_earnings}, "
-            f"date={self.earnings_date}, estimate_eps={self.estimate_eps})"
+            f"zone={self.pre_earnings_zone}, date={self.earnings_date}, estimate_eps={self.estimate_eps})"
         )

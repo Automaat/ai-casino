@@ -50,7 +50,7 @@ class AnalysisRequest:
 
     def __init__(
         self,
-        workflow: TradingWorkflow,
+        workflow: "TradingWorkflow",
         symbol: str,
         params: AnalysisRequestParams,
         collector: ExecutionMetricsCollector | None = None,
