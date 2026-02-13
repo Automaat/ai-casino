@@ -32,14 +32,19 @@ def weak_analyses():
             confidence=0.3,  # Below default threshold (0.4)
         ),
         "sentiment": SentimentAnalysis(
-            signal=Signal.HOLD,
+            overall_sentiment="neutral",
             sentiment_score=0.0,
-            interpretation="Neutral",
-            confidence=0.35,  # Below default threshold (0.4)
+            positive_ratio=0.3,
+            negative_ratio=0.3,
+            neutral_ratio=0.4,
+            article_count=5,
+            summary="Neutral",
+            confidence=0.35,
         ),
         "news": NewsAnalysis(
-            signal=Signal.HOLD,
-            interpretation="Mixed signals",
+            key_themes=["mixed signals"],
+            impact_assessment="Mixed signals",
+            recommendation="hold",
             confidence=0.5,
         ),
     }

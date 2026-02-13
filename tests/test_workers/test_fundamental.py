@@ -73,11 +73,12 @@ def mock_earnings_calendar_empty():
 
 
 @pytest.fixture
-def mock_fundamental_worker(mock_llm_client):
+def mock_fundamental_worker(test_container):
     """Create FundamentalWorker with mocked dependencies."""
     fundamental_fetcher = Mock()
     earnings_fetcher = Mock()
-    return FundamentalWorker(mock_llm_client, fundamental_fetcher, earnings_fetcher)
+    llm_client = test_container.llm_client()
+    return FundamentalWorker(llm_client, fundamental_fetcher, earnings_fetcher)
 
 
 def test_fundamental_worker_init(mock_fundamental_worker):

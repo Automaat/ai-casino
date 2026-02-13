@@ -14,7 +14,7 @@ from src.data.fundamental import FundamentalDataFetcher
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
-from src.tools.models import ToolDefinition, ToolFunction, ToolParameter
+from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.data.earnings import EarningsCalendar
@@ -342,7 +342,7 @@ class FundamentalWorker:
 
         try:
             return float(value)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
 
     def get_tool_definition(self) -> ToolDefinition:
@@ -356,17 +356,17 @@ class FundamentalWorker:
             function=ToolFunction(
                 name="analyze_fundamental",
                 description="Analyze fundamental metrics and earnings calendar for a stock",
-                parameters=ToolParameter(
+                parameters=ToolParametersSchema(
                     type="object",
                     properties={
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol (e.g., AAPL, TSLA)",
-                        },
-                        "current_price": {
-                            "type": "number",
-                            "description": "Current stock price (optional, for context)",
-                        },
+                        "symbol": ToolParameter(
+                            type="string",
+                            description="Stock ticker symbol (e.g., AAPL, TSLA)",
+                        ),
+                        "current_price": ToolParameter(
+                            type="number",
+                            description="Current stock price (optional, for context)",
+                        ),
                     },
                     required=["symbol"],
                 ),

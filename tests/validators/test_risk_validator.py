@@ -9,10 +9,10 @@ from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
 from src.daemon.config.risk_validation import RiskValidationConfig
-from src.daemon.degradation import DegradationContext
+from src.daemon.degradation import AgentType, DegradationContext, DegradationTier
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
-from src.validators.risk import RiskValidator
+from src.validators.risk import AnalysisContext, RiskValidator
 
 
 @pytest.fixture
@@ -68,10 +68,14 @@ def weak_technical():
 def strong_sentiment():
     """Create strong sentiment analysis."""
     return SentimentAnalysis(
-        signal=Signal.BUY,
+        overall_sentiment="positive",
         sentiment_score=0.8,
-        interpretation="Positive sentiment",
-        confidence=0.80,
+        positive_ratio=0.7,
+        negative_ratio=0.1,
+        neutral_ratio=0.2,
+        article_count=10,
+        summary="Positive sentiment",
+        confidence=0.8,
     )
 
 
@@ -79,10 +83,14 @@ def strong_sentiment():
 def weak_sentiment():
     """Create weak sentiment analysis."""
     return SentimentAnalysis(
-        signal=Signal.HOLD,
+        overall_sentiment="neutral",
         sentiment_score=0.0,
-        interpretation="Neutral sentiment",
-        confidence=0.30,
+        positive_ratio=0.3,
+        negative_ratio=0.3,
+        neutral_ratio=0.4,
+        article_count=5,
+        summary="Neutral sentiment",
+        confidence=0.3,
     )
 
 
@@ -90,8 +98,9 @@ def weak_sentiment():
 def strong_news():
     """Create strong news analysis."""
     return NewsAnalysis(
-        signal=Signal.BUY,
-        interpretation="Very positive news",
+        key_themes=["positive news", "growth", "expansion"],
+        impact_assessment="Very positive news",
+        recommendation="buy",
         confidence=0.85,
     )
 
@@ -100,8 +109,9 @@ def strong_news():
 def conflicting_news():
     """Create conflicting news analysis (SELL)."""
     return NewsAnalysis(
-        signal=Signal.SELL,
-        interpretation="Negative news",
+        key_themes=["negative news", "concerns", "risks"],
+        impact_assessment="Negative news",
+        recommendation="sell",
         confidence=0.75,
     )
 
@@ -136,7 +146,7 @@ def test_validator_approves_strong_analyses(
     fresh_market_data,
 ):
     """Test validator approves strong analyses with high confidence and consistent signals."""
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=strong_technical,
@@ -148,6 +158,7 @@ def test_validator_approves_strong_analyses(
         market_data=fresh_market_data,
         degradation_context=None,
     )
+    result = default_validator.validate(ctx)
 
     assert result.approved is True
     assert result.risk_level == "LOW"
@@ -164,7 +175,7 @@ def test_validator_warns_on_low_confidence(
     fresh_market_data,
 ):
     """Test validator warns when technical confidence below threshold."""
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=weak_technical,
@@ -176,6 +187,8 @@ def test_validator_warns_on_low_confidence(
         market_data=fresh_market_data,
         degradation_context=None,
     )
+
+    result = default_validator.validate(ctx)
 
     assert result.approved is True  # Still approved (warning-only mode)
     assert result.risk_level == "HIGH"  # But flagged as high risk
@@ -192,7 +205,7 @@ def test_validator_warns_on_conflicting_signals(
     fresh_market_data,
 ):
     """Test validator warns on conflicting signals (BUY vs SELL)."""
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=strong_technical,  # BUY
@@ -204,6 +217,7 @@ def test_validator_warns_on_conflicting_signals(
         market_data=fresh_market_data,
         degradation_context=None,
     )
+    result = default_validator.validate(ctx)
 
     assert result.approved is True  # Still approved (allow_conflicting_signals=True)
     assert result.risk_level == "HIGH"  # Flagged as high risk
@@ -220,11 +234,23 @@ def test_validator_rejects_excessive_conflicts(default_validator, fresh_market_d
         signal=Signal.BUY, rsi=70.0, macd_hist=0.5, interpretation="Buy", confidence=0.8
     )
     sentiment = SentimentAnalysis(
-        signal=Signal.SELL, sentiment_score=-0.5, interpretation="Sell", confidence=0.8
+        overall_sentiment="negative",
+        sentiment_score=-0.5,
+        positive_ratio=0.1,
+        negative_ratio=0.7,
+        neutral_ratio=0.2,
+        article_count=10,
+        summary="Sell",
+        confidence=0.5,
     )
-    news = NewsAnalysis(signal=Signal.BUY, interpretation="Buy", confidence=0.8)
+    news = NewsAnalysis(
+        key_themes=["positive news"],
+        impact_assessment="Buy",
+        recommendation="buy",
+        confidence=0.8,
+    )
 
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=technical,
@@ -236,6 +262,8 @@ def test_validator_rejects_excessive_conflicts(default_validator, fresh_market_d
         market_data=fresh_market_data,
         degradation_context=None,
     )
+
+    result = default_validator.validate(ctx)
 
     assert result.approved is True  # Still approved (warning-only)
     assert result.signal_consistency.conflicting_signals is True
@@ -253,10 +281,17 @@ def test_validator_enforces_premarket_threshold(
         signal=Signal.BUY, rsi=65.0, macd_hist=0.5, interpretation="Buy", confidence=0.6
     )
     sentiment = SentimentAnalysis(
-        signal=Signal.BUY, sentiment_score=0.5, interpretation="Positive", confidence=0.6
+        overall_sentiment="positive",
+        sentiment_score=0.5,
+        positive_ratio=0.6,
+        negative_ratio=0.2,
+        neutral_ratio=0.2,
+        article_count=8,
+        summary="Positive",
+        confidence=0.6,
     )
 
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.PRE_MARKET,  # PRE_MARKET session
         technical=technical,
@@ -268,6 +303,7 @@ def test_validator_enforces_premarket_threshold(
         market_data=fresh_market_data,
         degradation_context=None,
     )
+    result = default_validator.validate(ctx)
 
     assert result.approved is True  # Still approved (warning-only)
     assert len(result.warnings) > 0
@@ -282,11 +318,23 @@ def test_validator_detects_suspicious_patterns(default_validator, fresh_market_d
         signal=Signal.BUY, rsi=70.0, macd_hist=0.5, interpretation="Buy", confidence=0.96
     )
     sentiment = SentimentAnalysis(
-        signal=Signal.BUY, sentiment_score=0.8, interpretation="Positive", confidence=0.97
+        overall_sentiment="positive",
+        sentiment_score=0.8,
+        positive_ratio=0.9,
+        negative_ratio=0.05,
+        neutral_ratio=0.05,
+        article_count=15,
+        summary="Positive",
+        confidence=0.97,
     )
-    news = NewsAnalysis(signal=Signal.BUY, interpretation="Positive", confidence=0.98)
+    news = NewsAnalysis(
+        key_themes=["positive news", "strong growth"],
+        impact_assessment="Positive",
+        recommendation="buy",
+        confidence=0.98,
+    )
 
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=technical,
@@ -299,6 +347,8 @@ def test_validator_detects_suspicious_patterns(default_validator, fresh_market_d
         degradation_context=None,
     )
 
+    result = default_validator.validate(ctx)
+
     assert result.approved is True
     assert any("Suspicious" in w or "overfitting" in w for w in result.warnings)
     assert result.constraints_met["suspicious_patterns"] is False
@@ -307,12 +357,14 @@ def test_validator_detects_suspicious_patterns(default_validator, fresh_market_d
 def test_validator_respects_degradation_context_halted(default_validator, fresh_market_data):
     """Test validator blocks when degradation_tier is halted."""
     degradation = DegradationContext(
-        degradation_tier="halted",
-        reason="Circuit breaker triggered",
-        affected_analyses=["technical"],
+        tier=DegradationTier.HALTED,
+        halt_reason="Circuit breaker triggered",
+        available_agents=set(),
+        unavailable_services=["technical"],
+        confidence_adjustment=0.0,
     )
 
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=None,
@@ -324,6 +376,8 @@ def test_validator_respects_degradation_context_halted(default_validator, fresh_
         market_data=fresh_market_data,
         degradation_context=degradation,
     )
+
+    result = default_validator.validate(ctx)
 
     assert result.approved is False  # Blocked due to halted tier
     assert result.risk_level == "HIGH"
@@ -335,12 +389,14 @@ def test_validator_respects_degradation_context_halted(default_validator, fresh_
 def test_validator_respects_degradation_context_degraded(default_validator, fresh_market_data):
     """Test validator warns when degradation_tier is degraded (but doesn't block)."""
     degradation = DegradationContext(
-        degradation_tier="degraded",
-        reason="Data quality issues",
-        affected_analyses=["news"],
+        tier=DegradationTier.DEGRADED,
+        halt_reason="Data quality issues",
+        available_agents={AgentType.TECHNICAL, AgentType.SENTIMENT, AgentType.FUNDAMENTAL},
+        unavailable_services=["news"],
+        confidence_adjustment=0.8,
     )
 
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=None,
@@ -353,13 +409,15 @@ def test_validator_respects_degradation_context_degraded(default_validator, fres
         degradation_context=degradation,
     )
 
+    result = default_validator.validate(ctx)
+
     assert result.approved is True  # Not blocked
     assert result.risk_level == "HIGH"  # But flagged as high risk
 
 
 def test_validator_warns_on_stale_data(default_validator, stale_market_data):
     """Test validator warns when market data is stale."""
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=None,
@@ -371,6 +429,8 @@ def test_validator_warns_on_stale_data(default_validator, stale_market_data):
         market_data=stale_market_data,
         degradation_context=None,
     )
+
+    result = default_validator.validate(ctx)
 
     assert result.approved is True  # Still approved
     assert len(result.warnings) > 0
@@ -386,7 +446,7 @@ def test_validator_disabled_mode(
 ):
     """Test validator is bypassed when disabled."""
     # Even with weak analyses and stale data, should skip validation
-    result = disabled_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=weak_technical,
@@ -398,6 +458,7 @@ def test_validator_disabled_mode(
         market_data=stale_market_data,
         degradation_context=None,
     )
+    result = disabled_validator.validate(ctx)
 
     # Validation still runs (validator doesn't check config.enabled internally)
     # The enabled flag is checked in the pipeline (instrumented_analysis.py)
@@ -411,11 +472,23 @@ def test_validator_aggregate_confidence_calculation(default_validator, fresh_mar
         signal=Signal.BUY, rsi=70.0, macd_hist=0.5, interpretation="Buy", confidence=0.8
     )
     sentiment = SentimentAnalysis(
-        signal=Signal.BUY, sentiment_score=0.5, interpretation="Positive", confidence=0.6
+        overall_sentiment="positive",
+        sentiment_score=0.5,
+        positive_ratio=0.6,
+        negative_ratio=0.2,
+        neutral_ratio=0.2,
+        article_count=8,
+        summary="Positive",
+        confidence=0.6,
     )
-    news = NewsAnalysis(signal=Signal.BUY, interpretation="Positive", confidence=0.7)
+    news = NewsAnalysis(
+        key_themes=["positive news"],
+        impact_assessment="Positive",
+        recommendation="buy",
+        confidence=0.7,
+    )
 
-    result = default_validator.validate(
+    ctx = AnalysisContext(
         symbol="AAPL",
         trading_session=TradingSession.REGULAR,
         technical=technical,
@@ -427,6 +500,8 @@ def test_validator_aggregate_confidence_calculation(default_validator, fresh_mar
         market_data=fresh_market_data,
         degradation_context=None,
     )
+
+    result = default_validator.validate(ctx)
 
     # Expected average confidence: 0.7
     assert abs(result.confidence_score - 0.7) < 0.01

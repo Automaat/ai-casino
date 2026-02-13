@@ -311,12 +311,8 @@ class RiskValidator:
         confidences = [ctx.technical.confidence] if ctx.technical else []
 
         non_zero = [c for c in confidences if c > 0]
-        if len(non_zero) >= MIN_ANALYSES_FOR_OVERFITTING and all(
-            c > OVERFITTING_THRESHOLD for c in non_zero
-        ):
-            warnings.append(
-                f"Suspicious: all confidences >{OVERFITTING_THRESHOLD} (possible overfitting)"
-            )
+        if len(non_zero) >= MIN_ANALYSES_FOR_OVERFITTING and all(c > OVERFITTING_THRESHOLD for c in non_zero):
+            warnings.append(f"Suspicious: all confidences >{OVERFITTING_THRESHOLD} (possible overfitting)")
             return False
 
         return True
