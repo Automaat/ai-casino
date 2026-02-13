@@ -125,7 +125,7 @@ def _validate_input_data(input_data: AnalysisInput, warnings: list[str]) -> None
         warnings.append("No news articles available - sentiment and news analyses degraded")
 
 
-async def _run_analysis_group1(  # noqa: PLR0913
+async def _run_analysis_group1(
     input_data: AnalysisInput,
     technical_analyst: TechnicalAnalyst,
     sentiment_analyst: SentimentAnalyst,
@@ -171,7 +171,7 @@ async def _run_analysis_group1(  # noqa: PLR0913
     )
     social_task = _timed_agent_call("social", social_analyst.analyze(input_data.symbol), collector)
 
-    async def safe_optional(coro: Coroutine) -> Any:  # noqa: ANN401
+    async def safe_optional(coro: Coroutine) -> Any:
         try:
             return await coro
         except Exception as e:
@@ -240,7 +240,7 @@ def _process_optional_results(
     return fundamental, comparative, web_research, social, trump
 
 
-async def _run_research_group(  # noqa: PLR0913
+async def _run_research_group(
     symbol: str,
     technical: TechnicalAnalysis,
     sentiment: SentimentAnalysis,
@@ -264,7 +264,7 @@ async def _run_research_group(  # noqa: PLR0913
         collector,
     )
 
-    async def safe_research(coro: Coroutine) -> Any:  # noqa: ANN401
+    async def safe_research(coro: Coroutine) -> Any:
         try:
             return await coro
         except Exception as e:
@@ -279,7 +279,7 @@ async def _run_research_group(  # noqa: PLR0913
     )
 
 
-async def run_analyses(  # noqa: PLR0913
+async def run_analyses(
     input_data: AnalysisInput,
     technical_analyst: TechnicalAnalyst,
     sentiment_analyst: SentimentAnalyst,

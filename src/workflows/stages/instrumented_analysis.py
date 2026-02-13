@@ -1,7 +1,7 @@
 """Instrumented analysis pipeline with metrics collection."""
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
@@ -21,9 +21,13 @@ from src.workflows.stages import analysis, data_fetch, decision, execution, risk
 from src.workflows.stages.risk_validation import validate_analyses_stage
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
+if TYPE_CHECKING:
+    from src.agents.technical import TechnicalAnalyst
+    from src.daemon.degradation import DegradationContext as DegradationContextType
 
-async def run_instrumented_analysis(  # noqa: PLR0913
-    workflow: Any,  # noqa: ANN401
+
+async def run_instrumented_analysis(
+    workflow: Any,
     symbol: str,
     period_days: int,
     trading_session: TradingSession,
@@ -50,12 +54,85 @@ async def run_instrumented_analysis(  # noqa: PLR0913
         msg = f"Analysis halted: {degradation_context.halt_reason}"
         raise RuntimeError(msg)
 
+    # Run pipeline stages
+    data_output, account_output = await _run_fetch_stages(
+        workflow, symbol, period_days, trading_session, ctx, collector
+    )
+
+    strategy_output, backtest_output, technical_analyst = await _run_strategy_stages(
+        workflow, symbol, data_output, collector
+    )
+
+    analysis_output, validation_output = await _run_analysis_stages(
+        workflow, symbol, trading_session, data_output, technical_analyst, ctx, collector
+    )
+
+    decision_context = DecisionContext(
+        sector_rotation=ctx.sector_rotation_context,
+        earnings=ctx.earnings_context,
+        peer_analysis=ctx.peer_analysis_context,
+        game_plan=ctx.game_plan_context,
+        position=ctx.position_context,
+    )
+
+    decision_output, risk_output = await _run_decision_and_risk_stages(
+        workflow,
+        symbol,
+        decision_context,
+        data_output,
+        account_output,
+        backtest_output,
+        analysis_output,
+        validation_output,
+        degradation_context,
+        collector,
+    )
+
+    execution_output = await _run_execution_stage(
+        workflow, symbol, trading_session, decision_output, risk_output
+    )
+
+    # Log final result
+    logger.info(
+        f"Workflow complete: {decision_output.final_decision.action.value} "
+        f"(confidence={decision_output.final_decision.confidence:.2f}, "
+        f"risk_approved={risk_output.risk_assessment.validation.approved})"
+    )
+
+    # Build result
+    return await _build_and_persist_result(
+        workflow,
+        symbol,
+        data_output,
+        account_output,
+        strategy_output,
+        backtest_output,
+        analysis_output,
+        decision_output,
+        risk_output,
+        execution_output,
+        decision_context,
+        degradation_context,
+        trading_session,
+        collector,
+    )
+
+
+async def _run_fetch_stages(
+    workflow: Any,
+    symbol: str,
+    period_days: int,
+    trading_session: TradingSession,
+    ctx: WorkflowExtraContext,
+    collector: ExecutionMetricsCollector | None,
+) -> tuple[FetchDataOutput, AccountInfoOutput]:
+    """Run data and account fetch stages."""
+    from src.workflows.stages.data_fetch import DataFetchConfig
+
     enable_multi_timeframe = bool(ctx.enable_multi_timeframe)
 
     # Stage 1: Fetch data
     start = time.perf_counter()
-    from src.workflows.stages.data_fetch import DataFetchConfig
-
     data_output = await data_fetch.fetch_data(
         symbol,
         period_days,
@@ -75,13 +152,24 @@ async def run_instrumented_analysis(  # noqa: PLR0913
     account_output = await data_fetch.fetch_account_info(workflow.broker)
     _record_stage(collector, "fetch_account_info", start)
 
+    return data_output, account_output
+
+
+async def _run_strategy_stages(
+    workflow: Any,
+    symbol: str,
+    data_output: FetchDataOutput,
+    collector: ExecutionMetricsCollector | None,
+) -> tuple[StrategySelectionOutput, BacktestValidationOutput, TechnicalAnalyst]:
+    """Run strategy selection and backtest validation stages."""
     # Stage 3: Select strategy
     start = time.perf_counter()
     strategy_input = StrategySelectionInput(symbol=symbol, market_data=data_output.market_data)
+    default_strategy = cast("Any", workflow._default_strategy)
     strategy_output = await strategy_selection.select_strategy(
         strategy_input,
         workflow.meta_agent,
-        workflow._default_strategy,  # noqa: SLF001
+        default_strategy,
         workflow.use_ensemble,
         collector,
     )
@@ -100,10 +188,25 @@ async def run_instrumented_analysis(  # noqa: PLR0913
     )
     _record_stage(collector, "backtest_validation", start)
 
-    # Create TechnicalAnalyst with selected strategy via DI container
-    technical_analyst = workflow._container.technical_analyst()(  # noqa: SLF001
-        strategy_output.strategy_instance
-    )
+    # Create TechnicalAnalyst with selected strategy
+    container = cast("Any", workflow._container)
+    technical_analyst = container.technical_analyst()(strategy_output.strategy_instance)
+
+    return strategy_output, backtest_output, technical_analyst
+
+
+async def _run_analysis_stages(
+    workflow: Any,
+    symbol: str,
+    trading_session: TradingSession,
+    data_output: FetchDataOutput,
+    technical_analyst: TechnicalAnalyst,
+    ctx: WorkflowExtraContext,
+    collector: ExecutionMetricsCollector | None,
+) -> tuple[AnalysisOutput, RiskValidationOutput | None]:
+    """Run analyses and validation stages."""
+    enable_multi_timeframe = bool(ctx.enable_multi_timeframe)
+    degradation_context = ctx.degradation_context
 
     # Stage 5: Run analyses
     start = time.perf_counter()
@@ -131,10 +234,10 @@ async def run_instrumented_analysis(  # noqa: PLR0913
     )
     _record_stage(collector, "analyses", start)
 
-    # Stage 5.5: Validate analyses (pre-decision risk validation)
-    start = time.perf_counter()
+    # Stage 5.5: Validate analyses
     validation_output: RiskValidationOutput | None = None
     if workflow.risk_validation_config.enabled:
+        start = time.perf_counter()
         validation_input = RiskValidationInput(
             symbol=symbol,
             trading_session=trading_session,
@@ -155,15 +258,24 @@ async def run_instrumented_analysis(  # noqa: PLR0913
                 f"Risk validation WARNING for {symbol}: {validation_output.validation_result.warnings}"
             )
 
+    return analysis_output, validation_output
+
+
+async def _run_decision_and_risk_stages(
+    workflow: Any,
+    symbol: str,
+    decision_context: DecisionContext,
+    data_output: FetchDataOutput,
+    account_output: AccountInfoOutput,
+    backtest_output: BacktestValidationOutput,
+    analysis_output: AnalysisOutput,
+    validation_output: RiskValidationOutput | None,
+    degradation_context: DegradationContextType | None,
+    collector: ExecutionMetricsCollector | None,
+) -> tuple[DecisionOutput, RiskAssessmentOutput]:
+    """Run decision and risk assessment stages."""
     # Stage 6: Make decision
     start = time.perf_counter()
-    decision_context = DecisionContext(
-        sector_rotation=ctx.sector_rotation_context,
-        earnings=ctx.earnings_context,
-        peer_analysis=ctx.peer_analysis_context,
-        game_plan=ctx.game_plan_context,
-        position=ctx.position_context,
-    )
     decision_input = DecisionInput(
         symbol=symbol,
         technical=analysis_output.technical_analysis,
@@ -185,12 +297,8 @@ async def run_instrumented_analysis(  # noqa: PLR0913
 
     # Stage 7: Assess risk
     start = time.perf_counter()
-    # Get target weight from allocations if available
-    target_weight = (
-        workflow._target_allocations.get(symbol)  # noqa: SLF001
-        if workflow._target_allocations  # noqa: SLF001
-        else None
-    )
+    target_allocations = getattr(workflow, "_target_allocations", {})
+    target_weight = target_allocations.get(symbol) if target_allocations else None
     risk_input = RiskAssessmentInput(
         symbol=symbol,
         market_data=data_output.market_data,
@@ -206,7 +314,18 @@ async def run_instrumented_analysis(  # noqa: PLR0913
     risk_output = await risk.assess_risk(risk_input, workflow.risk_manager)
     _record_stage(collector, "risk_assessment", start)
 
-    # Notify if trade rejected by risk gate (only during regular hours when trades can execute)
+    return decision_output, risk_output
+
+
+async def _run_execution_stage(
+    workflow: Any,
+    symbol: str,
+    trading_session: TradingSession,
+    decision_output: DecisionOutput,
+    risk_output: RiskAssessmentOutput,
+) -> TradeExecutionOutput | None:
+    """Run trade execution stage with notification."""
+    # Notify if trade rejected by risk gate (only during regular hours)
     if (
         risk_output.risk_assessment
         and decision_output.final_decision
@@ -239,35 +358,11 @@ async def run_instrumented_analysis(  # noqa: PLR0913
         )
         execution_output = await execution.execute_trade(execution_input, workflow.broker)
 
-    # Log final result
-    logger.info(
-        f"Workflow complete: {decision_output.final_decision.action.value} "
-        f"(confidence={decision_output.final_decision.confidence:.2f}, "
-        f"risk_approved={risk_output.risk_assessment.validation.approved})"
-    )
-
-    # Build result
-    return await _build_and_persist_result(
-        workflow,
-        symbol,
-        data_output,
-        account_output,
-        strategy_output,
-        backtest_output,
-        analysis_output,
-        decision_output,
-        risk_output,
-        execution_output,
-        decision_context,
-        degradation_context,
-        target_weight,
-        trading_session,
-        collector,
-    )
+    return execution_output
 
 
-async def _build_and_persist_result(  # noqa: PLR0913
-    workflow: Any,  # noqa: ANN401
+async def _build_and_persist_result(
+    workflow: Any,
     symbol: str,
     data_output: FetchDataOutput,
     account_output: AccountInfoOutput,
@@ -278,8 +373,7 @@ async def _build_and_persist_result(  # noqa: PLR0913
     risk_output: RiskAssessmentOutput,
     execution_output: TradeExecutionOutput | None,
     decision_context: DecisionContext,
-    degradation_context: Any,  # noqa: ANN401
-    target_weight: float | None,  # noqa: ARG001
+    degradation_context: DegradationContextType | None,
     trading_session: TradingSession,
     collector: ExecutionMetricsCollector | None,
 ) -> TradingWorkflowResult:
@@ -298,7 +392,6 @@ async def _build_and_persist_result(  # noqa: PLR0913
         execution_output: Execution output
         decision_context: Decision context
         degradation_context: Degradation context
-        target_weight: Target portfolio weight
         trading_session: Trading session type
         collector: Optional metrics collector
     """

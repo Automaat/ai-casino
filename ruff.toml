@@ -102,6 +102,11 @@ ignore = [
     "TRY300",  # else-block style OK
     "TRY301",  # raise in try OK for data validation
 ]
+"src/workflows/stages/*.py" = [
+    "PLR0913", # many args OK for pipeline stage orchestration
+    "SLF001",  # private member access OK for tightly-coupled workflow components
+    "ANN401",  # Any required for workflow parameter (circular import)
+]
 "src/main.py" = [
     "T201",    # print OK in CLI
     "PLR2004", # magic values OK for CLI args
