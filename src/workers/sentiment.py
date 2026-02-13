@@ -7,7 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.data.news import NewsArticle
-from src.models.sentiment import _analyze_batch_worker, _finbert_executor
+from src.models.sentiment import _analyze_batch_worker, get_finbert_executor
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
@@ -70,7 +70,8 @@ class SentimentWorker:
         loop = asyncio.get_running_loop()
         # Use ProcessPoolExecutor for true parallelism (avoids GIL)
         device = getattr(self.finbert, "device", "cpu")
-        score_dicts = await loop.run_in_executor(_finbert_executor, _analyze_batch_worker, texts, device)
+        executor = get_finbert_executor()
+        score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
 
         # Import here to avoid circular import at module level
         from src.models.sentiment import SentimentScore

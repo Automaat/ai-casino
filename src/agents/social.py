@@ -11,7 +11,7 @@ from src.data.reddit import RedditFetcher, RedditSentimentData
 from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
-from src.models.sentiment import FinBERTSentiment, SentimentScore, _analyze_batch_worker, _finbert_executor
+from src.models.sentiment import FinBERTSentiment, SentimentScore, _analyze_batch_worker, get_finbert_executor
 from src.prompts import PromptLoader
 
 
@@ -249,8 +249,9 @@ class SocialSentimentAnalyst:
 
         loop = asyncio.get_running_loop()
         # Use ProcessPoolExecutor for true parallelism (avoids GIL)
+        executor = get_finbert_executor()
         score_dicts = await loop.run_in_executor(
-            _finbert_executor, _analyze_batch_worker, texts, self.finbert.device
+            executor, _analyze_batch_worker, texts, self.finbert.device
         )
         sentiments: list[SentimentScore] = [SentimentScore(**s) for s in score_dicts]
 

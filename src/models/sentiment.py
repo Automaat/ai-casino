@@ -24,8 +24,12 @@ hf_logging.set_verbosity_error()
 FINBERT_MODE = os.getenv("FINBERT_MODE", "local")
 FINBERT_SERVICE_URL = os.getenv("FINBERT_SERVICE_URL", "http://localhost:8485")
 
-# Process pool executor for parallel FinBERT inference (avoids GIL)
-_finbert_executor = ProcessPoolExecutor(max_workers=4)
+# Process pool executor holder for parallel FinBERT inference (avoids GIL)
+class _ExecutorHolder:
+    """Holder for process pool executor (allows recreation after shutdown)."""
+
+    executor: ProcessPoolExecutor | None = None
+    lock = threading.Lock()
 
 
 class _FinBERTHolder:
@@ -252,14 +256,35 @@ def clear_finbert_sentiment() -> None:
         logger.debug("FinBERT singleton cleared")
 
 
+def get_finbert_executor() -> ProcessPoolExecutor:
+    """Get or create process pool executor.
+
+    Creates executor on first call or after shutdown. Thread-safe.
+
+    Returns:
+        ProcessPoolExecutor for FinBERT inference
+    """
+    if _ExecutorHolder.executor is not None:
+        return _ExecutorHolder.executor
+
+    with _ExecutorHolder.lock:
+        if _ExecutorHolder.executor is None:
+            _ExecutorHolder.executor = ProcessPoolExecutor(max_workers=4)
+            logger.debug("FinBERT executor created")
+        return _ExecutorHolder.executor
+
+
 def shutdown_finbert_executor() -> None:
     """Shutdown the process pool executor (for cleanup).
 
     Should be called at application shutdown to properly cleanup worker processes.
     Registered with atexit for automatic cleanup, but can be called explicitly.
     """
-    _finbert_executor.shutdown(wait=True)
-    logger.debug("FinBERT executor shutdown")
+    with _ExecutorHolder.lock:
+        if _ExecutorHolder.executor is not None:
+            _ExecutorHolder.executor.shutdown(wait=True)
+            _ExecutorHolder.executor = None
+            logger.debug("FinBERT executor shutdown")
 
 
 # Register shutdown handler for deterministic cleanup

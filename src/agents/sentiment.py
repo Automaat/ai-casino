@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from src.data.news import NewsArticle
 from src.execution_tracking import track_agent
-from src.models.sentiment import _analyze_batch_worker, _finbert_executor
+from src.models.sentiment import _analyze_batch_worker, get_finbert_executor
 
 if TYPE_CHECKING:
     from src.models.sentiment import SentimentScore
@@ -71,7 +71,8 @@ class SentimentAnalyst:
         loop = asyncio.get_running_loop()
         # Use ProcessPoolExecutor for true parallelism (avoids GIL)
         device = getattr(self.finbert, "device", "cpu")
-        score_dicts = await loop.run_in_executor(_finbert_executor, _analyze_batch_worker, texts, device)
+        executor = get_finbert_executor()
+        score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
 
         # Import here to avoid circular import at module level
         from src.models.sentiment import SentimentScore
