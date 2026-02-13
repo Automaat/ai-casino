@@ -29,18 +29,30 @@ class TradingSupervisor:
         logger.info("Initialized TradingSupervisor")
 
     @track_agent
-    async def plan_analyses(self, context: PlanningContext) -> AnalysisRoutingDecision:
+    async def plan_analyses(
+        self, context: PlanningContext, *, symbol: str | None = None
+    ) -> AnalysisRoutingDecision:
         """Phase 1: Determine which analyses to run.
 
         Args:
             context: Planning context with market state and constraints
+            symbol: Trading symbol for execution tracking; defaults to context.symbol
 
         Returns:
             AnalysisRoutingDecision with required/optional/skip lists
         """
+        if symbol is None:
+            symbol = context.symbol
+        elif symbol != context.symbol:
+            logger.warning(
+                "plan_analyses called with mismatched symbol (%s) and context.symbol (%s)",
+                symbol,
+                context.symbol,
+            )
+
         prompt = self._prompts.load(
             "plan",
-            symbol=context.symbol,
+            symbol=symbol,
             regime=context.regime.regime.value if context.regime else "unknown",
             session=context.trading_session.value,
             owns_position=context.owns_position,
@@ -70,17 +82,32 @@ class TradingSupervisor:
 
     @track_agent
     async def synthesize_results(
-        self, context: SynthesisContext, completed: list[AnalysisType]
+        self, context: SynthesisContext, completed: list[AnalysisType], *, symbol: str | None = None
     ) -> AnalysisWeights:
         """Phase 2: Synthesize completed analyses.
 
         Args:
             context: Synthesis context with completed analysis summaries
             completed: List of completed analysis types
+            symbol: Trading symbol for execution tracking; defaults to context.symbol
 
         Returns:
             AnalysisWeights with reliability scores and confidence adjustment
         """
+        if symbol is None:
+            symbol = context.symbol
+        elif symbol != context.symbol:
+            logger.warning(
+                "synthesize_results called with mismatched symbol (%s) and context.symbol (%s)",
+                symbol,
+                context.symbol,
+            )
+
+        # Short-circuit when no analyses completed (avoid wasting LLM tokens)
+        if not completed:
+            logger.info("No analyses completed, returning default weights")
+            return self._default_weights(completed)
+
         analyses_summary = self._format_analyses_summary(context, completed)
 
         prompt = self._prompts.load("synthesize", symbol=context.symbol, analyses_summary=analyses_summary)
