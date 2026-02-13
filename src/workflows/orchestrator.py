@@ -6,6 +6,7 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
+    from src.di.container import AppContainer
 
 from src.agents.fundamental import FundamentalAnalyst
 from src.agents.sentiment import SentimentAnalyst
@@ -222,11 +223,17 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
-        from src.workflows.stages.instrumented_analysis import run_instrumented_analysis
+        from src.workflows.stages.instrumented_analysis import AnalysisRequest, run_instrumented_analysis
 
-        return await run_instrumented_analysis(
-            self, symbol, period_days, trading_session, collector, extra_context
+        request = AnalysisRequest(
+            workflow=self,
+            symbol=symbol,
+            period_days=period_days,
+            trading_session=trading_session,
+            collector=collector,
+            extra_context=extra_context,
         )
+        return await run_instrumented_analysis(request)
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
         """Set target portfolio allocations for position sizing.
@@ -237,6 +244,33 @@ class TradingWorkflow:
         self._target_allocations = allocations
         if allocations:
             logger.info(f"Set target allocations for {len(allocations)} symbols")
+
+    def get_target_allocation(self, symbol: str) -> float | None:
+        """Get target allocation for a symbol.
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            Target portfolio weight or None
+        """
+        return self._target_allocations.get(symbol) if self._target_allocations else None
+
+    def get_default_strategy(self) -> MomentumStrategy | EnsembleStrategy:
+        """Get default strategy instance.
+
+        Returns:
+            Default strategy (momentum or ensemble)
+        """
+        return self._default_strategy
+
+    def get_container(self) -> "AppContainer":
+        """Get DI container instance.
+
+        Returns:
+            Dependency injection container
+        """
+        return self._container
 
     # Backward compatibility methods for tests
     async def _fetch_data(
