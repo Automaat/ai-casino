@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from rich.console import Console
 
+from src.daemon.state.managers.portfolio import CorrelationAuditInput, PortfolioRebalancingInput
 from src.daemon.tasks.base import TaskExecutor
 
 if TYPE_CHECKING:
@@ -76,7 +77,7 @@ class OptimizationTask(TaskExecutor):
         """Get last optimization timestamp."""
         return await self.components.state.get_last_optimization()
 
-    async def record_success(self, duration: float) -> None:
+    async def record_success(self, _duration: float) -> None:
         """Record optimization completion."""
         await self.components.state.record_optimization(
             symbols_optimized=self._optimized,
@@ -163,7 +164,7 @@ class RebalancingTask(TaskExecutor):
                 alloc.action = rebalance.action
                 alloc.delta = rebalance.delta
 
-        await self.components.state.record_portfolio_rebalancing(
+        input_data = PortfolioRebalancingInput(
             method=method,
             allocations=allocations,
             expected_return=result.optimized_portfolio.expected_return,
@@ -172,6 +173,7 @@ class RebalancingTask(TaskExecutor):
             rebalances_executed=result.executed_count,
             rebalances_pending=result.pending_count,
         )
+        await self.components.state.record_portfolio_rebalancing(input_data)
 
         # Display summary
         console.print("\n[bold]Portfolio Metrics:[/bold]")
@@ -204,7 +206,7 @@ class RebalancingTask(TaskExecutor):
         """Get last rebalancing timestamp."""
         return await self.components.state.get_last_portfolio_rebalancing()
 
-    async def record_success(self, duration: float) -> None:
+    async def record_success(self, _duration: float) -> None:
         """Record rebalancing completion."""
         # State already recorded in execute()
 
@@ -273,10 +275,10 @@ class CorrelationAuditTask(TaskExecutor):
         """Get last correlation audit timestamp."""
         return await self.components.state.get_last_correlation_audit()
 
-    async def record_success(self, duration: float) -> None:
+    async def record_success(self, _duration: float) -> None:
         """Record correlation audit completion."""
         if self._result:
-            await self.components.state.record_correlation_audit(
+            input_data = CorrelationAuditInput(
                 num_positions=self._result.num_positions,
                 num_correlated_pairs=len(self._result.highly_correlated_pairs),
                 max_correlation=self._result.max_correlation,
@@ -285,6 +287,7 @@ class CorrelationAuditTask(TaskExecutor):
                 num_substitutions=len(self._result.substitution_suggestions),
                 total_duration_seconds=self._duration,
             )
+            await self.components.state.record_correlation_audit(input_data)
 
     def _print_results(self, result: CorrelationAuditResult, duration: float) -> None:
         """Print correlation audit results to console.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -16,12 +15,15 @@ if TYPE_CHECKING:
 
 from src.daemon.state.managers.data_pipeline import DataPipelineStateManager
 from src.daemon.state.managers.discovery import DiscoveryStateManager
-from src.daemon.state.managers.portfolio import PortfolioStateManager
+from src.daemon.state.managers.portfolio import (
+    CorrelationAuditInput,
+    PortfolioRebalancingInput,
+    PortfolioStateManager,
+)
 from src.daemon.state.managers.positions import PositionStateManager
 from src.daemon.state.managers.snapshots import SnapshotStateManager
 from src.daemon.state.managers.strategy import StrategyStateManager
-from src.daemon.state.managers.trading import TradingStateManager
-from src.daemon.state.repositories import RepositoryBundle
+from src.daemon.state.managers.trading import AnalysisRecordInput, TradingStateManager
 from src.daemon.state.models import (
     AnalysisRecord,
     CorrelationAuditRecord,
@@ -33,7 +35,6 @@ from src.daemon.state.models import (
     MonteCarloRecord,
     OptimizationRecord,
     PeerAnalysisRecord,
-    PortfolioAllocationRecord,
     PortfolioRebalancingRecord,
     PortfolioSnapshot,
     PrefetchRecord,
@@ -42,35 +43,15 @@ from src.daemon.state.models import (
     ScreeningRecord,
     SectorRotationRecord,
 )
+from src.daemon.state.repositories import RepositoryBundle
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
 from src.execution_tracking.tracker import ExecutionGraphTracker
 from src.screening.screener import ScreeningResult
-from src.strategies.session import TradingSession
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
-    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
-    from src.database.repositories.degradation import DegradationRecordRepository
-    from src.database.repositories.discovery import DiscoveryHistoryRepository
-    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
-    from src.database.repositories.game_plan import GamePlanRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
-    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
-    from src.database.repositories.optimization import OptimizationRecordRepository
-    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
-    from src.database.repositories.position import PositionRecordRepository
-    from src.database.repositories.position_action import PositionManagementActionRepository
-    from src.database.repositories.prefetch import PrefetchRecordRepository
-    from src.database.repositories.profiling import ProfilingRecordRepository
-    from src.database.repositories.rebalancing import RebalancingRecordRepository
-    from src.database.repositories.risk_report import RiskReportRecordRepository
-    from src.database.repositories.screening import ScreeningRecordRepository
-    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
-    from src.database.repositories.snapshot import PortfolioSnapshotRepository
 
 
 class DaemonState(BaseModel):
@@ -152,38 +133,8 @@ class DaemonState(BaseModel):
     # Trading Manager API
     # ===================
 
-    async def record_analysis(
-        self,
-        symbol: str,
-        signal: str,
-        confidence: float,
-        executed: bool = False,
-        trading_session: TradingSession = TradingSession.REGULAR,
-        is_paper_trade: bool = True,
-        rsi: float | None = None,
-        macd_hist: float | None = None,
-        reasoning: list[str] | None = None,
-        technical_analysis_reasoning: str | None = None,
-        sentiment_analysis_reasoning: str | None = None,
-        news_analysis_reasoning: str | None = None,
-    ) -> None:
+    async def record_analysis(self, input_data: AnalysisRecordInput) -> None:
         """Delegate to trading manager."""
-        from src.daemon.state.managers.trading import AnalysisRecordInput
-
-        input_data = AnalysisRecordInput(
-            symbol=symbol,
-            signal=signal,
-            confidence=confidence,
-            executed=executed,
-            trading_session=trading_session,
-            is_paper_trade=is_paper_trade,
-            rsi=rsi,
-            macd_hist=macd_hist,
-            reasoning=reasoning,
-            technical_analysis_reasoning=technical_analysis_reasoning,
-            sentiment_analysis_reasoning=sentiment_analysis_reasoning,
-            news_analysis_reasoning=news_analysis_reasoning,
-        )
         await self.trading.record_analysis(input_data)
 
     async def get_last_run(self) -> datetime | None:
@@ -283,28 +234,8 @@ class DaemonState(BaseModel):
         """Delegate to portfolio manager."""
         await self.portfolio.record_optimization(symbols_optimized, symbols_skipped, total_time_seconds)
 
-    async def record_portfolio_rebalancing(
-        self,
-        method: str,
-        allocations: list[PortfolioAllocationRecord],
-        expected_return: float,
-        expected_volatility: float,
-        sharpe_ratio: float,
-        rebalances_executed: int,
-        rebalances_pending: int,
-    ) -> None:
+    async def record_portfolio_rebalancing(self, input_data: PortfolioRebalancingInput) -> None:
         """Delegate to portfolio manager."""
-        from src.daemon.state.managers.portfolio import PortfolioRebalancingInput
-
-        input_data = PortfolioRebalancingInput(
-            method=method,
-            allocations=allocations,
-            expected_return=expected_return,
-            expected_volatility=expected_volatility,
-            sharpe_ratio=sharpe_ratio,
-            rebalances_executed=rebalances_executed,
-            rebalances_pending=rebalances_pending,
-        )
         await self.portfolio.record_portfolio_rebalancing(input_data)
 
     async def record_sector_rotation(
@@ -333,28 +264,8 @@ class DaemonState(BaseModel):
             symbols_analyzed, rankings, swap_recommendations, total_peers, total_duration_seconds
         )
 
-    async def record_correlation_audit(
-        self,
-        num_positions: int,
-        num_correlated_pairs: int,
-        max_correlation: float,
-        avg_correlation: float,
-        diversification_ratio: float,
-        num_substitutions: int,
-        total_duration_seconds: float,
-    ) -> None:
+    async def record_correlation_audit(self, input_data: CorrelationAuditInput) -> None:
         """Delegate to portfolio manager."""
-        from src.daemon.state.managers.portfolio import CorrelationAuditInput
-
-        input_data = CorrelationAuditInput(
-            num_positions=num_positions,
-            num_correlated_pairs=num_correlated_pairs,
-            max_correlation=max_correlation,
-            avg_correlation=avg_correlation,
-            diversification_ratio=diversification_ratio,
-            num_substitutions=num_substitutions,
-            total_duration_seconds=total_duration_seconds,
-        )
         await self.portfolio.record_correlation_audit(input_data)
 
     async def record_risk_report(self, report: RiskReportRecord) -> None:
@@ -466,7 +377,9 @@ class DaemonState(BaseModel):
         screened_at: datetime | None = None,
     ) -> None:
         """Delegate to data pipeline manager."""
-        await self.data_pipeline.record_after_hours_screening(criteria, universe, candidates, top_n, screened_at)
+        await self.data_pipeline.record_after_hours_screening(
+            criteria, universe, candidates, top_n, screened_at
+        )
 
     async def record_earnings_fetch(
         self,

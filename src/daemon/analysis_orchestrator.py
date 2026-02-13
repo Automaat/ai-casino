@@ -15,6 +15,7 @@ from src.cache.historical import SignalOutcomeInput
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.notification_helper import DaemonNotificationHelper
+from src.daemon.state.managers.trading import AnalysisRecordInput
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 if TYPE_CHECKING:
@@ -514,7 +515,7 @@ class AnalysisOrchestrator:
             else None
         )
 
-        await self.state.record_analysis(
+        input_data = AnalysisRecordInput(
             symbol=symbol,
             signal=result.decision.action.value,
             confidence=result.decision.confidence,
@@ -528,6 +529,7 @@ class AnalysisOrchestrator:
             sentiment_analysis_reasoning=sentiment_reasoning,
             news_analysis_reasoning=news_reasoning,
         )
+        await self.state.record_analysis(input_data)
 
     async def _record_signal_outcome(self, symbol: str, result: TradingWorkflowResult) -> None:
         """Record signal outcome to PostgreSQL or SQLite.

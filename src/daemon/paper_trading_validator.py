@@ -104,10 +104,7 @@ class PaperTradingValidator:
 
         # Calculate duration
         paper_start = await self.state.get_paper_trading_start_date()
-        if paper_start:
-            duration_days = (datetime.now(UTC) - paper_start).days
-        else:
-            duration_days = 0
+        duration_days = (datetime.now(UTC) - paper_start).days if paper_start else 0
 
         report = ReadinessReport(
             ready_for_live=ready,

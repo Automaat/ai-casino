@@ -123,9 +123,12 @@ async def run_backfill(state_file: str, database_url: str) -> dict[str, tuple[in
     """
     logger.info(f"Starting backfill from {state_file}")
 
-    # Load JSON directly
-    with Path(state_file).open() as f:
-        state_data = json.load(f)
+    # Load JSON directly (offload blocking I/O)
+    def _load_json() -> dict:
+        with Path(state_file).open() as f:
+            return json.load(f)
+
+    state_data = await asyncio.to_thread(_load_json)
 
     analyses_data = state_data.get("analyses", [])
     discovery_data = state_data.get("discovery_history", [])

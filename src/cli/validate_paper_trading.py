@@ -1,16 +1,12 @@
 """CLI command for paper trading validation."""
 
 import sys
-from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from src.daemon.config import DaemonConfig
-from src.daemon.paper_trading_validator import PaperTradingValidator, ReadinessReport
-from src.daemon.state import DaemonState
-from src.metrics.tracker import MetricsTracker
+from src.daemon.paper_trading_validator import ReadinessReport
 
 app = typer.Typer(help="Validate paper trading readiness for live promotion")
 console = Console()
@@ -98,10 +94,11 @@ def validate_paper_trading(config_path: str = "daemon.yaml") -> int:
     try:
         # NOTE: This CLI command requires async rewrite after JSON state elimination
         # See PR description: TUI/CLI are expected to be broken
-        raise NotImplementedError(
+        msg = (
             "validate_paper_trading requires async rewrite after JSON state elimination. "
             "Use daemon API endpoints or wait for CLI refactor."
         )
+        raise NotImplementedError(msg)
 
     except FileNotFoundError:
         console.print(f"[red]Error: Config file not found: {config_path}[/red]")

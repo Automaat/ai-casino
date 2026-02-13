@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from sqlalchemy import delete, select
 
-from sqlalchemy.engine import Result
-
 from src.database.models import ActiveDiscoveryCandidateORM
 from src.database.repositories.base import BaseRepository
 from src.discovery.models import ActiveDiscoveryCandidate, DiscoverySourceDetail
