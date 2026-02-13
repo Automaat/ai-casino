@@ -8,15 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
 import pytest
 
-
-@pytest.fixture(scope="session", autouse=True)
-def set_test_database_url():
-    """Set DATABASE_URL for all tests using in-memory SQLite."""
-    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
-    yield
-    os.environ.pop("DATABASE_URL", None)
-
-
 from src.agents.comparative import ComparativeAnalysis, RelativeValuation
 from src.agents.risk import AccountInfo
 from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
@@ -37,6 +28,14 @@ from src.screening.analyzer import ScreeningAnalysis
 from src.screening.screener import ScreeningCriteria, ScreeningOutput, ScreeningResult
 from src.strategies.signal import Signal
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
+
+
+@pytest.fixture(scope="session", autouse=True)
+def set_test_database_url():
+    """Set DATABASE_URL for all tests using in-memory SQLite."""
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+    yield
+    os.environ.pop("DATABASE_URL", None)
 
 
 @pytest.fixture
