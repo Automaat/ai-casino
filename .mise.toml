@@ -51,11 +51,11 @@ run = "pgrep -f 'ollama serve' && echo 'Ollama is running' || echo 'Ollama is no
 
 [tasks.dev]
 description = "Run dev environment (cloud LLM, uses ~/.ai-casino/daemon-production.yaml)"
-run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build --remove-orphans"
 
 [tasks."dev:ollama"]
 description = "Run dev environment with Ollama (uses ~/.ai-casino/daemon-dev.yaml)"
-run = "docker compose -f docker-compose.yml -f docker-compose.dev-ollama.yml up --build"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev-ollama.yml up --build --remove-orphans"
 
 [tasks."dev:down"]
 description = "Stop dev environment"
@@ -112,7 +112,7 @@ run = "docker exec -it ai-casino-db psql -U postgres -d ai_casino"
 
 [tasks.prod]
 description = "Run production daemon with Docker Compose"
-run = "docker compose up --build"
+run = "docker compose up --build --remove-orphans"
 
 [tasks."prod:down"]
 description = "Stop production daemon"
