@@ -1,6 +1,6 @@
 """Embedded FastAPI server for daemon monitoring."""
 
-from src.daemon.api.app import create_api_app, get_broker_account_info_cached
+from src.daemon.api.app import create_api_app
 from src.daemon.api.models import (
     AnalysesResponse,
     AnalysisRecordResponse,
@@ -52,5 +52,4 @@ __all__ = [
     "StateSummaryResponse",
     "WatchlistResponse",
     "create_api_app",
-    "get_broker_account_info_cached",
 ]

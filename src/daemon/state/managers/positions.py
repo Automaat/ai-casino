@@ -21,14 +21,14 @@ class PositionStateManager(StateManager):
 
     def set_repositories(
         self,
-        position_repository: object,
-        position_action_repository: object,
+        _position_repository: object,
+        _position_action_repository: object,
     ) -> None:
         """Enable database persistence (deprecated - use set_database_engine).
 
         Args:
-            position_repository: Ignored (for API compatibility)
-            position_action_repository: Ignored (for API compatibility)
+            _position_repository: Ignored (for API compatibility)
+            _position_action_repository: Ignored (for API compatibility)
         """
         # No-op for backward compatibility
         logger.debug("PositionStateManager.set_repositories called (no-op)")

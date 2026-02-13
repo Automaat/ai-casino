@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import PrivateAttr
@@ -12,10 +11,6 @@ from pydantic import PrivateAttr
 from src.daemon.state.managers.base import StateManager
 from src.daemon.state.models import AnalysisRecord
 from src.strategies.session import TradingSession
-
-if TYPE_CHECKING:
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
 
 
 @dataclass

@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
 from loguru import logger
 
@@ -10,9 +10,10 @@ if TYPE_CHECKING:
     from src.database.repositories.base import BaseRepository
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
-def handle_event_loop_error(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+def handle_event_loop_error(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
     """Decorator to handle event loop binding errors.
 
     When a repository method is called from a different event loop than where
@@ -27,11 +28,14 @@ def handle_event_loop_error(func: Callable[..., Awaitable[T]]) -> Callable[..., 
     """
 
     @wraps(func)
-    async def wrapper(self: BaseRepository[Any], *args: Any, **kwargs: Any) -> T:
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        # First arg is self (BaseRepository instance)
+        self = cast("BaseRepository[Any]", args[0]) if args else None
+
         try:
-            return await func(self, *args, **kwargs)
+            return await func(*args, **kwargs)
         except RuntimeError as e:
-            if "bound to a different event loop" in str(e):
+            if "bound to a different event loop" in str(e) and self is not None:
                 logger.warning(f"{func.__name__} encountered event loop error, recreating session")
                 # Recreate session in current event loop
                 from src.database.connection import get_db_engine
@@ -40,10 +44,10 @@ def handle_event_loop_error(func: Callable[..., Awaitable[T]]) -> Callable[..., 
                 self._session = engine.session()
 
                 # Retry operation with new session
-                return await func(self, *args, **kwargs)
+                return await func(*args, **kwargs)
             raise
         except Exception as e:
             logger.opt(exception=True).error(f"Database operation failed: {e}")
             raise
 
-    return cast("Callable[..., Awaitable[T]]", wrapper)
+    return wrapper
