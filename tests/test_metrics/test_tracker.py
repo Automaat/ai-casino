@@ -466,34 +466,6 @@ def test_save_report(tracker_with_mocked_file):
     assert "last_7_days" in report_data
 
 
-def test_load_trades_from_jsonl():
-    """Test loading trades from JSONL file."""
-    trade_data = {
-        "timestamp": datetime.now(UTC).isoformat(),
-        "symbol": "AAPL",
-        "action": "BUY",
-        "entry_price": 150.0,
-        "exit_price": 160.0,
-        "shares": 100,
-        "stop_loss_price": 147.0,
-        "confidence": 0.8,
-        "risk_level": "LOW",
-        "status": "CLOSED",
-        "pnl": 1000.0,
-        "pnl_percent": 6.67,
-    }
-
-    jsonl_content = json.dumps(trade_data) + "\n"
-
-    with patch("pathlib.Path.exists", return_value=True):
-        with patch("pathlib.Path.open", mock_open(read_data=jsonl_content)):
-            tracker = MetricsTracker(risk_free_rate=0.02)
-
-    assert len(tracker.trades) == 1
-    assert tracker.trades[0].symbol == "AAPL"
-    assert tracker.trades[0].pnl == 1000.0
-
-
 def test_filter_trades_by_window_30d(tracker_with_mocked_file):
     """Test filtering trades by 30-day window."""
     from datetime import timedelta

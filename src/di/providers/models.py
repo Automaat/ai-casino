@@ -10,12 +10,13 @@ if TYPE_CHECKING:
     from src.daemon.state import DaemonState
     from src.data.market import MarketDataFetcher
     from src.data.universe import StockUniverseFetcher
+    from src.database.repositories.trade import TradeRepository
     from src.di.container import AppContainer
     from src.metrics.execution import ExecutionMetricsCollector
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.metrics.quantstats_reporter import QuantStatsReporter
     from src.metrics.risk import RiskMetricsCalculator
-    from src.metrics.tracker import MetricsTracker
+    from src.metrics.tracker import BaseMetricsTracker
     from src.optimization.optimizer import OptunaOptimizer
     from src.screening.screener import StockScreener
     from src.strategies.regime import MarketRegimeDetector
@@ -179,18 +180,25 @@ def create_optuna_optimizer(n_trials: int = 100) -> OptunaOptimizer:
     return OptunaOptimizer(n_trials=n_trials)
 
 
-def create_metrics_tracker(daemon_config: DaemonConfig) -> MetricsTracker:
-    """Create MetricsTracker with config.
+def create_metrics_tracker(
+    daemon_config: DaemonConfig,
+    trade_repository: TradeRepository,
+) -> BaseMetricsTracker:
+    """Create DatabaseMetricsTracker with config.
 
     Args:
         daemon_config: Daemon configuration
+        trade_repository: Trade repository for persistence
 
     Returns:
-        MetricsTracker instance
+        DatabaseMetricsTracker instance
     """
-    from src.metrics.tracker import MetricsTracker
+    from src.metrics.db_tracker import DatabaseMetricsTracker
 
-    return MetricsTracker(risk_free_rate=daemon_config.metrics.risk_free_rate)
+    return DatabaseMetricsTracker(
+        trade_repository=trade_repository,
+        risk_free_rate=daemon_config.metrics.risk_free_rate,
+    )
 
 
 def create_quantstats_reporter(daemon_config: DaemonConfig) -> QuantStatsReporter:
