@@ -40,6 +40,7 @@ async def test_trader_agent_decide(test_container, sample_bullish_research, samp
         key_themes=["Growth", "Innovation"],
         impact_assessment="Positive outlook",
         recommendation="Consider buying",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -191,6 +192,7 @@ async def test_decide_owns_position_true(test_container, sample_bullish_research
         key_themes=["Stable"],
         impact_assessment="Neutral outlook",
         recommendation="Hold position",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -247,6 +249,7 @@ async def test_decide_owns_position_false(test_container, sample_bullish_researc
         key_themes=["Stable"],
         impact_assessment="Neutral outlook",
         recommendation="Hold position",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(
@@ -308,6 +311,7 @@ async def test_prompt_includes_portfolio_context(
         key_themes=["Growth"],
         impact_assessment="Positive",
         recommendation="Buy",
+        confidence=0.75,
     )
 
     fundamental = FundamentalAnalysis(

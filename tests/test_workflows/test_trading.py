@@ -209,6 +209,7 @@ async def test_make_decision(test_container, sample_bullish_research, sample_bea
             key_themes=["Growth"],
             impact_assessment="Positive",
             recommendation="Buy",
+            confidence=0.75,
         ),
         "trump_analysis": None,
         "fundamental_analysis": FundamentalAnalysis(
@@ -484,6 +485,7 @@ async def test_account_info_passed_to_trader(
             key_themes=["Stable"],
             impact_assessment="Neutral",
             recommendation="Hold",
+            confidence=0.75,
         ),
         "fundamental_analysis": FundamentalAnalysis(
             valuation="FAIRLY_VALUED",

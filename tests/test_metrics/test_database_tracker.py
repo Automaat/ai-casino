@@ -89,6 +89,7 @@ def mock_workflow_result():
             key_themes=["earnings", "growth"],
             impact_assessment="POSITIVE",
             recommendation="BUY",
+            confidence=0.75,
         ),
         fundamental=FundamentalAnalysis(
             valuation="FAIRLY_VALUED",
@@ -225,6 +226,7 @@ class TestRecordDecisionAsync:
                 key_themes=["volatility"],
                 impact_assessment="NEGATIVE",
                 recommendation="SELL",
+                confidence=0.75,
             ),
             fundamental=FundamentalAnalysis(
                 valuation="OVERVALUED",
