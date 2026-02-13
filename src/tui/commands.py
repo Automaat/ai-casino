@@ -686,7 +686,7 @@ Type freely to chat about markets or ask questions."""
             message=f"No matching candidates found for: {', '.join(symbols)}",
         )
 
-    def _handle_candidates_clear(self, state: DaemonState, state_file: str) -> CommandResult:
+    def _handle_candidates_clear(self, _state: DaemonState, _state_file: str) -> CommandResult:
         """Clear old screening candidates.
 
         NOTE: This command is broken after PostgreSQL migration.

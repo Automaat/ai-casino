@@ -22,6 +22,7 @@ from src.daemon.state.models import (
 )
 
 if TYPE_CHECKING:
+    from src.daemon.state.repositories import RepositoryBundle
     from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
     from src.database.repositories.metadata import MetadataRepository
     from src.database.repositories.monte_carlo import MonteCarloRecordRepository
@@ -78,26 +79,16 @@ class PortfolioStateManager(StateManager):
     _risk_report_cache: list[RiskReportRecord] | None = PrivateAttr(default=None)
     _monte_carlo_cache: list[MonteCarloRecord] | None = PrivateAttr(default=None)
 
-    def set_repositories(
-        self,
-        metadata_repository: MetadataRepository,
-        optimization_repository: OptimizationRecordRepository,
-        rebalancing_repository: RebalancingRecordRepository,
-        sector_rotation_repository: SectorRotationRecordRepository,
-        peer_analysis_repository: PeerAnalysisRecordRepository,
-        correlation_audit_repository: CorrelationAuditRecordRepository,
-        risk_report_repository: RiskReportRecordRepository,
-        monte_carlo_repository: MonteCarloRecordRepository,
-    ) -> None:
-        """Inject repositories."""
-        self._metadata_repository = metadata_repository
-        self._optimization_repository = optimization_repository
-        self._rebalancing_repository = rebalancing_repository
-        self._sector_rotation_repository = sector_rotation_repository
-        self._peer_analysis_repository = peer_analysis_repository
-        self._correlation_audit_repository = correlation_audit_repository
-        self._risk_report_repository = risk_report_repository
-        self._monte_carlo_repository = monte_carlo_repository
+    def set_repositories(self, repos: RepositoryBundle) -> None:
+        """Inject repositories from bundle."""
+        self._metadata_repository = repos.metadata_repository
+        self._optimization_repository = repos.optimization_repository
+        self._rebalancing_repository = repos.rebalancing_repository
+        self._sector_rotation_repository = repos.sector_rotation_repository
+        self._peer_analysis_repository = repos.peer_analysis_repository
+        self._correlation_audit_repository = repos.correlation_audit_repository
+        self._risk_report_repository = repos.risk_report_repository
+        self._monte_carlo_repository = repos.monte_carlo_repository
         logger.debug("PortfolioStateManager repositories injected")
 
     async def get_last_optimization(self) -> datetime | None:

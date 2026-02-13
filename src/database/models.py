@@ -529,7 +529,9 @@ class PeerAnalysisRecordORM(Base):
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     symbols_analyzed: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     rankings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    swap_recommendations: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    swap_recommendations: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     total_peers: Mapped[int] = mapped_column(Integer, nullable=False)
     total_duration_seconds: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -823,7 +825,9 @@ class DegradationRecordORM(Base):
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     tier: Mapped[str] = mapped_column(String(20), nullable=False)
-    unavailable_services: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    unavailable_services: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     confidence_adjustment: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     halt_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -100,7 +100,9 @@ class ProfilingRecordRepository(BaseRepository[ProfilingRecord]):
             duration_seconds=float(orm.duration_seconds),
             profiling_overhead_percent=float(orm.profiling_overhead_percent),
             top_function=orm.top_function,
-            top_function_cumtime=float(orm.top_function_cumtime) if orm.top_function_cumtime is not None else None,
+            top_function_cumtime=(
+                float(orm.top_function_cumtime) if orm.top_function_cumtime is not None else None
+            ),
         )
 
     def __repr__(self) -> str:

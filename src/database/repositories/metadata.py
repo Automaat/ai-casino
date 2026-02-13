@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import select
@@ -29,13 +29,14 @@ class MetadataRepository(BaseRepository[dict]):
 
     async def create(self, entity: dict) -> dict:
         """Create metadata entry (use set instead)."""
-        raise NotImplementedError("Use set() method instead")
+        msg = "Use set() method instead"
+        raise NotImplementedError(msg)
 
     async def get_by_id(self, entity_id: str) -> dict | None:
         """Get metadata by key (use get instead)."""
         return await self.get(entity_id)
 
-    async def get(self, key: str) -> Any:
+    async def get(self, key: str) -> datetime | int | str | float | list | dict | None:
         """Get metadata value by key.
 
         Args:
@@ -59,13 +60,14 @@ class MetadataRepository(BaseRepository[dict]):
         # Parse datetime strings back to datetime objects
         if isinstance(value, str) and value.endswith("Z"):
             try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+                # Replace Z with UTC timezone - fromisoformat handles +00:00
+                return datetime.fromisoformat(value.removesuffix("Z")).replace(tzinfo=UTC)
             except ValueError:
                 return value
 
         return value
 
-    async def set(self, key: str, value: Any) -> None:
+    async def set(self, key: str, value: datetime | int | str | float | list | dict) -> None:
         """Set metadata value by key.
 
         Args:
@@ -73,10 +75,7 @@ class MetadataRepository(BaseRepository[dict]):
             value: Value to store (datetime, int, str, list, dict, etc.)
         """
         # Serialize datetime to ISO format string
-        if isinstance(value, datetime):
-            serialized = value.isoformat()
-        else:
-            serialized = value
+        serialized = value.isoformat() if isinstance(value, datetime) else value
 
         # Check if exists
         result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
@@ -85,10 +84,10 @@ class MetadataRepository(BaseRepository[dict]):
         if orm:
             # Update existing
             orm.value = {"data": serialized}
-            orm.updated_at = datetime.now()
+            orm.updated_at = datetime.now(UTC)
         else:
             # Create new
-            orm = DaemonMetadataORM(key=key, value={"data": serialized}, updated_at=datetime.now())
+            orm = DaemonMetadataORM(key=key, value={"data": serialized}, updated_at=datetime.now(UTC))
             self._session.add(orm)
 
         await self._session.commit()

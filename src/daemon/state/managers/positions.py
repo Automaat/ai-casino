@@ -113,7 +113,9 @@ class PositionStateManager(StateManager):
             return []
         return await self._position_repository.get_all_active()
 
-    async def get_recent_actions(self, symbol: str | None = None, limit: int = 100) -> list[PositionManagementAction]:
+    async def get_recent_actions(
+        self, symbol: str | None = None, limit: int = 100
+    ) -> list[PositionManagementAction]:
         """Get recent position management actions.
 
         Args:

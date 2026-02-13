@@ -5,7 +5,7 @@ from src.database.repositories.analysis import AnalysisRecordRepository
 from src.database.repositories.base import BaseRepository
 from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
 from src.database.repositories.degradation import DegradationRecordRepository
-from src.database.repositories.discovery import DiscoveryHistoryRecordRepository
+from src.database.repositories.discovery import DiscoveryHistoryRepository
 from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
 from src.database.repositories.execution_graph import ExecutionGraphRepository
 from src.database.repositories.game_plan import GamePlanRecordRepository
@@ -32,7 +32,7 @@ __all__ = [
     "BaseRepository",
     "CorrelationAuditRecordRepository",
     "DegradationRecordRepository",
-    "DiscoveryHistoryRecordRepository",
+    "DiscoveryHistoryRepository",
     "EarningsCalendarRecordRepository",
     "ExecutionGraphRepository",
     "GamePlanRecordRepository",

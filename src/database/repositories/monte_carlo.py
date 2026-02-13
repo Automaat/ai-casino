@@ -110,7 +110,9 @@ class MonteCarloRecordRepository(BaseRepository[MonteCarloRecord]):
             expected_worst_drawdown=float(orm.expected_worst_drawdown),
             var_95=float(orm.var_95),
             cvar_95=float(orm.cvar_95),
-            median_recovery_days=float(orm.median_recovery_days) if orm.median_recovery_days is not None else None,
+            median_recovery_days=(
+                float(orm.median_recovery_days) if orm.median_recovery_days is not None else None
+            ),
             exceeds_risk_tolerance=orm.exceeds_risk_tolerance,
             alert_message=orm.alert_message,
             portfolio_symbols=orm.portfolio_symbols if isinstance(orm.portfolio_symbols, list) else [],

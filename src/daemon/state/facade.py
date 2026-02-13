@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -43,6 +42,7 @@ from src.daemon.state.models import (
     ScreeningRecord,
     SectorRotationRecord,
 )
+from src.daemon.state.repositories import RepositoryBundle
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
 from src.execution_tracking.tracker import ExecutionGraphTracker
@@ -52,52 +52,6 @@ from src.strategies.session import TradingSession
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
-    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
-    from src.database.repositories.degradation import DegradationRecordRepository
-    from src.database.repositories.discovery import DiscoveryHistoryRepository
-    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
-    from src.database.repositories.game_plan import GamePlanRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
-    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
-    from src.database.repositories.optimization import OptimizationRecordRepository
-    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
-    from src.database.repositories.position import PositionRecordRepository
-    from src.database.repositories.position_action import PositionManagementActionRepository
-    from src.database.repositories.prefetch import PrefetchRecordRepository
-    from src.database.repositories.profiling import ProfilingRecordRepository
-    from src.database.repositories.rebalancing import RebalancingRecordRepository
-    from src.database.repositories.risk_report import RiskReportRecordRepository
-    from src.database.repositories.screening import ScreeningRecordRepository
-    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
-    from src.database.repositories.snapshot import PortfolioSnapshotRepository
-
-
-@dataclass
-class RepositoryBundle:
-    """Bundle of all repositories for dependency injection."""
-
-    metadata_repository: MetadataRepository
-    analysis_repository: AnalysisRecordRepository
-    position_repository: PositionRecordRepository
-    action_repository: PositionManagementActionRepository
-    optimization_repository: OptimizationRecordRepository
-    rebalancing_repository: RebalancingRecordRepository
-    sector_rotation_repository: SectorRotationRecordRepository
-    peer_analysis_repository: PeerAnalysisRecordRepository
-    correlation_audit_repository: CorrelationAuditRecordRepository
-    risk_report_repository: RiskReportRecordRepository
-    monte_carlo_repository: MonteCarloRecordRepository
-    prefetch_repository: PrefetchRecordRepository
-    screening_repository: ScreeningRecordRepository
-    earnings_repository: EarningsCalendarRecordRepository
-    profiling_repository: ProfilingRecordRepository
-    discovery_repository: DiscoveryHistoryRepository
-    active_discovery_repository: ActiveDiscoveryCandidateRepository
-    game_plan_repository: GamePlanRecordRepository
-    degradation_repository: DegradationRecordRepository
-    snapshot_repository: PortfolioSnapshotRepository
 
 
 class DaemonState(BaseModel):
@@ -141,22 +95,12 @@ class DaemonState(BaseModel):
 
         # PositionStateManager
         self.positions.set_repositories(
-            metadata_repository=repos.metadata_repository,
             position_repository=repos.position_repository,
-            action_repository=repos.action_repository,
+            position_action_repository=repos.action_repository,
         )
 
         # PortfolioStateManager
-        self.portfolio.set_repositories(
-            metadata_repository=repos.metadata_repository,
-            optimization_repository=repos.optimization_repository,
-            rebalancing_repository=repos.rebalancing_repository,
-            sector_rotation_repository=repos.sector_rotation_repository,
-            peer_analysis_repository=repos.peer_analysis_repository,
-            correlation_audit_repository=repos.correlation_audit_repository,
-            risk_report_repository=repos.risk_report_repository,
-            monte_carlo_repository=repos.monte_carlo_repository,
-        )
+        self.portfolio.set_repositories(repos)
 
         # DataPipelineStateManager
         self.data_pipeline.set_repositories(

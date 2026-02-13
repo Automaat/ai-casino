@@ -134,7 +134,7 @@ class DaemonFactory:
         state = DaemonState()
 
         # Inject all repositories via RepositoryBundle
-        from src.daemon.state.facade import RepositoryBundle
+        from src.daemon.state.repositories import RepositoryBundle
 
         repos = RepositoryBundle(
             metadata_repository=self._container.metadata_repository(),
