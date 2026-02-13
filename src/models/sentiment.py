@@ -24,6 +24,7 @@ hf_logging.set_verbosity_error()
 FINBERT_MODE = os.getenv("FINBERT_MODE", "local")
 FINBERT_SERVICE_URL = os.getenv("FINBERT_SERVICE_URL", "http://localhost:8485")
 
+
 # Process pool executor holder for parallel FinBERT inference (avoids GIL)
 class _ExecutorHolder:
     """Holder for process pool executor (allows recreation after shutdown)."""
