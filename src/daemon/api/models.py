@@ -223,6 +223,29 @@ class ExecutionMetricsListResponse(BaseModel):
     count: int
 
 
+class ActiveExecutionGraphsResponse(BaseModel):
+    """Active execution graphs response."""
+
+    graphs: list[dict] = Field(description="Active execution graph data")
+    count: int = Field(description="Number of active graphs")
+
+
+class ExecutionGraphDetailResponse(BaseModel):
+    """Single execution graph detail response."""
+
+    workflow_id: str = Field(description="Workflow ID")
+    graph: dict = Field(description="Execution graph data")
+    source: str = Field(description="Data source: active | memory | database")
+
+
+class ExecutionGraphHistoryResponse(BaseModel):
+    """Execution graph history response."""
+
+    graphs: list[dict] = Field(description="Historical execution graphs")
+    count: int = Field(description="Number of graphs returned")
+    database_enabled: bool = Field(description="Whether database persistence is enabled")
+
+
 class SectorRotationResponse(BaseModel):
     """Sector rotation analysis."""
 
@@ -286,6 +309,7 @@ class FullConfigResponse(BaseModel):
 
 
 __all__ = [
+    "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
     "AnalysisRecordResponse",
     "ConfigResponse",
@@ -293,6 +317,8 @@ __all__ = [
     "DegradationHistoryResponse",
     "DegradationResponse",
     "EventResponse",
+    "ExecutionGraphDetailResponse",
+    "ExecutionGraphHistoryResponse",
     "ExecutionMetricsListResponse",
     "FullConfigResponse",
     "GamePlanResponse",

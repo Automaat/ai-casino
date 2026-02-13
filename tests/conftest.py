@@ -98,6 +98,30 @@ def sample_news_articles():
     ]
 
 
+@pytest.fixture
+def sample_execution_graph():
+    """Sample ExecutionGraph for testing."""
+    from src.execution_tracking.models import (
+        ExecutionGraph,
+        ExecutionNode,
+        ExecutionNodeType,
+        ExecutionStatus,
+    )
+
+    graph = ExecutionGraph(workflow_id="test-workflow-123", symbol="AAPL")
+
+    node = ExecutionNode(
+        node_type=ExecutionNodeType.WORKFLOW_STAGE,
+        name="TradingWorkflow",
+        status=ExecutionStatus.COMPLETED,
+        metadata={"test": "data"},
+    )
+    node.complete()
+    graph.add_node(node)
+
+    return graph
+
+
 # Deprecated fixtures removed - use test_container instead
 # - mock_llm_client: replaced by test_container.llm_client()
 # - mock_finbert: replaced by test_container.finbert_sentiment()

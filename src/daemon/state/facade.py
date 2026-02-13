@@ -46,6 +46,8 @@ from src.daemon.state.models import (
     SectorRotationRecord,
 )
 from src.discovery.models import DiscoveryCandidate
+from src.execution_tracking.models import ExecutionGraph
+from src.execution_tracking.tracker import ExecutionGraphTracker
 from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
@@ -55,8 +57,6 @@ if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
-    from src.execution_tracking.models import ExecutionGraph
-    from src.execution_tracking.tracker import ExecutionGraphTracker
 
 
 class DaemonState(BaseModel):
@@ -822,6 +822,47 @@ class DaemonState(BaseModel):
                 return graph
 
         return None
+
+    async def cleanup_completed_trackers(self) -> None:
+        """Persist completed execution graphs and move to history.
+
+        Called periodically by daemon to persist graphs and free memory.
+        Non-blocking - database errors logged but don't crash daemon.
+        """
+        from src.database.connection import get_session
+        from src.database.repositories.execution_graph import ExecutionGraphRepository
+
+        completed_ids = []
+
+        # Collect completed graphs first
+        completed_graphs = []
+        for workflow_id, tracker in self.active_execution_trackers.items():
+            if tracker.graph.is_completed():
+                completed_graphs.append((workflow_id, tracker.graph))
+
+        # Persist all in single session (reduces connection overhead)
+        if completed_graphs:
+            try:
+                async with get_session() as session:
+                    repo = ExecutionGraphRepository(session)
+                    for workflow_id, graph in completed_graphs:
+                        try:
+                            await repo.create(graph)
+                            logger.info(f"Persisted execution graph: {workflow_id}")
+                            # Move to history only on success
+                            self.execution_graph_history.append(graph)
+                            completed_ids.append(workflow_id)
+                        except Exception as e:
+                            logger.opt(exception=True).error(f"Failed to persist graph {workflow_id}: {e}")
+            except Exception as e:
+                logger.opt(exception=True).error(f"Failed to create database session: {e}")
+
+        # Remove from active trackers
+        for workflow_id in completed_ids:
+            del self.active_execution_trackers[workflow_id]
+
+        if completed_ids:
+            logger.debug(f"Cleaned up {len(completed_ids)} completed trackers")
 
     def __repr__(self) -> str:
         """Return string representation."""

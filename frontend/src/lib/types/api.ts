@@ -300,3 +300,67 @@ export interface WorkflowExecutionMetrics {
 	provider: string;
 	model: string;
 }
+
+export type ExecutionNodeType = "TOOL" | "AGENT" | "WORKFLOW_STAGE";
+
+export type ExecutionStatus = "RUNNING" | "COMPLETED" | "FAILED";
+
+export interface ExecutionNode {
+	node_id: string;
+	node_type: ExecutionNodeType;
+	name: string;
+	parent_id: string | null;
+	status: ExecutionStatus;
+	start_time: string;
+	end_time: string | null;
+	duration_ms: number | null;
+	error: string | null;
+	metadata: Record<string, any>;
+}
+
+export interface ExecutionGraph {
+	workflow_id: string;
+	symbol: string | null;
+	root_node_id: string | null;
+	nodes: Record<string, ExecutionNode>;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface ActiveExecutionGraphsResponse {
+	graphs: ExecutionGraph[];
+	count: number;
+}
+
+export interface ExecutionGraphDetailResponse {
+	workflow_id: string;
+	graph: ExecutionGraph;
+	source: string;
+}
+
+export interface ExecutionGraphHistoryResponse {
+	graphs: ExecutionGraph[];
+	count: number;
+	database_enabled: boolean;
+}
+
+export type EventType =
+	| "CYCLE_START"
+	| "CYCLE_COMPLETE"
+	| "ANALYSIS_START"
+	| "ANALYSIS_COMPLETE"
+	| "ANALYSIS_ERROR"
+	| "TRADE_EXECUTED"
+	| "HEALTH_CHECK"
+	| "DEGRADATION"
+	| "SCHEDULED_TASK"
+	| "STATE_UPDATE"
+	| "EXECUTION_NODE_START"
+	| "EXECUTION_NODE_COMPLETE";
+
+export interface DashboardEvent {
+	event_id: string;
+	event_type: EventType;
+	timestamp: string;
+	data: Record<string, any>;
+}

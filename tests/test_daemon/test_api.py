@@ -650,13 +650,14 @@ class TestCORS:
         assert response.headers["access-control-allow-origin"] == "http://localhost:8050"
 
     def test_cors_credentials(self, client: TestClient) -> None:
-        """Test CORS allows credentials."""
+        """Test CORS credentials disabled for WebSocket compatibility."""
         response = client.get(
             "/health",
             headers={"Origin": "http://localhost:8050"},
         )
         assert response.status_code == 200
-        assert response.headers["access-control-allow-credentials"] == "true"
+        # Credentials must be False for WebSocket to work with Starlette
+        assert response.headers.get("access-control-allow-credentials") != "true"
 
     def test_cors_custom_origins_config(self) -> None:
         """Test ApiConfig accepts custom CORS origins."""
@@ -740,13 +741,17 @@ class TestWebSocketEvents:
     """Test /ws/events WebSocket endpoint."""
 
     def test_websocket_no_event_bus(self, client: TestClient, mock_runner: Mock) -> None:
-        """Test WebSocket connection rejects when EventBus unavailable."""
+        """Test WebSocket closes when EventBus unavailable."""
         from starlette.websockets import WebSocketDisconnect
 
         mock_runner.event_bus = None
 
-        with pytest.raises(WebSocketDisconnect):
-            client.websocket_connect("/ws/events").__enter__()
+        # Connection is accepted first, then closed with code 1011
+        with client.websocket_connect("/ws/events") as websocket:
+            # Server should close connection immediately after validating no event_bus
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                websocket.receive_json()
+            assert exc_info.value.code == 1011
 
     def test_websocket_basic_connection(self, mock_runner: Mock) -> None:
         """Test WebSocket connection and cleanup."""

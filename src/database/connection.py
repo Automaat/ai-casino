@@ -16,6 +16,12 @@ class _DatabaseEngineHolder:
     instance: DatabaseEngine | None = None
     lock = threading.Lock()
 
+    @classmethod
+    def initialize(cls, engine: DatabaseEngine) -> None:
+        """Initialize the singleton with a DatabaseEngine instance."""
+        with cls.lock:
+            cls.instance = engine
+
 
 def get_db_engine() -> DatabaseEngine:
     """Get or create singleton DatabaseEngine."""

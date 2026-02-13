@@ -86,6 +86,12 @@ class DaemonCycleOrchestrator:
             # Phase 3: Run discovery (via task service now)
             # Already handled by task_runner if scheduled
 
+            # Phase 3.5: Cleanup completed execution trackers (persist to database)
+            try:
+                await self.components.state.cleanup_completed_trackers()
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Execution tracker cleanup failed: {e}")
+
             # Phase 4: Evaluate degradation before analysis
             degradation_context = self.runner._evaluate_degradation()  # type: ignore[attr-defined]  # noqa: SLF001
 

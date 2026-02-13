@@ -42,6 +42,12 @@ class DaemonLifecycle:
                 database_engine = self.components.container.database_engine()
                 await database_engine.ensure_migrated()
                 logger.info("Database migrations applied successfully")
+
+                # Initialize global database singleton for get_session() calls
+                from src.database.connection import _DatabaseEngineHolder
+
+                _DatabaseEngineHolder.initialize(database_engine)
+                logger.info("Global database singleton initialized")
         except Exception as e:
             logger.opt(exception=True).error(f"Database initialization failed: {e}")
             if self.components.config.database.enable_persistence:

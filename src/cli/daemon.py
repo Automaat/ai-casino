@@ -58,7 +58,15 @@ def daemon(
     )
 
     try:
-        runner = DaemonRunner(daemon_config)
+        # Create EventBus if API enabled (for real-time WebSocket streaming)
+        event_bus = None
+        if daemon_config.api.enabled:
+            from src.daemon.event_bus import EventBus
+
+            event_bus = EventBus(history_size=1000)
+            logger.info("EventBus initialized for API WebSocket streaming")
+
+        runner = DaemonRunner(daemon_config, event_bus=event_bus)
         asyncio.run(runner.run())
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Daemon interrupted[/bold yellow]")
