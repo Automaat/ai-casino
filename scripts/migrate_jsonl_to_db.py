@@ -86,7 +86,7 @@ async def main() -> None:
         logger.error("DATABASE_URL environment variable not set")
         sys.exit(1)
 
-    jsonl_path = Path("logs/trades.jsonl")
+    jsonl_path = Path.home() / ".ai-casino" / "logs" / "trades.jsonl"
     logger.info(f"Migrating trades from {jsonl_path} to database")
 
     db_engine = DatabaseEngine(database_url)
