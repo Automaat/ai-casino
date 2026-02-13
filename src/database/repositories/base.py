@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 T = TypeVar("T")
@@ -18,6 +19,25 @@ class BaseRepository(ABC, Generic[T]):
             session: SQLAlchemy async session
         """
         self._session = session
+
+    def _recreate_session_if_needed(self, error: RuntimeError) -> bool:
+        """Recreate session if event loop error detected.
+
+        Args:
+            error: RuntimeError from database operation
+
+        Returns:
+            True if session was recreated, False otherwise
+        """
+        error_msg = str(error)
+        if "bound to a different event loop" in error_msg or "attached to a different loop" in error_msg:
+            logger.warning(f"{self.__class__.__name__}: Event loop error, recreating session")
+            from src.database.connection import get_db_engine
+
+            engine = get_db_engine()
+            self._session = engine.session()
+            return True
+        return False
 
     @abstractmethod
     async def create(self, entity: T) -> T:

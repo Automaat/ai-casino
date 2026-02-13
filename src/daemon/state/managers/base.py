@@ -40,6 +40,26 @@ class StateManager(BaseModel):
     """Base class for domain state managers."""
 
     _pending_tasks: set[asyncio.Task[Any]] = PrivateAttr(default_factory=set)
+    _event_loop_id: int | None = PrivateAttr(default=None)
+
+    def _is_different_event_loop(self) -> bool:
+        """Check if current event loop differs from stored repositories' loop.
+
+        Returns:
+            True if repositories were created in different event loop
+        """
+        try:
+            current_loop = asyncio.get_running_loop()
+            current_id = id(current_loop)
+
+            if self._event_loop_id is None:
+                self._event_loop_id = current_id
+                return False
+
+            return self._event_loop_id != current_id
+        except RuntimeError:
+            # No running event loop
+            return False
 
     def _cap_history(self, history: list[T], max_size: int, keep_size: int) -> list[T]:
         """Cap history when exceeding max_size.
