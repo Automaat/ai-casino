@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from src.agents.risk import RiskManagementAgent
     from src.agents.sentiment import SentimentAnalyst
     from src.agents.social import SocialSentimentAnalyst
+    from src.agents.supervisor import TradingSupervisor
     from src.agents.technical import TechnicalAnalyst
     from src.agents.thesis_researcher import ThesisResearcher
     from src.agents.trader import TraderAgent
@@ -410,6 +411,20 @@ def create_adaptive_threshold_manager(
         config=daemon_config.coordinator.adaptive_thresholds,
         signal_outcome_repo=signal_outcome_repo,
     )
+
+
+def create_supervisor(llm_client: LLMClient) -> TradingSupervisor:
+    """Create TradingSupervisor with LLM client.
+
+    Args:
+        llm_client: LLM client for planning and synthesis
+
+    Returns:
+        Configured TradingSupervisor
+    """
+    from src.agents.supervisor import TradingSupervisor
+
+    return TradingSupervisor(llm_client)
 
 
 def create_trading_coordinator(

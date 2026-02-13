@@ -28,11 +28,7 @@ async def main() -> None:
         logger.error("Database URL not configured")
         return
 
-    db_engine = DatabaseEngine(
-        database_url=database_url,
-        pool_size=daemon_config.database.pool_size,
-        max_overflow=daemon_config.database.max_overflow,
-    )
+    db_engine = DatabaseEngine(database_url=database_url)
     await db_engine.ensure_migrated()
 
     # Fetch positions from database

@@ -1,0 +1,22 @@
+Context:
+Symbol: {symbol}
+Market Regime: {regime}
+Trading Session: {session}
+Owns Position: {owns_position}
+
+Data Availability:
+- News articles: {news_count}
+- Fundamental data: {fundamental_available}
+- Social data: {social_available}
+- Trump posts: {trump_count}
+
+Resource Constraints:
+- Fundamental API: {fundamental_rate_limit_status}
+- Time budget: {time_budget_ms}ms
+
+Determine which analyses to run:
+- Required: Critical for decision (must run)
+- Optional: Adds value if time/budget permits
+- Skip: Not relevant for this context
+
+Output AnalysisRoutingDecision with reasoning.

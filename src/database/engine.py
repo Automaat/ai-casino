@@ -6,6 +6,7 @@ from pathlib import Path
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 
 class MissingDatabaseURLError(ValueError):
@@ -22,16 +23,15 @@ class DatabaseEngine:
     def __init__(
         self,
         database_url: str | None = None,
-        pool_size: int = 5,
-        max_overflow: int = 10,
         pool_pre_ping: bool = True,
     ) -> None:
         """Initialize database engine.
 
+        Uses NullPool to avoid event loop issues when API server runs in separate thread.
+        Each request creates a fresh connection.
+
         Args:
             database_url: PostgreSQL connection URL (or from DATABASE_URL env)
-            pool_size: Connection pool size (1-20)
-            max_overflow: Max connections beyond pool_size (0-50)
             pool_pre_ping: Verify connections before use
 
         Raises:
@@ -43,8 +43,7 @@ class DatabaseEngine:
 
         self._engine: AsyncEngine = create_async_engine(
             self._database_url,
-            pool_size=pool_size,
-            max_overflow=max_overflow,
+            poolclass=NullPool,  # No pooling - each request gets fresh connection
             pool_pre_ping=pool_pre_ping,
         )
         self._session_factory = async_sessionmaker(

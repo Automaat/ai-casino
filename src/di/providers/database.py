@@ -45,8 +45,6 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
 
     engine = DatabaseEngine(
         database_url=database_url,
-        pool_size=daemon_config.database.pool_size,
-        max_overflow=daemon_config.database.max_overflow,
         pool_pre_ping=daemon_config.database.pool_pre_ping,
     )
 
