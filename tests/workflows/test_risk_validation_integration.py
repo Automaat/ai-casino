@@ -7,6 +7,7 @@ import pytest
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
 from src.agents.technical import TechnicalAnalysis
+from src.agents.thesis_researcher import BearishResearchAnalysis, BullishResearchAnalysis
 from src.daemon.config.risk_validation import RiskValidationConfig
 from src.strategies.signal import Signal
 from src.validators.risk import RiskValidator
@@ -132,13 +133,15 @@ async def test_trader_can_decide_despite_warnings(weak_analyses):
 
     # Mock LLM client
     mock_llm = Mock()
-    mock_llm.astructured = AsyncMock(
-        return_value=Mock(
-            signal="HOLD",
-            reasoning="Waiting for better entry",
-            confidence_keywords=["uncertain", "wait"],
-        )
-    )
+
+    # Create a mock response with actual Signal enum
+    mock_response = Mock()
+    mock_response.action = Signal.HOLD
+    mock_response.confidence = 0.5
+    mock_response.risk_level = "MEDIUM"
+    mock_response.reasoning = ["Waiting for better entry"]
+
+    mock_llm.astructured = AsyncMock(return_value=mock_response)
 
     # Create trader
     trader = TraderAgent(mock_llm)
@@ -179,21 +182,22 @@ async def test_trader_can_decide_despite_warnings(weak_analyses):
 
     # Trader should still be able to make decision
     decision = await trader.decide(
-        decision_input.symbol,
-        decision_input.technical,
-        decision_input.sentiment,
-        decision_input.news,
-        decision_input.bullish,
-        decision_input.bearish,
-        decision_input.fundamental,
-        decision_input.comparative,
-        decision_input.trump,
-        decision_input.account_info,
-        decision_input.context,
-        decision_input.backtest_validation,
-        decision_input.degradation_context,
+        symbol=decision_input.symbol,
+        technical=decision_input.technical,
+        sentiment=decision_input.sentiment,
+        news=decision_input.news,
+        fundamental=decision_input.fundamental,
+        bullish=decision_input.bullish or BullishResearchAnalysis(
+            thesis="", key_strengths=[], target_upside=0.0, confidence=0.5
+        ),
+        bearish=decision_input.bearish or BearishResearchAnalysis(
+            thesis="", key_weaknesses=[], target_downside=0.0, confidence=0.5
+        ),
+        comparative=decision_input.comparative,
+        backtest_validation=decision_input.backtest_validation,
+        degradation_context=decision_input.degradation_context,
     )
 
     # Verify decision was made
     assert decision is not None
-    assert decision.signal in {Signal.BUY, Signal.SELL, Signal.HOLD}
+    assert decision.action in {Signal.BUY, Signal.SELL, Signal.HOLD}

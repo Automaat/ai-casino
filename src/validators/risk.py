@@ -308,8 +308,20 @@ class RiskValidator:
         Returns:
             True if no suspicious patterns, False otherwise
         """
-        # Only technical has confidence in current implementation
-        confidences = [ctx.technical.confidence] if ctx.technical else []
+        # Collect all confidence values
+        confidences = []
+        if ctx.technical:
+            confidences.append(ctx.technical.confidence)
+        if ctx.sentiment:
+            confidences.append(ctx.sentiment.confidence)
+        if ctx.news:
+            confidences.append(ctx.news.confidence)
+        if ctx.fundamental:
+            confidences.append(ctx.fundamental.confidence)
+        if ctx.bullish:
+            confidences.append(ctx.bullish.confidence)
+        if ctx.bearish:
+            confidences.append(ctx.bearish.confidence)
 
         non_zero = [c for c in confidences if c > 0]
         if len(non_zero) >= MIN_ANALYSES_FOR_OVERFITTING and all(c > OVERFITTING_THRESHOLD for c in non_zero):
