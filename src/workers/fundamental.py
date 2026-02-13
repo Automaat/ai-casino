@@ -1,14 +1,13 @@
 """Fundamental analysis worker for stock valuation with earnings calendar integration."""
 
 import asyncio
-from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.agents.fundamental import FundamentalAnalysis
-from src.agents.models import FundamentalMetrics
+from src.agents.models import EarningsFlags, FundamentalMetrics
 from src.data.earnings import EarningsCalendarFetcher
 from src.data.fundamental import FundamentalDataFetcher
 from src.models.llm import LLMClient
@@ -23,15 +22,6 @@ if TYPE_CHECKING:
 EARNINGS_WARNING_DAYS = 5  # Flag trades within ±5 days of earnings
 PE_RATIO_UNDERVALUED = 15  # P/E < 15 is undervalued
 PE_RATIO_OVERVALUED = 30  # P/E > 30 is overvalued
-
-
-class EarningsFlags(BaseModel):
-    """Earnings calendar flags."""
-
-    upcoming_earnings: bool
-    days_until_earnings: int | None = None
-    earnings_date: date | None = None
-    estimate_eps: float | None = None
 
 
 class FundamentalLLMResponse(BaseModel):

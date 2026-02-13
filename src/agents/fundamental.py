@@ -1,19 +1,16 @@
 """Fundamental analysis agent for stock valuation."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.agents.models import FundamentalMetrics
+from src.agents.models import EarningsFlags, FundamentalMetrics
 from src.data.fundamental import FundamentalDataFetcher
 from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
-
-if TYPE_CHECKING:
-    from src.workers.fundamental import EarningsFlags
 
 
 class FundamentalLLMResponse(BaseModel):

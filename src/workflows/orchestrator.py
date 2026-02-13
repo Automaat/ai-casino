@@ -223,16 +223,14 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
-        from src.workflows.stages.instrumented_analysis import AnalysisRequest, run_instrumented_analysis
-
-        request = AnalysisRequest(
-            workflow=self,
-            symbol=symbol,
-            period_days=period_days,
-            trading_session=trading_session,
-            collector=collector,
-            extra_context=extra_context,
+        from src.workflows.stages.instrumented_analysis import (
+            AnalysisRequest,
+            AnalysisRequestParams,
+            run_instrumented_analysis,
         )
+
+        params = AnalysisRequestParams(period_days, trading_session, extra_context)
+        request = AnalysisRequest(self, symbol, params, collector)
         return await run_instrumented_analysis(request)
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
@@ -264,7 +262,7 @@ class TradingWorkflow:
         """
         return self._default_strategy
 
-    def get_container(self) -> "AppContainer":
+    def get_container(self) -> AppContainer:
         """Get DI container instance.
 
         Returns:

@@ -4,7 +4,6 @@ import time
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
 
 from src.metrics.execution import ExecutionMetricsCollector
 from src.strategies.session import TradingSession
@@ -28,20 +27,48 @@ if TYPE_CHECKING:
     from src.workflows.orchestrator import TradingWorkflow
 
 
-class AnalysisRequest(BaseModel):
-    """Request parameters for instrumented analysis."""
+class AnalysisRequestParams:
+    """Bundle of analysis request parameters."""
 
-    workflow: TradingWorkflow
-    symbol: str
-    period_days: int
-    trading_session: TradingSession
-    collector: ExecutionMetricsCollector | None
-    extra_context: WorkflowExtraContext | None = None
+    def __init__(
+        self, period_days: int, trading_session: TradingSession, extra_context: WorkflowExtraContext | None
+    ) -> None:
+        """Initialize request parameters.
 
-    class Config:
-        """Pydantic config."""
+        Args:
+            period_days: Days of historical data
+            trading_session: Trading session type
+            extra_context: Optional workflow context
+        """
+        self.period_days = period_days
+        self.trading_session = trading_session
+        self.extra_context = extra_context
 
-        arbitrary_types_allowed = True
+
+class AnalysisRequest:
+    """Request for instrumented analysis."""
+
+    def __init__(
+        self,
+        workflow: TradingWorkflow,
+        symbol: str,
+        params: AnalysisRequestParams,
+        collector: ExecutionMetricsCollector | None = None,
+    ) -> None:
+        """Initialize analysis request.
+
+        Args:
+            workflow: TradingWorkflow instance
+            symbol: Stock ticker symbol
+            params: Request parameters bundle
+            collector: Optional metrics collector
+        """
+        self.workflow = workflow
+        self.symbol = symbol
+        self.period_days = params.period_days
+        self.trading_session = params.trading_session
+        self.extra_context = params.extra_context
+        self.collector = collector
 
 
 class _ExecutionContext:
