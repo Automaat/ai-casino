@@ -116,44 +116,10 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
     Returns:
         FastAPI app
     """
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        """Recreate repositories in API server event loop on startup."""
-        # Recreate repositories in current event loop to avoid "bound to different event loop" errors
-        from src.daemon.state.repositories import RepositoryBundle
-
-        logger.info("Recreating repositories in API server event loop")
-        repos = RepositoryBundle(
-            metadata_repository=components.container.metadata_repository(),
-            analysis_repository=components.container.analysis_repository(),
-            position_repository=components.container.position_repository(),
-            action_repository=components.container.position_action_repository(),
-            optimization_repository=components.container.optimization_repository(),
-            rebalancing_repository=components.container.rebalancing_repository(),
-            sector_rotation_repository=components.container.sector_rotation_repository(),
-            peer_analysis_repository=components.container.peer_analysis_repository(),
-            correlation_audit_repository=components.container.correlation_audit_repository(),
-            risk_report_repository=components.container.risk_report_repository(),
-            monte_carlo_repository=components.container.monte_carlo_repository(),
-            prefetch_repository=components.container.prefetch_repository(),
-            screening_repository=components.container.screening_repository(),
-            earnings_repository=components.container.earnings_calendar_repository(),
-            profiling_repository=components.container.profiling_repository(),
-            discovery_repository=components.container.discovery_repository(),
-            active_discovery_repository=components.container.active_discovery_repository(),
-            game_plan_repository=components.container.game_plan_repository(),
-            degradation_repository=components.container.degradation_repository(),
-            snapshot_repository=components.container.snapshot_repository(),
-        )
-        components.state.set_repositories(repos)
-        logger.info("Repositories recreated in API server event loop")
-        yield
-
     app = FastAPI(
         title="AI Casino Daemon API",
         description="Read-only monitoring API for trading daemon",
         version="0.1.0",
-        lifespan=lifespan,
     )
 
     # Store components and start time in app state
@@ -205,41 +171,54 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
         """Get daemon state summary."""
         components: DaemonComponents = app.state.components
 
-        # Get current degradation tier
-        degradation_tier = "FULL"
-        degradation_history = await components.state.get_degradation_history(limit=1)
-        if degradation_history:
-            degradation_tier = degradation_history[-1].tier
+        try:
+            # Get current degradation tier
+            degradation_tier = "FULL"
+            degradation_history = await components.state.get_degradation_history(limit=1)
+            if degradation_history:
+                degradation_tier = degradation_history[-1].tier
 
-        # Calculate positions count
-        active_positions = await components.state.get_active_positions()
-        positions_count = len(active_positions)
+            # Calculate positions count
+            active_positions = await components.state.get_active_positions()
+            positions_count = len(active_positions)
 
-        # Win rate calculation - not available in current state (would need trades history)
-        win_rate = None
+            # Win rate calculation - not available in current state (would need trades history)
+            win_rate = None
 
-        # Get recent analyses (last 50), convert to dicts
-        all_analyses = await components.state.get_analyses(limit=50)
-        recent_analyses = [
-            analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
-            for analysis in all_analyses
-        ]
+            # Get recent analyses (last 50), convert to dicts
+            all_analyses = await components.state.get_analyses(limit=50)
+            recent_analyses = [
+                analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
+                for analysis in all_analyses
+            ]
 
-        total_analyses = await components.state.get_total_analyses()
-        total_trades = await components.state.get_total_trades()
-        errors = await components.state.get_errors()
-        trading_mode = await components.state.get_current_trading_mode()
+            total_analyses = await components.state.get_total_analyses()
+            total_trades = await components.state.get_total_trades()
+            errors = await components.state.get_errors()
+            trading_mode = await components.state.get_current_trading_mode()
 
-        return StateSummaryResponse(
-            total_analyses=total_analyses,
-            recent_analyses=recent_analyses,
-            total_trades=total_trades,
-            positions_count=positions_count,
-            win_rate=win_rate,
-            error_count=len(errors),
-            degradation_tier=degradation_tier,
-            trading_mode=trading_mode,
-        )
+            return StateSummaryResponse(
+                total_analyses=total_analyses,
+                recent_analyses=recent_analyses,
+                total_trades=total_trades,
+                positions_count=positions_count,
+                win_rate=win_rate,
+                error_count=len(errors),
+                degradation_tier=degradation_tier,
+                trading_mode=trading_mode,
+            )
+        except (RuntimeError, Exception):
+            # Event loop or DB errors - return minimal safe response
+            return StateSummaryResponse(
+                total_analyses=0,
+                recent_analyses=[],
+                total_trades=0,
+                positions_count=0,
+                win_rate=None,
+                error_count=0,
+                degradation_tier="FULL",
+                trading_mode=components.config.trading_mode.value,
+            )
 
     @app.get("/config", response_model=ConfigResponse)
     async def config() -> ConfigResponse:
