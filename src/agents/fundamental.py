@@ -1,6 +1,6 @@
 """Fundamental analysis agent for stock valuation."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -11,6 +11,9 @@ from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
+
+if TYPE_CHECKING:
+    from src.workers.fundamental import EarningsFlags
 
 
 class FundamentalLLMResponse(BaseModel):
@@ -26,6 +29,7 @@ class FundamentalAnalysis(BaseModel):
     """Fundamental analysis result."""
 
     valuation: str  # UNDERVALUED | FAIRLY_VALUED | OVERVALUED
+    earnings_flags: EarningsFlags | None = None
     pe_ratio: float | None
     eps: float | None
     revenue_growth_yoy: float | None

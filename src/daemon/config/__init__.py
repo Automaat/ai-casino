@@ -45,6 +45,7 @@ from src.daemon.config.risk import (
     PreTradeBacktestingConfig,
     RiskLimitsConfig,
 )
+from src.daemon.config.risk_validation import RiskValidationConfig
 from src.daemon.config.screening import (
     DiscoveryConfig,
     EarningsCalendarConfig,
@@ -96,6 +97,7 @@ __all__ = [
     "ProfilingConfig",
     "ReportingConfig",
     "RiskLimitsConfig",
+    "RiskValidationConfig",
     "ScheduleConfig",
     "ScreeningConfig",
     "SectorRotationConfig",
@@ -157,6 +159,7 @@ class DaemonConfig(BaseModel):
     profiling: ProfilingConfig = Field(default_factory=ProfilingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    risk_validation: RiskValidationConfig = Field(default_factory=RiskValidationConfig)
 
     @classmethod
     def from_yaml(cls, path: Path) -> DaemonConfig:
@@ -213,6 +216,7 @@ class DaemonConfig(BaseModel):
         profiling_data = daemon_data.pop("profiling", {}) or {}
         metrics_data = daemon_data.pop("metrics", {}) or {}
         logging_data = daemon_data.pop("logging", {}) or {}
+        risk_validation_data = daemon_data.pop("risk_validation", {}) or {}
 
         # Extract nested telegram config from notifications
         telegram_data = notifications_data.pop("telegram", {}) or {}
@@ -279,6 +283,7 @@ class DaemonConfig(BaseModel):
             profiling=ProfilingConfig(**profiling_data),
             metrics=MetricsConfig(**metrics_data),
             logging=LoggingConfig(**logging_data),
+            risk_validation=RiskValidationConfig(**risk_validation_data),
         )
 
     def __repr__(self) -> str:

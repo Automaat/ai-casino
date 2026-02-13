@@ -368,6 +368,13 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
     )
 
+    fundamental_worker = providers.Singleton(
+        worker_providers.create_fundamental_worker,
+        llm_client=llm_client,
+        fundamental_fetcher=fundamental_fetcher,
+        earnings_fetcher=earnings_fetcher,
+    )
+
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides
     # Note: container must be passed explicitly when calling these factories
     # (providers.Self() doesn't work reliably with Factory providers)

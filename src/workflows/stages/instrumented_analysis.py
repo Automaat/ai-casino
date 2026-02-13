@@ -15,8 +15,10 @@ from src.workflows.models.data_fetch import FetchDataOutput
 from src.workflows.models.decision import DecisionContext, DecisionInput, DecisionOutput
 from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOutput
 from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
+from src.workflows.models.risk_validation import RiskValidationInput, RiskValidationOutput
 from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
 from src.workflows.stages import analysis, data_fetch, decision, execution, risk, strategy_selection
+from src.workflows.stages.risk_validation import validate_analyses_stage
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 
@@ -129,6 +131,30 @@ async def run_instrumented_analysis(  # noqa: PLR0913
     )
     _record_stage(collector, "analyses", start)
 
+    # Stage 5.5: Validate analyses (pre-decision risk validation)
+    start = time.perf_counter()
+    validation_output: RiskValidationOutput | None = None
+    if workflow.risk_validation_config.enabled:
+        validation_input = RiskValidationInput(
+            symbol=symbol,
+            trading_session=trading_session,
+            technical_analysis=analysis_output.technical_analysis,
+            sentiment_analysis=analysis_output.sentiment_analysis,
+            news_analysis=analysis_output.news_analysis,
+            fundamental_analysis=analysis_output.fundamental_analysis,
+            bullish_research=analysis_output.bullish_research,
+            bearish_research=analysis_output.bearish_research,
+            market_data=data_output.market_data,
+            degradation_context=degradation_context,
+        )
+        validation_output = validate_analyses_stage(validation_input, workflow.risk_validator)
+        _record_stage(collector, "risk_validation", start)
+
+        if not validation_output.validation_result.approved:
+            logger.warning(
+                f"Risk validation WARNING for {symbol}: {validation_output.validation_result.warnings}"
+            )
+
     # Stage 6: Make decision
     start = time.perf_counter()
     decision_context = DecisionContext(
@@ -152,6 +178,7 @@ async def run_instrumented_analysis(  # noqa: PLR0913
         context=decision_context,
         backtest_validation=backtest_output.backtest_validation,
         degradation_context=degradation_context,
+        validation_context=validation_output,
     )
     decision_output = await decision.make_decision(decision_input, workflow.trader, collector)
     _record_stage(collector, "decision", start)

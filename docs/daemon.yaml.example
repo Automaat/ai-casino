@@ -317,6 +317,44 @@ daemon:
     # Risk reports directory
     report_dir: "~/.ai-casino/risk-reports"
 
+  risk_validation:
+    # Pre-decision risk validation (Stage 5.5 in analysis pipeline)
+    # Validates analyses before trader makes final decision
+    # Warning-only mode: trader receives validation context but continues
+    enabled: true
+
+    # Confidence thresholds (0.0-1.0)
+    # Minimum overall confidence score across all analyses
+    min_overall_confidence: 0.5
+    # Minimum confidence for technical analysis
+    min_technical_confidence: 0.4
+    # Minimum confidence for sentiment analysis
+    min_sentiment_confidence: 0.4
+    # Minimum confidence for news analysis
+    min_news_confidence: 0.4
+    # Minimum confidence for research analyses (bullish/bearish)
+    min_research_confidence: 0.5
+
+    # Signal consistency
+    # Allow conflicting signals (e.g., technical BUY + sentiment SELL)
+    allow_conflicting_signals: true
+    # Maximum number of conflicting signals before warning (0-5)
+    max_conflicting_signals: 2
+
+    # Market conditions
+    # Maximum volatility threshold (ATR% of price, null = disabled)
+    # Example: 0.05 = block if volatility exceeds 5% ATR
+    max_volatility_threshold: null
+
+    # Trading session rules
+    # Higher confidence required for pre-market trades (0.5-1.0)
+    pre_market_min_confidence: 0.7
+
+    # Data freshness
+    # Maximum age of market data in minutes (1-1440)
+    # Warn if data older than this threshold
+    max_data_age_minutes: 60
+
   rebalancing:
     # Portfolio rebalancing (optimize weights)
     enabled: false

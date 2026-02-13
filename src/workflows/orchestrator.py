@@ -94,6 +94,13 @@ class TradingWorkflow:
             position_sizing_config=components.position_sizing_config,
         )
 
+        # Risk validation
+        from src.daemon.config import RiskValidationConfig
+        from src.validators.risk import RiskValidator
+
+        self.risk_validation_config = components.risk_validation_config or RiskValidationConfig()
+        self.risk_validator = components.risk_validator or RiskValidator(self.risk_validation_config)
+
         mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
         trump_str = "+trump" if self.trump_mode else ""
         logger.info(f"Initialized TradingWorkflow (mode={mode}{trump_str})")
