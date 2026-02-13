@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from src.data.fundamental import FundamentalDataFetcher
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
+    from src.database.repositories.execution_metric import ExecutionMetricRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
@@ -64,6 +65,7 @@ class WorkflowComponents:
     broker: AlpacaBroker | None = None
     metrics_tracker: BaseMetricsTracker | None = None
     snapshot_repository: PortfolioSnapshotRepository | None = None
+    execution_metric_repository: ExecutionMetricRepository | None = None
     param_store: OptimizedParamStore | None = None
     historical_cache: HistoricalCache | None = None
     portfolio_var_calculator: PortfolioVaRCalculator | None = None
@@ -81,6 +83,7 @@ class WorkflowComponents:
                 self.broker is not None,
                 self.metrics_tracker is not None,
                 self.snapshot_repository is not None,
+                self.execution_metric_repository is not None,
                 self.param_store is not None,
                 self.historical_cache is not None,
                 self.portfolio_var_calculator is not None,

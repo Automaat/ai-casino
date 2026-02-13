@@ -876,3 +876,48 @@ class ActiveDiscoveryCandidateORM(Base):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"ActiveDiscoveryCandidateORM(id={self.id}, symbol={self.symbol})"
+
+
+class ExecutionMetricORM(Base):
+    """Execution metric ORM model."""
+
+    __tablename__ = "execution_metrics"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    order_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    symbol: Mapped[str] = mapped_column(String(10), nullable=False)
+    side: Mapped[str] = mapped_column(String(10), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+    requested_price: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+    filled_price: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    filled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    slippage_bps: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 2), nullable=True)
+    broker: Mapped[str] = mapped_column(String(50), nullable=False, server_default="'alpaca'")
+    venue: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_execution_metrics_symbol", "symbol"),
+        Index("idx_execution_metrics_submitted_at", "submitted_at"),
+        Index("idx_execution_metrics_broker", "broker"),
+        Index("idx_execution_metrics_status", "status"),
+        Index("idx_execution_metrics_symbol_broker", "symbol", "broker"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"ExecutionMetricORM(order_id={self.order_id}, "
+            f"symbol={self.symbol}, slippage_bps={self.slippage_bps})"
+        )

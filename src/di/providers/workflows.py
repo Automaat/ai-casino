@@ -17,6 +17,7 @@ from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
+from src.database.repositories.execution_metric import ExecutionMetricRepository
 from src.database.repositories.snapshot import PortfolioSnapshotRepository
 from src.metrics.portfolio_var import PortfolioVaRCalculator
 from src.metrics.tracker import BaseMetricsTracker
@@ -48,6 +49,7 @@ class WorkflowFactoryParams:
     metrics_tracker: BaseMetricsTracker | None = None
     param_store: OptimizedParamStore | None = None
     snapshot_repository: PortfolioSnapshotRepository | None = None
+    execution_metric_repository: ExecutionMetricRepository | None = None
     notification_service: NotificationService | None = None
 
 
@@ -102,6 +104,7 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
         broker=params.broker,
         metrics_tracker=params.metrics_tracker,
         snapshot_repository=params.snapshot_repository,
+        execution_metric_repository=params.execution_metric_repository,
         param_store=params.param_store,
         historical_cache=params.historical_cache,
         portfolio_var_calculator=params.portfolio_var_calculator,
@@ -143,6 +146,7 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
         broker=params.broker,
         metrics_tracker=params.metrics_tracker,
         snapshot_repository=params.snapshot_repository,
+        execution_metric_repository=params.execution_metric_repository,
         param_store=params.param_store,
         historical_cache=params.historical_cache,
         portfolio_var_calculator=params.portfolio_var_calculator,
@@ -184,6 +188,7 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
         broker=params.broker,
         metrics_tracker=params.metrics_tracker,
         snapshot_repository=params.snapshot_repository,
+        execution_metric_repository=params.execution_metric_repository,
         param_store=params.param_store,
         historical_cache=params.historical_cache,
         portfolio_var_calculator=params.portfolio_var_calculator,
