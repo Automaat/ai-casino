@@ -1,5 +1,6 @@
 """Pre-decision risk validation using deterministic rules."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -17,6 +18,29 @@ from src.strategies.signal import Signal
 from src.strategies.timeframe import MultiTimeframeData
 from src.workflows.models.risk_validation import SignalConsistency, ValidationResult
 
+# Constants for validation thresholds
+MIN_ANALYSES_FOR_OVERFITTING = 2
+OVERFITTING_THRESHOLD = 0.95
+HIGH_RISK_CONFIDENCE_THRESHOLD = 0.5
+MEDIUM_RISK_CONFIDENCE_THRESHOLD = 0.75
+DEFAULT_CONFIDENCE = 0.5
+
+
+@dataclass
+class AnalysisContext:
+    """Container for all analysis results to reduce method parameter count."""
+
+    symbol: str
+    trading_session: TradingSession
+    technical: TechnicalAnalysis | None
+    sentiment: SentimentAnalysis | None
+    news: NewsAnalysis | None
+    fundamental: FundamentalAnalysis | None
+    bullish: BullishResearchAnalysis | None
+    bearish: BearishResearchAnalysis | None
+    market_data: pd.DataFrame | MultiTimeframeData | None
+    degradation_context: DegradationContext | None
+
 
 class RiskValidator:
     """Pre-decision risk validation using deterministic rules."""
@@ -30,32 +54,11 @@ class RiskValidator:
         self.config = config or RiskValidationConfig()
         logger.info("Initialized RiskValidator")
 
-    def validate(
-        self,
-        symbol: str,
-        trading_session: TradingSession,
-        technical: TechnicalAnalysis | None,
-        _sentiment: SentimentAnalysis | None,
-        _news: NewsAnalysis | None,
-        fundamental: FundamentalAnalysis | None,
-        bullish: BullishResearchAnalysis | None,
-        bearish: BearishResearchAnalysis | None,
-        market_data: pd.DataFrame | MultiTimeframeData | None,
-        degradation_context: DegradationContext | None,
-    ) -> ValidationResult:
+    def validate(self, ctx: AnalysisContext) -> ValidationResult:
         """Validate analyses - synchronous, deterministic logic.
 
         Args:
-            symbol: Stock ticker symbol
-            trading_session: Current trading session (REGULAR or PRE_MARKET)
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result
-            fundamental: Fundamental analysis result
-            bullish: Bullish research result
-            bearish: Bearish research result
-            market_data: Market data (for freshness check)
-            degradation_context: Degradation context (for circuit breaker status)
+            ctx: Analysis context containing all inputs
 
         Returns:
             ValidationResult with approval status, warnings, and risk level
@@ -67,44 +70,42 @@ class RiskValidator:
         # Check degradation context (highest priority)
         from src.daemon.degradation import DegradationTier
 
-        if degradation_context and degradation_context.tier == DegradationTier.HALTED:
-            reason = degradation_context.halt_reason or "Unknown reason"
+        if ctx.degradation_context and ctx.degradation_context.tier == DegradationTier.HALTED:
+            reason = ctx.degradation_context.halt_reason or "Unknown reason"
             blocking_issues.append(f"Trading halted due to {reason}")
             constraints_met["degradation_check"] = False
         else:
             constraints_met["degradation_check"] = True
 
         # Check confidence thresholds
-        confidence_check = self._check_confidence_thresholds(
-            technical, _sentiment, _news, fundamental, bullish, bearish, warnings
-        )
+        confidence_check = self._check_confidence_thresholds(ctx, warnings)
         constraints_met["confidence_thresholds"] = confidence_check
 
         # Check signal consistency
-        signal_consistency = self._check_signal_consistency(technical, _sentiment, _news, warnings)
+        signal_consistency = self._check_signal_consistency(ctx, warnings)
         constraints_met["signal_consistency"] = not signal_consistency.conflicting_signals or (
             len(signal_consistency.conflict_details) <= self.config.max_conflicting_signals
         )
 
         # Check trading session rules
-        session_check = self._check_trading_session(trading_session, technical, _sentiment, _news, warnings)
+        session_check = self._check_trading_session(ctx, warnings)
         constraints_met["trading_session"] = session_check
 
         # Check data freshness
-        freshness_check = self._check_data_freshness(market_data, warnings)
+        freshness_check = self._check_data_freshness(ctx.market_data, warnings)
         constraints_met["data_freshness"] = freshness_check
 
         # Check suspicious patterns
-        suspicious_check = self._check_suspicious_patterns(technical, _sentiment, _news, warnings)
+        suspicious_check = self._check_suspicious_patterns(ctx, warnings)
         constraints_met["suspicious_patterns"] = suspicious_check
 
         # Calculate aggregate confidence
-        aggregate_confidence = self._calculate_aggregate_confidence(
-            technical, sentiment, news, fundamental, bullish, bearish
-        )
+        aggregate_confidence = self._calculate_aggregate_confidence(ctx)
 
         # Determine risk level
-        risk_level = self._determine_risk_level(aggregate_confidence, signal_consistency, degradation_context)
+        risk_level = self._determine_risk_level(
+            aggregate_confidence, signal_consistency, ctx.degradation_context
+        )
 
         # Determine approval (warn but continue unless blocking issues)
         approved = len(blocking_issues) == 0
@@ -121,23 +122,13 @@ class RiskValidator:
 
     def _check_confidence_thresholds(
         self,
-        technical: TechnicalAnalysis | None,
-        _sentiment: SentimentAnalysis | None,
-        _news: NewsAnalysis | None,
-        fundamental: FundamentalAnalysis | None,
-        bullish: BullishResearchAnalysis | None,
-        bearish: BearishResearchAnalysis | None,
+        ctx: AnalysisContext,
         warnings: list[str],
     ) -> bool:
         """Check confidence thresholds for each analysis type.
 
         Args:
-            technical: Technical analysis result
-            _sentiment: Sentiment analysis result (no confidence field, unused)
-            _news: News analysis result (no confidence field, unused)
-            fundamental: Fundamental analysis result
-            bullish: Bullish research result
-            bearish: Bearish research result
+            ctx: Analysis context
             warnings: List to append warnings to
 
         Returns:
@@ -145,9 +136,9 @@ class RiskValidator:
         """
         all_pass = True
 
-        if technical and technical.confidence < self.config.min_technical_confidence:
+        if ctx.technical and ctx.technical.confidence < self.config.min_technical_confidence:
             warnings.append(
-                f"Technical confidence ({technical.confidence:.2f}) below threshold "
+                f"Technical confidence ({ctx.technical.confidence:.2f}) below threshold "
                 f"({self.config.min_technical_confidence:.2f})"
             )
             all_pass = False
@@ -155,16 +146,16 @@ class RiskValidator:
         # Note: sentiment and news analyses don't have confidence fields in current implementation
 
         # Check research analyses
-        if bullish and bullish.confidence < self.config.min_research_confidence:
+        if ctx.bullish and ctx.bullish.confidence < self.config.min_research_confidence:
             warnings.append(
-                f"Bullish research confidence ({bullish.confidence:.2f}) below threshold "
+                f"Bullish research confidence ({ctx.bullish.confidence:.2f}) below threshold "
                 f"({self.config.min_research_confidence:.2f})"
             )
             all_pass = False
 
-        if bearish and bearish.confidence < self.config.min_research_confidence:
+        if ctx.bearish and ctx.bearish.confidence < self.config.min_research_confidence:
             warnings.append(
-                f"Bearish research confidence ({bearish.confidence:.2f}) below threshold "
+                f"Bearish research confidence ({ctx.bearish.confidence:.2f}) below threshold "
                 f"({self.config.min_research_confidence:.2f})"
             )
             all_pass = False
@@ -173,17 +164,13 @@ class RiskValidator:
 
     def _check_signal_consistency(
         self,
-        technical: TechnicalAnalysis | None,
-        _sentiment: SentimentAnalysis | None,
-        _news: NewsAnalysis | None,
+        ctx: AnalysisContext,
         warnings: list[str],
     ) -> SignalConsistency:
         """Check signal consistency across analyses.
 
         Args:
-            technical: Technical analysis result
-            _sentiment: Sentiment analysis result (no signal field, unused)
-            _news: News analysis result (no signal field, unused)
+            ctx: Analysis context
             warnings: List to append warnings to
 
         Returns:
@@ -194,9 +181,9 @@ class RiskValidator:
 
         # Collect signals (only technical has signal field in current implementation)
         signals: list[tuple[str, Signal]] = []
-        if technical:
-            signals.append(("technical", technical.signal))
-            signal_distribution[technical.signal] = signal_distribution.get(technical.signal, 0) + 1
+        if ctx.technical:
+            signals.append(("technical", ctx.technical.signal))
+            signal_distribution[ctx.technical.signal] = signal_distribution.get(ctx.technical.signal, 0) + 1
 
         # Note: sentiment and news analyses don't have signal fields in current implementation
 
@@ -228,29 +215,23 @@ class RiskValidator:
 
     def _check_trading_session(
         self,
-        trading_session: TradingSession,
-        technical: TechnicalAnalysis | None,
-        _sentiment: SentimentAnalysis | None,
-        _news: NewsAnalysis | None,
+        ctx: AnalysisContext,
         warnings: list[str],
     ) -> bool:
         """Check trading session-specific rules.
 
         Args:
-            trading_session: Current trading session
-            technical: Technical analysis result
-            _sentiment: Sentiment analysis result (no confidence field, unused)
-            _news: News analysis result (no confidence field, unused)
+            ctx: Analysis context
             warnings: List to append warnings to
 
         Returns:
             True if session rules met, False otherwise
         """
-        if trading_session != TradingSession.PRE_MARKET:
+        if ctx.trading_session != TradingSession.PRE_MARKET:
             return True  # No special rules for regular session
 
         # Pre-market: require higher confidence (only technical has confidence)
-        confidences = [technical.confidence] if technical else []
+        confidences = [ctx.technical.confidence] if ctx.technical else []
 
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
@@ -314,70 +295,57 @@ class RiskValidator:
 
     def _check_suspicious_patterns(
         self,
-        technical: TechnicalAnalysis | None,
-        _sentiment: SentimentAnalysis | None,
-        _news: NewsAnalysis | None,
+        ctx: AnalysisContext,
         warnings: list[str],
     ) -> bool:
         """Check for suspicious patterns (e.g., all confidences >0.95).
 
         Args:
-            technical: Technical analysis result
-            _sentiment: Sentiment analysis result (no confidence field, unused)
-            _news: News analysis result (no confidence field, unused)
+            ctx: Analysis context
             warnings: List to append warnings to
 
         Returns:
             True if no suspicious patterns, False otherwise
         """
         # Only technical has confidence in current implementation
-        confidences = [technical.confidence] if technical else []
+        confidences = [ctx.technical.confidence] if ctx.technical else []
 
         non_zero = [c for c in confidences if c > 0]
-        if len(non_zero) >= 2 and all(c > 0.95 for c in non_zero):
-            warnings.append("Suspicious: all confidences >0.95 (possible overfitting)")
+        if len(non_zero) >= MIN_ANALYSES_FOR_OVERFITTING and all(
+            c > OVERFITTING_THRESHOLD for c in non_zero
+        ):
+            warnings.append(
+                f"Suspicious: all confidences >{OVERFITTING_THRESHOLD} (possible overfitting)"
+            )
             return False
 
         return True
 
-    def _calculate_aggregate_confidence(
-        self,
-        technical: TechnicalAnalysis | None,
-        sentiment: SentimentAnalysis | None,
-        news: NewsAnalysis | None,
-        fundamental: FundamentalAnalysis | None,
-        bullish: BullishResearchAnalysis | None,
-        bearish: BearishResearchAnalysis | None,
-    ) -> float:
+    def _calculate_aggregate_confidence(self, ctx: AnalysisContext) -> float:
         """Calculate aggregate confidence across all analyses.
 
         Args:
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result
-            fundamental: Fundamental analysis result
-            bullish: Bullish research result
-            bearish: Bearish research result
+            ctx: Analysis context
 
         Returns:
             Weighted average confidence (0.0-1.0)
         """
         confidences = []
-        if technical:
-            confidences.append(technical.confidence)
-        if sentiment:
-            confidences.append(sentiment.confidence)
-        if news:
-            confidences.append(news.confidence)
-        if fundamental:
-            confidences.append(fundamental.confidence)
-        if bullish:
-            confidences.append(bullish.confidence)
-        if bearish:
-            confidences.append(bearish.confidence)
+        if ctx.technical:
+            confidences.append(ctx.technical.confidence)
+        if ctx.sentiment:
+            confidences.append(ctx.sentiment.confidence)
+        if ctx.news:
+            confidences.append(ctx.news.confidence)
+        if ctx.fundamental:
+            confidences.append(ctx.fundamental.confidence)
+        if ctx.bullish:
+            confidences.append(ctx.bullish.confidence)
+        if ctx.bearish:
+            confidences.append(ctx.bearish.confidence)
 
         if not confidences:
-            return 0.5  # Default if no analyses available
+            return DEFAULT_CONFIDENCE  # Default if no analyses available
 
         return sum(confidences) / len(confidences)
 
@@ -407,11 +375,11 @@ class RiskValidator:
             return "HIGH"
 
         # High risk if low confidence or conflicting signals
-        if aggregate_confidence < 0.5 or signal_consistency.conflicting_signals:
+        if aggregate_confidence < HIGH_RISK_CONFIDENCE_THRESHOLD or signal_consistency.conflicting_signals:
             return "HIGH"
 
         # Medium risk if moderate confidence
-        if aggregate_confidence < 0.75:
+        if aggregate_confidence < MEDIUM_RISK_CONFIDENCE_THRESHOLD:
             return "MEDIUM"
 
         # Low risk otherwise
@@ -419,4 +387,7 @@ class RiskValidator:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"RiskValidator(enabled={self.config.enabled}, min_confidence={self.config.min_overall_confidence})"
+        return (
+            f"RiskValidator(enabled={self.config.enabled}, "
+            f"min_confidence={self.config.min_overall_confidence})"
+        )

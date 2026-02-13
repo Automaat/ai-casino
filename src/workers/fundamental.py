@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -15,6 +15,14 @@ from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter
+
+if TYPE_CHECKING:
+    from src.data.earnings import EarningsCalendar
+
+# Constants for valuation thresholds
+EARNINGS_WARNING_DAYS = 5  # Flag trades within ±5 days of earnings
+PE_RATIO_UNDERVALUED = 15  # P/E < 15 is undervalued
+PE_RATIO_OVERVALUED = 30  # P/E > 30 is overvalued
 
 
 class EarningsFlags(BaseModel):
@@ -127,7 +135,7 @@ class FundamentalWorker:
 
     def _calculate_earnings_flags(
         self,
-        earnings_calendar: Any,
+        earnings_calendar: EarningsCalendar | None,
         symbol: str,
     ) -> EarningsFlags:
         """Calculate earnings flags - 5-day window (±5 days).
@@ -151,8 +159,8 @@ class FundamentalWorker:
         for event in earnings_calendar.events:
             if event.symbol.upper() == symbol.upper() and event.earnings_date:
                 days_until = (event.earnings_date - today).days
-                # Flag if within ±5 days
-                if abs(days_until) <= 5:
+                # Flag if within threshold
+                if abs(days_until) <= EARNINGS_WARNING_DAYS:
                     return EarningsFlags(
                         upcoming_earnings=True,
                         days_until_earnings=days_until,
@@ -194,9 +202,9 @@ class FundamentalWorker:
         if pe_ratio is None:
             return "FAIRLY_VALUED"
 
-        if pe_ratio < 15:
+        if pe_ratio < PE_RATIO_UNDERVALUED:
             return "UNDERVALUED"
-        if pe_ratio > 30:
+        if pe_ratio > PE_RATIO_OVERVALUED:
             return "OVERVALUED"
         return "FAIRLY_VALUED"
 

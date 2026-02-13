@@ -1,6 +1,6 @@
 """Stage 5.5: Pre-decision risk validation."""
 
-from src.validators.risk import RiskValidator
+from src.validators.risk import AnalysisContext, RiskValidator
 from src.workflows.models.risk_validation import RiskValidationInput, RiskValidationOutput
 
 
@@ -17,17 +17,19 @@ def validate_analyses_stage(
     Returns:
         RiskValidationOutput with validation result
     """
-    result = risk_validator.validate(
-        validation_input.symbol,
-        validation_input.trading_session,
-        validation_input.technical_analysis,
-        validation_input.sentiment_analysis,
-        validation_input.news_analysis,
-        validation_input.fundamental_analysis,
-        validation_input.bullish_research,
-        validation_input.bearish_research,
-        validation_input.market_data,
-        validation_input.degradation_context,
+    ctx = AnalysisContext(
+        symbol=validation_input.symbol,
+        trading_session=validation_input.trading_session,
+        technical=validation_input.technical_analysis,
+        sentiment=validation_input.sentiment_analysis,
+        news=validation_input.news_analysis,
+        fundamental=validation_input.fundamental_analysis,
+        bullish=validation_input.bullish_research,
+        bearish=validation_input.bearish_research,
+        market_data=validation_input.market_data,
+        degradation_context=validation_input.degradation_context,
     )
+
+    result = risk_validator.validate(ctx)
 
     return RiskValidationOutput(validation_result=result)

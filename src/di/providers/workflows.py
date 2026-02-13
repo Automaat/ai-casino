@@ -67,7 +67,7 @@ def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRCo
     )
 
 
-def _create_risk_validator(daemon_config: DaemonConfig):
+def _create_risk_validator(daemon_config: DaemonConfig) -> object:
     """Create RiskValidator from daemon risk_validation config."""
     from src.validators.risk import RiskValidator
 

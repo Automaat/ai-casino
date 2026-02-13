@@ -1,10 +1,12 @@
 """Worker providers for DI container."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
+    from src.data.earnings import EarningsFetcher
+    from src.data.fundamental import FundamentalDataFetcher
     from src.workers.fundamental import FundamentalWorker
     from src.workers.news import NewsWorker
     from src.workers.sentiment import SentimentWorker
@@ -55,8 +57,8 @@ def create_news_worker(llm_client: LLMClient) -> NewsWorker:
 
 def create_fundamental_worker(
     llm_client: LLMClient,
-    fundamental_fetcher: Any,
-    earnings_fetcher: Any,
+    fundamental_fetcher: FundamentalDataFetcher,
+    earnings_fetcher: EarningsFetcher,
 ) -> FundamentalWorker:
     """Create FundamentalWorker with LLM client and fetchers.
 
