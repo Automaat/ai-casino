@@ -250,9 +250,7 @@ class SocialSentimentAnalyst:
         loop = asyncio.get_running_loop()
         # Use ProcessPoolExecutor for true parallelism (avoids GIL)
         executor = get_finbert_executor()
-        score_dicts = await loop.run_in_executor(
-            executor, _analyze_batch_worker, texts, self.finbert.device
-        )
+        score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, self.finbert.device)
         sentiments: list[SentimentScore] = [SentimentScore(**s) for s in score_dicts]
 
         # Weight by upvote_ratio * score
