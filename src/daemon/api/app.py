@@ -871,10 +871,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         components: DaemonComponents = app.state.components
 
         active_trackers = await components.state.get_active_execution_trackers()
-        graphs = [
-            tracker.graph.model_dump(mode="json")
-            for tracker in active_trackers.values()
-        ]
+        graphs = [tracker.graph.model_dump(mode="json") for tracker in active_trackers.values()]
 
         return ActiveExecutionGraphsResponse(graphs=graphs, count=len(graphs))
 

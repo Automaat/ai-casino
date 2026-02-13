@@ -73,7 +73,7 @@ class JournalTask(TaskExecutor):
         try:
             date = datetime.fromisoformat(last_journal_date).date()
             return datetime.combine(date, datetime.min.time()).replace(tzinfo=UTC)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     async def record_success(self, duration: float) -> None:
@@ -103,9 +103,7 @@ class TearsheetTask(TaskExecutor):
         today = now.date()
         analyses = await self.components.state.get_analyses()
         today_analyses = [
-            r
-            for r in analyses
-            if r.timestamp.astimezone(self.components.scheduler.timezone).date() == today
+            r for r in analyses if r.timestamp.astimezone(self.components.scheduler.timezone).date() == today
         ]
 
         if not today_analyses:

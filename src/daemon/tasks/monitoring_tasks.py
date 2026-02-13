@@ -80,9 +80,7 @@ class HealthCheckTask(TaskExecutor):
 
     async def record_success(self, duration: float) -> None:
         """Record health check completion."""
-        await self.components.state.set_last_health_check(
-            datetime.now(tz=self.components.scheduler.timezone)
-        )
+        await self.components.state.set_last_health_check(datetime.now(tz=self.components.scheduler.timezone))
 
     async def should_skip_today(self) -> bool:
         """Custom dedup: check interval instead of daily.
