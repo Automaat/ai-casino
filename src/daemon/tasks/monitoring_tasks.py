@@ -78,7 +78,7 @@ class HealthCheckTask(TaskExecutor):
         """Get last health check timestamp."""
         return await self.components.state.get_last_health_check()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record health check completion."""
         await self.components.state.set_last_health_check(
             datetime.now(tz=self.components.scheduler.timezone)
@@ -122,7 +122,7 @@ class SignalTrackingTask(TaskExecutor):
         """Get last signal tracking timestamp."""
         return await self.components.state.get_last_signal_tracking()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record signal tracking completion."""
         await self.components.state.set_last_signal_tracking(datetime.now(UTC))
 
@@ -175,7 +175,7 @@ class MonteCarloTask(TaskExecutor):
             return None
         return monte_carlo_tests[-1].timestamp
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record Monte Carlo test completion."""
         if self._record:
             await self.components.state.record_monte_carlo_test(self._record)

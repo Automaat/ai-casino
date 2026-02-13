@@ -592,7 +592,7 @@ Type freely to chat about markets or ask questions."""
             message=f"{symbol} not found in watchlist '{watchlist_name}'.",
         )
 
-    async def _cmd_candidates(self, _args: list[str]) -> CommandResult:
+    async def _cmd_candidates(self, args: list[str]) -> CommandResult:
         """Manage after-hours screening candidates.
 
         Usage:

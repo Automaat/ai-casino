@@ -140,7 +140,7 @@ class DaemonContextBuilder:
             logger.opt(exception=True).warning(f"Failed to load game plan context: {e}")
             return None
 
-    def _build_earnings_context(self, _symbol: str) -> str | None:
+    def _build_earnings_context(self, symbol: str) -> str | None:
         """Build earnings context string from latest calendar state.
 
         Args:

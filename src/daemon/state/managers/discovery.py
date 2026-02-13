@@ -50,7 +50,7 @@ class DiscoveryStateManager(StateManager):
         if self._metadata_repository and value is not None:
             await self._metadata_repository.set("discovery.last_discovery", value)
 
-    async def get_discovery_history(self, _limit: int = 100) -> list[DiscoveryHistoryRecord]:
+    async def get_discovery_history(self, limit: int = 100) -> list[DiscoveryHistoryRecord]:
         """Get discovery history with lazy loading."""
         if not self._discovery_repository:
             return []

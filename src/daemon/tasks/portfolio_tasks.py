@@ -77,7 +77,7 @@ class OptimizationTask(TaskExecutor):
         """Get last optimization timestamp."""
         return await self.components.state.get_last_optimization()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record optimization completion."""
         await self.components.state.record_optimization(
             symbols_optimized=self._optimized,
@@ -206,7 +206,7 @@ class RebalancingTask(TaskExecutor):
         """Get last rebalancing timestamp."""
         return await self.components.state.get_last_portfolio_rebalancing()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record rebalancing completion."""
         # State already recorded in execute()
 
@@ -275,7 +275,7 @@ class CorrelationAuditTask(TaskExecutor):
         """Get last correlation audit timestamp."""
         return await self.components.state.get_last_correlation_audit()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record correlation audit completion."""
         if self._result:
             input_data = CorrelationAuditInput(

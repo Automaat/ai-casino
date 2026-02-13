@@ -321,7 +321,7 @@ class DaemonTaskService:
 
         await PeerAnalysisTask(self.components, self.container).run()
 
-    def _should_skip_correlation_audit(self, _now: datetime) -> bool:
+    def _should_skip_correlation_audit(self, now: datetime) -> bool:
         """Check if correlation audit should be skipped (already ran today)."""
         # NOTE: Requires async state access after JSON elimination
         # TODO: Implement using await self.components.state.get_last_correlation_audit()

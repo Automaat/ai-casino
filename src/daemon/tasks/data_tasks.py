@@ -73,7 +73,7 @@ class PrefetchTask(TaskExecutor):
         """Get last prefetch timestamp."""
         return await self.components.state.get_last_prefetch()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record prefetch completion."""
         await self.components.state.record_prefetch(
             symbols_prefetched=self._succeeded,
@@ -117,7 +117,7 @@ class PreMarketRefreshTask(TaskExecutor):
         """Get last pre-market refresh timestamp."""
         return await self.components.state.get_last_pre_market_refresh()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record pre-market refresh completion."""
         await self.components.state.set_last_pre_market_refresh(
             datetime.now(self.components.scheduler.timezone)
@@ -215,7 +215,7 @@ class ScreeningTask(TaskExecutor):
         """Get last screening timestamp."""
         return await self.components.state.get_last_after_hours_screening()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record screening completion."""
         # State already recorded in execute()
 
@@ -327,7 +327,7 @@ class EarningsFetchTask(TaskExecutor):
         """Get last earnings fetch timestamp."""
         return await self.components.state.get_last_earnings_fetch()
 
-    async def record_success(self, _duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record earnings fetch completion."""
         # State already recorded in execute()
 
