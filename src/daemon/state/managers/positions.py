@@ -131,4 +131,4 @@ class PositionStateManager(StateManager):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"PositionStateManager(positions={len(self.active_positions)})"
+        return "PositionStateManager()"

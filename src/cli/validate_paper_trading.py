@@ -96,9 +96,9 @@ def validate_paper_trading(config_path: str = "daemon.yaml") -> int:
         Exit code (0=ready, 1=not ready, 2=error)
     """
     try:
-        # Load config and state
+        # Load config and create state (now database-backed)
         config = DaemonConfig.from_yaml(Path(config_path))
-        state = DaemonState.load(config.state.state_file)
+        state = DaemonState()  # State is now database-backed, no JSON loading
 
         # Initialize tracker and validator
         metrics_tracker = MetricsTracker(config.metrics.risk_free_rate)

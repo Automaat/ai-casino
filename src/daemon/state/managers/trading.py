@@ -160,4 +160,4 @@ class TradingStateManager(StateManager):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"TradingStateManager(analyses={self.total_analyses}, trades={self.total_trades})"
+        return "TradingStateManager()"
