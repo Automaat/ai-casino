@@ -41,6 +41,7 @@ class EventWatcherConfig:
     relevance_threshold: float
     cooldown_minutes: int
     max_concurrent_analyses: int
+    period_days: int = 60
 
 
 class EventWatcher(ABC):
@@ -71,6 +72,7 @@ class EventWatcher(ABC):
         self.relevance_threshold = config.relevance_threshold
         self.cooldown_minutes = config.cooldown_minutes
         self.max_concurrent_analyses = config.max_concurrent_analyses
+        self.period_days = config.period_days
         self.running = False
         self._signal_callback = signal_callback
         self._container = container or create_container()
@@ -152,7 +154,7 @@ class EventWatcher(ABC):
         async def analyze_one(symbol: str) -> tuple[str, TradingWorkflowResult | None]:
             async with semaphore:
                 try:
-                    result = await workflow.analyze(symbol, period_days=60)
+                    result = await workflow.analyze(symbol, period_days=self.period_days)
                     return symbol, result
                 except Exception as e:
                     logger.opt(exception=True).error(f"Failed to analyze {symbol}: {e}")

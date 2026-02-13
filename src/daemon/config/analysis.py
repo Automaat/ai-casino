@@ -29,6 +29,7 @@ class NewsWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+    period_days: int = Field(default=60, ge=30, le=180)
     sources: NewsSourcesConfig = Field(default_factory=NewsSourcesConfig)
 
 
@@ -44,6 +45,7 @@ class SocialWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+    period_days: int = Field(default=60, ge=30, le=180)
 
 
 class FilingsWatcherConfig(BaseModel):
@@ -56,6 +58,7 @@ class FilingsWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+    period_days: int = Field(default=60, ge=30, le=180)
 
 
 class AnomalyWatcherConfig(BaseModel):
@@ -70,6 +73,7 @@ class AnomalyWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+    period_days: int = Field(default=60, ge=30, le=180)
 
 
 class TrumpWatcherConfig(BaseModel):
@@ -80,3 +84,4 @@ class TrumpWatcherConfig(BaseModel):
     relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
+    period_days: int = Field(default=60, ge=30, le=180)

@@ -30,6 +30,7 @@ class NewsWatcherConfig:
     cooldown_minutes: int = 15
     breaking_threshold_minutes: int = 15
     max_concurrent_analyses: int = 2
+    period_days: int = 60
 
 
 class NewsWatcher(EventWatcher):
@@ -110,6 +111,7 @@ class NewsWatcher(EventWatcher):
                 max_concurrent_analyses=int(
                     kwargs.get("max_concurrent_analyses", defaults.max_concurrent_analyses)
                 ),
+                period_days=int(kwargs.get("period_days", defaults.period_days)),
             )
 
         cfg = config or NewsWatcherConfig()
@@ -118,6 +120,7 @@ class NewsWatcher(EventWatcher):
             relevance_threshold=cfg.relevance_threshold,
             cooldown_minutes=cfg.cooldown_minutes,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
+            period_days=cfg.period_days,
         )
         super().__init__(base_config, historical_cache, container=container)
         self.breaking_threshold_minutes = cfg.breaking_threshold_minutes
