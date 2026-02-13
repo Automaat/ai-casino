@@ -35,11 +35,13 @@ class JournalTask(TaskExecutor):
 
         # Check daily dedup (custom dedup, not default)
         today = datetime.now(self.components.scheduler.timezone).date()
-        if self.components.state.last_journal_date == today.isoformat():
+        last_journal_date = await self.components.state.get_last_journal_date()
+        if last_journal_date == today.isoformat():
             return
 
         # Filter today's analysis records
-        today_records = [r for r in self.components.state.analyses if r.timestamp.date() == today]
+        analyses = await self.components.state.get_analyses()
+        today_records = [r for r in analyses if r.timestamp.date() == today]
         if not today_records:
             logger.info("No analyses today, skipping journal")
             return
@@ -52,7 +54,7 @@ class JournalTask(TaskExecutor):
         journal = await journal_agent.generate(today, today_records)
         file_path = journal_agent.persist(journal, self.components.config.journal.journal_dir)
 
-        self.components.state.last_journal_date = today.isoformat()
+        await self.components.state.set_last_journal_date(today.isoformat())
 
         correct = sum(1 for o in journal.outcomes if o.signal_correct)
         total = len(journal.outcomes)
@@ -60,24 +62,25 @@ class JournalTask(TaskExecutor):
         if total > 0:
             console.print(f"[bold magenta]Signal accuracy:[/bold magenta] {correct}/{total}")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last journal timestamp."""
         # Custom dedup based on date string, not timestamp
-        if not self.components.state.last_journal_date:
+        last_journal_date = await self.components.state.get_last_journal_date()
+        if not last_journal_date:
             return None
 
         # Convert date string to datetime for compatibility with base class
         try:
-            date = datetime.fromisoformat(self.components.state.last_journal_date).date()
+            date = datetime.fromisoformat(last_journal_date).date()
             return datetime.combine(date, datetime.min.time()).replace(tzinfo=UTC)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record journal completion."""
         # State already recorded in execute()
 
-    def should_skip_today(self) -> bool:
+    async def should_skip_today(self) -> bool:
         """Custom dedup: handled in execute via time window + date check."""
         # Always return False - execute() handles dedup
         return False
@@ -98,9 +101,10 @@ class TearsheetTask(TaskExecutor):
 
         now = datetime.now(self.components.scheduler.timezone)
         today = now.date()
+        analyses = await self.components.state.get_analyses()
         today_analyses = [
             r
-            for r in self.components.state.analyses
+            for r in analyses
             if r.timestamp.astimezone(self.components.scheduler.timezone).date() == today
         ]
 
@@ -122,7 +126,7 @@ class TearsheetTask(TaskExecutor):
                 retention_days=self.components.config.reporting.retention_days,
             )
 
-            self.components.state.record_tearsheet(
+            await self.components.state.record_tearsheet(
                 symbol="PORTFOLIO",
                 html_path=tearsheet.html_report_path,
             )
@@ -137,11 +141,11 @@ class TearsheetTask(TaskExecutor):
 
         console.print("\n[dim]Tearsheet generation complete[/dim]")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last tearsheet timestamp."""
-        return self.components.state.last_tearsheet
+        return await self.components.state.get_last_tearsheet()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record tearsheet completion."""
         # State already recorded in execute()
 
@@ -187,7 +191,7 @@ class RiskReportTask(TaskExecutor):
         report_path = await asyncio.to_thread(_write_report)
 
         # Record in state
-        self.components.state.record_risk_report(
+        await self.components.state.record_risk_report(
             RiskReportRecord(
                 timestamp=datetime.now(UTC),
                 var_95=report.var_95,
@@ -221,11 +225,11 @@ class RiskReportTask(TaskExecutor):
 
             task.add_done_callback(_log_var_notification_result)
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last risk report timestamp."""
-        return self.components.state.last_risk_report
+        return await self.components.state.get_last_risk_report()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record risk report completion."""
         # State already recorded in execute()
 

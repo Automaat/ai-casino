@@ -600,42 +600,12 @@ Type freely to chat about markets or ask questions."""
             /candidates add SYM...   - add candidates to watchlist
             /candidates clear        - clear old candidates
         """
-        from pathlib import Path
-
-        from src.daemon.config import DaemonConfig
-        from src.daemon.state import DaemonState
-
-        # Load daemon state
-        def _load_state() -> tuple[DaemonState, str]:
-            config_path = Path("~/.ai-casino/daemon.yaml").expanduser()
-            if config_path.exists():
-                config = DaemonConfig.from_yaml(config_path)
-                state_file = config.state.state_file
-            else:
-                state_file = "~/.ai-casino/daemon-state.json"
-            state = DaemonState.load(state_file)
-            return state, state_file
-
-        state, state_file = await asyncio.to_thread(_load_state)
-
-        # Handle subcommands
-        if args and args[0].lower() == "add":
-            return self._handle_candidates_add(args[1:], state, state_file)
-        if args and args[0].lower() == "clear":
-            return self._handle_candidates_clear(state, state_file)
-
-        # Show latest candidates
-        if not state.screening_history:
-            return CommandResult(
-                success=True,
-                message="No screening candidates yet. Enable after-hours screening in daemon.yaml.",
-            )
-
-        latest = state.screening_history[-1]
+        # NOTE: TUI commands require async rewrite after JSON state elimination
+        # See PR description: TUI/CLI are expected to be broken
         return CommandResult(
-            success=True,
-            message=self._format_candidates(latest),
-            data={"count": len(latest.candidates)},
+            success=False,
+            message="TUI /candidates command requires async rewrite after JSON state elimination. "
+            "Use daemon API endpoints or wait for TUI refactor.",
         )
 
     def _handle_candidates_add(

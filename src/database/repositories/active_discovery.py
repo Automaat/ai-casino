@@ -10,12 +10,13 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from sqlalchemy import delete, select
 
+from sqlalchemy.engine import Result
+
 from src.database.models import ActiveDiscoveryCandidateORM
 from src.database.repositories.base import BaseRepository
 from src.discovery.models import ActiveDiscoveryCandidate, DiscoverySourceDetail
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine import Result
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -114,11 +115,11 @@ class ActiveDiscoveryCandidateRepository(BaseRepository[ActiveDiscoveryCandidate
         Returns:
             Number of candidates deleted
         """
-        result: Result = await self._session.execute(
+        result = await self._session.execute(
             delete(ActiveDiscoveryCandidateORM).where(ActiveDiscoveryCandidateORM.ttl_expires_at < cutoff)
         )
         await self._session.commit()
-        deleted_count = result.rowcount if result.rowcount is not None else 0
+        deleted_count: int = getattr(result, "rowcount", 0) or 0
         if deleted_count > 0:
             logger.info(f"Deleted {deleted_count} expired discovery candidates")
         return deleted_count
@@ -132,11 +133,12 @@ class ActiveDiscoveryCandidateRepository(BaseRepository[ActiveDiscoveryCandidate
         Returns:
             True if deleted, False if not found
         """
-        result: Result = await self._session.execute(
+        result = await self._session.execute(
             delete(ActiveDiscoveryCandidateORM).where(ActiveDiscoveryCandidateORM.symbol == symbol)
         )
         await self._session.commit()
-        deleted = (result.rowcount if result.rowcount is not None else 0) > 0
+        deleted_count: int = getattr(result, "rowcount", 0) or 0
+        deleted = deleted_count > 0
         if deleted:
             logger.info(f"Deleted active discovery candidate: {symbol}")
         return deleted

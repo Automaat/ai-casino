@@ -30,7 +30,7 @@ class GamePlanTask(TaskExecutor):
         else:
             agent = self.components.game_plan_agent
 
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         # Build contexts via context builder
         context_builder = self.container.context_builder(
@@ -50,7 +50,7 @@ class GamePlanTask(TaskExecutor):
 
         plan_path = agent.persist(plan, self.components.config.game_plan.plan_dir)
 
-        self.components.state.record_game_plan(
+        await self.components.state.record_game_plan(
             priority_symbols=plan.priority_symbols,
             risk_stance=plan.risk_stance,
             sector_focus=plan.sector_focus,
@@ -62,11 +62,11 @@ class GamePlanTask(TaskExecutor):
         console.print(f"  Sectors: {', '.join(plan.sector_focus)}")
         console.print(f"  Saved: {plan_path}")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last game plan timestamp."""
-        return self.components.state.last_game_plan
+        return await self.components.state.get_last_game_plan()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record game plan completion."""
         # State already recorded in execute()
 
@@ -87,18 +87,19 @@ class DiscoveryTask(TaskExecutor):
             raise RuntimeError(msg)
 
         # Get current state
-        current_watchlist = self.components.broker_manager.get_merged_watchlist()
+        current_watchlist = await self.components.broker_manager.get_merged_watchlist()
         current_positions = {}
         if self.components.broker:
             try:
                 account_info = await asyncio.to_thread(self.components.broker.get_account_info)
-                current_positions = account_info.positions  # type: ignore[assignment]
+                current_positions = account_info.positions
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to fetch positions: {e}")
 
+        sector_rotation_history = await self.components.state.get_sector_rotation_history()
         sector_context = None
-        if self.components.state.sector_rotation_history:
-            sector_context = self.components.state.sector_rotation_history[-1]
+        if sector_rotation_history:
+            sector_context = sector_rotation_history[-1]
 
         # Run discovery
         result = await self.components.discovery_engine.discover(
@@ -112,8 +113,8 @@ class DiscoveryTask(TaskExecutor):
         added_candidates = result.candidates[:max_new]
         added_symbols = [c.symbol for c in added_candidates]
 
-        self.components.state.record_discovery(result.candidates, added_symbols)
-        self.components.state.last_discovery = datetime.now(UTC)
+        await self.components.state.record_discovery(result.candidates, added_symbols)
+        await self.components.state.set_last_discovery(datetime.now(UTC))
 
         console.print(
             f"[bold green]✓[/bold green] Discovery: "
@@ -128,15 +129,15 @@ class DiscoveryTask(TaskExecutor):
         for source, count in result.source_breakdown.items():
             logger.debug(f"  {source}: {count} candidates")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last discovery timestamp."""
-        return self.components.state.last_discovery
+        return await self.components.state.get_last_discovery()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record discovery completion."""
         # State already recorded in execute()
 
-    def should_skip_today(self) -> bool:
+    async def should_skip_today(self) -> bool:
         """Custom dedup: check time window + daily.
 
         Returns:
@@ -147,7 +148,7 @@ class DiscoveryTask(TaskExecutor):
             return True
 
         # Check if already ran today
-        last_run = self.get_last_run()
+        last_run = await self.get_last_run()
         if not last_run:
             return False
 
@@ -206,7 +207,7 @@ class SectorRotationTask(TaskExecutor):
         sector_strengths = {s.sector: s.relative_strength for s in analysis.sectors}
         sector_momenta = {s.sector: s.momentum.value for s in analysis.sectors}
 
-        self.components.state.record_sector_rotation(
+        await self.components.state.record_sector_rotation(
             leading_sectors=analysis.leading_sectors,
             lagging_sectors=analysis.lagging_sectors,
             sector_strengths=sector_strengths,
@@ -222,11 +223,11 @@ class SectorRotationTask(TaskExecutor):
 
         self._publish_event_sync("SCHEDULED_TASK", {"task_name": "sector_rotation", "status": "completed"})
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last sector rotation timestamp."""
-        return self.components.state.last_sector_rotation
+        return await self.components.state.get_last_sector_rotation()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record sector rotation completion."""
         # State already recorded in execute()
 
@@ -294,7 +295,7 @@ class PeerAnalysisTask(TaskExecutor):
             historical_cache=self.components.historical_cache,
         )
 
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
         console.print(f"[dim]Analyzing {len(watchlist)} positions against peers...[/dim]")
 
         result = await asyncio.to_thread(analyzer.analyze_positions, watchlist)
@@ -303,7 +304,7 @@ class PeerAnalysisTask(TaskExecutor):
         rankings = {a.symbol: a.rank for a in result.analyses}
         swaps = [a.swap_recommendation for a in result.analyses if a.swap_recommendation]
 
-        self.components.state.record_peer_analysis(
+        await self.components.state.record_peer_analysis(
             symbols_analyzed=[a.symbol for a in result.analyses],
             rankings=rankings,
             swap_recommendations=swaps,
@@ -329,10 +330,10 @@ class PeerAnalysisTask(TaskExecutor):
             f"{result.total_peers_analyzed} peers ({result.total_duration_seconds:.0f}s)[/dim]"
         )
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last peer analysis timestamp."""
-        return self.components.state.last_peer_analysis
+        return await self.components.state.get_last_peer_analysis()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record peer analysis completion."""
         # State already recorded in execute()

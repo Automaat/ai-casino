@@ -161,8 +161,10 @@ class DaemonFactory:
         state.set_repositories(repos)
 
         # Phase 2: Broker setup
+        import asyncio
+
         broker_manager = BrokerManager(self.config, state, historical_cache)
-        broker_manager.initialize_broker()
+        asyncio.run(broker_manager.initialize_broker())
         broker = broker_manager.broker
 
         # Phase 3: Scheduler
@@ -353,7 +355,9 @@ class DaemonFactory:
             )
 
             try:
-                report = validator.assess_readiness()
+                import asyncio
+
+                report = asyncio.run(validator.assess_readiness())
 
                 if not report.ready_for_live:
                     failed = [c.name for c in report.criteria if not c.passed]

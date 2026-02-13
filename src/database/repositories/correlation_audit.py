@@ -81,7 +81,9 @@ class CorrelationAuditRecordRepository(BaseRepository[CorrelationAuditRecord]):
             List of recent CorrelationAuditRecords
         """
         result = await self._session.execute(
-            select(CorrelationAuditRecordORM).order_by(CorrelationAuditRecordORM.timestamp.desc()).limit(limit)
+            select(CorrelationAuditRecordORM)
+            .order_by(CorrelationAuditRecordORM.timestamp.desc())
+            .limit(limit)
         )
         return [self._to_record(orm) for orm in result.scalars().all()]
 

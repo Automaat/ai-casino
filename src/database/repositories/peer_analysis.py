@@ -92,12 +92,13 @@ class PeerAnalysisRecordRepository(BaseRepository[PeerAnalysisRecord]):
         Returns:
             PeerAnalysisRecord
         """
-        swaps = orm.swap_recommendations if isinstance(orm.swap_recommendations, list) else []
         return PeerAnalysisRecord(
             timestamp=orm.timestamp,
             symbols_analyzed=orm.symbols_analyzed if isinstance(orm.symbols_analyzed, list) else [],
             rankings=orm.rankings if isinstance(orm.rankings, dict) else {},
-            swap_recommendations=swaps,
+            swap_recommendations=orm.swap_recommendations
+            if isinstance(orm.swap_recommendations, list)
+            else [],
             total_peers=orm.total_peers,
             total_duration_seconds=float(orm.total_duration_seconds),
         )

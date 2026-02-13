@@ -73,7 +73,7 @@ class DaemonCycleOrchestrator:
         from src.daemon.profiling.profiler import async_nullcontext
 
         # Start profiling if enabled
-        cycle_num = self.components.state.total_analyses
+        cycle_num = await self.components.state.get_total_analyses()
         profiling_context = self.profiler.profile_cycle(cycle_num) if self.profiler else async_nullcontext()
 
         async with profiling_context as profile_metrics:
@@ -114,7 +114,7 @@ class DaemonCycleOrchestrator:
                     )
 
             # Phase 6: Run watchlist analysis
-            watchlist = self.components.broker_manager.get_merged_watchlist()
+            watchlist = await self.components.broker_manager.get_merged_watchlist()
             logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
             console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now(tz=UTC):%H:%M:%S})")
 
@@ -135,7 +135,7 @@ class DaemonCycleOrchestrator:
 
             # Record profiling metrics to state
             if profile_metrics:
-                self.components.state.record_profiling(profile_metrics)
+                await self.components.state.record_profiling(profile_metrics)
 
             return cycle_result
 
@@ -196,7 +196,7 @@ class DaemonCycleOrchestrator:
             if self.components.notification_service:
                 await self._notification_helper.notify_degradation(degradation_context, self.components)
 
-            self.components.state.record_degradation(degradation_context)
+            await self.components.state.record_degradation(degradation_context)
 
         return None
 

@@ -86,7 +86,9 @@ class EarningsCalendarRecordRepository(BaseRepository[EarningsCalendarRecord]):
             List of recent EarningsCalendarRecords
         """
         result = await self._session.execute(
-            select(EarningsCalendarRecordORM).order_by(EarningsCalendarRecordORM.timestamp.desc()).limit(limit)
+            select(EarningsCalendarRecordORM)
+            .order_by(EarningsCalendarRecordORM.timestamp.desc())
+            .limit(limit)
         )
         return [self._to_record(orm) for orm in result.scalars().all()]
 

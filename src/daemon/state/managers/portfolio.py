@@ -140,6 +140,21 @@ class PortfolioStateManager(StateManager):
         value = await self._metadata_repository.get("portfolio.active_target_allocations")
         return value if isinstance(value, dict) else None
 
+    async def set_active_target_allocations(self, value: dict[str, float] | None) -> None:
+        """Set active target allocations in DB."""
+        if self._metadata_repository:
+            await self._metadata_repository.set("portfolio.active_target_allocations", value)
+
+    async def set_last_sector_rotation(self, value: datetime | None) -> None:
+        """Set last sector rotation timestamp in DB."""
+        if self._metadata_repository:
+            await self._metadata_repository.set("portfolio.last_sector_rotation", value)
+
+    async def set_last_correlation_audit(self, value: datetime | None) -> None:
+        """Set last correlation audit timestamp in DB."""
+        if self._metadata_repository:
+            await self._metadata_repository.set("portfolio.last_correlation_audit", value)
+
     async def get_optimization_history(self, limit: int = 10) -> list[OptimizationRecord]:
         """Get optimization history with lazy loading."""
         if not self._optimization_repository:

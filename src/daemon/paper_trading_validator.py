@@ -69,7 +69,7 @@ class PaperTradingValidator:
         self.metrics_tracker = metrics_tracker
         logger.info("Initialized PaperTradingValidator")
 
-    def assess_readiness(self) -> ReadinessReport:
+    async def assess_readiness(self) -> ReadinessReport:
         """Evaluate all validation criteria and generate readiness report.
 
         Returns:
@@ -78,12 +78,12 @@ class PaperTradingValidator:
         logger.info("Assessing paper trading readiness")
 
         # Calculate paper metrics
-        paper_metrics = self._calculate_paper_metrics()
+        paper_metrics = await self._calculate_paper_metrics()
 
         # Run validation checks
         criteria = []
-        criteria.append(self._check_duration())
-        criteria.append(self._check_min_trades())
+        criteria.append(await self._check_duration())
+        criteria.append(await self._check_min_trades())
         criteria.append(self._check_sharpe(paper_metrics.sharpe_ratio))
         criteria.append(self._check_drawdown(paper_metrics.max_drawdown_percent))
         criteria.append(self._check_win_rate(paper_metrics.win_rate))
@@ -95,7 +95,7 @@ class PaperTradingValidator:
         simulated_live = None
         if paper_metrics.closed_trades > 0:
             try:
-                simulated_live = self._simulate_live_comparison(paper_metrics)
+                simulated_live = await self._simulate_live_comparison(paper_metrics)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to simulate live comparison: {e}")
 
@@ -103,8 +103,9 @@ class PaperTradingValidator:
         recommendations = self._generate_recommendations(criteria, simulated_live)
 
         # Calculate duration
-        if self.state.paper_trading_start_date:
-            duration_days = (datetime.now(UTC) - self.state.paper_trading_start_date).days
+        paper_start = await self.state.get_paper_trading_start_date()
+        if paper_start:
+            duration_days = (datetime.now(UTC) - paper_start).days
         else:
             duration_days = 0
 
@@ -122,14 +123,14 @@ class PaperTradingValidator:
         logger.info(f"Readiness assessment complete: ready={ready}")
         return report
 
-    def _calculate_paper_metrics(self) -> PerformanceMetrics:
+    async def _calculate_paper_metrics(self) -> PerformanceMetrics:
         """Calculate metrics for paper trades only, scoped to start date.
 
         Returns:
             PerformanceMetrics for paper trading period
         """
         # Filter to paper trades scoped by start date
-        start_date = self.state.paper_trading_start_date
+        start_date = await self.state.get_paper_trading_start_date()
         paper_trades = []
         for t in self.metrics_tracker.trades:
             if not t.is_paper_trade:
@@ -169,14 +170,14 @@ class PaperTradingValidator:
         finally:
             self.metrics_tracker.trades = original_trades
 
-    def _simulate_live_trading(self) -> PerformanceMetrics:
+    async def _simulate_live_trading(self) -> PerformanceMetrics:
         """Simulate live trading with fees and slippage applied to paper trades.
 
         Returns:
             PerformanceMetrics for simulated live trading
         """
         # Filter to paper trades scoped by start date
-        start_date = self.state.paper_trading_start_date
+        start_date = await self.state.get_paper_trading_start_date()
         paper_trades = []
         for t in self.metrics_tracker.trades:
             if not t.is_paper_trade or not t.is_closed():
@@ -211,7 +212,7 @@ class PaperTradingValidator:
         finally:
             self.metrics_tracker.trades = original_trades
 
-    def _simulate_live_comparison(self, paper_metrics: PerformanceMetrics) -> SimulatedLiveComparison:
+    async def _simulate_live_comparison(self, paper_metrics: PerformanceMetrics) -> SimulatedLiveComparison:
         """Generate side-by-side comparison of paper vs simulated live.
 
         Args:
@@ -220,7 +221,7 @@ class PaperTradingValidator:
         Returns:
             SimulatedLiveComparison with delta analysis
         """
-        live_metrics = self._simulate_live_trading()
+        live_metrics = await self._simulate_live_trading()
 
         return SimulatedLiveComparison(
             paper_metrics=paper_metrics,
@@ -230,9 +231,10 @@ class PaperTradingValidator:
             win_rate_delta=live_metrics.win_rate - paper_metrics.win_rate,
         )
 
-    def _check_duration(self) -> ValidationCriterion:
+    async def _check_duration(self) -> ValidationCriterion:
         """Check minimum paper trading duration."""
-        if not self.state.paper_trading_start_date:
+        paper_start = await self.state.get_paper_trading_start_date()
+        if not paper_start:
             return ValidationCriterion(
                 name="Duration",
                 passed=False,
@@ -241,7 +243,7 @@ class PaperTradingValidator:
                 message="Paper trading start date not set",
             )
 
-        duration_days = (datetime.now(UTC) - self.state.paper_trading_start_date).days
+        duration_days = (datetime.now(UTC) - paper_start).days
 
         return ValidationCriterion(
             name="Duration",
@@ -251,10 +253,10 @@ class PaperTradingValidator:
             message=f"{duration_days}/{self.config.min_duration_days} days",
         )
 
-    def _check_min_trades(self) -> ValidationCriterion:
+    async def _check_min_trades(self) -> ValidationCriterion:
         """Check minimum number of executed trades."""
         # Filter to paper trades scoped by start date
-        start_date = self.state.paper_trading_start_date
+        start_date = await self.state.get_paper_trading_start_date()
         paper_trades = []
         for t in self.metrics_tracker.trades:
             if not t.is_paper_trade or t.status not in ("OPEN", "CLOSED"):

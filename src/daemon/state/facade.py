@@ -1,10 +1,9 @@
 """DaemonState facade maintaining backward compatibility."""
 
-# Properties delegate to managers for backward compatibility
-
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -24,13 +23,24 @@ from src.daemon.state.managers.strategy import StrategyStateManager
 from src.daemon.state.managers.trading import TradingStateManager
 from src.daemon.state.models import (
     AnalysisRecord,
+    CorrelationAuditRecord,
+    DegradationRecord,
+    DiscoveryHistoryRecord,
+    EarningsCalendarRecord,
     EarningsEventRecord,
+    GamePlanRecord,
     MonteCarloRecord,
+    OptimizationRecord,
+    PeerAnalysisRecord,
     PortfolioAllocationRecord,
+    PortfolioRebalancingRecord,
     PortfolioSnapshot,
+    PrefetchRecord,
+    ProfilingRecord,
     RiskReportRecord,
+    ScreeningRecord,
+    SectorRotationRecord,
 )
-from src.daemon.state.repositories import RepositoryBundle
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
 from src.execution_tracking.tracker import ExecutionGraphTracker
@@ -40,6 +50,52 @@ from src.strategies.session import TradingSession
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.daemon.positions import PositionManagementAction, PositionRecord
+    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+    from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+    from src.database.repositories.degradation import DegradationRecordRepository
+    from src.database.repositories.discovery import DiscoveryHistoryRepository
+    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+    from src.database.repositories.game_plan import GamePlanRecordRepository
+    from src.database.repositories.metadata import MetadataRepository
+    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+    from src.database.repositories.optimization import OptimizationRecordRepository
+    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
+    from src.database.repositories.position import PositionRecordRepository
+    from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.repositories.prefetch import PrefetchRecordRepository
+    from src.database.repositories.profiling import ProfilingRecordRepository
+    from src.database.repositories.rebalancing import RebalancingRecordRepository
+    from src.database.repositories.risk_report import RiskReportRecordRepository
+    from src.database.repositories.screening import ScreeningRecordRepository
+    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
+    from src.database.repositories.snapshot import PortfolioSnapshotRepository
+
+
+@dataclass
+class RepositoryBundle:
+    """Bundle of all repositories for dependency injection."""
+
+    metadata_repository: MetadataRepository
+    analysis_repository: AnalysisRecordRepository
+    position_repository: PositionRecordRepository
+    action_repository: PositionManagementActionRepository
+    optimization_repository: OptimizationRecordRepository
+    rebalancing_repository: RebalancingRecordRepository
+    sector_rotation_repository: SectorRotationRecordRepository
+    peer_analysis_repository: PeerAnalysisRecordRepository
+    correlation_audit_repository: CorrelationAuditRecordRepository
+    risk_report_repository: RiskReportRecordRepository
+    monte_carlo_repository: MonteCarloRecordRepository
+    prefetch_repository: PrefetchRecordRepository
+    screening_repository: ScreeningRecordRepository
+    earnings_repository: EarningsCalendarRecordRepository
+    profiling_repository: ProfilingRecordRepository
+    discovery_repository: DiscoveryHistoryRepository
+    active_discovery_repository: ActiveDiscoveryCandidateRepository
+    game_plan_repository: GamePlanRecordRepository
+    degradation_repository: DegradationRecordRepository
+    snapshot_repository: PortfolioSnapshotRepository
 
 
 class DaemonState(BaseModel):
@@ -68,7 +124,6 @@ class DaemonState(BaseModel):
         description="Recent completed execution graphs (last 50)",
     )
 
-
     def set_repositories(self, repos: RepositoryBundle) -> None:
         """Inject all database repositories into managers.
 
@@ -88,7 +143,16 @@ class DaemonState(BaseModel):
         )
 
         # PortfolioStateManager
-        self.portfolio.set_repositories(repos)
+        self.portfolio.set_repositories(
+            metadata_repository=repos.metadata_repository,
+            optimization_repository=repos.optimization_repository,
+            rebalancing_repository=repos.rebalancing_repository,
+            sector_rotation_repository=repos.sector_rotation_repository,
+            peer_analysis_repository=repos.peer_analysis_repository,
+            correlation_audit_repository=repos.correlation_audit_repository,
+            risk_report_repository=repos.risk_report_repository,
+            monte_carlo_repository=repos.monte_carlo_repository,
+        )
 
         # DataPipelineStateManager
         self.data_pipeline.set_repositories(
@@ -117,7 +181,6 @@ class DaemonState(BaseModel):
         self.snapshots.set_repository(repos.snapshot_repository)
 
         logger.debug("All repositories injected into DaemonState managers")
-
 
     # ===================
     # Trading Manager API
@@ -161,6 +224,10 @@ class DaemonState(BaseModel):
         """Get last run timestamp."""
         return await self.trading.get_last_run()
 
+    async def set_last_run(self, value: datetime | None) -> None:
+        """Set last run timestamp."""
+        await self.trading.set_last_run(value)
+
     async def get_analyses(self, limit: int = 1000) -> list[AnalysisRecord]:
         """Get recent analyses."""
         return await self.trading.get_analyses(limit)
@@ -177,17 +244,33 @@ class DaemonState(BaseModel):
         """Get paper trading start date."""
         return await self.trading.get_paper_trading_start_date()
 
+    async def set_paper_trading_start_date(self, value: datetime | None) -> None:
+        """Set paper trading start date."""
+        await self.trading.set_paper_trading_start_date(value)
+
     async def get_current_trading_mode(self) -> str:
         """Get current trading mode."""
         return await self.trading.get_current_trading_mode()
+
+    async def set_current_trading_mode(self, value: str) -> None:
+        """Set current trading mode."""
+        await self.trading.set_current_trading_mode(value)
 
     async def get_last_journal_date(self) -> str | None:
         """Get last journal date."""
         return await self.trading.get_last_journal_date()
 
+    async def set_last_journal_date(self, value: str | None) -> None:
+        """Set last journal date."""
+        await self.trading.set_last_journal_date(value)
+
     async def get_last_signal_tracking(self) -> datetime | None:
         """Get last signal tracking timestamp."""
         return await self.trading.get_last_signal_tracking()
+
+    async def set_last_signal_tracking(self, value: datetime | None) -> None:
+        """Set last signal tracking timestamp."""
+        await self.trading.set_last_signal_tracking(value)
 
     # ===================
     # Position Manager API
@@ -213,15 +296,13 @@ class DaemonState(BaseModel):
         """Delegate to position manager."""
         return await self.positions.get_position(symbol)
 
-    async def get_all_positions(self) -> list[PositionRecord]:
-        """Get all active positions."""
-        return await self.positions.get_all_positions()
+    async def get_active_positions(self) -> dict[str, dict]:
+        """Get active positions."""
+        return await self.positions.get_active_positions()
 
-    async def get_recent_position_actions(
-        self, symbol: str | None = None, limit: int = 100
-    ) -> list[PositionManagementAction]:
-        """Get recent position management actions."""
-        return await self.positions.get_recent_actions(symbol=symbol, limit=limit)
+    async def get_position_management_history(self) -> list[dict]:
+        """Get position management history."""
+        return await self.positions.get_position_management_history()
 
     # ===================
     # Portfolio Manager API
@@ -322,6 +403,78 @@ class DaemonState(BaseModel):
         """Delegate to portfolio manager."""
         await self.portfolio.record_tearsheet(symbol, html_path)
 
+    async def get_last_optimization(self) -> datetime | None:
+        """Get last optimization timestamp."""
+        return await self.portfolio.get_last_optimization()
+
+    async def get_optimization_history(self, limit: int = 10) -> list[OptimizationRecord]:
+        """Get optimization history."""
+        return await self.portfolio.get_optimization_history(limit)
+
+    async def get_last_portfolio_rebalancing(self) -> datetime | None:
+        """Get last rebalancing timestamp."""
+        return await self.portfolio.get_last_portfolio_rebalancing()
+
+    async def get_rebalancing_history(self, limit: int = 30) -> list[PortfolioRebalancingRecord]:
+        """Get rebalancing history."""
+        return await self.portfolio.get_rebalancing_history(limit)
+
+    async def get_active_target_allocations(self) -> dict[str, float] | None:
+        """Get active target allocations."""
+        return await self.portfolio.get_active_target_allocations()
+
+    async def set_active_target_allocations(self, value: dict[str, float] | None) -> None:
+        """Set active target allocations."""
+        await self.portfolio.set_active_target_allocations(value)
+
+    async def get_last_sector_rotation(self) -> datetime | None:
+        """Get last sector rotation timestamp."""
+        return await self.portfolio.get_last_sector_rotation()
+
+    async def set_last_sector_rotation(self, value: datetime | None) -> None:
+        """Set last sector rotation timestamp."""
+        await self.portfolio.set_last_sector_rotation(value)
+
+    async def get_sector_rotation_history(self, limit: int = 30) -> list[SectorRotationRecord]:
+        """Get sector rotation history."""
+        return await self.portfolio.get_sector_rotation_history(limit)
+
+    async def get_last_peer_analysis(self) -> datetime | None:
+        """Get last peer analysis timestamp."""
+        return await self.portfolio.get_last_peer_analysis()
+
+    async def get_peer_analysis_history(self, limit: int = 10) -> list[PeerAnalysisRecord]:
+        """Get peer analysis history."""
+        return await self.portfolio.get_peer_analysis_history(limit)
+
+    async def get_last_correlation_audit(self) -> datetime | None:
+        """Get last correlation audit timestamp."""
+        return await self.portfolio.get_last_correlation_audit()
+
+    async def set_last_correlation_audit(self, value: datetime | None) -> None:
+        """Set last correlation audit timestamp."""
+        await self.portfolio.set_last_correlation_audit(value)
+
+    async def get_correlation_audit_history(self, limit: int = 10) -> list[CorrelationAuditRecord]:
+        """Get correlation audit history."""
+        return await self.portfolio.get_correlation_audit_history(limit)
+
+    async def get_last_risk_report(self) -> datetime | None:
+        """Get last risk report timestamp."""
+        return await self.portfolio.get_last_risk_report()
+
+    async def get_risk_report_history(self, limit: int = 30) -> list[RiskReportRecord]:
+        """Get risk report history."""
+        return await self.portfolio.get_risk_report_history(limit)
+
+    async def get_monte_carlo_tests(self, limit: int = 52) -> list[MonteCarloRecord]:
+        """Get Monte Carlo tests."""
+        return await self.portfolio.get_monte_carlo_tests(limit)
+
+    async def get_last_tearsheet(self) -> datetime | None:
+        """Get last tearsheet timestamp."""
+        return await self.portfolio.get_last_tearsheet()
+
     # ===================
     # Data Pipeline Manager API
     # ===================
@@ -347,9 +500,7 @@ class DaemonState(BaseModel):
         screened_at: datetime | None = None,
     ) -> None:
         """Delegate to data pipeline manager."""
-        await self.data_pipeline.record_after_hours_screening(
-            criteria, universe, candidates, top_n, screened_at
-        )
+        await self.data_pipeline.record_after_hours_screening(criteria, universe, candidates, top_n, screened_at)
 
     async def record_earnings_fetch(
         self,
@@ -363,6 +514,50 @@ class DaemonState(BaseModel):
     async def record_profiling(self, metrics: object) -> None:
         """Delegate to data pipeline manager."""
         await self.data_pipeline.record_profiling(metrics)
+
+    async def get_last_prefetch(self) -> datetime | None:
+        """Get last prefetch timestamp."""
+        return await self.data_pipeline.get_last_prefetch()
+
+    async def set_last_prefetch(self, value: datetime | None) -> None:
+        """Set last prefetch timestamp."""
+        await self.data_pipeline.set_last_prefetch(value)
+
+    async def get_last_pre_market_refresh(self) -> datetime | None:
+        """Get last pre-market refresh timestamp."""
+        return await self.data_pipeline.get_last_pre_market_refresh()
+
+    async def set_last_pre_market_refresh(self, value: datetime | None) -> None:
+        """Set last pre-market refresh timestamp."""
+        await self.data_pipeline.set_last_pre_market_refresh(value)
+
+    async def get_prefetch_history(self, limit: int = 10) -> list[PrefetchRecord]:
+        """Get prefetch history."""
+        return await self.data_pipeline.get_prefetch_history(limit)
+
+    async def get_last_after_hours_screening(self) -> datetime | None:
+        """Get last after-hours screening timestamp."""
+        return await self.data_pipeline.get_last_after_hours_screening()
+
+    async def set_last_after_hours_screening(self, value: datetime | None) -> None:
+        """Set last after-hours screening timestamp."""
+        await self.data_pipeline.set_last_after_hours_screening(value)
+
+    async def get_screening_history(self, limit: int = 10) -> list[ScreeningRecord]:
+        """Get screening history."""
+        return await self.data_pipeline.get_screening_history(limit)
+
+    async def get_last_earnings_fetch(self) -> datetime | None:
+        """Get last earnings fetch timestamp."""
+        return await self.data_pipeline.get_last_earnings_fetch()
+
+    async def get_earnings_calendar_history(self, limit: int = 10) -> list[EarningsCalendarRecord]:
+        """Get earnings calendar history."""
+        return await self.data_pipeline.get_earnings_calendar_history(limit)
+
+    async def get_profiling_history(self, limit: int = 10) -> list[ProfilingRecord]:
+        """Get profiling history."""
+        return await self.data_pipeline.get_profiling_history(limit)
 
     # ===================
     # Discovery Manager API
@@ -379,6 +574,26 @@ class DaemonState(BaseModel):
     async def get_active_discovery_symbols(self) -> list[str]:
         """Delegate to discovery manager."""
         return await self.discovery.get_active_discovery_symbols()
+
+    async def get_last_discovery(self) -> datetime | None:
+        """Get last discovery timestamp."""
+        return await self.discovery.get_last_discovery()
+
+    async def set_last_discovery(self, value: datetime | None) -> None:
+        """Set last discovery timestamp."""
+        await self.discovery.set_last_discovery(value)
+
+    async def get_discovery_history(self, limit: int = 10) -> list[DiscoveryHistoryRecord]:
+        """Get discovery history."""
+        return await self.discovery.get_discovery_history(limit)
+
+    async def get_active_discovery_candidates(self) -> list[DiscoveryCandidate]:
+        """Get active discovery candidates."""
+        return await self.discovery.get_active_discovery_candidates()
+
+    async def set_active_discovery_candidates(self, value: list[DiscoveryCandidate]) -> None:
+        """Set active discovery candidates."""
+        await self.discovery.set_active_discovery_candidates(value)
 
     # ===================
     # Strategy Manager API
@@ -401,12 +616,51 @@ class DaemonState(BaseModel):
         """Delegate to strategy manager."""
         await self.strategy.record_error(error)
 
+    async def get_last_game_plan(self) -> datetime | None:
+        """Get last game plan timestamp."""
+        return await self.strategy.get_last_game_plan()
+
+    async def get_game_plan_history(self, limit: int = 10) -> list[GamePlanRecord]:
+        """Get game plan history."""
+        return await self.strategy.get_game_plan_history(limit)
+
+    async def get_last_degradation(self) -> datetime | None:
+        """Get last degradation timestamp."""
+        return await self.strategy.get_last_degradation()
+
+    async def get_degradation_history(self, limit: int = 30) -> list[DegradationRecord]:
+        """Get degradation history."""
+        return await self.strategy.get_degradation_history(limit)
+
+    async def get_market_events(self, limit: int | None = None) -> list[dict]:
+        """Get market events.
+
+        Args:
+            limit: Max number of events to return (optional)
+
+        Returns:
+            List of market events
+        """
+        return await self.strategy.get_market_events(limit=limit)
+
+    async def get_last_health_check(self) -> datetime | None:
+        """Get last health check timestamp."""
+        return await self.strategy.get_last_health_check()
+
+    async def set_last_health_check(self, value: datetime | None) -> None:
+        """Set last health check timestamp."""
+        await self.strategy.set_last_health_check(value)
+
+    async def get_errors(self) -> list[str]:
+        """Get errors."""
+        return await self.strategy.get_errors()
+
     # ===================
     # Snapshot Manager API
     # ===================
 
     def snapshot_portfolio(self, snapshot: PortfolioSnapshot) -> None:
-        """Delegate to snapshot manager."""
+        """Delegate to snapshot manager (fires async task internally)."""
         self.snapshots.snapshot_portfolio(snapshot)
 
     # ===========================
@@ -454,6 +708,26 @@ class DaemonState(BaseModel):
             List of active execution graphs
         """
         return [tracker.graph for tracker in self.active_execution_trackers.values()]
+
+    async def get_active_execution_trackers(self) -> dict[str, ExecutionGraphTracker]:
+        """Get active execution trackers.
+
+        Returns:
+            Dict of active execution trackers by workflow_id
+        """
+        return self.active_execution_trackers.copy()
+
+    async def get_execution_graph_history(self, limit: int = 1000) -> list[ExecutionGraph]:
+        """Get execution graph history.
+
+        Args:
+            limit: Max number of graphs to return
+
+        Returns:
+            List of recent execution graphs
+        """
+        history_list = list(self.execution_graph_history)
+        return history_list[-limit:] if limit > 0 else history_list
 
     def get_execution_graph(self, workflow_id: str) -> ExecutionGraph | None:
         """Get execution graph (active or recent).

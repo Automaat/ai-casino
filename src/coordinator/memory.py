@@ -168,9 +168,8 @@ class CoordinatorMemory:
         try:
             # Filter today's analyses
             today = datetime.now(UTC).date()
-            today_analyses = [
-                record for record in self._daemon_state.analyses if record.timestamp.date() == today
-            ]
+            all_analyses = await self._daemon_state.get_analyses(limit=1000)
+            today_analyses = [record for record in all_analyses if record.timestamp.date() == today]
 
             if not today_analyses:
                 return "No analyses today"
@@ -223,9 +222,8 @@ class CoordinatorMemory:
         try:
             # Filter today's game plans
             today = datetime.now(UTC).date()
-            today_plans = [
-                plan for plan in self._daemon_state.game_plan_history if plan.timestamp.date() == today
-            ]
+            all_plans = await self._daemon_state.get_game_plan_history(limit=100)
+            today_plans = [plan for plan in all_plans if plan.timestamp.date() == today]
 
             if not today_plans:
                 return "No game plan generated today"
@@ -311,7 +309,8 @@ class CoordinatorMemory:
         if not self._analysis_repo:
             # Fallback to in-memory if no repository
             if self._daemon_state:
-                records = [r for r in self._daemon_state.analyses if r.symbol.upper() == symbol.upper()]
+                all_analyses = await self._daemon_state.get_analyses(limit=1000)
+                records = [r for r in all_analyses if r.symbol.upper() == symbol.upper()]
                 if not records:
                     return f"No analysis history found for {symbol}"
 

@@ -128,7 +128,7 @@ class AnalysisOrchestrator:
         """Return string representation."""
         return f"AnalysisOrchestrator(max_concurrent={self.config.max_concurrent_analyses})"
 
-    def _sync_positions_with_broker(self) -> bool:
+    async def _sync_positions_with_broker(self) -> bool:
         """Sync positions with broker and update state.
 
         Returns:
@@ -139,21 +139,25 @@ class AnalysisOrchestrator:
             return False
 
         try:
+            # Get active positions from state
+            active_positions_dict = await self.state.get_active_positions()
+
             # Filter out None positions for type safety
-            state_positions = {
-                sym: pos
-                for sym in self.state.active_positions
-                if (pos := self.state.get_position(sym)) is not None
-            }
+            state_positions = {}
+            for sym in active_positions_dict:
+                pos = await self.state.get_position(sym)
+                if pos is not None:
+                    state_positions[sym] = pos
+
             new_positions, updated_positions, closed_symbols = position_manager.sync_with_broker(
                 state_positions
             )
             for pos in new_positions:
-                self.state.add_position(pos)
+                await self.state.add_position(pos)
             for pos in updated_positions:
-                self.state.update_position(pos)
+                await self.state.update_position(pos)
             for symbol in closed_symbols:
-                self.state.remove_position(symbol)
+                await self.state.remove_position(symbol)
             return True
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to sync positions: {e}")
@@ -176,7 +180,7 @@ class AnalysisOrchestrator:
             logger.opt(exception=True).warning(f"Failed to prefetch account info: {e}")
             return None
 
-    def _apply_position_management(self, results: list[TradingWorkflowResult]) -> int:
+    async def _apply_position_management(self, results: list[TradingWorkflowResult]) -> int:
         """Apply position management rules to results.
 
         Args:
@@ -190,15 +194,16 @@ class AnalysisOrchestrator:
             return 0
 
         position_actions = 0
+        active_positions_dict = await self.state.get_active_positions()
         for result in results:
-            if result.symbol in self.state.active_positions:
+            if result.symbol in active_positions_dict:
                 try:
-                    pos = self.state.get_position(result.symbol)
+                    pos = await self.state.get_position(result.symbol)
                     if pos:
                         actions = position_manager.review_position(pos, result.risk.current_price, result)
-                        self.state.update_position(pos)
+                        await self.state.update_position(pos)
                         for action in actions:
-                            self.state.record_position_action(action)
+                            await self.state.record_position_action(action)
                             position_actions += 1
                             logger.info(
                                 f"Position action: {action.action_type} {action.symbol} - {action.reason}"
@@ -208,7 +213,7 @@ class AnalysisOrchestrator:
 
         return position_actions
 
-    def _filter_analysis_results(
+    async def _filter_analysis_results(
         self,
         raw_results: list[TradingWorkflowResult | BaseException | None],
         watchlist: list[str],
@@ -235,7 +240,7 @@ class AnalysisOrchestrator:
                 raise result
             if isinstance(result, Exception):
                 logger.opt(exception=True).error(f"Analysis failed for {symbol}: {result}")
-                self.state.record_error(f"{symbol}: {result}")
+                await self.state.record_error(f"{symbol}: {result}")
                 failed_symbols.append(symbol)
             elif result is None:
                 logger.warning(f"Analysis returned None for {symbol}")
@@ -267,8 +272,8 @@ class AnalysisOrchestrator:
         """
         start_time = datetime.now(UTC)
 
-        # Step 1: Sync positions with broker (if enabled) - offload to thread
-        position_sync_performed = await asyncio.to_thread(self._sync_positions_with_broker)
+        # Step 1: Sync positions with broker (if enabled) - already async
+        position_sync_performed = await self._sync_positions_with_broker()
 
         # Step 2: Prefetch broker positions once - offload to thread
         broker_positions = await asyncio.to_thread(self._prefetch_broker_positions)
@@ -279,8 +284,9 @@ class AnalysisOrchestrator:
         async def analyze_with_limit(symbol: str) -> TradingWorkflowResult | None:
             # Build position context if holding
             position_context = None
-            if symbol in self.state.active_positions:
-                pos = self.state.get_position(symbol)
+            active_positions_dict = await self.state.get_active_positions()
+            if symbol in active_positions_dict:
+                pos = await self.state.get_position(symbol)
                 if pos:
                     # Get current price from prefetched broker positions
                     current_price = 0.0
@@ -329,10 +335,10 @@ class AnalysisOrchestrator:
         raw_results = [task.result() for task in task_results]
 
         # Step 4: Filter exceptions and None results
-        results, failed_symbols = self._filter_analysis_results(raw_results, watchlist)
+        results, failed_symbols = await self._filter_analysis_results(raw_results, watchlist)
 
         # Step 5: Apply position management rules
-        position_actions = self._apply_position_management(results)
+        position_actions = await self._apply_position_management(results)
 
         # Step 6: Build result
         duration = (datetime.now(UTC) - start_time).total_seconds()
@@ -396,7 +402,7 @@ class AnalysisOrchestrator:
             result = await self._run_workflow_analysis(symbol, session, target_allocations, extra_context)
 
             await self._handle_notifications(result)
-            self._record_analysis_result(symbol, result)
+            await self._record_analysis_result(symbol, result)
             await self._record_signal_outcome(symbol, result)
 
             await self._publish_event(
@@ -413,7 +419,7 @@ class AnalysisOrchestrator:
         except Exception as e:
             error_msg = f"Failed to analyze {symbol}: {e}"
             logger.opt(exception=True).error(error_msg)
-            self.state.record_error(error_msg)
+            await self.state.record_error(error_msg)
             await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
             return None
 
@@ -490,7 +496,7 @@ class AnalysisOrchestrator:
         if self.notification_service and self._components:
             await self._notification_helper.maybe_notify_signal(result, self._components)
 
-    def _record_analysis_result(self, symbol: str, result: TradingWorkflowResult) -> None:
+    async def _record_analysis_result(self, symbol: str, result: TradingWorkflowResult) -> None:
         """Record analysis result to daemon state.
 
         Args:
@@ -508,7 +514,7 @@ class AnalysisOrchestrator:
             else None
         )
 
-        self.state.record_analysis(
+        await self.state.record_analysis(
             symbol=symbol,
             signal=result.decision.action.value,
             confidence=result.decision.confidence,

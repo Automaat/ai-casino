@@ -50,7 +50,7 @@ class OptimizationTask(TaskExecutor):
 
         self._publish_event_sync("SCHEDULED_TASK", {"task_name": "optimization", "status": "started"})
 
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         start_time = time_mod.time()
         self._optimized, self._skipped, self._failed = await asyncio.to_thread(
@@ -72,13 +72,13 @@ class OptimizationTask(TaskExecutor):
 
         self._publish_event_sync("SCHEDULED_TASK", {"task_name": "optimization", "status": "completed"})
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last optimization timestamp."""
-        return self.components.state.last_optimization
+        return await self.components.state.get_last_optimization()
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record optimization completion."""
-        self.components.state.record_optimization(
+        await self.components.state.record_optimization(
             symbols_optimized=self._optimized,
             symbols_skipped=self._skipped,
             total_time_seconds=self._total_time,
@@ -137,7 +137,7 @@ class RebalancingTask(TaskExecutor):
             msg = "daemon_rebalancer not initialized"
             raise RuntimeError(msg)
 
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
         method = self.components.config.rebalancing.method
         auto_execute = self.components.config.auto_trade
 
@@ -163,7 +163,7 @@ class RebalancingTask(TaskExecutor):
                 alloc.action = rebalance.action
                 alloc.delta = rebalance.delta
 
-        self.components.state.record_portfolio_rebalancing(
+        await self.components.state.record_portfolio_rebalancing(
             method=method,
             allocations=allocations,
             expected_return=result.optimized_portfolio.expected_return,
@@ -200,11 +200,11 @@ class RebalancingTask(TaskExecutor):
             f"{result.pending_count} pending[/dim]"
         )
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last rebalancing timestamp."""
-        return self.components.state.last_portfolio_rebalancing
+        return await self.components.state.get_last_portfolio_rebalancing()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record rebalancing completion."""
         # State already recorded in execute()
 
@@ -243,14 +243,13 @@ class CorrelationAuditTask(TaskExecutor):
             logger.info(f"Insufficient positions ({len(positions)}), need ≥2")
             console.print("[dim]Insufficient positions[/dim]")
             # Mark as run even though skipped
-            self.components.state.last_correlation_audit = datetime.now(self.components.scheduler.timezone)
+            await self.components.state.set_last_correlation_audit(
+                datetime.now(self.components.scheduler.timezone)
+            )
             return
 
-        screening_results = (
-            self.components.state.screening_history[-1].candidates
-            if self.components.state.screening_history
-            else None
-        )
+        screening_history = await self.components.state.get_screening_history()
+        screening_results = screening_history[-1].candidates if screening_history else None
 
         workflow = self.components.workflow
         if not workflow:
@@ -270,14 +269,14 @@ class CorrelationAuditTask(TaskExecutor):
 
         self._print_results(self._result, self._duration)
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last correlation audit timestamp."""
-        return self.components.state.last_correlation_audit
+        return await self.components.state.get_last_correlation_audit()
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record correlation audit completion."""
         if self._result:
-            self.components.state.record_correlation_audit(
+            await self.components.state.record_correlation_audit(
                 num_positions=self._result.num_positions,
                 num_correlated_pairs=len(self._result.highly_correlated_pairs),
                 max_correlation=self._result.max_correlation,

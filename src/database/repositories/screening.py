@@ -42,9 +42,12 @@ class ScreeningRecordRepository(BaseRepository[ScreeningRecord]):
         candidates_json = [
             {
                 "symbol": c.symbol,
+                "name": c.name,
+                "sector": c.sector,
                 "score": c.score,
-                "criteria_met": c.criteria_met,
+                "signal": c.signal,
                 "metrics": c.metrics,
+                "reason": c.reason,
             }
             for c in entity.candidates
         ]
@@ -109,10 +112,13 @@ class ScreeningRecordRepository(BaseRepository[ScreeningRecord]):
             for c_dict in orm.candidates:
                 candidates.append(
                     ScreeningResult(
-                        symbol=c_dict["symbol"],
-                        score=c_dict["score"],
-                        criteria_met=c_dict["criteria_met"],
-                        metrics=c_dict["metrics"],
+                        symbol=c_dict.get("symbol", "UNKNOWN"),
+                        name=c_dict.get("name", "Unknown"),
+                        sector=c_dict.get("sector", "Unknown"),
+                        score=c_dict.get("score", 0.0),
+                        signal=c_dict.get("signal", "HOLD"),
+                        metrics=c_dict.get("metrics", {}),
+                        reason=c_dict.get("reason", "Legacy data"),
                     )
                 )
 

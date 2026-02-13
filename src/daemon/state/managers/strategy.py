@@ -58,12 +58,27 @@ class StrategyStateManager(StateManager):
             return None
         return await self._metadata_repository.get("strategy.last_health_check")
 
-    async def get_market_events(self) -> list[dict]:
-        """Get market events from DB metadata."""
+    async def set_last_health_check(self, value: datetime | None) -> None:
+        """Set last health check timestamp in DB."""
+        if self._metadata_repository:
+            await self._metadata_repository.set("strategy.last_health_check", value)
+
+    async def get_market_events(self, limit: int | None = None) -> list[dict]:
+        """Get market events from DB metadata.
+
+        Args:
+            limit: Max number of events to return (optional)
+
+        Returns:
+            List of market events
+        """
         if not self._metadata_repository:
             return []
         value = await self._metadata_repository.get("strategy.market_events")
-        return value if isinstance(value, list) else []
+        events = value if isinstance(value, list) else []
+        if limit is not None and limit > 0:
+            return events[-limit:]
+        return events
 
     async def get_errors(self) -> list[str]:
         """Get errors from DB metadata."""

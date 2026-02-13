@@ -56,22 +56,22 @@ class TaskExecutor(ABC):
         ...
 
     @abstractmethod
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last run timestamp for dedup."""
         ...
 
     @abstractmethod
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record successful execution in state."""
         ...
 
-    def should_skip_today(self) -> bool:
+    async def should_skip_today(self) -> bool:
         """Check if task already ran today.
 
         Returns:
             True if task already completed today
         """
-        last_run = self.get_last_run()
+        last_run = await self.get_last_run()
         if not last_run:
             return False
 
@@ -88,7 +88,7 @@ class TaskExecutor(ABC):
         - Error handling
         - State persistence
         """
-        if self.should_skip_today():
+        if await self.should_skip_today():
             logger.debug(f"{self.task_name} already completed today")
             return
 
@@ -102,7 +102,7 @@ class TaskExecutor(ABC):
             await self.execute()
             duration = time_mod.time() - start_time
 
-            self.record_success(duration)
+            await self.record_success(duration)
 
             console.print(f"\n[dim]Complete ({duration:.0f}s)[/dim]\n")
             logger.info(f"{self.task_name} completed in {duration:.1f}s")

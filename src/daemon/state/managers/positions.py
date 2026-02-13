@@ -129,6 +129,24 @@ class PositionStateManager(StateManager):
             return []
         return await self._position_action_repository.get_recent(symbol=symbol, limit=limit)
 
+    async def get_active_positions(self) -> dict[str, dict]:
+        """Get active positions as dict for backward compatibility.
+
+        Returns:
+            Dict mapping symbol to position dict
+        """
+        positions = await self.get_all_positions()
+        return {pos.symbol: pos.model_dump() for pos in positions}
+
+    async def get_position_management_history(self) -> list[dict]:
+        """Get position management history as list of dicts.
+
+        Returns:
+            List of action dicts
+        """
+        actions = await self.get_recent_actions(limit=100)
+        return [action.model_dump() for action in actions]
+
     def __repr__(self) -> str:
         """Return string representation."""
-        return "PositionStateManager()"
+        return "PositionStateManager(db_backed)"

@@ -34,7 +34,7 @@ class PrefetchTask(TaskExecutor):
             logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
             return
 
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         console.print(f"[dim]Prefetching {len(watchlist)} symbols...[/dim]")
         report = await asyncio.to_thread(prefetcher.prefetch_watchlist, watchlist)
@@ -69,13 +69,13 @@ class PrefetchTask(TaskExecutor):
             f"in {report.total_duration_seconds:.0f}s"
         )
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last prefetch timestamp."""
-        return self.components.state.last_prefetch
+        return await self.components.state.get_last_prefetch()
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record prefetch completion."""
-        self.components.state.record_prefetch(
+        await self.components.state.record_prefetch(
             symbols_prefetched=self._succeeded,
             symbols_failed=self._failed,
             finbert_ready=self._finbert_ready,
@@ -98,7 +98,7 @@ class PreMarketRefreshTask(TaskExecutor):
             logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
             return
 
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         console.print(f"[dim]Refreshing {len(watchlist)} symbols...[/dim]")
         report = await asyncio.to_thread(prefetcher.prefetch_watchlist, watchlist)
@@ -113,13 +113,15 @@ class PreMarketRefreshTask(TaskExecutor):
             f"Pre-market refresh completed: {succeeded} symbols in {report.total_duration_seconds:.0f}s"
         )
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last pre-market refresh timestamp."""
-        return self.components.state.last_pre_market_refresh
+        return await self.components.state.get_last_pre_market_refresh()
 
-    def record_success(self, duration: float) -> None:  # noqa: ARG002
+    async def record_success(self, duration: float) -> None:
         """Record pre-market refresh completion."""
-        self.components.state.last_pre_market_refresh = datetime.now(self.components.scheduler.timezone)
+        await self.components.state.set_last_pre_market_refresh(
+            datetime.now(self.components.scheduler.timezone)
+        )
 
 
 class ScreeningTask(TaskExecutor):
@@ -163,12 +165,13 @@ class ScreeningTask(TaskExecutor):
 
         # Apply sector rotation weighting if available
         results_to_save = output.results
-        if self.components.config.sector_rotation.enabled and self.components.state.sector_rotation_history:
+        sector_history = await self.components.state.get_sector_rotation_history(limit=1)
+        if self.components.config.sector_rotation.enabled and sector_history:
             try:
                 from src.daemon.sector_rotation import DaemonSectorRotation
 
                 # Reconstruct analysis from latest state record
-                latest_record = self.components.state.sector_rotation_history[-1]
+                latest_record = sector_history[-1]
                 rotation_analysis = self._reconstruct_rotation_analysis(latest_record)
 
                 daemon_rotation = DaemonSectorRotation()
@@ -194,7 +197,7 @@ class ScreeningTask(TaskExecutor):
         )
 
         # Record in state
-        self.components.state.record_after_hours_screening(
+        await self.components.state.record_after_hours_screening(
             criteria=criteria.value,
             universe=self.components.config.screening.universe,
             candidates=results_to_save,
@@ -208,11 +211,11 @@ class ScreeningTask(TaskExecutor):
         )
         logger.info(f"After-hours screening completed: {len(output.results)} candidates")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last screening timestamp."""
-        return self.components.state.last_after_hours_screening
+        return await self.components.state.get_last_after_hours_screening()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record screening completion."""
         # State already recorded in execute()
 
@@ -271,7 +274,7 @@ class EarningsFetchTask(TaskExecutor):
         from src.daemon.state import EarningsEventRecord
 
         daemon_earnings = DaemonEarningsCalendar()
-        watchlist = self.components.broker_manager.get_merged_watchlist()
+        watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         console.print(f"[dim]Fetching earnings for {len(watchlist)} symbols...[/dim]")
         calendar = await asyncio.to_thread(daemon_earnings.fetch, watchlist)
@@ -296,7 +299,7 @@ class EarningsFetchTask(TaskExecutor):
             )
 
         # NOTE: Missing earnings data is normal, not a failure
-        self.components.state.record_earnings_fetch(
+        await self.components.state.record_earnings_fetch(
             events=event_records,
             symbols_fetched=symbols_with_earnings,
             symbols_failed=0,  # Only track known fetch failures
@@ -320,22 +323,22 @@ class EarningsFetchTask(TaskExecutor):
         )
         logger.info(f"Earnings calendar fetch completed: {len(calendar.events)} events")
 
-    def get_last_run(self) -> datetime | None:
+    async def get_last_run(self) -> datetime | None:
         """Get last earnings fetch timestamp."""
-        return self.components.state.last_earnings_fetch
+        return await self.components.state.get_last_earnings_fetch()
 
-    def record_success(self, duration: float) -> None:
+    async def record_success(self, duration: float) -> None:
         """Record earnings fetch completion."""
         # State already recorded in execute()
 
-    def should_skip_today(self) -> bool:
+    async def should_skip_today(self) -> bool:
         """Custom dedup: check weekly schedule.
 
         Returns:
             True if already fetched today or not fetch time
         """
         # Check if already fetched today
-        last_run = self.get_last_run()
+        last_run = await self.get_last_run()
         if last_run:
             now = datetime.now(self.components.scheduler.timezone)
             last_date = last_run.astimezone(self.components.scheduler.timezone).date()

@@ -91,13 +91,12 @@ class DegradationRecordRepository(BaseRepository[DegradationRecord]):
         Returns:
             DegradationRecord
         """
-        unavailable = (
-            orm.unavailable_services if isinstance(orm.unavailable_services, list) else []
-        )
         return DegradationRecord(
             timestamp=orm.timestamp,
             tier=orm.tier,
-            unavailable_services=unavailable,
+            unavailable_services=orm.unavailable_services
+            if isinstance(orm.unavailable_services, list)
+            else [],
             confidence_adjustment=float(orm.confidence_adjustment),
             halt_reason=orm.halt_reason,
         )
