@@ -105,7 +105,7 @@ async def get_broker_account_info_cached(
         _broker_cache.reset(token)
 
 
-def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0915
+def create_api_app(components: DaemonComponents) -> FastAPI:
     """Create FastAPI app with components reference.
 
     Complexity acceptable for FastAPI route registration pattern.
@@ -116,10 +116,44 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
     Returns:
         FastAPI app
     """
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        """Recreate repositories in API server event loop on startup."""
+        # Recreate repositories in current event loop to avoid "bound to different event loop" errors
+        from src.daemon.state.repositories import RepositoryBundle
+
+        logger.info("Recreating repositories in API server event loop")
+        repos = RepositoryBundle(
+            metadata_repository=components.container.metadata_repository(),
+            analysis_repository=components.container.analysis_repository(),
+            position_repository=components.container.position_repository(),
+            action_repository=components.container.position_action_repository(),
+            optimization_repository=components.container.optimization_repository(),
+            rebalancing_repository=components.container.rebalancing_repository(),
+            sector_rotation_repository=components.container.sector_rotation_repository(),
+            peer_analysis_repository=components.container.peer_analysis_repository(),
+            correlation_audit_repository=components.container.correlation_audit_repository(),
+            risk_report_repository=components.container.risk_report_repository(),
+            monte_carlo_repository=components.container.monte_carlo_repository(),
+            prefetch_repository=components.container.prefetch_repository(),
+            screening_repository=components.container.screening_repository(),
+            earnings_repository=components.container.earnings_calendar_repository(),
+            profiling_repository=components.container.profiling_repository(),
+            discovery_repository=components.container.discovery_repository(),
+            active_discovery_repository=components.container.active_discovery_repository(),
+            game_plan_repository=components.container.game_plan_repository(),
+            degradation_repository=components.container.degradation_repository(),
+            snapshot_repository=components.container.snapshot_repository(),
+        )
+        components.state.set_repositories(repos)
+        logger.info("Repositories recreated in API server event loop")
+        yield
+
     app = FastAPI(
         title="AI Casino Daemon API",
         description="Read-only monitoring API for trading daemon",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     # Store components and start time in app state
@@ -632,7 +666,11 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 return {"overall_status": "HEALTHY", "service_checks": []}
 
         # Read health report in thread to avoid blocking
-        report_data = await asyncio.to_thread(_read_health_report)
+        try:
+            report_data = await asyncio.to_thread(_read_health_report)
+        except RuntimeError:
+            # Executor shut down (during shutdown/restart) - return healthy status
+            report_data = {"overall_status": "HEALTHY", "service_checks": []}
 
         try:
             raw_checks = report_data.get("service_checks", [])
