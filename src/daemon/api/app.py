@@ -145,16 +145,18 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         # Determine health status from degradation tier
         degradation_tier = "FULL"
-        if components.state.degradation_history:
-            degradation_tier = components.state.degradation_history[-1].tier
+        degradation_history = await components.state.strategy.get_degradation_history(limit=1)
+        if degradation_history:
+            degradation_tier = degradation_history[-1].tier
 
         status = "healthy" if degradation_tier == "FULL" else "degraded"
 
+        last_run = await components.state.get_last_run()
         return HealthResponse(
             status=status,
             uptime_seconds=uptime,
             daemon_running=components.running,
-            last_run=components.state.last_run.isoformat() if components.state.last_run else None,
+            last_run=last_run.isoformat() if last_run else None,
         )
 
     @app.get("/state/summary", response_model=StateSummaryResponse)
@@ -164,11 +166,13 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
 
         # Get current degradation tier
         degradation_tier = "FULL"
-        if components.state.degradation_history:
-            degradation_tier = components.state.degradation_history[-1].tier
+        degradation_history = await components.state.strategy.get_degradation_history(limit=1)
+        if degradation_history:
+            degradation_tier = degradation_history[-1].tier
 
         # Calculate positions count and win rate
-        positions_count = len(components.state.active_positions)
+        active_positions = await components.state.get_all_positions()
+        positions_count = len(active_positions)
 
         # Win rate calculation - try to derive from closed trades if available
         win_rate = None
@@ -189,33 +193,39 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
                 win_rate = wins / total_closed
 
         # Get recent analyses (last 50), convert to dicts
+        analyses = await components.state.get_analyses(limit=50)
         recent_analyses = [
-            analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json")
-            for analysis in components.state.trading.analyses[-50:]
+            analysis if isinstance(analysis, dict) else analysis.model_dump(mode="json") for analysis in analyses
         ]
 
+        total_analyses = await components.state.get_total_analyses()
+        total_trades = await components.state.get_total_trades()
+        errors = await components.state.strategy.get_errors()
+        trading_mode = await components.state.get_current_trading_mode()
+
         return StateSummaryResponse(
-            total_analyses=components.state.total_analyses,
+            total_analyses=total_analyses,
             recent_analyses=recent_analyses,
-            total_trades=components.state.total_trades,
+            total_trades=total_trades,
             positions_count=positions_count,
             win_rate=win_rate,
-            error_count=len(components.state.errors),
+            error_count=len(errors),
             degradation_tier=degradation_tier,
-            trading_mode=components.state.current_trading_mode,
+            trading_mode=trading_mode,
         )
 
     @app.get("/config", response_model=ConfigResponse)
     async def config() -> ConfigResponse:
         """Get daemon configuration (no secrets)."""
         components: DaemonComponents = app.state.components
+        trading_mode = await components.state.get_current_trading_mode()
 
         return ConfigResponse(
             watchlist=components.config.watchlist,
             interval_minutes=components.config.interval_minutes,
             market_hours_only=components.config.market_hours_only,
             auto_trade=components.config.auto_trade,
-            trading_mode=components.state.current_trading_mode,
+            trading_mode=trading_mode,
             pre_market_enabled=components.config.schedule.enable_pre_market,
         )
 
@@ -249,13 +259,15 @@ def create_api_app(components: DaemonComponents) -> FastAPI:  # noqa: C901, PLR0
         )
         notifications_dict["telegram"]["chat_id"] = _mask_sensitive_field(cfg.notifications.telegram.chat_id)
 
+        trading_mode = await components.state.get_current_trading_mode()
+
         return FullConfigResponse(
             watchlist=cfg.watchlist,
             interval_minutes=cfg.interval_minutes,
             market_hours_only=cfg.market_hours_only,
             auto_trade=cfg.auto_trade,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
-            trading_mode=components.state.current_trading_mode,
+            trading_mode=trading_mode,
             paper_trading=cfg.paper_trading.model_dump(),
             schedule=cfg.schedule.model_dump(),
             state=cfg.state.model_dump(),
