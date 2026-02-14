@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS risk_audit (
     stop_loss_price DECIMAL(12, 4) NOT NULL CHECK (stop_loss_price >= 0),
 
     -- Validation warnings (array)
-    warnings TEXT[] DEFAULT '{}',
+    warnings TEXT[] NOT NULL DEFAULT '{}',
 
     -- Portfolio VaR (optional)
     portfolio_var_95 DECIMAL(5, 4) CHECK (portfolio_var_95 >= 0),

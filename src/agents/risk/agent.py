@@ -123,7 +123,7 @@ class RiskManagementAgent:
             f"max_single={self.max_single_position}%, trailing={enable_trailing_stop}{var_str})"
         )
 
-    async def assess(
+    def assess(
         self,
         symbol: str,
         action: Signal,
@@ -135,7 +135,7 @@ class RiskManagementAgent:
         portfolio_value: float | None = None,
         target_portfolio_weight: float | None = None,
         backtest_validation: BacktestValidation | None = None,
-        _degradation_context: DegradationContext | None = None,
+        degradation_context: DegradationContext | None = None,
         broker_api_failed: bool = False,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
@@ -187,6 +187,15 @@ class RiskManagementAgent:
 
             confidence = self._calculate_risk_confidence(validation, decision_confidence)
 
+            # Apply degradation adjustment to confidence if provided
+            if degradation_context and degradation_context.confidence_adjustment < 1.0:
+                confidence = confidence * degradation_context.confidence_adjustment
+                degradation_penalty_pct = (1 - degradation_context.confidence_adjustment) * 100
+                logger.info(
+                    f"Applied degradation penalty: -{degradation_penalty_pct:.0f}% "
+                    f"(adjusted confidence: {confidence:.2f})"
+                )
+
             logger.info(
                 f"Risk assessment: {validation.risk_level} risk, "
                 f"approved={validation.approved}, confidence={confidence:.2f}"
@@ -203,8 +212,6 @@ class RiskManagementAgent:
                 confidence=confidence,
                 portfolio_var=context.latest_portfolio_var,
             )
-
-        await self._audit_log(assessment)
 
         return assessment
 
@@ -598,7 +605,9 @@ class RiskManagementAgent:
         )
 
     async def _audit_log(self, assessment: RiskAssessment) -> None:
-        """Log risk assessment to database and JSONL (transitional).
+        """Log risk assessment to database or JSONL fallback.
+
+        Logs to database if audit_repository configured, otherwise JSONL file.
 
         Args:
             assessment: Risk assessment to log
@@ -625,8 +634,14 @@ class RiskManagementAgent:
             )
 
             if self._audit_repository:
-                await self._audit_repository.create(record)
-                logger.debug(f"Audit logged to DB: {assessment.symbol} {assessment.action.value}")
+                try:
+                    await self._audit_repository.create(record)
+                    logger.debug(f"Audit logged to DB: {assessment.symbol} {assessment.action.value}")
+                except Exception as e:
+                    logger.opt(exception=True).error(f"DB audit failed, falling back to JSONL: {e}")
+                    log_entry = record.model_dump(mode="json", exclude={"id", "created_at"})
+                    with self.audit_log_path.open("a") as f:
+                        f.write(json.dumps(log_entry) + "\n")
             else:
                 log_entry = record.model_dump(mode="json", exclude={"id", "created_at"})
 

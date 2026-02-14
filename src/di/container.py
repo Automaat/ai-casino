@@ -431,6 +431,7 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
         daemon_config=daemon_config,
         portfolio_var_calculator=portfolio_var_calculator,
+        audit_repository=risk_audit_repository,
     )
 
     # Coordinator agent - Factory pattern to support runtime daemon_state override

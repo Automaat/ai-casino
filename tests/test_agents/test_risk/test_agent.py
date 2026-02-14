@@ -73,7 +73,7 @@ async def test_assess_hold_action(risk_agent, account_info, sample_ohlcv_data, t
     """Test assessment for HOLD action."""
     technical_analysis.signal = Signal.HOLD
 
-    result = await risk_agent.assess(
+    result = risk_agent.assess(
         symbol="AAPL",
         action=Signal.HOLD,
         current_price=150.0,
@@ -282,7 +282,7 @@ def test_validate_risk_low_confidence(risk_agent, account_info):
 @pytest.mark.asyncio
 async def test_assess_buy_approved(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
     """Test full assessment for approved BUY."""
-    result = await risk_agent.assess(
+    result = risk_agent.assess(
         symbol="AAPL",
         action=Signal.BUY,
         current_price=150.0,
@@ -304,7 +304,7 @@ async def test_assess_sell(risk_agent, account_info, sample_ohlcv_data, technica
     """Test assessment for SELL action."""
     technical_analysis.signal = Signal.SELL
 
-    result = await risk_agent.assess(
+    result = risk_agent.assess(
         symbol="SPY",
         action=Signal.SELL,
         current_price=150.0,
@@ -383,7 +383,7 @@ async def test_audit_log(risk_agent, account_info, sample_ohlcv_data, technical_
     """Test audit logging."""
     risk_agent.audit_log_path = tmp_path / "risk_audit.jsonl"
 
-    await risk_agent.assess(
+    risk_agent.assess(
         symbol="AAPL",
         action=Signal.BUY,
         current_price=150.0,
@@ -667,7 +667,7 @@ async def test_assess_with_target_weight(test_container, sample_ohlcv_data):
     sample_ohlcv_data["High"] = [105.0] * len(sample_ohlcv_data)
     sample_ohlcv_data["Low"] = [95.0] * len(sample_ohlcv_data)
 
-    result = await agent.assess(
+    result = agent.assess(
         symbol="AAPL",
         action=Signal.BUY,
         current_price=100.0,
@@ -693,7 +693,7 @@ async def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data)
     sample_ohlcv_data["High"] = [155.0] * len(sample_ohlcv_data)
     sample_ohlcv_data["Low"] = [145.0] * len(sample_ohlcv_data)
 
-    assessment = await agent.assess(
+    assessment = agent.assess(
         symbol="AAPL",
         action=Signal.BUY,
         current_price=150.0,

@@ -953,7 +953,7 @@ class RiskAuditORM(Base):
     warnings: Mapped[list[str]] = mapped_column(
         ARRAY(Text),
         nullable=False,
-        server_default=text("'{}'"),
+        server_default=text("'{}'::text[]"),
     )
 
     portfolio_var_95: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4))
@@ -966,12 +966,29 @@ class RiskAuditORM(Base):
     )
 
     __table_args__ = (
-        Index("idx_risk_audit_timestamp", "timestamp", postgresql_using="btree"),
+        Index(
+            "idx_risk_audit_timestamp",
+            "timestamp",
+            postgresql_using="btree",
+            postgresql_ops={"timestamp": "DESC"},
+        ),
         Index("idx_risk_audit_symbol", "symbol"),
-        Index("idx_risk_audit_symbol_timestamp", "symbol", "timestamp", postgresql_using="btree"),
+        Index(
+            "idx_risk_audit_symbol_timestamp",
+            "symbol",
+            "timestamp",
+            postgresql_using="btree",
+            postgresql_ops={"timestamp": "DESC"},
+        ),
         Index("idx_risk_audit_approved", "approved"),
         Index("idx_risk_audit_risk_level", "risk_level"),
-        Index("idx_risk_audit_violations", "symbol", "timestamp", postgresql_where=text("approved = false")),
+        Index(
+            "idx_risk_audit_violations",
+            "symbol",
+            "timestamp",
+            postgresql_where=text("approved = false"),
+            postgresql_ops={"timestamp": "DESC"},
+        ),
     )
 
     def __repr__(self) -> str:

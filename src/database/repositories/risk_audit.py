@@ -47,6 +47,7 @@ class RiskAuditRepository(BaseRepository[RiskAuditRecord]):
         )
         self._session.add(orm)
         await self._session.commit()
+        await self._session.refresh(orm)
         entity.id = str(orm.id)
         entity.created_at = orm.created_at
         logger.debug(f"Created risk audit: {entity.symbol} {entity.action.value}")
