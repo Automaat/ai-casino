@@ -145,6 +145,7 @@ async def _execute_workers_with_gather(
     # This per-task exception handling depends on the return_exceptions
     # behaviour and is the reason this function deviates from the TaskGroup
     # pattern used elsewhere in the codebase.
+    start_time = time.perf_counter()
     try:
         gather_coro = asyncio.gather(*task_list, return_exceptions=True)
         results = await asyncio.wait_for(gather_coro, timeout=timeout_ms / 1000)
@@ -159,6 +160,9 @@ async def _execute_workers_with_gather(
         raise
 
     # Record worker completions and errors
+    success_count = 0
+    error_count = 0
+
     for worker_task, result in zip(tasks, results, strict=True):
         analysis_type = worker_task.analysis_type
         category = worker_task.category
@@ -172,6 +176,7 @@ async def _execute_workers_with_gather(
             _record_worker_result(
                 analysis_type.value, result, is_error=True, metrics_collector=metrics_collector
             )
+            error_count += 1
             if category == "required":
                 logger.opt(exception=result).error(f"Required worker {analysis_type.value} failed")
                 raise result
@@ -181,7 +186,15 @@ async def _execute_workers_with_gather(
             _record_worker_result(
                 analysis_type.value, result, is_error=False, metrics_collector=metrics_collector
             )
+            success_count += 1
             output[analysis_type] = result
+
+    # Log worker completion summary
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"Workers completed: {success_count}/{len(tasks)} successful, "
+        f"{error_count} errors, duration {duration_ms:.0f}ms"
+    )
 
     return output
 
@@ -369,10 +382,15 @@ async def _run_supervised_group1(
     )
 
     # Execute workers
+    required_tasks = [t for t in tasks if t.category == "required"]
+    optional_tasks = [t for t in tasks if t.category == "optional"]
+    required_types = ", ".join([t.analysis_type.value for t in required_tasks]) if required_tasks else "none"
+    optional_types = ", ".join([t.analysis_type.value for t in optional_tasks]) if optional_tasks else "none"
+
     logger.info(
-        f"Running {len(tasks)} workers "
-        f"({len([t for t in tasks if t.category == 'required'])} required, "
-        f"{len([t for t in tasks if t.category == 'optional'])} optional)"
+        f"Launching group 1: {len(tasks)} workers "
+        f"({len(required_tasks)} required: {required_types}, "
+        f"{len(optional_tasks)} optional: {optional_types})"
     )
 
     return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector)
@@ -473,10 +491,15 @@ async def _run_supervised_research(
     if not tasks:
         return {}
 
+    required_tasks = [t for t in tasks if t.category == "required"]
+    optional_tasks = [t for t in tasks if t.category == "optional"]
+    required_types = ", ".join([t.analysis_type.value for t in required_tasks]) if required_tasks else "none"
+    optional_types = ", ".join([t.analysis_type.value for t in optional_tasks]) if optional_tasks else "none"
+
     logger.info(
-        f"Running {len(tasks)} research workers "
-        f"({len([t for t in tasks if t.category == 'required'])} required, "
-        f"{len([t for t in tasks if t.category == 'optional'])} optional)"
+        f"Launching research: {len(tasks)} workers "
+        f"({len(required_tasks)} required: {required_types}, "
+        f"{len(optional_tasks)} optional: {optional_types})"
     )
 
     return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector)
