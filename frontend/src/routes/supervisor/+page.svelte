@@ -18,7 +18,6 @@
 	const summaryData = $derived($summary);
 	const recentData = $derived($recentMetrics?.metrics || []);
 	const workerData = $derived($workerStats);
-	const errorsData = $derived($errors?.errors || []);
 
 	// Computed metrics
 	const avgRoutingTime = $derived(summaryData ? summaryData.avg_routing_ms.toFixed(1) : '0.0');
