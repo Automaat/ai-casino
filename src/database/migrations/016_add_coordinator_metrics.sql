@@ -2,8 +2,8 @@
 -- Description: Store coordinator decision cycle metrics for analytics
 
 CREATE TABLE coordinator_metrics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     cycle_num INTEGER NOT NULL,
     timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
     symbols_analyzed TEXT[] DEFAULT '{}'::TEXT[] NOT NULL,

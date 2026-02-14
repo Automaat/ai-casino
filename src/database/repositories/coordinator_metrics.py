@@ -1,7 +1,7 @@
 """Coordinator metrics repository for database operations."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from loguru import logger
@@ -26,6 +26,7 @@ class CoordinatorMetricsRepository(BaseRepository[CoordinatorCycleMetrics]):
         """
         orm = CoordinatorMetricsORM(
             id=uuid.uuid4(),
+            created_at=datetime.now(UTC),
             cycle_num=entity.cycle_num,
             timestamp=entity.timestamp,
             symbols_analyzed=entity.symbols_analyzed,

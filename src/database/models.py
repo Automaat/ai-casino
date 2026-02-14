@@ -1007,11 +1007,11 @@ class CoordinatorMetricsORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("gen_random_uuid()"),
+        server_default=text("uuid_generate_v4()"),
     )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
-        server_default=text("CURRENT_TIMESTAMP"),
+        server_default=text("NOW()"),
         nullable=False,
     )
     cycle_num: Mapped[int] = mapped_column(Integer, nullable=False)
