@@ -89,6 +89,25 @@
 			format: (value: string) => new Date(value).toLocaleTimeString()
 		}
 	];
+
+	function getDegradationIcon(tier: string | undefined): string {
+		switch (tier) {
+			case 'NONE':
+				return '✅';
+			case 'DEGRADED':
+				return '⚠️';
+			case 'MINIMAL':
+				return '🔶';
+			case 'HALTED':
+				return '🛑';
+			default:
+				return '❓';
+		}
+	}
+
+	function getDegradationDisplay(tier: string | undefined): string {
+		return tier ?? 'UNKNOWN';
+	}
 </script>
 
 <svelte:head>
@@ -133,8 +152,8 @@
 		/>
 		<MetricCard
 			title="Degradation"
-			value={summary?.degradation_tier ?? 'UNKNOWN'}
-			icon="⚠️"
+			value={getDegradationDisplay(summary?.degradation_tier)}
+			icon={getDegradationIcon(summary?.degradation_tier)}
 		/>
 	</div>
 

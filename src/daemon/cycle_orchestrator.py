@@ -177,8 +177,8 @@ class DaemonCycleOrchestrator:
                 results_count=0,
             )
 
-        # Log degradation status if not FULL
-        if degradation_context.tier != DegradationTier.FULL:
+        # Log degradation status if not NONE
+        if degradation_context.tier != DegradationTier.NONE:
             unavailable_agents = set(AgentType) - degradation_context.available_agents
             logger.warning(
                 f"Degraded mode: {degradation_context.tier} | "

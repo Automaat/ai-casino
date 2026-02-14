@@ -139,7 +139,7 @@ class DaemonRunner:
 
         # Convert DegradationContext to dict for coordinator API
         degradation_dict = None
-        if degradation_context.tier != DegradationTier.FULL:
+        if degradation_context.tier != DegradationTier.NONE:
             degradation_dict = {
                 "tier": degradation_context.tier.value,
                 "unavailable_services": degradation_context.unavailable_services,
@@ -285,6 +285,9 @@ class DaemonRunner:
         """Run the daemon main loop."""
         from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
         from src.daemon.lifecycle import DaemonLifecycle
+
+        # Initialize workflow (needed by scheduled tasks: RiskReportTask, CorrelationAuditTask)
+        self._init_workflow()
 
         # Create lifecycle manager
         lifecycle = DaemonLifecycle(self._components)
