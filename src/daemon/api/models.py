@@ -448,6 +448,34 @@ class DiscoveryInsightsResponse(BaseModel):
     total_discoveries: int = Field(description="Total discoveries in period")
 
 
+class PositionManagementActionResponse(BaseModel):
+    """Single position management action."""
+
+    action_type: str = Field(description="Action type (TRAILING_STOP, BREAKEVEN, PARTIAL_PROFIT, etc)")
+    timestamp: datetime = Field(description="When action occurred")
+    old_stop_loss: float | None = Field(default=None, description="Previous stop loss price")
+    new_stop_loss: float | None = Field(default=None, description="New stop loss price")
+    qty_sold: float | None = Field(default=None, description="Quantity sold (for partial exits)")
+    price: float = Field(description="Current price at action time")
+    reason: str = Field(description="Reason for action")
+    executed: bool = Field(description="Whether action was successfully executed")
+    order_id: str | None = Field(default=None, description="Broker order ID if executed")
+
+
+class PositionTimelineResponse(BaseModel):
+    """Position timeline with management actions."""
+
+    symbol: str = Field(description="Position symbol")
+    entry_price: float = Field(description="Entry price")
+    current_price: float = Field(description="Current price")
+    current_qty: float = Field(description="Current quantity")
+    entry_timestamp: datetime = Field(description="Position entry timestamp")
+    days_held: int = Field(description="Days position has been held")
+    actions: list[PositionManagementActionResponse] = Field(description="Management actions taken")
+    count: int = Field(description="Number of actions")
+    database_enabled: bool = Field(description="Whether database persistence is enabled")
+
+
 __all__ = [
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
@@ -470,7 +498,9 @@ __all__ = [
     "HealthResponse",
     "MarketEventsResponse",
     "PaperTradingValidationResponse",
+    "PositionManagementActionResponse",
     "PositionResponse",
+    "PositionTimelineResponse",
     "PositionsResponse",
     "RebalanceAllocation",
     "RebalanceResponse",

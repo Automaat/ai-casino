@@ -3,10 +3,10 @@
 	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
-	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import TreemapChart from '$lib/components/charts/TreemapChart.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import RebalanceChart from '$lib/components/charts/RebalanceChart.svelte';
+	import PositionDetailModal from '$lib/components/position/PositionDetailModal.svelte';
 	import { positions } from '$lib/stores/dashboard';
 	import { api } from '$lib/api/client';
 	import { formatCurrency, formatPercent } from '$lib/utils/format';
@@ -33,6 +33,20 @@
 	let snapshotsData: SnapshotsResponse | null = null;
 	let rebalance: RebalanceResponse | null = null;
 	let loading = true;
+
+	// Modal state
+	let selectedSymbol: string | null = null;
+	let showModal = false;
+
+	function openTimeline(symbol: string) {
+		selectedSymbol = symbol;
+		showModal = true;
+	}
+
+	function closeModal() {
+		showModal = false;
+		selectedSymbol = null;
+	}
 
 	async function loadData() {
 		loading = true;
@@ -106,12 +120,14 @@
 			.join(' | ') || 'No positions';
 	})();
 
-	const positionColumns: Array<{
+	interface PositionColumn {
 		key: keyof EnhancedPosition;
 		label: string;
 		format?: (value: any) => string;
 		class?: string;
-	}> = [
+	}
+
+	const positionColumns: PositionColumn[] = [
 		{
 			key: 'symbol',
 			label: 'Symbol',
@@ -270,7 +286,47 @@
 	<!-- Positions Table -->
 	<Card title="Positions">
 		{#if positionsList.length > 0}
-			<DataTable data={positionsList} columns={positionColumns} />
+			<div class="overflow-x-auto">
+				<table class="min-w-full divide-y divide-gray-300">
+					<thead class="bg-gray-50">
+						<tr>
+							{#each positionColumns as column}
+								<th
+									class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider {column.class || ''}"
+								>
+									{column.label}
+								</th>
+							{/each}
+							<th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+								Actions
+							</th>
+						</tr>
+					</thead>
+					<tbody class="bg-white divide-y divide-gray-300">
+						{#each positionsList as position}
+							<tr class="hover:bg-gray-50 transition-colors">
+								{#each positionColumns as column}
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-black">
+										{#if column.format}
+											{column.format(position[column.key])}
+										{:else}
+											{position[column.key]}
+										{/if}
+									</td>
+								{/each}
+								<td class="px-6 py-4 whitespace-nowrap text-sm">
+									<button
+										on:click={() => openTimeline(position.symbol)}
+										class="text-blue-600 hover:text-blue-800 font-medium"
+									>
+										View Timeline
+									</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		{:else}
 			<div class="text-center py-12 text-gray-600">
 				No active positions. Start trading to see positions here.
@@ -278,3 +334,8 @@
 		{/if}
 	</Card>
 </div>
+
+<!-- Position Timeline Modal -->
+{#if showModal && selectedSymbol}
+	<PositionDetailModal symbol={selectedSymbol} onClose={closeModal} />
+{/if}

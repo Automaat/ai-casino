@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
     CorrelationMatrixResponse,
+    PositionManagementActionResponse,
     PositionResponse,
     PositionsResponse,
+    PositionTimelineResponse,
     RebalanceAllocation,
     RebalanceResponse,
     RiskHistoryResponse,
@@ -276,4 +278,58 @@ async def get_correlation_matrix(request: Request) -> CorrelationMatrixResponse 
         symbols=symbols,
         max_correlation=audit_result.max_correlation,
         avg_correlation=audit_result.avg_correlation,
+    )
+
+
+@router.get("/positions/{symbol}/timeline", response_model=PositionTimelineResponse)
+async def get_position_timeline(symbol: str, request: Request) -> PositionTimelineResponse:
+    """Get position timeline with management actions."""
+    components = get_components(request)
+
+    # Check database enabled
+    database_enabled = components.config.database.enable_persistence
+
+    # Get position from state
+    position = await components.state.positions.get_position(symbol)
+    if not position:
+        raise HTTPException(status_code=404, detail=f"Position {symbol} not found")
+
+    # Get current price from broker
+    current_price = position.entry_price
+    async with get_broker_account_info_cached(components) as account_info:
+        if account_info and symbol in account_info["positions"]:
+            broker_pos = account_info["positions"][symbol]
+            current_price = (
+                broker_pos.market_value / broker_pos.qty if broker_pos.qty > 0 else position.entry_price
+            )
+
+    # Get actions
+    actions = await components.state.positions.get_recent_actions(symbol=symbol, limit=500)
+
+    # Convert to response models
+    action_responses = [
+        PositionManagementActionResponse(
+            action_type=action.action_type,
+            timestamp=action.timestamp,
+            old_stop_loss=action.old_stop_loss,
+            new_stop_loss=action.new_stop_loss,
+            qty_sold=action.qty_sold,
+            price=action.price,
+            reason=action.reason,
+            executed=action.executed,
+            order_id=action.order_id,
+        )
+        for action in actions
+    ]
+
+    return PositionTimelineResponse(
+        symbol=position.symbol,
+        entry_price=position.entry_price,
+        current_price=current_price,
+        current_qty=position.current_qty,
+        entry_timestamp=position.entry_timestamp,
+        days_held=position.days_held,
+        actions=action_responses,
+        count=len(action_responses),
+        database_enabled=database_enabled,
     )
