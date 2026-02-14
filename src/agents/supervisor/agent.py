@@ -179,7 +179,7 @@ class TradingSupervisor:
             skip[AnalysisType.FUNDAMENTAL] = "API rate limited"
         elif not context.fundamental_available:
             skip[AnalysisType.FUNDAMENTAL] = "Fundamental data unavailable"
-        elif context.fundamental_available:
+        else:
             optional.append(AnalysisType.FUNDAMENTAL)
 
         # Social sentiment: optional if available
