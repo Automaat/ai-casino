@@ -174,6 +174,11 @@ class AppContainer(containers.DeclarativeContainer):
         database_engine=database_engine,
     )
 
+    coordinator_metrics_repository = providers.Factory(
+        database_providers.create_coordinator_metrics_repository,
+        database_engine=database_engine,
+    )
+
     # Circuit breaker registry - Singleton
     circuit_breaker_registry = providers.Singleton(
         circuit_breaker_providers.create_circuit_breaker_registry,
