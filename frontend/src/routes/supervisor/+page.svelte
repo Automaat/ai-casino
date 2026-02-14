@@ -51,8 +51,7 @@
 			name,
 			executions: stats.total_executions,
 			success_rate: stats.success_rate.toFixed(1),
-			avg_latency: stats.avg_duration_ms.toFixed(0),
-			p95: (stats.avg_duration_ms * 1.5).toFixed(0)
+			avg_latency: stats.avg_duration_ms.toFixed(0)
 		}));
 	});
 
@@ -75,8 +74,7 @@
 		{ key: 'name' as const, label: 'Worker', class: 'font-medium' },
 		{ key: 'executions' as const, label: 'Executions' },
 		{ key: 'success_rate' as const, label: 'Success Rate', format: (v: string) => `${v}%` },
-		{ key: 'avg_latency' as const, label: 'Avg Latency (ms)' },
-		{ key: 'p95' as const, label: 'P95 (ms)' }
+		{ key: 'avg_latency' as const, label: 'Avg Latency (ms)' }
 	];
 
 	const WS_URL =
@@ -86,14 +84,20 @@
 			: 'ws://localhost:8484');
 
 	let reconnectTimeout: number | null = null;
+	let reconnectAttempts = 0;
+	const MAX_RECONNECT_ATTEMPTS = 5;
+	const RECONNECT_DELAY = 3000;
 
 	function connectWebSocket() {
+		if (typeof window === 'undefined') return; // SSR safety
+
 		const wsUrl = `${WS_URL}/ws/events`;
 
 		ws = new WebSocket(wsUrl);
 
 		ws.onopen = () => {
 			wsConnected = true;
+			reconnectAttempts = 0;
 		};
 
 		ws.onmessage = (event) => {
@@ -107,13 +111,21 @@
 			}
 		};
 
-		ws.onerror = () => {
+		ws.onerror = (error) => {
+			console.error('WebSocket error:', error);
 			wsConnected = false;
 		};
 
 		ws.onclose = () => {
 			wsConnected = false;
-			reconnectTimeout = setTimeout(connectWebSocket, 5000);
+
+			if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+				reconnectAttempts++;
+				console.log(`Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+				reconnectTimeout = setTimeout(connectWebSocket, RECONNECT_DELAY);
+			} else {
+				console.error('Failed to connect to WebSocket after multiple attempts');
+			}
 		};
 	}
 
