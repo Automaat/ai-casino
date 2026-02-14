@@ -20,7 +20,7 @@ async def migrate() -> None:
     """Apply migration to fix current_exposure_percent precision."""
     engine = DatabaseEngine()
 
-    async with engine.async_engine.begin() as conn:
+    async with engine.engine.begin() as conn:
         # Check current precision
         result = await conn.execute(
             text(
