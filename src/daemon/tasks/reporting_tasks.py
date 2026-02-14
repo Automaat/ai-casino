@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -177,18 +175,7 @@ class RiskReportTask(TaskExecutor):
             lookback_days=self.components.config.risk_limits.lookback_days,
         )
 
-        # Persist to JSON file
-        def _write_report() -> Path:
-            report_dir = Path(self.components.config.risk_limits.report_dir).expanduser()
-            report_dir.mkdir(parents=True, exist_ok=True)
-            report_path = report_dir / f"risk-report-{report.date}.json"
-            with report_path.open("w") as f:
-                json.dump(report.model_dump(), f, indent=2)
-            return report_path
-
-        report_path = await asyncio.to_thread(_write_report)
-
-        # Record in state
+        # Record in database
         await self.components.state.record_risk_report(
             RiskReportRecord(
                 timestamp=datetime.now(UTC),
@@ -198,6 +185,11 @@ class RiskReportTask(TaskExecutor):
                 cvar_99=report.cvar_99,
                 cdar_95=report.cdar_95,
                 max_drawdown=report.max_drawdown,
+                portfolio_volatility=report.portfolio_volatility,
+                current_exposure_percent=report.current_exposure_percent,
+                num_positions=report.num_positions,
+                var_limit_breached=report.var_limit_breached,
+                cvar_limit_breached=report.cvar_limit_breached,
                 risk_status=report.risk_status,
             )
         )
@@ -207,7 +199,6 @@ class RiskReportTask(TaskExecutor):
         )
         console.print(f"[{status_color}]Risk status: {report.risk_status}[/{status_color}]")
         console.print(f"[dim]VaR95={report.var_95:.4f}, CVaR99={report.cvar_99:.4f}[/dim]")
-        console.print(f"[dim]Report saved: {report_path}[/dim]")
         logger.info(f"Risk report generated: {report.risk_status}")
 
         # Send notification if VaR limits breached

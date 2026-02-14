@@ -161,6 +161,11 @@ class RiskReportRecord(BaseModel):
     cvar_99: float
     cdar_95: float
     max_drawdown: float
+    portfolio_volatility: float
+    current_exposure_percent: float
+    num_positions: int
+    var_limit_breached: bool
+    cvar_limit_breached: bool
     risk_status: str
 
 

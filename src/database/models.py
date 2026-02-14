@@ -601,6 +601,11 @@ class RiskReportRecordORM(Base):
     cvar_99: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     cdar_95: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     max_drawdown: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    portfolio_volatility: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+    current_exposure_percent: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
+    num_positions: Mapped[int] = mapped_column(nullable=False)
+    var_limit_breached: Mapped[bool] = mapped_column(nullable=False)
+    cvar_limit_breached: Mapped[bool] = mapped_column(nullable=False)
     risk_status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
