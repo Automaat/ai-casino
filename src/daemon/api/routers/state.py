@@ -42,7 +42,7 @@ async def state_summary(request: Request) -> StateSummaryResponse:
                 all_trades = await trade_repo.get_all()
                 closed_trades = [t for t in all_trades if t.is_closed()]
                 if closed_trades:
-                    win_rate_pct = calculate_win_rate(all_trades)
+                    win_rate_pct = calculate_win_rate(closed_trades)
                     win_rate = win_rate_pct / 100.0  # Convert percentage to decimal
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to calculate win rate: {e}")
