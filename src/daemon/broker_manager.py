@@ -1,6 +1,7 @@
 """Broker lifecycle and watchlist management for daemon."""
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -135,7 +136,10 @@ class BrokerManager:
         # Source 2: broker positions
         self._merge_broker_positions(merged_watchlist, seen)
 
-        # Source 3: active discovery candidates (ordered by score)
+        # Source 3: pre-market candidates (7:00-9:30 AM ET)
+        await self._merge_pre_market_candidates(merged_watchlist, seen, session=session)
+
+        # Source 4: active discovery candidates (ordered by score)
         await self._merge_discovery_candidates(merged_watchlist, seen, session=session)
 
         return merged_watchlist

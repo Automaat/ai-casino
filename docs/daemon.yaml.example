@@ -417,6 +417,32 @@ daemon:
     # Hours of overnight news to analyze
     lookback_hours: 16
 
+  pre_market:
+    # Pre-market screening for gap plays and catalysts (7:00-9:30 AM ET)
+    enabled: false
+    # Time to run screening (HH:MM, 07:00-09:00 recommended)
+    screening_time: "07:00"
+    # Stock universe to screen (NASDAQ100, SP500, COMBINED)
+    universe: "NASDAQ100"
+    # Top N candidates to return (1-50)
+    top_n: 20
+    # Minimum gap threshold in percent (0.0-10.0)
+    gap_threshold_percent: 3.0
+    # Minimum volume ratio vs 20-day average (1.0-5.0)
+    min_volume_ratio: 1.5
+    # Minimum composite score (0.0-1.0)
+    min_composite_score: 0.60
+    # Data fetching timeout in seconds (10-300)
+    timeout_seconds: 60
+    # Earnings lookahead window in days (1-14)
+    earnings_lookahead_days: 7
+    # Overnight news window in hours (1-24)
+    overnight_news_hours: 14
+    # Scoring weights (must sum to 1.0)
+    gap_weight: 0.50
+    volume_weight: 0.30
+    catalyst_weight: 0.20
+
   position_sizing:
     # Position sizing strategy combining multiple methods
     # Controls how many shares to buy/sell per trade

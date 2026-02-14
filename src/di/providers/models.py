@@ -247,6 +247,30 @@ def create_stock_screener(
     )
 
 
+def create_pre_market_screener(
+    universe_fetcher: StockUniverseFetcher,
+    news_fetcher,
+    earnings_fetcher,
+):
+    """Create PreMarketScreener with dependencies.
+
+    Args:
+        universe_fetcher: Stock universe fetcher
+        news_fetcher: News fetcher
+        earnings_fetcher: Earnings calendar fetcher
+
+    Returns:
+        PreMarketScreener instance
+    """
+    from src.screening.pre_market import PreMarketScreener
+
+    return PreMarketScreener(
+        universe_fetcher=universe_fetcher,
+        news_fetcher=news_fetcher,
+        earnings_fetcher=earnings_fetcher,
+    )
+
+
 def create_coordinator_tool_registry(
     container: AppContainer,
     daemon_state: DaemonState | None = None,

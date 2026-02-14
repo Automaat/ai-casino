@@ -208,6 +208,13 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
     )
 
+    pre_market_screener = providers.Singleton(
+        model_providers.create_pre_market_screener,
+        universe_fetcher=stock_universe_fetcher,
+        news_fetcher=news_fetcher,
+        earnings_fetcher=earnings_fetcher,
+    )
+
     coordinator_tool_registry = providers.Singleton(
         model_providers.create_coordinator_tool_registry,
         container=providers.Self(),

@@ -239,6 +239,126 @@ class DiscoveryStateManager(StateManager):
         candidates = await self.get_active_discovery_candidates(session=session)
         return [c.symbol for c in candidates]
 
+    async def record_pre_market_candidates(
+        self, candidates: list, expires_at: datetime, session: AsyncSession | None = None
+    ) -> None:
+        """Store pre-market candidates with TTL (expires 9:30 AM ET).
+
+        Args:
+            candidates: List of PreMarketCandidate objects
+            expires_at: Expiration timestamp (9:30 AM ET)
+            session: Optional session for transaction context
+        """
+        from src.discovery.models import DiscoveryCandidate, DiscoverySource
+
+        discovery_candidates = []
+        for candidate in candidates:
+            dc = DiscoveryCandidate(
+                symbol=candidate.symbol,
+                name=candidate.name,
+                sector=candidate.sector,
+                sources=[DiscoverySource.PRICE_GAP],
+                composite_score=candidate.composite_score,
+                source_scores={"PRE_MARKET": candidate.composite_score},
+                discovery_timestamp=datetime.now(UTC),
+                ttl_expires_at=expires_at,
+                metadata={
+                    "gap_percent": candidate.gap_percent,
+                    "volume_ratio": candidate.volume_ratio,
+                    "priority": candidate.priority,
+                },
+            )
+            discovery_candidates.append(dc)
+
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+
+            if session:
+                repo = ActiveDiscoveryCandidateRepository(session)
+                for dc in discovery_candidates:
+                    sources = [
+                        DiscoverySourceDetail(
+                            source_type="PRE_MARKET",
+                            weight=dc.composite_score,
+                            metadata=dc.metadata,
+                        )
+                    ]
+                    active_candidate = ActiveDiscoveryCandidate(
+                        symbol=dc.symbol,
+                        discovered_at=dc.discovery_timestamp,
+                        composite_score=dc.composite_score,
+                        sources=sources,
+                        ttl_expires_at=dc.ttl_expires_at,
+                    )
+                    existing = await repo.get_by_symbol(dc.symbol)
+                    if existing:
+                        await repo.delete_by_symbol(dc.symbol)
+                    await repo.create(active_candidate)
+            else:
+                async with get_session() as fresh_session:
+                    repo = ActiveDiscoveryCandidateRepository(fresh_session)
+                    for dc in discovery_candidates:
+                        sources = [
+                            DiscoverySourceDetail(
+                                source_type="PRE_MARKET",
+                                weight=dc.composite_score,
+                                metadata=dc.metadata,
+                            )
+                        ]
+                        active_candidate = ActiveDiscoveryCandidate(
+                            symbol=dc.symbol,
+                            discovered_at=dc.discovery_timestamp,
+                            composite_score=dc.composite_score,
+                            sources=sources,
+                            ttl_expires_at=dc.ttl_expires_at,
+                        )
+                        existing = await repo.get_by_symbol(dc.symbol)
+                        if existing:
+                            await repo.delete_by_symbol(dc.symbol)
+                        await repo.create(active_candidate)
+
+            logger.info(f"Recorded {len(discovery_candidates)} pre-market candidates (expires {expires_at})")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record pre-market candidates: {e}")
+
+    async def get_active_pre_market_candidates(
+        self, session: AsyncSession | None = None
+    ) -> list[DiscoveryCandidate]:
+        """Get non-expired pre-market candidates.
+
+        Args:
+            session: Optional session for transaction context
+
+        Returns:
+            List of active pre-market discovery candidates
+        """
+        from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+
+        if session:
+            repo = ActiveDiscoveryCandidateRepository(session)
+            active_candidates = await repo.get_all_active()
+            return [
+                self._to_discovery_candidate(c)
+                for c in active_candidates
+                if any(s.source_type == "PRE_MARKET" for s in c.sources)
+            ]
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = ActiveDiscoveryCandidateRepository(fresh_session)
+                active_candidates = await repo.get_all_active()
+                return [
+                    self._to_discovery_candidate(c)
+                    for c in active_candidates
+                    if any(s.source_type == "PRE_MARKET" for s in c.sources)
+                ]
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get active pre-market candidates: {e}")
+            return []
+
     def __repr__(self) -> str:
         """Return string representation."""
         return "DiscoveryStateManager()"

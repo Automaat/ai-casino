@@ -50,6 +50,8 @@ class MarketSchedulerConfig:
     enable_signal_tracking: bool = True
     game_plan_time: str = "04:00"
     enable_game_plan: bool = False
+    pre_market_screening_time: str = "07:00"
+    enable_pre_market_screening: bool = False
     monte_carlo_time: str = "17:00"
     monte_carlo_days: list[str] | None = None
 
@@ -92,6 +94,8 @@ class MarketScheduler:
         enable_signal_tracking: bool | None = None,
         game_plan_time: str | None = None,
         enable_game_plan: bool | None = None,
+        pre_market_screening_time: str | None = None,
+        enable_pre_market_screening: bool | None = None,
         monte_carlo_time: str | None = None,
         monte_carlo_days: list[str] | None = None,
     ) -> None:
@@ -135,6 +139,8 @@ class MarketScheduler:
             or enable_signal_tracking is not None
             or game_plan_time is not None
             or enable_game_plan is not None
+            or pre_market_screening_time is not None
+            or enable_pre_market_screening is not None
             or monte_carlo_time is not None
             or monte_carlo_days is not None
         ):
@@ -251,6 +257,16 @@ class MarketScheduler:
                 enable_game_plan=(
                     enable_game_plan if enable_game_plan is not None else defaults.enable_game_plan
                 ),
+                pre_market_screening_time=(
+                    pre_market_screening_time
+                    if pre_market_screening_time is not None
+                    else defaults.pre_market_screening_time
+                ),
+                enable_pre_market_screening=(
+                    enable_pre_market_screening
+                    if enable_pre_market_screening is not None
+                    else defaults.enable_pre_market_screening
+                ),
                 monte_carlo_time=(
                     monte_carlo_time if monte_carlo_time is not None else defaults.monte_carlo_time
                 ),
@@ -292,6 +308,8 @@ class MarketScheduler:
         self.enable_signal_tracking = cfg.enable_signal_tracking
         self.game_plan_time = cfg.game_plan_time
         self.enable_game_plan = cfg.enable_game_plan
+        self.pre_market_screening_time = cfg.pre_market_screening_time
+        self.enable_pre_market_screening = cfg.enable_pre_market_screening
         self.monte_carlo_time = cfg.monte_carlo_time
         self.monte_carlo_days = cfg.monte_carlo_days or ["sun"]
         logger.info(
@@ -758,6 +776,33 @@ class MarketScheduler:
             target_hour, target_minute = map(int, self.game_plan_time.split(":"))
         except (ValueError, AttributeError) as e:
             logger.opt(exception=True).warning(f"Malformed game_plan_time '{self.game_plan_time}': {e}")
+            return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_pre_market_screening_time(self) -> bool:
+        """Check if it's time for pre-market screening (07:00 ET, weekdays only).
+
+        Returns:
+            True if within 1 minute of configured time on weekday
+        """
+        if not self.enable_pre_market_screening:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        if now.weekday() >= 5:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.pre_market_screening_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.opt(exception=True).warning(
+                f"Malformed pre_market_screening_time '{self.pre_market_screening_time}': {e}"
+            )
             return False
 
         current_minutes = now.hour * 60 + now.minute
