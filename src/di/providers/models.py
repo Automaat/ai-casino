@@ -8,7 +8,9 @@ from src.models.llm import LLMClient
 if TYPE_CHECKING:
     from src.backtesting.runner import BacktestRunner
     from src.daemon.state import DaemonState
+    from src.data.earnings import EarningsCalendarFetcher
     from src.data.market import MarketDataFetcher
+    from src.data.news import NewsFetcher
     from src.data.universe import StockUniverseFetcher
     from src.database.repositories.trade import TradeRepository
     from src.di.container import AppContainer
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
     from src.metrics.risk import RiskMetricsCalculator
     from src.metrics.tracker import BaseMetricsTracker
     from src.optimization.optimizer import OptunaOptimizer
+    from src.screening.pre_market import PreMarketScreener
     from src.screening.screener import StockScreener
     from src.strategies.regime import MarketRegimeDetector
     from src.tools.registry import ToolRegistry
@@ -244,6 +247,30 @@ def create_stock_screener(
     return StockScreener(
         universe_fetcher=universe_fetcher,
         liquidity_filters=daemon_config.liquidity_filters,
+    )
+
+
+def create_pre_market_screener(
+    universe_fetcher: StockUniverseFetcher,
+    news_fetcher: NewsFetcher,
+    earnings_fetcher: EarningsCalendarFetcher,
+) -> PreMarketScreener:
+    """Create PreMarketScreener with dependencies.
+
+    Args:
+        universe_fetcher: Stock universe fetcher
+        news_fetcher: News fetcher
+        earnings_fetcher: Earnings calendar fetcher
+
+    Returns:
+        PreMarketScreener instance
+    """
+    from src.screening.pre_market import PreMarketScreener
+
+    return PreMarketScreener(
+        universe_fetcher=universe_fetcher,
+        news_fetcher=news_fetcher,
+        earnings_fetcher=earnings_fetcher,
     )
 
 

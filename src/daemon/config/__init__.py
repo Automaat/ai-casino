@@ -36,6 +36,7 @@ from src.daemon.config.portfolio import (
     PeerAnalysisConfig,
     PortfolioRebalancingConfig,
 )
+from src.daemon.config.pre_market import PreMarketScreeningConfig
 from src.daemon.config.profiling import ProfilingConfig
 from src.daemon.config.reporting import HealthConfig, MetricsConfig, ReportingConfig, SignalTrackingConfig
 from src.daemon.config.risk import (
@@ -93,6 +94,7 @@ __all__ = [
     "PortfolioRebalancingConfig",
     "PositionManagementConfig",
     "PositionSizingConfig",
+    "PreMarketScreeningConfig",
     "PreTradeBacktestingConfig",
     "PrefetchConfig",
     "ProfilingConfig",
@@ -144,6 +146,7 @@ class DaemonConfig(BaseModel):
     position_sizing: PositionSizingConfig = Field(default_factory=PositionSizingConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
     monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
+    pre_market: PreMarketScreeningConfig = Field(default_factory=PreMarketScreeningConfig)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
     analysis_orchestration: AnalysisOrchestratorConfig = Field(default_factory=AnalysisOrchestratorConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
@@ -199,6 +202,7 @@ class DaemonConfig(BaseModel):
             "position_sizing": daemon_data.pop("position_sizing", {}) or {},
             "position_management": daemon_data.pop("position_management", {}) or {},
             "monte_carlo": daemon_data.pop("monte_carlo", {}) or {},
+            "pre_market": daemon_data.pop("pre_market", {}) or {},
             "notifications": daemon_data.pop("notifications", {}) or {},
             "analysis_orchestration": daemon_data.pop("analysis_orchestration", {}) or {},
             "news_watcher": daemon_data.pop("news_watcher", {}) or {},
@@ -270,6 +274,7 @@ class DaemonConfig(BaseModel):
             position_sizing=PositionSizingConfig(**sections["position_sizing"]),
             position_management=PositionManagementConfig(**sections["position_management"]),
             monte_carlo=MonteCarloConfig(**sections["monte_carlo"]),
+            pre_market=PreMarketScreeningConfig(**sections["pre_market"]),
             notifications=NotificationsConfig(
                 **sections["notifications"], telegram=TelegramNotificationConfig(**sections["telegram"])
             ),

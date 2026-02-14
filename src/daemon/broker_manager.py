@@ -135,7 +135,10 @@ class BrokerManager:
         # Source 2: broker positions
         self._merge_broker_positions(merged_watchlist, seen)
 
-        # Source 3: active discovery candidates (ordered by score)
+        # Source 3: pre-market candidates (7:00-9:30 AM ET)
+        await self._merge_pre_market_candidates(merged_watchlist, seen, session=session)
+
+        # Source 4: active discovery candidates (ordered by score)
         await self._merge_discovery_candidates(merged_watchlist, seen, session=session)
 
         return merged_watchlist
@@ -161,6 +164,27 @@ class BrokerManager:
                 seen.update(added)
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to fetch positions for watchlist merge: {e}")
+
+    async def _merge_pre_market_candidates(
+        self, merged_watchlist: list[str], seen: set[str], session: AsyncSession | None = None
+    ) -> None:
+        """Merge pre-market screening candidates into watchlist (7:00-9:30 AM ET)."""
+        if not self.config.pre_market.enabled:
+            return
+
+        from src.discovery.models import DiscoverySource
+
+        active_candidates = await self.state.get_active_discovery_candidates(session=session)
+        pre_market_symbols = [
+            c.symbol
+            for c in active_candidates
+            if c.symbol not in seen and DiscoverySource.PRE_MARKET in c.sources
+        ]
+
+        if pre_market_symbols:
+            logger.info(f"Merged {len(pre_market_symbols)} pre-market candidates: {pre_market_symbols}")
+            merged_watchlist.extend(pre_market_symbols)
+            seen.update(pre_market_symbols)
 
     async def _merge_discovery_candidates(
         self, merged_watchlist: list[str], seen: set[str], session: AsyncSession | None = None

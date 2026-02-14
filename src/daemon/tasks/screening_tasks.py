@@ -1,0 +1,84 @@
+"""Pre-market screening task."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from loguru import logger
+
+from src.daemon.tasks.base import TaskExecutor
+
+
+class PreMarketScreeningTask(TaskExecutor):
+    """Pre-market screening task (7:00 AM ET)."""
+
+    @property
+    def task_name(self) -> str:
+        """Task display name."""
+        return "Pre-Market Screening"
+
+    async def get_last_run(self) -> datetime | None:
+        """Get last run timestamp."""
+        from src.database.connection import get_session
+        from src.database.repositories.metadata import MetadataRepository
+
+        try:
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("pre_market_screening.last_run")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last run: {e}")
+            return None
+
+    async def record_success(self, duration: float) -> None:
+        """Record successful execution."""
+        from src.database.connection import get_session
+        from src.database.repositories.metadata import MetadataRepository
+
+        try:
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("pre_market_screening.last_run", datetime.now(UTC))
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record success: {e}")
+
+    async def execute(self) -> None:
+        """Execute pre-market screening logic."""
+        from src.screening.models.pre_market import ScreeningParams, ScreeningWeights
+
+        config = self.components.config.pre_market
+
+        # Respect configuration flag to disable pre-market screening
+        if not getattr(config, "enabled", True):
+            logger.info("Pre-market screening is disabled by configuration; skipping execution")
+            return
+
+        screener = self.container.pre_market_screener()
+
+        params = ScreeningParams(
+            universe=config.universe,
+            top_n=config.top_n,
+            gap_threshold=config.gap_threshold_percent,
+            min_volume_ratio=config.min_volume_ratio,
+            min_score=config.min_composite_score,
+            timeout_seconds=config.timeout_seconds,
+            earnings_lookahead_days=config.earnings_lookahead_days,
+            overnight_news_hours=config.overnight_news_hours,
+            weights=ScreeningWeights(
+                gap=config.gap_weight,
+                volume=config.volume_weight,
+                catalyst=config.catalyst_weight,
+            ),
+        )
+
+        result = await screener.screen(params)
+
+        logger.info(
+            f"Pre-market screening found {len(result.candidates)} candidates "
+            f"(expires {result.expires_at.strftime('%H:%M %Z')})"
+        )
+
+        await self.components.state.discovery.record_pre_market_candidates(
+            candidates=result.candidates,
+            expires_at=result.expires_at,
+        )
