@@ -10,6 +10,7 @@ from src.database.engine import DatabaseEngine, MissingDatabaseURLError
 if TYPE_CHECKING:
     from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
     from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
     from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
     from src.database.repositories.degradation import DegradationRecordRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
@@ -485,3 +486,20 @@ def create_risk_audit_repository(database_engine: DatabaseEngine) -> RiskAuditRe
 
     session = database_engine.session()
     return RiskAuditRepository(session)
+
+
+def create_coordinator_metrics_repository(
+    database_engine: DatabaseEngine,
+) -> CoordinatorMetricsRepository:
+    """Create CoordinatorMetricsRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        CoordinatorMetricsRepository instance
+    """
+    from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
+
+    session = database_engine.session()
+    return CoordinatorMetricsRepository(session)

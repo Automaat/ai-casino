@@ -364,7 +364,7 @@ class DaemonCycleOrchestrator:
         result: CoordinatorCycleResult,
         patterns_detected: int,
     ) -> None:
-        """Save coordinator cycle metrics to JSONL.
+        """Save coordinator cycle metrics to PostgreSQL (with JSONL fallback).
 
         Args:
             result: Coordinator cycle result
@@ -388,7 +388,19 @@ class DaemonCycleOrchestrator:
                 patterns_detected=patterns_detected,
             )
 
-            # Save to JSONL file
+            # Try PostgreSQL first
+            try:
+                if self.components.container:
+                    repo = self.components.container.coordinator_metrics_repository()
+                    await repo.create(metrics)
+                    logger.debug(f"Saved coordinator metrics to PostgreSQL: cycle={self._cycle_counter}")
+                    return
+            except Exception as pg_error:
+                logger.opt(exception=True).warning(
+                    f"PostgreSQL save failed, using JSONL fallback: {pg_error}"
+                )
+
+            # Fallback to JSONL
             metrics_file = Path.home() / ".ai-casino" / "coordinator-metrics.jsonl"
             save_metrics_jsonl(metrics, metrics_file)
 
