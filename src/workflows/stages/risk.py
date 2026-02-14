@@ -45,7 +45,7 @@ async def assess_risk(
         portfolio_value=input_data.portfolio_value,
         target_portfolio_weight=input_data.target_portfolio_weight,
         backtest_validation=input_data.backtest_validation,
-        degradation_context=input_data.degradation_context,
+        _degradation_context=input_data.degradation_context,
         broker_api_failed=input_data.broker_api_failed,
     )
 
