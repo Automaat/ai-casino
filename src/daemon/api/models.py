@@ -476,6 +476,44 @@ class PositionTimelineResponse(BaseModel):
     database_enabled: bool = Field(description="Whether database persistence is enabled")
 
 
+class TradeResponse(BaseModel):
+    """Single trade record."""
+
+    id: str = Field(description="Trade ID")
+    timestamp: datetime = Field(description="Trade timestamp")
+    symbol: str = Field(description="Symbol traded")
+    action: str = Field(description="Trade action (BUY/SELL)")
+    entry_price: float = Field(description="Entry price")
+    exit_price: float | None = Field(default=None, description="Exit price (null if OPEN)")
+    shares: int = Field(description="Number of shares")
+    confidence: float = Field(description="Confidence (0.0-1.0)")
+    risk_level: str = Field(description="Risk level (LOW/MEDIUM/HIGH)")
+    status: str = Field(description="Trade status (OPEN/CLOSED/REJECTED)")
+    pnl: float | None = Field(default=None, description="Profit/loss (null if OPEN)")
+    pnl_percent: float | None = Field(default=None, description="P/L percentage (null if OPEN)")
+    strategy_name: str | None = Field(default=None, description="Strategy used")
+    is_paper_trade: bool = Field(description="Whether paper trade")
+    closed_at: datetime | None = Field(default=None, description="Close timestamp (null if OPEN)")
+
+
+class TradesResponse(BaseModel):
+    """Trades endpoint response."""
+
+    trades: list[TradeResponse] = Field(description="List of trades")
+    total_count: int = Field(description="Total trades in database")
+    returned_count: int = Field(description="Number of trades returned")
+    database_enabled: bool = Field(description="Whether database persistence is enabled")
+
+
+class EnrichedTradeResponse(BaseModel):
+    """Trade with analysis reasoning."""
+
+    trade: TradeResponse = Field(description="Trade record")
+    analysis: AnalysisRecordResponse | None = Field(
+        default=None, description="Matched analysis record with reasoning"
+    )
+
+
 __all__ = [
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
@@ -488,6 +526,7 @@ __all__ = [
     "DiscoveryRecord",
     "DiscoverySourceBreakdown",
     "DiscoverySuccessMetrics",
+    "EnrichedTradeResponse",
     "ErrorSummaryResponse",
     "EventResponse",
     "ExecutionGraphDetailResponse",
@@ -515,6 +554,8 @@ __all__ = [
     "SupervisorMetricResponse",
     "SupervisorMetricsListResponse",
     "SupervisorSummaryResponse",
+    "TradeResponse",
+    "TradesResponse",
     "ValidationCriterionResponse",
     "WatchlistResponse",
     "WorkerPerformanceResponse",
