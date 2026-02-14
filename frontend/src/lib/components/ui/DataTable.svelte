@@ -4,6 +4,7 @@
 		label: string;
 		format?: (value: any, row: T) => string;
 		class?: string;
+		cellClass?: (value: any, row: T) => string;
 	}
 
 	interface Props {
@@ -32,7 +33,7 @@
 			{#each data as row}
 				<tr class="hover:bg-gray-50 transition-colors">
 					{#each columns as column}
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-black">
+						<td class="px-6 py-4 whitespace-nowrap text-sm text-black {column.cellClass ? column.cellClass(row[column.key], row) : ''}">
 							{#if column.format}
 								{column.format(row[column.key], row)}
 							{:else}

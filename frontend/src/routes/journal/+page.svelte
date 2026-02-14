@@ -17,7 +17,7 @@
 	let selectedSymbol = '';
 	let selectedStatus = '';
 	let selectedRisk = '';
-	let window = 'all';
+	let window: 'all' | '30d' | '7d' = 'all';
 
 	$: allTrades = tradesData?.trades || [];
 
@@ -119,7 +119,7 @@
 				if (value === null) return '-';
 				return formatCurrency(value);
 			},
-			class: (value: number | null) => {
+			cellClass: (value: number | null) => {
 				if (value === null) return '';
 				return value > 0 ? 'text-green-600 font-semibold' : value < 0 ? 'text-red-600 font-semibold' : '';
 			}
@@ -131,7 +131,7 @@
 				if (value === null) return '-';
 				return formatPercent(value);
 			},
-			class: (value: number | null) => {
+			cellClass: (value: number | null) => {
 				if (value === null) return '';
 				return value > 0 ? 'text-green-600' : value < 0 ? 'text-red-600' : '';
 			}
@@ -256,26 +256,26 @@
 		<MetricCard
 			title="Win Rate"
 			value={formatPercent(winRate)}
-			variant={winRate >= 0.5 ? 'success' : 'danger'}
+			trend={winRate >= 0.5 ? 'up' : 'down'}
 		/>
 		<MetricCard
 			title="Total P/L"
 			value={formatCurrency(totalPnl)}
-			variant={totalPnl > 0 ? 'success' : totalPnl < 0 ? 'danger' : 'neutral'}
+			trend={totalPnl > 0 ? 'up' : totalPnl < 0 ? 'down' : 'neutral'}
 		/>
 		<MetricCard
 			title="Avg P/L"
 			value={formatCurrency(avgPnl)}
-			variant={avgPnl > 0 ? 'success' : avgPnl < 0 ? 'danger' : 'neutral'}
+			trend={avgPnl > 0 ? 'up' : avgPnl < 0 ? 'down' : 'neutral'}
 		/>
 	</div>
 
 	<!-- Additional Stats -->
 	<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-		<MetricCard title="Winning Trades" value={winningTrades.length.toString()} variant="success" />
-		<MetricCard title="Losing Trades" value={losingTrades.length.toString()} variant="danger" />
-		<MetricCard title="Avg Win" value={formatCurrency(avgWin)} variant="success" />
-		<MetricCard title="Avg Loss" value={formatCurrency(avgLoss)} variant="danger" />
+		<MetricCard title="Winning Trades" value={winningTrades.length.toString()} trend="up" />
+		<MetricCard title="Losing Trades" value={losingTrades.length.toString()} trend="down" />
+		<MetricCard title="Avg Win" value={formatCurrency(avgWin)} trend="up" />
+		<MetricCard title="Avg Loss" value={formatCurrency(avgLoss)} trend="down" />
 	</div>
 
 	<!-- Trades Table -->
