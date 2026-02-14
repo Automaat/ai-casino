@@ -63,6 +63,8 @@ class TradingSupervisor:
                 context.symbol,
             )
 
+        from src.strategies.regime import MIN_ROWS_FOR_REGIME
+
         prompt = self._prompts.load(
             "plan",
             symbol=symbol,
@@ -70,10 +72,13 @@ class TradingSupervisor:
             session=context.trading_session.value,
             owns_position=context.owns_position,
             news_count=context.news_count,
-            fundamental_available=context.fundamental_available,
-            social_available=context.social_available,
+            market_data_rows=context.market_data_rows,
+            min_rows_required=MIN_ROWS_FOR_REGIME,
+            fundamental_status="available" if context.fundamental_available else "unavailable",
+            social_status="available" if context.social_available else "unavailable",
             trump_count=context.trump_count,
-            fundamental_rate_limit_status="limited" if context.fundamental_rate_limit else "available",
+            is_high_volatility=context.is_high_volatility,
+            fundamental_api_status="rate limited" if context.fundamental_rate_limit else "available",
             time_budget_ms=context.time_budget_ms,
         )
         system = self._prompts.load("system")
@@ -140,7 +145,7 @@ class TradingSupervisor:
         return weights
 
     def default_routing(self, context: PlanningContext) -> AnalysisRoutingDecision:
-        """Fallback routing decision for timeout or LLM failure.
+        """Fallback routing when LLM unavailable - intelligent data-driven decisions.
 
         Args:
             context: Planning context
@@ -148,34 +153,93 @@ class TradingSupervisor:
         Returns:
             Default routing decision
         """
-        required = [
-            AnalysisType.TECHNICAL,
-            AnalysisType.SENTIMENT,
-            AnalysisType.NEWS,
-            AnalysisType.BULLISH_RESEARCH,
-            AnalysisType.BEARISH_RESEARCH,
-        ]
-        optional = []
-        skip = {}
+        from src.strategies.regime import MIN_ROWS_FOR_REGIME
 
-        if context.fundamental_available and not context.fundamental_rate_limit:
-            optional.append(AnalysisType.FUNDAMENTAL)
+        required: list[AnalysisType] = []
+        optional: list[AnalysisType] = []
+        skip: dict[AnalysisType, str] = {}
+
+        # Technical: skip if insufficient data
+        if context.market_data_rows < MIN_ROWS_FOR_REGIME:
+            skip[AnalysisType.TECHNICAL] = (
+                f"Insufficient data ({context.market_data_rows} < {MIN_ROWS_FOR_REGIME} required)"
+            )
         else:
-            skip[AnalysisType.FUNDAMENTAL] = "API rate limited or unavailable"
+            required.append(AnalysisType.TECHNICAL)
 
+        # Sentiment + News: skip if no articles
+        if context.news_count == 0:
+            skip[AnalysisType.SENTIMENT] = "No news articles available"
+            skip[AnalysisType.NEWS] = "No news articles available"
+        else:
+            required.extend([AnalysisType.SENTIMENT, AnalysisType.NEWS])
+
+        # Fundamental: optional unless rate-limited
+        if context.fundamental_rate_limit:
+            skip[AnalysisType.FUNDAMENTAL] = "API rate limited"
+        elif not context.fundamental_available:
+            skip[AnalysisType.FUNDAMENTAL] = "Fundamental data unavailable"
+        elif context.fundamental_available:
+            optional.append(AnalysisType.FUNDAMENTAL)
+
+        # Social sentiment: optional if available
         if context.social_available:
             optional.append(AnalysisType.SOCIAL_SENTIMENT)
 
+        # Trump: optional if posts exist
         if context.trump_count > 0:
             optional.append(AnalysisType.TRUMP)
+
+        # Research: required only if technical not skipped
+        if AnalysisType.TECHNICAL not in skip:
+            required.extend([AnalysisType.BULLISH_RESEARCH, AnalysisType.BEARISH_RESEARCH])
+        else:
+            skip[AnalysisType.BULLISH_RESEARCH] = "Technical skipped (dependency)"
+            skip[AnalysisType.BEARISH_RESEARCH] = "Technical skipped (dependency)"
+
+        # Build priority order based on context
+        priority_order = self._build_priority_order(context, required, optional)
 
         return AnalysisRoutingDecision(
             required_analyses=required,
             optional_analyses=optional,
             skip_analyses=skip,
-            reasoning="Default routing (LLM fallback)",
-            priority_order=required + optional,
+            reasoning="Intelligent fallback routing based on data availability",
+            priority_order=priority_order,
         )
+
+    def _build_priority_order(
+        self,
+        context: PlanningContext,
+        required: list[AnalysisType],
+        optional: list[AnalysisType],
+    ) -> list[AnalysisType]:
+        """Build execution priority order based on session and conditions.
+
+        Args:
+            context: Planning context
+            required: Required analyses
+            optional: Optional analyses
+
+        Returns:
+            Priority-ordered list of analyses
+        """
+        from src.strategies.session import TradingSession
+
+        if context.trading_session == TradingSession.PRE_MARKET:
+            # Pre-market: prioritize news/sentiment for breaking developments
+            priority = []
+            for analysis_type in [AnalysisType.NEWS, AnalysisType.SENTIMENT]:
+                if analysis_type in required:
+                    priority.append(analysis_type)
+            # Add remaining required analyses
+            for analysis_type in required:
+                if analysis_type not in priority:
+                    priority.append(analysis_type)
+            return priority + optional
+
+        # Regular session: standard order (technical → sentiment → news → research)
+        return required + optional
 
     def _default_weights(self, completed: list[AnalysisType]) -> AnalysisWeights:
         """Fallback uniform weights.

@@ -36,6 +36,8 @@ async def test_plan_analyses_basic(test_container):
         trump_count=0,
         fundamental_rate_limit=False,
         time_budget_ms=30000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     # Mock falls back to default routing
@@ -64,6 +66,8 @@ async def test_plan_analyses_rate_limited(test_container):
         trump_count=0,
         fundamental_rate_limit=True,
         time_budget_ms=20000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     # Default routing skips fundamental when rate limited
@@ -92,6 +96,8 @@ async def test_plan_analyses_fallback(test_container):
         trump_count=2,
         fundamental_rate_limit=False,
         time_budget_ms=30000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     decision = await supervisor.plan_analyses(context)
@@ -179,6 +185,8 @@ def testdefault_routing(test_container):
         trump_count=0,
         fundamental_rate_limit=False,
         time_budget_ms=30000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     decision = supervisor.default_routing(context)
@@ -210,6 +218,8 @@ def testdefault_routing_rate_limited(test_container):
         trump_count=0,
         fundamental_rate_limit=True,
         time_budget_ms=20000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     decision = supervisor.default_routing(context)
@@ -233,6 +243,8 @@ def testdefault_routing_trump_posts(test_container):
         trump_count=3,
         fundamental_rate_limit=False,
         time_budget_ms=20000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     decision = supervisor.default_routing(context)
@@ -318,6 +330,8 @@ async def test_plan_analyses_with_regime(test_container):
         trump_count=0,
         fundamental_rate_limit=False,
         time_budget_ms=30000,
+        market_data_rows=50,
+        is_high_volatility=True,
     )
 
     decision = await supervisor.plan_analyses(context)
@@ -342,6 +356,8 @@ async def test_plan_analyses_pre_market(test_container):
         trump_count=0,
         fundamental_rate_limit=False,
         time_budget_ms=15000,
+        market_data_rows=50,
+        is_high_volatility=False,
     )
 
     decision = await supervisor.plan_analyses(context)
@@ -349,3 +365,108 @@ async def test_plan_analyses_pre_market(test_container):
     # Default routing still applies
     assert isinstance(decision, AnalysisRoutingDecision)
     assert AnalysisType.TECHNICAL in decision.required_analyses
+
+
+def test_default_routing_no_news(test_container):
+    """Skip sentiment/news when news_count=0."""
+    supervisor = test_container.supervisor()
+    context = PlanningContext(
+        symbol="AAPL",
+        regime=None,
+        trading_session=TradingSession.REGULAR,
+        owns_position=False,
+        news_count=0,
+        fundamental_available=True,
+        social_available=False,
+        trump_count=0,
+        fundamental_rate_limit=False,
+        time_budget_ms=30000,
+        market_data_rows=50,
+        is_high_volatility=False,
+    )
+    decision = supervisor.default_routing(context)
+
+    assert AnalysisType.SENTIMENT in decision.skip_analyses
+    assert AnalysisType.NEWS in decision.skip_analyses
+    assert "No news" in decision.skip_analyses[AnalysisType.SENTIMENT]
+    assert AnalysisType.TECHNICAL in decision.required_analyses
+
+
+def test_default_routing_insufficient_data(test_container):
+    """Skip technical when market_data_rows < 35."""
+    supervisor = test_container.supervisor()
+    context = PlanningContext(
+        symbol="AAPL",
+        regime=None,
+        trading_session=TradingSession.REGULAR,
+        owns_position=False,
+        news_count=10,
+        fundamental_available=True,
+        social_available=False,
+        trump_count=0,
+        fundamental_rate_limit=False,
+        time_budget_ms=30000,
+        market_data_rows=20,
+        is_high_volatility=False,
+    )
+    decision = supervisor.default_routing(context)
+
+    assert AnalysisType.TECHNICAL in decision.skip_analyses
+    assert "Insufficient data" in decision.skip_analyses[AnalysisType.TECHNICAL]
+    assert AnalysisType.BULLISH_RESEARCH in decision.skip_analyses
+    assert AnalysisType.BEARISH_RESEARCH in decision.skip_analyses
+
+
+def test_default_routing_pre_market_priority(test_container):
+    """Pre-market prioritizes news/sentiment."""
+    supervisor = test_container.supervisor()
+    context = PlanningContext(
+        symbol="AAPL",
+        regime=None,
+        trading_session=TradingSession.PRE_MARKET,
+        owns_position=False,
+        news_count=5,
+        fundamental_available=True,
+        social_available=False,
+        trump_count=0,
+        fundamental_rate_limit=False,
+        time_budget_ms=15000,
+        market_data_rows=50,
+        is_high_volatility=False,
+    )
+    decision = supervisor.default_routing(context)
+
+    # News and sentiment at start of priority_order
+    assert decision.priority_order[0] in [AnalysisType.NEWS, AnalysisType.SENTIMENT]
+    assert decision.priority_order[1] in [AnalysisType.NEWS, AnalysisType.SENTIMENT]
+    assert AnalysisType.TECHNICAL in decision.required_analyses
+
+
+def test_default_routing_combined_constraints(test_container):
+    """Multiple constraints: no news + insufficient data."""
+    supervisor = test_container.supervisor()
+    context = PlanningContext(
+        symbol="AAPL",
+        regime=None,
+        trading_session=TradingSession.REGULAR,
+        owns_position=False,
+        news_count=0,
+        fundamental_available=False,
+        social_available=False,
+        trump_count=0,
+        fundamental_rate_limit=False,
+        time_budget_ms=30000,
+        market_data_rows=15,
+        is_high_volatility=True,
+    )
+    decision = supervisor.default_routing(context)
+
+    # All major analyses skipped
+    assert AnalysisType.TECHNICAL in decision.skip_analyses
+    assert AnalysisType.SENTIMENT in decision.skip_analyses
+    assert AnalysisType.NEWS in decision.skip_analyses
+    assert AnalysisType.FUNDAMENTAL in decision.skip_analyses
+    assert AnalysisType.BULLISH_RESEARCH in decision.skip_analyses
+
+    # Still should have reasoning
+    assert "fallback" in decision.reasoning.lower()
