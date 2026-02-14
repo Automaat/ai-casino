@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from src.database.repositories.prefetch import PrefetchRecordRepository
     from src.database.repositories.profiling import ProfilingRecordRepository
     from src.database.repositories.rebalancing import RebalancingRecordRepository
+    from src.database.repositories.risk_audit import RiskAuditRepository
     from src.database.repositories.risk_report import RiskReportRecordRepository
     from src.database.repositories.screening import ScreeningRecordRepository
     from src.database.repositories.sector_rotation import SectorRotationRecordRepository
@@ -47,12 +48,14 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     Raises:
         MissingDatabaseURLError: If enable_persistence=True but no database URL
     """
-    database_url = daemon_config.database.database_url
+    from src.di.config import resolve_config_or_env
+
+    database_url = resolve_config_or_env(daemon_config.database.database_url, "DATABASE_URL")
 
     if daemon_config.database.enable_persistence and not database_url:
         logger.error(
             "Database persistence enabled but DATABASE_URL not configured. "
-            "Set database.database_url in daemon.yaml."
+            "Set database.database_url in daemon.yaml or DATABASE_URL env var."
         )
         raise MissingDatabaseURLError
 
@@ -467,3 +470,18 @@ def create_execution_metric_repository(database_engine: DatabaseEngine) -> Execu
 
     session = database_engine.session()
     return ExecutionMetricRepository(session)
+
+
+def create_risk_audit_repository(database_engine: DatabaseEngine) -> RiskAuditRepository:
+    """Create RiskAuditRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        RiskAuditRepository instance
+    """
+    from src.database.repositories.risk_audit import RiskAuditRepository
+
+    session = database_engine.session()
+    return RiskAuditRepository(session)

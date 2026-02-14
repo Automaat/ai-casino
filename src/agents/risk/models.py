@@ -1,5 +1,7 @@
 """Risk management data models."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from src.metrics.portfolio_var import PortfolioVaRResult
@@ -97,3 +99,32 @@ class RiskAssessment(BaseModel):
     validation: RiskValidation
     confidence: float
     portfolio_var: PortfolioVaRResult | None = None
+
+
+class RiskAuditRecord(BaseModel):
+    """Risk audit log record."""
+
+    id: str | None = None
+    timestamp: datetime
+    symbol: str
+    action: Signal
+    current_price: float
+
+    approved: bool
+    risk_level: str
+    risk_score: float
+    confidence: float
+
+    recommended_shares: int
+    position_value: float
+    risk_amount: float
+    risk_percent: float
+
+    stop_loss_price: float
+    warnings: list[str] = Field(default_factory=list)
+
+    portfolio_var_95: float | None = None
+    portfolio_cvar_99: float | None = None
+    portfolio_cdar_95: float | None = None
+
+    created_at: datetime | None = None

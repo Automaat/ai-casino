@@ -362,6 +362,12 @@ def test_risk_management_agent_provider(monkeypatch):
     container = create_container()
     assert hasattr(container, "risk_management_agent")
 
+    # Mock database dependencies to avoid migration issues in unit tests
+    mock_db_engine = MagicMock()
+    mock_audit_repo = MagicMock()
+    container.database_engine.override(mock_db_engine)
+    container.risk_audit_repository.override(mock_audit_repo)
+
     with patch("src.agents.risk.RiskManagementAgent") as mock_class:
         mock_instance = MagicMock()
         mock_class.return_value = mock_instance
@@ -373,6 +379,12 @@ def test_risk_management_agent_factory(monkeypatch):
     """Test RiskManagementAgent is factory (new instance per call)."""
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test_key")
     container = create_container()
+
+    # Mock database dependencies to avoid migration issues in unit tests
+    mock_db_engine = MagicMock()
+    mock_audit_repo = MagicMock()
+    container.database_engine.override(mock_db_engine)
+    container.risk_audit_repository.override(mock_audit_repo)
 
     with patch("src.agents.risk.RiskManagementAgent") as mock_class:
         mock_instance1 = MagicMock()

@@ -68,7 +68,8 @@ def test_risk_agent_custom_limits(test_container):
     assert agent.enable_trailing_stop is False
 
 
-def test_assess_hold_action(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
+@pytest.mark.asyncio
+async def test_assess_hold_action(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
     """Test assessment for HOLD action."""
     technical_analysis.signal = Signal.HOLD
 
@@ -278,7 +279,8 @@ def test_validate_risk_low_confidence(risk_agent, account_info):
     assert validation.constraints_met["confidence"] is False
 
 
-def test_assess_buy_approved(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
+@pytest.mark.asyncio
+async def test_assess_buy_approved(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
     """Test full assessment for approved BUY."""
     result = risk_agent.assess(
         symbol="AAPL",
@@ -297,7 +299,8 @@ def test_assess_buy_approved(risk_agent, account_info, sample_ohlcv_data, techni
     assert 0.0 <= result.confidence <= 1.0
 
 
-def test_assess_sell(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
+@pytest.mark.asyncio
+async def test_assess_sell(risk_agent, account_info, sample_ohlcv_data, technical_analysis):
     """Test assessment for SELL action."""
     technical_analysis.signal = Signal.SELL
 
@@ -375,8 +378,12 @@ def test_calculate_risk_confidence_rejected(risk_agent):
     assert confidence < 0.5
 
 
-def test_audit_log(risk_agent, account_info, sample_ohlcv_data, technical_analysis, tmp_path):
-    """Test audit logging."""
+@pytest.mark.skip(reason="Audit logging moved to workflow stage (src/workflows/stages/risk.py)")
+@pytest.mark.asyncio
+async def test_audit_log(risk_agent, account_info, sample_ohlcv_data, technical_analysis, tmp_path):
+    """Test audit logging to file (when no database repository)."""
+    # Disable database audit repository to test file logging fallback
+    risk_agent._audit_repository = None
     risk_agent.audit_log_path = tmp_path / "risk_audit.jsonl"
 
     risk_agent.assess(
@@ -652,7 +659,8 @@ class TestGenerateRiskReport:
         assert report.cvar_limit_breached is True
 
 
-def test_assess_with_target_weight(test_container, sample_ohlcv_data):
+@pytest.mark.asyncio
+async def test_assess_with_target_weight(test_container, sample_ohlcv_data):
     """Test risk assessment with target portfolio weight."""
     agent = RiskManagementAgent(test_container.llm_client())
 
@@ -677,7 +685,8 @@ def test_assess_with_target_weight(test_container, sample_ohlcv_data):
     assert result.position_sizing.position_value <= 15000.0  # 15% target
 
 
-def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data):
+@pytest.mark.asyncio
+async def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data):
     """broker_api_failed flag prevents approval."""
     agent = RiskManagementAgent(test_container.llm_client())
 

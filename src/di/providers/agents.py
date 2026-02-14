@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from src.daemon.notification_channels import TelegramChannel
     from src.daemon.state import DaemonState
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
+    from src.database.repositories.risk_audit import RiskAuditRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.models.sentiment import FinBERTSentiment
@@ -293,6 +294,7 @@ def create_risk_management_agent(
     llm_client: LLMClient,
     daemon_config: DaemonConfig,
     portfolio_var_calculator: PortfolioVaRCalculator | None = None,
+    audit_repository: RiskAuditRepository | None = None,
 ) -> RiskManagementAgent:
     """Create RiskManagementAgent with config extraction.
 
@@ -302,6 +304,7 @@ def create_risk_management_agent(
         llm_client: LLM client for risk analysis
         daemon_config: Daemon configuration
         portfolio_var_calculator: Optional PortfolioVaRCalculator
+        audit_repository: Optional repository for database audit logging
 
     Returns:
         Configured RiskManagementAgent
@@ -324,6 +327,7 @@ def create_risk_management_agent(
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
         position_sizing_config=position_sizing_config,
+        audit_repository=audit_repository,
     )
 
 

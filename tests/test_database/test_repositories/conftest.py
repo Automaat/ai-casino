@@ -11,6 +11,16 @@ from sqlalchemy.sql import sqltypes
 from src.database.models import Base
 
 
+def _should_remove_default(default_value, patterns):
+    """Check if server default should be removed based on patterns."""
+    if default_value is None:
+        return False
+    default_text = str(default_value.arg)
+    if isinstance(patterns, list):
+        return any(pattern in default_text for pattern in patterns)
+    return default_text in patterns
+
+
 def _adapt_types_for_sqlite(target, connection, **kw):
     """Replace PostgreSQL-specific types with SQLite-compatible equivalents."""
     for table in target.tables.values():
@@ -18,23 +28,23 @@ def _adapt_types_for_sqlite(target, connection, **kw):
             # JSONB → JSON
             if isinstance(column.type, postgresql.JSONB):
                 column.type = JSON()
-                # Remove PostgreSQL-specific default
-                if column.server_default is not None:
-                    default_text = str(column.server_default.arg)
-                    if "::jsonb" in default_text or "::json" in default_text:
-                        column.server_default = None
+                if _should_remove_default(column.server_default, ["::jsonb", "::json"]):
+                    column.server_default = None
+
+            # ARRAY → JSON
+            elif isinstance(column.type, postgresql.ARRAY):
+                column.type = JSON()
+                if _should_remove_default(column.server_default, ["'{}'", "ARRAY[]", "::text[]"]):
+                    column.server_default = None
 
             # UUID → String(36)
-            if isinstance(column.type, postgresql.UUID):
+            elif isinstance(column.type, postgresql.UUID):
                 column.type = String(36)
-                # Remove uuid_generate_v4() default
-                if column.server_default is not None:
-                    default_text = str(column.server_default.arg)
-                    if "uuid_generate_v4" in default_text:
-                        column.server_default = None
+                if _should_remove_default(column.server_default, ["uuid_generate_v4"]):
+                    column.server_default = None
 
             # DECIMAL → Float
-            if isinstance(column.type, sqltypes.DECIMAL):
+            elif isinstance(column.type, sqltypes.DECIMAL):
                 column.type = Float()
 
 

@@ -169,6 +169,11 @@ class AppContainer(containers.DeclarativeContainer):
         database_engine=database_engine,
     )
 
+    risk_audit_repository = providers.Factory(
+        database_providers.create_risk_audit_repository,
+        database_engine=database_engine,
+    )
+
     # Circuit breaker registry - Singleton
     circuit_breaker_registry = providers.Singleton(
         circuit_breaker_providers.create_circuit_breaker_registry,
@@ -426,6 +431,7 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
         daemon_config=daemon_config,
         portfolio_var_calculator=portfolio_var_calculator,
+        audit_repository=risk_audit_repository,
     )
 
     # Coordinator agent - Factory pattern to support runtime daemon_state override
