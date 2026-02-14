@@ -183,23 +183,39 @@ export const api = {
 
 	// Supervisor Metrics
 	async getSupervisorMetricsRecent(params?: { limit?: number }): Promise<T.SupervisorMetricsRecent> {
-		const query = params?.limit ? `?limit=${params.limit}` : '';
-		return fetchAPI<T.SupervisorMetricsRecent>(`/supervisor/metrics/recent${query}`);
+		const query = new URLSearchParams();
+		if (params?.limit !== undefined) query.set('limit', params.limit.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsRecent>(
+			`/supervisor/metrics/recent${queryString ? `?${queryString}` : ''}`
+		);
 	},
 
 	async getSupervisorMetricsSummary(params?: { hours?: number }): Promise<T.SupervisorMetricsSummary> {
-		const query = params?.hours ? `?hours=${params.hours}` : '';
-		return fetchAPI<T.SupervisorMetricsSummary>(`/supervisor/metrics/summary${query}`);
+		const query = new URLSearchParams();
+		if (params?.hours !== undefined) query.set('hours', params.hours.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsSummary>(
+			`/supervisor/metrics/summary${queryString ? `?${queryString}` : ''}`
+		);
 	},
 
 	async getSupervisorMetricsWorkers(params?: { hours?: number }): Promise<T.SupervisorMetricsWorkers> {
-		const query = params?.hours ? `?hours=${params.hours}` : '';
-		return fetchAPI<T.SupervisorMetricsWorkers>(`/supervisor/metrics/workers${query}`);
+		const query = new URLSearchParams();
+		if (params?.hours !== undefined) query.set('hours', params.hours.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsWorkers>(
+			`/supervisor/metrics/workers${queryString ? `?${queryString}` : ''}`
+		);
 	},
 
 	async getSupervisorMetricsErrors(params?: { hours?: number }): Promise<T.SupervisorMetricsErrors> {
-		const query = params?.hours ? `?hours=${params.hours}` : '';
-		return fetchAPI<T.SupervisorMetricsErrors>(`/supervisor/metrics/errors${query}`);
+		const query = new URLSearchParams();
+		if (params?.hours !== undefined) query.set('hours', params.hours.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsErrors>(
+			`/supervisor/metrics/errors${queryString ? `?${queryString}` : ''}`
+		);
 	}
 };
 

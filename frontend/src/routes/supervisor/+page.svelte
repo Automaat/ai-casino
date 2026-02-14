@@ -26,7 +26,7 @@
 	const totalCost = $derived(recentData.length > 0
 		? recentData.reduce((sum, m) => sum + m.total_cost_usd, 0).toFixed(4)
 		: '0.00');
-	const avgWorkers = $derived(summaryData ? summaryData.avg_workers_per_cycle.toFixed(1) : '0.0');
+	const avgWorkers = $derived(summaryData ? summaryData.sample_size.toFixed(0) : '0');
 
 	// Routing breakdown
 	const routingBreakdown = $derived.by(() => {
@@ -63,7 +63,7 @@
 		{ key: 'timestamp', label: 'Time', format: (v: string) => new Date(v).toLocaleTimeString() },
 		{ key: 'total_workers', label: 'Workers' },
 		{ key: 'total_cost_usd', label: 'Cost', format: (v: number) => `$${v.toFixed(4)}` },
-		{ key: 'routing_time_ms', label: 'Routing (ms)', format: (v: number) => v.toFixed(1) }
+		{ key: 'routing_decision_ms', label: 'Routing (ms)', format: (v: number) => v.toFixed(1) }
 	];
 
 	const breakdownColumns = [
@@ -80,9 +80,16 @@
 		{ key: 'p95' as const, label: 'P95 (ms)' }
 	];
 
+	const WS_URL =
+		import.meta.env.VITE_WS_URL ||
+		(typeof window !== 'undefined'
+			? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+			: 'ws://localhost:8484');
+
+	let reconnectTimeout: number | null = null;
+
 	function connectWebSocket() {
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.host.replace(':5173', ':8484')}/ws/events`;
+		const wsUrl = `${WS_URL}/ws/events`;
 
 		ws = new WebSocket(wsUrl);
 
@@ -91,9 +98,13 @@
 		};
 
 		ws.onmessage = (event) => {
-			const msg = JSON.parse(event.data);
-			if (msg.event_type === 'CYCLE_COMPLETE' || msg.event_type === 'ANALYSIS_COMPLETE') {
-				fetchAllSupervisorMetrics();
+			try {
+				const msg = JSON.parse(event.data);
+				if (msg.event_type === 'CYCLE_COMPLETE' || msg.event_type === 'ANALYSIS_COMPLETE') {
+					fetchAllSupervisorMetrics();
+				}
+			} catch (error) {
+				console.error('Failed to parse WebSocket message:', error);
 			}
 		};
 
@@ -103,7 +114,7 @@
 
 		ws.onclose = () => {
 			wsConnected = false;
-			setTimeout(connectWebSocket, 5000);
+			reconnectTimeout = setTimeout(connectWebSocket, 5000);
 		};
 	}
 
@@ -114,6 +125,7 @@
 	});
 
 	onDestroy(() => {
+		if (reconnectTimeout) clearTimeout(reconnectTimeout);
 		if (ws) ws.close();
 		if (refreshInterval) clearInterval(refreshInterval);
 	});
@@ -191,16 +203,18 @@
 								</span>
 							</div>
 						</div>
-						{#if metric.reasoning}
+						{#if metric.routing_reasoning}
 							<div class="text-sm text-gray-700">
 								<span class="text-gray-600">Reasoning:</span>
-								{metric.reasoning}
+								{metric.routing_reasoning}
 							</div>
 						{/if}
-						{#if metric.errors.length > 0}
+						{#if metric.worker_errors && Object.keys(metric.worker_errors).length > 0}
 							<div class="text-sm text-red-600 mt-2">
 								<span class="font-medium">Errors:</span>
-								{metric.errors.join(', ')}
+								{#each Object.entries(metric.worker_errors) as [worker, error]}
+									<div>{worker}: {error}</div>
+								{/each}
 							</div>
 						{/if}
 					</div>
