@@ -293,6 +293,7 @@ def create_risk_management_agent(
     llm_client: LLMClient,
     daemon_config: DaemonConfig,
     portfolio_var_calculator: PortfolioVaRCalculator | None = None,
+    container: AppContainer | None = None,
 ) -> RiskManagementAgent:
     """Create RiskManagementAgent with config extraction.
 
@@ -302,6 +303,7 @@ def create_risk_management_agent(
         llm_client: LLM client for risk analysis
         daemon_config: Daemon configuration
         portfolio_var_calculator: Optional PortfolioVaRCalculator
+        container: Optional DI container for repository
 
     Returns:
         Configured RiskManagementAgent
@@ -319,11 +321,14 @@ def create_risk_management_agent(
             else:
                 portfolio_var_config = PortfolioVaRConfig(**risk_limits)
 
+    audit_repository = container.risk_audit_repository() if container else None
+
     return RiskManagementAgent(
         llm_client,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
         position_sizing_config=position_sizing_config,
+        audit_repository=audit_repository,
     )
 
 

@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -920,4 +920,63 @@ class ExecutionMetricORM(Base):
         return (
             f"ExecutionMetricORM(order_id={self.order_id}, "
             f"symbol={self.symbol}, slippage_bps={self.slippage_bps})"
+        )
+
+
+class RiskAuditORM(Base):
+    """Risk audit log entry."""
+
+    __tablename__ = "risk_audit"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(10), nullable=False)
+    action: Mapped[str] = mapped_column(String(10), nullable=False)
+    current_price: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+
+    approved: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(10), nullable=False)
+    risk_score: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
+    confidence: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
+
+    recommended_shares: Mapped[int] = mapped_column(Integer, nullable=False)
+    position_value: Mapped[Decimal] = mapped_column(DECIMAL(12, 2), nullable=False)
+    risk_amount: Mapped[Decimal] = mapped_column(DECIMAL(12, 2), nullable=False)
+    risk_percent: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
+
+    stop_loss_price: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+
+    warnings: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        server_default=text("'{}'"),
+    )
+
+    portfolio_var_95: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4))
+    portfolio_cvar_99: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4))
+    portfolio_cdar_95: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4))
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_risk_audit_timestamp", "timestamp", postgresql_using="btree"),
+        Index("idx_risk_audit_symbol", "symbol"),
+        Index("idx_risk_audit_symbol_timestamp", "symbol", "timestamp", postgresql_using="btree"),
+        Index("idx_risk_audit_approved", "approved"),
+        Index("idx_risk_audit_risk_level", "risk_level"),
+        Index("idx_risk_audit_violations", "symbol", "timestamp", postgresql_where=text("approved = false")),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"RiskAuditORM(id={self.id}, symbol={self.symbol}, "
+            f"action={self.action}, approved={self.approved})"
         )

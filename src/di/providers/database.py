@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from src.database.repositories.prefetch import PrefetchRecordRepository
     from src.database.repositories.profiling import ProfilingRecordRepository
     from src.database.repositories.rebalancing import RebalancingRecordRepository
+    from src.database.repositories.risk_audit import RiskAuditRepository
     from src.database.repositories.risk_report import RiskReportRecordRepository
     from src.database.repositories.screening import ScreeningRecordRepository
     from src.database.repositories.sector_rotation import SectorRotationRecordRepository
@@ -467,3 +468,18 @@ def create_execution_metric_repository(database_engine: DatabaseEngine) -> Execu
 
     session = database_engine.session()
     return ExecutionMetricRepository(session)
+
+
+def create_risk_audit_repository(database_engine: DatabaseEngine) -> RiskAuditRepository:
+    """Create RiskAuditRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        RiskAuditRepository instance
+    """
+    from src.database.repositories.risk_audit import RiskAuditRepository
+
+    session = database_engine.session()
+    return RiskAuditRepository(session)

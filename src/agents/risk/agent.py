@@ -11,6 +11,7 @@ from loguru import logger
 if TYPE_CHECKING:
     from src.daemon.config import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
+    from src.database.repositories.risk_audit import RiskAuditRepository
     from src.workflows.types import BacktestValidation
 
 from src.agents.risk.context import RiskContext
@@ -20,6 +21,7 @@ from src.agents.risk.models import (
     PortfolioVaRConfig,
     PositionSizeCalculation,
     RiskAssessment,
+    RiskAuditRecord,
     RiskValidation,
     StopLossCalculation,
 )
@@ -58,6 +60,7 @@ class RiskManagementAgent:
         portfolio_var_calculator: PortfolioVaRCalculator | None = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
         position_sizing_config: PositionSizingConfig | None = None,
+        audit_repository: RiskAuditRepository | None = None,
     ) -> None:
         """Initialize risk management agent.
 
@@ -70,8 +73,10 @@ class RiskManagementAgent:
             portfolio_var_calculator: Optional VaR calculator for portfolio-level limits
             portfolio_var_config: Optional VaR limit configuration
             position_sizing_config: Optional position sizing config (takes priority over individual params)
+            audit_repository: Optional repository for database audit logging
         """
         self.llm = llm_client
+        self._audit_repository = audit_repository
         self.max_position_risk = (
             position_sizing_config.max_risk_per_trade_pct
             if position_sizing_config
@@ -118,7 +123,7 @@ class RiskManagementAgent:
             f"max_single={self.max_single_position}%, trailing={enable_trailing_stop}{var_str})"
         )
 
-    def assess(
+    async def assess(
         self,
         symbol: str,
         action: Signal,
@@ -130,7 +135,7 @@ class RiskManagementAgent:
         portfolio_value: float | None = None,
         target_portfolio_weight: float | None = None,
         backtest_validation: BacktestValidation | None = None,
-        degradation_context: DegradationContext | None = None,  # noqa: ARG002
+        _degradation_context: DegradationContext | None = None,
         broker_api_failed: bool = False,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
@@ -199,7 +204,7 @@ class RiskManagementAgent:
                 portfolio_var=context.latest_portfolio_var,
             )
 
-        self._audit_log(assessment)
+        await self._audit_log(assessment)
 
         return assessment
 
@@ -592,39 +597,43 @@ class RiskManagementAgent:
             + decision_confidence * self.DECISION_CONFIDENCE_WEIGHT
         )
 
-    def _audit_log(self, assessment: RiskAssessment) -> None:
-        """Log risk assessment to audit file.
+    async def _audit_log(self, assessment: RiskAssessment) -> None:
+        """Log risk assessment to database and JSONL (transitional).
 
         Args:
             assessment: Risk assessment to log
         """
         try:
-            log_entry = {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "symbol": assessment.symbol,
-                "action": assessment.action.value,
-                "current_price": assessment.current_price,
-                "approved": assessment.validation.approved,
-                "risk_level": assessment.validation.risk_level,
-                "risk_score": assessment.validation.risk_score,
-                "confidence": assessment.confidence,
-                "recommended_shares": assessment.position_sizing.recommended_shares,
-                "position_value": assessment.position_sizing.position_value,
-                "risk_amount": assessment.position_sizing.risk_amount,
-                "risk_percent": assessment.position_sizing.risk_percent,
-                "stop_loss_price": assessment.stop_loss.stop_loss_price,
-                "warnings": assessment.validation.warnings,
-            }
+            record = RiskAuditRecord(
+                timestamp=datetime.now(UTC),
+                symbol=assessment.symbol,
+                action=assessment.action,
+                current_price=assessment.current_price,
+                approved=assessment.validation.approved,
+                risk_level=assessment.validation.risk_level,
+                risk_score=assessment.validation.risk_score,
+                confidence=assessment.confidence,
+                recommended_shares=assessment.position_sizing.recommended_shares,
+                position_value=assessment.position_sizing.position_value,
+                risk_amount=assessment.position_sizing.risk_amount,
+                risk_percent=assessment.position_sizing.risk_percent,
+                stop_loss_price=assessment.stop_loss.stop_loss_price,
+                warnings=assessment.validation.warnings,
+                portfolio_var_95=assessment.portfolio_var.var_95 if assessment.portfolio_var else None,
+                portfolio_cvar_99=assessment.portfolio_var.cvar_99 if assessment.portfolio_var else None,
+                portfolio_cdar_95=assessment.portfolio_var.cdar_95 if assessment.portfolio_var else None,
+            )
 
-            if assessment.portfolio_var:
-                log_entry["portfolio_var_95"] = assessment.portfolio_var.var_95
-                log_entry["portfolio_cvar_99"] = assessment.portfolio_var.cvar_99
-                log_entry["portfolio_cdar_95"] = assessment.portfolio_var.cdar_95
+            if self._audit_repository:
+                await self._audit_repository.create(record)
+                logger.debug(f"Audit logged to DB: {assessment.symbol} {assessment.action.value}")
+            else:
+                log_entry = record.model_dump(mode="json", exclude={"id", "created_at"})
 
-            with self.audit_log_path.open("a") as f:
-                f.write(json.dumps(log_entry) + "\n")
+                with self.audit_log_path.open("a") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+                logger.debug(f"Audit logged to JSONL: {assessment.symbol} {assessment.action.value}")
 
-            logger.debug(f"Audit logged: {assessment.symbol} {assessment.action.value}")
         except Exception as e:
             logger.opt(exception=True).error(f"Audit logging failed: {e}")
 
