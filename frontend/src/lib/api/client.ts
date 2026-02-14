@@ -179,6 +179,27 @@ export const api = {
 		return fetchAPI<T.ExecutionGraphHistoryResponse>(
 			`/api/execution/history${queryString ? `?${queryString}` : ''}`
 		);
+	},
+
+	// Supervisor Metrics
+	async getSupervisorMetricsRecent(params?: { limit?: number }): Promise<T.SupervisorMetricsRecent> {
+		const query = params?.limit ? `?limit=${params.limit}` : '';
+		return fetchAPI<T.SupervisorMetricsRecent>(`/supervisor/metrics/recent${query}`);
+	},
+
+	async getSupervisorMetricsSummary(params?: { hours?: number }): Promise<T.SupervisorMetricsSummary> {
+		const query = params?.hours ? `?hours=${params.hours}` : '';
+		return fetchAPI<T.SupervisorMetricsSummary>(`/supervisor/metrics/summary${query}`);
+	},
+
+	async getSupervisorMetricsWorkers(params?: { hours?: number }): Promise<T.SupervisorMetricsWorkers> {
+		const query = params?.hours ? `?hours=${params.hours}` : '';
+		return fetchAPI<T.SupervisorMetricsWorkers>(`/supervisor/metrics/workers${query}`);
+	},
+
+	async getSupervisorMetricsErrors(params?: { hours?: number }): Promise<T.SupervisorMetricsErrors> {
+		const query = params?.hours ? `?hours=${params.hours}` : '';
+		return fetchAPI<T.SupervisorMetricsErrors>(`/supervisor/metrics/errors${query}`);
 	}
 };
 

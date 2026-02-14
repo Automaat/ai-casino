@@ -364,3 +364,55 @@ export interface DashboardEvent {
 	timestamp: string;
 	data: Record<string, any>;
 }
+
+// Supervisor Metrics
+export interface SupervisorMetricRecord {
+	id: number;
+	timestamp: string;
+	symbol: string;
+	routing_time_ms: number;
+	total_workers: number;
+	required_analyses: string[];
+	optional_analyses: string[];
+	reasoning: string | null;
+	total_cost_usd: number;
+	efficiency_percent: number;
+	errors: string[];
+}
+
+export interface SupervisorMetricsRecent {
+	metrics: SupervisorMetricRecord[];
+	count: number;
+}
+
+export interface SupervisorMetricsSummary {
+	total_routing_decisions: number;
+	avg_routing_ms: number;
+	avg_workers_per_cycle: number;
+	avg_cost_per_cycle_usd: number;
+	avg_efficiency_percent: number;
+	total_errors: number;
+	period_hours: number;
+}
+
+export interface WorkerStats {
+	total_executions: number;
+	success_rate: number;
+	avg_duration_ms: number;
+}
+
+export interface SupervisorMetricsWorkers {
+	worker_stats: Record<string, WorkerStats>;
+	period_hours: number;
+}
+
+export interface SupervisorMetricsErrors {
+	errors: Array<{
+		timestamp: string;
+		symbol: string;
+		error: string;
+		worker: string | null;
+	}>;
+	count: number;
+	period_hours: number;
+}
