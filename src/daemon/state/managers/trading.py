@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import PrivateAttr
@@ -12,10 +11,6 @@ from pydantic import PrivateAttr
 from src.daemon.state.managers.base import StateManager
 from src.daemon.state.models import AnalysisRecord
 from src.strategies.session import TradingSession
-
-if TYPE_CHECKING:
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
 
 
 @dataclass
@@ -39,94 +34,191 @@ class AnalysisRecordInput:
 class TradingStateManager(StateManager):
     """Trading signal tracking and paper trading metrics."""
 
-    _analysis_repository: AnalysisRecordRepository | None = PrivateAttr(default=None)
-    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
+    _database_enabled: bool = PrivateAttr(default=False)
     _analysis_cache: list[AnalysisRecord] | None = PrivateAttr(default=None)
 
-    def set_repositories(
-        self,
-        analysis_repository: AnalysisRecordRepository,
-        metadata_repository: MetadataRepository,
-    ) -> None:
-        """Inject repositories.
-
-        Args:
-            analysis_repository: Analysis record repository
-            metadata_repository: Metadata repository
-        """
-        self._analysis_repository = analysis_repository
-        self._metadata_repository = metadata_repository
-        logger.debug("TradingStateManager repositories injected")
+    def enable_database(self) -> None:
+        """Enable database persistence."""
+        self._database_enabled = True
+        logger.debug("TradingStateManager database enabled")
 
     async def get_last_run(self) -> datetime | None:
         """Get last run timestamp from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_datetime("trading.last_run")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("trading.last_run")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last run: {e}")
+            return None
 
     async def set_last_run(self, value: datetime | None) -> None:
         """Set last run timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("trading.last_run", value)
+        if not self._database_enabled or value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("trading.last_run", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last run: {e}")
 
     async def get_total_analyses(self) -> int:
         """Get total analyses count from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return 0
-        value = await self._metadata_repository.get_int("trading.total_analyses")
-        return value if value is not None else 0
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                value = await repo.get_int("trading.total_analyses")
+                return value if value is not None else 0
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get total analyses: {e}")
+            return 0
 
     async def get_total_trades(self) -> int:
         """Get total trades count from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return 0
-        value = await self._metadata_repository.get_int("trading.total_trades")
-        return value if value is not None else 0
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                value = await repo.get_int("trading.total_trades")
+                return value if value is not None else 0
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get total trades: {e}")
+            return 0
 
     async def get_paper_trading_start_date(self) -> datetime | None:
         """Get paper trading start date from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_datetime("trading.paper_trading_start_date")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("trading.paper_trading_start_date")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get paper trading start date: {e}")
+            return None
 
     async def set_paper_trading_start_date(self, value: datetime | None) -> None:
         """Set paper trading start date in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("trading.paper_trading_start_date", value)
+        if not self._database_enabled or value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("trading.paper_trading_start_date", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set paper trading start date: {e}")
 
     async def get_current_trading_mode(self) -> str:
         """Get current trading mode from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return "paper"
-        value = await self._metadata_repository.get_str("trading.current_trading_mode")
-        return value if value is not None else "paper"
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                value = await repo.get_str("trading.current_trading_mode")
+                return value if value is not None else "paper"
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get current trading mode: {e}")
+            return "paper"
 
     async def set_current_trading_mode(self, value: str) -> None:
         """Set current trading mode in DB."""
-        if self._metadata_repository:
-            await self._metadata_repository.set("trading.current_trading_mode", value)
+        if not self._database_enabled:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("trading.current_trading_mode", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set current trading mode: {e}")
 
     async def get_last_journal_date(self) -> str | None:
         """Get last journal date from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_str("trading.last_journal_date")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_str("trading.last_journal_date")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last journal date: {e}")
+            return None
 
     async def set_last_journal_date(self, value: str | None) -> None:
         """Set last journal date in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("trading.last_journal_date", value)
+        if not self._database_enabled or value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("trading.last_journal_date", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last journal date: {e}")
 
     async def get_last_signal_tracking(self) -> datetime | None:
         """Get last signal tracking timestamp from DB."""
-        if not self._metadata_repository:
+        if not self._database_enabled:
             return None
-        return await self._metadata_repository.get_datetime("trading.last_signal_tracking")
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("trading.last_signal_tracking")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last signal tracking: {e}")
+            return None
 
     async def set_last_signal_tracking(self, value: datetime | None) -> None:
         """Set last signal tracking timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("trading.last_signal_tracking", value)
+        if not self._database_enabled or value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("trading.last_signal_tracking", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last signal tracking: {e}")
 
     async def get_analyses(self, limit: int = 1000) -> list[AnalysisRecord]:
         """Get recent analyses with lazy loading.
@@ -137,10 +229,19 @@ class TradingStateManager(StateManager):
         Returns:
             List of recent AnalysisRecords
         """
-        if not self._analysis_repository:
+        if not self._database_enabled:
             return []
         if self._analysis_cache is None:
-            self._analysis_cache = await self._analysis_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+                from src.database.repositories.analysis import AnalysisRecordRepository
+
+                async with get_session() as session:
+                    repo = AnalysisRecordRepository(session)
+                    self._analysis_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get analyses: {e}")
+                return []
         return self._analysis_cache
 
     async def record_analysis(self, input_data: AnalysisRecordInput) -> None:
@@ -166,22 +267,35 @@ class TradingStateManager(StateManager):
         )
 
         # Immediate DB write
-        if self._analysis_repository:
-            await self._analysis_repository.create(record)
-            logger.debug(f"Persisted analysis record: {input_data.symbol} {input_data.signal}")
+        if not self._database_enabled:
+            self._analysis_cache = None
+            return
 
-        # Update metadata counters
-        if self._metadata_repository:
-            total = await self.get_total_analyses()
-            await self._metadata_repository.set("trading.total_analyses", total + 1)
-            await self._metadata_repository.set("trading.last_run", datetime.now(UTC))
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.analysis import AnalysisRecordRepository
+            from src.database.repositories.metadata import MetadataRepository
 
-            if input_data.executed:
-                trades = await self.get_total_trades()
-                await self._metadata_repository.set("trading.total_trades", trades + 1)
+            async with get_session() as session:
+                analysis_repo = AnalysisRecordRepository(session)
+                metadata_repo = MetadataRepository(session)
 
-        # Invalidate cache
-        self._analysis_cache = None
+                await analysis_repo.create(record)
+                logger.debug(f"Persisted analysis record: {input_data.symbol} {input_data.signal}")
+
+                # Update metadata counters in same session
+                total = await self.get_total_analyses()
+                await metadata_repo.set("trading.total_analyses", total + 1)
+                await metadata_repo.set("trading.last_run", datetime.now(UTC))
+
+                if input_data.executed:
+                    trades = await self.get_total_trades()
+                    await metadata_repo.set("trading.total_trades", trades + 1)
+
+            # Invalidate cache
+            self._analysis_cache = None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record analysis: {e}")
 
     def __repr__(self) -> str:
         """Return string representation."""

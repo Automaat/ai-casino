@@ -11,30 +11,36 @@ from src.daemon.state.managers.base import StateManager
 
 if TYPE_CHECKING:
     from src.daemon.positions import PositionManagementAction, PositionRecord
-    from src.database.repositories.position import PositionRecordRepository
-    from src.database.repositories.position_action import PositionManagementActionRepository
+    from src.database.engine import DatabaseEngine
 
 
 class PositionStateManager(StateManager):
     """Active portfolio position CRUD."""
 
-    _position_repository: PositionRecordRepository | None = PrivateAttr(default=None)
-    _position_action_repository: PositionManagementActionRepository | None = PrivateAttr(default=None)
+    _database_engine: DatabaseEngine | None = PrivateAttr(default=None)
 
     def set_repositories(
         self,
-        position_repository: PositionRecordRepository,
-        position_action_repository: PositionManagementActionRepository,
+        _position_repository: object,
+        _position_action_repository: object,
     ) -> None:
-        """Inject repositories.
+        """Enable database persistence (deprecated - use set_database_engine).
 
         Args:
-            position_repository: Position record repository
-            position_action_repository: Position action repository
+            _position_repository: Ignored (for API compatibility)
+            _position_action_repository: Ignored (for API compatibility)
         """
-        self._position_repository = position_repository
-        self._position_action_repository = position_action_repository
-        logger.debug("PositionStateManager repositories injected")
+        # No-op for backward compatibility
+        logger.debug("PositionStateManager.set_repositories called (no-op)")
+
+    def set_database_engine(self, engine: DatabaseEngine) -> None:
+        """Set database engine for creating fresh sessions.
+
+        Args:
+            engine: DatabaseEngine instance
+        """
+        self._database_engine = engine
+        logger.debug("PositionStateManager database engine set")
 
     async def add_position(self, position: PositionRecord) -> None:
         """Add or update position in state.
@@ -42,18 +48,24 @@ class PositionStateManager(StateManager):
         Args:
             position: Position record to add
         """
-        if not self._position_repository:
-            logger.warning("Position repository not available")
+        if not self._database_engine:
             return
 
-        # Check if exists
-        existing = await self._position_repository.get_by_symbol(position.symbol)
-        if existing:
-            await self._position_repository.update(position)
-            logger.debug(f"Updated position: {position.symbol}")
-        else:
-            await self._position_repository.create(position)
-            logger.debug(f"Added position: {position.symbol}")
+        try:
+            from src.database.repositories.position import PositionRecordRepository
+
+            async with self._database_engine.session() as session:
+                repo = PositionRecordRepository(session)
+                # Check if exists
+                existing = await repo.get_by_symbol(position.symbol)
+                if existing:
+                    await repo.update(position)
+                    logger.debug(f"Updated position: {position.symbol}")
+                else:
+                    await repo.create(position)
+                    logger.debug(f"Added position: {position.symbol}")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to add/update position: {e}")
 
     async def remove_position(self, symbol: str) -> None:
         """Remove position from state.
@@ -61,13 +73,19 @@ class PositionStateManager(StateManager):
         Args:
             symbol: Stock ticker to remove
         """
-        if not self._position_repository:
-            logger.warning("Position repository not available")
+        if not self._database_engine:
             return
 
-        deleted = await self._position_repository.delete_by_symbol(symbol)
-        if deleted:
-            logger.debug(f"Removed position: {symbol}")
+        try:
+            from src.database.repositories.position import PositionRecordRepository
+
+            async with self._database_engine.session() as session:
+                repo = PositionRecordRepository(session)
+                deleted = await repo.delete_by_symbol(symbol)
+                if deleted:
+                    logger.debug(f"Removed position: {symbol}")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to remove position: {e}")
 
     async def update_position(self, position: PositionRecord) -> None:
         """Update existing position in state.
@@ -83,12 +101,18 @@ class PositionStateManager(StateManager):
         Args:
             action: Action to record
         """
-        if not self._position_action_repository:
-            logger.warning("Position action repository not available")
+        if not self._database_engine:
             return
 
-        await self._position_action_repository.create(action)
-        logger.debug(f"Recorded position action: {action.symbol} {action.action_type}")
+        try:
+            from src.database.repositories.position_action import PositionManagementActionRepository
+
+            async with self._database_engine.session() as session:
+                repo = PositionManagementActionRepository(session)
+                await repo.create(action)
+                logger.debug(f"Recorded position action: {action.symbol} {action.action_type}")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record position action: {e}")
 
     async def get_position(self, symbol: str) -> PositionRecord | None:
         """Get position record by symbol.
@@ -99,9 +123,18 @@ class PositionStateManager(StateManager):
         Returns:
             PositionRecord or None
         """
-        if not self._position_repository:
+        if not self._database_engine:
             return None
-        return await self._position_repository.get_by_symbol(symbol)
+
+        try:
+            from src.database.repositories.position import PositionRecordRepository
+
+            async with self._database_engine.session() as session:
+                repo = PositionRecordRepository(session)
+                return await repo.get_by_symbol(symbol)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get position: {e}")
+            return None
 
     async def get_all_positions(self) -> list[PositionRecord]:
         """Get all active positions.
@@ -109,9 +142,18 @@ class PositionStateManager(StateManager):
         Returns:
             List of all PositionRecords
         """
-        if not self._position_repository:
+        if not self._database_engine:
             return []
-        return await self._position_repository.get_all_active()
+
+        try:
+            from src.database.repositories.position import PositionRecordRepository
+
+            async with self._database_engine.session() as session:
+                repo = PositionRecordRepository(session)
+                return await repo.get_all_active()
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get all positions: {e}")
+            return []
 
     async def get_recent_actions(
         self, symbol: str | None = None, limit: int = 100
@@ -125,9 +167,18 @@ class PositionStateManager(StateManager):
         Returns:
             List of recent PositionManagementActions
         """
-        if not self._position_action_repository:
+        if not self._database_engine:
             return []
-        return await self._position_action_repository.get_recent(symbol=symbol, limit=limit)
+
+        try:
+            from src.database.repositories.position_action import PositionManagementActionRepository
+
+            async with self._database_engine.session() as session:
+                repo = PositionManagementActionRepository(session)
+                return await repo.get_recent(symbol=symbol, limit=limit)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get recent actions: {e}")
+            return []
 
     async def get_active_positions(self) -> dict[str, dict]:
         """Get active positions as dict for backward compatibility.

@@ -8,7 +8,6 @@ import signal
 from loguru import logger
 from rich.console import Console
 
-from src.daemon.api.server import ThreadedApiServer
 from src.daemon.factory import DaemonComponents
 
 console = Console()
@@ -25,7 +24,7 @@ class DaemonLifecycle:
         """
         self.components = components
         self.running = False
-        self._api_server: ThreadedApiServer | None = None
+        self._api_server_task: asyncio.Task | None = None
         self._watcher_tasks: list[asyncio.Task] = []
 
     def __repr__(self) -> str:
@@ -37,6 +36,7 @@ class DaemonLifecycle:
         self.running = True
 
         # Initialize database (run migrations)
+        # IMPORTANT: Create database engine HERE in the event loop, not during __init__
         try:
             if self.components.config.database.enable_persistence:
                 database_engine = self.components.container.database_engine()
@@ -48,6 +48,14 @@ class DaemonLifecycle:
 
                 _DatabaseEngineHolder.initialize(database_engine)
                 logger.info("Global database singleton initialized")
+
+                # Set database engine on position manager (was None during init)
+                if self.components.position_manager:
+                    try:
+                        trade_repository = self.components.container.trade_repository()
+                        self.components.position_manager.set_database(database_engine, trade_repository)
+                    except Exception as e:
+                        logger.opt(exception=True).warning(f"Failed to set position manager database: {e}")
         except Exception as e:
             logger.opt(exception=True).error(f"Database initialization failed: {e}")
             if self.components.config.database.enable_persistence:
@@ -118,21 +126,28 @@ class DaemonLifecycle:
     def request_shutdown(self) -> None:
         """Request graceful shutdown (called by signal handlers)."""
         self.running = False
-        if self._api_server:
-            self._api_server.should_exit = True
+        if self._api_server_task:
+            self._api_server_task.cancel()
 
     def _start_api_server(self) -> None:
-        """Start embedded API server in a dedicated thread."""
+        """Start embedded API server in same event loop as background task."""
         try:
+            import uvicorn
+
             from src.daemon.api import create_api_app
 
             app = create_api_app(self.components)
-            self._api_server = ThreadedApiServer(
+            config = uvicorn.Config(
                 app,
                 host=self.components.config.api.host,
                 port=self.components.config.api.port,
+                log_level="info",
+                access_log=False,
             )
-            self._api_server.start()
+            server = uvicorn.Server(config)
+
+            # Run server in background task (same event loop)
+            self._api_server_task = asyncio.create_task(server.serve())
 
             logger.info(
                 f"API server started at http://{self.components.config.api.host}:"
@@ -144,18 +159,20 @@ class DaemonLifecycle:
             )
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to start API server: {e}")
-            self._api_server = None
+            self._api_server_task = None
 
     async def _stop_api_server(self) -> None:
         """Stop embedded API server gracefully."""
-        if self._api_server:
+        if self._api_server_task:
             try:
                 logger.info("Stopping API server...")
-                stopped = await asyncio.to_thread(self._api_server.stop, 5.0)
-                if stopped:
+                self._api_server_task.cancel()
+                try:
+                    await asyncio.wait_for(self._api_server_task, timeout=5.0)
+                except asyncio.CancelledError:
                     logger.info("API server stopped")
-                else:
-                    logger.error("API server thread did not exit cleanly")
+                except TimeoutError:
+                    logger.error("API server did not stop within timeout")
             except Exception as e:
                 logger.opt(exception=True).error(f"Error stopping API server: {e}")
 

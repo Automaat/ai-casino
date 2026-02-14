@@ -124,6 +124,23 @@ class PositionManager:
         self._pending_tasks: set[asyncio.Task[Any]] = set()  # Track background tasks
         logger.info(f"PositionManager initialized: {config}")
 
+    def set_database(
+        self,
+        database_engine: DatabaseEngine,
+        trade_repository: TradeRepository,
+    ) -> None:
+        """Set database engine and trade repository after initialization.
+
+        Called during lifecycle startup to set database components after event loop is running.
+
+        Args:
+            database_engine: Database engine for creating per-task sessions
+            trade_repository: Trade repository for loading entry metadata
+        """
+        self._database_engine = database_engine
+        self._trade_repository = trade_repository
+        logger.info("PositionManager database components set")
+
     def sync_with_broker(
         self,
         state_positions: dict[str, PositionRecord],

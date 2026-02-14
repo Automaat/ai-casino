@@ -25,7 +25,6 @@ class MetadataRepository(BaseRepository[dict]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized MetadataRepository")
 
     async def create(self, entity: dict) -> dict:
         """Create metadata entry (use set instead)."""
