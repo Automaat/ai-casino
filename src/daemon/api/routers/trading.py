@@ -4,9 +4,11 @@ import asyncio
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
     AnalysesResponse,
     AnalysisRecordResponse,
@@ -41,11 +43,13 @@ async def get_analyses(request: Request, limit: int = 50, symbol: str | None = N
 
 
 @router.get("/watchlist", response_model=WatchlistResponse)
-async def get_watchlist(request: Request) -> WatchlistResponse:
+async def get_watchlist(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> WatchlistResponse:
     """Get merged watchlist."""
     components = get_components(request)
 
-    symbols = await components.broker_manager.get_merged_watchlist()
+    symbols = await components.broker_manager.get_merged_watchlist(session=session)
 
     config_count = len([s for s in components.config.watchlist if s in symbols])
 
@@ -58,7 +62,7 @@ async def get_watchlist(request: Request) -> WatchlistResponse:
         logger.opt(exception=True).warning(f"Unable to derive broker symbols for watchlist: {e}")
 
     screening_count = 0
-    screening_history = await components.state.get_screening_history(limit=1)
+    screening_history = await components.state.get_screening_history(limit=1, session=session)
     if components.config.screening.enabled and screening_history:
         latest = screening_history[-1]
         screening_count = len([s for s in latest.top_symbols if s in symbols])

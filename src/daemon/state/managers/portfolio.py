@@ -22,6 +22,8 @@ from src.daemon.state.models import (
 )
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from src.daemon.state.repositories import RepositoryBundle
     from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
     from src.database.repositories.metadata import MetadataRepository
@@ -91,44 +93,79 @@ class PortfolioStateManager(StateManager):
         self._monte_carlo_repository = repos.monte_carlo_repository
         logger.debug("PortfolioStateManager repositories injected")
 
-    async def get_last_optimization(self) -> datetime | None:
+    async def get_last_optimization(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last optimization timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_optimization")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_optimization")
 
-    async def get_last_portfolio_rebalancing(self) -> datetime | None:
+    async def get_last_portfolio_rebalancing(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last rebalancing timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_portfolio_rebalancing")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_portfolio_rebalancing")
 
-    async def get_last_sector_rotation(self) -> datetime | None:
+    async def get_last_sector_rotation(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last sector rotation timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_sector_rotation")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_sector_rotation")
 
-    async def get_last_peer_analysis(self) -> datetime | None:
+    async def get_last_peer_analysis(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last peer analysis timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_peer_analysis")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_peer_analysis")
 
-    async def get_last_correlation_audit(self) -> datetime | None:
+    async def get_last_correlation_audit(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last correlation audit timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_correlation_audit")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_correlation_audit")
 
-    async def get_last_risk_report(self) -> datetime | None:
+    async def get_last_risk_report(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last risk report timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_risk_report")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_risk_report")
 
-    async def get_last_tearsheet(self) -> datetime | None:
+    async def get_last_tearsheet(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last tearsheet timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("portfolio.last_tearsheet")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("portfolio.last_tearsheet")
@@ -154,56 +191,105 @@ class PortfolioStateManager(StateManager):
         if self._metadata_repository and value is not None:
             await self._metadata_repository.set("portfolio.last_correlation_audit", value)
 
-    async def get_optimization_history(self, limit: int = 10) -> list[OptimizationRecord]:
+    async def get_optimization_history(
+        self, limit: int = 10, session: AsyncSession | None = None
+    ) -> list[OptimizationRecord]:
         """Get optimization history with lazy loading."""
+        if session:
+            from src.database.repositories.optimization import OptimizationRecordRepository
+
+            repo = OptimizationRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._optimization_repository:
             return []
         if self._optimization_cache is None:
             self._optimization_cache = await self._optimization_repository.get_recent(limit)
         return self._optimization_cache
 
-    async def get_rebalancing_history(self, limit: int = 30) -> list[PortfolioRebalancingRecord]:
+    async def get_rebalancing_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[PortfolioRebalancingRecord]:
         """Get rebalancing history with lazy loading."""
+        if session:
+            from src.database.repositories.rebalancing import RebalancingRecordRepository
+
+            repo = RebalancingRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._rebalancing_repository:
             return []
         if self._rebalancing_cache is None:
             self._rebalancing_cache = await self._rebalancing_repository.get_recent(limit)
         return self._rebalancing_cache
 
-    async def get_sector_rotation_history(self, limit: int = 30) -> list[SectorRotationRecord]:
+    async def get_sector_rotation_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[SectorRotationRecord]:
         """Get sector rotation history with lazy loading."""
+        if session:
+            from src.database.repositories.sector_rotation import SectorRotationRecordRepository
+
+            repo = SectorRotationRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._sector_rotation_repository:
             return []
         if self._sector_rotation_cache is None:
             self._sector_rotation_cache = await self._sector_rotation_repository.get_recent(limit)
         return self._sector_rotation_cache
 
-    async def get_peer_analysis_history(self, limit: int = 10) -> list[PeerAnalysisRecord]:
+    async def get_peer_analysis_history(
+        self, limit: int = 10, session: AsyncSession | None = None
+    ) -> list[PeerAnalysisRecord]:
         """Get peer analysis history with lazy loading."""
+        if session:
+            from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
+
+            repo = PeerAnalysisRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._peer_analysis_repository:
             return []
         if self._peer_analysis_cache is None:
             self._peer_analysis_cache = await self._peer_analysis_repository.get_recent(limit)
         return self._peer_analysis_cache
 
-    async def get_correlation_audit_history(self, limit: int = 10) -> list[CorrelationAuditRecord]:
+    async def get_correlation_audit_history(
+        self, limit: int = 10, session: AsyncSession | None = None
+    ) -> list[CorrelationAuditRecord]:
         """Get correlation audit history with lazy loading."""
+        if session:
+            from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+
+            repo = CorrelationAuditRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._correlation_audit_repository:
             return []
         if self._correlation_audit_cache is None:
             self._correlation_audit_cache = await self._correlation_audit_repository.get_recent(limit)
         return self._correlation_audit_cache
 
-    async def get_risk_report_history(self, limit: int = 30) -> list[RiskReportRecord]:
+    async def get_risk_report_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[RiskReportRecord]:
         """Get risk report history with lazy loading."""
+        if session:
+            from src.database.repositories.risk_report import RiskReportRecordRepository
+
+            repo = RiskReportRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._risk_report_repository:
             return []
         if self._risk_report_cache is None:
             self._risk_report_cache = await self._risk_report_repository.get_recent(limit)
         return self._risk_report_cache
 
-    async def get_monte_carlo_tests(self, limit: int = 52) -> list[MonteCarloRecord]:
+    async def get_monte_carlo_tests(
+        self, limit: int = 52, session: AsyncSession | None = None
+    ) -> list[MonteCarloRecord]:
         """Get Monte Carlo tests with lazy loading."""
+        if session:
+            from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+
+            repo = MonteCarloRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._monte_carlo_repository:
             return []
         if self._monte_carlo_cache is None:

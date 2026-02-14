@@ -10,6 +10,8 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from src.execution_tracking.models import ExecutionGraph
     from src.execution_tracking.tracker import ExecutionGraphTracker
 
@@ -282,9 +284,11 @@ class DaemonState(BaseModel):
         """Get last rebalancing timestamp."""
         return await self.portfolio.get_last_portfolio_rebalancing()
 
-    async def get_rebalancing_history(self, limit: int = 30) -> list[PortfolioRebalancingRecord]:
+    async def get_rebalancing_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[PortfolioRebalancingRecord]:
         """Get rebalancing history."""
-        return await self.portfolio.get_rebalancing_history(limit)
+        return await self.portfolio.get_rebalancing_history(limit, session=session)
 
     async def get_active_target_allocations(self) -> dict[str, float] | None:
         """Get active target allocations."""
@@ -302,9 +306,11 @@ class DaemonState(BaseModel):
         """Set last sector rotation timestamp."""
         await self.portfolio.set_last_sector_rotation(value)
 
-    async def get_sector_rotation_history(self, limit: int = 30) -> list[SectorRotationRecord]:
+    async def get_sector_rotation_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[SectorRotationRecord]:
         """Get sector rotation history."""
-        return await self.portfolio.get_sector_rotation_history(limit)
+        return await self.portfolio.get_sector_rotation_history(limit, session=session)
 
     async def get_last_peer_analysis(self) -> datetime | None:
         """Get last peer analysis timestamp."""
@@ -330,9 +336,11 @@ class DaemonState(BaseModel):
         """Get last risk report timestamp."""
         return await self.portfolio.get_last_risk_report()
 
-    async def get_risk_report_history(self, limit: int = 30) -> list[RiskReportRecord]:
+    async def get_risk_report_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[RiskReportRecord]:
         """Get risk report history."""
-        return await self.portfolio.get_risk_report_history(limit)
+        return await self.portfolio.get_risk_report_history(limit, session=session)
 
     async def get_monte_carlo_tests(self, limit: int = 52) -> list[MonteCarloRecord]:
         """Get Monte Carlo tests."""
@@ -412,9 +420,11 @@ class DaemonState(BaseModel):
         """Set last after-hours screening timestamp."""
         await self.data_pipeline.set_last_after_hours_screening(value)
 
-    async def get_screening_history(self, limit: int = 10) -> list[ScreeningRecord]:
+    async def get_screening_history(
+        self, limit: int = 10, session: AsyncSession | None = None
+    ) -> list[ScreeningRecord]:
         """Get screening history."""
-        return await self.data_pipeline.get_screening_history(limit)
+        return await self.data_pipeline.get_screening_history(limit, session=session)
 
     async def get_last_earnings_fetch(self) -> datetime | None:
         """Get last earnings fetch timestamp."""
@@ -456,9 +466,11 @@ class DaemonState(BaseModel):
         """Get discovery history."""
         return await self.discovery.get_discovery_history(limit)
 
-    async def get_active_discovery_candidates(self) -> list[DiscoveryCandidate]:
+    async def get_active_discovery_candidates(
+        self, session: AsyncSession | None = None
+    ) -> list[DiscoveryCandidate]:
         """Get active discovery candidates."""
-        return await self.discovery.get_active_discovery_candidates()
+        return await self.discovery.get_active_discovery_candidates(session=session)
 
     async def set_active_discovery_candidates(self, value: list[DiscoveryCandidate]) -> None:
         """Set active discovery candidates."""

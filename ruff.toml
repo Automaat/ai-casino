@@ -120,6 +120,9 @@ ignore = [
     "PLR2004", # magic values OK for time calculations and limits
     "TRY301",  # raise in try OK for runtime guards
 ]
+"src/daemon/api/**/*.py" = [
+    "B008",    # Depends() in argument defaults is standard FastAPI pattern
+]
 "src/tui/*.py" = [
     "PLR2004", # magic values OK for time calculations
     "RUF012", # textual uses class attributes for BINDINGS
