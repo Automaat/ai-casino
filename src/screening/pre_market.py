@@ -11,7 +11,12 @@ from loguru import logger
 from src.data.earnings import EarningsCalendarFetcher
 from src.data.news import NewsFetcher
 from src.data.universe import StockUniverseFetcher
-from src.screening.models.pre_market import PreMarketCandidate, PreMarketResult
+from src.screening.models.pre_market import (
+    PreMarketCandidate,
+    PreMarketResult,
+    ScreeningParams,
+    ScreeningWeights,
+)
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -42,52 +47,32 @@ class PreMarketScreener:
         self._earnings_fetcher = earnings_fetcher
         logger.info("Initialized PreMarketScreener")
 
-    async def screen(
-        self,
-        universe: str = "NASDAQ100",
-        top_n: int = 20,
-        gap_threshold: float = 3.0,
-        min_volume_ratio: float = 1.5,
-        min_score: float = 0.60,
-        timeout_seconds: int = 60,
-        earnings_lookahead_days: int = 7,
-        overnight_news_hours: int = 14,
-        gap_weight: float = 0.50,
-        volume_weight: float = 0.30,
-        catalyst_weight: float = 0.20,
-    ) -> PreMarketResult:
+    async def screen(self, params: ScreeningParams | None = None) -> PreMarketResult:
         """Screen universe for pre-market opportunities.
 
         Args:
-            universe: Universe name (NASDAQ100, SP500, COMBINED)
-            top_n: Top N candidates to return
-            gap_threshold: Minimum gap percentage (absolute)
-            min_volume_ratio: Minimum volume ratio vs 20-day average
-            min_score: Minimum composite score
-            timeout_seconds: Timeout for data fetching
-            earnings_lookahead_days: Days ahead to check for earnings
-            overnight_news_hours: Hours back to check for overnight news
-            gap_weight: Gap score weight (0-1)
-            volume_weight: Volume score weight (0-1)
-            catalyst_weight: Catalyst score weight (0-1)
+            params: Screening parameters (uses defaults if not provided)
 
         Returns:
             PreMarketResult with filtered and ranked candidates
         """
-        logger.info(f"Starting pre-market screening: universe={universe}, top_n={top_n}")
+        params = params or ScreeningParams()
+        logger.info(f"Starting pre-market screening: universe={params.universe}, top_n={params.top_n}")
 
-        symbols = await asyncio.to_thread(self._get_universe_symbols, universe)
-        logger.info(f"Fetched {len(symbols)} symbols from {universe}")
+        symbols = await asyncio.to_thread(self._get_universe_symbols, params.universe)
+        logger.info(f"Fetched {len(symbols)} symbols from {params.universe}")
 
         try:
-            async with asyncio.timeout(timeout_seconds):
+            async with asyncio.timeout(params.timeout_seconds):
                 market_data = await asyncio.to_thread(self._fetch_market_data, symbols)
-                news_data = await self._fetch_overnight_news(symbols, overnight_news_hours)
+                news_data = await self._fetch_overnight_news(symbols, params.overnight_news_hours)
                 earnings_data = await asyncio.to_thread(
-                    self._fetch_earnings_data, symbols, earnings_lookahead_days
+                    self._fetch_earnings_data, symbols, params.earnings_lookahead_days
                 )
         except TimeoutError:
-            logger.warning(f"Pre-market screening timeout after {timeout_seconds}s, using partial data")
+            logger.warning(
+                f"Pre-market screening timeout after {params.timeout_seconds}s, using partial data"
+            )
             market_data = {}
             news_data = {}
             earnings_data = {}
@@ -96,19 +81,17 @@ class PreMarketScreener:
             market_data=market_data,
             news_data=news_data,
             earnings_data=earnings_data,
-            gap_weight=gap_weight,
-            volume_weight=volume_weight,
-            catalyst_weight=catalyst_weight,
+            weights=params.weights,
         )
 
         filtered = self._filter_candidates(
             candidates=candidates,
-            gap_threshold=gap_threshold,
-            min_volume_ratio=min_volume_ratio,
-            min_score=min_score,
+            gap_threshold=params.gap_threshold,
+            min_volume_ratio=params.min_volume_ratio,
+            min_score=params.min_score,
         )
 
-        ranked = self._rank_candidates(filtered, top_n=top_n)
+        ranked = self._rank_candidates(filtered, top_n=params.top_n)
 
         now = datetime.now(EASTERN)
         expires_at = now.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -121,7 +104,7 @@ class PreMarketScreener:
             filtered_count=len(filtered),
             screened_at=datetime.now(UTC),
             expires_at=expires_at,
-            gap_plays_count=sum(1 for c in ranked if abs(c.gap_percent) >= gap_threshold),
+            gap_plays_count=sum(1 for c in ranked if abs(c.gap_percent) >= params.gap_threshold),
             volume_spike_count=sum(1 for c in ranked if c.volume_ratio >= DEFAULT_VOLUME_SPIKE_THRESHOLD),
             catalyst_count=sum(1 for c in ranked if c.has_earnings or c.news_count > 0),
         )
@@ -167,85 +150,80 @@ class PreMarketScreener:
         result = {}
 
         if len(symbols) == 1:
-            symbol = symbols[0]
-            if isinstance(data, pd.DataFrame) and not data.empty and len(data) >= MIN_PRICE_POINTS:
-                close_data = data.get("Close", pd.Series(dtype=float))
-                open_data = data.get("Open", pd.Series(dtype=float))
-                volume_data = data.get("Volume", pd.Series(dtype=float))
-
-                if not close_data.empty and not open_data.empty and not volume_data.empty:
-                    prev_close = float(close_data.iloc[-2])
-                    current_open = float(open_data.iloc[-1])
-                    yesterday_volume = int(volume_data.iloc[-2])
-                    avg_volume_20d = (
-                        float(volume_data.iloc[-MIN_VOLUME_WINDOW :].mean())
-                        if len(volume_data) >= MIN_VOLUME_WINDOW
-                        else 0.0
-                    )
-
-                    try:
-                        ticker = yf.Ticker(symbol)
-                        info = ticker.info or {}
-                        name = info.get("longName", symbol)
-                        sector = info.get("sector", "Unknown")
-                    except Exception:
-                        name = symbol
-                        sector = "Unknown"
-
-                    result[symbol] = {
-                        "prev_close": prev_close,
-                        "open": current_open,
-                        "yesterday_volume": yesterday_volume,
-                        "avg_volume_20d": avg_volume_20d,
-                        "name": name,
-                        "sector": sector,
-                    }
+            result = self._process_single_symbol_data(symbols[0], data)
         else:
-            for symbol in symbols:
-                try:
-                    if symbol not in data or data[symbol].empty or len(data[symbol]) < MIN_PRICE_POINTS:
-                        continue
-
-                    symbol_data = data[symbol]
-                    close_data = symbol_data.get("Close", pd.Series(dtype=float))
-                    open_data = symbol_data.get("Open", pd.Series(dtype=float))
-                    volume_data = symbol_data.get("Volume", pd.Series(dtype=float))
-
-                    if close_data.empty or open_data.empty or volume_data.empty:
-                        continue
-
-                    prev_close = float(close_data.iloc[-2])
-                    current_open = float(open_data.iloc[-1])
-                    yesterday_volume = int(volume_data.iloc[-2])
-                    avg_volume_20d = (
-                        float(volume_data.iloc[-MIN_VOLUME_WINDOW :].mean())
-                        if len(volume_data) >= MIN_VOLUME_WINDOW
-                        else 0.0
-                    )
-
-                    try:
-                        ticker = yf.Ticker(symbol)
-                        info = ticker.info or {}
-                        name = info.get("longName", symbol)
-                        sector = info.get("sector", "Unknown")
-                    except Exception:
-                        name = symbol
-                        sector = "Unknown"
-
-                    result[symbol] = {
-                        "prev_close": prev_close,
-                        "open": current_open,
-                        "yesterday_volume": yesterday_volume,
-                        "avg_volume_20d": avg_volume_20d,
-                        "name": name,
-                        "sector": sector,
-                    }
-                except Exception as e:
-                    logger.opt(exception=True).debug(f"Failed to fetch market data for {symbol}: {e}")
-                    continue
+            result = self._process_multi_symbol_data(symbols, data)
 
         logger.info(f"Successfully fetched market data for {len(result)}/{len(symbols)} symbols")
         return result
+
+    def _process_single_symbol_data(self, symbol: str, data: pd.DataFrame) -> dict[str, dict]:
+        """Process market data for single symbol."""
+        result = {}
+
+        if isinstance(data, pd.DataFrame) and not data.empty and len(data) >= MIN_PRICE_POINTS:
+            close_data = data.get("Close", pd.Series(dtype=float))
+            open_data = data.get("Open", pd.Series(dtype=float))
+            volume_data = data.get("Volume", pd.Series(dtype=float))
+
+            if not close_data.empty and not open_data.empty and not volume_data.empty:
+                market_metrics = self._extract_market_metrics(close_data, open_data, volume_data)
+                metadata = self._fetch_symbol_metadata(symbol)
+
+                result[symbol] = {**market_metrics, **metadata}
+
+        return result
+
+    def _process_multi_symbol_data(self, symbols: list[str], data: pd.DataFrame) -> dict[str, dict]:
+        """Process market data for multiple symbols."""
+        result = {}
+
+        for symbol in symbols:
+            try:
+                if symbol not in data or data[symbol].empty or len(data[symbol]) < MIN_PRICE_POINTS:
+                    continue
+
+                symbol_data = data[symbol]
+                close_data = symbol_data.get("Close", pd.Series(dtype=float))
+                open_data = symbol_data.get("Open", pd.Series(dtype=float))
+                volume_data = symbol_data.get("Volume", pd.Series(dtype=float))
+
+                if close_data.empty or open_data.empty or volume_data.empty:
+                    continue
+
+                market_metrics = self._extract_market_metrics(close_data, open_data, volume_data)
+                metadata = self._fetch_symbol_metadata(symbol)
+
+                result[symbol] = {**market_metrics, **metadata}
+            except Exception as e:
+                logger.opt(exception=True).debug(f"Failed to fetch market data for {symbol}: {e}")
+                continue
+
+        return result
+
+    def _extract_market_metrics(
+        self, close_data: pd.Series, open_data: pd.Series, volume_data: pd.Series
+    ) -> dict[str, float]:
+        """Extract price and volume metrics from series data."""
+        return {
+            "prev_close": float(close_data.iloc[-2]),
+            "open": float(open_data.iloc[-1]),
+            "yesterday_volume": int(volume_data.iloc[-2]),
+            "avg_volume_20d": (
+                float(volume_data.iloc[-MIN_VOLUME_WINDOW :].mean())
+                if len(volume_data) >= MIN_VOLUME_WINDOW
+                else 0.0
+            ),
+        }
+
+    def _fetch_symbol_metadata(self, symbol: str) -> dict[str, str]:
+        """Fetch symbol name and sector metadata."""
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info or {}
+            return {"name": info.get("longName", symbol), "sector": info.get("sector", "Unknown")}
+        except Exception:
+            return {"name": symbol, "sector": "Unknown"}
 
     async def _fetch_overnight_news(self, symbols: list[str], hours_back: int) -> dict[str, list[str]]:
         """Fetch overnight news for symbols.
@@ -293,9 +271,7 @@ class PreMarketScreener:
         market_data: dict[str, dict],
         news_data: dict[str, list[str]],
         earnings_data: dict[str, datetime],
-        gap_weight: float,
-        volume_weight: float,
-        catalyst_weight: float,
+        weights: ScreeningWeights,
     ) -> list[PreMarketCandidate]:
         """Build candidates from fetched data."""
         candidates = []
@@ -321,7 +297,7 @@ class PreMarketScreener:
             catalyst_score = (0.5 if has_earnings else 0.0) + min(len(news_titles) / 5.0, 0.5)
 
             composite_score = (
-                gap_weight * gap_score + volume_weight * volume_score + catalyst_weight * catalyst_score
+                weights.gap * gap_score + weights.volume * volume_score + weights.catalyst * catalyst_score
             )
 
             candidate = PreMarketCandidate(
