@@ -67,17 +67,17 @@
 	];
 
 	const breakdownColumns = [
-		{ key: 'type', label: 'Analysis Type', class: 'font-medium' },
-		{ key: 'count', label: 'Count' },
-		{ key: 'percentage', label: 'Percentage', format: (v: string) => `${v}%` }
+		{ key: 'type' as const, label: 'Analysis Type', class: 'font-medium' },
+		{ key: 'count' as const, label: 'Count' },
+		{ key: 'percentage' as const, label: 'Percentage', format: (v: string) => `${v}%` }
 	];
 
 	const workerColumns = [
-		{ key: 'name', label: 'Worker', class: 'font-medium' },
-		{ key: 'executions', label: 'Executions' },
-		{ key: 'success_rate', label: 'Success Rate', format: (v: string) => `${v}%` },
-		{ key: 'avg_latency', label: 'Avg Latency (ms)' },
-		{ key: 'p95', label: 'P95 (ms)' }
+		{ key: 'name' as const, label: 'Worker', class: 'font-medium' },
+		{ key: 'executions' as const, label: 'Executions' },
+		{ key: 'success_rate' as const, label: 'Success Rate', format: (v: string) => `${v}%` },
+		{ key: 'avg_latency' as const, label: 'Avg Latency (ms)' },
+		{ key: 'p95' as const, label: 'P95 (ms)' }
 	];
 
 	function connectWebSocket() {
