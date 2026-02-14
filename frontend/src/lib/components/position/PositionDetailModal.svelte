@@ -124,15 +124,17 @@
 						<p class="text-xl font-bold text-gray-900">{formatPrice(timeline.current_price)}</p>
 					</div>
 
-					<div class="bg-gray-50 rounded-lg p-4">
-						<p class="text-sm text-gray-600 mb-1">Unrealized P&L</p>
+					{#if timeline}
 						{@const pnl = calculatePnL(timeline.entry_price, timeline.current_price)}
-						<p
-							class="text-xl font-bold {pnl >= 0 ? 'text-green-600' : 'text-red-600'}"
-						>
-							{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}%
-						</p>
-					</div>
+						<div class="bg-gray-50 rounded-lg p-4">
+							<p class="text-sm text-gray-600 mb-1">Unrealized P&L</p>
+							<p
+								class="text-xl font-bold {pnl >= 0 ? 'text-green-600' : 'text-red-600'}"
+							>
+								{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}%
+							</p>
+						</div>
+					{/if}
 
 					<div class="bg-gray-50 rounded-lg p-4">
 						<p class="text-sm text-gray-600 mb-1">Days Held</p>
