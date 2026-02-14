@@ -94,12 +94,12 @@
 		/>
 		<MetricCard
 			title="Avg Check Duration"
-			value={`${Number.isFinite(metrics?.avg_duration) ? metrics.avg_duration.toFixed(0) : 0}ms`}
+			value={`${Number.isFinite(metrics?.avg_duration) ? metrics?.avg_duration.toFixed(0) : 0}ms`}
 			icon="⏱️"
 		/>
 		<MetricCard
 			title="Overall Uptime"
-			value={`${Number.isFinite(metrics?.overall_uptime) ? metrics.overall_uptime.toFixed(2) : 100}%`}
+			value={`${Number.isFinite(metrics?.overall_uptime) ? metrics?.overall_uptime.toFixed(2) : 100}%`}
 			icon="📈"
 		/>
 	</div>
