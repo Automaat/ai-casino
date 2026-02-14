@@ -44,10 +44,12 @@ class PreMarketScreeningTask(TaskExecutor):
 
     async def execute(self) -> None:
         """Execute pre-market screening logic."""
+        from src.screening.models.pre_market import ScreeningParams, ScreeningWeights
+
         config = self.components.config.pre_market
         screener = self.container.pre_market_screener()
 
-        result = await screener.screen(
+        params = ScreeningParams(
             universe=config.universe,
             top_n=config.top_n,
             gap_threshold=config.gap_threshold_percent,
@@ -56,10 +58,14 @@ class PreMarketScreeningTask(TaskExecutor):
             timeout_seconds=config.timeout_seconds,
             earnings_lookahead_days=config.earnings_lookahead_days,
             overnight_news_hours=config.overnight_news_hours,
-            gap_weight=config.gap_weight,
-            volume_weight=config.volume_weight,
-            catalyst_weight=config.catalyst_weight,
+            weights=ScreeningWeights(
+                gap=config.gap_weight,
+                volume=config.volume_weight,
+                catalyst=config.catalyst_weight,
+            ),
         )
+
+        result = await screener.screen(params)
 
         logger.info(
             f"Pre-market screening found {len(result.candidates)} candidates "

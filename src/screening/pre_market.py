@@ -210,7 +210,7 @@ class PreMarketScreener:
             "open": float(open_data.iloc[-1]),
             "yesterday_volume": int(volume_data.iloc[-2]),
             "avg_volume_20d": (
-                float(volume_data.iloc[-MIN_VOLUME_WINDOW :].mean())
+                float(volume_data.iloc[-MIN_VOLUME_WINDOW:].mean())
                 if len(volume_data) >= MIN_VOLUME_WINDOW
                 else 0.0
             ),
