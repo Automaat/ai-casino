@@ -384,7 +384,15 @@ async def _run_supervised_research(
         )
         coro = _timed_agent_call(
             "bullish_researcher",
-            bullish_researcher.analyze(symbol, inputs),
+            bullish_researcher.analyze(
+                symbol,
+                technical=inputs.technical,
+                sentiment=inputs.sentiment,
+                news=inputs.news,
+                fundamental=inputs.fundamental,
+                comparative=inputs.comparative,
+                trump_analysis=inputs.trump_analysis,
+            ),
             collector,
         )
         task = asyncio.create_task(coro)
@@ -403,7 +411,15 @@ async def _run_supervised_research(
         )
         coro = _timed_agent_call(
             "bearish_researcher",
-            bearish_researcher.analyze(symbol, inputs),
+            bearish_researcher.analyze(
+                symbol,
+                technical=inputs.technical,
+                sentiment=inputs.sentiment,
+                news=inputs.news,
+                fundamental=inputs.fundamental,
+                comparative=inputs.comparative,
+                trump_analysis=inputs.trump_analysis,
+            ),
             collector,
         )
         task = asyncio.create_task(coro)

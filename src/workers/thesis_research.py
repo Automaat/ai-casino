@@ -150,13 +150,16 @@ class ThesisResearchWorker:
             else "No news analysis"
         )
 
-        fundamental_summary = (
-            f"Valuation: {inputs.fundamental.valuation}, "
-            f"P/E: {inputs.fundamental.pe_ratio:.2f if inputs.fundamental.pe_ratio else 'N/A'}, "
-            f"Confidence: {inputs.fundamental.confidence:.2f}"
-            if inputs.fundamental
-            else "No fundamental data available"
-        )
+        if inputs.fundamental:
+            pe_str = (
+                f"{inputs.fundamental.pe_ratio:.2f}" if inputs.fundamental.pe_ratio is not None else "N/A"
+            )
+            fundamental_summary = (
+                f"Valuation: {inputs.fundamental.valuation}, P/E: {pe_str}, "
+                f"Confidence: {inputs.fundamental.confidence:.2f}"
+            )
+        else:
+            fundamental_summary = "No fundamental data available"
 
         comparative_summary = (
             f"Relative Valuation: {inputs.comparative.relative_valuation.value}, "

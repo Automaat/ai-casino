@@ -20,6 +20,7 @@ from src.prompts import PromptLoader
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
+    from src.metrics.execution import ExecutionMetricsCollector
     from src.strategies.ensemble import EnsembleStrategy
     from src.strategies.momentum import MomentumStrategy
     from src.strategies.session import TradingSession
@@ -232,6 +233,8 @@ class TradingSupervisor:
         components: WorkflowComponents,
         config: WorkflowConfig,
         trading_session: TradingSession | None = None,
+        collector: ExecutionMetricsCollector | None = None,
+        target_allocations: dict[str, float] | None = None,
         extra_context: WorkflowExtraContext | None = None,
     ) -> TradingWorkflowResult:
         """Coordinate full trading workflow with adaptive stage execution.
@@ -244,6 +247,8 @@ class TradingSupervisor:
             components: Workflow components (fetchers, broker, etc.)
             config: Workflow configuration
             trading_session: Trading session type (defaults to REGULAR)
+            collector: Optional metrics collector
+            target_allocations: Optional target portfolio allocations
             extra_context: Optional workflow context
 
         Returns:
@@ -265,11 +270,11 @@ class TradingSupervisor:
         )
 
         # Create minimal workflow and delegate to existing pipeline
-        workflow = _MinimalWorkflow(components, config, self)
+        workflow = _MinimalWorkflow(components, config, self, target_allocations)
         session = trading_session or TradingSession.REGULAR
         params = AnalysisRequestParams(period_days, session, extra_context)
         # _MinimalWorkflow duck-types as TradingWorkflow (structural compatibility)
-        request = AnalysisRequest(workflow, symbol, params, None)  # pyrefly: ignore[bad-argument-type]
+        request = AnalysisRequest(workflow, symbol, params, collector)  # pyrefly: ignore[bad-argument-type]
 
         return await run_instrumented_analysis(request)
 
@@ -282,14 +287,18 @@ class _MinimalWorkflow:
     """Minimal workflow object for instrumented analysis delegation."""
 
     def __init__(
-        self, components: WorkflowComponents, config: WorkflowConfig, supervisor: TradingSupervisor
+        self,
+        components: WorkflowComponents,
+        config: WorkflowConfig,
+        supervisor: TradingSupervisor,
+        target_allocations: dict[str, float] | None = None,
     ) -> None:
         self._init_components(components)
         self._init_config(components, config)
         self._init_conditional_components(components)
         self._init_agents(components)
         self.supervisor = supervisor
-        self._target_allocations = None
+        self._target_allocations = target_allocations
 
     def _init_components(self, components: WorkflowComponents) -> None:
         """Initialize core component references."""

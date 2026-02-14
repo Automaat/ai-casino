@@ -57,6 +57,7 @@ class TradingWorkflow:
         self.notification_service = components.notification_service
         self._container = components.container
         self.analysis_orchestrator_config = components.analysis_orchestrator_config
+        self._original_components = components  # Store for supervisor mode
 
         # Initialize components
         self._initialize_trump_components(components)
@@ -239,7 +240,9 @@ class TradingWorkflow:
         # Branch based on analysis pattern
         if self.analysis_pattern == "supervisor":
             # Supervisor-driven workflow using workers
-            return await self._analyze_supervisor(symbol, period_days, trading_session, extra_context)
+            return await self._analyze_supervisor(
+                symbol, period_days, trading_session, collector, extra_context
+            )
         # Sequential pipeline using agents (legacy)
         return await self._analyze_sequential(symbol, period_days, trading_session, collector, extra_context)
 
@@ -278,6 +281,7 @@ class TradingWorkflow:
         symbol: str,
         period_days: int,
         trading_session: TradingSession,
+        collector: ExecutionMetricsCollector | None,
         extra_context: WorkflowExtraContext | None = None,
     ) -> TradingWorkflowResult:
         """Run supervisor-driven workflow using workers.
@@ -286,6 +290,7 @@ class TradingWorkflow:
             symbol: Stock ticker symbol
             period_days: Days of historical data
             trading_session: Trading session type
+            collector: Optional metrics collector
             extra_context: Optional workflow context
 
         Returns:
@@ -307,8 +312,8 @@ class TradingWorkflow:
             metrics_tracker=self.metrics_tracker,
             snapshot_repository=self.snapshot_repository,
             execution_metric_repository=self.execution_metric_repository,
-            param_store=None,  # TODO: Wire param_store if available
-            historical_cache=None,  # TODO: Wire historical_cache if available
+            param_store=self._original_components.param_store,
+            historical_cache=self._original_components.historical_cache,
             portfolio_var_calculator=self.risk_manager.portfolio_var_calculator,
             portfolio_var_config=self.risk_manager.portfolio_var_config,
             notification_service=self.notification_service,
@@ -338,6 +343,8 @@ class TradingWorkflow:
             components=components,
             config=config,
             trading_session=trading_session,
+            collector=collector,
+            target_allocations=self._target_allocations,
             extra_context=extra_context,
         )
 

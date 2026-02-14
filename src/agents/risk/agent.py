@@ -90,6 +90,7 @@ class RiskManagementAgent:
         self.enable_trailing_stop = enable_trailing_stop
         self._var_calculator = portfolio_var_calculator
         self._var_config = portfolio_var_config or PortfolioVaRConfig()
+        self._sizing_config = position_sizing_config
 
         # Create position sizer component with resolved config
         self._position_sizer = PositionSizer(
@@ -129,9 +130,9 @@ class RiskManagementAgent:
         return self._var_config
 
     @property
-    def position_sizing_config(self) -> None:
-        """Public accessor for position sizing config (deprecated - config is resolved in __init__)."""
-        return None
+    def position_sizing_config(self) -> PositionSizingConfig | None:
+        """Public accessor for position sizing config."""
+        return self._sizing_config
 
     def assess(
         self,
