@@ -15,6 +15,10 @@ from sqlalchemy import text
 
 from src.database.engine import DatabaseEngine
 
+OLD_PRECISION = 5
+NEW_PRECISION = 8
+SCALE = 4
+
 
 async def migrate() -> None:
     """Apply migration to fix current_exposure_percent precision."""
@@ -34,21 +38,22 @@ async def migrate() -> None:
         )
         row = result.fetchone()
 
-        if row and row[0] == 5:
-            logger.info("Applying migration: changing current_exposure_percent from (5,4) to (8,4)")
+        if row and row[0] == OLD_PRECISION:
+            logger.info(
+                f"Applying migration: changing current_exposure_percent from "
+                f"({OLD_PRECISION},{SCALE}) to ({NEW_PRECISION},{SCALE})"
+            )
             await conn.execute(
                 text(
-                    """
+                    f"""
                     ALTER TABLE risk_report_records
-                    ALTER COLUMN current_exposure_percent TYPE numeric(8,4)
+                    ALTER COLUMN current_exposure_percent TYPE numeric({NEW_PRECISION},{SCALE})
                     """
                 )
             )
             logger.info("Migration completed successfully")
         else:
-            logger.info(
-                f"Migration already applied or unexpected precision: {row[0] if row else 'unknown'}"
-            )
+            logger.info(f"Migration already applied or unexpected precision: {row[0] if row else 'unknown'}")
 
 
 async def main() -> None:
