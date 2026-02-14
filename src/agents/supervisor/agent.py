@@ -91,11 +91,26 @@ class TradingSupervisor:
             logger.opt(exception=True).warning(f"Structured output failed, using default: {e}")
             decision = self.default_routing(context)
 
+        # Log routing summary
+        required_types = (
+            ", ".join([a.value for a in decision.required_analyses]) if decision.required_analyses else "none"
+        )
+        optional_types = (
+            ", ".join([a.value for a in decision.optional_analyses]) if decision.optional_analyses else "none"
+        )
         logger.info(
-            f"Routing: {len(decision.required_analyses)} required, "
-            f"{len(decision.optional_analyses)} optional, "
+            f"Routing: {len(decision.required_analyses)} required ({required_types}), "
+            f"{len(decision.optional_analyses)} optional ({optional_types}), "
             f"{len(decision.skip_analyses)} skipped"
         )
+
+        # Log skip reasons for each skipped analysis (debug to avoid duplicate info-level noise)
+        for analysis_type, reason in decision.skip_analyses.items():
+            logger.debug(f"Skip {analysis_type.value}: {reason}")
+
+        # Debug log: full routing reasoning
+        logger.debug(f"Routing reasoning: {decision.reasoning}")
+
         return decision
 
     @track_agent
@@ -137,11 +152,20 @@ class TradingSupervisor:
             logger.opt(exception=True).warning(f"Structured output failed, uniform weights: {e}")
             weights = self._default_weights(completed)
 
+        # Log synthesis summary
+        weighted_analyses = ", ".join([f"{t.value}={w:.2f}" for t, w in weights.weights.items()])
+        conflict_pairs = ", ".join(weights.conflicts) if weights.conflicts else "none"
+        consensus_items = ", ".join(weights.consensus) if weights.consensus else "none"
         logger.info(
-            f"Synthesis: {len(weights.conflicts)} conflicts, "
-            f"{len(weights.consensus)} consensus, "
+            f"Synthesis: {len(completed)} analyses weighted ({weighted_analyses}), "
+            f"{len(weights.conflicts)} conflicts ({conflict_pairs}), "
+            f"{len(weights.consensus)} consensus ({consensus_items}), "
             f"confidence_adj={weights.confidence_adjustment:.2f}"
         )
+
+        # Debug log: full synthesis reasoning
+        logger.debug(f"Synthesis reasoning: {weights.reasoning}")
+
         return weights
 
     def default_routing(self, context: PlanningContext) -> AnalysisRoutingDecision:
