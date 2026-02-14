@@ -48,6 +48,11 @@ class RiskReportRecordRepository(BaseRepository[RiskReportRecord]):
             cvar_99=Decimal(str(entity.cvar_99)),
             cdar_95=Decimal(str(entity.cdar_95)),
             max_drawdown=Decimal(str(entity.max_drawdown)),
+            portfolio_volatility=Decimal(str(entity.portfolio_volatility)),
+            current_exposure_percent=Decimal(str(entity.current_exposure_percent)),
+            num_positions=entity.num_positions,
+            var_limit_breached=entity.var_limit_breached,
+            cvar_limit_breached=entity.cvar_limit_breached,
             risk_status=entity.risk_status,
             created_at=datetime.now(UTC),
         )
@@ -102,6 +107,11 @@ class RiskReportRecordRepository(BaseRepository[RiskReportRecord]):
             cvar_99=float(orm.cvar_99),
             cdar_95=float(orm.cdar_95),
             max_drawdown=float(orm.max_drawdown),
+            portfolio_volatility=float(orm.portfolio_volatility),
+            current_exposure_percent=float(orm.current_exposure_percent),
+            num_positions=orm.num_positions,
+            var_limit_breached=orm.var_limit_breached,
+            cvar_limit_breached=orm.cvar_limit_breached,
             risk_status=orm.risk_status,
         )
 
