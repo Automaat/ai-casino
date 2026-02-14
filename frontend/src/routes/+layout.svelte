@@ -16,6 +16,7 @@
 		{ id: 'workflow', label: 'Workflow', href: '/workflow' },
 		{ id: 'execution', label: 'Execution', href: '/execution' },
 		{ id: 'supervisor', label: 'Supervisor', href: '/supervisor' },
+		{ id: 'health', label: 'Health', href: '/health' },
 		{ id: 'config', label: 'Config', href: '/config' }
 	];
 
@@ -32,6 +33,7 @@
 		: currentPath.startsWith('/workflow') ? 'workflow'
 		: currentPath.startsWith('/execution') ? 'execution'
 		: currentPath.startsWith('/supervisor') ? 'supervisor'
+		: currentPath.startsWith('/health') ? 'health'
 		: currentPath.startsWith('/config') ? 'config'
 		: 'overview'
 	);
