@@ -409,6 +409,128 @@ class MarketDataFetcher:
             last_updated=datetime.now(),
         )
 
+    def _check_cache_batch(
+        self, symbols: list[str], period_days: int
+    ) -> tuple[dict[str, MarketData], list[str]]:
+        """Check cache for multiple symbols.
+
+        Args:
+            symbols: List of symbols to check
+            period_days: Required history depth
+
+        Returns:
+            Tuple of (results dict, cache misses list)
+        """
+        results: dict[str, MarketData] = {}
+        cache_misses: list[str] = []
+
+        for symbol in symbols:
+            cached = self._try_cache(symbol, period_days)
+            if cached:
+                results[symbol] = cached
+            else:
+                cache_misses.append(symbol)
+
+        return results, cache_misses
+
+    def _fetch_yfinance_batch(self, symbols: list[str], period_days: int) -> dict[str, MarketData]:
+        """Fetch batch data from yfinance.
+
+        Args:
+            symbols: List of symbols to fetch
+            period_days: Number of days of history
+
+        Returns:
+            Dict of fetched MarketData (may be partial)
+        """
+        results: dict[str, MarketData] = {}
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=period_days)
+
+        batch_data = yf.download(
+            tickers=" ".join(symbols),
+            start=start_date,
+            end=end_date,
+            group_by="ticker",
+            threads=True,
+            progress=False,
+        )
+
+        if batch_data.empty:
+            msg = f"No data returned for symbols: {symbols}"
+            raise ValueError(msg)
+
+        if len(symbols) == 1:
+            symbol = symbols[0]
+            df = batch_data
+            df.index.name = "Date"
+            self._store_to_cache(symbol, df)
+            results[symbol] = MarketData(symbol=symbol, data=df, last_updated=datetime.now())
+        else:
+            for symbol in symbols:
+                if symbol in batch_data.columns.get_level_values(0):
+                    df = batch_data[symbol]
+                    df.index.name = "Date"
+                    self._store_to_cache(symbol, df)
+                    results[symbol] = MarketData(symbol=symbol, data=df, last_updated=datetime.now())
+                else:
+                    logger.warning(f"No data in batch for {symbol}")
+
+        return results
+
+    def fetch_daily_batch(self, symbols: list[str], period_days: int = 90) -> dict[str, MarketData]:
+        """Fetch daily OHLCV data for multiple symbols in parallel.
+
+        Uses yfinance batch API for efficient multi-symbol fetching.
+        Falls back to individual fetches on error.
+
+        Args:
+            symbols: List of stock ticker symbols
+            period_days: Number of days of historical data
+
+        Returns:
+            Dict mapping symbol to MarketData
+
+        Raises:
+            ValueError: If no data available for any symbol
+        """
+        from src.metrics.execution import timed_operation
+
+        logger.info(f"Batch fetching {period_days} days for {len(symbols)} symbols")
+
+        results, cache_misses = self._check_cache_batch(symbols, period_days)
+
+        if not cache_misses:
+            logger.info(f"All {len(symbols)} symbols served from cache")
+            return results
+
+        logger.info(f"Fetching {len(cache_misses)} symbols from yfinance batch API")
+
+        with timed_operation("market_data_fetch", source="yfinance_batch"):
+            try:
+                batch_results = self._fetch_yfinance_batch(cache_misses, period_days)
+                results.update(batch_results)
+                logger.info(f"Batch fetched {len(batch_results)} symbols")
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Batch fetch failed, falling back to individual: {e}")
+
+        missing = set(cache_misses) - set(results.keys())
+        if missing:
+            logger.info(f"Fetching {len(missing)} symbols individually")
+            for symbol in missing:
+                try:
+                    results[symbol] = self.fetch_daily(symbol, period_days)
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Individual fetch failed for {symbol}: {e}")
+
+        if not results:
+            msg = f"No data available for any symbols: {symbols}"
+            logger.error(msg)
+            raise ValueError(msg)
+
+        logger.info(f"Successfully fetched {len(results)}/{len(symbols)} symbols")
+        return results
+
     def fetch_overnight_futures(self, symbols: list[str]) -> dict[str, float]:
         """Fetch overnight futures % change.
 
