@@ -506,3 +506,39 @@ export interface PositionTimelineResponse {
 	count: number;
 	database_enabled: boolean;
 }
+
+export type TradeAction = "BUY" | "SELL";
+
+export type TradeStatus = "OPEN" | "CLOSED" | "REJECTED";
+
+export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface TradeResponse {
+	id: string;
+	timestamp: string;
+	symbol: string;
+	action: TradeAction;
+	entry_price: number;
+	exit_price: number | null;
+	shares: number;
+	confidence: number;
+	risk_level: RiskLevel;
+	status: TradeStatus;
+	pnl: number | null;
+	pnl_percent: number | null;
+	strategy_name: string | null;
+	is_paper_trade: boolean;
+	closed_at: string | null;
+}
+
+export interface TradesResponse {
+	trades: TradeResponse[];
+	total_count: number;
+	returned_count: number;
+	database_enabled: boolean;
+}
+
+export interface EnrichedTradeResponse {
+	trade: TradeResponse;
+	analysis: AnalysisRecordResponse | null;
+}

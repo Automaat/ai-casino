@@ -230,6 +230,26 @@ export const api = {
 	// Discovery
 	async getDiscoveryInsights(): Promise<T.DiscoveryInsightsResponse> {
 		return fetchAPI<T.DiscoveryInsightsResponse>('/api/discovery/insights');
+	},
+
+	// Trades
+	async getTrades(params?: {
+		limit?: number;
+		symbol?: string;
+		status?: T.TradeStatus;
+		window?: 'all' | '30d' | '7d';
+	}): Promise<T.TradesResponse> {
+		const query = new URLSearchParams();
+		if (params?.limit) query.set('limit', params.limit.toString());
+		if (params?.symbol) query.set('symbol', params.symbol);
+		if (params?.status) query.set('status', params.status);
+		if (params?.window) query.set('window', params.window);
+		const queryString = query.toString();
+		return fetchAPI<T.TradesResponse>(`/trades${queryString ? `?${queryString}` : ''}`);
+	},
+
+	async getTradeDetail(tradeId: string): Promise<T.EnrichedTradeResponse> {
+		return fetchAPI<T.EnrichedTradeResponse>(`/trades/${encodeURIComponent(tradeId)}`);
 	}
 };
 

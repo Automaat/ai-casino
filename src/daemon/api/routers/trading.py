@@ -3,9 +3,11 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from loguru import logger
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.daemon.api.dependencies import get_db_session
@@ -16,12 +18,24 @@ from src.daemon.api.models import (
     DiscoveryRecord,
     DiscoverySourceBreakdown,
     DiscoverySuccessMetrics,
+    EnrichedTradeResponse,
     GamePlanResponse,
+    TradeResponse,
+    TradesResponse,
     WatchlistResponse,
 )
 from src.daemon.api.routers.shared import get_components
 
 router = APIRouter(tags=["trading"])
+
+
+class TradeQueryParams(BaseModel):
+    """Trade query filter parameters."""
+
+    limit: int = 100
+    symbol: str | None = None
+    status: str | None = None
+    window: Literal["all", "30d", "7d"] = "all"
 
 
 @router.get("/analyses", response_model=AnalysesResponse)
@@ -121,6 +135,150 @@ async def get_game_plan(request: Request) -> GamePlanResponse | None:
     except Exception as e:
         logger.opt(exception=True).error(f"Failed to load game plan: {e}")
         return None
+
+
+@router.get("/trades", response_model=TradesResponse)
+async def get_trades(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    params: TradeQueryParams = Depends(),
+) -> TradesResponse:
+    """Get trade history.
+
+    Args:
+        request: FastAPI request object
+        session: Database session
+        params: Query parameters for filtering
+
+    Returns:
+        TradesResponse with filtered trades
+    """
+    components = get_components(request)
+    limit = max(0, min(params.limit, 500))
+
+    from src.database.repositories.trade import TradeRepository
+
+    repo = TradeRepository(session)
+
+    # Get trades by window
+    trades = await repo.get_by_window(params.window)
+
+    # Apply filters
+    if params.symbol:
+        trades = [t for t in trades if t.symbol == params.symbol]
+    if params.status:
+        trades = [t for t in trades if t.status == params.status.upper()]
+
+    # Apply limit
+    trades = trades[:limit]
+
+    # Get total count
+    total_count = await repo.count_all()
+
+    return TradesResponse(
+        trades=[
+            TradeResponse(
+                id=str(t.id),
+                timestamp=t.timestamp,
+                symbol=t.symbol,
+                action=t.action.value,
+                entry_price=t.entry_price,
+                exit_price=t.exit_price,
+                shares=t.shares,
+                confidence=t.confidence,
+                risk_level=t.risk_level,
+                status=t.status,
+                pnl=t.pnl,
+                pnl_percent=t.pnl_percent,
+                strategy_name=t.strategy_name,
+                is_paper_trade=t.is_paper_trade,
+                closed_at=t.closed_at,
+            )
+            for t in trades
+        ],
+        total_count=total_count,
+        returned_count=len(trades),
+        database_enabled=components.config.database.enable_persistence,
+    )
+
+
+@router.get("/trades/{trade_id}", response_model=EnrichedTradeResponse)
+async def get_trade_detail(
+    trade_id: str, session: AsyncSession = Depends(get_db_session)
+) -> EnrichedTradeResponse:
+    """Get single trade with analysis reasoning.
+
+    Args:
+        trade_id: Trade UUID
+        session: Database session
+
+    Returns:
+        EnrichedTradeResponse with trade and matched analysis
+
+    Raises:
+        HTTPException: 404 if trade not found
+    """
+    from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.trade import TradeRepository
+
+    trade_repo = TradeRepository(session)
+    analysis_repo = AnalysisRecordRepository(session)
+
+    trade = await trade_repo.get_by_id(trade_id)
+    if not trade:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
+
+    # Find matching analysis (same symbol, timestamp within 1 minute)
+    analyses = await analysis_repo.get_by_symbol(trade.symbol)
+    matched_analysis = None
+    matched_time_diff: float | None = None
+
+    for analysis in analyses:
+        time_diff = abs((analysis.timestamp - trade.timestamp).total_seconds())
+        if time_diff <= 60 and (matched_time_diff is None or time_diff < matched_time_diff):
+            matched_analysis = analysis
+            matched_time_diff = time_diff
+
+    return EnrichedTradeResponse(
+        trade=TradeResponse(
+            id=str(trade.id),
+            timestamp=trade.timestamp,
+            symbol=trade.symbol,
+            action=trade.action.value,
+            entry_price=trade.entry_price,
+            exit_price=trade.exit_price,
+            shares=trade.shares,
+            confidence=trade.confidence,
+            risk_level=trade.risk_level,
+            status=trade.status,
+            pnl=trade.pnl,
+            pnl_percent=trade.pnl_percent,
+            strategy_name=trade.strategy_name,
+            is_paper_trade=trade.is_paper_trade,
+            closed_at=trade.closed_at,
+        ),
+        analysis=(
+            AnalysisRecordResponse(
+                symbol=matched_analysis.symbol,
+                timestamp=matched_analysis.timestamp,
+                signal=matched_analysis.signal,
+                confidence=matched_analysis.confidence,
+                executed_trade=matched_analysis.executed_trade,
+                trading_session=matched_analysis.trading_session.value,
+                is_paper_trade=matched_analysis.is_paper_trade,
+                rsi=matched_analysis.rsi,
+                macd_hist=matched_analysis.macd_hist,
+                reasoning=matched_analysis.reasoning,
+                technical_analysis_reasoning=matched_analysis.technical_analysis_reasoning,
+                sentiment_analysis_reasoning=matched_analysis.sentiment_analysis_reasoning,
+                news_analysis_reasoning=matched_analysis.news_analysis_reasoning,
+            )
+            if matched_analysis
+            else None
+        ),
+    )
 
 
 @router.get("/discovery/insights", response_model=DiscoveryInsightsResponse)

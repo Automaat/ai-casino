@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from src.database.models import TradeORM
 from src.database.repositories.base import BaseRepository
@@ -154,6 +154,15 @@ class TradeRepository(BaseRepository[TradeRecord]):
         """
         result = await self._session.execute(select(TradeORM).order_by(TradeORM.timestamp.desc()))
         return [self._to_record(orm) for orm in result.scalars().all()]
+
+    async def count_all(self) -> int:
+        """Count all trades.
+
+        Returns:
+            Total number of trades
+        """
+        result = await self._session.execute(select(func.count()).select_from(TradeORM))
+        return result.scalar_one()
 
     async def get_closed_since(self, start_date: datetime) -> list[TradeRecord]:
         """Get closed trades since start date.
