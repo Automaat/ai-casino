@@ -57,7 +57,6 @@ def _record_worker_result(
     if not metrics_collector:
         return
     if is_error:
-        metrics_collector.record_worker_complete(worker_name, None)
         metrics_collector.record_worker_error(worker_name, str(result))
     else:
         metrics_collector.record_worker_complete(worker_name, result)
@@ -575,6 +574,7 @@ async def run_supervised_analyses(
 
         if isinstance(supervisor_metrics_repository, SupervisorMetricsRepository):
             metrics_collector = SupervisorMetricsCollector(workflow_id, input_data.symbol)
+            metrics_collector.record_planning_start()
             metrics_collector.record_planning(routing_decision, fallback_used=False)
 
     # Run group 1 analyses
