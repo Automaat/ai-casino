@@ -1,7 +1,6 @@
 """FastAPI dependencies for database access."""
 
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +8,6 @@ from src.database.connection import get_session
 from src.database.repositories.metadata import MetadataRepository
 
 
-@asynccontextmanager
 async def get_db_session() -> AsyncIterator[AsyncSession]:
     """Get database session for API requests.
 
@@ -23,7 +21,6 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-@asynccontextmanager
 async def get_metadata_repo() -> AsyncIterator[MetadataRepository]:
     """Get metadata repository with fresh session for API requests.
 
