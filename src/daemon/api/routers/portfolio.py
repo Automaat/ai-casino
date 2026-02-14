@@ -289,6 +289,25 @@ async def get_position_timeline(symbol: str, request: Request) -> PositionTimeli
     # Check database enabled
     database_enabled = components.config.database.enable_persistence
 
+    # If database disabled, return empty timeline
+    if not database_enabled:
+        # Still need position from state for basic info
+        position = await components.state.positions.get_position(symbol)
+        if not position:
+            raise HTTPException(status_code=404, detail=f"Position {symbol} not found")
+
+        return PositionTimelineResponse(
+            symbol=position.symbol,
+            entry_price=position.entry_price,
+            current_price=position.entry_price,
+            current_qty=position.current_qty,
+            entry_timestamp=position.entry_timestamp,
+            days_held=position.days_held,
+            actions=[],
+            count=0,
+            database_enabled=False,
+        )
+
     # Get position from state
     position = await components.state.positions.get_position(symbol)
     if not position:

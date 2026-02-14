@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/client';
 	import type { PositionTimelineResponse } from '$lib/types/api';
 	import TimelineView from './TimelineView.svelte';
@@ -14,6 +14,9 @@
 	onMount(() => {
 		loadTimeline();
 
+		// Prevent body scroll
+		document.body.classList.add('modal-open');
+
 		// Close on escape key
 		const handleEscape = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
@@ -24,13 +27,26 @@
 		return () => window.removeEventListener('keydown', handleEscape);
 	});
 
+	onDestroy(() => {
+		// Restore body scroll
+		document.body.classList.remove('modal-open');
+	});
+
 	async function loadTimeline() {
 		loading = true;
 		error = null;
 		try {
 			timeline = await api.getPositionTimeline(symbol);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load position timeline';
+			// Provide user-friendly message for 404
+			const anyError = e as any;
+			const status = anyError?.status ?? anyError?.response?.status;
+
+			if (status === 404) {
+				error = 'Position not found. It may have been closed.';
+			} else {
+				error = e instanceof Error ? e.message : 'Failed to load position timeline';
+			}
 		} finally {
 			loading = false;
 		}
@@ -156,7 +172,7 @@
 
 <style>
 	/* Prevent body scroll when modal is open */
-	:global(body:has(dialog[open])) {
+	:global(body.modal-open) {
 		overflow: hidden;
 	}
 </style>
