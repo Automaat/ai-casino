@@ -48,12 +48,14 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     Raises:
         MissingDatabaseURLError: If enable_persistence=True but no database URL
     """
-    database_url = daemon_config.database.database_url
+    from src.di.config import resolve_config_or_env
+
+    database_url = resolve_config_or_env(daemon_config.database.database_url, "DATABASE_URL")
 
     if daemon_config.database.enable_persistence and not database_url:
         logger.error(
             "Database persistence enabled but DATABASE_URL not configured. "
-            "Set database.database_url in daemon.yaml."
+            "Set database.database_url in daemon.yaml or DATABASE_URL env var."
         )
         raise MissingDatabaseURLError
 
