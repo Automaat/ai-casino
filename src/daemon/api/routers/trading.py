@@ -12,6 +12,10 @@ from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
     AnalysesResponse,
     AnalysisRecordResponse,
+    DiscoveryInsightsResponse,
+    DiscoveryRecord,
+    DiscoverySourceBreakdown,
+    DiscoverySuccessMetrics,
     GamePlanResponse,
     WatchlistResponse,
 )
@@ -117,3 +121,84 @@ async def get_game_plan(request: Request) -> GamePlanResponse | None:
     except Exception as e:
         logger.opt(exception=True).error(f"Failed to load game plan: {e}")
         return None
+
+
+@router.get("/discovery/insights", response_model=DiscoveryInsightsResponse)
+async def get_discovery_insights(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> DiscoveryInsightsResponse:
+    """Get discovery insights dashboard data."""
+    components = get_components(request)
+
+    # Fetch discovery history (last 30 days)
+    discoveries = await components.state.get_discovery_history(limit=1000, session=session)
+
+    if not discoveries:
+        return DiscoveryInsightsResponse(
+            source_breakdown=[],
+            success_metrics=DiscoverySuccessMetrics(
+                total_discovered=0, added_to_watchlist=0, received_signal=0, signal_rate=0.0
+            ),
+            recent_discoveries=[],
+            avg_composite_score=0.0,
+            total_discoveries=0,
+        )
+
+    # Calculate source breakdown
+    source_counts: dict[str, int] = {}
+    for discovery in discoveries:
+        for source in discovery.sources:
+            source_name = source.value if hasattr(source, "value") else str(source)
+            source_counts[source_name] = source_counts.get(source_name, 0) + 1
+
+    total_source_occurrences = sum(source_counts.values())
+    source_breakdown = [
+        DiscoverySourceBreakdown(
+            source=source,
+            count=count,
+            percentage=(
+                round((count / total_source_occurrences) * 100, 1) if total_source_occurrences > 0 else 0.0
+            ),
+        )
+        for source, count in sorted(source_counts.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # Calculate success metrics
+    total_discovered = len(discoveries)
+    added_to_watchlist = sum(1 for d in discoveries if d.added_to_watchlist)
+    received_signal = sum(1 for d in discoveries if d.first_signal is not None)
+    signal_rate = round((received_signal / total_discovered) * 100, 1) if total_discovered > 0 else 0.0
+
+    success_metrics = DiscoverySuccessMetrics(
+        total_discovered=total_discovered,
+        added_to_watchlist=added_to_watchlist,
+        received_signal=received_signal,
+        signal_rate=signal_rate,
+    )
+
+    # Recent discoveries with outcomes
+    recent_discoveries = [
+        DiscoveryRecord(
+            symbol=d.symbol,
+            discovered_at=d.discovered_at,
+            composite_score=d.composite_score,
+            sources=[s.value if hasattr(s, "value") else str(s) for s in d.sources],
+            added_to_watchlist=d.added_to_watchlist,
+            first_signal=d.first_signal,
+            first_signal_date=d.first_signal_date,
+            outcome_7d=d.outcome_7d,
+            outcome_30d=d.outcome_30d,
+        )
+        for d in sorted(discoveries, key=lambda x: x.discovered_at, reverse=True)[:50]
+    ]
+
+    # Calculate average composite score
+    avg_composite_score = round(sum(d.composite_score for d in discoveries) / len(discoveries), 3)
+
+    return DiscoveryInsightsResponse(
+        source_breakdown=source_breakdown,
+        success_metrics=success_metrics,
+        recent_discoveries=recent_discoveries,
+        avg_composite_score=avg_composite_score,
+        total_discoveries=total_discovered,
+    )

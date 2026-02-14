@@ -422,9 +422,11 @@ class DaemonState(BaseModel):
         """Set last discovery timestamp."""
         await self.discovery.set_last_discovery(value)
 
-    async def get_discovery_history(self, limit: int = 10) -> list[DiscoveryHistoryRecord]:
+    async def get_discovery_history(
+        self, limit: int = 10, session: AsyncSession | None = None
+    ) -> list[DiscoveryHistoryRecord]:
         """Get discovery history."""
-        return await self.discovery.get_discovery_history(limit)
+        return await self.discovery.get_discovery_history(limit, session=session)
 
     async def get_active_discovery_candidates(
         self, session: AsyncSession | None = None

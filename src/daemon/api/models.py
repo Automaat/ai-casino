@@ -407,6 +407,47 @@ class PaperTradingValidationResponse(BaseModel):
     recommendations: list[str]
 
 
+class DiscoverySourceBreakdown(BaseModel):
+    """Discovery source breakdown for insights."""
+
+    source: str = Field(description="Discovery source name")
+    count: int = Field(description="Number of discoveries from this source")
+    percentage: float = Field(description="Percentage of total discoveries")
+
+
+class DiscoveryRecord(BaseModel):
+    """Discovery record for insights table."""
+
+    symbol: str
+    discovered_at: datetime
+    composite_score: float
+    sources: list[str]
+    added_to_watchlist: bool
+    first_signal: str | None
+    first_signal_date: datetime | None
+    outcome_7d: float | None
+    outcome_30d: float | None
+
+
+class DiscoverySuccessMetrics(BaseModel):
+    """Success tracking metrics."""
+
+    total_discovered: int = Field(description="Total symbols discovered")
+    added_to_watchlist: int = Field(description="Symbols added to watchlist")
+    received_signal: int = Field(description="Discovered symbols that received trading signal")
+    signal_rate: float = Field(description="Percentage that received signals")
+
+
+class DiscoveryInsightsResponse(BaseModel):
+    """Discovery insights dashboard data."""
+
+    source_breakdown: list[DiscoverySourceBreakdown] = Field(description="Multi-source breakdown")
+    success_metrics: DiscoverySuccessMetrics = Field(description="Success rate tracking")
+    recent_discoveries: list[DiscoveryRecord] = Field(description="Recent discoveries with outcomes")
+    avg_composite_score: float = Field(description="Average composite score")
+    total_discoveries: int = Field(description="Total discoveries in period")
+
+
 __all__ = [
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
@@ -415,6 +456,10 @@ __all__ = [
     "CorrelationMatrixResponse",
     "DegradationHistoryResponse",
     "DegradationResponse",
+    "DiscoveryInsightsResponse",
+    "DiscoveryRecord",
+    "DiscoverySourceBreakdown",
+    "DiscoverySuccessMetrics",
     "ErrorSummaryResponse",
     "EventResponse",
     "ExecutionGraphDetailResponse",

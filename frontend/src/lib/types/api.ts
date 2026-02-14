@@ -449,3 +449,36 @@ export interface PaperTradingValidation {
 	criteria: ValidationCriterion[];
 	recommendations: string[];
 }
+
+export interface DiscoverySourceBreakdown {
+	source: string;
+	count: number;
+	percentage: number;
+}
+
+export interface DiscoveryRecord {
+	symbol: string;
+	discovered_at: string;
+	composite_score: number;
+	sources: string[];
+	added_to_watchlist: boolean;
+	first_signal: string | null;
+	first_signal_date: string | null;
+	outcome_7d: number | null;
+	outcome_30d: number | null;
+}
+
+export interface DiscoverySuccessMetrics {
+	total_discovered: number;
+	added_to_watchlist: number;
+	received_signal: number;
+	signal_rate: number;
+}
+
+export interface DiscoveryInsightsResponse {
+	source_breakdown: DiscoverySourceBreakdown[];
+	success_metrics: DiscoverySuccessMetrics;
+	recent_discoveries: DiscoveryRecord[];
+	avg_composite_score: number;
+	total_discoveries: number;
+}
