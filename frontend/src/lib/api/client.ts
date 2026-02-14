@@ -87,6 +87,10 @@ export const api = {
 		return fetchAPI<T.PositionsResponse>('/positions');
 	},
 
+	async getPositionTimeline(symbol: string): Promise<T.PositionTimelineResponse> {
+		return fetchAPI<T.PositionTimelineResponse>(`/positions/${encodeURIComponent(symbol)}/timeline`);
+	},
+
 	async getSnapshots(limit?: number): Promise<T.SnapshotsResponse> {
 		const query = limit ? `?limit=${limit}` : '';
 		return fetchAPI<T.SnapshotsResponse>(`/portfolio/snapshots${query}`);

@@ -482,3 +482,27 @@ export interface DiscoveryInsightsResponse {
 	avg_composite_score: number;
 	total_discoveries: number;
 }
+
+export interface PositionManagementActionResponse {
+	action_type: string;
+	timestamp: string;
+	old_stop_loss: number | null;
+	new_stop_loss: number | null;
+	qty_sold: number | null;
+	price: number;
+	reason: string;
+	executed: boolean;
+	order_id: string | null;
+}
+
+export interface PositionTimelineResponse {
+	symbol: string;
+	entry_price: number;
+	current_price: number;
+	current_qty: number;
+	entry_timestamp: string;
+	days_held: number;
+	actions: PositionManagementActionResponse[];
+	count: number;
+	database_enabled: boolean;
+}
