@@ -22,7 +22,7 @@ async def state_summary(request: Request) -> StateSummaryResponse:
 
     try:
         # Get current degradation tier
-        degradation_tier = "FULL"
+        degradation_tier = "NONE"
         degradation_history = await components.state.get_degradation_history(limit=1)
         if degradation_history:
             degradation_tier = degradation_history[-1].tier
@@ -66,7 +66,7 @@ async def state_summary(request: Request) -> StateSummaryResponse:
             positions_count=0,
             win_rate=None,
             error_count=0,
-            degradation_tier="FULL",
+            degradation_tier="NONE",
             trading_mode=components.config.trading_mode.value,
         )
 
@@ -79,7 +79,7 @@ async def get_degradation(request: Request) -> DegradationResponse:
     degradation_history = await components.state.get_degradation_history(limit=1)
     if not degradation_history:
         return DegradationResponse(
-            tier="FULL",
+            tier="NONE",
             unavailable_services=[],
             confidence_adjustment=1.0,
             halt_reason=None,

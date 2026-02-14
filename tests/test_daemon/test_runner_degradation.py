@@ -286,8 +286,8 @@ async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_h
 
         assert sleep_time == daemon_config_with_health.interval_minutes * 60
 
-        # Verify no degradation recorded (or FULL tier recorded)
-        # Note: Implementation may or may not record FULL tier
+        # Verify no degradation recorded (or NONE tier recorded)
+        # Note: Implementation may or may not record NONE tier
         if runner.state.degradation_history:
             assert runner.state.degradation_history[-1].tier == DegradationTier.NONE.value
 
