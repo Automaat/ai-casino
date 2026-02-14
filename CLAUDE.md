@@ -837,6 +837,169 @@ Inheritance is acceptable ONLY for:
 
 **Never use inheritance for code reuse** - always extract and compose instead.
 
+### Database Session Management (MANDATORY)
+
+**Core principle:** Sessions are per-request, never singletons. Engines are singletons.
+
+#### Pattern 1: FastAPI API Endpoints (Dependency Injection)
+
+```python
+# In API endpoint
+@app.get("/positions")
+async def get_positions(
+    session: AsyncSession = Depends(get_db_session)
+):
+    repo = PositionRecordRepository(session)
+    return await repo.get_all_active()
+```
+
+**Use for:** All FastAPI endpoints, any request-scoped operations
+
+#### Pattern 2: Background Tasks (Inline Creation)
+
+```python
+# In background task
+async def scheduled_task():
+    async with get_db_engine().session() as session:
+        repo = AnalysisRepository(session)
+        await repo.create(analysis)
+```
+
+**Use for:** Daemon lifecycle tasks, scheduled jobs, event watchers
+
+#### Pattern 3: Repository Pattern
+
+```python
+class PositionRecordRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def get_all_active(self) -> list[PositionRecord]:
+        result = await self.session.execute(
+            select(PositionRecord).where(PositionRecord.closed == False)
+        )
+        return list(result.scalars().all())
+```
+
+**Rules:**
+
+- ✅ Repositories receive sessions in `__init__`
+- ✅ Repository instances can be reused
+- ❌ Never store sessions in long-lived objects
+- ❌ Never create sessions inside repositories
+
+#### State Manager Pattern
+
+```python
+class PositionStateManager:
+    # API methods (called from endpoints)
+    async def get_all_positions(self, session: AsyncSession) -> list[PositionRecord]:
+        repo = PositionRecordRepository(session)
+        return await repo.get_all_active()
+
+    # Background task methods (daemon lifecycle)
+    async def sync_from_broker(self):
+        async with get_db_engine().session() as session:
+            repo = PositionRecordRepository(session)
+            # sync logic
+```
+
+**Rules:**
+
+- ✅ API-facing methods accept `session: AsyncSession` parameter
+- ✅ Background task methods create sessions inline
+- ❌ Never store `_database_engine` or `_session` as instance variables
+
+#### Common Anti-Patterns
+
+❌ **DON'T: Store sessions in state**
+
+```python
+class BadManager:
+    def __init__(self, session: AsyncSession):
+        self._session = session  # ❌ Session shared across requests
+```
+
+❌ **DON'T: Use scoped sessions**
+
+```python
+scoped_session = scoped_session(session_factory)  # ❌ Not recommended for async
+```
+
+❌ **DON'T: Create sessions inside repositories**
+
+```python
+class BadRepository:
+    async def get_all(self):
+        async with get_db_engine().session() as session:  # ❌ Should receive session
+            ...
+```
+
+✅ **DO: Pass sessions explicitly**
+
+```python
+# FastAPI endpoint
+async def endpoint(session: AsyncSession = Depends(get_db_session)):
+    result = await service.process(session, data)
+
+# Service layer
+async def process(session: AsyncSession, data: Data):
+    repo = DataRepository(session)
+    return await repo.create(data)
+```
+
+#### Configuration
+
+```python
+# Engine: Singleton (thread-safe, connection pool)
+engine = create_async_engine(database_url, pool_size=5, max_overflow=10)
+
+# Session factory: Configured once
+async_session_maker = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,  # Required for async
+    autoflush=False,  # Explicit control
+)
+```
+
+#### Exception Handling
+
+```python
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_maker() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+```
+
+#### Troubleshooting
+
+**Error: "This session is provisioning a new connection; concurrent operations are not permitted"**
+
+- **Cause:** Shared session used by concurrent requests
+- **Fix:** Ensure each request gets fresh session via dependency injection
+
+**Error: "greenlet_spawn has not been called"**
+
+- **Cause:** `expire_on_commit=True` with async sessions
+- **Fix:** Set `expire_on_commit=False` in session factory
+
+**Error: Deadlock or hanging requests**
+
+- **Cause:** Session not closed, connection pool exhausted
+- **Fix:** Always use `async with` context manager for sessions
+
+#### References
+
+- [SQLAlchemy Async Documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
+- [FastAPI Dependencies with Yield](https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/)
+- [Session Management Best Practices](https://deepwiki.com/fastapi-practices/fastapi_best_architecture/7.6-database-session-management)
+
 ### LLM Abstraction (Custom Provider Pattern)
 
 **Architecture:** Custom provider abstraction using native SDKs (Anthropic, OpenAI) and direct HTTP for Ollama.
