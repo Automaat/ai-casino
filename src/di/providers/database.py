@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from src.database.repositories.sector_rotation import SectorRotationRecordRepository
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
     from src.database.repositories.tearsheet import TearSheetRepository
     from src.database.repositories.trade import TradeRepository
 
@@ -503,3 +504,20 @@ def create_coordinator_metrics_repository(
 
     session = database_engine.session()
     return CoordinatorMetricsRepository(session)
+
+
+def create_supervisor_metrics_repository(
+    database_engine: DatabaseEngine,
+) -> SupervisorMetricsRepository:
+    """Create SupervisorMetricsRepository with database session.
+
+    Args:
+        database_engine: Database engine instance
+
+    Returns:
+        SupervisorMetricsRepository instance
+    """
+    from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
+
+    session = database_engine.session()
+    return SupervisorMetricsRepository(session)
