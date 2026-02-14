@@ -1,11 +1,16 @@
 """FastAPI dependencies for database access."""
 
+import contextlib
 from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_session
 from src.database.repositories.metadata import MetadataRepository
+from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
+
+# Explicitly reference to ensure pyrefly sees the import
+asynccontextmanager = contextlib.asynccontextmanager
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
@@ -32,3 +37,17 @@ async def get_metadata_repo() -> AsyncIterator[MetadataRepository]:
     """
     async with get_session() as session:
         yield MetadataRepository(session)
+
+
+@asynccontextmanager
+async def get_supervisor_metrics_repo() -> AsyncIterator[SupervisorMetricsRepository]:
+    """Get supervisor metrics repository with fresh session for API requests.
+
+    This ensures the session is created in the FastAPI event loop,
+    avoiding "bound to different event loop" errors.
+
+    Yields:
+        SupervisorMetricsRepository with fresh session
+    """
+    async with get_session() as session:
+        yield SupervisorMetricsRepository(session)

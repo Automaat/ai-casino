@@ -308,6 +308,84 @@ class FullConfigResponse(BaseModel):
     api_keys: dict[str, Any]
 
 
+class SupervisorMetricResponse(BaseModel):
+    """Single supervisor metric response."""
+
+    id: str
+    created_at: datetime
+    workflow_id: str
+    symbol: str
+    timestamp: datetime
+    required_analyses: list[str]
+    optional_analyses: list[str]
+    skip_analyses: dict[str, str]
+    routing_reasoning: str
+    total_workers: int
+    required_workers: int
+    optional_workers: int
+    successful_workers: int
+    failed_workers: int
+    routing_decision_ms: float
+    group1_execution_ms: float
+    research_execution_ms: float
+    total_supervisor_overhead_ms: float
+    worker_timings: dict[str, float]
+    worker_errors: dict[str, str]
+    total_llm_calls: int
+    total_cost_usd: float
+    planning_fallback_used: bool
+    synthesis_fallback_used: bool
+    confidence_adjustment: float
+    synthesis_reasoning: str
+    parallel_efficiency_percent: float
+    timeout_triggered: bool
+
+
+class SupervisorMetricsListResponse(BaseModel):
+    """List of supervisor metrics."""
+
+    metrics: list[SupervisorMetricResponse]
+    count: int
+
+
+class WorkerStats(BaseModel):
+    """Worker statistics for summary."""
+
+    total_executions: int
+    successful_executions: int
+    failed_executions: int
+    success_rate: float
+    avg_duration_ms: float
+
+
+class WorkerPerformanceResponse(BaseModel):
+    """Worker performance by type."""
+
+    worker_stats: dict[str, WorkerStats]
+    total_workers: int
+    sample_size: int
+
+
+class SupervisorSummaryResponse(BaseModel):
+    """Supervisor metrics summary."""
+
+    avg_efficiency_percent: float
+    avg_routing_ms: float
+    avg_group1_ms: float
+    avg_research_ms: float
+    avg_total_ms: float
+    timeout_rate_percent: float
+    sample_size: int
+    symbol: str | None
+
+
+class ErrorSummaryResponse(BaseModel):
+    """Error summary by worker type."""
+
+    error_counts: dict[str, int]
+    total_errors: int
+
+
 __all__ = [
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
@@ -316,6 +394,7 @@ __all__ = [
     "CorrelationMatrixResponse",
     "DegradationHistoryResponse",
     "DegradationResponse",
+    "ErrorSummaryResponse",
     "EventResponse",
     "ExecutionGraphDetailResponse",
     "ExecutionGraphHistoryResponse",
@@ -336,5 +415,10 @@ __all__ = [
     "SnapshotRecord",
     "SnapshotsResponse",
     "StateSummaryResponse",
+    "SupervisorMetricResponse",
+    "SupervisorMetricsListResponse",
+    "SupervisorSummaryResponse",
     "WatchlistResponse",
+    "WorkerPerformanceResponse",
+    "WorkerStats",
 ]
