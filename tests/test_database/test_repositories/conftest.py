@@ -34,7 +34,7 @@ def _adapt_types_for_sqlite(target, connection, **kw):
             # ARRAY → JSON
             elif isinstance(column.type, postgresql.ARRAY):
                 column.type = JSON()
-                if _should_remove_default(column.server_default, ("'{}'", "ARRAY[]")):
+                if _should_remove_default(column.server_default, ["'{}'", "ARRAY[]", "::text[]"]):
                     column.server_default = None
 
             # UUID → String(36)
