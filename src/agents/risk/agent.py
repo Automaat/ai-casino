@@ -95,6 +95,7 @@ class RiskManagementAgent:
         self.enable_trailing_stop = enable_trailing_stop
         self._var_calculator = portfolio_var_calculator
         self._var_config = portfolio_var_config or PortfolioVaRConfig()
+        self._sizing_config = position_sizing_config
 
         # Create position sizer component with resolved config
         self._position_sizer = PositionSizer(
@@ -122,6 +123,21 @@ class RiskManagementAgent:
             f"(max_risk={self.max_position_risk}%, max_exposure={self.max_exposure}%, "
             f"max_single={self.max_single_position}%, trailing={enable_trailing_stop}{var_str})"
         )
+
+    @property
+    def portfolio_var_calculator(self) -> PortfolioVaRCalculator | None:
+        """Public accessor for portfolio VaR calculator."""
+        return self._var_calculator
+
+    @property
+    def portfolio_var_config(self) -> PortfolioVaRConfig:
+        """Public accessor for portfolio VaR config."""
+        return self._var_config
+
+    @property
+    def position_sizing_config(self) -> PositionSizingConfig | None:
+        """Public accessor for position sizing config."""
+        return self._sizing_config
 
     def assess(
         self,

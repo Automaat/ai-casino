@@ -1,5 +1,9 @@
 """Trading Supervisor Agent."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from src.agents.supervisor.models import (
@@ -13,6 +17,15 @@ from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
+
+if TYPE_CHECKING:
+    from src.di.container import AppContainer
+    from src.metrics.execution import ExecutionMetricsCollector
+    from src.strategies.ensemble import EnsembleStrategy
+    from src.strategies.momentum import MomentumStrategy
+    from src.strategies.session import TradingSession
+    from src.workflows.config import WorkflowComponents, WorkflowConfig
+    from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 
 class TradingSupervisor:
@@ -213,6 +226,170 @@ class TradingSupervisor:
 
         return "\n".join(lines)
 
+    async def coordinate(
+        self,
+        symbol: str,
+        period_days: int,
+        components: WorkflowComponents,
+        config: WorkflowConfig,
+        trading_session: TradingSession | None = None,
+        collector: ExecutionMetricsCollector | None = None,
+        target_allocations: dict[str, float] | None = None,
+        extra_context: WorkflowExtraContext | None = None,
+    ) -> TradingWorkflowResult:
+        """Coordinate full trading workflow with adaptive stage execution.
+
+        This method orchestrates all 8 workflow stages using workers instead of agents.
+
+        Args:
+            symbol: Stock ticker symbol
+            period_days: Days of historical data
+            components: Workflow components (fetchers, broker, etc.)
+            config: Workflow configuration
+            trading_session: Trading session type (defaults to REGULAR)
+            collector: Optional metrics collector
+            target_allocations: Optional target portfolio allocations
+            extra_context: Optional workflow context
+
+        Returns:
+            TradingWorkflowResult with all analyses and final decision
+
+        Note:
+            This method delegates to existing stage functions from workflows/stages/
+            for most stages, using workers for the analysis stage (Stage 5).
+        """
+        from src.strategies.session import TradingSession
+        from src.workflows.stages.instrumented_analysis import (
+            AnalysisRequest,
+            AnalysisRequestParams,
+            run_instrumented_analysis,
+        )
+
+        logger.info(
+            f"Supervisor coordinating workflow for {symbol} (supervisor mode - using existing pipeline)"
+        )
+
+        # Create minimal workflow and delegate to existing pipeline
+        workflow = _MinimalWorkflow(components, config, self, target_allocations)
+        session = trading_session or TradingSession.REGULAR
+        params = AnalysisRequestParams(period_days, session, extra_context)
+        # _MinimalWorkflow duck-types as TradingWorkflow (structural compatibility)
+        request = AnalysisRequest(workflow, symbol, params, collector)  # pyrefly: ignore[bad-argument-type]
+
+        return await run_instrumented_analysis(request)
+
     def __repr__(self) -> str:
         """String representation."""
         return f"TradingSupervisor(llm={self.llm.provider})"
+
+
+class _MinimalWorkflow:
+    """Minimal workflow object for instrumented analysis delegation."""
+
+    def __init__(
+        self,
+        components: WorkflowComponents,
+        config: WorkflowConfig,
+        supervisor: TradingSupervisor,
+        target_allocations: dict[str, float] | None = None,
+    ) -> None:
+        self._init_components(components)
+        self._init_config(components, config)
+        self._init_conditional_components(components)
+        self._init_agents(components)
+        self.supervisor = supervisor
+        self._target_allocations = target_allocations
+
+    def _init_components(self, components: WorkflowComponents) -> None:
+        """Initialize core component references."""
+        self.market_fetcher = components.market_fetcher
+        self.news_fetcher = components.news_fetcher
+        self.finbert = components.finbert
+        self.fundamental_fetcher = components.fundamental_fetcher
+        self.broker = components.broker
+        self.metrics_tracker = components.metrics_tracker
+        self.snapshot_repository = components.snapshot_repository
+        self.execution_metric_repository = components.execution_metric_repository
+        self.notification_service = components.notification_service
+        self._container = components.container
+        self.analysis_orchestrator_config = components.analysis_orchestrator_config
+
+    def _init_config(self, components: WorkflowComponents, config: WorkflowConfig) -> None:
+        """Initialize configuration attributes."""
+        self.use_ensemble = config.use_ensemble
+        self.use_meta_agent = config.use_meta_agent
+        self.trump_mode = config.trump_mode
+        self.snapshot_on_trade = config.snapshot_on_trade or False
+        self.execution_metrics_enabled = config.execution_metrics_enabled
+        self.pre_trade_backtest_config = config.pre_trade_backtest_config
+        self.risk_validation_config = components.risk_validation_config
+        self.risk_validator = components.risk_validator
+
+    def _init_conditional_components(self, components: WorkflowComponents) -> None:
+        """Initialize conditional components (Trump, meta-agent, backtest)."""
+        # Trump components
+        if self.trump_mode:
+            from src.data.truth_social import TruthSocialFetcher
+
+            self.trump_fetcher: TruthSocialFetcher | None = TruthSocialFetcher(
+                historical_cache=components.historical_cache
+            )
+            self.trump_analyst = self._container.trump_analyst()
+        else:
+            self.trump_fetcher: TruthSocialFetcher | None = None
+            self.trump_analyst = None  # pyrefly: ignore[bad-assignment]
+
+        # Meta-agent
+        if self.use_meta_agent:
+            self.meta_agent = self._container.meta_agent()
+            if components.metrics_tracker:
+                self.meta_agent.metrics_tracker = components.metrics_tracker
+            if components.param_store:
+                self.meta_agent.param_store = components.param_store
+        else:
+            self.meta_agent = None  # pyrefly: ignore[bad-assignment]
+
+        # Default strategy
+        from src.strategies.ensemble import EnsembleStrategy
+        from src.strategies.momentum import MomentumStrategy
+
+        self._default_strategy = EnsembleStrategy() if self.use_ensemble else MomentumStrategy()
+
+        # Backtest runner
+        if self.pre_trade_backtest_config and self.pre_trade_backtest_config.enabled:
+            from src.backtesting import VectorBTRunner
+
+            self.vectorbt_runner: VectorBTRunner | None = VectorBTRunner()
+        else:
+            self.vectorbt_runner: VectorBTRunner | None = None
+
+    def _init_agents(self, components: WorkflowComponents) -> None:
+        """Initialize analysis and risk agents."""
+        from src.agents.fundamental import FundamentalAnalyst
+        from src.agents.risk import RiskManagementAgent
+        from src.agents.sentiment import SentimentAnalyst
+
+        self.sentiment_analyst = SentimentAnalyst(components.finbert)
+        self.news_analyst = self._container.news_analyst()
+        self.fundamental_analyst = FundamentalAnalyst(components.llm_client, components.fundamental_fetcher)
+        self.comparative_analyst = self._container.comparative_analyst()
+        self.web_researcher = self._container.web_research_agent()
+        self.social_analyst = self._container.social_sentiment_analyst()
+        self.bullish_researcher = self._container.bullish_researcher()
+        self.bearish_researcher = self._container.bearish_researcher()
+        self.trader = self._container.trader_agent()
+        self.risk_manager = RiskManagementAgent(
+            components.llm_client,
+            portfolio_var_calculator=components.portfolio_var_calculator,
+            portfolio_var_config=components.portfolio_var_config,
+            position_sizing_config=components.position_sizing_config,
+        )
+
+    def get_default_strategy(self) -> EnsembleStrategy | MomentumStrategy:
+        return self._default_strategy
+
+    def get_container(self) -> AppContainer:
+        return self._container
+
+    def get_target_allocation(self, symbol: str) -> float | None:
+        return self._target_allocations.get(symbol) if self._target_allocations else None
