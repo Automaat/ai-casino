@@ -19,11 +19,28 @@ class PreMarketScreeningTask(TaskExecutor):
 
     async def get_last_run(self) -> datetime | None:
         """Get last run timestamp."""
-        return await self.components.state.metadata.get("pre_market_screening.last_run")
+        from src.database.connection import get_session
+        from src.database.repositories.metadata import MetadataRepository
 
-    async def record_success(self) -> None:
+        try:
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_datetime("pre_market_screening.last_run")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last run: {e}")
+            return None
+
+    async def record_success(self, duration: float) -> None:
         """Record successful execution."""
-        await self.components.state.metadata.set("pre_market_screening.last_run", datetime.now(UTC))
+        from src.database.connection import get_session
+        from src.database.repositories.metadata import MetadataRepository
+
+        try:
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("pre_market_screening.last_run", datetime.now(UTC))
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record success: {e}")
 
     async def execute(self) -> None:
         """Execute pre-market screening logic."""

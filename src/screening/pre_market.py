@@ -15,6 +15,11 @@ from src.screening.models.pre_market import PreMarketCandidate, PreMarketResult
 
 EASTERN = ZoneInfo("America/New_York")
 
+# Constants for screening thresholds
+MIN_PRICE_POINTS = 2
+MIN_VOLUME_WINDOW = 20
+DEFAULT_VOLUME_SPIKE_THRESHOLD = 2.0
+
 
 class PreMarketScreener:
     """Pre-market screening for gap plays, volume spikes, and catalysts."""
@@ -117,7 +122,7 @@ class PreMarketScreener:
             screened_at=datetime.now(UTC),
             expires_at=expires_at,
             gap_plays_count=sum(1 for c in ranked if abs(c.gap_percent) >= gap_threshold),
-            volume_spike_count=sum(1 for c in ranked if c.volume_ratio >= 2.0),
+            volume_spike_count=sum(1 for c in ranked if c.volume_ratio >= DEFAULT_VOLUME_SPIKE_THRESHOLD),
             catalyst_count=sum(1 for c in ranked if c.has_earnings or c.news_count > 0),
         )
 
@@ -163,7 +168,7 @@ class PreMarketScreener:
 
         if len(symbols) == 1:
             symbol = symbols[0]
-            if isinstance(data, pd.DataFrame) and not data.empty and len(data) >= 2:
+            if isinstance(data, pd.DataFrame) and not data.empty and len(data) >= MIN_PRICE_POINTS:
                 close_data = data.get("Close", pd.Series(dtype=float))
                 open_data = data.get("Open", pd.Series(dtype=float))
                 volume_data = data.get("Volume", pd.Series(dtype=float))
@@ -172,7 +177,11 @@ class PreMarketScreener:
                     prev_close = float(close_data.iloc[-2])
                     current_open = float(open_data.iloc[-1])
                     yesterday_volume = int(volume_data.iloc[-2])
-                    avg_volume_20d = float(volume_data.iloc[-20:].mean()) if len(volume_data) >= 20 else 0.0
+                    avg_volume_20d = (
+                        float(volume_data.iloc[-MIN_VOLUME_WINDOW :].mean())
+                        if len(volume_data) >= MIN_VOLUME_WINDOW
+                        else 0.0
+                    )
 
                     try:
                         ticker = yf.Ticker(symbol)
@@ -194,7 +203,7 @@ class PreMarketScreener:
         else:
             for symbol in symbols:
                 try:
-                    if symbol not in data or data[symbol].empty or len(data[symbol]) < 2:
+                    if symbol not in data or data[symbol].empty or len(data[symbol]) < MIN_PRICE_POINTS:
                         continue
 
                     symbol_data = data[symbol]
@@ -208,7 +217,11 @@ class PreMarketScreener:
                     prev_close = float(close_data.iloc[-2])
                     current_open = float(open_data.iloc[-1])
                     yesterday_volume = int(volume_data.iloc[-2])
-                    avg_volume_20d = float(volume_data.iloc[-20:].mean()) if len(volume_data) >= 20 else 0.0
+                    avg_volume_20d = (
+                        float(volume_data.iloc[-MIN_VOLUME_WINDOW :].mean())
+                        if len(volume_data) >= MIN_VOLUME_WINDOW
+                        else 0.0
+                    )
 
                     try:
                         ticker = yf.Ticker(symbol)
