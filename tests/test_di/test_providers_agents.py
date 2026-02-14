@@ -364,9 +364,7 @@ def test_risk_management_agent_provider(monkeypatch):
 
     # Mock database dependencies to avoid migration issues in unit tests
     mock_db_engine = MagicMock()
-    mock_audit_repo = MagicMock()
     container.database_engine.override(mock_db_engine)
-    container.risk_audit_repository.override(mock_audit_repo)
 
     with patch("src.agents.risk.RiskManagementAgent") as mock_class:
         mock_instance = MagicMock()
@@ -382,9 +380,7 @@ def test_risk_management_agent_factory(monkeypatch):
 
     # Mock database dependencies to avoid migration issues in unit tests
     mock_db_engine = MagicMock()
-    mock_audit_repo = MagicMock()
     container.database_engine.override(mock_db_engine)
-    container.risk_audit_repository.override(mock_audit_repo)
 
     with patch("src.agents.risk.RiskManagementAgent") as mock_class:
         mock_instance1 = MagicMock()

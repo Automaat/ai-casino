@@ -21,160 +21,212 @@ from src.screening.screener import ScreeningResult
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
-    from src.database.repositories.prefetch import PrefetchRecordRepository
-    from src.database.repositories.profiling import ProfilingRecordRepository
-    from src.database.repositories.screening import ScreeningRecordRepository
-
 
 class DataPipelineStateManager(StateManager):
     """Background data operations (prefetch, screening, earnings)."""
-
-    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
-    _prefetch_repository: PrefetchRecordRepository | None = PrivateAttr(default=None)
-    _screening_repository: ScreeningRecordRepository | None = PrivateAttr(default=None)
-    _earnings_repository: EarningsCalendarRecordRepository | None = PrivateAttr(default=None)
-    _profiling_repository: ProfilingRecordRepository | None = PrivateAttr(default=None)
 
     _prefetch_cache: list[PrefetchRecord] | None = PrivateAttr(default=None)
     _screening_cache: list[ScreeningRecord] | None = PrivateAttr(default=None)
     _earnings_cache: list[EarningsCalendarRecord] | None = PrivateAttr(default=None)
     _profiling_cache: list[ProfilingRecord] | None = PrivateAttr(default=None)
 
-    def set_repositories(
-        self,
-        metadata_repository: MetadataRepository,
-        prefetch_repository: PrefetchRecordRepository,
-        screening_repository: ScreeningRecordRepository,
-        earnings_repository: EarningsCalendarRecordRepository,
-        profiling_repository: ProfilingRecordRepository,
-    ) -> None:
-        """Inject repositories."""
-        self._metadata_repository = metadata_repository
-        self._prefetch_repository = prefetch_repository
-        self._screening_repository = screening_repository
-        self._earnings_repository = earnings_repository
-        self._profiling_repository = profiling_repository
-        logger.debug("DataPipelineStateManager repositories injected")
-
     async def get_last_prefetch(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last prefetch timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
+        from src.database.repositories.metadata import MetadataRepository
 
+        if session:
             repo = MetadataRepository(session)
             return await repo.get_datetime("data_pipeline.last_prefetch")
-        if not self._metadata_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = MetadataRepository(fresh_session)
+                return await repo.get_datetime("data_pipeline.last_prefetch")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get prefetch: {e}")
             return None
-        return await self._metadata_repository.get_datetime("data_pipeline.last_prefetch")
 
     async def set_last_prefetch(self, value: datetime | None) -> None:
         """Set last prefetch timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("data_pipeline.last_prefetch", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await MetadataRepository(session).set("data_pipeline.last_prefetch", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set prefetch: {e}")
 
     async def get_last_pre_market_refresh(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last pre-market refresh timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
+        from src.database.repositories.metadata import MetadataRepository
 
+        if session:
             repo = MetadataRepository(session)
             return await repo.get_datetime("data_pipeline.last_pre_market_refresh")
-        if not self._metadata_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = MetadataRepository(fresh_session)
+                return await repo.get_datetime("data_pipeline.last_pre_market_refresh")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get pre-market refresh: {e}")
             return None
-        return await self._metadata_repository.get_datetime("data_pipeline.last_pre_market_refresh")
 
     async def set_last_pre_market_refresh(self, value: datetime | None) -> None:
         """Set last pre-market refresh timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("data_pipeline.last_pre_market_refresh", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await MetadataRepository(session).set("data_pipeline.last_pre_market_refresh", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set pre-market refresh: {e}")
 
     async def get_last_after_hours_screening(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last after-hours screening timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
+        from src.database.repositories.metadata import MetadataRepository
 
+        if session:
             repo = MetadataRepository(session)
             return await repo.get_datetime("data_pipeline.last_after_hours_screening")
-        if not self._metadata_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = MetadataRepository(fresh_session)
+                return await repo.get_datetime("data_pipeline.last_after_hours_screening")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get after-hours screening: {e}")
             return None
-        return await self._metadata_repository.get_datetime("data_pipeline.last_after_hours_screening")
 
     async def set_last_after_hours_screening(self, value: datetime | None) -> None:
         """Set last after-hours screening timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("data_pipeline.last_after_hours_screening", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await MetadataRepository(session).set("data_pipeline.last_after_hours_screening", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set after-hours screening: {e}")
 
     async def get_last_earnings_fetch(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last earnings fetch timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
+        from src.database.repositories.metadata import MetadataRepository
 
+        if session:
             repo = MetadataRepository(session)
             return await repo.get_datetime("data_pipeline.last_earnings_fetch")
-        if not self._metadata_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = MetadataRepository(fresh_session)
+                return await repo.get_datetime("data_pipeline.last_earnings_fetch")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get earnings fetch: {e}")
             return None
-        return await self._metadata_repository.get_datetime("data_pipeline.last_earnings_fetch")
 
     async def get_prefetch_history(
         self, limit: int = 30, session: AsyncSession | None = None
     ) -> list[PrefetchRecord]:
         """Get prefetch history with lazy loading."""
-        if session:
-            from src.database.repositories.prefetch import PrefetchRecordRepository
+        from src.database.repositories.prefetch import PrefetchRecordRepository
 
+        if session:
             repo = PrefetchRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._prefetch_repository:
-            return []
+
         if self._prefetch_cache is None:
-            self._prefetch_cache = await self._prefetch_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = PrefetchRecordRepository(fresh_session)
+                    self._prefetch_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get prefetch history: {e}")
+                return []
         return self._prefetch_cache
 
     async def get_screening_history(
         self, limit: int = 30, session: AsyncSession | None = None
     ) -> list[ScreeningRecord]:
         """Get screening history with lazy loading."""
-        if session:
-            from src.database.repositories.screening import ScreeningRecordRepository
+        from src.database.repositories.screening import ScreeningRecordRepository
 
+        if session:
             repo = ScreeningRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._screening_repository:
-            return []
+
         if self._screening_cache is None:
-            self._screening_cache = await self._screening_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = ScreeningRecordRepository(fresh_session)
+                    self._screening_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get screening history: {e}")
+                return []
         return self._screening_cache
 
     async def get_earnings_calendar_history(
         self, limit: int = 10, session: AsyncSession | None = None
     ) -> list[EarningsCalendarRecord]:
         """Get earnings calendar history with lazy loading."""
-        if session:
-            from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+        from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
 
+        if session:
             repo = EarningsCalendarRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._earnings_repository:
-            return []
+
         if self._earnings_cache is None:
-            self._earnings_cache = await self._earnings_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = EarningsCalendarRecordRepository(fresh_session)
+                    self._earnings_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get earnings calendar history: {e}")
+                return []
         return self._earnings_cache
 
     async def get_profiling_history(
         self, limit: int = 100, session: AsyncSession | None = None
     ) -> list[ProfilingRecord]:
         """Get profiling history with lazy loading."""
-        if session:
-            from src.database.repositories.profiling import ProfilingRecordRepository
+        from src.database.repositories.profiling import ProfilingRecordRepository
 
+        if session:
             repo = ProfilingRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._profiling_repository:
-            return []
+
         if self._profiling_cache is None:
-            self._profiling_cache = await self._profiling_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = ProfilingRecordRepository(fresh_session)
+                    self._profiling_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get profiling history: {e}")
+                return []
         return self._profiling_cache
 
     async def record_prefetch(
@@ -194,10 +246,16 @@ class DataPipelineStateManager(StateManager):
             total_duration_seconds=total_duration_seconds,
         )
 
-        if self._prefetch_repository:
-            await self._prefetch_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("data_pipeline.last_prefetch", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.prefetch import PrefetchRecordRepository
+
+            async with get_session() as session:
+                await PrefetchRecordRepository(session).create(record)
+                await MetadataRepository(session).set("data_pipeline.last_prefetch", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record prefetch: {e}")
 
         self._prefetch_cache = None
 
@@ -221,10 +279,16 @@ class DataPipelineStateManager(StateManager):
             screened_at=screened_at or now,
         )
 
-        if self._screening_repository:
-            await self._screening_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("data_pipeline.last_after_hours_screening", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.screening import ScreeningRecordRepository
+
+            async with get_session() as session:
+                await ScreeningRecordRepository(session).create(record)
+                await MetadataRepository(session).set("data_pipeline.last_after_hours_screening", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record screening: {e}")
 
         self._screening_cache = None
 
@@ -243,10 +307,16 @@ class DataPipelineStateManager(StateManager):
             symbols_failed=symbols_failed,
         )
 
-        if self._earnings_repository:
-            await self._earnings_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("data_pipeline.last_earnings_fetch", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await EarningsCalendarRecordRepository(session).create(record)
+                await MetadataRepository(session).set("data_pipeline.last_earnings_fetch", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record earnings fetch: {e}")
 
         self._earnings_cache = None
 
@@ -272,8 +342,14 @@ class DataPipelineStateManager(StateManager):
             top_function_cumtime=top_cumtime,
         )
 
-        if self._profiling_repository:
-            await self._profiling_repository.create(record)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.profiling import ProfilingRecordRepository
+
+            async with get_session() as session:
+                await ProfilingRecordRepository(session).create(record)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record profiling: {e}")
 
         self._profiling_cache = None
 

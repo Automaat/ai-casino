@@ -45,7 +45,6 @@ from src.daemon.state.models import (
     ScreeningRecord,
     SectorRotationRecord,
 )
-from src.daemon.state.repositories import RepositoryBundle
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
 from src.execution_tracking.tracker import ExecutionGraphTracker
@@ -81,45 +80,6 @@ class DaemonState(BaseModel):
         exclude=True,
         description="Recent completed execution graphs (last 50)",
     )
-
-    def set_repositories(self, repos: RepositoryBundle) -> None:
-        """Inject all database repositories into managers.
-
-        Args:
-            repos: Bundle containing all 20 repositories
-        """
-        # TradingStateManager - uses fresh sessions per operation
-        self.trading.enable_database()
-
-        # PositionStateManager - needs database engine for fresh sessions
-        # Note: set_repositories is deprecated, engine injection happens in factory
-
-        # PortfolioStateManager
-        self.portfolio.set_repositories(repos)
-
-        # DataPipelineStateManager
-        self.data_pipeline.set_repositories(
-            metadata_repository=repos.metadata_repository,
-            prefetch_repository=repos.prefetch_repository,
-            screening_repository=repos.screening_repository,
-            earnings_repository=repos.earnings_repository,
-            profiling_repository=repos.profiling_repository,
-        )
-
-        # DiscoveryStateManager
-        self.discovery.set_repositories(
-            metadata_repository=repos.metadata_repository,
-            discovery_repository=repos.discovery_repository,
-            active_discovery_repository=repos.active_discovery_repository,
-        )
-
-        # StrategyStateManager - uses fresh sessions per operation
-        self.strategy.enable_database()
-
-        # SnapshotStateManager
-        self.snapshots.set_repository(repos.snapshot_repository)
-
-        logger.debug("All repositories injected into DaemonState managers")
 
     # ===================
     # Trading Manager API
