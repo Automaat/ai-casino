@@ -279,7 +279,7 @@ class DiscoveryStateManager(StateManager):
                 for dc in discovery_candidates:
                     sources = [
                         DiscoverySourceDetail(
-                            source_type="PRE_MARKET",
+                            source_type="pre_market",
                             weight=dc.composite_score,
                             metadata=dc.metadata,
                         )
@@ -301,7 +301,7 @@ class DiscoveryStateManager(StateManager):
                     for dc in discovery_candidates:
                         sources = [
                             DiscoverySourceDetail(
-                                source_type="PRE_MARKET",
+                                source_type="pre_market",
                                 weight=dc.composite_score,
                                 metadata=dc.metadata,
                             )
@@ -341,7 +341,7 @@ class DiscoveryStateManager(StateManager):
             return [
                 self._to_discovery_candidate(c)
                 for c in active_candidates
-                if any(s.source_type == "PRE_MARKET" for s in c.sources)
+                if any(s.source_type == "pre_market" for s in c.sources)
             ]
 
         try:
@@ -353,7 +353,7 @@ class DiscoveryStateManager(StateManager):
                 return [
                     self._to_discovery_candidate(c)
                     for c in active_candidates
-                    if any(s.source_type == "PRE_MARKET" for s in c.sources)
+                    if any(s.source_type == "pre_market" for s in c.sources)
                 ]
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to get active pre-market candidates: {e}")

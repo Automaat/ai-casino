@@ -47,6 +47,12 @@ class PreMarketScreeningTask(TaskExecutor):
         from src.screening.models.pre_market import ScreeningParams, ScreeningWeights
 
         config = self.components.config.pre_market
+
+        # Respect configuration flag to disable pre-market screening
+        if not getattr(config, "enabled", True):
+            logger.info("Pre-market screening is disabled by configuration; skipping execution")
+            return
+
         screener = self.container.pre_market_screener()
 
         params = ScreeningParams(

@@ -16,6 +16,7 @@ class DiscoverySource(StrEnum):
     VOLUME_SPIKE = "volume_spike"
     PRICE_GAP = "price_gap"
     NEWS_TRENDING = "news_trending"
+    PRE_MARKET = "pre_market"
 
 
 class DiscoveryCandidate(BaseModel):

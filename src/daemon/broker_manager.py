@@ -172,11 +172,13 @@ class BrokerManager:
         if not self.config.pre_market.enabled:
             return
 
+        from src.discovery.models import DiscoverySource
+
         active_candidates = await self.state.get_active_discovery_candidates(session=session)
         pre_market_symbols = [
             c.symbol
             for c in active_candidates
-            if c.symbol not in seen and "PRE_MARKET" in {str(s.value) for s in c.sources}
+            if c.symbol not in seen and DiscoverySource.PRE_MARKET in c.sources
         ]
 
         if pre_market_symbols:
