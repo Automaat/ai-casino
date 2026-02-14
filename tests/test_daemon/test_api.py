@@ -153,7 +153,7 @@ def mock_runner(
         degradation_history=[
             DegradationRecord(
                 timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
-                tier="FULL",
+                tier="NONE",
                 unavailable_services=[],
                 confidence_adjustment=1.0,
             )
@@ -546,7 +546,7 @@ class TestDegradationEndpoint:
     """Tests for /degradation endpoint."""
 
     def test_get_degradation_full(self, client: TestClient) -> None:
-        """Test degradation endpoint with FULL tier."""
+        """Test degradation endpoint with NONE tier."""
         response = client.get("/degradation")
         assert response.status_code == 200
 
@@ -577,7 +577,7 @@ class TestDegradationEndpoint:
         assert data["confidence_adjustment"] == 0.9
 
     def test_get_degradation_no_history(self, client: TestClient, mock_runner: Mock) -> None:
-        """Test degradation endpoint defaults to FULL."""
+        """Test degradation endpoint defaults to NONE."""
         mock_runner.state.degradation_history = []
 
         response = client.get("/degradation")

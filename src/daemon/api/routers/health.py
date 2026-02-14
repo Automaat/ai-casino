@@ -22,7 +22,7 @@ async def health(request: Request) -> HealthResponse:
     uptime = (datetime.now(UTC) - request.app.state.start_time).total_seconds()
 
     # Determine health status from degradation tier
-    degradation_tier = "FULL"
+    degradation_tier = "NONE"
     last_run = None
 
     try:
