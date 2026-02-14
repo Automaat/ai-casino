@@ -1,9 +1,16 @@
 """Database provider functions for DI container."""
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from src.daemon.config import DaemonConfig
 from src.database.engine import DatabaseEngine, MissingDatabaseURLError
+
+if TYPE_CHECKING:
+    from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.signal_outcome import SignalOutcomeRepository
+    from src.database.repositories.trade import TradeRepository
 
 
 def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
@@ -63,3 +70,45 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
 
     logger.info("DatabaseEngine initialized and migrations applied")
     return engine
+
+
+def create_analysis_repository(database_engine: DatabaseEngine) -> AnalysisRecordRepository:
+    """Create AnalysisRecordRepository with fresh session.
+
+    Args:
+        database_engine: Database engine singleton
+
+    Returns:
+        Repository with new session
+    """
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    return AnalysisRecordRepository(database_engine.session())
+
+
+def create_trade_repository(database_engine: DatabaseEngine) -> TradeRepository:
+    """Create TradeRepository with fresh session.
+
+    Args:
+        database_engine: Database engine singleton
+
+    Returns:
+        Repository with new session
+    """
+    from src.database.repositories.trade import TradeRepository
+
+    return TradeRepository(database_engine.session())
+
+
+def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalOutcomeRepository:
+    """Create SignalOutcomeRepository with fresh session.
+
+    Args:
+        database_engine: Database engine singleton
+
+    Returns:
+        Repository with new session
+    """
+    from src.database.repositories.signal_outcome import SignalOutcomeRepository
+
+    return SignalOutcomeRepository(database_engine.session())

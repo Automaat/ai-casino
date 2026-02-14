@@ -43,6 +43,22 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
     )
 
+    # Repository factories - create repos with fresh sessions per call
+    analysis_repository = providers.Factory(
+        database_providers.create_analysis_repository,
+        database_engine=database_engine,
+    )
+
+    trade_repository = providers.Factory(
+        database_providers.create_trade_repository,
+        database_engine=database_engine,
+    )
+
+    signal_outcome_repository = providers.Factory(
+        database_providers.create_signal_outcome_repository,
+        database_engine=database_engine,
+    )
+
     # Circuit breaker registry - Singleton
     circuit_breaker_registry = providers.Singleton(
         circuit_breaker_providers.create_circuit_breaker_registry,
