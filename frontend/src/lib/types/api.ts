@@ -364,3 +364,71 @@ export interface DashboardEvent {
 	timestamp: string;
 	data: Record<string, any>;
 }
+
+// Supervisor Metrics
+export interface SupervisorMetricRecord {
+	// Backend fields (SupervisorMetricResponse)
+	id: string;
+	created_at: string;
+	workflow_id: string;
+	symbol: string;
+	timestamp: string;
+	required_analyses: string[];
+	optional_analyses: string[];
+	skip_analyses: Record<string, string>;
+	routing_reasoning: string;
+	total_workers: number;
+	required_workers: number;
+	optional_workers: number;
+	successful_workers: number;
+	failed_workers: number;
+	routing_decision_ms: number;
+	group1_execution_ms: number;
+	research_execution_ms: number;
+	total_supervisor_overhead_ms: number;
+	worker_timings: Record<string, number>;
+	worker_errors: Record<string, string>;
+	total_llm_calls: number;
+	total_cost_usd: number;
+	planning_fallback_used: boolean;
+	synthesis_fallback_used: boolean;
+	confidence_adjustment: number;
+	synthesis_reasoning: string;
+	parallel_efficiency_percent: number;
+	timeout_triggered: boolean;
+}
+
+export interface SupervisorMetricsRecent {
+	metrics: SupervisorMetricRecord[];
+	count: number;
+}
+
+export interface SupervisorMetricsSummary {
+	avg_efficiency_percent: number;
+	avg_routing_ms: number;
+	avg_group1_ms: number;
+	avg_research_ms: number;
+	avg_total_ms: number;
+	timeout_rate_percent: number;
+	sample_size: number;
+	symbol: string | null;
+}
+
+export interface WorkerStats {
+	total_executions: number;
+	successful_executions: number;
+	failed_executions: number;
+	success_rate: number;
+	avg_duration_ms: number;
+}
+
+export interface SupervisorMetricsWorkers {
+	worker_stats: Record<string, WorkerStats>;
+	total_workers: number;
+	sample_size: number;
+}
+
+export interface SupervisorMetricsErrors {
+	error_counts: Record<string, number>;
+	total_errors: number;
+}

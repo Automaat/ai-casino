@@ -1,0 +1,238 @@
+<script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import MetricCard from '$lib/components/ui/MetricCard.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import DataTable from '$lib/components/ui/DataTable.svelte';
+	import {
+		recentMetrics,
+		summary,
+		workerStats,
+		errors,
+		fetchAllSupervisorMetrics
+	} from '$lib/stores/supervisor';
+
+	let wsConnected = $state(false);
+	let ws: WebSocket | null = null;
+	let refreshInterval: number | null = null;
+
+	const summaryData = $derived($summary);
+	const recentData = $derived($recentMetrics?.metrics || []);
+	const workerData = $derived($workerStats);
+
+	// Computed metrics
+	const avgRoutingTime = $derived(summaryData ? summaryData.avg_routing_ms.toFixed(1) : '0.0');
+	const efficiency = $derived(summaryData ? summaryData.avg_efficiency_percent.toFixed(1) : '0');
+	const totalCost = $derived(recentData.length > 0
+		? recentData.reduce((sum, m) => sum + m.total_cost_usd, 0).toFixed(4)
+		: '0.00');
+	const avgWorkers = $derived(summaryData ? summaryData.sample_size.toFixed(0) : '0');
+
+	// Routing breakdown
+	const routingBreakdown = $derived.by(() => {
+		if (!recentData.length) return [];
+		const counts: Record<string, number> = {};
+		recentData.forEach(m => {
+			[...m.required_analyses, ...m.optional_analyses].forEach(a => {
+				counts[a] = (counts[a] || 0) + 1;
+			});
+		});
+		const total = Object.values(counts).reduce((sum, v) => sum + v, 0);
+		return Object.entries(counts).map(([type, count]) => ({
+			type: type.charAt(0).toUpperCase() + type.slice(1),
+			count,
+			percentage: total > 0 ? ((count / total) * 100).toFixed(1) : '0'
+		}));
+	});
+
+	// Worker performance table
+	const workerPerformance = $derived.by(() => {
+		if (!workerData) return [];
+		return Object.entries(workerData.worker_stats).map(([name, stats]) => ({
+			name,
+			executions: stats.total_executions,
+			success_rate: stats.success_rate.toFixed(1),
+			avg_latency: stats.avg_duration_ms.toFixed(0)
+		}));
+	});
+
+	// Recent routing columns
+	const routingColumns = [
+		{ key: 'symbol', label: 'Symbol', class: 'font-medium' },
+		{ key: 'timestamp', label: 'Time', format: (v: string) => new Date(v).toLocaleTimeString() },
+		{ key: 'total_workers', label: 'Workers' },
+		{ key: 'total_cost_usd', label: 'Cost', format: (v: number) => `$${v.toFixed(4)}` },
+		{ key: 'routing_decision_ms', label: 'Routing (ms)', format: (v: number) => v.toFixed(1) }
+	];
+
+	const breakdownColumns = [
+		{ key: 'type' as const, label: 'Analysis Type', class: 'font-medium' },
+		{ key: 'count' as const, label: 'Count' },
+		{ key: 'percentage' as const, label: 'Percentage', format: (v: string) => `${v}%` }
+	];
+
+	const workerColumns = [
+		{ key: 'name' as const, label: 'Worker', class: 'font-medium' },
+		{ key: 'executions' as const, label: 'Executions' },
+		{ key: 'success_rate' as const, label: 'Success Rate', format: (v: string) => `${v}%` },
+		{ key: 'avg_latency' as const, label: 'Avg Latency (ms)' }
+	];
+
+	const WS_URL =
+		import.meta.env.VITE_WS_URL ||
+		(typeof window !== 'undefined'
+			? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+			: 'ws://localhost:8484');
+
+	let reconnectTimeout: number | null = null;
+	let reconnectAttempts = 0;
+	const MAX_RECONNECT_ATTEMPTS = 5;
+	const RECONNECT_DELAY = 3000;
+
+	function connectWebSocket() {
+		if (typeof window === 'undefined') return; // SSR safety
+
+		const wsUrl = `${WS_URL}/ws/events`;
+
+		ws = new WebSocket(wsUrl);
+
+		ws.onopen = () => {
+			wsConnected = true;
+			reconnectAttempts = 0;
+		};
+
+		ws.onmessage = (event) => {
+			try {
+				const msg = JSON.parse(event.data);
+				if (msg.event_type === 'CYCLE_COMPLETE' || msg.event_type === 'ANALYSIS_COMPLETE') {
+					fetchAllSupervisorMetrics();
+				}
+			} catch (error) {
+				console.error('Failed to parse WebSocket message:', error);
+			}
+		};
+
+		ws.onerror = (error) => {
+			console.error('WebSocket error:', error);
+			wsConnected = false;
+		};
+
+		ws.onclose = () => {
+			wsConnected = false;
+
+			if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+				reconnectAttempts++;
+				console.log(`Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+				reconnectTimeout = setTimeout(connectWebSocket, RECONNECT_DELAY);
+			} else {
+				console.error('Failed to connect to WebSocket after multiple attempts');
+			}
+		};
+	}
+
+	onMount(() => {
+		fetchAllSupervisorMetrics();
+		connectWebSocket();
+		refreshInterval = setInterval(() => fetchAllSupervisorMetrics(), 30000);
+	});
+
+	onDestroy(() => {
+		if (reconnectTimeout) clearTimeout(reconnectTimeout);
+		if (ws) ws.close();
+		if (refreshInterval) clearInterval(refreshInterval);
+	});
+</script>
+
+<svelte:head>
+	<title>Supervisor Metrics - AI Casino</title>
+</svelte:head>
+
+<div class="space-y-8">
+	<!-- Header -->
+	<div class="flex justify-between items-center">
+		<div>
+			<h1 class="text-3xl font-bold text-gray-900">Supervisor Metrics Dashboard</h1>
+			<p class="text-gray-600 mt-1">Routing decisions and worker performance</p>
+		</div>
+		<div class="flex items-center gap-2">
+			<div class={`w-3 h-3 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+			<span class="text-sm text-gray-600">{wsConnected ? 'Live' : 'Disconnected'}</span>
+		</div>
+	</div>
+
+	<!-- Stats Cards -->
+	<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+		<MetricCard title="Avg Routing Time" value={`${avgRoutingTime}ms`} icon="⚡" />
+		<MetricCard title="Efficiency" value={`${efficiency}%`} icon="🎯" />
+		<MetricCard title="Total Cost (24h)" value={`$${totalCost}`} icon="💰" />
+		<MetricCard title="Avg Workers" value={avgWorkers} icon="👥" />
+	</div>
+
+	<!-- Routing Breakdown -->
+	<Card title="Routing Breakdown">
+		{#if routingBreakdown.length > 0}
+			<DataTable data={routingBreakdown} columns={breakdownColumns} />
+		{:else}
+			<div class="text-center py-12 text-gray-600">No routing data available</div>
+		{/if}
+	</Card>
+
+	<!-- Worker Performance -->
+	<Card title="Worker Performance (24h)">
+		{#if workerPerformance.length > 0}
+			<DataTable data={workerPerformance} columns={workerColumns} />
+		{:else}
+			<div class="text-center py-12 text-gray-600">No worker data available</div>
+		{/if}
+	</Card>
+
+	<!-- Recent Routing Decisions -->
+	<Card title="Recent Routing Decisions">
+		{#if recentData.length > 0}
+			<div class="space-y-4">
+				{#each recentData as metric}
+					<div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+						<div class="flex justify-between items-start mb-2">
+							<div>
+								<span class="font-semibold text-gray-900">{metric.symbol}</span>
+								<span class="text-sm text-gray-500 ml-2">
+									{new Date(metric.timestamp).toLocaleTimeString()}
+								</span>
+							</div>
+							<div class="text-sm text-gray-600">
+								{metric.total_workers} workers | ${metric.total_cost_usd.toFixed(4)}
+							</div>
+						</div>
+						<div class="grid grid-cols-2 gap-4 text-sm mb-2">
+							<div>
+								<span class="text-gray-600">Required:</span>
+								<span class="text-gray-900">{metric.required_analyses.join(', ')}</span>
+							</div>
+							<div>
+								<span class="text-gray-600">Optional:</span>
+								<span class="text-gray-900">
+									{metric.optional_analyses.length > 0 ? metric.optional_analyses.join(', ') : 'None'}
+								</span>
+							</div>
+						</div>
+						{#if metric.routing_reasoning}
+							<div class="text-sm text-gray-700">
+								<span class="text-gray-600">Reasoning:</span>
+								{metric.routing_reasoning}
+							</div>
+						{/if}
+						{#if metric.worker_errors && Object.keys(metric.worker_errors).length > 0}
+							<div class="text-sm text-red-600 mt-2">
+								<span class="font-medium">Errors:</span>
+								{#each Object.entries(metric.worker_errors) as [worker, error]}
+									<div>{worker}: {error}</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="text-center py-12 text-gray-600">No recent routing decisions</div>
+		{/if}
+	</Card>
+</div>

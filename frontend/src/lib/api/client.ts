@@ -179,6 +179,43 @@ export const api = {
 		return fetchAPI<T.ExecutionGraphHistoryResponse>(
 			`/api/execution/history${queryString ? `?${queryString}` : ''}`
 		);
+	},
+
+	// Supervisor Metrics
+	async getSupervisorMetricsRecent(params?: { limit?: number }): Promise<T.SupervisorMetricsRecent> {
+		const query = new URLSearchParams();
+		if (params?.limit !== undefined) query.set('limit', params.limit.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsRecent>(
+			`/supervisor/metrics/recent${queryString ? `?${queryString}` : ''}`
+		);
+	},
+
+	async getSupervisorMetricsSummary(params?: { hours?: number }): Promise<T.SupervisorMetricsSummary> {
+		const query = new URLSearchParams();
+		if (params?.hours !== undefined) query.set('hours', params.hours.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsSummary>(
+			`/supervisor/metrics/summary${queryString ? `?${queryString}` : ''}`
+		);
+	},
+
+	async getSupervisorMetricsWorkers(params?: { hours?: number }): Promise<T.SupervisorMetricsWorkers> {
+		const query = new URLSearchParams();
+		if (params?.hours !== undefined) query.set('hours', params.hours.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsWorkers>(
+			`/supervisor/metrics/workers${queryString ? `?${queryString}` : ''}`
+		);
+	},
+
+	async getSupervisorMetricsErrors(params?: { hours?: number }): Promise<T.SupervisorMetricsErrors> {
+		const query = new URLSearchParams();
+		if (params?.hours !== undefined) query.set('hours', params.hours.toString());
+		const queryString = query.toString();
+		return fetchAPI<T.SupervisorMetricsErrors>(
+			`/supervisor/metrics/errors${queryString ? `?${queryString}` : ''}`
+		);
 	}
 };
 

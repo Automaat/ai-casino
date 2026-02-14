@@ -12,6 +12,7 @@
 		{ id: 'events', label: 'Events', href: '/events' },
 		{ id: 'workflow', label: 'Workflow', href: '/workflow' },
 		{ id: 'execution', label: 'Execution', href: '/execution' },
+		{ id: 'supervisor', label: 'Supervisor', href: '/supervisor' },
 		{ id: 'config', label: 'Config', href: '/config' }
 	];
 
@@ -24,6 +25,7 @@
 		: currentPath.startsWith('/events') ? 'events'
 		: currentPath.startsWith('/workflow') ? 'workflow'
 		: currentPath.startsWith('/execution') ? 'execution'
+		: currentPath.startsWith('/supervisor') ? 'supervisor'
 		: currentPath.startsWith('/config') ? 'config'
 		: 'overview'
 	);
