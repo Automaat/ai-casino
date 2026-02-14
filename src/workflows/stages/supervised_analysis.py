@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from src.strategies.timeframe import MultiTimeframeData
 
 from src.agents.supervisor.models import AnalysisRoutingDecision, AnalysisType
+from src.workers.thesis_research import AnalysisInputs
 from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
 from src.workflows.stages.strategy_selection import _timed_agent_call
 
@@ -373,9 +374,17 @@ async def _run_supervised_research(
     # Bullish research
     if AnalysisType.BULLISH_RESEARCH in required or AnalysisType.BULLISH_RESEARCH in optional:
         category = "required" if AnalysisType.BULLISH_RESEARCH in required else "optional"
+        inputs = AnalysisInputs(
+            technical=technical,
+            sentiment=sentiment,
+            news=news,
+            fundamental=fundamental,
+            comparative=comparative,
+            trump_analysis=trump,
+        )
         coro = _timed_agent_call(
             "bullish_researcher",
-            bullish_researcher.analyze(symbol, technical, sentiment, news, fundamental, comparative, trump),
+            bullish_researcher.analyze(symbol, inputs),
             collector,
         )
         task = asyncio.create_task(coro)
@@ -384,9 +393,17 @@ async def _run_supervised_research(
     # Bearish research
     if AnalysisType.BEARISH_RESEARCH in required or AnalysisType.BEARISH_RESEARCH in optional:
         category = "required" if AnalysisType.BEARISH_RESEARCH in required else "optional"
+        inputs = AnalysisInputs(
+            technical=technical,
+            sentiment=sentiment,
+            news=news,
+            fundamental=fundamental,
+            comparative=comparative,
+            trump_analysis=trump,
+        )
         coro = _timed_agent_call(
             "bearish_researcher",
-            bearish_researcher.analyze(symbol, technical, sentiment, news, fundamental, comparative, trump),
+            bearish_researcher.analyze(symbol, inputs),
             collector,
         )
         task = asyncio.create_task(coro)

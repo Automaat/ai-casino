@@ -60,6 +60,7 @@ from src.daemon.config.trading import (
     ScheduleConfig,
     StateConfig,
 )
+from src.daemon.config.workflow import WorkflowConfigDaemon
 
 __all__ = [
     "AnalysisOrchestratorConfig",
@@ -107,6 +108,7 @@ __all__ = [
     "TelegramNotificationConfig",
     "TradingMode",
     "TrumpWatcherConfig",
+    "WorkflowConfigDaemon",
 ]
 
 
@@ -160,6 +162,72 @@ class DaemonConfig(BaseModel):
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     risk_validation: RiskValidationConfig = Field(default_factory=RiskValidationConfig)
+    workflow: WorkflowConfigDaemon = Field(default_factory=WorkflowConfigDaemon)
+
+    @staticmethod
+    def _extract_config_sections(daemon_data: dict) -> dict[str, dict]:
+        """Extract all config sections from daemon data.
+
+        Args:
+            daemon_data: Raw daemon configuration dict
+
+        Returns:
+            Dict mapping section names to their config data
+        """
+        # Extract top-level sections
+        sections = {
+            "paper_trading": daemon_data.pop("paper_trading", {}) or {},
+            "schedule": daemon_data.pop("schedule", {}) or {},
+            "state": daemon_data.pop("state", {}) or {},
+            "journal": daemon_data.pop("journal", {}) or {},
+            "health": daemon_data.pop("health", {}) or {},
+            "optimization": daemon_data.pop("optimization", {}) or {},
+            "screening": daemon_data.pop("screening", {}) or {},
+            "discovery": daemon_data.pop("discovery", {}) or {},
+            "liquidity_filters": daemon_data.pop("liquidity_filters", {}) or {},
+            "prefetch": daemon_data.pop("prefetch", {}) or {},
+            "sector_rotation": daemon_data.pop("sector_rotation", {}) or {},
+            "earnings_calendar": daemon_data.pop("earnings_calendar", {}) or {},
+            "peer_analysis": daemon_data.pop("peer_analysis", {}) or {},
+            "correlation_audit": daemon_data.pop("correlation_audit", {}) or {},
+            "reporting": daemon_data.pop("reporting", {}) or {},
+            "risk_limits": daemon_data.pop("risk_limits", {}) or {},
+            "rebalancing": daemon_data.pop("rebalancing", {}) or {},
+            "signal_tracking": daemon_data.pop("signal_tracking", {}) or {},
+            "pre_trade_backtesting": daemon_data.pop("pre_trade_backtesting", {}) or {},
+            "game_plan": daemon_data.pop("game_plan", {}) or {},
+            "position_sizing": daemon_data.pop("position_sizing", {}) or {},
+            "position_management": daemon_data.pop("position_management", {}) or {},
+            "monte_carlo": daemon_data.pop("monte_carlo", {}) or {},
+            "notifications": daemon_data.pop("notifications", {}) or {},
+            "analysis_orchestration": daemon_data.pop("analysis_orchestration", {}) or {},
+            "news_watcher": daemon_data.pop("news_watcher", {}) or {},
+            "social_watcher": daemon_data.pop("social_watcher", {}) or {},
+            "trump_watcher": daemon_data.pop("trump_watcher", {}) or {},
+            "filings_watcher": daemon_data.pop("filings_watcher", {}) or {},
+            "anomaly_watcher": daemon_data.pop("anomaly_watcher", {}) or {},
+            "api": daemon_data.pop("api", {}) or {},
+            "llm": daemon_data.pop("llm", {}) or {},
+            "finbert": daemon_data.pop("finbert", {}) or {},
+            "api_keys": daemon_data.pop("api_keys", {}) or {},
+            "data_sources": daemon_data.pop("data_sources", {}) or {},
+            "database": daemon_data.pop("database", {}) or {},
+            "coordinator": daemon_data.pop("coordinator", {}) or {},
+            "profiling": daemon_data.pop("profiling", {}) or {},
+            "metrics": daemon_data.pop("metrics", {}) or {},
+            "logging": daemon_data.pop("logging", {}) or {},
+            "risk_validation": daemon_data.pop("risk_validation", {}) or {},
+            "workflow": daemon_data.pop("workflow", {}) or {},
+        }
+
+        # Extract nested sections
+        sections["telegram"] = sections["notifications"].pop("telegram", {}) or {}
+        sections["news_sources"] = sections["news_watcher"].pop("sources", {}) or {}
+        sections["circuit_breaker"] = sections["api"].pop("circuit_breaker", {}) or {}
+        sections["adaptive_thresholds"] = sections["coordinator"].pop("adaptive_thresholds", {}) or {}
+        sections["pattern_detection"] = sections["coordinator"].pop("pattern_detection", {}) or {}
+
+        return sections
 
     @classmethod
     def from_yaml(cls, path: Path) -> DaemonConfig:
@@ -175,115 +243,62 @@ class DaemonConfig(BaseModel):
             data = yaml.safe_load(f)
 
         daemon_data = data.get("daemon", {})
-
-        paper_trading_data = daemon_data.pop("paper_trading", {}) or {}
-        schedule_data = daemon_data.pop("schedule", {}) or {}
-        state_data = daemon_data.pop("state", {}) or {}
-        journal_data = daemon_data.pop("journal", {}) or {}
-        health_data = daemon_data.pop("health", {}) or {}
-        optimization_data = daemon_data.pop("optimization", {}) or {}
-        screening_data = daemon_data.pop("screening", {}) or {}
-        discovery_data = daemon_data.pop("discovery", {}) or {}
-        liquidity_filters_data = daemon_data.pop("liquidity_filters", {}) or {}
-        prefetch_data = daemon_data.pop("prefetch", {}) or {}
-        sector_rotation_data = daemon_data.pop("sector_rotation", {}) or {}
-        earnings_calendar_data = daemon_data.pop("earnings_calendar", {}) or {}
-        peer_analysis_data = daemon_data.pop("peer_analysis", {}) or {}
-        correlation_audit_data = daemon_data.pop("correlation_audit", {}) or {}
-        reporting_data = daemon_data.pop("reporting", {}) or {}
-        risk_limits_data = daemon_data.pop("risk_limits", {}) or {}
-        rebalancing_data = daemon_data.pop("rebalancing", {}) or {}
-        signal_tracking_data = daemon_data.pop("signal_tracking", {}) or {}
-        pre_trade_backtesting_data = daemon_data.pop("pre_trade_backtesting", {}) or {}
-        game_plan_data = daemon_data.pop("game_plan", {}) or {}
-        position_sizing_data = daemon_data.pop("position_sizing", {}) or {}
-        position_management_data = daemon_data.pop("position_management", {}) or {}
-        monte_carlo_data = daemon_data.pop("monte_carlo", {}) or {}
-        notifications_data = daemon_data.pop("notifications", {}) or {}
-        analysis_orchestration_data = daemon_data.pop("analysis_orchestration", {}) or {}
-        news_watcher_data = daemon_data.pop("news_watcher", {}) or {}
-        social_watcher_data = daemon_data.pop("social_watcher", {}) or {}
-        trump_watcher_data = daemon_data.pop("trump_watcher", {}) or {}
-        filings_watcher_data = daemon_data.pop("filings_watcher", {}) or {}
-        anomaly_watcher_data = daemon_data.pop("anomaly_watcher", {}) or {}
-        api_data = daemon_data.pop("api", {}) or {}
-        llm_data = daemon_data.pop("llm", {}) or {}
-        finbert_data = daemon_data.pop("finbert", {}) or {}
-        api_keys_data = daemon_data.pop("api_keys", {}) or {}
-        data_sources_data = daemon_data.pop("data_sources", {}) or {}
-        database_data = daemon_data.pop("database", {}) or {}
-        coordinator_data = daemon_data.pop("coordinator", {}) or {}
-        profiling_data = daemon_data.pop("profiling", {}) or {}
-        metrics_data = daemon_data.pop("metrics", {}) or {}
-        logging_data = daemon_data.pop("logging", {}) or {}
-        risk_validation_data = daemon_data.pop("risk_validation", {}) or {}
-
-        # Extract nested telegram config from notifications
-        telegram_data = notifications_data.pop("telegram", {}) or {}
-
-        # Extract nested sources config from news_watcher
-        news_sources_data = news_watcher_data.pop("sources", {}) or {}
-
-        # Extract nested circuit_breaker config from api
-        circuit_breaker_data = api_data.pop("circuit_breaker", {}) or {}
-
-        # Extract nested adaptive_thresholds config from coordinator
-        adaptive_thresholds_data = coordinator_data.pop("adaptive_thresholds", {}) or {}
-
-        # Extract nested pattern_detection config from coordinator
-        pattern_detection_data = coordinator_data.pop("pattern_detection", {}) or {}
+        sections = cls._extract_config_sections(daemon_data)
 
         return cls(
             **daemon_data,
-            paper_trading=PaperTradingConfig(**paper_trading_data),
-            schedule=ScheduleConfig(**schedule_data),
-            state=StateConfig(**state_data),
-            journal=JournalConfig(**journal_data),
-            health=HealthConfig(**health_data),
-            optimization=OptimizationConfig(**optimization_data),
-            screening=ScreeningConfig(**screening_data),
-            discovery=DiscoveryConfig(**discovery_data),
-            liquidity_filters=LiquidityFilterConfig(**liquidity_filters_data),
-            prefetch=PrefetchConfig(**prefetch_data),
-            sector_rotation=SectorRotationConfig(**sector_rotation_data),
-            earnings_calendar=EarningsCalendarConfig(**earnings_calendar_data),
-            peer_analysis=PeerAnalysisConfig(**peer_analysis_data),
-            correlation_audit=CorrelationAuditConfig(**correlation_audit_data),
-            reporting=ReportingConfig(**reporting_data),
-            risk_limits=RiskLimitsConfig(**risk_limits_data),
-            rebalancing=PortfolioRebalancingConfig(**rebalancing_data),
-            signal_tracking=SignalTrackingConfig(**signal_tracking_data),
-            pre_trade_backtesting=PreTradeBacktestingConfig(**pre_trade_backtesting_data),
-            game_plan=GamePlanConfig(**game_plan_data),
-            position_sizing=PositionSizingConfig(**position_sizing_data),
-            position_management=PositionManagementConfig(**position_management_data),
-            monte_carlo=MonteCarloConfig(**monte_carlo_data),
+            paper_trading=PaperTradingConfig(**sections["paper_trading"]),
+            schedule=ScheduleConfig(**sections["schedule"]),
+            state=StateConfig(**sections["state"]),
+            journal=JournalConfig(**sections["journal"]),
+            health=HealthConfig(**sections["health"]),
+            optimization=OptimizationConfig(**sections["optimization"]),
+            screening=ScreeningConfig(**sections["screening"]),
+            discovery=DiscoveryConfig(**sections["discovery"]),
+            liquidity_filters=LiquidityFilterConfig(**sections["liquidity_filters"]),
+            prefetch=PrefetchConfig(**sections["prefetch"]),
+            sector_rotation=SectorRotationConfig(**sections["sector_rotation"]),
+            earnings_calendar=EarningsCalendarConfig(**sections["earnings_calendar"]),
+            peer_analysis=PeerAnalysisConfig(**sections["peer_analysis"]),
+            correlation_audit=CorrelationAuditConfig(**sections["correlation_audit"]),
+            reporting=ReportingConfig(**sections["reporting"]),
+            risk_limits=RiskLimitsConfig(**sections["risk_limits"]),
+            rebalancing=PortfolioRebalancingConfig(**sections["rebalancing"]),
+            signal_tracking=SignalTrackingConfig(**sections["signal_tracking"]),
+            pre_trade_backtesting=PreTradeBacktestingConfig(**sections["pre_trade_backtesting"]),
+            game_plan=GamePlanConfig(**sections["game_plan"]),
+            position_sizing=PositionSizingConfig(**sections["position_sizing"]),
+            position_management=PositionManagementConfig(**sections["position_management"]),
+            monte_carlo=MonteCarloConfig(**sections["monte_carlo"]),
             notifications=NotificationsConfig(
-                **notifications_data, telegram=TelegramNotificationConfig(**telegram_data)
+                **sections["notifications"], telegram=TelegramNotificationConfig(**sections["telegram"])
             ),
-            analysis_orchestration=AnalysisOrchestratorConfig(**analysis_orchestration_data),
+            analysis_orchestration=AnalysisOrchestratorConfig(**sections["analysis_orchestration"]),
             news_watcher=NewsWatcherConfig(
-                **news_watcher_data, sources=NewsSourcesConfig(**news_sources_data)
+                **sections["news_watcher"], sources=NewsSourcesConfig(**sections["news_sources"])
             ),
-            social_watcher=SocialWatcherConfig(**social_watcher_data),
-            trump_watcher=TrumpWatcherConfig(**trump_watcher_data),
-            filings_watcher=FilingsWatcherConfig(**filings_watcher_data),
-            anomaly_watcher=AnomalyWatcherConfig(**anomaly_watcher_data),
-            api=ApiConfig(**api_data, circuit_breaker=CircuitBreakerConfig(**circuit_breaker_data)),
-            llm=LLMConfig(**llm_data),
-            finbert=FinBERTConfig(**finbert_data),
-            api_keys=ApiKeysConfig(**api_keys_data),
-            data_sources=DataSourcesConfig(**data_sources_data),
-            database=DatabaseConfig(**database_data),
+            social_watcher=SocialWatcherConfig(**sections["social_watcher"]),
+            trump_watcher=TrumpWatcherConfig(**sections["trump_watcher"]),
+            filings_watcher=FilingsWatcherConfig(**sections["filings_watcher"]),
+            anomaly_watcher=AnomalyWatcherConfig(**sections["anomaly_watcher"]),
+            api=ApiConfig(
+                **sections["api"], circuit_breaker=CircuitBreakerConfig(**sections["circuit_breaker"])
+            ),
+            llm=LLMConfig(**sections["llm"]),
+            finbert=FinBERTConfig(**sections["finbert"]),
+            api_keys=ApiKeysConfig(**sections["api_keys"]),
+            data_sources=DataSourcesConfig(**sections["data_sources"]),
+            database=DatabaseConfig(**sections["database"]),
             coordinator=CoordinatorConfig(
-                **coordinator_data,
-                adaptive_thresholds=AdaptiveThresholdConfig(**adaptive_thresholds_data),
-                pattern_detection=PatternDetectionConfig(**pattern_detection_data),
+                **sections["coordinator"],
+                adaptive_thresholds=AdaptiveThresholdConfig(**sections["adaptive_thresholds"]),
+                pattern_detection=PatternDetectionConfig(**sections["pattern_detection"]),
             ),
-            profiling=ProfilingConfig(**profiling_data),
-            metrics=MetricsConfig(**metrics_data),
-            logging=LoggingConfig(**logging_data),
-            risk_validation=RiskValidationConfig(**risk_validation_data),
+            profiling=ProfilingConfig(**sections["profiling"]),
+            metrics=MetricsConfig(**sections["metrics"]),
+            logging=LoggingConfig(**sections["logging"]),
+            risk_validation=RiskValidationConfig(**sections["risk_validation"]),
+            workflow=WorkflowConfigDaemon(**sections["workflow"]),
         )
 
     def __repr__(self) -> str:

@@ -118,6 +118,21 @@ class RiskManagementAgent:
             f"max_single={self.max_single_position}%, trailing={enable_trailing_stop}{var_str})"
         )
 
+    @property
+    def portfolio_var_calculator(self) -> PortfolioVaRCalculator | None:
+        """Public accessor for portfolio VaR calculator."""
+        return self._var_calculator
+
+    @property
+    def portfolio_var_config(self) -> PortfolioVaRConfig:
+        """Public accessor for portfolio VaR config."""
+        return self._var_config
+
+    @property
+    def position_sizing_config(self) -> None:
+        """Public accessor for position sizing config (deprecated - config is resolved in __init__)."""
+        return None
+
     def assess(
         self,
         symbol: str,

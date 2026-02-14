@@ -39,6 +39,7 @@ class TradingWorkflow:
         self.use_ensemble = config.use_ensemble
         self.use_meta_agent = config.use_meta_agent
         self.trump_mode = config.trump_mode
+        self.analysis_pattern = config.analysis_pattern
         self.snapshot_on_trade = config.snapshot_on_trade or False
         self.execution_metrics_enabled = config.execution_metrics_enabled
         self.pre_trade_backtest_config = config.pre_trade_backtest_config
@@ -235,6 +236,33 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
+        # Branch based on analysis pattern
+        if self.analysis_pattern == "supervisor":
+            # Supervisor-driven workflow using workers
+            return await self._analyze_supervisor(symbol, period_days, trading_session, extra_context)
+        # Sequential pipeline using agents (legacy)
+        return await self._analyze_sequential(symbol, period_days, trading_session, collector, extra_context)
+
+    async def _analyze_sequential(
+        self,
+        symbol: str,
+        period_days: int,
+        trading_session: TradingSession,
+        collector: ExecutionMetricsCollector | None,
+        extra_context: WorkflowExtraContext | None = None,
+    ) -> TradingWorkflowResult:
+        """Run sequential pipeline workflow using agents (legacy).
+
+        Args:
+            symbol: Stock ticker symbol
+            period_days: Days of historical data
+            trading_session: Trading session type
+            collector: Optional metrics collector
+            extra_context: Optional workflow context
+
+        Returns:
+            TradingWorkflowResult from instrumented analysis
+        """
         from src.workflows.stages.instrumented_analysis import (
             AnalysisRequest,
             AnalysisRequestParams,
@@ -244,6 +272,74 @@ class TradingWorkflow:
         params = AnalysisRequestParams(period_days, trading_session, extra_context)
         request = AnalysisRequest(cast("Any", self), symbol, params, collector)
         return await run_instrumented_analysis(request)
+
+    async def _analyze_supervisor(
+        self,
+        symbol: str,
+        period_days: int,
+        trading_session: TradingSession,
+        extra_context: WorkflowExtraContext | None = None,
+    ) -> TradingWorkflowResult:
+        """Run supervisor-driven workflow using workers.
+
+        Args:
+            symbol: Stock ticker symbol
+            period_days: Days of historical data
+            trading_session: Trading session type
+            extra_context: Optional workflow context
+
+        Returns:
+            TradingWorkflowResult from supervisor coordination
+        """
+        if not self.supervisor:
+            msg = "Supervisor not initialized - cannot use supervisor mode"
+            raise ValueError(msg)
+
+        # Build components bundle
+        components = WorkflowComponents(
+            llm_client=self.llm_client,
+            market_fetcher=self.market_fetcher,
+            news_fetcher=self.news_fetcher,
+            finbert=self.finbert,
+            fundamental_fetcher=self.fundamental_fetcher,
+            container=self._container,
+            broker=self.broker,
+            metrics_tracker=self.metrics_tracker,
+            snapshot_repository=self.snapshot_repository,
+            execution_metric_repository=self.execution_metric_repository,
+            param_store=None,  # TODO: Wire param_store if available
+            historical_cache=None,  # TODO: Wire historical_cache if available
+            portfolio_var_calculator=self.risk_manager.portfolio_var_calculator,
+            portfolio_var_config=self.risk_manager.portfolio_var_config,
+            notification_service=self.notification_service,
+            position_sizing_config=self.risk_manager.position_sizing_config,
+            risk_validation_config=self.risk_validation_config,
+            risk_validator=self.risk_validator,
+            analysis_orchestrator_config=self.analysis_orchestrator_config,
+        )
+
+        # Build config from self
+        from src.workflows.config import WorkflowConfig
+
+        config = WorkflowConfig(
+            use_ensemble=self.use_ensemble,
+            use_meta_agent=self.use_meta_agent,
+            trump_mode=self.trump_mode,
+            analysis_pattern=self.analysis_pattern,
+            snapshot_on_trade=self.snapshot_on_trade,
+            execution_metrics_enabled=self.execution_metrics_enabled,
+            pre_trade_backtest_config=self.pre_trade_backtest_config,
+        )
+
+        # Delegate to supervisor
+        return await self.supervisor.coordinate(
+            symbol=symbol,
+            period_days=period_days,
+            components=components,
+            config=config,
+            trading_session=trading_session,
+            extra_context=extra_context,
+        )
 
     def set_target_allocations(self, allocations: dict[str, float] | None) -> None:
         """Set target portfolio allocations for position sizing.

@@ -33,6 +33,22 @@ daemon:
     # Minimum win rate required (0.0-1.0)
     min_win_rate: 0.45
 
+  # Workflow execution configuration
+  workflow:
+    # Workflow execution pattern
+    # - sequential: Use 8-stage pipeline with agents (legacy, stable)
+    # - supervisor: Use supervisor-driven adaptive workflow with workers (new, experimental)
+    analysis_pattern: sequential
+
+    # Use ensemble strategy combining multiple technical indicators
+    use_ensemble: false
+
+    # Use meta-agent for dynamic strategy selection based on market regime
+    use_meta_agent: true
+
+    # Enable Trump social media analysis (requires Truth Social API)
+    trump_mode: false
+
   schedule:
     # Market hours (Eastern Time)
     start_time: "09:30"
