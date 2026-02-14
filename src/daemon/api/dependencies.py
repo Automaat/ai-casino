@@ -3,8 +3,24 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.database.connection import get_session
 from src.database.repositories.metadata import MetadataRepository
+
+
+@asynccontextmanager
+async def get_db_session() -> AsyncIterator[AsyncSession]:
+    """Get database session for API requests.
+
+    This ensures the session is created in the FastAPI event loop,
+    avoiding "bound to different event loop" errors.
+
+    Yields:
+        AsyncSession for database operations
+    """
+    async with get_session() as session:
+        yield session
 
 
 @asynccontextmanager

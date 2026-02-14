@@ -13,6 +13,8 @@ from src.daemon.state.models import DiscoveryHistoryRecord
 from src.discovery.models import ActiveDiscoveryCandidate, DiscoveryCandidate, DiscoverySourceDetail
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
     from src.database.repositories.discovery import DiscoveryHistoryRepository
     from src.database.repositories.metadata import MetadataRepository
@@ -39,8 +41,13 @@ class DiscoveryStateManager(StateManager):
         self._active_discovery_repository = active_discovery_repository
         logger.debug("DiscoveryStateManager repositories injected")
 
-    async def get_last_discovery(self) -> datetime | None:
+    async def get_last_discovery(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last discovery timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("discovery.last_discovery")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("discovery.last_discovery")
@@ -50,35 +57,57 @@ class DiscoveryStateManager(StateManager):
         if self._metadata_repository and value is not None:
             await self._metadata_repository.set("discovery.last_discovery", value)
 
-    async def get_discovery_history(self, limit: int = 100) -> list[DiscoveryHistoryRecord]:
+    async def get_discovery_history(
+        self, limit: int = 100, session: AsyncSession | None = None
+    ) -> list[DiscoveryHistoryRecord]:
         """Get discovery history with lazy loading."""
+        if session:
+            from src.database.repositories.discovery import DiscoveryHistoryRepository
+
+            repo = DiscoveryHistoryRepository(session)
+            return await repo.get_recent_discoveries(days=30)
         if not self._discovery_repository:
             return []
         if self._discovery_cache is None:
             self._discovery_cache = await self._discovery_repository.get_recent_discoveries(days=30)
         return self._discovery_cache
 
-    async def get_active_discovery_candidates(self) -> list[DiscoveryCandidate]:
+    def _to_discovery_candidate(self, active_candidate: ActiveDiscoveryCandidate) -> DiscoveryCandidate:
+        """Convert ActiveDiscoveryCandidate to DiscoveryCandidate.
+
+        Args:
+            active_candidate: ActiveDiscoveryCandidate from repository
+
+        Returns:
+            DiscoveryCandidate with converted fields
+        """
+        from src.discovery.models import DiscoverySource
+
+        return DiscoveryCandidate(
+            symbol=active_candidate.symbol,
+            name="Unknown",
+            sector="Unknown",
+            sources=[DiscoverySource(s.source_type) for s in active_candidate.sources],
+            composite_score=active_candidate.composite_score,
+            source_scores={s.source_type: s.weight for s in active_candidate.sources},
+            discovery_timestamp=active_candidate.discovered_at,
+            ttl_expires_at=active_candidate.ttl_expires_at,
+        )
+
+    async def get_active_discovery_candidates(
+        self, session: AsyncSession | None = None
+    ) -> list[DiscoveryCandidate]:
         """Get all active discovery candidates from DB, converted to DiscoveryCandidate."""
+        if session:
+            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+
+            repo = ActiveDiscoveryCandidateRepository(session)
+            active_candidates = await repo.get_all_active()
+            return [self._to_discovery_candidate(c) for c in active_candidates]
         if not self._active_discovery_repository:
             return []
         active_candidates = await self._active_discovery_repository.get_all_active()
-        # Convert ActiveDiscoveryCandidate to DiscoveryCandidate for backward compatibility
-        from src.discovery.models import DiscoverySource
-
-        return [
-            DiscoveryCandidate(
-                symbol=c.symbol,
-                name="Unknown",
-                sector="Unknown",
-                sources=[DiscoverySource(s.source_type) for s in c.sources],
-                composite_score=c.composite_score,
-                source_scores={s.source_type: s.weight for s in c.sources},
-                discovery_timestamp=c.discovered_at,
-                ttl_expires_at=c.ttl_expires_at,
-            )
-            for c in active_candidates
-        ]
+        return [self._to_discovery_candidate(c) for c in active_candidates]
 
     async def set_active_discovery_candidates(self, value: list[DiscoveryCandidate]) -> None:
         """Set active discovery candidates in DB (replaces all)."""
@@ -173,9 +202,9 @@ class DiscoveryStateManager(StateManager):
         logger.info(f"Expired {deleted_count} discovery candidates")
         return []  # Return empty list since we don't track individual expired symbols
 
-    async def get_active_discovery_symbols(self) -> list[str]:
+    async def get_active_discovery_symbols(self, session: AsyncSession | None = None) -> list[str]:
         """Get symbols from active discovery candidates."""
-        candidates = await self.get_active_discovery_candidates()
+        candidates = await self.get_active_discovery_candidates(session=session)
         return [c.symbol for c in candidates]
 
     def __repr__(self) -> str:

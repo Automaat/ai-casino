@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
@@ -109,8 +110,11 @@ class BrokerManager:
                     logger.warning(f"Failed to init broker for watchlist merging: {e}")
                     self.broker = None
 
-    async def get_merged_watchlist(self) -> list[str]:
+    async def get_merged_watchlist(self, session: AsyncSession | None = None) -> list[str]:
         """Get watchlist merged with broker positions and screening candidates.
+
+        Args:
+            session: Optional database session for API requests
 
         Returns:
             Deduplicated list combining config watchlist, broker positions,
@@ -132,7 +136,7 @@ class BrokerManager:
         self._merge_broker_positions(merged_watchlist, seen)
 
         # Source 3: active discovery candidates (ordered by score)
-        await self._merge_discovery_candidates(merged_watchlist, seen)
+        await self._merge_discovery_candidates(merged_watchlist, seen, session=session)
 
         return merged_watchlist
 
@@ -158,9 +162,11 @@ class BrokerManager:
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to fetch positions for watchlist merge: {e}")
 
-    async def _merge_discovery_candidates(self, merged_watchlist: list[str], seen: set[str]) -> None:
+    async def _merge_discovery_candidates(
+        self, merged_watchlist: list[str], seen: set[str], session: AsyncSession | None = None
+    ) -> None:
         """Merge discovery candidates or screening results into watchlist."""
-        active_candidates = await self.state.get_active_discovery_candidates()
+        active_candidates = await self.state.get_active_discovery_candidates(session=session)
         if self.config.discovery.enabled and active_candidates:
             # Expire stale candidates first
             expired = await self.state.expire_stale_candidates()
@@ -169,14 +175,14 @@ class BrokerManager:
 
             # Add active candidates (already sorted by score in discovery engine)
             # Refresh active candidates after expiration
-            active_candidates = await self.state.get_active_discovery_candidates()
+            active_candidates = await self.state.get_active_discovery_candidates(session=session)
             discovery_symbols = [c.symbol for c in active_candidates if c.symbol not in seen]
             if discovery_symbols:
                 logger.info(f"Merged {len(discovery_symbols)} discovery candidates: {discovery_symbols}")
                 merged_watchlist.extend(discovery_symbols)
                 seen.update(discovery_symbols)
         elif self.config.screening.enabled:
-            screening_history = await self.state.get_screening_history(limit=1)
+            screening_history = await self.state.get_screening_history(limit=1, session=session)
             if screening_history:
                 # Fallback to old screening (backward compatible)
                 latest = screening_history[-1]

@@ -2,9 +2,11 @@
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
     CorrelationMatrixResponse,
     PositionResponse,
@@ -130,7 +132,9 @@ async def get_snapshots(request: Request, days: int = 30) -> SnapshotsResponse:
 
 
 @router.get("/portfolio/rebalance", response_model=RebalanceResponse)
-async def get_rebalance(request: Request) -> RebalanceResponse:
+async def get_rebalance(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> RebalanceResponse:
     """Get latest portfolio rebalance data."""
     components = get_components(request)
 
@@ -138,7 +142,7 @@ async def get_rebalance(request: Request) -> RebalanceResponse:
     rebalancing_enabled = components.config.rebalancing.enabled
 
     # If disabled or no history, return status-only response
-    rebalancing_history = await components.state.get_rebalancing_history(limit=1)
+    rebalancing_history = await components.state.get_rebalancing_history(limit=1, session=session)
     if not rebalancing_enabled or not rebalancing_history:
         return RebalanceResponse(enabled=rebalancing_enabled)
 
@@ -179,11 +183,13 @@ async def get_rebalance(request: Request) -> RebalanceResponse:
 
 
 @router.get("/risk", response_model=RiskReportResponse | None)
-async def get_risk(request: Request) -> RiskReportResponse | None:
+async def get_risk(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> RiskReportResponse | None:
     """Get latest risk report."""
     components = get_components(request)
 
-    risk_history = await components.state.get_risk_report_history(limit=1)
+    risk_history = await components.state.get_risk_report_history(limit=1, session=session)
     if not risk_history:
         return None
 
@@ -202,10 +208,12 @@ async def get_risk(request: Request) -> RiskReportResponse | None:
 
 
 @router.get("/risk/history", response_model=RiskHistoryResponse)
-async def get_risk_history(request: Request) -> RiskHistoryResponse:
+async def get_risk_history(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> RiskHistoryResponse:
     """Get historical risk reports."""
     components = get_components(request)
-    all_reports = await components.state.get_risk_report_history(limit=1000)
+    all_reports = await components.state.get_risk_report_history(limit=1000, session=session)
     reports = [
         RiskReportResponse(
             timestamp=r.timestamp,
@@ -223,10 +231,12 @@ async def get_risk_history(request: Request) -> RiskHistoryResponse:
 
 
 @router.get("/sector-rotation/latest", response_model=SectorRotationResponse | None)
-async def get_sector_rotation(request: Request) -> SectorRotationResponse | None:
+async def get_sector_rotation(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> SectorRotationResponse | None:
     """Get latest sector rotation analysis."""
     components = get_components(request)
-    rotation_history = await components.state.get_sector_rotation_history(limit=1)
+    rotation_history = await components.state.get_sector_rotation_history(limit=1, session=session)
     if not rotation_history:
         return None
     latest = rotation_history[-1]

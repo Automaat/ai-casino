@@ -19,6 +19,8 @@ from src.daemon.state.models import (
 from src.screening.screener import ScreeningResult
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
     from src.database.repositories.metadata import MetadataRepository
     from src.database.repositories.prefetch import PrefetchRecordRepository
@@ -56,8 +58,13 @@ class DataPipelineStateManager(StateManager):
         self._profiling_repository = profiling_repository
         logger.debug("DataPipelineStateManager repositories injected")
 
-    async def get_last_prefetch(self) -> datetime | None:
+    async def get_last_prefetch(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last prefetch timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("data_pipeline.last_prefetch")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("data_pipeline.last_prefetch")
@@ -67,8 +74,13 @@ class DataPipelineStateManager(StateManager):
         if self._metadata_repository and value is not None:
             await self._metadata_repository.set("data_pipeline.last_prefetch", value)
 
-    async def get_last_pre_market_refresh(self) -> datetime | None:
+    async def get_last_pre_market_refresh(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last pre-market refresh timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("data_pipeline.last_pre_market_refresh")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("data_pipeline.last_pre_market_refresh")
@@ -78,8 +90,13 @@ class DataPipelineStateManager(StateManager):
         if self._metadata_repository and value is not None:
             await self._metadata_repository.set("data_pipeline.last_pre_market_refresh", value)
 
-    async def get_last_after_hours_screening(self) -> datetime | None:
+    async def get_last_after_hours_screening(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last after-hours screening timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("data_pipeline.last_after_hours_screening")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("data_pipeline.last_after_hours_screening")
@@ -89,38 +106,71 @@ class DataPipelineStateManager(StateManager):
         if self._metadata_repository and value is not None:
             await self._metadata_repository.set("data_pipeline.last_after_hours_screening", value)
 
-    async def get_last_earnings_fetch(self) -> datetime | None:
+    async def get_last_earnings_fetch(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last earnings fetch timestamp from DB."""
+        if session:
+            from src.database.repositories.metadata import MetadataRepository
+
+            repo = MetadataRepository(session)
+            return await repo.get_datetime("data_pipeline.last_earnings_fetch")
         if not self._metadata_repository:
             return None
         return await self._metadata_repository.get_datetime("data_pipeline.last_earnings_fetch")
 
-    async def get_prefetch_history(self, limit: int = 30) -> list[PrefetchRecord]:
+    async def get_prefetch_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[PrefetchRecord]:
         """Get prefetch history with lazy loading."""
+        if session:
+            from src.database.repositories.prefetch import PrefetchRecordRepository
+
+            repo = PrefetchRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._prefetch_repository:
             return []
         if self._prefetch_cache is None:
             self._prefetch_cache = await self._prefetch_repository.get_recent(limit)
         return self._prefetch_cache
 
-    async def get_screening_history(self, limit: int = 30) -> list[ScreeningRecord]:
+    async def get_screening_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[ScreeningRecord]:
         """Get screening history with lazy loading."""
+        if session:
+            from src.database.repositories.screening import ScreeningRecordRepository
+
+            repo = ScreeningRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._screening_repository:
             return []
         if self._screening_cache is None:
             self._screening_cache = await self._screening_repository.get_recent(limit)
         return self._screening_cache
 
-    async def get_earnings_calendar_history(self, limit: int = 10) -> list[EarningsCalendarRecord]:
+    async def get_earnings_calendar_history(
+        self, limit: int = 10, session: AsyncSession | None = None
+    ) -> list[EarningsCalendarRecord]:
         """Get earnings calendar history with lazy loading."""
+        if session:
+            from src.database.repositories.earnings_calendar import EarningsCalendarRecordRepository
+
+            repo = EarningsCalendarRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._earnings_repository:
             return []
         if self._earnings_cache is None:
             self._earnings_cache = await self._earnings_repository.get_recent(limit)
         return self._earnings_cache
 
-    async def get_profiling_history(self, limit: int = 100) -> list[ProfilingRecord]:
+    async def get_profiling_history(
+        self, limit: int = 100, session: AsyncSession | None = None
+    ) -> list[ProfilingRecord]:
         """Get profiling history with lazy loading."""
+        if session:
+            from src.database.repositories.profiling import ProfilingRecordRepository
+
+            repo = ProfilingRecordRepository(session)
+            return await repo.get_recent(limit)
         if not self._profiling_repository:
             return []
         if self._profiling_cache is None:
