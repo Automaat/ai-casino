@@ -1,6 +1,6 @@
 """Paper trading validation endpoints."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,13 +22,12 @@ async def get_paper_trading_validation(
     """
     components = get_components(request)
 
-    # Get or create metrics tracker
+    # Create metrics tracker for this request (avoid mutating shared component)
     from src.database.repositories.trade import TradeRepository
     from src.metrics.tracker import create_metrics_tracker
 
-    if components.metrics_tracker is None:
-        trade_repo = TradeRepository(session)
-        components.metrics_tracker = create_metrics_tracker(trade_repository=trade_repo)
+    trade_repo = TradeRepository(session)
+    metrics_tracker = create_metrics_tracker(trade_repository=trade_repo)
 
     # Create validator
     from src.daemon.paper_trading_validator import PaperTradingValidator
@@ -36,7 +35,7 @@ async def get_paper_trading_validation(
     validator = PaperTradingValidator(
         config=components.config.paper_trading,
         state=components.state,
-        metrics_tracker=components.metrics_tracker,
+        metrics_tracker=metrics_tracker,
     )
 
     # Assess readiness
@@ -62,4 +61,4 @@ async def get_paper_trading_validation(
         )
     except Exception as e:
         logger.opt(exception=True).error(f"Failed to assess paper trading readiness: {e}")
-        raise
+        raise HTTPException(status_code=500, detail="Failed to assess paper trading readiness") from e

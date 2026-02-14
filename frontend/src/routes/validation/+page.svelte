@@ -34,9 +34,32 @@
 		}
 	});
 
+	function isLowerBetterMetric(criterion: ValidationCriterion): boolean {
+		// Only "Max Drawdown" is a lower-is-better metric
+		return criterion.name === 'Max Drawdown';
+	}
+
 	function getProgressPercent(criterion: ValidationCriterion): number {
 		if (criterion.threshold === 0) return 0;
-		return Math.min((criterion.current_value / criterion.threshold) * 100, 100);
+
+		const ratio = criterion.current_value / criterion.threshold;
+		let risk: number;
+
+		if (isLowerBetterMetric(criterion)) {
+			// For lower-is-better metrics (e.g. Max Drawdown),
+			// risk increases as current_value approaches/exceeds the threshold
+			risk = Math.max(0, Math.min(ratio, 1));
+		} else {
+			// For higher-is-better metrics, risk increases as current_value
+			// falls below the threshold. At/above threshold => no risk
+			if (ratio >= 1) {
+				risk = 0;
+			} else {
+				risk = 1 - Math.max(0, ratio);
+			}
+		}
+
+		return risk * 100;
 	}
 
 	function getProgressColor(criterion: ValidationCriterion): string {
