@@ -93,82 +93,52 @@ class PortfolioStateManager(StateManager):
         self._monte_carlo_repository = repos.monte_carlo_repository
         logger.debug("PortfolioStateManager repositories injected")
 
-    async def get_last_optimization(self, session: AsyncSession | None = None) -> datetime | None:
-        """Get last optimization timestamp from DB."""
+    async def _get_metadata_datetime(self, key: str, session: AsyncSession | None = None) -> datetime | None:
+        """Get datetime metadata value, supporting both session and injected repository.
+
+        Args:
+            key: Metadata key to fetch
+            session: Optional session for API endpoints
+
+        Returns:
+            Datetime value or None if not found/unavailable
+        """
         if session:
             from src.database.repositories.metadata import MetadataRepository
 
             repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_optimization")
+            return await repo.get_datetime(key)
         if not self._metadata_repository:
             return None
-        return await self._metadata_repository.get_datetime("portfolio.last_optimization")
+        return await self._metadata_repository.get_datetime(key)
+
+    async def get_last_optimization(self, session: AsyncSession | None = None) -> datetime | None:
+        """Get last optimization timestamp from DB."""
+        return await self._get_metadata_datetime("portfolio.last_optimization", session)
 
     async def get_last_portfolio_rebalancing(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last rebalancing timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
-
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_portfolio_rebalancing")
-        if not self._metadata_repository:
-            return None
-        return await self._metadata_repository.get_datetime("portfolio.last_portfolio_rebalancing")
+        return await self._get_metadata_datetime("portfolio.last_portfolio_rebalancing", session)
 
     async def get_last_sector_rotation(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last sector rotation timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
-
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_sector_rotation")
-        if not self._metadata_repository:
-            return None
-        return await self._metadata_repository.get_datetime("portfolio.last_sector_rotation")
+        return await self._get_metadata_datetime("portfolio.last_sector_rotation", session)
 
     async def get_last_peer_analysis(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last peer analysis timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
-
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_peer_analysis")
-        if not self._metadata_repository:
-            return None
-        return await self._metadata_repository.get_datetime("portfolio.last_peer_analysis")
+        return await self._get_metadata_datetime("portfolio.last_peer_analysis", session)
 
     async def get_last_correlation_audit(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last correlation audit timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
-
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_correlation_audit")
-        if not self._metadata_repository:
-            return None
-        return await self._metadata_repository.get_datetime("portfolio.last_correlation_audit")
+        return await self._get_metadata_datetime("portfolio.last_correlation_audit", session)
 
     async def get_last_risk_report(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last risk report timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
-
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_risk_report")
-        if not self._metadata_repository:
-            return None
-        return await self._metadata_repository.get_datetime("portfolio.last_risk_report")
+        return await self._get_metadata_datetime("portfolio.last_risk_report", session)
 
     async def get_last_tearsheet(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last tearsheet timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
-
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("portfolio.last_tearsheet")
-        if not self._metadata_repository:
-            return None
-        return await self._metadata_repository.get_datetime("portfolio.last_tearsheet")
+        return await self._get_metadata_datetime("portfolio.last_tearsheet", session)
 
     async def get_active_target_allocations(self) -> dict[str, float] | None:
         """Get active target allocations from DB."""
