@@ -525,18 +525,21 @@ async def _publish_routing_event(
     from src.daemon.event_bus import DashboardEvent, EventBus, EventType
 
     if isinstance(event_bus, EventBus):
-        routing_event = DashboardEvent(
-            event_type=EventType.SUPERVISOR_ROUTING_COMPLETE,
-            data={
-                "workflow_id": workflow_id,
-                "symbol": symbol,
-                "required_analyses": [a.value for a in routing_decision.required_analyses],
-                "optional_analyses": [a.value for a in routing_decision.optional_analyses],
-                "skip_analyses": {k.value: v for k, v in routing_decision.skip_analyses.items()},
-                "reasoning": routing_decision.reasoning,
-            },
-        )
-        await event_bus.publish(routing_event)
+        try:
+            routing_event = DashboardEvent(
+                event_type=EventType.SUPERVISOR_ROUTING_COMPLETE,
+                data={
+                    "workflow_id": workflow_id,
+                    "symbol": symbol,
+                    "required_analyses": [a.value for a in routing_decision.required_analyses],
+                    "optional_analyses": [a.value for a in routing_decision.optional_analyses],
+                    "skip_analyses": {k.value: v for k, v in routing_decision.skip_analyses.items()},
+                    "reasoning": routing_decision.reasoning,
+                },
+            )
+            await event_bus.publish(routing_event)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to publish routing event: {e}")
 
 
 async def _publish_metrics_event(
@@ -559,22 +562,25 @@ async def _publish_metrics_event(
     from src.daemon.event_bus import DashboardEvent, EventBus, EventType
 
     if isinstance(event_bus, EventBus):
-        metrics_event = DashboardEvent(
-            event_type=EventType.SUPERVISOR_METRICS_UPDATED,
-            data={
-                "workflow_id": workflow_id,
-                "symbol": symbol,
-                "total_workers": metrics_collector.total_workers,
-                "successful_workers": metrics_collector.successful_workers,
-                "failed_workers": metrics_collector.failed_workers,
-                "routing_decision_ms": metrics_collector.routing_decision_ms,
-                "group1_execution_ms": metrics_collector.group1_execution_ms,
-                "research_execution_ms": metrics_collector.research_execution_ms,
-                "parallel_efficiency_percent": metrics_collector.parallel_efficiency_percent,
-                "timeout_triggered": metrics_collector.timeout_triggered,
-            },
-        )
-        await event_bus.publish(metrics_event)
+        try:
+            metrics_event = DashboardEvent(
+                event_type=EventType.SUPERVISOR_METRICS_UPDATED,
+                data={
+                    "workflow_id": workflow_id,
+                    "symbol": symbol,
+                    "total_workers": metrics_collector.total_workers,
+                    "successful_workers": metrics_collector.successful_workers,
+                    "failed_workers": metrics_collector.failed_workers,
+                    "routing_decision_ms": metrics_collector.routing_decision_ms,
+                    "group1_execution_ms": metrics_collector.group1_execution_ms,
+                    "research_execution_ms": metrics_collector.research_execution_ms,
+                    "parallel_efficiency_percent": metrics_collector.parallel_efficiency_percent,
+                    "timeout_triggered": metrics_collector.timeout_triggered,
+                },
+            )
+            await event_bus.publish(metrics_event)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to publish metrics event: {e}")
 
 
 def _build_output(
