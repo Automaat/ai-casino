@@ -21,7 +21,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
 # Install dependencies (builds wheels)
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra profiling
 
 # Runtime stage - minimal image with only Python and compiled wheels
 FROM python:3.14.3-slim

@@ -11,6 +11,9 @@ from src.daemon.api.models import (
     StateSummaryResponse,
 )
 from src.daemon.api.routers.shared import get_components
+from src.database.connection import get_session
+from src.database.repositories.trade import TradeRepository
+from src.metrics.performance import calculate_win_rate
 
 router = APIRouter(tags=["state"])
 
@@ -31,8 +34,18 @@ async def state_summary(request: Request) -> StateSummaryResponse:
         active_positions = await components.state.get_active_positions()
         positions_count = len(active_positions)
 
-        # Win rate calculation - not available in current state (would need trades history)
+        # Win rate calculation from closed trades
         win_rate = None
+        try:
+            async with get_session() as session:
+                trade_repo = TradeRepository(session)
+                all_trades = await trade_repo.get_all()
+                closed_trades = [t for t in all_trades if t.is_closed()]
+                if closed_trades:
+                    win_rate_pct = calculate_win_rate(closed_trades)
+                    win_rate = win_rate_pct / 100.0  # Convert percentage to decimal
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to calculate win rate: {e}")
 
         # Get recent analyses (last 50), convert to dicts
         all_analyses = await components.state.get_analyses(limit=50)
