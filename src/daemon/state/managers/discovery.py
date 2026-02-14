@@ -15,61 +15,63 @@ from src.discovery.models import ActiveDiscoveryCandidate, DiscoveryCandidate, D
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
-    from src.database.repositories.discovery import DiscoveryHistoryRepository
-    from src.database.repositories.metadata import MetadataRepository
-
 
 class DiscoveryStateManager(StateManager):
     """Stock discovery with TTL management."""
 
-    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
-    _discovery_repository: DiscoveryHistoryRepository | None = PrivateAttr(default=None)
-    _active_discovery_repository: ActiveDiscoveryCandidateRepository | None = PrivateAttr(default=None)
-
     _discovery_cache: list[DiscoveryHistoryRecord] | None = PrivateAttr(default=None)
-
-    def set_repositories(
-        self,
-        metadata_repository: MetadataRepository,
-        discovery_repository: DiscoveryHistoryRepository,
-        active_discovery_repository: ActiveDiscoveryCandidateRepository,
-    ) -> None:
-        """Inject repositories."""
-        self._metadata_repository = metadata_repository
-        self._discovery_repository = discovery_repository
-        self._active_discovery_repository = active_discovery_repository
-        logger.debug("DiscoveryStateManager repositories injected")
 
     async def get_last_discovery(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last discovery timestamp from DB."""
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
+        from src.database.repositories.metadata import MetadataRepository
 
+        if session:
             repo = MetadataRepository(session)
             return await repo.get_datetime("discovery.last_discovery")
-        if not self._metadata_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = MetadataRepository(fresh_session)
+                return await repo.get_datetime("discovery.last_discovery")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get last discovery: {e}")
             return None
-        return await self._metadata_repository.get_datetime("discovery.last_discovery")
 
     async def set_last_discovery(self, value: datetime | None) -> None:
         """Set last discovery timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("discovery.last_discovery", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await MetadataRepository(session).set("discovery.last_discovery", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last discovery: {e}")
 
     async def get_discovery_history(
         self, limit: int = 100, session: AsyncSession | None = None
     ) -> list[DiscoveryHistoryRecord]:
         """Get discovery history with lazy loading."""
-        if session:
-            from src.database.repositories.discovery import DiscoveryHistoryRepository
+        from src.database.repositories.discovery import DiscoveryHistoryRepository
 
+        if session:
             repo = DiscoveryHistoryRepository(session)
             return await repo.get_recent_discoveries(days=30)
-        if not self._discovery_repository:
-            return []
+
         if self._discovery_cache is None:
-            self._discovery_cache = await self._discovery_repository.get_recent_discoveries(days=30)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = DiscoveryHistoryRepository(fresh_session)
+                    self._discovery_cache = await repo.get_recent_discoveries(days=30)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get discovery history: {e}")
+                return []
         return self._discovery_cache
 
     def _to_discovery_candidate(self, active_candidate: ActiveDiscoveryCandidate) -> DiscoveryCandidate:
@@ -98,93 +100,116 @@ class DiscoveryStateManager(StateManager):
         self, session: AsyncSession | None = None
     ) -> list[DiscoveryCandidate]:
         """Get all active discovery candidates from DB, converted to DiscoveryCandidate."""
-        if session:
-            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+        from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
 
+        if session:
             repo = ActiveDiscoveryCandidateRepository(session)
             active_candidates = await repo.get_all_active()
             return [self._to_discovery_candidate(c) for c in active_candidates]
-        if not self._active_discovery_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = ActiveDiscoveryCandidateRepository(fresh_session)
+                active_candidates = await repo.get_all_active()
+                return [self._to_discovery_candidate(c) for c in active_candidates]
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get active discovery candidates: {e}")
             return []
-        active_candidates = await self._active_discovery_repository.get_all_active()
-        return [self._to_discovery_candidate(c) for c in active_candidates]
 
     async def set_active_discovery_candidates(self, value: list[DiscoveryCandidate]) -> None:
         """Set active discovery candidates in DB (replaces all)."""
-        if not self._active_discovery_repository:
-            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
 
-        # Delete all existing
-        await self._active_discovery_repository.delete_expired(datetime.max.replace(tzinfo=UTC))
+            async with get_session() as session:
+                repo = ActiveDiscoveryCandidateRepository(session)
 
-        # Insert new ones
-        for candidate in value:
-            sources = [
-                DiscoverySourceDetail(
-                    source_type=str(source.value),
-                    weight=candidate.source_scores.get(str(source.value), 0.0),
-                    metadata={},
-                )
-                for source in candidate.sources
-            ]
+                # Delete all existing
+                await repo.delete_expired(datetime.max.replace(tzinfo=UTC))
 
-            active_candidate = ActiveDiscoveryCandidate(
-                symbol=candidate.symbol,
-                discovered_at=candidate.discovery_timestamp,
-                composite_score=candidate.composite_score,
-                sources=sources,
-                ttl_expires_at=candidate.ttl_expires_at,
-            )
-            await self._active_discovery_repository.create(active_candidate)
+                # Insert new ones
+                for candidate in value:
+                    sources = [
+                        DiscoverySourceDetail(
+                            source_type=str(source.value),
+                            weight=candidate.source_scores.get(str(source.value), 0.0),
+                            metadata={},
+                        )
+                        for source in candidate.sources
+                    ]
+
+                    active_candidate = ActiveDiscoveryCandidate(
+                        symbol=candidate.symbol,
+                        discovered_at=candidate.discovery_timestamp,
+                        composite_score=candidate.composite_score,
+                        sources=sources,
+                        ttl_expires_at=candidate.ttl_expires_at,
+                    )
+                    await repo.create(active_candidate)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set active discovery candidates: {e}")
 
     async def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
         """Record discovery run and update active candidates."""
         now = datetime.now(UTC)
 
-        # Add history records to DB
-        for candidate in candidates:
-            history_record = DiscoveryHistoryRecord(
-                symbol=candidate.symbol,
-                discovered_at=candidate.discovery_timestamp,
-                composite_score=candidate.composite_score,
-                sources=candidate.sources,
-                added_to_watchlist=candidate.symbol in added_symbols,
-                ttl_expires_at=candidate.ttl_expires_at,
-            )
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+            from src.database.repositories.discovery import DiscoveryHistoryRepository
+            from src.database.repositories.metadata import MetadataRepository
 
-            if self._discovery_repository:
-                await self._discovery_repository.create(history_record)
+            async with get_session() as session:
+                discovery_repo = DiscoveryHistoryRepository(session)
+                active_repo = ActiveDiscoveryCandidateRepository(session)
+                metadata_repo = MetadataRepository(session)
 
-        # Update active candidates in DB
-        if self._active_discovery_repository:
-            for candidate in candidates:
-                # Convert DiscoverySource enums to DiscoverySourceDetail
-                sources = [
-                    DiscoverySourceDetail(
-                        source_type=str(source.value),
-                        weight=candidate.source_scores.get(str(source.value), 0.0),
-                        metadata={},
+                # Add history records to DB
+                for candidate in candidates:
+                    history_record = DiscoveryHistoryRecord(
+                        symbol=candidate.symbol,
+                        discovered_at=candidate.discovery_timestamp,
+                        composite_score=candidate.composite_score,
+                        sources=candidate.sources,
+                        added_to_watchlist=candidate.symbol in added_symbols,
+                        ttl_expires_at=candidate.ttl_expires_at,
                     )
-                    for source in candidate.sources
-                ]
+                    await discovery_repo.create(history_record)
 
-                active_candidate = ActiveDiscoveryCandidate(
-                    symbol=candidate.symbol,
-                    discovered_at=candidate.discovery_timestamp,
-                    composite_score=candidate.composite_score,
-                    sources=sources,
-                    ttl_expires_at=candidate.ttl_expires_at,
-                )
+                # Update active candidates in DB
+                for candidate in candidates:
+                    # Convert DiscoverySource enums to DiscoverySourceDetail
+                    sources = [
+                        DiscoverySourceDetail(
+                            source_type=str(source.value),
+                            weight=candidate.source_scores.get(str(source.value), 0.0),
+                            metadata={},
+                        )
+                        for source in candidate.sources
+                    ]
 
-                # Check if exists, update or create
-                existing = await self._active_discovery_repository.get_by_symbol(candidate.symbol)
-                if existing:
-                    await self._active_discovery_repository.delete_by_symbol(candidate.symbol)
-                await self._active_discovery_repository.create(active_candidate)
+                    active_candidate = ActiveDiscoveryCandidate(
+                        symbol=candidate.symbol,
+                        discovered_at=candidate.discovery_timestamp,
+                        composite_score=candidate.composite_score,
+                        sources=sources,
+                        ttl_expires_at=candidate.ttl_expires_at,
+                    )
 
-        # Update metadata
-        if self._metadata_repository:
-            await self._metadata_repository.set("discovery.last_discovery", now)
+                    # Check if exists, update or create
+                    existing = await active_repo.get_by_symbol(candidate.symbol)
+                    if existing:
+                        await active_repo.delete_by_symbol(candidate.symbol)
+                    await active_repo.create(active_candidate)
+
+                # Update metadata
+                await metadata_repo.set("discovery.last_discovery", now)
+
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record discovery: {e}")
 
         # Invalidate cache
         self._discovery_cache = None
@@ -193,13 +218,20 @@ class DiscoveryStateManager(StateManager):
 
     async def expire_stale_candidates(self) -> list[str]:
         """Remove candidates past TTL, return expired symbols."""
-        if not self._active_discovery_repository:
-            return []
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
 
-        now = datetime.now(UTC)
-        deleted_count = await self._active_discovery_repository.delete_expired(now)
+            now = datetime.now(UTC)
 
-        logger.info(f"Expired {deleted_count} discovery candidates")
+            async with get_session() as session:
+                repo = ActiveDiscoveryCandidateRepository(session)
+                deleted_count = await repo.delete_expired(now)
+
+            logger.info(f"Expired {deleted_count} discovery candidates")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to expire stale candidates: {e}")
+
         return []  # Return empty list since we don't track individual expired symbols
 
     async def get_active_discovery_symbols(self, session: AsyncSession | None = None) -> list[str]:

@@ -182,23 +182,34 @@ def create_optuna_optimizer(n_trials: int = 100) -> OptunaOptimizer:
 
 def create_metrics_tracker(
     daemon_config: DaemonConfig,
-    trade_repository: TradeRepository,
+    trade_repository: TradeRepository | None,
 ) -> BaseMetricsTracker:
-    """Create DatabaseMetricsTracker with config.
+    """Create appropriate metrics tracker with config.
+
+    Returns DatabaseMetricsTracker if repository provided and persistence enabled,
+    otherwise returns JSONL-based MetricsTracker.
 
     Args:
         daemon_config: Daemon configuration
-        trade_repository: Trade repository for persistence
+        trade_repository: Optional trade repository for database mode
 
     Returns:
-        DatabaseMetricsTracker instance
+        Appropriate metrics tracker instance
     """
-    from src.metrics.db_tracker import DatabaseMetricsTracker
+    from loguru import logger
 
-    return DatabaseMetricsTracker(
-        trade_repository=trade_repository,
-        risk_free_rate=daemon_config.metrics.risk_free_rate,
-    )
+    from src.metrics.db_tracker import DatabaseMetricsTracker
+    from src.metrics.tracker import MetricsTracker
+
+    if daemon_config.database.enable_persistence and trade_repository:
+        logger.info("Using DatabaseMetricsTracker")
+        return DatabaseMetricsTracker(
+            trade_repository=trade_repository,
+            risk_free_rate=daemon_config.metrics.risk_free_rate,
+        )
+
+    logger.info("Using JSONL MetricsTracker")
+    return MetricsTracker(risk_free_rate=daemon_config.metrics.risk_free_rate)
 
 
 def create_quantstats_reporter(daemon_config: DaemonConfig) -> QuantStatsReporter:

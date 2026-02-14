@@ -101,9 +101,6 @@ def create_test_container(
         container.quantstats_reporter.override(create_mock_quantstats_reporter())
         container.stock_screener.override(create_mock_stock_screener())
 
-    # Risk audit repository override (mock for unit tests)
-    container.risk_audit_repository.override(create_mock_risk_audit_repository())
-
     return container
 
 
@@ -536,15 +533,4 @@ def create_mock_stock_screener() -> MagicMock:
         screened_at=datetime.now(UTC),
     )
 
-    return mock
-
-
-def create_mock_risk_audit_repository() -> MagicMock:
-    """Create mock RiskAuditRepository.
-
-    Returns:
-        Mock with log_decision method
-    """
-    mock = MagicMock()
-    mock.log_decision = AsyncMock(return_value=None)
     return mock

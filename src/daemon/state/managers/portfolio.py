@@ -24,16 +24,6 @@ from src.daemon.state.models import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from src.daemon.state.repositories import RepositoryBundle
-    from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
-    from src.database.repositories.metadata import MetadataRepository
-    from src.database.repositories.monte_carlo import MonteCarloRecordRepository
-    from src.database.repositories.optimization import OptimizationRecordRepository
-    from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
-    from src.database.repositories.rebalancing import RebalancingRecordRepository
-    from src.database.repositories.risk_report import RiskReportRecordRepository
-    from src.database.repositories.sector_rotation import SectorRotationRecordRepository
-
 
 @dataclass
 class PortfolioRebalancingInput:
@@ -64,15 +54,6 @@ class CorrelationAuditInput:
 class PortfolioStateManager(StateManager):
     """Advanced portfolio analytics (optimization, risk, correlation, peer, sector)."""
 
-    _metadata_repository: MetadataRepository | None = PrivateAttr(default=None)
-    _optimization_repository: OptimizationRecordRepository | None = PrivateAttr(default=None)
-    _rebalancing_repository: RebalancingRecordRepository | None = PrivateAttr(default=None)
-    _sector_rotation_repository: SectorRotationRecordRepository | None = PrivateAttr(default=None)
-    _peer_analysis_repository: PeerAnalysisRecordRepository | None = PrivateAttr(default=None)
-    _correlation_audit_repository: CorrelationAuditRecordRepository | None = PrivateAttr(default=None)
-    _risk_report_repository: RiskReportRecordRepository | None = PrivateAttr(default=None)
-    _monte_carlo_repository: MonteCarloRecordRepository | None = PrivateAttr(default=None)
-
     _optimization_cache: list[OptimizationRecord] | None = PrivateAttr(default=None)
     _rebalancing_cache: list[PortfolioRebalancingRecord] | None = PrivateAttr(default=None)
     _sector_rotation_cache: list[SectorRotationRecord] | None = PrivateAttr(default=None)
@@ -81,20 +62,8 @@ class PortfolioStateManager(StateManager):
     _risk_report_cache: list[RiskReportRecord] | None = PrivateAttr(default=None)
     _monte_carlo_cache: list[MonteCarloRecord] | None = PrivateAttr(default=None)
 
-    def set_repositories(self, repos: RepositoryBundle) -> None:
-        """Inject repositories from bundle."""
-        self._metadata_repository = repos.metadata_repository
-        self._optimization_repository = repos.optimization_repository
-        self._rebalancing_repository = repos.rebalancing_repository
-        self._sector_rotation_repository = repos.sector_rotation_repository
-        self._peer_analysis_repository = repos.peer_analysis_repository
-        self._correlation_audit_repository = repos.correlation_audit_repository
-        self._risk_report_repository = repos.risk_report_repository
-        self._monte_carlo_repository = repos.monte_carlo_repository
-        logger.debug("PortfolioStateManager repositories injected")
-
     async def _get_metadata_datetime(self, key: str, session: AsyncSession | None = None) -> datetime | None:
-        """Get datetime metadata value, supporting both session and injected repository.
+        """Get datetime metadata value with fresh session.
 
         Args:
             key: Metadata key to fetch
@@ -103,14 +72,21 @@ class PortfolioStateManager(StateManager):
         Returns:
             Datetime value or None if not found/unavailable
         """
-        if session:
-            from src.database.repositories.metadata import MetadataRepository
+        from src.database.repositories.metadata import MetadataRepository
 
+        if session:
             repo = MetadataRepository(session)
             return await repo.get_datetime(key)
-        if not self._metadata_repository:
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = MetadataRepository(fresh_session)
+                return await repo.get_datetime(key)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get metadata {key}: {e}")
             return None
-        return await self._metadata_repository.get_datetime(key)
 
     async def get_last_optimization(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last optimization timestamp from DB."""
@@ -142,128 +118,211 @@ class PortfolioStateManager(StateManager):
 
     async def get_active_target_allocations(self) -> dict[str, float] | None:
         """Get active target allocations from DB."""
-        if not self._metadata_repository:
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                return await repo.get_dict("portfolio.active_target_allocations")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get active target allocations: {e}")
             return None
-        return await self._metadata_repository.get_dict("portfolio.active_target_allocations")
 
     async def set_active_target_allocations(self, value: dict[str, float] | None) -> None:
         """Set active target allocations in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("portfolio.active_target_allocations", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("portfolio.active_target_allocations", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set active target allocations: {e}")
 
     async def set_last_sector_rotation(self, value: datetime | None) -> None:
         """Set last sector rotation timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("portfolio.last_sector_rotation", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("portfolio.last_sector_rotation", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last sector rotation: {e}")
 
     async def set_last_correlation_audit(self, value: datetime | None) -> None:
         """Set last correlation audit timestamp in DB."""
-        if self._metadata_repository and value is not None:
-            await self._metadata_repository.set("portfolio.last_correlation_audit", value)
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                repo = MetadataRepository(session)
+                await repo.set("portfolio.last_correlation_audit", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set last correlation audit: {e}")
 
     async def get_optimization_history(
         self, limit: int = 10, session: AsyncSession | None = None
     ) -> list[OptimizationRecord]:
         """Get optimization history with lazy loading."""
-        if session:
-            from src.database.repositories.optimization import OptimizationRecordRepository
+        from src.database.repositories.optimization import OptimizationRecordRepository
 
+        if session:
             repo = OptimizationRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._optimization_repository:
-            return []
+
         if self._optimization_cache is None:
-            self._optimization_cache = await self._optimization_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = OptimizationRecordRepository(fresh_session)
+                    self._optimization_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get optimization history: {e}")
+                return []
         return self._optimization_cache
 
     async def get_rebalancing_history(
         self, limit: int = 30, session: AsyncSession | None = None
     ) -> list[PortfolioRebalancingRecord]:
         """Get rebalancing history with lazy loading."""
-        if session:
-            from src.database.repositories.rebalancing import RebalancingRecordRepository
+        from src.database.repositories.rebalancing import RebalancingRecordRepository
 
+        if session:
             repo = RebalancingRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._rebalancing_repository:
-            return []
+
         if self._rebalancing_cache is None:
-            self._rebalancing_cache = await self._rebalancing_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = RebalancingRecordRepository(fresh_session)
+                    self._rebalancing_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get rebalancing history: {e}")
+                return []
         return self._rebalancing_cache
 
     async def get_sector_rotation_history(
         self, limit: int = 30, session: AsyncSession | None = None
     ) -> list[SectorRotationRecord]:
         """Get sector rotation history with lazy loading."""
-        if session:
-            from src.database.repositories.sector_rotation import SectorRotationRecordRepository
+        from src.database.repositories.sector_rotation import SectorRotationRecordRepository
 
+        if session:
             repo = SectorRotationRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._sector_rotation_repository:
-            return []
+
         if self._sector_rotation_cache is None:
-            self._sector_rotation_cache = await self._sector_rotation_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = SectorRotationRecordRepository(fresh_session)
+                    self._sector_rotation_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get sector rotation history: {e}")
+                return []
         return self._sector_rotation_cache
 
     async def get_peer_analysis_history(
         self, limit: int = 10, session: AsyncSession | None = None
     ) -> list[PeerAnalysisRecord]:
         """Get peer analysis history with lazy loading."""
-        if session:
-            from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
+        from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
 
+        if session:
             repo = PeerAnalysisRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._peer_analysis_repository:
-            return []
+
         if self._peer_analysis_cache is None:
-            self._peer_analysis_cache = await self._peer_analysis_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = PeerAnalysisRecordRepository(fresh_session)
+                    self._peer_analysis_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get peer analysis history: {e}")
+                return []
         return self._peer_analysis_cache
 
     async def get_correlation_audit_history(
         self, limit: int = 10, session: AsyncSession | None = None
     ) -> list[CorrelationAuditRecord]:
         """Get correlation audit history with lazy loading."""
-        if session:
-            from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+        from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
 
+        if session:
             repo = CorrelationAuditRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._correlation_audit_repository:
-            return []
+
         if self._correlation_audit_cache is None:
-            self._correlation_audit_cache = await self._correlation_audit_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = CorrelationAuditRecordRepository(fresh_session)
+                    self._correlation_audit_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get correlation audit history: {e}")
+                return []
         return self._correlation_audit_cache
 
     async def get_risk_report_history(
         self, limit: int = 30, session: AsyncSession | None = None
     ) -> list[RiskReportRecord]:
         """Get risk report history with lazy loading."""
-        if session:
-            from src.database.repositories.risk_report import RiskReportRecordRepository
+        from src.database.repositories.risk_report import RiskReportRecordRepository
 
+        if session:
             repo = RiskReportRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._risk_report_repository:
-            return []
+
         if self._risk_report_cache is None:
-            self._risk_report_cache = await self._risk_report_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = RiskReportRecordRepository(fresh_session)
+                    self._risk_report_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get risk report history: {e}")
+                return []
         return self._risk_report_cache
 
     async def get_monte_carlo_tests(
         self, limit: int = 52, session: AsyncSession | None = None
     ) -> list[MonteCarloRecord]:
         """Get Monte Carlo tests with lazy loading."""
-        if session:
-            from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+        from src.database.repositories.monte_carlo import MonteCarloRecordRepository
 
+        if session:
             repo = MonteCarloRecordRepository(session)
             return await repo.get_recent(limit)
-        if not self._monte_carlo_repository:
-            return []
+
         if self._monte_carlo_cache is None:
-            self._monte_carlo_cache = await self._monte_carlo_repository.get_recent(limit)
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = MonteCarloRecordRepository(fresh_session)
+                    self._monte_carlo_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get Monte Carlo tests: {e}")
+                return []
         return self._monte_carlo_cache
 
     async def record_optimization(
@@ -281,10 +340,16 @@ class PortfolioStateManager(StateManager):
             total_time_seconds=total_time_seconds,
         )
 
-        if self._optimization_repository:
-            await self._optimization_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_optimization", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.optimization import OptimizationRecordRepository
+
+            async with get_session() as session:
+                await OptimizationRecordRepository(session).create(record)
+                await MetadataRepository(session).set("portfolio.last_optimization", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record optimization: {e}")
 
         self._optimization_cache = None
 
@@ -302,13 +367,20 @@ class PortfolioStateManager(StateManager):
             rebalances_pending=input_data.rebalances_pending,
         )
 
-        if self._rebalancing_repository:
-            await self._rebalancing_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_portfolio_rebalancing", now)
-            # Store active target allocations
-            allocations_dict = {a.symbol: a.weight for a in input_data.allocations}
-            await self._metadata_repository.set("portfolio.active_target_allocations", allocations_dict)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.rebalancing import RebalancingRecordRepository
+
+            async with get_session() as session:
+                await RebalancingRecordRepository(session).create(record)
+                metadata_repo = MetadataRepository(session)
+                await metadata_repo.set("portfolio.last_portfolio_rebalancing", now)
+                # Store active target allocations
+                allocations_dict = {a.symbol: a.weight for a in input_data.allocations}
+                await metadata_repo.set("portfolio.active_target_allocations", allocations_dict)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record portfolio rebalancing: {e}")
 
         self._rebalancing_cache = None
 
@@ -331,10 +403,16 @@ class PortfolioStateManager(StateManager):
             flagged_positions=flagged_positions or [],
         )
 
-        if self._sector_rotation_repository:
-            await self._sector_rotation_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_sector_rotation", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.sector_rotation import SectorRotationRecordRepository
+
+            async with get_session() as session:
+                await SectorRotationRecordRepository(session).create(record)
+                await MetadataRepository(session).set("portfolio.last_sector_rotation", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record sector rotation: {e}")
 
         self._sector_rotation_cache = None
 
@@ -357,10 +435,16 @@ class PortfolioStateManager(StateManager):
             total_duration_seconds=total_duration_seconds,
         )
 
-        if self._peer_analysis_repository:
-            await self._peer_analysis_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_peer_analysis", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.peer_analysis import PeerAnalysisRecordRepository
+
+            async with get_session() as session:
+                await PeerAnalysisRecordRepository(session).create(record)
+                await MetadataRepository(session).set("portfolio.last_peer_analysis", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record peer analysis: {e}")
 
         self._peer_analysis_cache = None
 
@@ -378,34 +462,58 @@ class PortfolioStateManager(StateManager):
             total_duration_seconds=input_data.total_duration_seconds,
         )
 
-        if self._correlation_audit_repository:
-            await self._correlation_audit_repository.create(record)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_correlation_audit", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.correlation_audit import CorrelationAuditRecordRepository
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await CorrelationAuditRecordRepository(session).create(record)
+                await MetadataRepository(session).set("portfolio.last_correlation_audit", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record correlation audit: {e}")
 
         self._correlation_audit_cache = None
 
     async def record_risk_report(self, report: RiskReportRecord) -> None:
         """Record a portfolio risk report."""
-        if self._risk_report_repository:
-            await self._risk_report_repository.create(report)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_risk_report", report.timestamp)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.risk_report import RiskReportRecordRepository
+
+            async with get_session() as session:
+                await RiskReportRecordRepository(session).create(report)
+                await MetadataRepository(session).set("portfolio.last_risk_report", report.timestamp)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record risk report: {e}")
 
         self._risk_report_cache = None
 
     async def record_monte_carlo_test(self, record: MonteCarloRecord) -> None:
         """Add Monte Carlo test record."""
-        if self._monte_carlo_repository:
-            await self._monte_carlo_repository.create(record)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.monte_carlo import MonteCarloRecordRepository
+
+            async with get_session() as session:
+                await MonteCarloRecordRepository(session).create(record)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record Monte Carlo test: {e}")
 
         self._monte_carlo_cache = None
 
     async def record_tearsheet(self, symbol: str, html_path: str) -> None:
         """Record a tearsheet generation run."""
         now = datetime.now(UTC)
-        if self._metadata_repository:
-            await self._metadata_repository.set("portfolio.last_tearsheet", now)
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await MetadataRepository(session).set("portfolio.last_tearsheet", now)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record tearsheet: {e}")
 
         logger.info(f"Recorded tearsheet generation for {symbol} at {html_path}")
 
