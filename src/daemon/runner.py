@@ -139,7 +139,7 @@ class DaemonRunner:
 
         # Convert DegradationContext to dict for coordinator API
         degradation_dict = None
-        if degradation_context.tier != DegradationTier.FULL:
+        if degradation_context.tier != DegradationTier.NONE:
             degradation_dict = {
                 "tier": degradation_context.tier.value,
                 "unavailable_services": degradation_context.unavailable_services,

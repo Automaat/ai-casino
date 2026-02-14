@@ -267,9 +267,9 @@
 			return;
 		}
 
-		const tierOrder = ['FULL', 'DEGRADED', 'MINIMAL', 'HALTED'];
+		const tierOrder = ['NONE', 'DEGRADED', 'MINIMAL', 'HALTED'];
 		const tierColors: Record<string, string> = {
-			FULL: '#16a34a',
+			NONE: '#16a34a',
 			DEGRADED: '#fbbf24',
 			MINIMAL: '#f97316',
 			HALTED: '#ef4444'

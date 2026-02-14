@@ -256,7 +256,7 @@ class TestStateSummaryEndpoint:
         assert data["total_analyses"] == 42
         assert data["total_trades"] == 15
         assert data["error_count"] == 2
-        assert data["degradation_tier"] == "FULL"
+        assert data["degradation_tier"] == "NONE"
         assert data["trading_mode"] == "paper"
 
     def test_state_summary_degraded(self, client: TestClient, mock_runner: Mock) -> None:
@@ -551,7 +551,7 @@ class TestDegradationEndpoint:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["tier"] == "FULL"
+        assert data["tier"] == "NONE"
         assert data["unavailable_services"] == []
         assert data["confidence_adjustment"] == 1.0
         assert data["halt_reason"] is None
@@ -584,7 +584,7 @@ class TestDegradationEndpoint:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["tier"] == "FULL"
+        assert data["tier"] == "NONE"
         assert data["confidence_adjustment"] == 1.0
 
 

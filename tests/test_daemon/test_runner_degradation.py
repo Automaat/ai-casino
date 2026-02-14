@@ -289,7 +289,7 @@ async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_h
         # Verify no degradation recorded (or FULL tier recorded)
         # Note: Implementation may or may not record FULL tier
         if runner.state.degradation_history:
-            assert runner.state.degradation_history[-1].tier == DegradationTier.FULL.value
+            assert runner.state.degradation_history[-1].tier == DegradationTier.NONE.value
 
 
 async def test_degradation_history_limited_to_100(daemon_config_with_health, temp_health_dir):

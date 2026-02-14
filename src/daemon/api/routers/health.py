@@ -35,7 +35,7 @@ async def health(request: Request) -> HealthResponse:
         # DB temporarily unavailable due to concurrent operations - still healthy
         logger.opt(exception=True).debug(f"Failed to fetch state for health check: {e}")
 
-    status = "healthy" if degradation_tier == "FULL" else "degraded"
+    status = "healthy" if degradation_tier == "NONE" else "degraded"
 
     return HealthResponse(
         status=status,

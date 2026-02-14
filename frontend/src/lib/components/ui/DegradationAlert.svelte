@@ -5,13 +5,13 @@
 
 	// Tier colors
 	const tierColors: Record<string, string> = {
-		FULL: 'bg-green-100 text-green-800 border-green-300',
+		NONE: 'bg-green-100 text-green-800 border-green-300',
 		DEGRADED: 'bg-yellow-100 text-yellow-800 border-yellow-300',
 		MINIMAL: 'bg-orange-100 text-orange-800 border-orange-300',
 		HALTED: 'bg-red-100 text-red-800 border-red-300'
 	};
 
-	$: shouldShow = degradation && degradation.tier !== 'FULL';
+	$: shouldShow = degradation && degradation.tier !== 'NONE';
 	$: tierClass = degradation ? tierColors[degradation.tier] || tierColors.DEGRADED : '';
 </script>
 

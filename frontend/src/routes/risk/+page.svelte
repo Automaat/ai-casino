@@ -49,6 +49,7 @@
 	$: sharpeData = riskHistory
 		.slice()
 		.reverse()
+		.filter(r => r.sharpe_ratio != null)
 		.map(r => ({
 			time: formatDateShort(r.timestamp),
 			value: r.sharpe_ratio
@@ -58,6 +59,7 @@
 	$: volatilityData = riskHistory
 		.slice()
 		.reverse()
+		.filter(r => r.portfolio_volatility != null)
 		.map(r => ({
 			time: formatDateShort(r.timestamp),
 			value: r.portfolio_volatility
@@ -73,25 +75,25 @@
 	<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
 		<MetricCard
 			title="Sharpe Ratio"
-			value={riskReport ? riskReport.sharpe_ratio.toFixed(2) : 'N/A'}
+			value={riskReport?.sharpe_ratio != null ? riskReport.sharpe_ratio.toFixed(2) : 'N/A'}
 			subtitle="Risk-adjusted return"
 			icon="📉"
 		/>
 		<MetricCard
 			title="Volatility"
-			value={riskReport ? formatPercent(riskReport.portfolio_volatility) : 'N/A'}
+			value={riskReport?.portfolio_volatility != null ? formatPercent(riskReport.portfolio_volatility) : 'N/A'}
 			subtitle="Portfolio volatility"
 			icon="📊"
 		/>
 		<MetricCard
 			title="Max Drawdown"
-			value={riskReport ? formatPercent(riskReport.max_drawdown) : 'N/A'}
+			value={riskReport?.max_drawdown != null ? formatPercent(riskReport.max_drawdown) : 'N/A'}
 			subtitle="Peak to trough"
 			icon="⚠️"
 		/>
 		<MetricCard
 			title="VaR (95%)"
-			value={riskReport ? formatPercent(riskReport.var_95) : 'N/A'}
+			value={riskReport?.var_95 != null ? formatPercent(riskReport.var_95) : 'N/A'}
 			subtitle="Value at Risk"
 			icon="🎲"
 		/>

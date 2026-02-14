@@ -275,7 +275,7 @@ async def test_run_cycle_uses_merged_watchlist(
         runner,
         "_evaluate_degradation",
         lambda: DegradationContext(
-            tier=DegradationTier.FULL,
+            tier=DegradationTier.NONE,
             available_agents=set(),
             unavailable_services=[],
             confidence_adjustment=1.0,
@@ -529,7 +529,7 @@ class TestSectorRotationIntegration:
             runner,
             "_evaluate_degradation",
             lambda: DegradationContext(
-                tier=DegradationTier.FULL,
+                tier=DegradationTier.NONE,
                 available_agents=set(AgentType),  # All agents available
                 unavailable_services=[],
                 confidence_adjustment=1.0,
@@ -678,7 +678,7 @@ async def test_runner_publishes_cycle_events(sample_config: DaemonConfig, event_
             runner,
             "_evaluate_degradation",
             return_value=DegradationContext(
-                tier=DegradationTier.FULL,
+                tier=DegradationTier.NONE,
                 available_agents=set(),
                 unavailable_services=[],
                 confidence_adjustment=1.0,

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class DegradationTier(StrEnum):
     """Degradation tier based on API availability."""
 
-    FULL = "FULL"  # All services healthy
+    NONE = "NONE"  # All services healthy
     DEGRADED = "DEGRADED"  # Some optional services down
     MINIMAL = "MINIMAL"  # Only cached/free data available
     HALTED = "HALTED"  # Critical services down (no market data or LLM)
@@ -146,7 +146,7 @@ class DegradationPolicy:
 
         if not health_report:
             return DegradationContext(
-                tier=DegradationTier.FULL,
+                tier=DegradationTier.NONE,
                 available_agents=set(AgentType),
                 unavailable_services=[],
                 confidence_adjustment=1.0,
@@ -192,7 +192,7 @@ class DegradationPolicy:
 
         # Determine tier
         if len(unavailable_agents) == 0:
-            tier = DegradationTier.FULL
+            tier = DegradationTier.NONE
         elif len(available_agents) >= 3:  # Technical + 2 others
             tier = DegradationTier.DEGRADED
         else:

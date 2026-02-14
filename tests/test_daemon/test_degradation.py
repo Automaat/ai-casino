@@ -55,7 +55,7 @@ def test_full_mode_all_services_healthy(policy):
 
     context = policy.evaluate_degradation(health_report)
 
-    assert context.tier == DegradationTier.FULL
+    assert context.tier == DegradationTier.NONE
     assert len(context.available_agents) == 9  # All agents
     assert context.confidence_adjustment == 1.0
     assert context.halt_reason is None
@@ -240,7 +240,7 @@ def test_stale_health_report_different_llm_provider():
     context = policy.evaluate_degradation(health_report)
 
     # Should NOT halt (configured provider is healthy)
-    assert context.tier == DegradationTier.FULL
+    assert context.tier == DegradationTier.NONE
     assert context.halt_reason is None
     assert len(context.available_agents) == 9
     assert context.confidence_adjustment == 1.0
@@ -291,7 +291,7 @@ def test_no_health_report_defaults_to_full(policy):
     """Verify FULL tier when no health report available."""
     context = policy.evaluate_degradation(None)
 
-    assert context.tier == DegradationTier.FULL
+    assert context.tier == DegradationTier.NONE
     assert len(context.available_agents) == 9
     assert context.confidence_adjustment == 1.0
 

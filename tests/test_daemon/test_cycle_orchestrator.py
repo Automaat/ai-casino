@@ -82,7 +82,7 @@ def sample_config_coordinator_disabled(tmp_path: Path) -> DaemonConfig:
 def mock_degradation_context() -> DegradationContext:
     """Create mock degradation context."""
     return DegradationContext(
-        tier=DegradationTier.FULL,
+        tier=DegradationTier.NONE,
         available_agents=set(),
         unavailable_services=[],
         confidence_adjustment=1.0,
