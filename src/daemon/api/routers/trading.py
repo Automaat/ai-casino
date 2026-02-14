@@ -127,10 +127,10 @@ async def get_game_plan(request: Request) -> GamePlanResponse | None:
 async def get_discovery_insights(
     request: Request, session: AsyncSession = Depends(get_db_session)
 ) -> DiscoveryInsightsResponse:
-    """Get discovery insights dashboard data."""
+    """Get discovery insights dashboard data (last 30 days, up to 1000 records)."""
     components = get_components(request)
 
-    # Fetch discovery history (last 30 days)
+    # Fetch discovery history from last 30 days
     discoveries = await components.state.get_discovery_history(limit=1000, session=session)
 
     if not discoveries:

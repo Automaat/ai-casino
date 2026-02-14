@@ -221,6 +221,11 @@ export const api = {
 	// Validation
 	async getPaperTradingValidation(): Promise<T.PaperTradingValidation> {
 		return fetchAPI<T.PaperTradingValidation>('/validation/paper-trading');
+	},
+
+	// Discovery
+	async getDiscoveryInsights(): Promise<T.DiscoveryInsightsResponse> {
+		return fetchAPI<T.DiscoveryInsightsResponse>('/api/discovery/insights');
 	}
 };
 

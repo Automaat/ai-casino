@@ -134,10 +134,10 @@
 
 	<!-- Stats Cards -->
 	<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-		<MetricCard title="Total Discovered" value={insights?.total_discoveries.toString() || '0'} icon="🔍" />
-		<MetricCard title="Added to Watchlist" value={insights?.success_metrics.added_to_watchlist.toString() || '0'} icon="⭐" />
-		<MetricCard title="Received Signal" value={insights?.success_metrics.received_signal.toString() || '0'} icon="📊" />
-		<MetricCard title="Signal Rate" value={`${insights?.success_metrics.signal_rate || 0}%`} icon="🎯" />
+		<MetricCard title="Total Discovered" value={insights?.total_discoveries?.toString() || '0'} icon="🔍" />
+		<MetricCard title="Added to Watchlist" value={insights?.success_metrics?.added_to_watchlist?.toString() || '0'} icon="⭐" />
+		<MetricCard title="Received Signal" value={insights?.success_metrics?.received_signal?.toString() || '0'} icon="📊" />
+		<MetricCard title="Signal Rate" value={`${insights?.success_metrics?.signal_rate || 0}%`} icon="🎯" />
 	</div>
 
 	<!-- Charts Row -->
@@ -172,22 +172,22 @@
 			</div>
 			<div class="text-center">
 				<div class="text-3xl font-bold text-green-600">
-					{insights?.success_metrics.added_to_watchlist || 0}
+					{insights?.success_metrics?.added_to_watchlist || 0}
 				</div>
 				<div class="text-sm text-gray-600 mt-1">Added to Watchlist</div>
 				<div class="text-xs text-gray-500 mt-1">
 					{insights?.total_discoveries ?
-						((insights.success_metrics.added_to_watchlist / insights.total_discoveries) * 100).toFixed(1)
+						((insights?.success_metrics?.added_to_watchlist / insights?.total_discoveries) * 100).toFixed(1)
 						: '0'}% conversion
 				</div>
 			</div>
 			<div class="text-center">
 				<div class="text-3xl font-bold text-purple-600">
-					{insights?.success_metrics.received_signal || 0}
+					{insights?.success_metrics?.received_signal || 0}
 				</div>
 				<div class="text-sm text-gray-600 mt-1">Received Trading Signal</div>
 				<div class="text-xs text-gray-500 mt-1">
-					{insights?.success_metrics.signal_rate || 0}% signal rate
+					{insights?.success_metrics?.signal_rate || 0}% signal rate
 				</div>
 			</div>
 		</div>
@@ -208,7 +208,7 @@
 			<div>
 				<h3 class="text-lg font-semibold text-gray-900 mb-3">Average Composite Score</h3>
 				<div class="text-4xl font-bold text-blue-600">
-					{insights?.avg_composite_score.toFixed(3) || '0.000'}
+					{insights?.avg_composite_score?.toFixed(3) || '0.000'}
 				</div>
 				<p class="text-sm text-gray-600 mt-2">
 					Higher scores indicate stronger multi-source confirmation
