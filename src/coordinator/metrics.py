@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 class CoordinatorCycleMetrics(BaseModel):
     """Coordinator cycle metrics."""
 
+    id: str | None = None
+    created_at: datetime | None = None
     cycle_num: int = Field(ge=0, description="Cycle number")
     timestamp: datetime
     symbols_analyzed: list[str] = Field(default_factory=list)

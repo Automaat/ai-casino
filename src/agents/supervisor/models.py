@@ -60,6 +60,8 @@ class PlanningContext(BaseModel):
     trump_count: int
     fundamental_rate_limit: bool
     time_budget_ms: int
+    market_data_rows: int = 0
+    is_high_volatility: bool = False
 
 
 class SynthesisContext(BaseModel):

@@ -1002,3 +1002,64 @@ class RiskAuditORM(Base):
             f"RiskAuditORM(id={self.id}, symbol={self.symbol}, "
             f"action={self.action}, approved={self.approved})"
         )
+
+
+class CoordinatorMetricsORM(Base):
+    """Coordinator decision cycle metrics."""
+
+    __tablename__ = "coordinator_metrics"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    cycle_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    symbols_analyzed: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        server_default=text("'{}'::text[]"),
+    )
+    tool_calls_made: Mapped[int] = mapped_column(Integer, nullable=False)
+    trades_proposed: Mapped[int] = mapped_column(Integer, nullable=False)
+    trades_executed: Mapped[int] = mapped_column(Integer, nullable=False)
+    trades_pending: Mapped[int] = mapped_column(Integer, nullable=False)
+    game_plan_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    cycle_duration_seconds: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+    patterns_detected: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "idx_coordinator_metrics_timestamp",
+            "timestamp",
+            postgresql_using="btree",
+            postgresql_ops={"timestamp": "DESC"},
+        ),
+        Index("idx_coordinator_metrics_cycle_num", "cycle_num"),
+        Index(
+            "idx_coordinator_metrics_cycle_timestamp",
+            "cycle_num",
+            "timestamp",
+            postgresql_using="btree",
+            postgresql_ops={"timestamp": "DESC"},
+        ),
+        Index("idx_coordinator_metrics_game_plan", "game_plan_generated"),
+        Index(
+            "idx_coordinator_metrics_trades_executed",
+            "trades_executed",
+            postgresql_where=text("trades_executed > 0"),
+        ),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"CoordinatorMetricsORM(id={self.id}, cycle_num={self.cycle_num}, "
+            f"trades_executed={self.trades_executed})"
+        )

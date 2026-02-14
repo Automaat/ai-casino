@@ -161,12 +161,12 @@ class RiskReportRecord(BaseModel):
     cvar_99: float
     cdar_95: float
     max_drawdown: float
-    portfolio_volatility: float = 0.0
-    current_exposure_percent: float = 0.0
-    num_positions: int = 0
-    var_limit_breached: bool = False
-    cvar_limit_breached: bool = False
-    risk_status: str = "UNKNOWN"
+    portfolio_volatility: float
+    current_exposure_percent: float
+    num_positions: int
+    var_limit_breached: bool
+    cvar_limit_breached: bool
+    risk_status: str
 
 
 class MonteCarloRecord(BaseModel):

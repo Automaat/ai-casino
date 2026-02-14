@@ -288,6 +288,25 @@ def _check_owns_position(positions: dict[str, BrokerPosition] | None, symbol: st
     return symbol in positions
 
 
+def _get_market_data_length(market_data: object) -> int:
+    """Get length of market data for routing decisions.
+
+    Args:
+        market_data: OHLCV DataFrame or multi-timeframe data
+
+    Returns:
+        Number of rows in market data, 0 if None
+    """
+    from src.strategies.timeframe import MultiTimeframeData
+
+    if market_data is None:
+        return 0
+    if isinstance(market_data, MultiTimeframeData):
+        # Use primary (shortest) timeframe
+        return min(len(df) for df in market_data.timeframes.values())
+    return len(market_data)  # pyrefly: ignore[bad-argument-type]
+
+
 async def _run_analyses_with_validation(
     ctx: _ExecutionContext,
     prep_result: _PreparationResult,
@@ -323,6 +342,17 @@ async def _run_analyses_with_validation(
     if config and config.enable_supervisor_routing:
         # Supervisor-driven conditional execution
         start_planning = time.perf_counter()
+
+        # Collect routing context
+        from src.strategies.regime import MarketRegime
+
+        market_data_rows = _get_market_data_length(prep_result.data_output.market_data)
+        is_high_volatility = (
+            prep_result.strategy_output.regime_analysis.regime == MarketRegime.HIGH_VOLATILITY
+            if prep_result.strategy_output.regime_analysis
+            else False
+        )
+
         planning_context = PlanningContext(
             symbol=ctx.symbol,
             regime=prep_result.strategy_output.regime_analysis,
@@ -334,6 +364,8 @@ async def _run_analyses_with_validation(
             trump_count=len(prep_result.data_output.trump_posts or []),
             fundamental_rate_limit=False,  # TODO: Check circuit breaker
             time_budget_ms=config.worker_execution_timeout_ms,
+            market_data_rows=market_data_rows,
+            is_high_volatility=is_high_volatility,
         )
 
         try:
