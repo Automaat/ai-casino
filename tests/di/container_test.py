@@ -534,5 +534,3 @@ def create_mock_stock_screener() -> MagicMock:
     )
 
     return mock
-
-
