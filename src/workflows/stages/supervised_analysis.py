@@ -146,6 +146,9 @@ async def _execute_workers_with_gather(
     # behaviour and is the reason this function deviates from the TaskGroup
     # pattern used elsewhere in the codebase.
     start_time = time.perf_counter()
+    success_count = 0
+    error_count = 0
+
     try:
         gather_coro = asyncio.gather(*task_list, return_exceptions=True)
         results = await asyncio.wait_for(gather_coro, timeout=timeout_ms / 1000)
@@ -158,11 +161,15 @@ async def _execute_workers_with_gather(
                 worker_task.task.cancel()
         await asyncio.gather(*task_list, return_exceptions=True)
         raise
+    finally:
+        # Log worker completion summary even on timeout for observability
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.info(
+            f"Workers completed: {success_count}/{len(tasks)} successful, "
+            f"{error_count} errors, duration {duration_ms:.0f}ms"
+        )
 
     # Record worker completions and errors
-    success_count = 0
-    error_count = 0
-
     for worker_task, result in zip(tasks, results, strict=True):
         analysis_type = worker_task.analysis_type
         category = worker_task.category
@@ -188,13 +195,6 @@ async def _execute_workers_with_gather(
             )
             success_count += 1
             output[analysis_type] = result
-
-    # Log worker completion summary
-    duration_ms = (time.perf_counter() - start_time) * 1000
-    logger.info(
-        f"Workers completed: {success_count}/{len(tasks)} successful, "
-        f"{error_count} errors, duration {duration_ms:.0f}ms"
-    )
 
     return output
 

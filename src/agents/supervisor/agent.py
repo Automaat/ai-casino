@@ -104,9 +104,9 @@ class TradingSupervisor:
             f"{len(decision.skip_analyses)} skipped"
         )
 
-        # Log skip reasons for each skipped analysis
+        # Log skip reasons for each skipped analysis (debug to avoid duplicate info-level noise)
         for analysis_type, reason in decision.skip_analyses.items():
-            logger.info(f"Skip {analysis_type.value}: {reason}")
+            logger.debug(f"Skip {analysis_type.value}: {reason}")
 
         # Debug log: full routing reasoning
         logger.debug(f"Routing reasoning: {decision.reasoning}")
