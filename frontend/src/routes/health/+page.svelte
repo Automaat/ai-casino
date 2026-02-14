@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
-	import ServiceHealthBadge from '$lib/components/ui/ServiceHealthBadge.svelte';
-	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import { serviceHealth } from '$lib/stores/dashboard';
 	import { uptimeMetrics, degradationTimeline, serviceNames } from '$lib/stores/health';
 	import { formatDate } from '$lib/utils/format';
@@ -12,20 +9,6 @@
 	const currentHealth = $derived($serviceHealth);
 	const metrics = $derived($uptimeMetrics);
 	const timeline = $derived($degradationTimeline);
-
-	// Uptime chart data - show uptime percentage over time for each service
-	const uptimeChartData = $derived.by(() => {
-		if (!metrics?.services) return [];
-
-		const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
-		const serviceKeys = Object.keys(metrics.services);
-
-		return serviceKeys.map((key, idx) => ({
-			name: metrics.services[key].name,
-			data: [{ timestamp: new Date().toISOString(), value: metrics.services[key].uptime_percent }],
-			color: colors[idx % colors.length]
-		}));
-	});
 
 	// Service details table
 	const serviceColumns = [
@@ -84,7 +67,15 @@
 			<p class="text-gray-600 mt-1">Real-time monitoring of external services and circuit breakers</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<div class={`w-3 h-3 rounded-full ${metrics?.overall_status === 'HEALTHY' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+			<div
+				class={`w-3 h-3 rounded-full ${
+					metrics?.overall_status === 'HEALTHY'
+						? 'bg-green-500'
+						: metrics?.overall_status === 'UNHEALTHY'
+							? 'bg-red-500'
+							: 'bg-yellow-500'
+				}`}
+			></div>
 			<span class="text-sm text-gray-600">{metrics?.overall_status || 'Unknown'}</span>
 		</div>
 	</div>
@@ -103,12 +94,12 @@
 		/>
 		<MetricCard
 			title="Avg Check Duration"
-			value={`${metrics?.avg_duration?.toFixed(0) || 0}ms`}
+			value={`${Number.isFinite(metrics?.avg_duration) ? metrics.avg_duration.toFixed(0) : 0}ms`}
 			icon="⏱️"
 		/>
 		<MetricCard
 			title="Overall Uptime"
-			value={`${metrics?.overall_uptime?.toFixed(2) || 100}%`}
+			value={`${Number.isFinite(metrics?.overall_uptime) ? metrics.overall_uptime.toFixed(2) : 100}%`}
 			icon="📈"
 		/>
 	</div>

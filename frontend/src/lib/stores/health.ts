@@ -104,13 +104,20 @@ export const uptimeMetrics = derived(
 			};
 		});
 
+		const serviceValues = Object.values(services);
+		const serviceCount = serviceValues.length;
+
 		return {
 			services,
 			overall_status: $serviceHealth.overall_status,
-			total_services: Object.keys(services).length,
-			healthy_services: Object.values(services).filter((s) => s.status === 'HEALTHY').length,
-			avg_duration: Object.values(services).reduce((sum, s) => sum + s.duration_ms, 0) / Object.values(services).length,
-			overall_uptime: Object.values(services).reduce((sum, s) => sum + s.uptime_percent, 0) / Object.values(services).length
+			total_services: serviceCount,
+			healthy_services: serviceValues.filter((s) => s.status === 'HEALTHY').length,
+			avg_duration: serviceCount
+				? serviceValues.reduce((sum, s) => sum + s.duration_ms, 0) / serviceCount
+				: 0,
+			overall_uptime: serviceCount
+				? serviceValues.reduce((sum, s) => sum + s.uptime_percent, 0) / serviceCount
+				: 0
 		};
 	}
 );
