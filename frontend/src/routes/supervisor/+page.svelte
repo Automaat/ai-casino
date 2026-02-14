@@ -15,21 +15,21 @@
 	let ws: WebSocket | null = null;
 	let refreshInterval: number | null = null;
 
-	$: summaryData = $summary;
-	$: recentData = $recentMetrics?.metrics || [];
-	$: workerData = $workerStats;
-	$: errorsData = $errors?.errors || [];
+	const summaryData = $derived($summary);
+	const recentData = $derived($recentMetrics?.metrics || []);
+	const workerData = $derived($workerStats);
+	const errorsData = $derived($errors?.errors || []);
 
 	// Computed metrics
-	$: avgRoutingTime = summaryData ? summaryData.avg_routing_ms.toFixed(1) : '0.0';
-	$: efficiency = summaryData ? summaryData.avg_efficiency_percent.toFixed(1) : '0';
-	$: totalCost = recentData.length > 0
+	const avgRoutingTime = $derived(summaryData ? summaryData.avg_routing_ms.toFixed(1) : '0.0');
+	const efficiency = $derived(summaryData ? summaryData.avg_efficiency_percent.toFixed(1) : '0');
+	const totalCost = $derived(recentData.length > 0
 		? recentData.reduce((sum, m) => sum + m.total_cost_usd, 0).toFixed(4)
-		: '0.00';
-	$: avgWorkers = summaryData ? summaryData.avg_workers_per_cycle.toFixed(1) : '0.0';
+		: '0.00');
+	const avgWorkers = $derived(summaryData ? summaryData.avg_workers_per_cycle.toFixed(1) : '0.0');
 
 	// Routing breakdown
-	$: routingBreakdown = (() => {
+	const routingBreakdown = $derived.by(() => {
 		if (!recentData.length) return [];
 		const counts: Record<string, number> = {};
 		recentData.forEach(m => {
@@ -43,10 +43,10 @@
 			count,
 			percentage: total > 0 ? ((count / total) * 100).toFixed(1) : '0'
 		}));
-	})();
+	});
 
 	// Worker performance table
-	$: workerPerformance = (() => {
+	const workerPerformance = $derived.by(() => {
 		if (!workerData) return [];
 		return Object.entries(workerData.worker_stats).map(([name, stats]) => ({
 			name,
@@ -55,7 +55,7 @@
 			avg_latency: stats.avg_duration_ms.toFixed(0),
 			p95: (stats.avg_duration_ms * 1.5).toFixed(0)
 		}));
-	})();
+	});
 
 	// Recent routing columns
 	const routingColumns = [
