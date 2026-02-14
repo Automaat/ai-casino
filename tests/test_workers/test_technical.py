@@ -131,6 +131,48 @@ async def test_technical_worker_multi_timeframe(test_container):
     assert 0.0 <= result.multi_timeframe.confluence_score <= 1.0
 
 
+async def test_multi_timeframe_5_timeframes(test_container, sample_ohlcv_data):
+    """Test TechnicalWorker with all 5 timeframes."""
+    import time
+    from datetime import datetime
+
+    from src.strategies.timeframe import MultiTimeframeData, Timeframe
+
+    # Create MultiTimeframeData with 5 timeframes
+    multi_data = MultiTimeframeData(
+        symbol="AAPL",
+        timeframes={
+            Timeframe.DAILY: sample_ohlcv_data,
+            Timeframe.HOURLY: sample_ohlcv_data,
+            Timeframe.FIFTEEN_MIN: sample_ohlcv_data,
+            Timeframe.FIVE_MIN: sample_ohlcv_data,
+            Timeframe.ONE_MIN: sample_ohlcv_data,
+        },
+        last_updated=datetime.now(),
+    )
+
+    worker = test_container.technical_worker()
+    strategy = MomentumStrategy()
+
+    start = time.perf_counter()
+    result = await worker.analyze("AAPL", multi_data, strategy, enable_multi_timeframe=True)
+    duration = time.perf_counter() - start
+
+    # Assertions
+    assert result.multi_timeframe is not None
+    assert len(result.multi_timeframe.timeframe_results) == 5
+    assert 0.0 <= result.multi_timeframe.confluence_score <= 1.0
+    assert result.multi_timeframe.primary_timeframe in Timeframe
+    assert duration < 30.0  # Performance requirement (generous for LLM calls)
+
+    # Verify all 5 timeframes are present
+    assert Timeframe.DAILY in result.multi_timeframe.timeframe_results
+    assert Timeframe.HOURLY in result.multi_timeframe.timeframe_results
+    assert Timeframe.FIFTEEN_MIN in result.multi_timeframe.timeframe_results
+    assert Timeframe.FIVE_MIN in result.multi_timeframe.timeframe_results
+    assert Timeframe.ONE_MIN in result.multi_timeframe.timeframe_results
+
+
 def test_technical_worker_tool_definition(test_container):
     """Test tool definition for supervisor integration."""
     worker = test_container.technical_worker()

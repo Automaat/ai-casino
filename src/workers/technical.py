@@ -210,9 +210,7 @@ class TechnicalWorker:
         calculator = ConfluenceCalculator()
         final_signal, confluence_score, conflict_detected = calculator.calculate_confluence(timeframe_results)
 
-        primary_timeframe = (
-            Timeframe.DAILY if Timeframe.DAILY in timeframe_results else next(iter(timeframe_results.keys()))
-        )
+        primary_timeframe = calculator.select_dominant_timeframe(final_signal, timeframe_results)
         base_confidence = timeframe_results[primary_timeframe].confidence
         final_confidence = calculator.adjust_confidence(base_confidence, confluence_score)
 
