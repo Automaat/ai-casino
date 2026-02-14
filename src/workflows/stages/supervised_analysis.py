@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from loguru import logger
 
+from src.agents.supervisor.metrics import SupervisorMetricsCollector
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -31,6 +33,33 @@ from src.workflows.models.analysis import AnalysisInput, AnalysisOutput
 from src.workflows.stages.strategy_selection import _timed_agent_call
 
 T = TypeVar("T")
+
+
+def _record_worker_starts(
+    tasks: list[_WorkerTask], metrics_collector: SupervisorMetricsCollector | None
+) -> None:
+    """Record worker starts in metrics collector."""
+    if not metrics_collector:
+        return
+    for worker_task in tasks:
+        is_required = worker_task.category == "required"
+        metrics_collector.record_worker_start(worker_task.analysis_type.value, is_required)
+
+
+def _record_worker_result(
+    worker_name: str,
+    result: object,
+    *,
+    is_error: bool,
+    metrics_collector: SupervisorMetricsCollector | None,
+) -> None:
+    """Record worker completion or error in metrics collector."""
+    if not metrics_collector:
+        return
+    if is_error:
+        metrics_collector.record_worker_error(worker_name, str(result))
+    else:
+        metrics_collector.record_worker_complete(worker_name, result)
 
 
 class _WorkerTask:
@@ -83,12 +112,14 @@ def _validate_input_data(input_data: AnalysisInput) -> None:
 async def _execute_workers_with_gather(
     tasks: list[_WorkerTask],
     timeout_ms: int,
+    metrics_collector: SupervisorMetricsCollector | None = None,
 ) -> dict[AnalysisType, Any]:
     """Execute workers using asyncio.gather with timeout and error handling.
 
     Args:
         tasks: List of worker tasks with metadata
         timeout_ms: Timeout in milliseconds
+        metrics_collector: Optional supervisor metrics collector
 
     Returns:
         Dict mapping analysis type to result (None for failures)
@@ -101,6 +132,7 @@ async def _execute_workers_with_gather(
     if not tasks:
         return output
 
+    _record_worker_starts(tasks, metrics_collector)
     task_list = [t.task for t in tasks]
 
     # NOTE:
@@ -118,12 +150,15 @@ async def _execute_workers_with_gather(
         results = await asyncio.wait_for(gather_coro, timeout=timeout_ms / 1000)
     except TimeoutError:
         logger.warning(f"Worker execution timed out after {timeout_ms}ms, cancelling tasks")
+        if metrics_collector:
+            metrics_collector.record_timeout()
         for worker_task in tasks:
             if not worker_task.task.done():
                 worker_task.task.cancel()
         await asyncio.gather(*task_list, return_exceptions=True)
         raise
 
+    # Record worker completions and errors
     for worker_task, result in zip(tasks, results, strict=True):
         analysis_type = worker_task.analysis_type
         category = worker_task.category
@@ -134,12 +169,18 @@ async def _execute_workers_with_gather(
 
         # Worker failures
         if isinstance(result, Exception):
+            _record_worker_result(
+                analysis_type.value, result, is_error=True, metrics_collector=metrics_collector
+            )
             if category == "required":
                 logger.opt(exception=result).error(f"Required worker {analysis_type.value} failed")
                 raise result
             logger.opt(exception=result).warning(f"Optional worker {analysis_type.value} failed")
             output[analysis_type] = None
         else:
+            _record_worker_result(
+                analysis_type.value, result, is_error=False, metrics_collector=metrics_collector
+            )
             output[analysis_type] = result
 
     return output
@@ -280,6 +321,7 @@ async def _run_supervised_group1(
     trump_analyst: TrumpAnalyst | None,
     collector: ExecutionMetricsCollector | None,
     timeout_ms: int,
+    metrics_collector: SupervisorMetricsCollector | None = None,
 ) -> dict[AnalysisType, Any]:
     """Run first group of analyses based on routing decision.
 
@@ -297,6 +339,7 @@ async def _run_supervised_group1(
         trump_analyst: Trump analyst
         collector: Optional metrics collector
         timeout_ms: Timeout in milliseconds
+        metrics_collector: Optional supervisor metrics collector
 
     Returns:
         Dict mapping analysis type to result
@@ -332,7 +375,7 @@ async def _run_supervised_group1(
         f"{len([t for t in tasks if t.category == 'optional'])} optional)"
     )
 
-    return await _execute_workers_with_gather(tasks, timeout_ms)
+    return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector)
 
 
 async def _run_supervised_research(
@@ -343,6 +386,7 @@ async def _run_supervised_research(
     bearish_researcher: ThesisResearcher,
     collector: ExecutionMetricsCollector | None,
     timeout_ms: int,
+    metrics_collector: SupervisorMetricsCollector | None = None,
 ) -> dict[AnalysisType, Any]:
     """Run research analyses based on routing decision.
 
@@ -354,6 +398,7 @@ async def _run_supervised_research(
         bearish_researcher: Bearish researcher
         collector: Optional metrics collector
         timeout_ms: Timeout in milliseconds
+        metrics_collector: Optional supervisor metrics collector
 
     Returns:
         Dict mapping analysis type to result
@@ -434,7 +479,7 @@ async def _run_supervised_research(
         f"{len([t for t in tasks if t.category == 'optional'])} optional)"
     )
 
-    return await _execute_workers_with_gather(tasks, timeout_ms)
+    return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector)
 
 
 def _build_output(
@@ -483,6 +528,8 @@ async def run_supervised_analyses(
     trump_analyst: TrumpAnalyst | None,
     collector: ExecutionMetricsCollector | None = None,
     timeout_ms: int = 30000,
+    workflow_id: str | None = None,
+    supervisor_metrics_repository: object | None = None,
 ) -> AnalysisOutput:
     """Execute analyses based on supervisor routing decision.
 
@@ -507,6 +554,8 @@ async def run_supervised_analyses(
         trump_analyst: Trump analyst (required if trump_mode=True)
         collector: Optional metrics collector
         timeout_ms: Timeout for worker execution in milliseconds
+        workflow_id: Optional workflow ID for supervisor metrics
+        supervisor_metrics_repository: Optional repository for supervisor metrics
 
     Returns:
         AnalysisOutput with all analyses
@@ -518,7 +567,19 @@ async def run_supervised_analyses(
         logger.warning(f"No news articles available for {input_data.symbol}, analyses may be degraded")
         warnings.append("No news articles available - sentiment and news analyses degraded")
 
+    # Initialize supervisor metrics collector
+    metrics_collector = None
+    if workflow_id and supervisor_metrics_repository:
+        from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
+
+        if isinstance(supervisor_metrics_repository, SupervisorMetricsRepository):
+            metrics_collector = SupervisorMetricsCollector(workflow_id, input_data.symbol)
+            metrics_collector.record_planning_start()
+            metrics_collector.record_planning(routing_decision, fallback_used=False)
+
     # Run group 1 analyses
+    if metrics_collector:
+        metrics_collector.record_group1_start()
     start = time.perf_counter()
     group1_results = await _run_supervised_group1(
         input_data,
@@ -534,10 +595,16 @@ async def run_supervised_analyses(
         trump_analyst,
         collector,
         timeout_ms,
+        metrics_collector,
     )
-    logger.debug(f"Group 1 analyses completed in {(time.perf_counter() - start) * 1000:.0f}ms")
+    group1_ms = (time.perf_counter() - start) * 1000
+    if metrics_collector:
+        metrics_collector.record_group1_complete()
+    logger.debug(f"Group 1 analyses completed in {group1_ms:.0f}ms")
 
     # Run group 2 research
+    if metrics_collector:
+        metrics_collector.record_research_start()
     start = time.perf_counter()
     research_results = await _run_supervised_research(
         input_data.symbol,
@@ -547,7 +614,18 @@ async def run_supervised_analyses(
         bearish_researcher,
         collector,
         timeout_ms,
+        metrics_collector,
     )
-    logger.debug(f"Research analyses completed in {(time.perf_counter() - start) * 1000:.0f}ms")
+    research_ms = (time.perf_counter() - start) * 1000
+    if metrics_collector:
+        metrics_collector.record_research_complete()
+    logger.debug(f"Research analyses completed in {research_ms:.0f}ms")
+
+    # Save supervisor metrics
+    if metrics_collector and supervisor_metrics_repository:
+        from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
+
+        if isinstance(supervisor_metrics_repository, SupervisorMetricsRepository):
+            await metrics_collector.save(supervisor_metrics_repository)
 
     return _build_output(group1_results, research_results, warnings)

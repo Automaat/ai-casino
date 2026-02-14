@@ -1063,3 +1063,67 @@ class CoordinatorMetricsORM(Base):
             f"CoordinatorMetricsORM(id={self.id}, cycle_num={self.cycle_num}, "
             f"trades_executed={self.trades_executed})"
         )
+
+
+class SupervisorMetricsORM(Base):
+    """Supervisor routing and worker execution metrics."""
+
+    __tablename__ = "supervisor_metrics"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v4()")
+    )
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+
+    # Identifiers
+    workflow_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+    # Routing decision
+    required_analyses: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    optional_analyses: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    skip_analyses: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    routing_reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Execution metrics
+    total_workers: Mapped[int] = mapped_column(Integer, nullable=False)
+    required_workers: Mapped[int] = mapped_column(Integer, nullable=False)
+    optional_workers: Mapped[int] = mapped_column(Integer, nullable=False)
+    successful_workers: Mapped[int] = mapped_column(Integer, nullable=False)
+    failed_workers: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Timing metrics in milliseconds
+    routing_decision_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
+    group1_execution_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
+    research_execution_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
+    total_supervisor_overhead_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
+
+    # Worker execution details
+    worker_timings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    worker_errors: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+    # LLM usage metrics
+    total_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_cost_usd: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)
+    planning_fallback_used: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    synthesis_fallback_used: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    # Synthesis results
+    confidence_adjustment: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
+    synthesis_reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Efficiency
+    parallel_efficiency_percent: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), nullable=False)
+    timeout_triggered: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    __table_args__ = (
+        Index("idx_supervisor_metrics_symbol", "symbol"),
+        Index("idx_supervisor_metrics_timestamp", "timestamp", postgresql_using="btree"),
+        Index("idx_supervisor_metrics_workflow_id", "workflow_id"),
+        Index("idx_supervisor_metrics_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"SupervisorMetricsORM(id={self.id}, workflow_id={self.workflow_id}, symbol={self.symbol})"
