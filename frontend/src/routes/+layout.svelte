@@ -9,6 +9,7 @@
 		{ id: 'portfolio', label: 'Portfolio', href: '/portfolio' },
 		{ id: 'signals', label: 'Signals', href: '/signals' },
 		{ id: 'risk', label: 'Risk', href: '/risk' },
+		{ id: 'validation', label: 'Validation', href: '/validation' },
 		{ id: 'events', label: 'Events', href: '/events' },
 		{ id: 'workflow', label: 'Workflow', href: '/workflow' },
 		{ id: 'execution', label: 'Execution', href: '/execution' },
@@ -22,6 +23,7 @@
 		: currentPath.startsWith('/portfolio') ? 'portfolio'
 		: currentPath.startsWith('/signals') ? 'signals'
 		: currentPath.startsWith('/risk') ? 'risk'
+		: currentPath.startsWith('/validation') ? 'validation'
 		: currentPath.startsWith('/events') ? 'events'
 		: currentPath.startsWith('/workflow') ? 'workflow'
 		: currentPath.startsWith('/execution') ? 'execution'

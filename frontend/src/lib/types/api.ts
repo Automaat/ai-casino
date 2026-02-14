@@ -432,3 +432,20 @@ export interface SupervisorMetricsErrors {
 	error_counts: Record<string, number>;
 	total_errors: number;
 }
+
+export interface ValidationCriterion {
+	name: string;
+	passed: boolean;
+	current_value: number;
+	threshold: number;
+	message: string;
+}
+
+export interface PaperTradingValidation {
+	ready_for_live: boolean;
+	assessment_date: string;
+	paper_trading_duration_days: number;
+	total_paper_trades: number;
+	criteria: ValidationCriterion[];
+	recommendations: string[];
+}

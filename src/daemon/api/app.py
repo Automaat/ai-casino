@@ -15,6 +15,7 @@ from src.daemon.api.routers import (
     state_router,
     supervisor_router,
     trading_router,
+    validation_router,
     websocket_router,
 )
 
@@ -60,6 +61,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
     app.include_router(portfolio_router)
     app.include_router(execution_router)
     app.include_router(supervisor_router)
+    app.include_router(validation_router)
     app.include_router(websocket_router)
 
     logger.info("FastAPI app created")
