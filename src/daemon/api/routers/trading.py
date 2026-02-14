@@ -3,6 +3,7 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from loguru import logger
@@ -34,7 +35,7 @@ class TradeQueryParams(BaseModel):
     limit: int = 100
     symbol: str | None = None
     status: str | None = None
-    window: str = "all"
+    window: Literal["all", "30d", "7d"] = "all"
 
 
 @router.get("/analyses", response_model=AnalysesResponse)
@@ -172,8 +173,7 @@ async def get_trades(
     trades = trades[:limit]
 
     # Get total count
-    all_trades = await repo.get_all()
-    total_count = len(all_trades)
+    total_count = await repo.count_all()
 
     return TradesResponse(
         trades=[
@@ -233,12 +233,13 @@ async def get_trade_detail(
     # Find matching analysis (same symbol, timestamp within 1 minute)
     analyses = await analysis_repo.get_by_symbol(trade.symbol)
     matched_analysis = None
+    matched_time_diff: float | None = None
 
     for analysis in analyses:
         time_diff = abs((analysis.timestamp - trade.timestamp).total_seconds())
-        if time_diff <= 60:
+        if time_diff <= 60 and (matched_time_diff is None or time_diff < matched_time_diff):
             matched_analysis = analysis
-            break
+            matched_time_diff = time_diff
 
     return EnrichedTradeResponse(
         trade=TradeResponse(

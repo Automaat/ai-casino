@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import { api } from '$lib/api/client';
@@ -41,7 +40,6 @@
 	$: avgPnl = closedTrades.length > 0 ? totalPnl / closedTrades.length : 0;
 	$: avgWin = winningTrades.length > 0 ? winningTrades.reduce((sum, t) => sum + (t.pnl || 0), 0) / winningTrades.length : 0;
 	$: avgLoss = losingTrades.length > 0 ? Math.abs(losingTrades.reduce((sum, t) => sum + (t.pnl || 0), 0)) / losingTrades.length : 0;
-	$: profitFactor = avgLoss > 0 ? avgWin / avgLoss : 0;
 
 	async function loadData() {
 		loading = true;
@@ -62,7 +60,10 @@
 		selectedRisk = '';
 	}
 
+	let initialLoad = false;
+
 	onMount(() => {
+		initialLoad = true;
 		loadData();
 	});
 
@@ -72,7 +73,7 @@
 	}
 
 	// Refetch when window changes
-	$: if (window) {
+	$: if (window && initialLoad) {
 		loadData();
 	}
 
