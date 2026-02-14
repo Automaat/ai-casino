@@ -286,6 +286,9 @@ class DaemonRunner:
         from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
         from src.daemon.lifecycle import DaemonLifecycle
 
+        # Initialize workflow (needed by scheduled tasks: RiskReportTask, CorrelationAuditTask)
+        self._init_workflow()
+
         # Create lifecycle manager
         lifecycle = DaemonLifecycle(self._components)
         await lifecycle.startup()
