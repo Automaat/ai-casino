@@ -1,10 +1,13 @@
 """Supervisor metrics endpoints."""
 
 from datetime import UTC, datetime, timedelta
+from typing import TypedDict
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
+from src.agents.supervisor.metrics import SupervisorCycleMetrics
 from src.daemon.api.dependencies import get_supervisor_metrics_repo
 from src.daemon.api.models import (
     ErrorSummaryResponse,
@@ -16,6 +19,56 @@ from src.daemon.api.models import (
 )
 
 router = APIRouter(prefix="/supervisor", tags=["supervisor"])
+
+
+class WorkerStatsAgg(TypedDict):
+    """Worker statistics aggregation for internal use."""
+
+    total: int
+    successful: int
+    failed: int
+    durations: list[float]
+
+
+def to_supervisor_metric_response(metric: SupervisorCycleMetrics) -> SupervisorMetricResponse:
+    """Convert SupervisorCycleMetrics to response model.
+
+    Args:
+        metric: SupervisorCycleMetrics instance
+
+    Returns:
+        SupervisorMetricResponse
+    """
+    return SupervisorMetricResponse(
+        id=str(metric.id),
+        created_at=metric.created_at or datetime.now(UTC),
+        workflow_id=metric.workflow_id,
+        symbol=metric.symbol,
+        timestamp=metric.timestamp,
+        required_analyses=metric.required_analyses,
+        optional_analyses=metric.optional_analyses,
+        skip_analyses=metric.skip_analyses,
+        routing_reasoning=metric.routing_reasoning,
+        total_workers=metric.total_workers,
+        required_workers=metric.required_workers,
+        optional_workers=metric.optional_workers,
+        successful_workers=metric.successful_workers,
+        failed_workers=metric.failed_workers,
+        routing_decision_ms=metric.routing_decision_ms,
+        group1_execution_ms=metric.group1_execution_ms,
+        research_execution_ms=metric.research_execution_ms,
+        total_supervisor_overhead_ms=metric.total_supervisor_overhead_ms,
+        worker_timings=metric.worker_timings,
+        worker_errors=metric.worker_errors,
+        total_llm_calls=metric.total_llm_calls,
+        total_cost_usd=metric.total_cost_usd,
+        planning_fallback_used=metric.planning_fallback_used,
+        synthesis_fallback_used=metric.synthesis_fallback_used,
+        confidence_adjustment=metric.confidence_adjustment,
+        synthesis_reasoning=metric.synthesis_reasoning,
+        parallel_efficiency_percent=metric.parallel_efficiency_percent,
+        timeout_triggered=metric.timeout_triggered,
+    )
 
 
 @router.get("/metrics/recent", response_model=SupervisorMetricsListResponse)
@@ -35,39 +88,7 @@ async def get_recent_metrics(limit: int = 50, symbol: str | None = None) -> Supe
         async with get_supervisor_metrics_repo() as repo:
             metrics = await repo.get_recent(limit=limit, symbol=symbol)
             return SupervisorMetricsListResponse(
-                metrics=[
-                    SupervisorMetricResponse(
-                        id=str(m.id),
-                        created_at=m.created_at or datetime.now(UTC),
-                        workflow_id=m.workflow_id,
-                        symbol=m.symbol,
-                        timestamp=m.timestamp,
-                        required_analyses=m.required_analyses,
-                        optional_analyses=m.optional_analyses,
-                        skip_analyses=m.skip_analyses,
-                        routing_reasoning=m.routing_reasoning,
-                        total_workers=m.total_workers,
-                        required_workers=m.required_workers,
-                        optional_workers=m.optional_workers,
-                        successful_workers=m.successful_workers,
-                        failed_workers=m.failed_workers,
-                        routing_decision_ms=m.routing_decision_ms,
-                        group1_execution_ms=m.group1_execution_ms,
-                        research_execution_ms=m.research_execution_ms,
-                        total_supervisor_overhead_ms=m.total_supervisor_overhead_ms,
-                        worker_timings=m.worker_timings,
-                        worker_errors=m.worker_errors,
-                        total_llm_calls=m.total_llm_calls,
-                        total_cost_usd=m.total_cost_usd,
-                        planning_fallback_used=m.planning_fallback_used,
-                        synthesis_fallback_used=m.synthesis_fallback_used,
-                        confidence_adjustment=m.confidence_adjustment,
-                        synthesis_reasoning=m.synthesis_reasoning,
-                        parallel_efficiency_percent=m.parallel_efficiency_percent,
-                        timeout_triggered=m.timeout_triggered,
-                    )
-                    for m in metrics
-                ],
+                metrics=[to_supervisor_metric_response(m) for m in metrics],
                 count=len(metrics),
             )
     except Exception as e:
@@ -76,7 +97,7 @@ async def get_recent_metrics(limit: int = 50, symbol: str | None = None) -> Supe
 
 
 @router.get("/metrics/{metric_id}", response_model=SupervisorMetricResponse)
-async def get_metric_by_id(metric_id: str) -> SupervisorMetricResponse:
+async def get_metric_by_id(metric_id: UUID) -> SupervisorMetricResponse:
     """Get supervisor metric by ID.
 
     Args:
@@ -87,41 +108,12 @@ async def get_metric_by_id(metric_id: str) -> SupervisorMetricResponse:
     """
     try:
         async with get_supervisor_metrics_repo() as repo:
-            metric = await repo.get_by_id(metric_id)
+            metric = await repo.get_by_id(str(metric_id))
 
             if not metric:
                 raise HTTPException(status_code=404, detail="Metric not found")
 
-            return SupervisorMetricResponse(
-                id=str(metric.id),
-                created_at=metric.created_at or datetime.now(UTC),
-                workflow_id=metric.workflow_id,
-                symbol=metric.symbol,
-                timestamp=metric.timestamp,
-                required_analyses=metric.required_analyses,
-                optional_analyses=metric.optional_analyses,
-                skip_analyses=metric.skip_analyses,
-                routing_reasoning=metric.routing_reasoning,
-                total_workers=metric.total_workers,
-                required_workers=metric.required_workers,
-                optional_workers=metric.optional_workers,
-                successful_workers=metric.successful_workers,
-                failed_workers=metric.failed_workers,
-                routing_decision_ms=metric.routing_decision_ms,
-                group1_execution_ms=metric.group1_execution_ms,
-                research_execution_ms=metric.research_execution_ms,
-                total_supervisor_overhead_ms=metric.total_supervisor_overhead_ms,
-                worker_timings=metric.worker_timings,
-                worker_errors=metric.worker_errors,
-                total_llm_calls=metric.total_llm_calls,
-                total_cost_usd=metric.total_cost_usd,
-                planning_fallback_used=metric.planning_fallback_used,
-                synthesis_fallback_used=metric.synthesis_fallback_used,
-                confidence_adjustment=metric.confidence_adjustment,
-                synthesis_reasoning=metric.synthesis_reasoning,
-                parallel_efficiency_percent=metric.parallel_efficiency_percent,
-                timeout_triggered=metric.timeout_triggered,
-            )
+            return to_supervisor_metric_response(metric)
     except HTTPException:
         raise
     except Exception as e:
@@ -144,41 +136,17 @@ async def get_summary(hours: int = 24, symbol: str | None = None) -> SupervisorS
 
     try:
         async with get_supervisor_metrics_repo() as repo:
-            # Get date range
-            end_time = datetime.now(UTC)
-            start_time = end_time - timedelta(hours=hours)
-
-            # Get metrics in range
-            metrics_list = await repo.get_date_range(start=start_time, end=end_time, limit=10000)
-
-            # Filter by symbol if provided
-            if symbol:
-                metrics_list = [m for m in metrics_list if m.symbol == symbol]
-
-            # Calculate aggregates
-            if not metrics_list:
-                return SupervisorSummaryResponse(
-                    avg_efficiency_percent=0.0,
-                    avg_routing_ms=0.0,
-                    avg_group1_ms=0.0,
-                    avg_research_ms=0.0,
-                    avg_total_ms=0.0,
-                    timeout_rate_percent=0.0,
-                    sample_size=0,
-                    symbol=symbol,
-                )
-
-            total_count = len(metrics_list)
-            timeout_count = sum(1 for m in metrics_list if m.timeout_triggered)
+            # Use DB aggregation to avoid truncation and Python processing
+            stats = await repo.get_efficiency_stats(symbol=symbol, days=hours // 24 or 1)
 
             return SupervisorSummaryResponse(
-                avg_efficiency_percent=sum(m.parallel_efficiency_percent for m in metrics_list) / total_count,
-                avg_routing_ms=sum(m.routing_decision_ms for m in metrics_list) / total_count,
-                avg_group1_ms=sum(m.group1_execution_ms for m in metrics_list) / total_count,
-                avg_research_ms=sum(m.research_execution_ms for m in metrics_list) / total_count,
-                avg_total_ms=sum(m.total_supervisor_overhead_ms for m in metrics_list) / total_count,
-                timeout_rate_percent=(timeout_count / total_count * 100) if total_count > 0 else 0.0,
-                sample_size=total_count,
+                avg_efficiency_percent=stats["avg_efficiency_percent"],
+                avg_routing_ms=stats["avg_routing_ms"],
+                avg_group1_ms=stats["avg_group1_ms"],
+                avg_research_ms=stats["avg_research_ms"],
+                avg_total_ms=stats["avg_total_ms"],
+                timeout_rate_percent=stats["timeout_rate_percent"],
+                sample_size=stats["sample_size"],
                 symbol=symbol,
             )
     except Exception as e:
@@ -207,15 +175,7 @@ async def get_worker_performance(hours: int = 24) -> WorkerPerformanceResponse:
             # Get metrics in range
             metrics_list = await repo.get_date_range(start=start_time, end=end_time, limit=10000)
 
-            # Aggregate worker stats - using typed dict for clarity
-            from typing import TypedDict
-
-            class WorkerStatsAgg(TypedDict):
-                total: int
-                successful: int
-                failed: int
-                durations: list[float]
-
+            # Aggregate worker stats
             worker_stats_dict: dict[str, WorkerStatsAgg] = {}
 
             for metric in metrics_list:
