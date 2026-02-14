@@ -505,6 +505,84 @@ async def _run_supervised_research(
     return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector)
 
 
+async def _publish_routing_event(
+    event_bus: object | None,
+    workflow_id: str,
+    symbol: str,
+    routing_decision: AnalysisRoutingDecision,
+) -> None:
+    """Publish supervisor routing complete event.
+
+    Args:
+        event_bus: Optional event bus for real-time updates
+        workflow_id: Workflow identifier
+        symbol: Stock ticker symbol
+        routing_decision: Supervisor routing decision
+    """
+    if not event_bus or not workflow_id:
+        return
+
+    from src.daemon.event_bus import DashboardEvent, EventBus, EventType
+
+    if isinstance(event_bus, EventBus):
+        try:
+            routing_event = DashboardEvent(
+                event_type=EventType.SUPERVISOR_ROUTING_COMPLETE,
+                data={
+                    "workflow_id": workflow_id,
+                    "symbol": symbol,
+                    "required_analyses": [a.value for a in routing_decision.required_analyses],
+                    "optional_analyses": [a.value for a in routing_decision.optional_analyses],
+                    "skip_analyses": {k.value: v for k, v in routing_decision.skip_analyses.items()},
+                    "reasoning": routing_decision.reasoning,
+                },
+            )
+            await event_bus.publish(routing_event)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to publish routing event: {e}")
+
+
+async def _publish_metrics_event(
+    event_bus: object | None,
+    workflow_id: str,
+    symbol: str,
+    metrics_collector: SupervisorMetricsCollector,
+) -> None:
+    """Publish supervisor metrics updated event.
+
+    Args:
+        event_bus: Optional event bus for real-time updates
+        workflow_id: Workflow identifier
+        symbol: Stock ticker symbol
+        metrics_collector: Supervisor metrics collector
+    """
+    if not event_bus or not workflow_id:
+        return
+
+    from src.daemon.event_bus import DashboardEvent, EventBus, EventType
+
+    if isinstance(event_bus, EventBus):
+        try:
+            metrics_event = DashboardEvent(
+                event_type=EventType.SUPERVISOR_METRICS_UPDATED,
+                data={
+                    "workflow_id": workflow_id,
+                    "symbol": symbol,
+                    "total_workers": metrics_collector.total_workers,
+                    "successful_workers": metrics_collector.successful_workers,
+                    "failed_workers": metrics_collector.failed_workers,
+                    "routing_decision_ms": metrics_collector.routing_decision_ms,
+                    "group1_execution_ms": metrics_collector.group1_execution_ms,
+                    "research_execution_ms": metrics_collector.research_execution_ms,
+                    "parallel_efficiency_percent": metrics_collector.parallel_efficiency_percent,
+                    "timeout_triggered": metrics_collector.timeout_triggered,
+                },
+            )
+            await event_bus.publish(metrics_event)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to publish metrics event: {e}")
+
+
 def _build_output(
     results: dict[AnalysisType, Any],
     research_results: dict[AnalysisType, Any],
@@ -553,6 +631,7 @@ async def run_supervised_analyses(
     timeout_ms: int = 30000,
     workflow_id: str | None = None,
     supervisor_metrics_repository: object | None = None,
+    event_bus: object | None = None,
 ) -> AnalysisOutput:
     """Execute analyses based on supervisor routing decision.
 
@@ -579,6 +658,7 @@ async def run_supervised_analyses(
         timeout_ms: Timeout for worker execution in milliseconds
         workflow_id: Optional workflow ID for supervisor metrics
         supervisor_metrics_repository: Optional repository for supervisor metrics
+        event_bus: Optional event bus for real-time updates
 
     Returns:
         AnalysisOutput with all analyses
@@ -599,6 +679,9 @@ async def run_supervised_analyses(
             metrics_collector = SupervisorMetricsCollector(workflow_id, input_data.symbol)
             metrics_collector.record_planning_start()
             metrics_collector.record_planning(routing_decision, fallback_used=False)
+
+    # Publish routing complete event
+    await _publish_routing_event(event_bus, workflow_id or "", input_data.symbol, routing_decision)
 
     # Run group 1 analyses
     if metrics_collector:
@@ -650,5 +733,6 @@ async def run_supervised_analyses(
 
         if isinstance(supervisor_metrics_repository, SupervisorMetricsRepository):
             await metrics_collector.save(supervisor_metrics_repository)
+            await _publish_metrics_event(event_bus, workflow_id or "", input_data.symbol, metrics_collector)
 
     return _build_output(group1_results, research_results, warnings)
