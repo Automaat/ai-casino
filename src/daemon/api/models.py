@@ -386,6 +386,27 @@ class ErrorSummaryResponse(BaseModel):
     total_errors: int
 
 
+class ValidationCriterionResponse(BaseModel):
+    """Single validation criterion result."""
+
+    name: str
+    passed: bool
+    current_value: float
+    threshold: float
+    message: str
+
+
+class PaperTradingValidationResponse(BaseModel):
+    """Paper trading validation status response."""
+
+    ready_for_live: bool
+    assessment_date: datetime
+    paper_trading_duration_days: int
+    total_paper_trades: int
+    criteria: list[ValidationCriterionResponse]
+    recommendations: list[str]
+
+
 __all__ = [
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
@@ -403,6 +424,7 @@ __all__ = [
     "GamePlanResponse",
     "HealthResponse",
     "MarketEventsResponse",
+    "PaperTradingValidationResponse",
     "PositionResponse",
     "PositionsResponse",
     "RebalanceAllocation",
@@ -418,6 +440,7 @@ __all__ = [
     "SupervisorMetricResponse",
     "SupervisorMetricsListResponse",
     "SupervisorSummaryResponse",
+    "ValidationCriterionResponse",
     "WatchlistResponse",
     "WorkerPerformanceResponse",
     "WorkerStats",

@@ -216,6 +216,11 @@ export const api = {
 		return fetchAPI<T.SupervisorMetricsErrors>(
 			`/supervisor/metrics/errors${queryString ? `?${queryString}` : ''}`
 		);
+	},
+
+	// Validation
+	async getPaperTradingValidation(): Promise<T.PaperTradingValidation> {
+		return fetchAPI<T.PaperTradingValidation>('/validation/paper-trading');
 	}
 };
 

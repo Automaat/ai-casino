@@ -23,6 +23,9 @@ hf_logging.set_verbosity_error()
 # Feature flag for FinBERT mode (local in-process vs remote microservice)
 FINBERT_MODE = os.getenv("FINBERT_MODE", "local")
 FINBERT_SERVICE_URL = os.getenv("FINBERT_SERVICE_URL", "http://localhost:8485")
+FINBERT_WORKERS = os.getenv("FINBERT_WORKERS")
+MAX_WORKERS = 32
+DEFAULT_WORKERS = 4
 
 
 # Process pool executor holder for parallel FinBERT inference (avoids GIL)
@@ -261,6 +264,7 @@ def get_finbert_executor() -> ProcessPoolExecutor:
     """Get or create process pool executor.
 
     Creates executor on first call or after shutdown. Thread-safe.
+    Worker count: FINBERT_WORKERS env var > os.cpu_count() > 4
 
     Returns:
         ProcessPoolExecutor for FinBERT inference
@@ -270,9 +274,31 @@ def get_finbert_executor() -> ProcessPoolExecutor:
 
     with _ExecutorHolder.lock:
         if _ExecutorHolder.executor is None:
-            _ExecutorHolder.executor = ProcessPoolExecutor(max_workers=4)
-            logger.debug("FinBERT executor created")
+            workers = _get_worker_count()
+            _ExecutorHolder.executor = ProcessPoolExecutor(max_workers=workers)
+            logger.debug(f"FinBERT executor created with {workers} workers")
         return _ExecutorHolder.executor
+
+
+def _get_worker_count() -> int:
+    """Determine optimal worker count for FinBERT executor.
+
+    Priority: FINBERT_WORKERS env var > os.cpu_count() > DEFAULT_WORKERS
+
+    Returns:
+        Worker count (1-MAX_WORKERS)
+    """
+    if FINBERT_WORKERS:
+        try:
+            workers = int(FINBERT_WORKERS)
+            if workers < 1 or workers > MAX_WORKERS:
+                logger.warning(f"FINBERT_WORKERS={workers} out of range (1-{MAX_WORKERS}), using cpu_count()")
+            else:
+                return workers
+        except ValueError:
+            logger.warning(f"Invalid FINBERT_WORKERS={FINBERT_WORKERS}, using cpu_count()")
+
+    return os.cpu_count() or DEFAULT_WORKERS
 
 
 def shutdown_finbert_executor() -> None:

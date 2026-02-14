@@ -1,6 +1,8 @@
 """Sentiment Analysis Agent."""
 
 import asyncio
+import hashlib
+import time
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -32,6 +34,7 @@ class SentimentAnalyst:
 
     POSITIVE_THRESHOLD = 0.2
     NEGATIVE_THRESHOLD = -0.2
+    CACHE_TTL_SECONDS = 3600
 
     def __init__(self, finbert: object) -> None:
         """Initialize sentiment analyst.
@@ -40,7 +43,51 @@ class SentimentAnalyst:
             finbert: FinBERT sentiment analyzer (local or remote, provides analyze_batch method)
         """
         self.finbert = finbert
+        self._cache: dict[str, tuple[SentimentAnalysis, float]] = {}
         logger.info("Initialized SentimentAnalyst")
+
+    def _get_cache_key(self, symbol: str, articles: list[NewsArticle]) -> str:
+        """Generate cache key from symbol and article URLs.
+
+        Args:
+            symbol: Stock ticker symbol
+            articles: List of news articles
+
+        Returns:
+            SHA256 hash of symbol + sorted article URLs
+        """
+        urls = sorted(article.url for article in articles)
+        content = f"{symbol}:{','.join(urls)}"
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def _get_cached_result(self, cache_key: str) -> SentimentAnalysis | None:
+        """Get cached sentiment result if fresh.
+
+        Args:
+            cache_key: Cache key
+
+        Returns:
+            Cached SentimentAnalysis or None if expired/missing
+        """
+        if cache_key in self._cache:
+            result, timestamp = self._cache[cache_key]
+            age = time.time() - timestamp
+            if age < self.CACHE_TTL_SECONDS:
+                logger.debug(f"Sentiment cache hit (age={age:.1f}s)")
+                return result
+            logger.debug(f"Sentiment cache expired (age={age:.1f}s)")
+            del self._cache[cache_key]
+        return None
+
+    def _store_cached_result(self, cache_key: str, result: SentimentAnalysis) -> None:
+        """Store sentiment result in cache.
+
+        Args:
+            cache_key: Cache key
+            result: Sentiment analysis result
+        """
+        self._cache[cache_key] = (result, time.time())
+        logger.debug(f"Stored sentiment in cache ({len(self._cache)} entries)")
 
     @track_agent
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
@@ -54,6 +101,11 @@ class SentimentAnalyst:
             SentimentAnalysis with aggregated sentiment
         """
         logger.info(f"Analyzing sentiment for {symbol} from {len(articles)} articles")
+
+        cache_key = self._get_cache_key(symbol, articles)
+        cached = self._get_cached_result(cache_key)
+        if cached:
+            return cached
 
         if not articles:
             logger.warning("No articles provided for sentiment analysis")
@@ -106,7 +158,7 @@ class SentimentAnalyst:
         # Calculate confidence from sentiment strength (stronger sentiment = higher confidence)
         confidence = abs(overall_score)
 
-        return SentimentAnalysis(
+        result = SentimentAnalysis(
             overall_sentiment=sentiment_label,
             sentiment_score=overall_score,
             positive_ratio=positive_count / total,
@@ -116,6 +168,9 @@ class SentimentAnalyst:
             summary=summary,
             confidence=confidence,
         )
+
+        self._store_cached_result(cache_key, result)
+        return result
 
     def _aggregate_sentiment(self, scores: list[SentimentScore]) -> float:
         """Aggregate individual sentiment scores.

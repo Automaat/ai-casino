@@ -124,6 +124,12 @@ class FinBERTConfig(BaseModel):
         le=120.0,
         description="HTTP request timeout in seconds (10-120)",
     )
+    workers: int | None = Field(
+        default=None,
+        ge=1,
+        le=32,
+        description="ProcessPoolExecutor workers for local mode (1-32, default: os.cpu_count())",
+    )
 
 
 class DatabaseConfig(BaseModel):

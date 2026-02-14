@@ -5,9 +5,10 @@
 	interface Props {
 		variant: Signal | 'success' | 'error' | 'warning' | 'info' | 'neutral';
 		children: Snippet;
+		class?: string;
 	}
 
-	let { variant, children }: Props = $props();
+	let { variant, children, class: className }: Props = $props();
 
 	const variantStyles: Record<string, string> = {
 		BUY: 'bg-green-50 text-green-700 border-green-300',
@@ -23,6 +24,6 @@
 	const classes = $derived(variantStyles[variant] || variantStyles.neutral);
 </script>
 
-<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {classes}">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {classes} {className || ''}">
 	{@render children()}
 </span>

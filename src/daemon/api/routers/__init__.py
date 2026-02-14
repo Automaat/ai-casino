@@ -7,6 +7,7 @@ from src.daemon.api.routers.portfolio import router as portfolio_router
 from src.daemon.api.routers.state import router as state_router
 from src.daemon.api.routers.supervisor import router as supervisor_router
 from src.daemon.api.routers.trading import router as trading_router
+from src.daemon.api.routers.validation import router as validation_router
 from src.daemon.api.routers.websocket import router as websocket_router
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "state_router",
     "supervisor_router",
     "trading_router",
+    "validation_router",
     "websocket_router",
 ]

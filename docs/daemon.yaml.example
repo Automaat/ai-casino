@@ -997,6 +997,13 @@ daemon:
     # Default: 60.0
     # timeout: 60.0
 
+    # ProcessPoolExecutor workers for local mode (1-32)
+    # Uses os.cpu_count() if not specified
+    # Higher values improve parallel analysis throughput
+    # Example: 8 workers on 10-core machine for better CPU utilization
+    # Default: null (auto-detect CPU count)
+    # workers: null
+
   # Data Sources Configuration
   data_sources:
     # Market data source: "yfinance" (no API key required) or "alpha_vantage" (requires API key)
