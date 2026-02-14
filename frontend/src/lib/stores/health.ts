@@ -2,8 +2,7 @@
  * Enhanced health store with historical tracking for uptime charts
  */
 
-import { writable, derived, get } from 'svelte/store';
-import type { ServiceHealthResponse, ServiceCheck } from '$lib/types/api';
+import { writable, derived } from 'svelte/store';
 import { serviceHealth } from './dashboard';
 
 interface HistoricalDataPoint {
