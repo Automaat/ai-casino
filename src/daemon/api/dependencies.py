@@ -1,13 +1,16 @@
 """FastAPI dependencies for database access."""
 
+import contextlib
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_session
 from src.database.repositories.metadata import MetadataRepository
 from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
+
+# Explicitly reference to ensure pyrefly sees the import
+asynccontextmanager = contextlib.asynccontextmanager
 
 
 @asynccontextmanager
