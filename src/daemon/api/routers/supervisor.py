@@ -1,0 +1,289 @@
+"""Supervisor metrics endpoints."""
+
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, HTTPException
+from loguru import logger
+
+from src.daemon.api.dependencies import get_supervisor_metrics_repo
+from src.daemon.api.models import (
+    ErrorSummaryResponse,
+    SupervisorMetricResponse,
+    SupervisorMetricsListResponse,
+    SupervisorSummaryResponse,
+    WorkerPerformanceResponse,
+    WorkerStats,
+)
+
+router = APIRouter(prefix="/supervisor", tags=["supervisor"])
+
+
+@router.get("/metrics/recent", response_model=SupervisorMetricsListResponse)
+async def get_recent_metrics(limit: int = 50, symbol: str | None = None) -> SupervisorMetricsListResponse:
+    """Get recent supervisor metrics.
+
+    Args:
+        limit: Maximum records to return (1-500)
+        symbol: Optional symbol filter
+
+    Returns:
+        List of recent supervisor metrics
+    """
+    limit = max(1, min(limit, 500))
+
+    try:
+        async with get_supervisor_metrics_repo() as repo:
+            metrics = await repo.get_recent(limit=limit, symbol=symbol)
+            return SupervisorMetricsListResponse(
+                metrics=[
+                    SupervisorMetricResponse(
+                        id=str(m.id),
+                        created_at=m.created_at or datetime.now(UTC),
+                        workflow_id=m.workflow_id,
+                        symbol=m.symbol,
+                        timestamp=m.timestamp,
+                        required_analyses=m.required_analyses,
+                        optional_analyses=m.optional_analyses,
+                        skip_analyses=m.skip_analyses,
+                        routing_reasoning=m.routing_reasoning,
+                        total_workers=m.total_workers,
+                        required_workers=m.required_workers,
+                        optional_workers=m.optional_workers,
+                        successful_workers=m.successful_workers,
+                        failed_workers=m.failed_workers,
+                        routing_decision_ms=m.routing_decision_ms,
+                        group1_execution_ms=m.group1_execution_ms,
+                        research_execution_ms=m.research_execution_ms,
+                        total_supervisor_overhead_ms=m.total_supervisor_overhead_ms,
+                        worker_timings=m.worker_timings,
+                        worker_errors=m.worker_errors,
+                        total_llm_calls=m.total_llm_calls,
+                        total_cost_usd=m.total_cost_usd,
+                        planning_fallback_used=m.planning_fallback_used,
+                        synthesis_fallback_used=m.synthesis_fallback_used,
+                        confidence_adjustment=m.confidence_adjustment,
+                        synthesis_reasoning=m.synthesis_reasoning,
+                        parallel_efficiency_percent=m.parallel_efficiency_percent,
+                        timeout_triggered=m.timeout_triggered,
+                    )
+                    for m in metrics
+                ],
+                count=len(metrics),
+            )
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch recent supervisor metrics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch metrics") from e
+
+
+@router.get("/metrics/{metric_id}", response_model=SupervisorMetricResponse)
+async def get_metric_by_id(metric_id: str) -> SupervisorMetricResponse:
+    """Get supervisor metric by ID.
+
+    Args:
+        metric_id: Supervisor metric UUID
+
+    Returns:
+        Supervisor metric detail
+    """
+    try:
+        async with get_supervisor_metrics_repo() as repo:
+            metric = await repo.get_by_id(metric_id)
+
+            if not metric:
+                raise HTTPException(status_code=404, detail="Metric not found")
+
+            return SupervisorMetricResponse(
+                id=str(metric.id),
+                created_at=metric.created_at or datetime.now(UTC),
+                workflow_id=metric.workflow_id,
+                symbol=metric.symbol,
+                timestamp=metric.timestamp,
+                required_analyses=metric.required_analyses,
+                optional_analyses=metric.optional_analyses,
+                skip_analyses=metric.skip_analyses,
+                routing_reasoning=metric.routing_reasoning,
+                total_workers=metric.total_workers,
+                required_workers=metric.required_workers,
+                optional_workers=metric.optional_workers,
+                successful_workers=metric.successful_workers,
+                failed_workers=metric.failed_workers,
+                routing_decision_ms=metric.routing_decision_ms,
+                group1_execution_ms=metric.group1_execution_ms,
+                research_execution_ms=metric.research_execution_ms,
+                total_supervisor_overhead_ms=metric.total_supervisor_overhead_ms,
+                worker_timings=metric.worker_timings,
+                worker_errors=metric.worker_errors,
+                total_llm_calls=metric.total_llm_calls,
+                total_cost_usd=metric.total_cost_usd,
+                planning_fallback_used=metric.planning_fallback_used,
+                synthesis_fallback_used=metric.synthesis_fallback_used,
+                confidence_adjustment=metric.confidence_adjustment,
+                synthesis_reasoning=metric.synthesis_reasoning,
+                parallel_efficiency_percent=metric.parallel_efficiency_percent,
+                timeout_triggered=metric.timeout_triggered,
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch supervisor metric {metric_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch metric") from e
+
+
+@router.get("/metrics/summary", response_model=SupervisorSummaryResponse)
+async def get_summary(hours: int = 24, symbol: str | None = None) -> SupervisorSummaryResponse:
+    """Get supervisor metrics summary for time period.
+
+    Args:
+        hours: Hours to look back (1-720)
+        symbol: Optional symbol filter
+
+    Returns:
+        Aggregated supervisor metrics summary
+    """
+    hours = max(1, min(hours, 720))
+
+    try:
+        async with get_supervisor_metrics_repo() as repo:
+            # Get date range
+            end_time = datetime.now(UTC)
+            start_time = end_time - timedelta(hours=hours)
+
+            # Get metrics in range
+            metrics_list = await repo.get_date_range(start=start_time, end=end_time, limit=10000)
+
+            # Filter by symbol if provided
+            if symbol:
+                metrics_list = [m for m in metrics_list if m.symbol == symbol]
+
+            # Calculate aggregates
+            if not metrics_list:
+                return SupervisorSummaryResponse(
+                    avg_efficiency_percent=0.0,
+                    avg_routing_ms=0.0,
+                    avg_group1_ms=0.0,
+                    avg_research_ms=0.0,
+                    avg_total_ms=0.0,
+                    timeout_rate_percent=0.0,
+                    sample_size=0,
+                    symbol=symbol,
+                )
+
+            total_count = len(metrics_list)
+            timeout_count = sum(1 for m in metrics_list if m.timeout_triggered)
+
+            return SupervisorSummaryResponse(
+                avg_efficiency_percent=sum(m.parallel_efficiency_percent for m in metrics_list) / total_count,
+                avg_routing_ms=sum(m.routing_decision_ms for m in metrics_list) / total_count,
+                avg_group1_ms=sum(m.group1_execution_ms for m in metrics_list) / total_count,
+                avg_research_ms=sum(m.research_execution_ms for m in metrics_list) / total_count,
+                avg_total_ms=sum(m.total_supervisor_overhead_ms for m in metrics_list) / total_count,
+                timeout_rate_percent=(timeout_count / total_count * 100) if total_count > 0 else 0.0,
+                sample_size=total_count,
+                symbol=symbol,
+            )
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch supervisor summary: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch summary") from e
+
+
+@router.get("/metrics/workers", response_model=WorkerPerformanceResponse)
+async def get_worker_performance(hours: int = 24) -> WorkerPerformanceResponse:
+    """Get worker performance statistics.
+
+    Args:
+        hours: Hours to look back (1-720)
+
+    Returns:
+        Worker performance by type
+    """
+    hours = max(1, min(hours, 720))
+
+    try:
+        async with get_supervisor_metrics_repo() as repo:
+            # Get date range
+            end_time = datetime.now(UTC)
+            start_time = end_time - timedelta(hours=hours)
+
+            # Get metrics in range
+            metrics_list = await repo.get_date_range(start=start_time, end=end_time, limit=10000)
+
+            # Aggregate worker stats - using typed dict for clarity
+            from typing import TypedDict
+
+            class WorkerStatsAgg(TypedDict):
+                total: int
+                successful: int
+                failed: int
+                durations: list[float]
+
+            worker_stats_dict: dict[str, WorkerStatsAgg] = {}
+
+            for metric in metrics_list:
+                # Process worker timings
+                for worker_name, duration_ms in metric.worker_timings.items():
+                    if worker_name not in worker_stats_dict:
+                        worker_stats_dict[worker_name] = {
+                            "total": 0,
+                            "successful": 0,
+                            "failed": 0,
+                            "durations": [],
+                        }
+
+                    worker_stats_dict[worker_name]["total"] += 1
+                    worker_stats_dict[worker_name]["durations"].append(duration_ms)
+
+                    # Check if worker failed
+                    if worker_name in metric.worker_errors:
+                        worker_stats_dict[worker_name]["failed"] += 1
+                    else:
+                        worker_stats_dict[worker_name]["successful"] += 1
+
+            # Calculate stats
+            worker_stats: dict[str, WorkerStats] = {}
+            for worker_name, stats_data in worker_stats_dict.items():
+                total = stats_data["total"]
+                successful = stats_data["successful"]
+                failed = stats_data["failed"]
+                durations = stats_data["durations"]
+
+                worker_stats[worker_name] = WorkerStats(
+                    total_executions=total,
+                    successful_executions=successful,
+                    failed_executions=failed,
+                    success_rate=(successful / total * 100) if total > 0 else 0.0,
+                    avg_duration_ms=sum(durations) / len(durations) if durations else 0.0,
+                )
+
+            return WorkerPerformanceResponse(
+                worker_stats=worker_stats,
+                total_workers=len(worker_stats),
+                sample_size=len(metrics_list),
+            )
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch worker performance: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch worker performance") from e
+
+
+@router.get("/metrics/errors", response_model=ErrorSummaryResponse)
+async def get_error_summary(hours: int = 24) -> ErrorSummaryResponse:
+    """Get error summary by worker type.
+
+    Args:
+        hours: Hours to look back (1-720)
+
+    Returns:
+        Error counts by worker type
+    """
+    hours = max(1, min(hours, 720))
+
+    try:
+        async with get_supervisor_metrics_repo() as repo:
+            error_counts = await repo.get_error_summary(hours=hours)
+
+            return ErrorSummaryResponse(
+                error_counts=error_counts,
+                total_errors=sum(error_counts.values()),
+            )
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch error summary: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch error summary") from e
