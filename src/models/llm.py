@@ -52,13 +52,13 @@ T = TypeVar("T", bound=BaseModel)
 
 _MIN_CONCURRENT_REQUESTS = 1
 _MAX_CONCURRENT_REQUESTS = 20
-_DEFAULT_CONCURRENT_REQUESTS = 5
+_DEFAULT_CONCURRENT_REQUESTS = 10
 
 
 def _parse_max_concurrent_requests() -> int:
     """Parse and validate LLM_MAX_CONCURRENT environment variable.
 
-    Valid range is 1-20. Falls back to default (5) on invalid values.
+    Valid range is 1-20. Falls back to default (10) on invalid values.
 
     Returns:
         Validated concurrency limit (1-20)
@@ -99,8 +99,8 @@ def _parse_max_concurrent_requests() -> int:
     return value
 
 
-# Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 5)
-# With concurrency=5, analyses stage: ~80-100s (vs ~287s serialized)
+# Limit concurrent async requests for multi-agent workflows (env: LLM_MAX_CONCURRENT, default 10)
+# With concurrency=10, analyses stage: ~50-70s (vs ~287s serialized, ~80-100s with concurrency=5)
 # OpenAI/Anthropic allow ~8-10 req/sec, Ollama (local) has no limits
 MAX_CONCURRENT_REQUESTS = _parse_max_concurrent_requests()
 _semaphore_holder: dict[str, asyncio.Semaphore | int | None] = {}
