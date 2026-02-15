@@ -9,6 +9,7 @@ from loguru import logger
 
 from src.daemon.api.routers import (
     config_router,
+    cost_analytics_router,
     execution_router,
     health_router,
     portfolio_router,
@@ -62,6 +63,7 @@ def create_api_app(components: DaemonComponents) -> FastAPI:
     app.include_router(execution_router)
     app.include_router(supervisor_router)
     app.include_router(validation_router)
+    app.include_router(cost_analytics_router)
     app.include_router(websocket_router)
 
     logger.info("FastAPI app created")

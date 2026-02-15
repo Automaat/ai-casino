@@ -1,6 +1,7 @@
 """API routers for daemon monitoring endpoints."""
 
 from src.daemon.api.routers.config import router as config_router
+from src.daemon.api.routers.cost_analytics import router as cost_analytics_router
 from src.daemon.api.routers.execution import router as execution_router
 from src.daemon.api.routers.health import router as health_router
 from src.daemon.api.routers.portfolio import router as portfolio_router
@@ -12,6 +13,7 @@ from src.daemon.api.routers.websocket import router as websocket_router
 
 __all__ = [
     "config_router",
+    "cost_analytics_router",
     "execution_router",
     "health_router",
     "portfolio_router",

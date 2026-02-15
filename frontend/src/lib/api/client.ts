@@ -250,6 +250,43 @@ export const api = {
 
 	async getTradeDetail(tradeId: string): Promise<T.EnrichedTradeResponse> {
 		return fetchAPI<T.EnrichedTradeResponse>(`/trades/${encodeURIComponent(tradeId)}`);
+	},
+
+	// Cost Analytics
+	async getCostSummary(startDate: string, endDate: string): Promise<T.CostAnalyticsSummaryResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.CostAnalyticsSummaryResponse>(`/api/cost-analytics/summary?${query}`);
+	},
+
+	async getCostTrends(period: 'daily' | 'weekly', startDate: string, endDate: string): Promise<T.CostTrendsResponse> {
+		const query = new URLSearchParams();
+		query.set('period', period);
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.CostTrendsResponse>(`/api/cost-analytics/trends?${query}`);
+	},
+
+	async getCostBySymbol(startDate: string, endDate: string): Promise<T.CostByDimensionListResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.CostByDimensionListResponse>(`/api/cost-analytics/by-symbol?${query}`);
+	},
+
+	async getCostByAgent(startDate: string, endDate: string): Promise<T.CostByDimensionListResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.CostByDimensionListResponse>(`/api/cost-analytics/by-agent?${query}`);
+	},
+
+	async getCostByModel(startDate: string, endDate: string): Promise<T.CostByDimensionListResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.CostByDimensionListResponse>(`/api/cost-analytics/by-model?${query}`);
 	}
 };
 
