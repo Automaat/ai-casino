@@ -24,16 +24,16 @@
 	// Latest screening record
 	let latestRecord = $derived.by(() => {
 		if (!history?.records.length) return null;
-		return history.records[history.records.length - 1];
+		return history.records[0];
 	});
 
 	// Criteria filter for history table
-	let criteriaFilter: string | null = $state(null);
+	let criteriaFilter: string = $state('');
 
 	// Filtered history records
 	let filteredHistory = $derived.by(() => {
 		if (!history?.records) return [];
-		if (!criteriaFilter) return history.records;
+		if (criteriaFilter === '') return history.records;
 		return history.records.filter((r) => r.criteria === criteriaFilter);
 	});
 
@@ -231,13 +231,8 @@
 		return () => {
 			if (refreshInterval) clearInterval(refreshInterval);
 			disconnectWebSocket();
+			screening.reset();
 		};
-	});
-
-	onDestroy(() => {
-		if (refreshInterval) clearInterval(refreshInterval);
-		disconnectWebSocket();
-		screening.reset();
 	});
 </script>
 
@@ -326,7 +321,7 @@
 			<div class="table-controls">
 				<label for="criteria-filter">Filter by Criteria:</label>
 				<select id="criteria-filter" bind:value={criteriaFilter}>
-					<option value={null}>All</option>
+					<option value="">All</option>
 					{#if insights?.criteria_breakdown}
 						{#each Object.keys(insights.criteria_breakdown) as criteria}
 							<option value={criteria}>{criteria}</option>
