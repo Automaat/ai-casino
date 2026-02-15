@@ -198,6 +198,12 @@ class NewsFetcher:
 
             except httpx.HTTPStatusError as e:
                 self._log_rate_limit_headers(e.response, symbol)
+                if e.response.status_code == 402:
+                    logger.warning(
+                        f"Marketaux API payment required (402) for {symbol} - "
+                        "quota exceeded or subscription needed"
+                    )
+                    return []
                 logger.opt(exception=True).error(f"News fetch failed: {e}")
                 raise
             except httpx.HTTPError as e:
@@ -269,6 +275,12 @@ class NewsFetcher:
             logger.info(f"Fetched {len(articles)} articles")
             return articles
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 402:
+                logger.warning("Marketaux API payment required (402) - quota exceeded or subscription needed")
+                return []
+            logger.opt(exception=True).error(f"Market news fetch failed: {e}")
+            raise
         except httpx.HTTPError as e:
             logger.opt(exception=True).error(f"Market news fetch failed: {e}")
             raise
