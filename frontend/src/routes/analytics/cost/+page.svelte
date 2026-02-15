@@ -14,12 +14,12 @@
 	let ws: WebSocket | null = null;
 	let wsConnected = $state(false);
 
-	const state = $derived($costAnalytics);
-	const summary = $derived(state.summary);
-	const trends = $derived(state.trends);
-	const bySymbol = $derived(state.bySymbol);
-	const byAgent = $derived(state.byAgent);
-	const byModel = $derived(state.byModel);
+	let analyticsState = $derived($costAnalytics);
+	let summary = $derived(analyticsState.summary);
+	let trends = $derived(analyticsState.trends);
+	let bySymbol = $derived(analyticsState.bySymbol);
+	let byAgent = $derived(analyticsState.byAgent);
+	let byModel = $derived(analyticsState.byModel);
 
 	function getDefaultStartDate(): string {
 		const date = new Date();
@@ -58,78 +58,46 @@
 	}
 
 	// Line chart data for cost trends
-	const trendChartData = $derived.by(() => {
+	let trendChartData = $derived.by(() => {
 		if (!trends?.trends.length) return null;
 
-		const dates = trends.trends.map(t => new Date(t.timestamp).toLocaleDateString());
-		const costs = trends.trends.map(t => t.cost_usd);
-
-		return {
-			xAxis: { type: 'category' as const, data: dates },
-			yAxis: { type: 'value' as const, name: 'Cost (USD)' },
-			series: [
-				{
-					name: 'Cost',
-					type: 'line' as const,
-					data: costs,
-					smooth: true,
-					itemStyle: { color: '#3b82f6' }
-				}
-			]
-		};
+		return trends.trends.map(t => ({
+			time: new Date(t.timestamp).toLocaleDateString(),
+			value: t.cost_usd
+		}));
 	});
 
 	// Bar chart data for cost by symbol
-	const symbolChartData = $derived.by(() => {
+	let symbolChartData = $derived.by(() => {
 		if (!bySymbol?.data.length) return null;
 
 		const top10 = bySymbol.data.slice(0, 10);
-		const symbols = top10.map(d => d.dimension_value);
-		const costs = top10.map(d => d.cost_usd);
-
-		return {
-			xAxis: { type: 'category' as const, data: symbols },
-			yAxis: { type: 'value' as const, name: 'Cost (USD)' },
-			series: [
-				{
-					name: 'Cost',
-					type: 'bar' as const,
-					data: costs,
-					itemStyle: { color: '#10b981' }
-				}
-			]
-		};
+		return top10.map(d => ({
+			label: d.dimension_value,
+			value: d.cost_usd,
+			color: '#10b981'
+		}));
 	});
 
 	// Pie chart data for token distribution by agent
-	const agentPieData = $derived.by(() => {
+	let agentPieData = $derived.by(() => {
 		if (!byAgent?.data.length) return null;
 
 		return byAgent.data.map(d => ({
-			name: d.dimension_value,
+			label: d.dimension_value,
 			value: d.tokens
 		}));
 	});
 
 	// Bar chart data for model cost comparison
-	const modelChartData = $derived.by(() => {
+	let modelChartData = $derived.by(() => {
 		if (!byModel?.data.length) return null;
 
-		const models = byModel.data.map(d => d.dimension_value);
-		const costs = byModel.data.map(d => d.cost_usd);
-
-		return {
-			xAxis: { type: 'category' as const, data: models },
-			yAxis: { type: 'value' as const, name: 'Cost (USD)' },
-			series: [
-				{
-					name: 'Cost',
-					type: 'bar' as const,
-					data: costs,
-					itemStyle: { color: '#8b5cf6' }
-				}
-			]
-		};
+		return byModel.data.map(d => ({
+			label: d.dimension_value,
+			value: d.cost_usd,
+			color: '#8b5cf6'
+		}));
 	});
 
 	const WS_URL =
@@ -251,24 +219,20 @@
 			<MetricCard
 				title="Total Cost"
 				value={formatCurrency(summary.total_cost_usd)}
-				trend={null}
 			/>
 			<MetricCard
 				title="Avg Cost / Signal"
 				value={formatCurrency(summary.avg_cost_per_signal)}
 				subtitle="BUY/SELL only"
-				trend={null}
 			/>
 			<MetricCard
 				title="Total Tokens"
 				value={formatNumber(summary.total_tokens)}
-				trend={null}
 			/>
 			<MetricCard
 				title="Executions"
 				value={summary.total_executions.toString()}
 				subtitle={`Avg ${formatCurrency(summary.avg_cost_per_execution)}/exec`}
-				trend={null}
 			/>
 		</div>
 
@@ -329,10 +293,8 @@
 				</div>
 			</div>
 			<LineChart
-				title=""
-				xAxis={trendChartData.xAxis}
-				yAxis={trendChartData.yAxis}
-				series={trendChartData.series}
+				data={trendChartData}
+				yAxisLabel="Cost (USD)"
 				height={300}
 			/>
 		</Card>
@@ -344,10 +306,8 @@
 			<Card>
 				<h3 class="text-lg font-semibold mb-4">Cost by Symbol (Top 10)</h3>
 				<BarChart
-					title=""
-					xAxis={symbolChartData.xAxis}
-					yAxis={symbolChartData.yAxis}
-					series={symbolChartData.series}
+					data={symbolChartData}
+					yAxisLabel="Cost (USD)"
 					height={300}
 				/>
 			</Card>
@@ -357,7 +317,6 @@
 			<Card>
 				<h3 class="text-lg font-semibold mb-4">Token Distribution by Agent</h3>
 				<PieChart
-					title=""
 					data={agentPieData}
 					height={300}
 				/>
@@ -370,10 +329,8 @@
 		<Card>
 			<h3 class="text-lg font-semibold mb-4">Model Cost Comparison</h3>
 			<BarChart
-				title=""
-				xAxis={modelChartData.xAxis}
-				yAxis={modelChartData.yAxis}
-				series={modelChartData.series}
+				data={modelChartData}
+				yAxisLabel="Cost (USD)"
 				height={300}
 			/>
 			<p class="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -383,24 +340,24 @@
 	{/if}
 
 	<!-- Loading State -->
-	{#if state.loading}
+	{#if analyticsState.loading}
 		<div class="flex justify-center items-center py-12">
 			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
 		</div>
 	{/if}
 
 	<!-- Error State -->
-	{#if state.error}
+	{#if analyticsState.error}
 		<Card>
 			<div class="text-red-600 dark:text-red-400">
 				<p class="font-semibold">Error</p>
-				<p class="text-sm">{state.error}</p>
+				<p class="text-sm">{analyticsState.error}</p>
 			</div>
 		</Card>
 	{/if}
 
 	<!-- Empty State -->
-	{#if !state.loading && !state.error && !summary}
+	{#if !analyticsState.loading && !analyticsState.error && !summary}
 		<Card>
 			<div class="text-center py-12 text-gray-600 dark:text-gray-400">
 				<p>No data available for the selected date range</p>
