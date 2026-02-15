@@ -94,10 +94,10 @@ def prefetcher(
 
 
 class TestPrefetchSymbol:
-    def test_caches_all_data(self, prefetcher: DataPrefetcher) -> None:
+    async def test_caches_all_data(self, prefetcher: DataPrefetcher) -> None:
         """Verify all three data types are cached."""
-        with patch("src.daemon.prefetch.time.sleep"):
-            result = prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            result = await prefetcher.prefetch_symbol("AAPL")
 
         assert result.symbol == "AAPL"
         assert result.market_data is True
@@ -109,43 +109,45 @@ class TestPrefetchSymbol:
         assert prefetcher.get_cached_news("AAPL") is not None
         assert prefetcher.get_cached_fundamentals("AAPL") is not None
 
-    def test_cache_ttls(self, prefetcher: DataPrefetcher) -> None:
+    async def test_cache_ttls(self, prefetcher: DataPrefetcher) -> None:
         """Verify cache entries use correct TTL values."""
         cache_set = prefetcher._cache.set
         with (
-            patch("src.daemon.prefetch.time.sleep"),
+            patch("asyncio.sleep"),
             patch.object(prefetcher._cache, "set", wraps=cache_set) as mock_set,
         ):
-            prefetcher.prefetch_symbol("AAPL")
+            await prefetcher.prefetch_symbol("AAPL")
 
         ttls = [c.kwargs.get("expire") for c in mock_set.call_args_list]
         assert MARKET_DATA_TTL in ttls
         assert NEWS_TTL in ttls
         assert FUNDAMENTALS_TTL in ttls
 
-    def test_handles_market_data_failure(self, prefetcher: DataPrefetcher, mock_market_fetcher: Mock) -> None:
+    async def test_handles_market_data_failure(
+        self, prefetcher: DataPrefetcher, mock_market_fetcher: Mock
+    ) -> None:
         """Verify partial failure doesn't stop other fetches."""
         mock_market_fetcher.fetch_daily.side_effect = RuntimeError("down")
 
-        with patch("src.daemon.prefetch.time.sleep"):
-            result = prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            result = await prefetcher.prefetch_symbol("AAPL")
 
         assert result.market_data is False
         assert result.news is True
         assert result.fundamentals is True
 
-    def test_handles_news_failure(self, prefetcher: DataPrefetcher, mock_news_fetcher: Mock) -> None:
+    async def test_handles_news_failure(self, prefetcher: DataPrefetcher, mock_news_fetcher: Mock) -> None:
         """Verify news failure doesn't stop fundamentals."""
         mock_news_fetcher.afetch_company_news = AsyncMock(side_effect=RuntimeError("down"))
 
-        with patch("src.daemon.prefetch.time.sleep"):
-            result = prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            result = await prefetcher.prefetch_symbol("AAPL")
 
         assert result.market_data is True
         assert result.news is False
         assert result.fundamentals is True
 
-    def test_handles_fundamentals_failure(
+    async def test_handles_fundamentals_failure(
         self,
         prefetcher: DataPrefetcher,
         mock_fundamental_fetcher: Mock,
@@ -153,8 +155,8 @@ class TestPrefetchSymbol:
         """Verify fundamentals failure is isolated."""
         mock_fundamental_fetcher.fetch_overview.side_effect = RuntimeError("down")
 
-        with patch("src.daemon.prefetch.time.sleep"):
-            result = prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            result = await prefetcher.prefetch_symbol("AAPL")
 
         assert result.market_data is True
         assert result.news is True
@@ -162,63 +164,63 @@ class TestPrefetchSymbol:
 
 
 class TestPrefetchWatchlist:
-    def test_sequential_execution(self, prefetcher: DataPrefetcher) -> None:
+    async def test_sequential_execution(self, prefetcher: DataPrefetcher) -> None:
         """Verify symbols are prefetched sequentially."""
         call_order: list[str] = []
         original = prefetcher.prefetch_symbol
 
-        def tracking(symbol: str) -> PrefetchResult:
+        async def tracking(symbol: str) -> PrefetchResult:
             call_order.append(symbol)
-            return original(symbol)
+            return await original(symbol)
 
         with (
             patch.object(prefetcher, "prefetch_symbol", side_effect=tracking),
-            patch("src.daemon.prefetch.time.sleep"),
+            patch("asyncio.sleep"),
         ):
-            report = prefetcher.prefetch_watchlist(["AAPL", "TSLA", "GOOGL"])
+            report = await prefetcher.prefetch_watchlist(["AAPL", "TSLA", "GOOGL"])
 
         assert call_order == ["AAPL", "TSLA", "GOOGL"]
         assert len(report.results) == 3
         assert report.total_duration_seconds > 0
 
-    def test_rate_limiting(self, prefetcher: DataPrefetcher) -> None:
+    async def test_rate_limiting(self, prefetcher: DataPrefetcher) -> None:
         """Verify AV staggering sleeps between symbols."""
         sleep_calls: list[float] = []
 
-        def record_sleep(s: float) -> None:
+        async def record_sleep(s: float) -> None:
             sleep_calls.append(s)
 
-        with patch("src.daemon.prefetch.time.sleep", side_effect=record_sleep):
-            prefetcher.prefetch_watchlist(["AAPL", "TSLA"])
+        with patch("asyncio.sleep", side_effect=record_sleep):
+            await prefetcher.prefetch_watchlist(["AAPL", "TSLA"])
 
         assert any(s == AV_RATE_LIMIT_SLEEP for s in sleep_calls)
 
 
 class TestCachedDataRetrieval:
-    def test_get_cached_market_data(self, prefetcher: DataPrefetcher) -> None:
+    async def test_get_cached_market_data(self, prefetcher: DataPrefetcher) -> None:
         """Verify cached market data can be retrieved."""
-        with patch("src.daemon.prefetch.time.sleep"):
-            prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            await prefetcher.prefetch_symbol("AAPL")
 
         cached = prefetcher.get_cached_market_data("AAPL")
         assert cached is not None
         assert cached.symbol == "AAPL"
         assert len(cached.data) == 3
 
-    def test_get_cached_news(self, prefetcher: DataPrefetcher) -> None:
+    async def test_get_cached_news(self, prefetcher: DataPrefetcher) -> None:
         """Verify cached news can be retrieved."""
-        with patch("src.daemon.prefetch.time.sleep"):
-            prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            await prefetcher.prefetch_symbol("AAPL")
 
         cached = prefetcher.get_cached_news("AAPL")
         assert cached is not None
         assert len(cached) == 1
         assert cached[0].title == "Apple reports strong earnings"
 
-    def test_get_cached_fundamentals(self, prefetcher: DataPrefetcher) -> None:
+    async def test_get_cached_fundamentals(self, prefetcher: DataPrefetcher) -> None:
         """Verify cached fundamentals can be retrieved."""
-        with patch("src.daemon.prefetch.time.sleep"):
-            prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            await prefetcher.prefetch_symbol("AAPL")
 
         cached = prefetcher.get_cached_fundamentals("AAPL")
         assert cached is not None
@@ -231,10 +233,10 @@ class TestCachedDataRetrieval:
         assert prefetcher.get_cached_news("UNKNOWN") is None
         assert prefetcher.get_cached_fundamentals("UNKNOWN") is None
 
-    def test_clear_cache(self, prefetcher: DataPrefetcher) -> None:
+    async def test_clear_cache(self, prefetcher: DataPrefetcher) -> None:
         """Verify cache can be cleared."""
-        with patch("src.daemon.prefetch.time.sleep"):
-            prefetcher.prefetch_symbol("AAPL")
+        with patch("asyncio.sleep"):
+            await prefetcher.prefetch_symbol("AAPL")
 
         prefetcher.clear_cache()
 
@@ -265,7 +267,7 @@ class TestWarmFinbert:
 
 
 class TestPrefetchHandlesFailures:
-    def test_all_failures_still_returns_result(
+    async def test_all_failures_still_returns_result(
         self,
         prefetcher: DataPrefetcher,
         mock_market_fetcher: Mock,
@@ -277,13 +279,13 @@ class TestPrefetchHandlesFailures:
         mock_news_fetcher.afetch_company_news = AsyncMock(side_effect=RuntimeError("x"))
         mock_fundamental_fetcher.fetch_overview.side_effect = RuntimeError("x")
 
-        result = prefetcher.prefetch_symbol("AAPL")
+        result = await prefetcher.prefetch_symbol("AAPL")
 
         assert result.market_data is False
         assert result.news is False
         assert result.fundamentals is False
 
-    def test_watchlist_continues_after_symbol_failure(
+    async def test_watchlist_continues_after_symbol_failure(
         self,
         prefetcher: DataPrefetcher,
         mock_market_fetcher: Mock,
@@ -305,8 +307,8 @@ class TestPrefetchHandlesFailures:
 
         mock_market_fetcher.fetch_daily.side_effect = fail_first
 
-        with patch("src.daemon.prefetch.time.sleep"):
-            report = prefetcher.prefetch_watchlist(["AAPL", "TSLA"])
+        with patch("asyncio.sleep"):
+            report = await prefetcher.prefetch_watchlist(["AAPL", "TSLA"])
 
         assert len(report.results) == 2
         assert report.results[0].market_data is False

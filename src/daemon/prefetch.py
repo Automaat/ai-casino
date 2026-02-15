@@ -84,7 +84,7 @@ class DataPrefetcher:
         raw = f"{prefix}:{symbol}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
-    def prefetch_symbol(self, symbol: str) -> PrefetchResult:
+    async def prefetch_symbol(self, symbol: str) -> PrefetchResult:
         """Fetch and cache all data types for one symbol.
 
         Fetches market data, news, and fundamentals sequentially.
@@ -101,16 +101,16 @@ class DataPrefetcher:
         news_ok = False
         fundamentals_ok = False
 
-        # Market data (uses AV or yfinance)
+        # Market data (uses AV or yfinance) - offload blocking I/O
         try:
-            market_data = self._market_fetcher.fetch_daily(symbol)
+            market_data = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol)
             key = self._cache_key("market", symbol)
             cached_data = {
                 "symbol": market_data.symbol,
                 "data": market_data.data.to_json(orient="split", date_format="iso"),
                 "last_updated": market_data.last_updated.isoformat(),
             }
-            self._cache.set(key, cached_data, expire=MARKET_DATA_TTL)
+            await asyncio.to_thread(self._cache.set, key, cached_data, expire=MARKET_DATA_TTL)
             market_ok = True
             logger.debug(f"Prefetched market data for {symbol}")
         except Exception as e:
@@ -118,22 +118,11 @@ class DataPrefetcher:
 
         # News (uses Marketaux, no AV rate limit concern)
         try:
-            # Handle calling async from sync - detect if event loop is running
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                # No event loop running, safe to use asyncio.run()
-                articles = asyncio.run(self._news_fetcher.afetch_company_news(symbol))
-            else:
-                # Event loop already running, use run_in_executor
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._news_fetcher.afetch_company_news(symbol))
-                    articles = future.result()
+            articles = await self._news_fetcher.afetch_company_news(symbol)
 
             key = self._cache_key("news", symbol)
-            self._cache.set(
+            await asyncio.to_thread(
+                self._cache.set,
                 key,
                 [a.model_dump(mode="json") for a in articles],
                 expire=NEWS_TTL,
@@ -144,13 +133,13 @@ class DataPrefetcher:
             logger.opt(exception=True).warning(f"Failed to prefetch news for {symbol}: {e}")
 
         # Rate limit sleep before fundamentals (both market and fundamentals use Alpha Vantage)
-        time.sleep(AV_RATE_LIMIT_SLEEP)
+        await asyncio.sleep(AV_RATE_LIMIT_SLEEP)
 
-        # Fundamentals (uses Alpha Vantage)
+        # Fundamentals (uses Alpha Vantage) - offload blocking I/O
         try:
-            fundamentals = self._fundamental_fetcher.fetch_overview(symbol)
+            fundamentals = await asyncio.to_thread(self._fundamental_fetcher.fetch_overview, symbol)
             key = self._cache_key("fundamentals", symbol)
-            self._cache.set(key, fundamentals, expire=FUNDAMENTALS_TTL)
+            await asyncio.to_thread(self._cache.set, key, fundamentals, expire=FUNDAMENTALS_TTL)
             fundamentals_ok = True
             logger.debug(f"Prefetched fundamentals for {symbol}")
         except Exception as e:
@@ -165,7 +154,7 @@ class DataPrefetcher:
             duration_ms=duration_ms,
         )
 
-    def prefetch_watchlist(self, symbols: list[str]) -> PrefetchReport:
+    async def prefetch_watchlist(self, symbols: list[str]) -> PrefetchReport:
         """Prefetch data for all symbols sequentially with rate limiting.
 
         Args:
@@ -179,7 +168,7 @@ class DataPrefetcher:
 
         for i, symbol in enumerate(symbols):
             logger.info(f"Prefetching {symbol} ({i + 1}/{len(symbols)})")
-            result = self.prefetch_symbol(symbol)
+            result = await self.prefetch_symbol(symbol)
             results.append(result)
 
         total_duration = time.perf_counter() - start
@@ -310,6 +299,11 @@ class DataPrefetcher:
         """Clear all prefetch cache data."""
         self._cache.clear()
         logger.info("Cleared prefetch cache")
+
+    async def aclose(self) -> None:
+        """Close HTTP clients."""
+        await self._news_fetcher.aclose()
+        logger.debug("DataPrefetcher HTTP clients closed")
 
     def __repr__(self) -> str:
         """Return string representation."""

@@ -71,8 +71,16 @@ class NewsFetcher:
         self._circuit_breaker = circuit_breaker
         self._circuit_breaker_registry = circuit_breaker_registry
         self._circuit_breaker_config = circuit_breaker_config
+        self._client: httpx.AsyncClient | None = None
         if not self.api_key:
             logger.warning("marketaux_api_key not set in config - API calls may be limited")
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """Lazily initialize and return reusable HTTP client."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+            logger.debug("Initialized reusable httpx.AsyncClient for NewsFetcher")
+        return self._client
 
     async def _ensure_circuit_breaker(self) -> None:
         """Lazily initialize circuit breaker from registry."""
@@ -159,34 +167,34 @@ class NewsFetcher:
 
         with timed_operation("news_fetch", source="marketaux"):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.get(self.BASE_URL, params=params)
+                client = await self._ensure_client()
+                response = await client.get(self.BASE_URL, params=params)
 
-                    # Log rate limit headers before raising
-                    self._log_rate_limit_headers(response, symbol)
+                # Log rate limit headers before raising
+                self._log_rate_limit_headers(response, symbol)
 
-                    response.raise_for_status()
+                response.raise_for_status()
 
-                    data = response.json()
-                    articles = []
+                data = response.json()
+                articles = []
 
-                    for item in data.get("data", []):
-                        articles.append(
-                            NewsArticle(
-                                title=item.get("title", ""),
-                                description=item.get("description", ""),
-                                url=item.get("url", ""),
-                                published_at=datetime.fromisoformat(item.get("published_at", "")),
-                                source=item.get("source", ""),
-                            )
+                for item in data.get("data", []):
+                    articles.append(
+                        NewsArticle(
+                            title=item.get("title", ""),
+                            description=item.get("description", ""),
+                            url=item.get("url", ""),
+                            published_at=datetime.fromisoformat(item.get("published_at", "")),
+                            source=item.get("source", ""),
                         )
+                    )
 
-                    logger.info(f"Fetched {len(articles)} articles")
+                logger.info(f"Fetched {len(articles)} articles")
 
-                    if self._cache and articles:
-                        self._cache.store_news_articles(symbol, articles)
+                if self._cache and articles:
+                    self._cache.store_news_articles(symbol, articles)
 
-                    return articles
+                return articles
 
             except httpx.HTTPStatusError as e:
                 self._log_rate_limit_headers(e.response, symbol)
@@ -240,26 +248,26 @@ class NewsFetcher:
             params["api_token"] = self.api_key
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(self.BASE_URL, params=params)
-                response.raise_for_status()
+            client = await self._ensure_client()
+            response = await client.get(self.BASE_URL, params=params)
+            response.raise_for_status()
 
-                data = response.json()
-                articles = []
+            data = response.json()
+            articles = []
 
-                for item in data.get("data", []):
-                    articles.append(
-                        NewsArticle(
-                            title=item.get("title", ""),
-                            description=item.get("description", ""),
-                            url=item.get("url", ""),
-                            published_at=datetime.fromisoformat(item.get("published_at", "")),
-                            source=item.get("source", ""),
-                        )
+            for item in data.get("data", []):
+                articles.append(
+                    NewsArticle(
+                        title=item.get("title", ""),
+                        description=item.get("description", ""),
+                        url=item.get("url", ""),
+                        published_at=datetime.fromisoformat(item.get("published_at", "")),
+                        source=item.get("source", ""),
                     )
+                )
 
-                logger.info(f"Fetched {len(articles)} articles")
-                return articles
+            logger.info(f"Fetched {len(articles)} articles")
+            return articles
 
         except httpx.HTTPError as e:
             logger.opt(exception=True).error(f"Market news fetch failed: {e}")
@@ -268,6 +276,13 @@ class NewsFetcher:
     def get_source_name(self) -> str:
         """Return source identifier."""
         return "marketaux"
+
+    async def aclose(self) -> None:
+        """Close HTTP client."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+            logger.debug("Closed httpx.AsyncClient for NewsFetcher")
 
     def __repr__(self) -> str:
         """String representation."""
