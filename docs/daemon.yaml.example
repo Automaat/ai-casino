@@ -999,6 +999,10 @@ daemon:
     # Higher = faster analysis but more resource intensive
     max_concurrent: 5
 
+    # TOOL_EXECUTION_MAX_CONCURRENT: Max concurrent tool executions (default: 5, range: 1-10)
+    #   Controls backpressure for LLM tool calls, separate from LLM_MAX_CONCURRENT
+    #   Set via environment variable, not in config file
+
     # Ollama base URL (only for ollama provider)
     ollama_base_url: "http://localhost:11434"
 

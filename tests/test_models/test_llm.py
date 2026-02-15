@@ -517,6 +517,250 @@ class TestAsyncToolExecutor:
         assert "Result for NVDA" in callback_calls[0][2]
 
 
+class TestParallelToolExecution:
+    """Tests for parallel tool execution in acomplete_with_tools."""
+
+    @pytest.fixture
+    def sample_tools(self):
+        return [
+            ToolDefinition(
+                function=ToolFunction(
+                    name="search",
+                    description="Search the web",
+                    parameters=ToolParametersSchema(
+                        properties={"query": ToolParameter(type="string", description="Search query")},
+                        required=["query"],
+                    ),
+                ),
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_tools_execute_concurrently(self, mock_openai_provider, sample_tools):
+        """Verify multiple tools execute concurrently, not sequentially."""
+        _, provider = mock_openai_provider
+
+        max_concurrent = 0
+        current_concurrent = 0
+        lock = asyncio.Lock()
+
+        async def async_executor(name: str, args: dict) -> str:
+            nonlocal max_concurrent, current_concurrent
+            async with lock:
+                current_concurrent += 1
+                max_concurrent = max(max_concurrent, current_concurrent)
+
+            await asyncio.sleep(0.05)  # Simulate work
+
+            async with lock:
+                current_concurrent -= 1
+            return f"Result for {args.get('query', 'N/A')}"
+
+        tool_calls = [
+            ToolCall(id=f"call_{i}", name="search", arguments={"query": f"query{i}"}) for i in range(3)
+        ]
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, tool_calls),
+                ("All searches complete", None),
+            ]
+        )
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(prompt="Search", tools=sample_tools, tool_executor=async_executor)
+
+        import time
+
+        start = time.perf_counter()
+        result = await client.acomplete_with_tools(params)
+
+        assert result == "All searches complete"
+        assert max_concurrent > 1, "Tools should execute concurrently"
+
+    @pytest.mark.asyncio
+    async def test_callback_ordering_preserved(self, mock_openai_provider, sample_tools):
+        """Verify callbacks invoked in tool_calls order despite random delays."""
+        _, provider = mock_openai_provider
+
+        import random
+
+        async def async_executor(name: str, args: dict) -> str:
+            await asyncio.sleep(random.uniform(0.001, 0.01))  # Random delay
+            return f"Result for {args.get('query', 'N/A')}"
+
+        callback_order = []
+
+        def on_tool_call(name: str, args: dict, result: str) -> None:
+            callback_order.append(args["query"])
+
+        tool_calls = [
+            ToolCall(id=f"call_{i}", name="search", arguments={"query": f"query{i}"}) for i in range(5)
+        ]
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, tool_calls),
+                ("Complete", None),
+            ]
+        )
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(
+            prompt="Search", tools=sample_tools, tool_executor=async_executor, on_tool_call=on_tool_call
+        )
+        await client.acomplete_with_tools(params)
+
+        # Callbacks should be in original tool_calls order
+        assert callback_order == ["query0", "query1", "query2", "query3", "query4"]
+
+    @pytest.mark.asyncio
+    async def test_message_ordering_preserved(self, mock_openai_provider, sample_tools):
+        """Verify messages formatted in deterministic order."""
+        _, provider = mock_openai_provider
+
+        import random
+
+        async def async_executor(name: str, args: dict) -> str:
+            await asyncio.sleep(random.uniform(0.001, 0.01))
+            return f"Result {args['query']}"
+
+        tool_calls = [ToolCall(id=f"call_{i}", name="search", arguments={"query": str(i)}) for i in range(3)]
+
+        messages_log = []
+
+        # Capture messages passed to provider
+        async def capture_messages(msgs, tools, temp):
+            messages_log.append(list(msgs))
+            if len(messages_log) == 1:
+                return (None, tool_calls)
+            return ("Complete", None)
+
+        provider.acomplete_with_tools = AsyncMock(side_effect=capture_messages)
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(prompt="Search", tools=sample_tools, tool_executor=async_executor)
+        await client.acomplete_with_tools(params)
+
+        # Second call should have tool results in order
+        assert len(messages_log) == 2
+        tool_results = [m for m in messages_log[1] if m.get("role") == "tool"]
+        assert len(tool_results) == 3
+        # Results should match tool_calls order
+        for i, msg in enumerate(tool_results):
+            assert f"Result {i}" in msg["content"]
+
+    @pytest.mark.asyncio
+    async def test_partial_failures_handled(self, mock_openai_provider, sample_tools):
+        """Verify mixed success/failure results handled gracefully."""
+        _, provider = mock_openai_provider
+
+        async def async_executor(name: str, args: dict) -> str:
+            query = args.get("query", "")
+            if "fail" in query:
+                msg = f"Simulated failure for {query}"
+                raise ValueError(msg)
+            return f"Success for {query}"
+
+        tool_calls = [
+            ToolCall(id="call_0", name="search", arguments={"query": "success1"}),
+            ToolCall(id="call_1", name="search", arguments={"query": "fail1"}),
+            ToolCall(id="call_2", name="search", arguments={"query": "success2"}),
+        ]
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, tool_calls),
+                ("Handled partial failures", None),
+            ]
+        )
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(prompt="Search", tools=sample_tools, tool_executor=async_executor)
+        result = await client.acomplete_with_tools(params)
+
+        assert result == "Handled partial failures"
+
+    @pytest.mark.asyncio
+    async def test_semaphore_limits_concurrency(self, mock_openai_provider, sample_tools, monkeypatch):
+        """Verify semaphore enforces concurrency limit."""
+        monkeypatch.setenv("TOOL_EXECUTION_MAX_CONCURRENT", "2")
+
+        # Recreate module-level constants with monkeypatch for automatic cleanup
+        from src.models import llm
+
+        monkeypatch.setattr(llm, "MAX_CONCURRENT_TOOL_EXECUTIONS", 2)
+        monkeypatch.setattr(llm, "_tool_semaphore_holder", {})
+
+        _, provider = mock_openai_provider
+
+        max_concurrent = 0
+        current_concurrent = 0
+        lock = asyncio.Lock()
+
+        async def async_executor(name: str, args: dict) -> str:
+            nonlocal max_concurrent, current_concurrent
+            async with lock:
+                current_concurrent += 1
+                max_concurrent = max(max_concurrent, current_concurrent)
+
+            await asyncio.sleep(0.02)
+
+            async with lock:
+                current_concurrent -= 1
+            return f"Result {args.get('query', 'N/A')}"
+
+        tool_calls = [ToolCall(id=f"call_{i}", name="search", arguments={"query": str(i)}) for i in range(5)]
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, tool_calls),
+                ("Complete", None),
+            ]
+        )
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(prompt="Search", tools=sample_tools, tool_executor=async_executor)
+        await client.acomplete_with_tools(params)
+
+        assert max_concurrent == 2, f"Expected max 2 concurrent, got {max_concurrent}"
+
+    @pytest.mark.asyncio
+    async def test_control_flow_exception_propagates(self, mock_openai_provider, sample_tools):
+        """Verify CancelledError raises immediately."""
+        _, provider = mock_openai_provider
+
+        async def async_executor(name: str, args: dict) -> str:
+            raise asyncio.CancelledError
+
+        tool_calls = [ToolCall(id="call_0", name="search", arguments={"query": "test"})]
+        provider.acomplete_with_tools = AsyncMock(return_value=(None, tool_calls))
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(prompt="Search", tools=sample_tools, tool_executor=async_executor)
+
+        with pytest.raises(asyncio.CancelledError):
+            await client.acomplete_with_tools(params)
+
+    @pytest.mark.asyncio
+    async def test_single_tool_call(self, mock_openai_provider, sample_tools):
+        """Verify single tool still works (edge case)."""
+        _, provider = mock_openai_provider
+
+        async def async_executor(name: str, args: dict) -> str:
+            return f"Single result for {args.get('query', 'N/A')}"
+
+        tool_call = ToolCall(id="call_0", name="search", arguments={"query": "single"})
+        provider.acomplete_with_tools = AsyncMock(
+            side_effect=[
+                (None, [tool_call]),
+                ("Single tool complete", None),
+            ]
+        )
+
+        client = LLMClient(provider="openai", model="gpt-4o")
+        params = ToolCallingParams(prompt="Search", tools=sample_tools, tool_executor=async_executor)
+        result = await client.acomplete_with_tools(params)
+
+        assert result == "Single tool complete"
+
+
 class TestSupportsTools:
     """Tests for supports_tools property."""
 
