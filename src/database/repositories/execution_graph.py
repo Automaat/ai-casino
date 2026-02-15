@@ -27,7 +27,6 @@ class ExecutionGraphRepository(BaseRepository[ExecutionGraph]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized ExecutionGraphRepository")
 
     async def create(self, entity: ExecutionGraph) -> ExecutionGraph:
         """Create new execution graph.

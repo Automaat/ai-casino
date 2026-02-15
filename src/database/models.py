@@ -1,10 +1,10 @@
 """SQLAlchemy ORM models for trade history persistence."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
+from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -562,6 +562,7 @@ class PeerAnalysisRecordORM(Base):
     swap_recommendations: Mapped[list] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
+    analyses: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     total_peers: Mapped[int] = mapped_column(Integer, nullable=False)
     total_duration_seconds: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -1157,3 +1158,113 @@ class SupervisorMetricsORM(Base):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"SupervisorMetricsORM(id={self.id}, workflow_id={self.workflow_id}, symbol={self.symbol})"
+
+
+class HealthReportORM(Base):
+    """Health report ORM model."""
+
+    __tablename__ = "health_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    overall_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    service_checks: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    cleanup_results: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    total_duration_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_health_reports_timestamp", "timestamp"),
+        Index("idx_health_reports_status", "overall_status"),
+        Index("idx_health_reports_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"HealthReportORM(id={self.id}, status={self.overall_status}, timestamp={self.timestamp})"
+
+
+class TradeJournalORM(Base):
+    """Trade journal ORM model."""
+
+    __tablename__ = "trade_journals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    date: Mapped[date] = mapped_column(DATE, nullable=False, unique=True)
+    outcomes: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    winners: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    losers: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    lessons: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    tomorrows_focus: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    overall_assessment: Mapped[str] = mapped_column(Text, nullable=False)
+    markdown_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_signals: Mapped[int] = mapped_column(Integer, nullable=False)
+    correct_signals: Mapped[int] = mapped_column(Integer, nullable=False)
+    accuracy_pct: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_trade_journals_date", "date", unique=True),
+        Index("idx_trade_journals_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"TradeJournalORM(id={self.id}, date={self.date}, accuracy={self.accuracy_pct}%)"
+
+
+class PaperTradingReportORM(Base):
+    """Paper trading validation report ORM model."""
+
+    __tablename__ = "paper_trading_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    assessment_date: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    ready_for_live: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    paper_trading_duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_paper_trades: Mapped[int] = mapped_column(Integer, nullable=False)
+    criteria: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    total_pnl: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
+    sharpe_ratio: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    sortino_ratio: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    max_drawdown: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    win_rate: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
+    simulated_live: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    recommendations: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_paper_trading_reports_date", "assessment_date"),
+        Index("idx_paper_trading_reports_ready", "ready_for_live"),
+        Index("idx_paper_trading_reports_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"PaperTradingReportORM(id={self.id}, date={self.assessment_date}, ready={self.ready_for_live})"
+        )

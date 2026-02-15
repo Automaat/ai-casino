@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -127,6 +127,17 @@ class SectorAttributionRecord(BaseModel):
     contributions: list[dict[str, float | str | int]]
 
 
+class PeerAnalysisInput(BaseModel):
+    """Input parameters for recording peer analysis."""
+
+    symbols_analyzed: list[str]
+    rankings: dict[str, int]
+    swap_recommendations: list[str]
+    total_peers: int
+    total_duration_seconds: float
+    analyses: list[dict] | None = None
+
+
 class PeerAnalysisRecord(BaseModel):
     """Record of a deep peer benchmarking analysis run."""
 
@@ -134,6 +145,7 @@ class PeerAnalysisRecord(BaseModel):
     symbols_analyzed: list[str]
     rankings: dict[str, int]
     swap_recommendations: list[str]
+    analyses: list[dict] = Field(default_factory=list)
     total_peers: int
     total_duration_seconds: float
 
@@ -272,3 +284,49 @@ class SignalUpdateRecord(BaseModel):
     symbol: str
     timestamp: datetime
     target_date: datetime
+
+
+class HealthReportRecord(BaseModel):
+    """Record of a health check execution."""
+
+    id: str | None = None
+    timestamp: datetime
+    overall_status: str
+    service_checks: list[dict]
+    cleanup_results: list[dict]
+    total_duration_ms: float
+
+
+class TradeJournalRecord(BaseModel):
+    """Record of a daily trade journal."""
+
+    id: str | None = None
+    date: date
+    outcomes: list[dict]
+    winners: list[str]
+    losers: list[str]
+    lessons: list[str]
+    tomorrows_focus: list[str]
+    overall_assessment: str
+    markdown_content: str | None = None
+    total_signals: int
+    correct_signals: int
+    accuracy_pct: float
+
+
+class PaperTradingReportRecord(BaseModel):
+    """Record of a paper trading validation assessment."""
+
+    id: str | None = None
+    assessment_date: datetime
+    ready_for_live: bool
+    paper_trading_duration_days: int
+    total_paper_trades: int
+    criteria: list[dict]
+    total_pnl: float
+    sharpe_ratio: float
+    sortino_ratio: float
+    max_drawdown: float
+    win_rate: float
+    simulated_live: dict | None = None
+    recommendations: list[str]

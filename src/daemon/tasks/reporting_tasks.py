@@ -50,13 +50,16 @@ class JournalTask(TaskExecutor):
         journal_agent = self.container.trade_journal_agent()
 
         journal = await journal_agent.generate(today, today_records)
-        file_path = journal_agent.persist(journal, self.components.config.journal.journal_dir)
+        file_path = await journal_agent.persist(
+            journal, self.components.state, self.components.config.journal.journal_dir
+        )
 
         await self.components.state.set_last_journal_date(today.isoformat())
 
         correct = sum(1 for o in journal.outcomes if o.signal_correct)
         total = len(journal.outcomes)
-        console.print(f"[bold magenta]Journal saved:[/bold magenta] {file_path}")
+        if file_path:
+            console.print(f"[bold magenta]Journal saved:[/bold magenta] {file_path}")
         if total > 0:
             console.print(f"[bold magenta]Signal accuracy:[/bold magenta] {correct}/{total}")
 

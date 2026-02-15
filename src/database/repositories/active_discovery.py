@@ -28,7 +28,6 @@ class ActiveDiscoveryCandidateRepository(BaseRepository[ActiveDiscoveryCandidate
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized ActiveDiscoveryCandidateRepository")
 
     async def create(self, entity: ActiveDiscoveryCandidate) -> ActiveDiscoveryCandidate:
         """Create new active discovery candidate.

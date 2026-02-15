@@ -48,7 +48,6 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized SignalOutcomeRepository")
 
     async def record_signal(self, input_data: SignalRecordInput) -> SignalOutcome:
         """Record a new trading signal for outcome tracking.

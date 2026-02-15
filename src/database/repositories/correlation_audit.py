@@ -28,7 +28,6 @@ class CorrelationAuditRecordRepository(BaseRepository[CorrelationAuditRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized CorrelationAuditRecordRepository")
 
     async def create(self, entity: CorrelationAuditRecord) -> CorrelationAuditRecord:
         """Create new correlation audit record.

@@ -29,7 +29,6 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized AnalysisRecordRepository")
 
     async def create(self, entity: AnalysisRecord) -> AnalysisRecord:
         """Create new analysis record.

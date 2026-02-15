@@ -28,7 +28,6 @@ class RiskReportRecordRepository(BaseRepository[RiskReportRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized RiskReportRecordRepository")
 
     async def create(self, entity: RiskReportRecord) -> RiskReportRecord:
         """Create new risk report record.

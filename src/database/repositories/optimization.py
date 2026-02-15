@@ -28,7 +28,6 @@ class OptimizationRecordRepository(BaseRepository[OptimizationRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized OptimizationRecordRepository")
 
     async def create(self, entity: OptimizationRecord) -> OptimizationRecord:
         """Create new optimization record.
