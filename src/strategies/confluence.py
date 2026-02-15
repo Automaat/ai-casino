@@ -12,9 +12,11 @@ class ConfluenceCalculator:
     """Calculate signal confluence across multiple timeframes."""
 
     TIMEFRAME_WEIGHTS: ClassVar[dict[Timeframe, float]] = {
-        Timeframe.DAILY: 0.52,
-        Timeframe.HOURLY: 0.35,
-        Timeframe.FIFTEEN_MIN: 0.13,
+        Timeframe.DAILY: 0.40,
+        Timeframe.HOURLY: 0.30,
+        Timeframe.FIFTEEN_MIN: 0.15,
+        Timeframe.FIVE_MIN: 0.10,
+        Timeframe.ONE_MIN: 0.05,
     }
 
     SIGNAL_VALUES: ClassVar[dict[Signal, float]] = {Signal.BUY: 1.0, Signal.HOLD: 0.0, Signal.SELL: -1.0}
@@ -140,6 +142,32 @@ class ConfluenceCalculator:
             total_weight += weight
 
         return weighted_agreement / total_weight if total_weight > 0 else 0.0
+
+    def select_dominant_timeframe(
+        self, final_signal: Signal, results: dict[Timeframe, TimeframeResult]
+    ) -> Timeframe:
+        """Select dominant timeframe (highest weight agreeing with final signal).
+
+        Returns the timeframe with the highest weight that agrees with the final signal.
+        Falls back to first available timeframe if none agree.
+
+        Args:
+            final_signal: Final aggregated signal
+            results: Timeframe analysis results
+
+        Returns:
+            Dominant timeframe
+        """
+        for tf in [
+            Timeframe.DAILY,
+            Timeframe.HOURLY,
+            Timeframe.FIFTEEN_MIN,
+            Timeframe.FIVE_MIN,
+            Timeframe.ONE_MIN,
+        ]:
+            if tf in results and results[tf].signal == final_signal:
+                return tf
+        return next(iter(results.keys()))
 
     def __repr__(self) -> str:
         """String representation."""

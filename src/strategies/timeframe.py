@@ -15,6 +15,8 @@ class Timeframe(StrEnum):
     DAILY = "1d"
     HOURLY = "1h"
     FIFTEEN_MIN = "15min"
+    FIVE_MIN = "5min"
+    ONE_MIN = "1min"
 
 
 class TimeframeResult(BaseModel):

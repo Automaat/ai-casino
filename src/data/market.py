@@ -365,24 +365,37 @@ class MarketDataFetcher:
             ValueError: If no timeframe data could be fetched
         """
         if timeframes is None:
-            timeframes = [Timeframe.DAILY, Timeframe.HOURLY]
+            timeframes = [
+                Timeframe.DAILY,
+                Timeframe.HOURLY,
+                Timeframe.FIFTEEN_MIN,
+                Timeframe.FIVE_MIN,
+                Timeframe.ONE_MIN,
+            ]
 
         logger.info(f"Fetching multi-timeframe data for {symbol}: {timeframes}")
 
         async def fetch_timeframe(tf: Timeframe) -> tuple[Timeframe, pd.DataFrame | None]:
             """Fetch data for a single timeframe."""
+            timeframe_intervals = {
+                Timeframe.DAILY: None,  # Uses fetch_daily instead of fetch_intraday
+                Timeframe.HOURLY: "60min",
+                Timeframe.FIFTEEN_MIN: "15min",
+                Timeframe.FIVE_MIN: "5min",
+                Timeframe.ONE_MIN: "1min",
+            }
             try:
-                if tf == Timeframe.DAILY:
+                if tf not in timeframe_intervals:
+                    logger.warning(f"Unsupported timeframe: {tf}")
+                    return (tf, None)
+
+                interval = timeframe_intervals[tf]
+                if interval is None:  # DAILY case
                     result = await asyncio.to_thread(self.fetch_daily, symbol, period_days)
                     return (tf, result.data)
-                if tf == Timeframe.HOURLY:
-                    result = await asyncio.to_thread(self.fetch_intraday, symbol, "60min")
-                    return (tf, result.data)
-                if tf == Timeframe.FIFTEEN_MIN:
-                    result = await asyncio.to_thread(self.fetch_intraday, symbol, "15min")
-                    return (tf, result.data)
-                logger.warning(f"Unsupported timeframe: {tf}")
-                return (tf, None)
+                # Intraday case
+                result = await asyncio.to_thread(self.fetch_intraday, symbol, interval)
+                return (tf, result.data)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)
