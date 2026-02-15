@@ -14,7 +14,7 @@ from src.daemon.api.models import (
 )
 from src.metrics.analytics import CostAnalyticsService
 
-router = APIRouter(prefix="/cost-analytics", tags=["cost-analytics"])
+router = APIRouter(prefix="/api/cost-analytics", tags=["cost-analytics"])
 
 
 def _get_service() -> CostAnalyticsService:
