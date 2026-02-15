@@ -629,3 +629,64 @@ export interface CostByDimensionListResponse {
 	data: CostByDimensionResponse[];
 	count: number;
 }
+
+// Signal Analytics
+export interface SignalFlowSummaryResponse {
+	total_signals: number;
+	total_buy_signals: number;
+	total_sell_signals: number;
+	execution_rate: number;
+	executed_count: number;
+	not_executed_count: number;
+	profitable_count: number;
+	unprofitable_count: number;
+	overall_accuracy: number;
+	avg_confidence: number;
+	date_range: [string, string];
+}
+
+export interface SankeyFlowResponse {
+	nodes: { name: string; itemStyle: { color: string } }[];
+	links: { source: string; target: string; value: number }[];
+}
+
+export interface AccuracyByTypeResponse {
+	signal_type: string;
+	horizon: string;
+	hit_rate: number;
+	executed_count: number;
+	total_count: number;
+}
+
+export interface AccuracyByTypeListResponse {
+	data: AccuracyByTypeResponse[];
+	count: number;
+}
+
+export interface CalibrationBucketResponse {
+	confidence_bucket: string;
+	expected_confidence: number;
+	actual_accuracy: number;
+	sample_count: number;
+}
+
+export interface CalibrationCurveResponse {
+	buckets: CalibrationBucketResponse[];
+}
+
+export interface TimingAnalysisResponse {
+	avg_execution_delay_hours: number;
+	by_confidence_bucket: { [key: string]: number };
+}
+
+export interface ExecutionRateResponse {
+	confidence_bucket: string;
+	execution_rate: number;
+	executed_count: number;
+	total_count: number;
+}
+
+export interface ExecutionRateListResponse {
+	data: ExecutionRateResponse[];
+	count: number;
+}

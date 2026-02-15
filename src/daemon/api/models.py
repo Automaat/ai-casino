@@ -622,10 +622,107 @@ class CostByDimensionListResponse(BaseModel):
     count: int = Field(description="Number of dimensions")
 
 
+class SignalFlowSummaryResponse(BaseModel):
+    """Signal flow summary."""
+
+    total_signals: int = Field(description="Total signals generated (BUY/SELL only)")
+    total_buy_signals: int = Field(description="Total BUY signals")
+    total_sell_signals: int = Field(description="Total SELL signals")
+    execution_rate: float = Field(description="Percentage of signals that were executed")
+    executed_count: int = Field(description="Number of executed signals")
+    not_executed_count: int = Field(description="Number of signals not executed")
+    profitable_count: int = Field(description="Number of profitable executed signals (5d)")
+    unprofitable_count: int = Field(description="Number of unprofitable executed signals (5d)")
+    overall_accuracy: float = Field(description="Overall accuracy of executed signals (5d)")
+    avg_confidence: float = Field(description="Average signal confidence")
+    date_range: tuple[str, str] = Field(description="Date range queried (ISO format)")
+
+
+class SankeyNodeResponse(BaseModel):
+    """Sankey diagram node."""
+
+    name: str = Field(description="Node name")
+    item_style: dict[str, str] = Field(description="Node styling (color)", serialization_alias="itemStyle")
+
+
+class SankeyLinkResponse(BaseModel):
+    """Sankey diagram link."""
+
+    source: str = Field(description="Source node name")
+    target: str = Field(description="Target node name")
+    value: int = Field(description="Flow value (count)")
+
+
+class SankeyFlowResponse(BaseModel):
+    """Sankey diagram flow data."""
+
+    nodes: list[dict[str, str | dict[str, str]]] = Field(description="Sankey nodes with styling")
+    links: list[dict[str, str | int]] = Field(description="Sankey links with flow values")
+
+
+class AccuracyByTypeResponse(BaseModel):
+    """Signal accuracy by type."""
+
+    signal_type: str = Field(description="Signal type (BUY/SELL)")
+    horizon: str = Field(description="Time horizon (1d/5d/20d)")
+    hit_rate: float = Field(description="Hit rate (0.0-1.0)")
+    executed_count: int = Field(description="Number of executed signals")
+    total_count: int = Field(description="Total signals with outcome data")
+
+
+class AccuracyByTypeListResponse(BaseModel):
+    """Accuracy by type list."""
+
+    data: list[AccuracyByTypeResponse] = Field(description="Accuracy breakdown by signal type")
+    count: int = Field(description="Number of signal types")
+
+
+class CalibrationBucketResponse(BaseModel):
+    """Calibration curve bucket."""
+
+    confidence_bucket: str = Field(description="Confidence bucket range")
+    expected_confidence: float = Field(description="Expected confidence (bucket midpoint)")
+    actual_accuracy: float = Field(description="Actual accuracy for bucket")
+    sample_count: int = Field(description="Number of samples in bucket")
+
+
+class CalibrationCurveResponse(BaseModel):
+    """Calibration curve data."""
+
+    buckets: list[CalibrationBucketResponse] = Field(description="Calibration buckets")
+
+
+class TimingAnalysisResponse(BaseModel):
+    """Signal timing analysis."""
+
+    avg_execution_delay_hours: float = Field(description="Average delay from signal to execution (hours)")
+    by_confidence_bucket: dict[str, float] = Field(description="Average delay by confidence bucket (hours)")
+
+
+class ExecutionRateResponse(BaseModel):
+    """Execution rate by confidence bucket."""
+
+    confidence_bucket: str = Field(description="Confidence bucket range")
+    execution_rate: float = Field(description="Execution rate (0.0-1.0)")
+    executed_count: int = Field(description="Number of executed signals")
+    total_count: int = Field(description="Total signals in bucket")
+
+
+class ExecutionRateListResponse(BaseModel):
+    """Execution rate list."""
+
+    data: list[ExecutionRateResponse] = Field(description="Execution rates by confidence bucket")
+    count: int = Field(description="Number of confidence buckets")
+
+
 __all__ = [
+    "AccuracyByTypeListResponse",
+    "AccuracyByTypeResponse",
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
     "AnalysisRecordResponse",
+    "CalibrationBucketResponse",
+    "CalibrationCurveResponse",
     "ConfigResponse",
     "CorrelationMatrixResponse",
     "CostAnalyticsSummaryResponse",
@@ -645,6 +742,8 @@ __all__ = [
     "ExecutionGraphDetailResponse",
     "ExecutionGraphHistoryResponse",
     "ExecutionMetricsListResponse",
+    "ExecutionRateListResponse",
+    "ExecutionRateResponse",
     "FullConfigResponse",
     "GamePlanResponse",
     "HealthResponse",
@@ -662,15 +761,20 @@ __all__ = [
     "RebalancingHistoryResponse",
     "RiskHistoryResponse",
     "RiskReportResponse",
+    "SankeyFlowResponse",
+    "SankeyLinkResponse",
+    "SankeyNodeResponse",
     "SectorRotationResponse",
     "ServiceCheck",
     "ServiceHealthResponse",
+    "SignalFlowSummaryResponse",
     "SnapshotRecord",
     "SnapshotsResponse",
     "StateSummaryResponse",
     "SupervisorMetricResponse",
     "SupervisorMetricsListResponse",
     "SupervisorSummaryResponse",
+    "TimingAnalysisResponse",
     "TradeResponse",
     "TradesResponse",
     "ValidationCriterionResponse",

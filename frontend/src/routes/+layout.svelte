@@ -19,6 +19,7 @@
 		{ id: 'supervisor', label: 'Supervisor', href: '/supervisor' },
 		{ id: 'cost-analytics', label: 'Costs', href: '/analytics/cost' },
 		{ id: 'worker-analytics', label: 'Workers', href: '/analytics/workers' },
+		{ id: 'signal-analytics', label: 'Signal Accuracy', href: '/analytics/signals' },
 		{ id: 'health', label: 'Health', href: '/health' },
 		{ id: 'config', label: 'Config', href: '/config' }
 	];
@@ -39,6 +40,7 @@
 		: currentPath.startsWith('/supervisor') ? 'supervisor'
 		: currentPath.startsWith('/analytics/cost') ? 'cost-analytics'
 		: currentPath.startsWith('/analytics/workers') ? 'worker-analytics'
+		: currentPath.startsWith('/analytics/signals') ? 'signal-analytics'
 		: currentPath.startsWith('/health') ? 'health'
 		: currentPath.startsWith('/config') ? 'config'
 		: 'overview'
