@@ -101,16 +101,16 @@ class DataPrefetcher:
         news_ok = False
         fundamentals_ok = False
 
-        # Market data (uses AV or yfinance)
+        # Market data (uses AV or yfinance) - offload blocking I/O
         try:
-            market_data = self._market_fetcher.fetch_daily(symbol)
+            market_data = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol)
             key = self._cache_key("market", symbol)
             cached_data = {
                 "symbol": market_data.symbol,
                 "data": market_data.data.to_json(orient="split", date_format="iso"),
                 "last_updated": market_data.last_updated.isoformat(),
             }
-            self._cache.set(key, cached_data, expire=MARKET_DATA_TTL)
+            await asyncio.to_thread(self._cache.set, key, cached_data, expire=MARKET_DATA_TTL)
             market_ok = True
             logger.debug(f"Prefetched market data for {symbol}")
         except Exception as e:
@@ -121,7 +121,8 @@ class DataPrefetcher:
             articles = await self._news_fetcher.afetch_company_news(symbol)
 
             key = self._cache_key("news", symbol)
-            self._cache.set(
+            await asyncio.to_thread(
+                self._cache.set,
                 key,
                 [a.model_dump(mode="json") for a in articles],
                 expire=NEWS_TTL,
@@ -134,11 +135,11 @@ class DataPrefetcher:
         # Rate limit sleep before fundamentals (both market and fundamentals use Alpha Vantage)
         await asyncio.sleep(AV_RATE_LIMIT_SLEEP)
 
-        # Fundamentals (uses Alpha Vantage)
+        # Fundamentals (uses Alpha Vantage) - offload blocking I/O
         try:
-            fundamentals = self._fundamental_fetcher.fetch_overview(symbol)
+            fundamentals = await asyncio.to_thread(self._fundamental_fetcher.fetch_overview, symbol)
             key = self._cache_key("fundamentals", symbol)
-            self._cache.set(key, fundamentals, expire=FUNDAMENTALS_TTL)
+            await asyncio.to_thread(self._cache.set, key, fundamentals, expire=FUNDAMENTALS_TTL)
             fundamentals_ok = True
             logger.debug(f"Prefetched fundamentals for {symbol}")
         except Exception as e:

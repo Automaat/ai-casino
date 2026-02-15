@@ -92,6 +92,13 @@ class DaemonLifecycle:
         # Stop API server before saving state
         await self._stop_api_server()
 
+        # Close NewsFetcher HTTP client
+        if self.components.prefetcher:
+            try:
+                await self.components.prefetcher._news_fetcher.aclose()
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Error closing NewsFetcher: {e}")
+
         # Wait for position manager background tasks to complete
         if self.components.position_manager:
             try:

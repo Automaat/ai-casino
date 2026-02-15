@@ -114,7 +114,7 @@ class EventBus:
         except Exception as e:
             logger.opt(exception=True).error(f"EventBus publish failed: {e}")
 
-    def get_history(self, limit: int | None = None) -> list[DashboardEvent]:
+    async def get_history(self, limit: int | None = None) -> list[DashboardEvent]:
         """Get event history, newest first.
 
         Args:
@@ -126,9 +126,9 @@ class EventBus:
         if limit is not None and limit <= 0:
             return []
 
-        # get_history is sync, but we can safely read without lock for this use case
-        # since deque operations are atomic and we're just reading
-        events = list(reversed(self._history))
+        # Take lock to ensure consistent snapshot while publish() may be mutating
+        async with self._lock:
+            events = list(reversed(self._history))
 
         if limit is not None:
             events = events[:limit]
