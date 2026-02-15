@@ -9,12 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
     CorrelationMatrixResponse,
+    MetricsSnapshot,
     PositionManagementActionResponse,
     PositionResponse,
     PositionsResponse,
     PositionTimelineResponse,
     RebalanceAllocation,
+    RebalanceCalculation,
+    RebalanceHistoryEntry,
     RebalanceResponse,
+    RebalancingHistoryResponse,
     RiskHistoryResponse,
     RiskReportResponse,
     SectorRotationResponse,
@@ -182,6 +186,118 @@ async def get_rebalance(
             expected_volatility=latest.expected_volatility,
             sharpe_ratio=latest.sharpe_ratio,
         )
+
+
+@router.get("/portfolio/rebalancing/history", response_model=RebalancingHistoryResponse)
+async def get_rebalancing_history(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> RebalancingHistoryResponse:
+    """Get rebalancing history with deviation metrics."""
+    components = get_components(request)
+
+    # Check if rebalancing is enabled
+    rebalancing_enabled = components.config.rebalancing.enabled
+    rebalance_threshold = components.config.rebalancing.rebalance_threshold
+
+    # Get current portfolio value
+    current_portfolio_value = 0.0
+    async with get_broker_account_info_cached(components) as account_info:
+        current_portfolio_value = account_info["portfolio_value"] if account_info else 0.0
+        broker_positions = account_info["positions"] if account_info else {}
+
+    # Get current metrics from previous rebalancing record if exists
+    current_metrics = None
+    prior_records = await components.state.get_rebalancing_history(limit=2, session=session)
+    if len(prior_records) >= 2:
+        prior_record = prior_records[-2]
+        current_metrics = MetricsSnapshot(
+            expected_return=prior_record.expected_return,
+            expected_volatility=prior_record.expected_volatility,
+            sharpe_ratio=prior_record.sharpe_ratio,
+        )
+
+    # If disabled, return status-only response
+    if not rebalancing_enabled:
+        return RebalancingHistoryResponse(
+            enabled=False,
+            current_portfolio_value=current_portfolio_value,
+            rebalance_threshold=rebalance_threshold,
+            current_metrics=current_metrics,
+        )
+
+    # Get rebalancing history
+    rebalancing_records = await components.state.get_rebalancing_history(limit=30, session=session)
+
+    if not rebalancing_records:
+        return RebalancingHistoryResponse(
+            enabled=True,
+            current_portfolio_value=current_portfolio_value,
+            rebalance_threshold=rebalance_threshold,
+            current_metrics=current_metrics,
+        )
+
+    # Build latest calculation with full allocations
+    latest_record = rebalancing_records[-1]
+    total_portfolio_value = current_portfolio_value
+
+    allocations = []
+    for allocation in latest_record.allocations:
+        current_weight = 0.0
+        if allocation.symbol in broker_positions and total_portfolio_value > 0:
+            current_weight = broker_positions[allocation.symbol].market_value / total_portfolio_value
+
+        delta = current_weight - allocation.weight
+        action = "REDUCE" if delta > 0 else "INCREASE" if delta < 0 else "HOLD"
+
+        allocations.append(
+            RebalanceAllocation(
+                symbol=allocation.symbol,
+                target_weight=allocation.weight,
+                current_weight=current_weight,
+                delta=delta,
+                action=action,
+            )
+        )
+
+    latest = RebalanceCalculation(
+        timestamp=latest_record.timestamp,
+        method=latest_record.method,
+        allocations=allocations,
+        expected_return=latest_record.expected_return,
+        expected_volatility=latest_record.expected_volatility,
+        sharpe_ratio=latest_record.sharpe_ratio,
+    )
+
+    # Build history with deviation metrics
+    history = []
+    for record in rebalancing_records:
+        # Calculate deviation metrics from allocations
+        deviations = [abs(alloc.delta) for alloc in record.allocations]
+        avg_deviation = sum(deviations) / len(deviations) if deviations else 0.0
+        max_deviation = max(deviations) if deviations else 0.0
+
+        history.append(
+            RebalanceHistoryEntry(
+                timestamp=record.timestamp,
+                method=record.method,
+                avg_deviation_pct=avg_deviation * 100,
+                max_deviation_pct=max_deviation * 100,
+                metrics=MetricsSnapshot(
+                    expected_return=record.expected_return,
+                    expected_volatility=record.expected_volatility,
+                    sharpe_ratio=record.sharpe_ratio,
+                ),
+            )
+        )
+
+    return RebalancingHistoryResponse(
+        enabled=True,
+        current_portfolio_value=current_portfolio_value,
+        rebalance_threshold=rebalance_threshold,
+        current_metrics=current_metrics,
+        latest=latest,
+        history=history,
+    )
 
 
 @router.get("/risk", response_model=RiskReportResponse | None)

@@ -137,6 +137,46 @@ class RebalanceResponse(BaseModel):
     sharpe_ratio: float | None = Field(default=None, description="Expected Sharpe ratio")
 
 
+class MetricsSnapshot(BaseModel):
+    """Portfolio metrics snapshot."""
+
+    expected_return: float = Field(description="Expected portfolio return")
+    expected_volatility: float = Field(description="Expected volatility")
+    sharpe_ratio: float = Field(description="Sharpe ratio")
+
+
+class RebalanceCalculation(BaseModel):
+    """Single rebalancing calculation record."""
+
+    timestamp: datetime = Field(description="Calculation timestamp")
+    method: str = Field(description="Rebalancing method used")
+    allocations: list[RebalanceAllocation] = Field(description="Full allocation records")
+    expected_return: float = Field(description="Expected portfolio return")
+    expected_volatility: float = Field(description="Expected volatility")
+    sharpe_ratio: float = Field(description="Sharpe ratio")
+
+
+class RebalanceHistoryEntry(BaseModel):
+    """Historical rebalancing record with deviation metrics."""
+
+    timestamp: datetime = Field(description="Record timestamp")
+    method: str = Field(description="Rebalancing method")
+    avg_deviation_pct: float = Field(description="Average deviation percentage")
+    max_deviation_pct: float = Field(description="Maximum deviation percentage")
+    metrics: MetricsSnapshot = Field(description="Portfolio metrics at this time")
+
+
+class RebalancingHistoryResponse(BaseModel):
+    """Rebalancing history endpoint response."""
+
+    enabled: bool = Field(description="Whether rebalancing is enabled")
+    current_portfolio_value: float = Field(description="Current portfolio value")
+    rebalance_threshold: float = Field(description="Rebalance threshold from config")
+    current_metrics: MetricsSnapshot | None = Field(default=None, description="Current portfolio metrics")
+    latest: RebalanceCalculation | None = Field(default=None, description="Latest calculation")
+    history: list[RebalanceHistoryEntry] = Field(default_factory=list, description="Historical records")
+
+
 class RiskReportResponse(BaseModel):
     """Risk report endpoint response."""
 
@@ -586,13 +626,17 @@ __all__ = [
     "GamePlanResponse",
     "HealthResponse",
     "MarketEventsResponse",
+    "MetricsSnapshot",
     "PaperTradingValidationResponse",
     "PositionManagementActionResponse",
     "PositionResponse",
     "PositionTimelineResponse",
     "PositionsResponse",
     "RebalanceAllocation",
+    "RebalanceCalculation",
+    "RebalanceHistoryEntry",
     "RebalanceResponse",
+    "RebalancingHistoryResponse",
     "RiskHistoryResponse",
     "RiskReportResponse",
     "SectorRotationResponse",

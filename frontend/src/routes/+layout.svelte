@@ -7,6 +7,7 @@
 	const tabs = [
 		{ id: 'overview', label: 'Overview', href: '/' },
 		{ id: 'portfolio', label: 'Portfolio', href: '/portfolio' },
+		{ id: 'rebalancing', label: 'Rebalancing', href: '/rebalancing' },
 		{ id: 'journal', label: 'Journal', href: '/journal' },
 		{ id: 'signals', label: 'Signals', href: '/signals' },
 		{ id: 'discovery', label: 'Discovery', href: '/discovery' },
@@ -24,6 +25,7 @@
 	const currentPath = $derived($page.url.pathname);
 	const activeTab = $derived(
 		currentPath === '/' ? 'overview'
+		: currentPath.startsWith('/rebalancing') ? 'rebalancing'
 		: currentPath.startsWith('/portfolio') ? 'portfolio'
 		: currentPath.startsWith('/journal') ? 'journal'
 		: currentPath.startsWith('/signals') ? 'signals'
