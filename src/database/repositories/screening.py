@@ -122,6 +122,7 @@ class ScreeningRecordRepository(BaseRepository[ScreeningRecord]):
                 )
 
         return ScreeningRecord(
+            id=str(orm.id),
             timestamp=orm.timestamp,
             criteria=orm.criteria,
             universe=orm.universe,

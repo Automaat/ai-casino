@@ -353,6 +353,17 @@ export const api = {
 		query.set('start_date', startDate);
 		query.set('end_date', endDate);
 		return fetchAPI<T.ExecutionRateListResponse>(`/api/signal-analytics/execution-rate?${query}`);
+	},
+
+	// Screening
+	async getScreeningHistory(limit: number = 30): Promise<T.ScreeningHistoryResponse> {
+		const query = new URLSearchParams();
+		query.set('limit', limit.toString());
+		return fetchAPI<T.ScreeningHistoryResponse>(`/api/screening/history?${query}`);
+	},
+
+	async getScreeningInsights(): Promise<T.ScreeningInsightsResponse> {
+		return fetchAPI<T.ScreeningInsightsResponse>('/api/screening/insights');
 	}
 };
 
