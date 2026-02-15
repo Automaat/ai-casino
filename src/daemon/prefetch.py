@@ -300,6 +300,11 @@ class DataPrefetcher:
         self._cache.clear()
         logger.info("Cleared prefetch cache")
 
+    async def aclose(self) -> None:
+        """Close HTTP clients."""
+        await self._news_fetcher.aclose()
+        logger.debug("DataPrefetcher HTTP clients closed")
+
     def __repr__(self) -> str:
         """Return string representation."""
         return f"DataPrefetcher(cache_dir={self._cache_dir})"

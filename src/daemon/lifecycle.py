@@ -92,40 +92,42 @@ class DaemonLifecycle:
         # Stop API server before saving state
         await self._stop_api_server()
 
-        # Close NewsFetcher HTTP client
+        # Close HTTP clients
+        await self._close_http_clients()
+
+        # Wait for background tasks to complete
+        await self._wait_for_background_tasks()
+
+    async def _close_http_clients(self) -> None:
+        """Close HTTP clients (NewsFetcher)."""
         if self.components.prefetcher:
             try:
-                await self.components.prefetcher._news_fetcher.aclose()
+                await self.components.prefetcher.aclose()
             except Exception as e:
-                logger.opt(exception=True).warning(f"Error closing NewsFetcher: {e}")
+                logger.opt(exception=True).warning(f"Error closing prefetcher: {e}")
 
-        # Wait for position manager background tasks to complete
+    async def _wait_for_background_tasks(self) -> None:
+        """Wait for all background tasks to complete."""
+        timeout = 5.0
+
+        # Position manager
         if self.components.position_manager:
             try:
-                await self.components.position_manager.wait_for_pending_tasks(timeout_seconds=5.0)
+                await self.components.position_manager.wait_for_pending_tasks(timeout_seconds=timeout)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Error waiting for position persistence tasks: {e}")
 
-        # Wait for other state manager background tasks to complete
-        if self.components.state.discovery:
-            try:
-                await self.components.state.discovery.wait_for_pending_tasks(timeout_seconds=5.0)
-            except Exception as e:
-                logger.opt(exception=True).warning(
-                    f"Error waiting for discovery state persistence tasks: {e}"
-                )
-
-        if self.components.state.snapshots:
-            try:
-                await self.components.state.snapshots.wait_for_pending_tasks(timeout_seconds=5.0)
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Error waiting for snapshot state persistence tasks: {e}")
-
-        if self.components.state.trading:
-            try:
-                await self.components.state.trading.wait_for_pending_tasks(timeout_seconds=5.0)
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Error waiting for trading state persistence tasks: {e}")
+        # State managers
+        for name, manager in [
+            ("discovery", self.components.state.discovery),
+            ("snapshots", self.components.state.snapshots),
+            ("trading", self.components.state.trading),
+        ]:
+            if manager:
+                try:
+                    await manager.wait_for_pending_tasks(timeout_seconds=timeout)
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Error waiting for {name} state persistence: {e}")
 
         console.print("\n[bold yellow]Daemon stopped[/bold yellow]")
         logger.info("Daemon shutdown complete")
