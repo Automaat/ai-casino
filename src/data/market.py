@@ -385,15 +385,17 @@ class MarketDataFetcher:
                 Timeframe.ONE_MIN: "1min",
             }
             try:
-                interval = timeframe_intervals.get(tf)
-                if interval is None and tf == Timeframe.DAILY:
+                if tf not in timeframe_intervals:
+                    logger.warning(f"Unsupported timeframe: {tf}")
+                    return (tf, None)
+
+                interval = timeframe_intervals[tf]
+                if interval is None:  # DAILY case
                     result = await asyncio.to_thread(self.fetch_daily, symbol, period_days)
                     return (tf, result.data)
-                if interval is not None:
-                    result = await asyncio.to_thread(self.fetch_intraday, symbol, interval)
-                    return (tf, result.data)
-                logger.warning(f"Unsupported timeframe: {tf}")
-                return (tf, None)
+                # Intraday case
+                result = await asyncio.to_thread(self.fetch_intraday, symbol, interval)
+                return (tf, result.data)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to fetch {tf} data for {symbol}: {e}")
                 return (tf, None)

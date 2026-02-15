@@ -433,7 +433,8 @@ def test_dominant_timeframe_selection():
 
     final_signal2, _, _ = calculator.calculate_confluence(results_hourly_dominant)
     # With new weights: DAILY=0.40*(-1) + HOURLY=0.30*(1) + 15MIN=0.15*(1) + 5MIN=0.10*(1)
-    # = -0.40 + 0.30 + 0.15 + 0.10 = 0.15 → BUY
+    # Weighted sum = -0.40 + 0.30 + 0.15 + 0.10 = 0.15; total_weight = 0.95
+    # → weighted_avg = 0.15 / 0.95 ≈ 0.1579 → BUY
     # So dominant should be HOURLY (highest weight agreeing with BUY)
     dominant2 = calculator.select_dominant_timeframe(final_signal2, results_hourly_dominant)
     assert dominant2 == Timeframe.HOURLY
