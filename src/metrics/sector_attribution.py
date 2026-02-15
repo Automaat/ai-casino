@@ -112,7 +112,14 @@ class SectorAttributionAnalyzer:
             sector_name = sector.name
 
             # Calculate metrics
-            current_price = broker_pos.avg_entry_price + (broker_pos.unrealized_pnl / broker_pos.qty)
+            if broker_pos.qty <= 0:
+                logger.warning(
+                    f"Broker position for {position.symbol} has non-positive quantity "
+                    f"({broker_pos.qty}), skipping to avoid division by zero"
+                )
+                continue
+
+            current_price = broker_pos.market_value / broker_pos.qty
             position_value = current_price * position.current_qty
             position_cost = position.entry_price * position.current_qty
             position_pnl = position_value - position_cost
