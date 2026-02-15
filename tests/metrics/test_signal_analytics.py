@@ -68,6 +68,7 @@ async def sample_analyses(db_session, sample_signals):
             executed_trade=True,
             trading_session="REGULAR",
             is_paper_trade=True,
+            reasoning=[],
             created_at=datetime.now(UTC),
         )
         db_session.add(analysis)

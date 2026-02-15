@@ -1,5 +1,6 @@
 """Signal analytics service for tracking signal accuracy and execution."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -41,6 +42,20 @@ class SankeyFlowData:
 
     nodes: list[dict[str, str | dict[str, str]]]
     links: list[dict[str, str | int]]
+
+
+@dataclass
+class _CategorizedSignals:
+    """Categorized signals for Sankey diagram."""
+
+    buy_executed: list[SignalOutcomeORM]
+    buy_not_executed: list[SignalOutcomeORM]
+    sell_executed: list[SignalOutcomeORM]
+    sell_not_executed: list[SignalOutcomeORM]
+    buy_profitable: list[SignalOutcomeORM]
+    buy_unprofitable: list[SignalOutcomeORM]
+    sell_profitable: list[SignalOutcomeORM]
+    sell_unprofitable: list[SignalOutcomeORM]
 
 
 @dataclass
@@ -101,6 +116,31 @@ class SignalAnalyticsService:
     def __repr__(self) -> str:
         """Return string representation."""
         return "SignalAnalyticsService()"
+
+    def _was_signal_executed(
+        self,
+        signal: SignalOutcomeORM,
+        analyses: Sequence[AnalysisRecordORM],
+    ) -> bool:
+        """Check if signal was executed based on correlation with analyses.
+
+        Args:
+            signal: Signal to check
+            analyses: List of analysis records
+
+        Returns:
+            True if signal was executed
+        """
+        for analysis in analyses:
+            if (
+                signal.symbol == analysis.symbol
+                and signal.signal == analysis.signal
+                and abs((signal.timestamp - analysis.timestamp).total_seconds())
+                < self._correlation_window_seconds
+                and analysis.executed_trade
+            ):
+                return True
+        return False
 
     async def get_flow_summary(self, start: datetime, end: datetime) -> SignalFlowSummary:
         """Get signal flow summary for date range.
@@ -207,6 +247,71 @@ class SignalAnalyticsService:
             self._cache[cache_key] = (datetime.now(UTC), summary)
             return summary
 
+    def _categorize_by_profitability(
+        self, executed_signals: list[SignalOutcomeORM], horizon: str = "5d"
+    ) -> tuple[list[SignalOutcomeORM], list[SignalOutcomeORM]]:
+        """Categorize executed signals into profitable and unprofitable.
+
+        Args:
+            executed_signals: List of executed signals
+            horizon: Time horizon for profitability check
+
+        Returns:
+            Tuple of (profitable_signals, unprofitable_signals)
+        """
+        profitable = []
+        unprofitable = []
+
+        for signal in executed_signals:
+            price_field = f"price_at_{horizon}"
+            if getattr(signal, price_field) is None:
+                continue
+            is_correct = self._is_signal_correct(signal, horizon)
+            if is_correct is True:
+                profitable.append(signal)
+            elif is_correct is False:
+                unprofitable.append(signal)
+
+        return profitable, unprofitable
+
+    def _build_sankey_nodes(self) -> list[dict[str, str | dict[str, str]]]:
+        """Build Sankey diagram nodes with colors."""
+        return [
+            {"name": "BUY", "itemStyle": {"color": "#10b981"}},
+            {"name": "SELL", "itemStyle": {"color": "#ef4444"}},
+            {"name": "Executed", "itemStyle": {"color": "#3b82f6"}},
+            {"name": "Not Executed", "itemStyle": {"color": "#9ca3af"}},
+            {"name": "Profitable", "itemStyle": {"color": "#059669"}},
+            {"name": "Unprofitable", "itemStyle": {"color": "#dc2626"}},
+        ]
+
+    def _build_sankey_links(self, categorized: _CategorizedSignals) -> list[dict[str, str | int]]:
+        """Build Sankey diagram links with values.
+
+        Args:
+            categorized: Categorized signals data
+
+        Returns:
+            List of Sankey links
+        """
+        links = [
+            {"source": "BUY", "target": "Executed", "value": len(categorized.buy_executed)},
+            {"source": "BUY", "target": "Not Executed", "value": len(categorized.buy_not_executed)},
+            {"source": "SELL", "target": "Executed", "value": len(categorized.sell_executed)},
+            {"source": "SELL", "target": "Not Executed", "value": len(categorized.sell_not_executed)},
+            {
+                "source": "Executed",
+                "target": "Profitable",
+                "value": len(categorized.buy_profitable) + len(categorized.sell_profitable),
+            },
+            {
+                "source": "Executed",
+                "target": "Unprofitable",
+                "value": len(categorized.buy_unprofitable) + len(categorized.sell_unprofitable),
+            },
+        ]
+        return [link for link in links if cast("int", link["value"]) > 0]
+
     async def get_sankey_data(self, start: datetime, end: datetime) -> SankeyFlowData:
         """Get Sankey diagram data for signal flow.
 
@@ -255,86 +360,93 @@ class SignalAnalyticsService:
             sell_not_executed = []
 
             for signal in signals:
-                was_executed = False
-                for analysis in analyses:
-                    if (
-                        signal.symbol == analysis.symbol
-                        and signal.signal == analysis.signal
-                        and abs((signal.timestamp - analysis.timestamp).total_seconds())
-                        < self._correlation_window_seconds
-                        and analysis.executed_trade
-                    ):
-                        was_executed = True
-                        break
+                was_executed = self._was_signal_executed(signal, analyses)
 
                 if signal.signal == "BUY":
-                    if was_executed:
-                        buy_executed.append(signal)
-                    else:
-                        buy_not_executed.append(signal)
-                elif was_executed:
-                    sell_executed.append(signal)
+                    target = buy_executed if was_executed else buy_not_executed
                 else:
-                    sell_not_executed.append(signal)
+                    target = sell_executed if was_executed else sell_not_executed
+                target.append(signal)
 
             # Further categorize executed signals by profitability
-            buy_profitable = []
-            buy_unprofitable = []
-            sell_profitable = []
-            sell_unprofitable = []
+            buy_profitable, buy_unprofitable = self._categorize_by_profitability(buy_executed)
+            sell_profitable, sell_unprofitable = self._categorize_by_profitability(sell_executed)
 
-            for signal in buy_executed:
-                if signal.price_at_5d is None:
-                    continue
-                is_correct = self._is_signal_correct(signal, "5d")
-                if is_correct is True:
-                    buy_profitable.append(signal)
-                elif is_correct is False:
-                    buy_unprofitable.append(signal)
-
-            for signal in sell_executed:
-                if signal.price_at_5d is None:
-                    continue
-                is_correct = self._is_signal_correct(signal, "5d")
-                if is_correct is True:
-                    sell_profitable.append(signal)
-                elif is_correct is False:
-                    sell_unprofitable.append(signal)
-
-            # Build nodes
-            nodes = [
-                {"name": "BUY", "itemStyle": {"color": "#10b981"}},
-                {"name": "SELL", "itemStyle": {"color": "#ef4444"}},
-                {"name": "Executed", "itemStyle": {"color": "#3b82f6"}},
-                {"name": "Not Executed", "itemStyle": {"color": "#9ca3af"}},
-                {"name": "Profitable", "itemStyle": {"color": "#059669"}},
-                {"name": "Unprofitable", "itemStyle": {"color": "#dc2626"}},
-            ]
-
-            # Build links
-            links = [
-                {"source": "BUY", "target": "Executed", "value": len(buy_executed)},
-                {"source": "BUY", "target": "Not Executed", "value": len(buy_not_executed)},
-                {"source": "SELL", "target": "Executed", "value": len(sell_executed)},
-                {"source": "SELL", "target": "Not Executed", "value": len(sell_not_executed)},
-                {
-                    "source": "Executed",
-                    "target": "Profitable",
-                    "value": len(buy_profitable) + len(sell_profitable),
-                },
-                {
-                    "source": "Executed",
-                    "target": "Unprofitable",
-                    "value": len(buy_unprofitable) + len(sell_unprofitable),
-                },
-            ]
-
-            # Filter out zero-value links
-            links = [link for link in links if cast(int, link["value"]) > 0]
+            # Build nodes and links
+            categorized = _CategorizedSignals(
+                buy_executed=buy_executed,
+                buy_not_executed=buy_not_executed,
+                sell_executed=sell_executed,
+                sell_not_executed=sell_not_executed,
+                buy_profitable=buy_profitable,
+                buy_unprofitable=buy_unprofitable,
+                sell_profitable=sell_profitable,
+                sell_unprofitable=sell_unprofitable,
+            )
+            nodes = self._build_sankey_nodes()
+            links = self._build_sankey_links(categorized)
 
             data = SankeyFlowData(nodes=nodes, links=links)
             self._cache[cache_key] = (datetime.now(UTC), data)
             return data
+
+    def _find_executed_signals(
+        self,
+        signals: Sequence[SignalOutcomeORM],
+        analyses: Sequence[AnalysisRecordORM],
+    ) -> set[str]:
+        """Find signals that were executed based on correlation with analyses.
+
+        Args:
+            signals: List of signals
+            analyses: List of analysis records
+
+        Returns:
+            Set of executed signal IDs
+        """
+        executed_signal_ids = set()
+        for signal in signals:
+            if self._was_signal_executed(signal, analyses):
+                executed_signal_ids.add(str(signal.id))
+        return executed_signal_ids
+
+    def _calculate_type_accuracy(
+        self,
+        signals: Sequence[SignalOutcomeORM],
+        executed_signal_ids: set[str],
+        horizon: str,
+        signal_type: str,
+    ) -> tuple[int, int, int]:
+        """Calculate accuracy metrics for a specific signal type.
+
+        Args:
+            signals: List of all signals
+            executed_signal_ids: Set of executed signal IDs
+            horizon: Time horizon
+            signal_type: Signal type (BUY/SELL)
+
+        Returns:
+            Tuple of (hits, total, executed_count)
+        """
+        hits = 0
+        total = 0
+        executed_count = 0
+
+        for signal in signals:
+            if signal.signal != signal_type:
+                continue
+
+            is_correct = self._is_signal_correct(signal, horizon)
+            if is_correct is None:
+                continue
+
+            total += 1
+            if is_correct:
+                hits += 1
+            if str(signal.id) in executed_signal_ids:
+                executed_count += 1
+
+        return hits, total, executed_count
 
     async def get_accuracy_by_type(
         self,
@@ -388,46 +500,15 @@ class SignalAnalyticsService:
             analyses = analyses_result.scalars().all()
 
             # Correlate to find executed signals
-            executed_signal_ids = set()
-            for signal in signals:
-                for analysis in analyses:
-                    if (
-                        signal.symbol == analysis.symbol
-                        and signal.signal == analysis.signal
-                        and abs((signal.timestamp - analysis.timestamp).total_seconds())
-                        < self._correlation_window_seconds
-                        and analysis.executed_trade
-                    ):
-                        executed_signal_ids.add(str(signal.id))
-                        break
+            executed_signal_ids = self._find_executed_signals(signals, analyses)
 
             # Calculate accuracy by type
-            buy_hits = 0
-            buy_total = 0
-            sell_hits = 0
-            sell_total = 0
-            buy_executed = 0
-            sell_executed = 0
-
-            for signal in signals:
-                is_correct = self._is_signal_correct(signal, horizon)
-                if is_correct is None:
-                    continue
-
-                was_executed = str(signal.id) in executed_signal_ids
-
-                if signal.signal == "BUY":
-                    buy_total += 1
-                    if is_correct:
-                        buy_hits += 1
-                    if was_executed:
-                        buy_executed += 1
-                elif signal.signal == "SELL":
-                    sell_total += 1
-                    if is_correct:
-                        sell_hits += 1
-                    if was_executed:
-                        sell_executed += 1
+            buy_hits, buy_total, buy_executed = self._calculate_type_accuracy(
+                signals, executed_signal_ids, horizon, "BUY"
+            )
+            sell_hits, sell_total, sell_executed = self._calculate_type_accuracy(
+                signals, executed_signal_ids, horizon, "SELL"
+            )
 
             result = [
                 AccuracyByType(
