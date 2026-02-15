@@ -58,10 +58,12 @@ class DatabaseEngine:
         pool_config = pool_config or PoolConfig()
         engine_kwargs: dict[str, Any] = {"pool_pre_ping": pool_config.pool_pre_ping}
 
-        # Only pass pool params if not using NullPool (pooling disabled)
+        # Only pass pool params for databases that support pooling (PostgreSQL)
+        # SQLite uses StaticPool which doesn't accept pool parameters
         from sqlalchemy.pool import NullPool
 
-        if poolclass is not NullPool:
+        supports_pooling = self._database_url.startswith(("postgresql", "mysql"))
+        if poolclass is not NullPool and (supports_pooling or poolclass is not None):
             engine_kwargs.update(
                 {
                     "pool_size": pool_config.pool_size,
