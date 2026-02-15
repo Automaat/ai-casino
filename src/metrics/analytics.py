@@ -157,7 +157,7 @@ class CostAnalyticsService:
             else:
                 # Parse ISO week (e.g., "2026-W07")
                 year, week_str = bucket_key.split("-W")
-                timestamp = datetime.strptime(f"{year}-W{week_str}-1", "%Y-W%W-%w").replace(tzinfo=UTC)
+                timestamp = datetime.strptime(f"{year}-W{week_str}-1", "%G-W%V-%u").replace(tzinfo=UTC)
 
             trends.append(
                 CostTrendPoint(
@@ -227,13 +227,14 @@ class CostAnalyticsService:
                 agent_data[agent]["count"] += 1
                 total_cost += cost
 
+        epsilon = 1e-10
         result = [
             CostByDimension(
                 dimension_value=agent,
                 cost_usd=float(data["cost"]),
                 tokens=int(data["tokens"]),
                 execution_count=int(data["count"]),
-                percentage=(float(data["cost"]) / total_cost * 100) if total_cost > 0 else 0.0,
+                percentage=(float(data["cost"]) / total_cost * 100) if total_cost > epsilon else 0.0,
             )
             for agent, data in agent_data.items()
         ]
@@ -308,6 +309,7 @@ class CostAnalyticsService:
 
         def _read() -> list[dict]:
             if not self._metrics_path.exists():
+                logger.debug(f"Metrics file does not exist at '{self._metrics_path}'. Returning empty metrics list.")
                 return []
 
             metrics = []
@@ -375,17 +377,21 @@ class CostAnalyticsService:
         return result
 
     def _count_trade_signals(self, metrics: list[WorkflowExecutionMetrics]) -> int:
-        """Count BUY/SELL signals (exclude HOLD).
+        """Count executions used as a proxy for trade signals.
+
+        This helper currently does not distinguish between BUY, SELL, or HOLD
+        outcomes. It simply counts workflow executions, which may include
+        non-trading/HOLD decisions.
 
         Args:
             metrics: List of workflow metrics
 
         Returns:
-            Count of trade signals
+            Count of executions (used as proxy for trade signals)
         """
-        # Note: This requires scanning workflow results
-        # For now, return execution count as proxy (will refine when we add result tracking)
-        # TODO: Parse workflow results from LLM calls to extract actual BUY/SELL decisions
+        # NOTE: Proper trade signal counting would require parsing workflow results
+        # to extract actual BUY/SELL/HOLD decisions. Until that is implemented,
+        # we intentionally use execution count as a coarse proxy.
         return len(metrics)
 
     async def _get_daily_costs(
