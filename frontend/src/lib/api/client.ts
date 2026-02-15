@@ -123,6 +123,10 @@ export const api = {
 		return fetchAPI<T.SectorRotationResponse>('/sector-rotation/latest');
 	},
 
+	async getSectorAttribution(): Promise<T.SectorAttributionResponse | null> {
+		return fetchAPI<T.SectorAttributionResponse | null>('/sector-attribution/latest');
+	},
+
 	async getDegradation(): Promise<T.DegradationResponse> {
 		return fetchAPI<T.DegradationResponse>('/degradation');
 	},

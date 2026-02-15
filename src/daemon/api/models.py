@@ -297,6 +297,29 @@ class SectorRotationResponse(BaseModel):
     flagged_positions: list[str]
 
 
+class SectorContributionDetail(BaseModel):
+    """Individual sector contribution detail."""
+
+    sector: str
+    sector_etf: str
+    total_value: float
+    portfolio_weight: float
+    benchmark_weight: float
+    over_under_weight: float
+    pnl: float
+    return_pct: float
+    position_count: int
+
+
+class SectorAttributionResponse(BaseModel):
+    """Sector attribution analysis."""
+
+    timestamp: datetime
+    contributions: list[SectorContributionDetail]
+    total_portfolio_value: float
+    benchmark_name: str
+
+
 class CorrelationMatrixResponse(BaseModel):
     """Correlation matrix."""
 

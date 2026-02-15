@@ -43,6 +43,7 @@ from src.daemon.state.models import (
     ProfilingRecord,
     RiskReportRecord,
     ScreeningRecord,
+    SectorAttributionRecord,
     SectorRotationRecord,
 )
 from src.discovery.models import DiscoveryCandidate
@@ -169,6 +170,14 @@ class DaemonState(BaseModel):
         """Get active positions."""
         return await self.positions.get_active_positions()
 
+    async def get_all_positions(self) -> list[PositionRecord]:
+        """Get all active positions as PositionRecord list.
+
+        Returns:
+            List of PositionRecords
+        """
+        return await self.positions.get_all_positions()
+
     async def get_position_management_history(self) -> list[dict]:
         """Get position management history."""
         return await self.positions.get_position_management_history()
@@ -271,6 +280,29 @@ class DaemonState(BaseModel):
     ) -> list[SectorRotationRecord]:
         """Get sector rotation history."""
         return await self.portfolio.get_sector_rotation_history(limit, session=session)
+
+    async def store_sector_attribution(
+        self,
+        analysis: SectorAttributionRecord,
+        session: AsyncSession | None = None,
+    ) -> None:
+        """Store sector attribution analysis."""
+        await self.portfolio.record_sector_attribution(analysis, session=session)
+
+    async def get_sector_attribution_latest(
+        self,
+        session: AsyncSession | None = None,
+    ) -> SectorAttributionRecord | None:
+        """Get latest sector attribution record."""
+        return await self.portfolio.get_sector_attribution_latest(session=session)
+
+    async def get_sector_attribution_history(
+        self,
+        limit: int = 30,
+        session: AsyncSession | None = None,
+    ) -> list[SectorAttributionRecord]:
+        """Get sector attribution history."""
+        return await self.portfolio.get_sector_attribution_history(limit, session=session)
 
     async def get_last_peer_analysis(self) -> datetime | None:
         """Get last peer analysis timestamp."""

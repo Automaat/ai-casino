@@ -118,6 +118,15 @@ class SectorRotationRecord(BaseModel):
     flagged_positions: list[str]
 
 
+class SectorAttributionRecord(BaseModel):
+    """Record of a sector attribution analysis run."""
+
+    timestamp: datetime
+    total_portfolio_value: float
+    benchmark_name: str
+    contributions: list[dict[str, float | str | int]]
+
+
 class PeerAnalysisRecord(BaseModel):
     """Record of a deep peer benchmarking analysis run."""
 

@@ -18,6 +18,7 @@ from src.daemon.state.models import (
     PortfolioAllocationRecord,
     PortfolioRebalancingRecord,
     RiskReportRecord,
+    SectorAttributionRecord,
     SectorRotationRecord,
 )
 
@@ -57,6 +58,7 @@ class PortfolioStateManager(StateManager):
     _optimization_cache: list[OptimizationRecord] | None = PrivateAttr(default=None)
     _rebalancing_cache: list[PortfolioRebalancingRecord] | None = PrivateAttr(default=None)
     _sector_rotation_cache: list[SectorRotationRecord] | None = PrivateAttr(default=None)
+    _sector_attribution_cache: SectorAttributionRecord | None = PrivateAttr(default=None)
     _peer_analysis_cache: list[PeerAnalysisRecord] | None = PrivateAttr(default=None)
     _correlation_audit_cache: list[CorrelationAuditRecord] | None = PrivateAttr(default=None)
     _risk_report_cache: list[RiskReportRecord] | None = PrivateAttr(default=None)
@@ -259,6 +261,48 @@ class PortfolioStateManager(StateManager):
                 return []
         return self._peer_analysis_cache
 
+    async def get_sector_attribution_latest(
+        self, session: AsyncSession | None = None
+    ) -> SectorAttributionRecord | None:
+        """Get latest sector attribution record with lazy loading."""
+        from src.database.repositories.sector_attribution import SectorAttributionRecordRepository
+
+        if session:
+            repo = SectorAttributionRecordRepository(session)
+            return await repo.get_latest()
+
+        if self._sector_attribution_cache is None:
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = SectorAttributionRecordRepository(fresh_session)
+                    self._sector_attribution_cache = await repo.get_latest()
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get sector attribution: {e}")
+                return None
+        return self._sector_attribution_cache
+
+    async def get_sector_attribution_history(
+        self, limit: int = 30, session: AsyncSession | None = None
+    ) -> list[SectorAttributionRecord]:
+        """Get sector attribution history."""
+        from src.database.repositories.sector_attribution import SectorAttributionRecordRepository
+
+        try:
+            if session:
+                repo = SectorAttributionRecordRepository(session)
+                return await repo.get_history(limit)
+
+            from src.database.connection import get_session
+
+            async with get_session() as fresh_session:
+                repo = SectorAttributionRecordRepository(fresh_session)
+                return await repo.get_history(limit)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get sector attribution history: {e}")
+            return []
+
     async def get_correlation_audit_history(
         self, limit: int = 10, session: AsyncSession | None = None
     ) -> list[CorrelationAuditRecord]:
@@ -447,6 +491,29 @@ class PortfolioStateManager(StateManager):
             logger.opt(exception=True).warning(f"Failed to record peer analysis: {e}")
 
         self._peer_analysis_cache = None
+
+    async def record_sector_attribution(
+        self,
+        analysis: SectorAttributionRecord,
+        session: AsyncSession | None = None,
+    ) -> None:
+        """Record a sector attribution analysis run."""
+        try:
+            from src.database.repositories.sector_attribution import (
+                SectorAttributionRecordRepository,
+            )
+
+            if session:
+                await SectorAttributionRecordRepository(session).create(analysis)
+            else:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    await SectorAttributionRecordRepository(fresh_session).create(analysis)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record sector attribution: {e}")
+
+        self._sector_attribution_cache = None
 
     async def record_correlation_audit(self, input_data: CorrelationAuditInput) -> None:
         """Record a correlation audit run."""
