@@ -95,6 +95,38 @@ export interface RebalanceResponse {
 	sharpe_ratio?: number | null;
 }
 
+export interface MetricsSnapshot {
+	expected_return: number;
+	expected_volatility: number;
+	sharpe_ratio: number;
+}
+
+export interface RebalanceCalculation {
+	timestamp: string;
+	method: string;
+	allocations: RebalanceAllocation[];
+	expected_return: number;
+	expected_volatility: number;
+	sharpe_ratio: number;
+}
+
+export interface RebalanceHistoryEntry {
+	timestamp: string;
+	method: string;
+	avg_deviation_pct: number;
+	max_deviation_pct: number;
+	metrics: MetricsSnapshot;
+}
+
+export interface RebalancingHistoryResponse {
+	enabled: boolean;
+	current_portfolio_value: number;
+	rebalance_threshold: number;
+	current_metrics: MetricsSnapshot | null;
+	latest: RebalanceCalculation | null;
+	history: RebalanceHistoryEntry[];
+}
+
 export interface RiskReportResponse {
 	portfolio_volatility: number;
 	sharpe_ratio: number;

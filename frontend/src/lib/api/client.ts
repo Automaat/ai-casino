@@ -100,6 +100,10 @@ export const api = {
 		return fetchAPI<T.RebalanceResponse>('/portfolio/rebalance');
 	},
 
+	async getRebalancingHistory(): Promise<T.RebalancingHistoryResponse> {
+		return fetchAPI<T.RebalancingHistoryResponse>('/portfolio/rebalancing/history');
+	},
+
 	// Risk
 	async getRisk(): Promise<T.RiskReportResponse> {
 		return fetchAPI<T.RiskReportResponse>('/risk');
