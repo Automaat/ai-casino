@@ -137,12 +137,12 @@ class GamePlanAgent:
             symbols: Futures symbols
 
         Returns:
-            Dict mapping symbol to % change
+            Dict mapping symbol to % change (empty if unavailable)
         """
         try:
             return self.market_fetcher.fetch_overnight_futures(symbols)
         except Exception as e:
-            logger.opt(exception=True).warning(f"Futures unavailable: {e}")
+            logger.opt(exception=True).warning(f"Unexpected error fetching futures: {e}")
             return {}
 
     def _fetch_premarket_movers(self, watchlist: list[str]) -> str:

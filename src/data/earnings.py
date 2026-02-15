@@ -119,7 +119,7 @@ class EarningsCalendarFetcher:
                 if hasattr(raw, "iloc"):
                     return self._parse_date(raw.iloc[0])
                 return self._parse_date(raw)
-        except KeyError, IndexError:
+        except (KeyError, IndexError):
             # Missing or malformed earnings date entry; treat as no earnings date.
             logger.debug("Earnings date not found or malformed in calendar data; returning None.")
 
@@ -139,7 +139,7 @@ class EarningsCalendarFetcher:
             if eps is not None:
                 try:
                     return float(eps)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     return None
             return None
 
@@ -151,7 +151,7 @@ class EarningsCalendarFetcher:
                     if hasattr(val, "iloc"):
                         val = val.iloc[0]
                     return float(val)
-            except KeyError, IndexError, TypeError, ValueError:
+            except (KeyError, IndexError, TypeError, ValueError):
                 continue
 
         return None

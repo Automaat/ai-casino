@@ -332,7 +332,7 @@ class FundamentalWorker:
 
         try:
             return float(value)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
 
     def get_tool_definition(self) -> ToolDefinition:

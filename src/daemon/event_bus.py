@@ -1,7 +1,7 @@
 """Real-time event streaming for dashboard integration."""
 
+import asyncio
 import queue
-import threading
 import uuid
 from collections import deque
 from datetime import UTC, datetime
@@ -53,7 +53,7 @@ class EventBus:
         """
         self._subscribers: dict[str, queue.Queue[DashboardEvent]] = {}
         self._history: deque[DashboardEvent] = deque(maxlen=history_size)
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
         self._queue_size = queue_size
         logger.info(f"Initialized EventBus (history={history_size}, queue_size={queue_size})")
 
@@ -66,7 +66,7 @@ class EventBus:
         subscriber_id = str(uuid.uuid4())
         q: queue.Queue[DashboardEvent] = queue.Queue(maxsize=self._queue_size)
 
-        with self._lock:
+        async with self._lock:
             self._subscribers[subscriber_id] = q
 
         logger.info(f"Subscriber {subscriber_id} connected (total: {len(self._subscribers)})")
@@ -78,7 +78,7 @@ class EventBus:
         Args:
             subscriber_id: Subscriber ID to remove
         """
-        with self._lock:
+        async with self._lock:
             if subscriber_id in self._subscribers:
                 del self._subscribers[subscriber_id]
                 logger.info(f"Subscriber {subscriber_id} disconnected (remaining: {len(self._subscribers)})")
@@ -92,7 +92,7 @@ class EventBus:
             event: Event to publish
         """
         try:
-            with self._lock:
+            async with self._lock:
                 self._history.append(event)
                 subscribers = list(self._subscribers.items())
 
@@ -126,8 +126,9 @@ class EventBus:
         if limit is not None and limit <= 0:
             return []
 
-        with self._lock:
-            events = list(reversed(self._history))
+        # get_history is sync, but we can safely read without lock for this use case
+        # since deque operations are atomic and we're just reading
+        events = list(reversed(self._history))
 
         if limit is not None:
             events = events[:limit]

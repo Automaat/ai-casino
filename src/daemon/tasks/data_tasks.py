@@ -37,7 +37,7 @@ class PrefetchTask(TaskExecutor):
         watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         console.print(f"[dim]Prefetching {len(watchlist)} symbols...[/dim]")
-        report = await asyncio.to_thread(prefetcher.prefetch_watchlist, watchlist)
+        report = await prefetcher.prefetch_watchlist(watchlist)
 
         # Warm FinBERT if configured
         finbert_ready = False
@@ -101,7 +101,7 @@ class PreMarketRefreshTask(TaskExecutor):
         watchlist = await self.components.broker_manager.get_merged_watchlist()
 
         console.print(f"[dim]Refreshing {len(watchlist)} symbols...[/dim]")
-        report = await asyncio.to_thread(prefetcher.prefetch_watchlist, watchlist)
+        report = await prefetcher.prefetch_watchlist(watchlist)
 
         succeeded = sum(1 for r in report.results if r.market_data or r.news or r.fundamentals)
 

@@ -84,7 +84,7 @@ class DataPrefetcher:
         raw = f"{prefix}:{symbol}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
-    def prefetch_symbol(self, symbol: str) -> PrefetchResult:
+    async def prefetch_symbol(self, symbol: str) -> PrefetchResult:
         """Fetch and cache all data types for one symbol.
 
         Fetches market data, news, and fundamentals sequentially.
@@ -118,19 +118,7 @@ class DataPrefetcher:
 
         # News (uses Marketaux, no AV rate limit concern)
         try:
-            # Handle calling async from sync - detect if event loop is running
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                # No event loop running, safe to use asyncio.run()
-                articles = asyncio.run(self._news_fetcher.afetch_company_news(symbol))
-            else:
-                # Event loop already running, use run_in_executor
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._news_fetcher.afetch_company_news(symbol))
-                    articles = future.result()
+            articles = await self._news_fetcher.afetch_company_news(symbol)
 
             key = self._cache_key("news", symbol)
             self._cache.set(
@@ -144,7 +132,7 @@ class DataPrefetcher:
             logger.opt(exception=True).warning(f"Failed to prefetch news for {symbol}: {e}")
 
         # Rate limit sleep before fundamentals (both market and fundamentals use Alpha Vantage)
-        time.sleep(AV_RATE_LIMIT_SLEEP)
+        await asyncio.sleep(AV_RATE_LIMIT_SLEEP)
 
         # Fundamentals (uses Alpha Vantage)
         try:
@@ -165,7 +153,7 @@ class DataPrefetcher:
             duration_ms=duration_ms,
         )
 
-    def prefetch_watchlist(self, symbols: list[str]) -> PrefetchReport:
+    async def prefetch_watchlist(self, symbols: list[str]) -> PrefetchReport:
         """Prefetch data for all symbols sequentially with rate limiting.
 
         Args:
@@ -179,7 +167,7 @@ class DataPrefetcher:
 
         for i, symbol in enumerate(symbols):
             logger.info(f"Prefetching {symbol} ({i + 1}/{len(symbols)})")
-            result = self.prefetch_symbol(symbol)
+            result = await self.prefetch_symbol(symbol)
             results.append(result)
 
         total_duration = time.perf_counter() - start
