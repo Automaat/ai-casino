@@ -13,7 +13,7 @@
 
 	interface MetricRow {
 		label: string;
-		currentValue: number;
+		currentValue: number | null;
 		expectedValue: number;
 		delta: number;
 		deltaPercent: number;
@@ -25,7 +25,7 @@
 			return [
 				{
 					label: 'Expected Return',
-					currentValue: 0,
+					currentValue: null,
 					expectedValue: expected.expected_return,
 					delta: 0,
 					deltaPercent: 0,
@@ -33,7 +33,7 @@
 				},
 				{
 					label: 'Expected Volatility',
-					currentValue: 0,
+					currentValue: null,
 					expectedValue: expected.expected_volatility,
 					delta: 0,
 					deltaPercent: 0,
@@ -41,7 +41,7 @@
 				},
 				{
 					label: 'Sharpe Ratio',
-					currentValue: 0,
+					currentValue: null,
 					expectedValue: expected.sharpe_ratio,
 					delta: 0,
 					deltaPercent: 0,
@@ -92,20 +92,34 @@
 					<div>
 						<div class="text-xs text-gray-500">Current</div>
 						<div class="text-lg font-semibold text-black">
-							{formatPercent(metric.currentValue / 100)}
+							{#if metric.currentValue === null}
+								N/A
+							{:else if metric.label === 'Sharpe Ratio'}
+								{metric.currentValue.toFixed(2)}
+							{:else}
+								{formatPercent(metric.currentValue)}
+							{/if}
 						</div>
 					</div>
 					<div>
 						<div class="text-xs text-gray-500">After Rebalancing</div>
 						<div class="text-lg font-semibold text-black">
-							{formatPercent(metric.expectedValue / 100)}
+							{#if metric.label === 'Sharpe Ratio'}
+								{metric.expectedValue.toFixed(2)}
+							{:else}
+								{formatPercent(metric.expectedValue)}
+							{/if}
 						</div>
 					</div>
 				</div>
 				{#if current && metric.delta !== 0}
 					<div class="mt-2">
 						<Badge variant={metric.isImprovement ? 'success' : 'error'}>
-							{metric.delta > 0 ? '+' : ''}{formatPercent(metric.deltaPercent / 100)} ({metric.delta > 0 ? '+' : ''}{(metric.delta * 100).toFixed(2)}pp)
+							{#if metric.label === 'Sharpe Ratio'}
+								{metric.delta > 0 ? '+' : ''}{metric.delta.toFixed(2)}
+							{:else}
+								{metric.delta > 0 ? '+' : ''}{formatPercent(metric.deltaPercent / 100)} ({metric.delta > 0 ? '+' : ''}{(metric.delta * 100).toFixed(2)}pp)
+							{/if}
 						</Badge>
 					</div>
 				{/if}

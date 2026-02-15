@@ -55,7 +55,7 @@
 				yAxisLabel = 'Volatility %';
 				break;
 			case 'sharpe':
-				data = history.map(h => h.metrics.sharpe_ratio * 100);
+				data = history.map(h => h.metrics.sharpe_ratio);
 				name = 'Sharpe Ratio';
 				color = '#3b82f6';
 				yAxisLabel = 'Sharpe Ratio';
@@ -67,7 +67,10 @@
 				trigger: 'axis',
 				formatter: (params: any) => {
 					const param = params[0];
-					return `${param.name}<br/>${param.seriesName}: ${param.value.toFixed(2)}%`;
+					const value = param.seriesName === 'Sharpe Ratio'
+						? param.value.toFixed(2)
+						: `${param.value.toFixed(2)}%`;
+					return `${param.name}<br/>${param.seriesName}: ${value}`;
 				}
 			},
 			grid: {
@@ -85,7 +88,7 @@
 				type: 'value',
 				name: yAxisLabel,
 				axisLabel: {
-					formatter: '{value}%'
+					formatter: selectedMetric === 'sharpe' ? '{value}' : '{value}%'
 				}
 			},
 			series: [

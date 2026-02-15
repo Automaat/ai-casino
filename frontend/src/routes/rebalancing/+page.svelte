@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import RebalanceChart from '$lib/components/charts/RebalanceChart.svelte';
@@ -16,42 +15,26 @@
 	let loading = $state(true);
 
 	async function loadData() {
-		console.log('[Rebalancing] loadData starting...');
 		loading = true;
 		try {
-			console.log('[Rebalancing] Fetching data...');
 			const [rebalancingResult, positionsResult] = await Promise.allSettled([
 				api.getRebalancingHistory(),
 				api.getPositions()
 			]);
 
-			console.log('[Rebalancing] Results:', {
-				rebalancing: rebalancingResult.status,
-				positions: positionsResult.status
-			});
-
 			if (rebalancingResult.status === 'fulfilled') {
 				rebalancingData = rebalancingResult.value;
-				console.log('[Rebalancing] Data loaded:', rebalancingData);
-			} else {
-				console.error('Failed to load rebalancing data:', rebalancingResult.reason);
 			}
 
 			if (positionsResult.status === 'fulfilled') {
 				positions = positionsResult.value;
-			} else {
-				console.error('Failed to load positions:', positionsResult.reason);
 			}
-		} catch (error) {
-			console.error('Failed to load rebalancing data:', error);
 		} finally {
-			console.log('[Rebalancing] Setting loading = false');
 			loading = false;
 		}
 	}
 
 	onMount(() => {
-		console.log('[Rebalancing] onMount called');
 		loadData();
 	});
 

@@ -119,7 +119,23 @@
 
 	$effect(() => {
 		if (chart && history) {
-			initChart();
+			// Update existing chart instead of re-initializing
+			const timestamps = history.map(h => new Date(h.timestamp).toLocaleDateString());
+			const avgDeviations = history.map(h => h.avg_deviation_pct);
+			const maxDeviations = history.map(h => h.max_deviation_pct);
+
+			const option: echarts.EChartsOption = {
+				xAxis: {
+					data: timestamps
+				},
+				series: [
+					{ data: avgDeviations },
+					{ data: maxDeviations },
+					{ data: Array(history.length).fill(threshold) }
+				]
+			};
+
+			chart.setOption(option);
 		}
 	});
 </script>

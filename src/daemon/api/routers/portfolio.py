@@ -209,7 +209,8 @@ async def get_rebalancing_history(
     current_metrics = None
     prior_records = await components.state.get_rebalancing_history(limit=2, session=session)
     if len(prior_records) >= 2:
-        prior_record = prior_records[-2]
+        # Records are desc by timestamp, so index 1 is the previous record
+        prior_record = prior_records[1]
         current_metrics = MetricsSnapshot(
             expected_return=prior_record.expected_return,
             expected_volatility=prior_record.expected_volatility,
@@ -236,8 +237,8 @@ async def get_rebalancing_history(
             current_metrics=current_metrics,
         )
 
-    # Build latest calculation with full allocations
-    latest_record = rebalancing_records[-1]
+    # Build latest calculation with full allocations (records are desc by timestamp)
+    latest_record = rebalancing_records[0]
     total_portfolio_value = current_portfolio_value
 
     allocations = []
