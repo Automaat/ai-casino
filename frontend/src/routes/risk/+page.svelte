@@ -127,7 +127,7 @@
 		}
 	];
 
-	type DrawdownEvent = { start: string; startIdx: number };
+	type DrawdownEvent = { start: string; startDate: Date };
 
 	function calculateDrawdownDuration(history: RiskReportResponse[]): {
 		longestDays: number;
@@ -138,19 +138,21 @@
 		const events: Array<{ start: string; end: string; days: number }> = [];
 		let currentEvent: DrawdownEvent | null = null;
 
-		sorted.forEach((r, idx) => {
+		sorted.forEach((r) => {
 			if (r.max_drawdown >= threshold) {
 				// In drawdown
 				if (!currentEvent) {
-					currentEvent = { start: r.timestamp, startIdx: idx };
+					currentEvent = { start: r.timestamp, startDate: new Date(r.timestamp) };
 				}
 			} else {
 				// Recovered
 				if (currentEvent) {
+					const endDate = new Date(r.timestamp);
+					const days = Math.ceil((endDate.getTime() - currentEvent.startDate.getTime()) / (1000 * 60 * 60 * 24));
 					events.push({
 						start: currentEvent.start,
-						end: sorted[idx - 1].timestamp,
-						days: idx - currentEvent.startIdx
+						end: r.timestamp,
+						days
 					});
 					currentEvent = null;
 				}
@@ -160,10 +162,12 @@
 		// Handle ongoing drawdown
 		if (currentEvent !== null) {
 			const event: DrawdownEvent = currentEvent;
+			const endDate = new Date(sorted[sorted.length - 1].timestamp);
+			const days = Math.ceil((endDate.getTime() - event.startDate.getTime()) / (1000 * 60 * 60 * 24));
 			events.push({
 				start: event.start,
 				end: sorted[sorted.length - 1].timestamp,
-				days: sorted.length - event.startIdx
+				days
 			});
 		}
 
@@ -216,8 +220,14 @@
 		.reverse()
 		.map((r) => ({
 			time: formatDateShort(r.timestamp),
-			value: r.max_drawdown * 100
+			value: r.max_drawdown * -100
 		}));
+
+	const RISK_STATUS_VALUES = {
+		HEALTHY: 1,
+		WARNING: 2,
+		CRITICAL: 3
+	} as const;
 
 	// Risk status timeline
 	$: riskStatusData = riskHistory
@@ -225,7 +235,7 @@
 		.reverse()
 		.map((r) => ({
 			time: formatDateShort(r.timestamp),
-			value: r.risk_status === 'HEALTHY' ? 1 : r.risk_status === 'WARNING' ? 2 : 3
+			value: RISK_STATUS_VALUES[r.risk_status as keyof typeof RISK_STATUS_VALUES] ?? RISK_STATUS_VALUES.CRITICAL
 		}));
 
 	// Metric card calculations

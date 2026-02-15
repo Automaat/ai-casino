@@ -35,9 +35,7 @@
 		chart = echarts.init(chartContainer);
 
 		// Determine x-axis data
-		const xAxisData = series
-			? data?.map(d => typeof d.time === 'string' ? d.time : d.time.toLocaleString()) || []
-			: data?.map(d => typeof d.time === 'string' ? d.time : d.time.toLocaleString()) || [];
+		const xAxisData = data?.map(d => typeof d.time === 'string' ? d.time : d.time.toLocaleString()) || [];
 
 		// Build series config
 		let seriesConfig: any[];
