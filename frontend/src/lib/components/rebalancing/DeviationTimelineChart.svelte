@@ -86,7 +86,7 @@
 				{
 					name: 'Threshold',
 					type: 'line',
-					data: new Array(timestamps.length).fill(threshold * 100),
+					data: Array.from({ length: timestamps.length }).fill(threshold * 100),
 					lineStyle: {
 						type: 'dashed',
 						color: '#f59e0b',
