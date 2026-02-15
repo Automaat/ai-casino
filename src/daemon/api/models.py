@@ -514,12 +514,62 @@ class EnrichedTradeResponse(BaseModel):
     )
 
 
+class CostAnalyticsSummaryResponse(BaseModel):
+    """Cost analytics summary."""
+
+    total_cost_usd: float = Field(description="Total estimated cost in USD")
+    total_tokens: int = Field(description="Total tokens (input + output)")
+    total_executions: int = Field(description="Total workflow executions")
+    avg_cost_per_execution: float = Field(description="Average cost per execution")
+    avg_cost_per_signal: float = Field(description="Average cost per trade signal (BUY/SELL)")
+    forecast_30d_usd: float = Field(description="Forecasted 30-day cost based on trend")
+    date_range: tuple[str, str] = Field(description="Date range queried (ISO format)")
+
+
+class CostTrendPointResponse(BaseModel):
+    """Cost trend point for time series."""
+
+    timestamp: datetime = Field(description="Bucket timestamp")
+    cost_usd: float = Field(description="Total cost for period")
+    tokens: int = Field(description="Total tokens for period")
+    execution_count: int = Field(description="Execution count for period")
+
+
+class CostByDimensionResponse(BaseModel):
+    """Cost breakdown by dimension."""
+
+    dimension_value: str = Field(description="Dimension value (symbol/agent/model)")
+    cost_usd: float = Field(description="Total cost")
+    tokens: int = Field(description="Total tokens")
+    execution_count: int = Field(description="Execution count")
+    percentage: float = Field(description="Percentage of total cost")
+
+
+class CostTrendsResponse(BaseModel):
+    """Cost trends list."""
+
+    trends: list[CostTrendPointResponse] = Field(description="Time series data")
+    count: int = Field(description="Number of data points")
+
+
+class CostByDimensionListResponse(BaseModel):
+    """Cost by dimension list."""
+
+    data: list[CostByDimensionResponse] = Field(description="Dimension breakdown")
+    count: int = Field(description="Number of dimensions")
+
+
 __all__ = [
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
     "AnalysisRecordResponse",
     "ConfigResponse",
     "CorrelationMatrixResponse",
+    "CostAnalyticsSummaryResponse",
+    "CostByDimensionListResponse",
+    "CostByDimensionResponse",
+    "CostTrendPointResponse",
+    "CostTrendsResponse",
     "DegradationHistoryResponse",
     "DegradationResponse",
     "DiscoveryInsightsResponse",

@@ -542,3 +542,39 @@ export interface EnrichedTradeResponse {
 	trade: TradeResponse;
 	analysis: AnalysisRecordResponse | null;
 }
+
+// Cost Analytics
+export interface CostAnalyticsSummaryResponse {
+	total_cost_usd: number;
+	total_tokens: number;
+	total_executions: number;
+	avg_cost_per_execution: number;
+	avg_cost_per_signal: number;
+	forecast_30d_usd: number;
+	date_range: [string, string];
+}
+
+export interface CostTrendPointResponse {
+	timestamp: string;
+	cost_usd: number;
+	tokens: number;
+	execution_count: number;
+}
+
+export interface CostByDimensionResponse {
+	dimension_value: string;
+	cost_usd: number;
+	tokens: number;
+	execution_count: number;
+	percentage: number;
+}
+
+export interface CostTrendsResponse {
+	trends: CostTrendPointResponse[];
+	count: number;
+}
+
+export interface CostByDimensionListResponse {
+	data: CostByDimensionResponse[];
+	count: number;
+}
