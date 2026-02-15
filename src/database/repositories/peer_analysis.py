@@ -28,7 +28,6 @@ class PeerAnalysisRecordRepository(BaseRepository[PeerAnalysisRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized PeerAnalysisRecordRepository")
 
     async def create(self, entity: PeerAnalysisRecord) -> PeerAnalysisRecord:
         """Create new peer analysis record.
@@ -45,6 +44,7 @@ class PeerAnalysisRecordRepository(BaseRepository[PeerAnalysisRecord]):
             symbols_analyzed=entity.symbols_analyzed,
             rankings=entity.rankings,
             swap_recommendations=entity.swap_recommendations,
+            analyses=entity.analyses,
             total_peers=entity.total_peers,
             total_duration_seconds=Decimal(str(entity.total_duration_seconds)),
             created_at=datetime.now(UTC),
@@ -99,6 +99,7 @@ class PeerAnalysisRecordRepository(BaseRepository[PeerAnalysisRecord]):
             swap_recommendations=orm.swap_recommendations
             if isinstance(orm.swap_recommendations, list)
             else [],
+            analyses=orm.analyses if isinstance(orm.analyses, list) else [],
             total_peers=orm.total_peers,
             total_duration_seconds=float(orm.total_duration_seconds),
         )

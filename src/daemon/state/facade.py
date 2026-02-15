@@ -34,8 +34,10 @@ from src.daemon.state.models import (
     EarningsCalendarRecord,
     EarningsEventRecord,
     GamePlanRecord,
+    HealthReportRecord,
     MonteCarloRecord,
     OptimizationRecord,
+    PaperTradingReportRecord,
     PeerAnalysisRecord,
     PortfolioRebalancingRecord,
     PortfolioSnapshot,
@@ -45,6 +47,7 @@ from src.daemon.state.models import (
     ScreeningRecord,
     SectorAttributionRecord,
     SectorRotationRecord,
+    TradeJournalRecord,
 )
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
@@ -219,10 +222,11 @@ class DaemonState(BaseModel):
         swap_recommendations: list[str],
         total_peers: int,
         total_duration_seconds: float,
+        analyses: list[dict] | None = None,
     ) -> None:
         """Delegate to portfolio manager."""
         await self.portfolio.record_peer_analysis(
-            symbols_analyzed, rankings, swap_recommendations, total_peers, total_duration_seconds
+            symbols_analyzed, rankings, swap_recommendations, total_peers, total_duration_seconds, analyses
         )
 
     async def record_correlation_audit(self, input_data: CorrelationAuditInput) -> None:
@@ -506,6 +510,34 @@ class DaemonState(BaseModel):
     async def get_degradation_history(self, limit: int = 30) -> list[DegradationRecord]:
         """Get degradation history."""
         return await self.strategy.get_degradation_history(limit)
+
+    async def record_health_report(self, report: HealthReportRecord) -> None:
+        """Delegate to strategy manager."""
+        await self.strategy.record_health_report(report)
+
+    async def get_recent_health_reports(self, limit: int = 100) -> list[HealthReportRecord]:
+        """Get recent health reports."""
+        return await self.strategy.get_recent_health_reports(limit)
+
+    async def record_trade_journal(self, journal: TradeJournalRecord) -> None:
+        """Delegate to strategy manager."""
+        await self.strategy.record_trade_journal(journal)
+
+    async def get_recent_trade_journals(self, limit: int = 30) -> list[TradeJournalRecord]:
+        """Get recent trade journals."""
+        return await self.strategy.get_recent_trade_journals(limit)
+
+    async def record_paper_trading_report(self, report: PaperTradingReportRecord) -> None:
+        """Delegate to strategy manager."""
+        await self.strategy.record_paper_trading_report(report)
+
+    async def get_latest_paper_trading_report(self) -> PaperTradingReportRecord | None:
+        """Get latest paper trading report."""
+        return await self.strategy.get_latest_paper_trading_report()
+
+    async def get_recent_paper_trading_reports(self, limit: int = 10) -> list[PaperTradingReportRecord]:
+        """Get recent paper trading reports."""
+        return await self.strategy.get_recent_paper_trading_reports(limit)
 
     async def get_market_events(self, limit: int | None = None) -> list[dict]:
         """Get market events.

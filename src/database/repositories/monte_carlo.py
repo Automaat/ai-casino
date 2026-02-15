@@ -28,7 +28,6 @@ class MonteCarloRecordRepository(BaseRepository[MonteCarloRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized MonteCarloRecordRepository")
 
     async def create(self, entity: MonteCarloRecord) -> MonteCarloRecord:
         """Create new Monte Carlo record.

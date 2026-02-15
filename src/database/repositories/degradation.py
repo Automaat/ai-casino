@@ -28,7 +28,6 @@ class DegradationRecordRepository(BaseRepository[DegradationRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized DegradationRecordRepository")
 
     async def create(self, entity: DegradationRecord) -> DegradationRecord:
         """Create new degradation record.

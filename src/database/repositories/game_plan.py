@@ -27,7 +27,6 @@ class GamePlanRecordRepository(BaseRepository[GamePlanRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized GamePlanRecordRepository")
 
     async def create(self, entity: GamePlanRecord) -> GamePlanRecord:
         """Create new game plan record.

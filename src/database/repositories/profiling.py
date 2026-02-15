@@ -28,7 +28,6 @@ class ProfilingRecordRepository(BaseRepository[ProfilingRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized ProfilingRecordRepository")
 
     async def create(self, entity: ProfilingRecord) -> ProfilingRecord:
         """Create new profiling record.

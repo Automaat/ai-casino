@@ -27,7 +27,6 @@ class SectorAttributionRecordRepository(BaseRepository[SectorAttributionRecord])
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized SectorAttributionRecordRepository")
 
     async def create(self, entity: SectorAttributionRecord) -> SectorAttributionRecord:
         """Create new sector attribution record.

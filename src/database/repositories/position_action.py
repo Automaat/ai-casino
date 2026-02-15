@@ -29,7 +29,6 @@ class PositionManagementActionRepository(BaseRepository[PositionManagementAction
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized PositionManagementActionRepository")
 
     async def create(self, entity: PositionManagementAction) -> PositionManagementAction:
         """Create new position management action.

@@ -27,7 +27,6 @@ class ScreeningRecordRepository(BaseRepository[ScreeningRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized ScreeningRecordRepository")
 
     async def create(self, entity: ScreeningRecord) -> ScreeningRecord:
         """Create new screening record.

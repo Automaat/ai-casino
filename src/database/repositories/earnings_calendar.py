@@ -27,7 +27,6 @@ class EarningsCalendarRecordRepository(BaseRepository[EarningsCalendarRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized EarningsCalendarRecordRepository")
 
     async def create(self, entity: EarningsCalendarRecord) -> EarningsCalendarRecord:
         """Create new earnings calendar record.

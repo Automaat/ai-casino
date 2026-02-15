@@ -3,12 +3,15 @@
 import asyncio
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.daemon.state import AnalysisRecord
+
+if TYPE_CHECKING:
+    from src.daemon.state import DaemonState
 from src.data.market import MarketDataFetcher
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
@@ -143,24 +146,66 @@ class TradeJournalAgent:
             )
         return "\n".join(lines)
 
-    def persist(self, journal: DailyJournal, journal_dir: str) -> Path:
-        """Write journal entry as markdown file.
+    async def persist(
+        self,
+        journal: DailyJournal,
+        state: DaemonState,
+        journal_dir: str | None = None,
+    ) -> Path | None:
+        """Persist journal to database and optionally as markdown file.
 
         Args:
             journal: Daily journal to persist
-            journal_dir: Directory path (supports ~ expansion)
+            state: DaemonState instance for database persistence
+            journal_dir: Optional directory path for markdown export (supports ~ expansion)
 
         Returns:
-            Path to written file
+            Path to markdown file if journal_dir provided, None otherwise
         """
-        dir_path = Path(journal_dir).expanduser()
-        dir_path.mkdir(parents=True, exist_ok=True)
+        from src.daemon.state.models import TradeJournalRecord
 
-        file_path = dir_path / f"{journal.date}.md"
-        content = self._render_markdown(journal)
-        file_path.write_text(content, encoding="utf-8")
-        logger.info(f"Journal persisted to {file_path}")
-        return file_path
+        # Calculate stats
+        total_signals = len(journal.outcomes)
+        correct_signals = sum(1 for o in journal.outcomes if o.signal_correct)
+        accuracy_pct = (correct_signals / total_signals * 100) if total_signals > 0 else 0.0
+
+        # Render markdown content
+        markdown_content = self._render_markdown(journal)
+
+        # Convert to database record
+        record = TradeJournalRecord(
+            date=journal.date,
+            outcomes=[o.model_dump(mode="json") for o in journal.outcomes],
+            winners=journal.winners,
+            losers=journal.losers,
+            lessons=journal.lessons,
+            tomorrows_focus=journal.tomorrows_focus,
+            overall_assessment=journal.overall_assessment,
+            markdown_content=markdown_content,
+            total_signals=total_signals,
+            correct_signals=correct_signals,
+            accuracy_pct=accuracy_pct,
+        )
+
+        # Primary: Database persistence
+        await state.record_trade_journal(record)
+
+        # Secondary: Markdown file (always generate if journal_dir provided)
+        if journal_dir:
+            import asyncio
+
+            def _write_file() -> Path:
+                dir_path = Path(journal_dir).expanduser()
+                dir_path.mkdir(parents=True, exist_ok=True)
+                file_path = dir_path / f"{journal.date}.md"
+                file_path.write_text(markdown_content, encoding="utf-8")
+                return file_path
+
+            file_path = await asyncio.to_thread(_write_file)
+            logger.info(f"Journal persisted to {file_path}")
+            return file_path
+
+        return None
 
     def _render_markdown(self, journal: DailyJournal) -> str:
         """Render journal as markdown.

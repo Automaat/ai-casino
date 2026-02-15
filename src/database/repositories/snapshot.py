@@ -36,7 +36,6 @@ class PortfolioSnapshotRepository(BaseRepository[PortfolioSnapshot]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized PortfolioSnapshotRepository")
 
     async def create(self, entity: PortfolioSnapshot) -> PortfolioSnapshot:
         """Create new portfolio snapshot.

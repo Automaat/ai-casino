@@ -308,6 +308,7 @@ class PeerAnalysisTask(TaskExecutor):
             symbols_analyzed=[a.symbol for a in result.analyses],
             rankings=rankings,
             swap_recommendations=swaps,
+            analyses=[a.model_dump(mode="json") for a in result.analyses],
             total_peers=result.total_peers_analyzed,
             total_duration_seconds=result.total_duration_seconds,
         )

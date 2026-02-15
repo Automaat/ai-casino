@@ -467,6 +467,7 @@ class PortfolioStateManager(StateManager):
         swap_recommendations: list[str],
         total_peers: int,
         total_duration_seconds: float,
+        analyses: list[dict] | None = None,
     ) -> None:
         """Record a deep peer benchmarking analysis run."""
         now = datetime.now(UTC)
@@ -475,6 +476,7 @@ class PortfolioStateManager(StateManager):
             symbols_analyzed=symbols_analyzed,
             rankings=rankings,
             swap_recommendations=swap_recommendations,
+            analyses=analyses or [],
             total_peers=total_peers,
             total_duration_seconds=total_duration_seconds,
         )

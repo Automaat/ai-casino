@@ -28,7 +28,6 @@ class RebalancingRecordRepository(BaseRepository[PortfolioRebalancingRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized RebalancingRecordRepository")
 
     async def create(self, entity: PortfolioRebalancingRecord) -> PortfolioRebalancingRecord:
         """Create new rebalancing record.

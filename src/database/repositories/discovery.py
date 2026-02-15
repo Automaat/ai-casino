@@ -29,7 +29,6 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized DiscoveryHistoryRepository")
 
     async def create(self, entity: DiscoveryHistoryRecord) -> DiscoveryHistoryRecord:
         """Create new discovery history record.
