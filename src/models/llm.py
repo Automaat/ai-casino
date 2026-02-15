@@ -521,7 +521,7 @@ class LLMClient:
 
                 # Handle errors: log and convert to error string
                 if isinstance(result, Exception):
-                    logger.opt(exception=True).error(f"Tool '{tool_call.name}' failed: {result}")
+                    logger.opt(exception=result).error(f"Tool '{tool_call.name}' failed: {result}")
                     tool_result = f"Tool '{tool_call.name}' failed: {result}"
                 else:
                     # Success case: unpack tuple

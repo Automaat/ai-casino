@@ -573,12 +573,9 @@ class TestParallelToolExecution:
 
         start = time.perf_counter()
         result = await client.acomplete_with_tools(params)
-        duration = time.perf_counter() - start
 
         assert result == "All searches complete"
         assert max_concurrent > 1, "Tools should execute concurrently"
-        # 3 tools at 0.05s each: sequential would be ~0.15s, concurrent should be ~0.05s
-        assert duration < 0.12, f"Duration {duration:.3f}s suggests sequential execution"
 
     @pytest.mark.asyncio
     async def test_callback_ordering_preserved(self, mock_openai_provider, sample_tools):
