@@ -21,6 +21,8 @@ from src.daemon.api.models import (
     RebalancingHistoryResponse,
     RiskHistoryResponse,
     RiskReportResponse,
+    SectorAttributionResponse,
+    SectorContributionDetail,
     SectorRotationResponse,
     SnapshotRecord,
     SnapshotsResponse,
@@ -366,6 +368,39 @@ async def get_sector_rotation(
         sector_strengths=latest.sector_strengths,
         sector_momenta=latest.sector_momenta,
         flagged_positions=latest.flagged_positions,
+    )
+
+
+@router.get("/sector-attribution/latest", response_model=SectorAttributionResponse | None)
+async def get_sector_attribution(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> SectorAttributionResponse | None:
+    """Get latest sector attribution analysis."""
+    components = get_components(request)
+    record = await components.state.get_sector_attribution_latest(session=session)
+    if not record:
+        return None
+
+    contributions = [
+        SectorContributionDetail(
+            sector=str(c["sector"]),
+            sector_etf=str(c["sector_etf"]),
+            total_value=float(c["total_value"]),
+            portfolio_weight=float(c["portfolio_weight"]),
+            benchmark_weight=float(c["benchmark_weight"]),
+            over_under_weight=float(c["over_under_weight"]),
+            pnl=float(c["pnl"]),
+            return_pct=float(c["return_pct"]),
+            position_count=int(c["position_count"]),
+        )
+        for c in record.contributions
+    ]
+
+    return SectorAttributionResponse(
+        timestamp=record.timestamp,
+        contributions=contributions,
+        total_portfolio_value=record.total_portfolio_value,
+        benchmark_name=record.benchmark_name,
     )
 
 

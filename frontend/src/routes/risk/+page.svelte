@@ -6,16 +6,20 @@
 	import HeatmapChart from '$lib/components/charts/HeatmapChart.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import GaugeChart from '$lib/components/charts/GaugeChart.svelte';
+	import TreemapChart from '$lib/components/charts/TreemapChart.svelte';
+	import BarChart from '$lib/components/charts/BarChart.svelte';
 	import SectorRotationHeatmap from '$lib/components/charts/SectorRotationHeatmap.svelte';
 	import RiskStatusBadge from '$lib/components/ui/RiskStatusBadge.svelte';
-	import { risk, correlation, sectorRotation } from '$lib/stores/dashboard';
+	import DataTable from '$lib/components/ui/DataTable.svelte';
+	import { risk, correlation, sectorRotation, sectorAttribution } from '$lib/stores/dashboard';
 	import { api } from '$lib/api/client';
 	import { formatPercent, formatDateShort } from '$lib/utils/format';
-	import type { RiskReportResponse } from '$lib/types/api';
+	import type { RiskReportResponse, SectorContributionDetail } from '$lib/types/api';
 
 	$: riskReport = $risk;
 	$: correlationData = $correlation;
 	$: sectorRotationData = $sectorRotation;
+	$: sectorAttributionData = $sectorAttribution;
 
 	let riskHistory: RiskReportResponse[] = [];
 	let loading = true;
@@ -23,9 +27,12 @@
 	async function loadData() {
 		loading = true;
 		try {
-			await risk.fetch();
-			await correlation.fetch();
-			await sectorRotation.fetch();
+			await Promise.all([
+				risk.fetch(),
+				correlation.fetch(),
+				sectorRotation.fetch(),
+				sectorAttribution.fetch()
+			]);
 			const historyData = await api.getRiskHistory(30);
 			riskHistory = historyData.history;
 		} catch (error) {
@@ -64,6 +71,61 @@
 			time: formatDateShort(r.timestamp),
 			value: r.portfolio_volatility
 		}));
+
+	// Sector attribution data transformations
+	$: sectorAllocationData = sectorAttributionData?.contributions
+		.filter(c => c.total_value > 0)
+		.map(c => ({
+			name: c.sector,
+			value: c.total_value
+		})) || [];
+
+	$: sectorWeightDeltaData = sectorAttributionData?.contributions
+		.map(c => ({
+			label: c.sector_etf,
+			value: c.over_under_weight * 100,
+			color: c.over_under_weight > 0 ? '#10b981' : '#ef4444'
+		}))
+		.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)) || [];
+
+	const sectorContributionColumns: Array<{
+		key: keyof SectorContributionDetail;
+		label: string;
+		format?: (v: any, row: SectorContributionDetail) => string;
+		class?: string;
+		cellClass?: (v: any, row: SectorContributionDetail) => string;
+	}> = [
+		{ key: 'sector', label: 'Sector', class: 'font-medium' },
+		{ key: 'position_count', label: 'Positions' },
+		{
+			key: 'portfolio_weight',
+			label: 'Portfolio %',
+			format: (v: number) => (v * 100).toFixed(2) + '%'
+		},
+		{
+			key: 'benchmark_weight',
+			label: 'SPY %',
+			format: (v: number) => (v * 100).toFixed(2) + '%'
+		},
+		{
+			key: 'over_under_weight',
+			label: 'Delta',
+			format: (v: number) => (v > 0 ? '+' : '') + (v * 100).toFixed(2) + '%',
+			cellClass: (v: number) => v > 0 ? 'text-green-600' : 'text-red-600'
+		},
+		{
+			key: 'pnl',
+			label: 'P&L',
+			format: (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2 }),
+			cellClass: (v: number) => v >= 0 ? 'text-green-600' : 'text-red-600'
+		},
+		{
+			key: 'return_pct',
+			label: 'Return',
+			format: (v: number) => (v > 0 ? '+' : '') + v.toFixed(2) + '%',
+			cellClass: (v: number) => v >= 0 ? 'text-green-600' : 'text-red-600'
+		}
+	];
 </script>
 
 <svelte:head>
@@ -157,6 +219,44 @@
 		{:else}
 			<div class="text-center py-12 text-gray-600">
 				Sector rotation not enabled or no data available.
+			</div>
+		{/if}
+	</Card>
+
+	<!-- Sector Contribution & Allocation -->
+	<Card title="Sector Contribution & Allocation" class="mt-6">
+		{#if sectorAttributionData && sectorAttributionData.contributions.length > 0}
+			<!-- Charts Row -->
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+				<!-- Left: Treemap of current allocation -->
+				<div>
+					<h3 class="text-sm font-medium mb-2">Current Allocation by Sector</h3>
+					<TreemapChart
+						data={sectorAllocationData}
+						height={350}
+					/>
+				</div>
+
+				<!-- Right: Bar chart of over/underweight -->
+				<div>
+					<h3 class="text-sm font-medium mb-2">vs SPY Benchmark</h3>
+					<BarChart
+						data={sectorWeightDeltaData}
+						height={350}
+						yAxisLabel="Over/Under Weight (%)"
+					/>
+				</div>
+			</div>
+
+			<!-- Data Table -->
+			<DataTable
+				columns={sectorContributionColumns}
+				data={sectorAttributionData.contributions}
+				class="mt-4"
+			/>
+		{:else}
+			<div class="text-center py-12 text-gray-600">
+				No positions or sector attribution data available.
 			</div>
 		{/if}
 	</Card>

@@ -516,6 +516,36 @@ class SectorRotationRecordORM(Base):
         return f"SectorRotationRecordORM(id={self.id}, timestamp={self.timestamp})"
 
 
+class SectorAttributionRecordORM(Base):
+    """Sector attribution record ORM model."""
+
+    __tablename__ = "sector_attribution"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    total_portfolio_value: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
+    benchmark_name: Mapped[str] = mapped_column(String(20), nullable=False, server_default="'SPY'")
+    contributions: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_sector_attribution_timestamp", "timestamp", postgresql_ops={"timestamp": "DESC"}),
+        Index("idx_sector_attribution_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"SectorAttributionRecordORM(id={self.id}, timestamp={self.timestamp})"
+
+
 class PeerAnalysisRecordORM(Base):
     """Peer analysis record ORM model."""
 

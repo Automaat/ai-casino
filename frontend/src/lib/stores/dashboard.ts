@@ -156,6 +156,22 @@ function createSectorRotationStore() {
 	return { subscribe, fetch };
 }
 
+function createSectorAttributionStore() {
+	const { subscribe, set } = writable<T.SectorAttributionResponse | null>(null);
+
+	async function fetch() {
+		try {
+			const data = await api.getSectorAttribution();
+			set(data);
+		} catch (error) {
+			console.error('Failed to fetch sector attribution:', error);
+			set(null);
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
 // Config store
 function createConfigStore() {
 	return readable<T.FullConfigResponse | null>(null, (set) => {
@@ -379,6 +395,7 @@ export const positions = createPositionsStore();
 export const risk = createRiskStore();
 export const correlation = createCorrelationStore();
 export const sectorRotation = createSectorRotationStore();
+export const sectorAttribution = createSectorAttributionStore();
 export const config = createConfigStore();
 export const serviceHealth = createServiceHealthStore();
 export const gamePlan = createGamePlanStore();

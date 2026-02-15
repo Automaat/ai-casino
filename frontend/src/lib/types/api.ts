@@ -159,6 +159,25 @@ export interface SectorRotationResponse {
 	flagged_positions?: string[];
 }
 
+export interface SectorContributionDetail {
+	sector: string;
+	sector_etf: string;
+	total_value: number;
+	portfolio_weight: number;
+	benchmark_weight: number;
+	over_under_weight: number;
+	pnl: number;
+	return_pct: number;
+	position_count: number;
+}
+
+export interface SectorAttributionResponse {
+	timestamp: string;
+	contributions: SectorContributionDetail[];
+	total_portfolio_value: number;
+	benchmark_name: string;
+}
+
 export interface DegradationResponse {
 	tier: string;
 	unavailable_services: string[];
