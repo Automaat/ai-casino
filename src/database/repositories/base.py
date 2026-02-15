@@ -10,7 +10,13 @@ T = TypeVar("T")
 
 
 class BaseRepository(ABC, Generic[T]):
-    """Abstract base class for repositories."""
+    """Abstract base class for repositories.
+
+    Note: Sessions are currently held by repositories and not explicitly closed.
+    This is a known architectural limitation. Connections are eventually reclaimed
+    via pool_recycle (default 3600s) and garbage collection. For proper cleanup,
+    consider using repositories as async context managers in future refactoring.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session.
