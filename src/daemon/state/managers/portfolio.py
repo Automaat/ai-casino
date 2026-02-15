@@ -14,6 +14,7 @@ from src.daemon.state.models import (
     CorrelationAuditRecord,
     MonteCarloRecord,
     OptimizationRecord,
+    PeerAnalysisInput,
     PeerAnalysisRecord,
     PortfolioAllocationRecord,
     PortfolioRebalancingRecord,
@@ -460,25 +461,17 @@ class PortfolioStateManager(StateManager):
 
         self._sector_rotation_cache = None
 
-    async def record_peer_analysis(
-        self,
-        symbols_analyzed: list[str],
-        rankings: dict[str, int],
-        swap_recommendations: list[str],
-        total_peers: int,
-        total_duration_seconds: float,
-        analyses: list[dict] | None = None,
-    ) -> None:
+    async def record_peer_analysis(self, input_data: PeerAnalysisInput) -> None:
         """Record a deep peer benchmarking analysis run."""
         now = datetime.now(UTC)
         record = PeerAnalysisRecord(
             timestamp=now,
-            symbols_analyzed=symbols_analyzed,
-            rankings=rankings,
-            swap_recommendations=swap_recommendations,
-            analyses=analyses or [],
-            total_peers=total_peers,
-            total_duration_seconds=total_duration_seconds,
+            symbols_analyzed=input_data.symbols_analyzed,
+            rankings=input_data.rankings,
+            swap_recommendations=input_data.swap_recommendations,
+            analyses=input_data.analyses or [],
+            total_peers=input_data.total_peers,
+            total_duration_seconds=input_data.total_duration_seconds,
         )
 
         try:

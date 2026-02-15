@@ -3,7 +3,7 @@
 import asyncio
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -191,11 +191,13 @@ class TradeJournalAgent:
         await state.record_trade_journal(record)
 
         # Secondary: Markdown file (always generate if journal_dir provided)
-        if journal_dir:
+        if journal_dir is not None:
             import asyncio
 
+            journal_dir_str: str = journal_dir
+
             def _write_file() -> Path:
-                dir_path = Path(journal_dir).expanduser()
+                dir_path = Path(journal_dir_str).expanduser()
                 dir_path.mkdir(parents=True, exist_ok=True)
                 file_path = dir_path / f"{journal.date}.md"
                 file_path.write_text(markdown_content, encoding="utf-8")

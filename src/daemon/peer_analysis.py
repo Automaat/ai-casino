@@ -14,6 +14,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from src.cache.historical import HistoricalCache
+from src.daemon.state.models import PeerAnalysisInput
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.universe import StockInfo, StockUniverseFetcher
 
@@ -419,12 +420,14 @@ class DeepPeerAnalyzer:
 
         # Primary: Database persistence
         await state.record_peer_analysis(
-            symbols_analyzed=[a.symbol for a in result.analyses],
-            rankings=rankings,
-            swap_recommendations=swap_recommendations,
-            analyses=[a.model_dump(mode="json") for a in result.analyses],
-            total_peers=result.total_peers_analyzed,
-            total_duration_seconds=result.total_duration_seconds,
+            PeerAnalysisInput(
+                symbols_analyzed=[a.symbol for a in result.analyses],
+                rankings=rankings,
+                swap_recommendations=swap_recommendations,
+                analyses=[a.model_dump(mode="json") for a in result.analyses],
+                total_peers=result.total_peers_analyzed,
+                total_duration_seconds=result.total_duration_seconds,
+            )
         )
 
         # Optional: File export (deprecated)

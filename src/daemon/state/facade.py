@@ -38,6 +38,7 @@ from src.daemon.state.models import (
     MonteCarloRecord,
     OptimizationRecord,
     PaperTradingReportRecord,
+    PeerAnalysisInput,
     PeerAnalysisRecord,
     PortfolioRebalancingRecord,
     PortfolioSnapshot,
@@ -215,19 +216,9 @@ class DaemonState(BaseModel):
             leading_sectors, lagging_sectors, sector_strengths, sector_momenta, flagged_positions
         )
 
-    async def record_peer_analysis(
-        self,
-        symbols_analyzed: list[str],
-        rankings: dict[str, int],
-        swap_recommendations: list[str],
-        total_peers: int,
-        total_duration_seconds: float,
-        analyses: list[dict] | None = None,
-    ) -> None:
+    async def record_peer_analysis(self, input_data: PeerAnalysisInput) -> None:
         """Delegate to portfolio manager."""
-        await self.portfolio.record_peer_analysis(
-            symbols_analyzed, rankings, swap_recommendations, total_peers, total_duration_seconds, analyses
-        )
+        await self.portfolio.record_peer_analysis(input_data)
 
     async def record_correlation_audit(self, input_data: CorrelationAuditInput) -> None:
         """Delegate to portfolio manager."""

@@ -401,11 +401,13 @@ class PaperTradingValidator:
         await self.state.record_paper_trading_report(record)
 
         # Optional: File export (deprecated)
-        if enable_file_export and path:
+        if enable_file_export and path is not None:
             import asyncio
 
+            path_str: str = path
+
             def _write_file() -> None:
-                expanded_path = Path(path).expanduser()
+                expanded_path = Path(path_str).expanduser()
                 expanded_path.parent.mkdir(parents=True, exist_ok=True)
                 with expanded_path.open("w") as f:
                     json.dump(report.model_dump(mode="json"), f, indent=2, default=str)

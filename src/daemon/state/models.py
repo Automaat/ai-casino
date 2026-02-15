@@ -127,6 +127,17 @@ class SectorAttributionRecord(BaseModel):
     contributions: list[dict[str, float | str | int]]
 
 
+class PeerAnalysisInput(BaseModel):
+    """Input parameters for recording peer analysis."""
+
+    symbols_analyzed: list[str]
+    rankings: dict[str, int]
+    swap_recommendations: list[str]
+    total_peers: int
+    total_duration_seconds: float
+    analyses: list[dict] | None = None
+
+
 class PeerAnalysisRecord(BaseModel):
     """Record of a deep peer benchmarking analysis run."""
 
