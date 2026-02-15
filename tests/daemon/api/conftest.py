@@ -1,14 +1,20 @@
-"""Fixtures for metrics tests using SQLite in-memory."""
+"""Fixtures for daemon API tests."""
 
 import uuid
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import JSON, Float, String, event
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.sql import sqltypes
 
+from src.daemon.api.app import create_api_app
+from src.daemon.api.dependencies import get_db_session
+from src.daemon.config import DaemonConfig
+from src.daemon.factory import DaemonComponents
 from src.database.models import Base
+from tests.di.container_test import create_test_container
 
 
 def _should_remove_default(default_value, patterns):
@@ -64,7 +70,7 @@ async def async_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Initialize global database engine with test engine for SignalAnalyticsService
+    # Initialize global database engine with test engine
     db_engine = DatabaseEngine()
     db_engine._engine = engine  # pyrefly: ignore[reportAttributeAccessIssue]
     db_engine._session_factory = async_sessionmaker(  # pyrefly: ignore[reportAttributeAccessIssue]
@@ -111,3 +117,55 @@ async def db_session(async_engine) -> AsyncSession:
         # Remove listener to prevent cross-test side effects
         event.remove(sync_session, "before_flush", _convert_uuids_to_strings)
         await session.rollback()
+
+
+@pytest.fixture
+async def test_app(db_session):
+    """Create FastAPI app for testing with test database session."""
+    from unittest.mock import Mock
+
+    # Create minimal config for testing
+    config = DaemonConfig.model_validate(
+        {
+            "watchlist": ["AAPL"],
+            "interval_minutes": 30,
+            "api": {
+                "enabled": True,
+                "host": "127.0.0.1",
+                "port": 8000,
+                "cors_origins": ["http://localhost:3000"],
+            },
+        }
+    )
+
+    # Create minimal mock components
+    container = create_test_container()
+
+    # Create mock components for API testing
+    components = Mock(spec=DaemonComponents)
+    components.config = config
+    components.container = container
+
+    # Create app
+    app = create_api_app(components)
+
+    # Override database dependency to use test session
+    async def override_get_db_session():
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+
+    yield app
+
+    # Clean up
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def async_client(test_app):
+    """Create async HTTP client for testing FastAPI endpoints."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app),  # pyrefly: ignore[reportArgumentType]
+        base_url="http://test",
+    ) as client:
+        yield client
