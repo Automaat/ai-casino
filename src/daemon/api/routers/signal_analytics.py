@@ -1,5 +1,6 @@
 """Signal analytics endpoints."""
 
+from dataclasses import asdict
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
@@ -42,16 +43,21 @@ def _get_service() -> SignalAnalyticsService:
 async def get_summary(
     start_date: str = Query(..., description="Start date in ISO format (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date in ISO format (YYYY-MM-DD)"),
+    horizon: str = Query("5d", description="Time horizon for profitability (1d/5d/20d)"),
 ) -> SignalFlowSummaryResponse:
     """Get signal flow summary for date range.
 
     Args:
         start_date: Start date in ISO format
         end_date: End date in ISO format
+        horizon: Time horizon for profitability
 
     Returns:
         Signal flow summary
     """
+    if horizon not in ("1d", "5d", "20d"):
+        raise HTTPException(status_code=400, detail="Horizon must be '1d', '5d', or '20d'")
+
     try:
         start = datetime.fromisoformat(start_date).replace(tzinfo=UTC)
         end = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59, tzinfo=UTC)
@@ -60,7 +66,7 @@ async def get_summary(
 
     try:
         service = _get_service()
-        summary = await service.get_flow_summary(start, end)
+        summary = await service.get_flow_summary(start, end, horizon)
 
         return SignalFlowSummaryResponse(
             total_signals=summary.total_signals,
@@ -84,16 +90,21 @@ async def get_summary(
 async def get_sankey(
     start_date: str = Query(..., description="Start date in ISO format (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date in ISO format (YYYY-MM-DD)"),
+    horizon: str = Query("5d", description="Time horizon for profitability (1d/5d/20d)"),
 ) -> SankeyFlowResponse:
     """Get Sankey flow data for signal visualization.
 
     Args:
         start_date: Start date in ISO format
         end_date: End date in ISO format
+        horizon: Time horizon for profitability
 
     Returns:
         Sankey flow data (nodes and links)
     """
+    if horizon not in ("1d", "5d", "20d"):
+        raise HTTPException(status_code=400, detail="Horizon must be '1d', '5d', or '20d'")
+
     try:
         start = datetime.fromisoformat(start_date).replace(tzinfo=UTC)
         end = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59, tzinfo=UTC)
@@ -102,11 +113,11 @@ async def get_sankey(
 
     try:
         service = _get_service()
-        data = await service.get_sankey_data(start, end)
+        data = await service.get_sankey_data(start, end, horizon)
 
         return SankeyFlowResponse(
-            nodes=data.nodes,
-            links=data.links,
+            nodes=[asdict(node) for node in data.nodes],
+            links=[asdict(link) for link in data.links],
         )
     except Exception as e:
         logger.opt(exception=True).error(f"Failed to get Sankey data: {e}")

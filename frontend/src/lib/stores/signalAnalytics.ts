@@ -35,8 +35,8 @@ function createSignalAnalyticsStore() {
 		try {
 			const [summary, sankeyData, accuracyByType, calibration, timing, executionRate] =
 				await Promise.all([
-					api.getSignalSummary(startDate, endDate),
-					api.getSignalSankey(startDate, endDate),
+					api.getSignalSummary(startDate, endDate, horizon),
+					api.getSignalSankey(startDate, endDate, horizon),
 					api.getSignalAccuracyByType(startDate, endDate, horizon),
 					api.getSignalCalibration(startDate, endDate, horizon),
 					api.getSignalTiming(startDate, endDate),

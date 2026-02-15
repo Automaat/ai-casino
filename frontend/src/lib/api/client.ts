@@ -298,17 +298,19 @@ export const api = {
 	},
 
 	// Signal Analytics
-	async getSignalSummary(startDate: string, endDate: string): Promise<T.SignalFlowSummaryResponse> {
+	async getSignalSummary(startDate: string, endDate: string, horizon: '1d' | '5d' | '20d' = '5d'): Promise<T.SignalFlowSummaryResponse> {
 		const query = new URLSearchParams();
 		query.set('start_date', startDate);
 		query.set('end_date', endDate);
+		query.set('horizon', horizon);
 		return fetchAPI<T.SignalFlowSummaryResponse>(`/api/signal-analytics/summary?${query}`);
 	},
 
-	async getSignalSankey(startDate: string, endDate: string): Promise<T.SankeyFlowResponse> {
+	async getSignalSankey(startDate: string, endDate: string, horizon: '1d' | '5d' | '20d' = '5d'): Promise<T.SankeyFlowResponse> {
 		const query = new URLSearchParams();
 		query.set('start_date', startDate);
 		query.set('end_date', endDate);
+		query.set('horizon', horizon);
 		return fetchAPI<T.SankeyFlowResponse>(`/api/signal-analytics/sankey?${query}`);
 	},
 

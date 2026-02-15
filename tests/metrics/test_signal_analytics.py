@@ -101,10 +101,10 @@ async def test_flow_summary_calculation(sample_signals, sample_analyses):
     assert summary.total_signals == 8  # 5 BUY + 3 SELL
     assert summary.total_buy_signals == 5
     assert summary.total_sell_signals == 3
-    # Note: 4 executions matched due to correlation window - one analysis outside window
-    assert summary.executed_count == 4
-    assert summary.not_executed_count == 4
-    assert summary.execution_rate == pytest.approx(4 / 8)
+    # Note: 5 executions matched (expanded window captures all analyses)
+    assert summary.executed_count == 5
+    assert summary.not_executed_count == 3
+    assert summary.execution_rate == pytest.approx(5 / 8)
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_sankey_data_structure(sample_signals, sample_analyses):
 
     # Check nodes
     assert len(sankey.nodes) == 6
-    node_names = [n["name"] for n in sankey.nodes]
+    node_names = [n.name for n in sankey.nodes]
     assert "BUY" in node_names
     assert "SELL" in node_names
     assert "Executed" in node_names
@@ -130,7 +130,7 @@ async def test_sankey_data_structure(sample_signals, sample_analyses):
     # Check links exist and have values
     assert len(sankey.links) > 0
     for link in sankey.links:
-        assert link["value"] > 0
+        assert link.value > 0
 
 
 @pytest.mark.asyncio

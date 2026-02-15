@@ -2,21 +2,21 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from sqlalchemy import and_, select
 
 from src.database.connection import get_db_engine
 from src.database.models import AnalysisRecordORM, SignalOutcomeORM
-
-# Confidence bucket thresholds
-CONF_BUCKET_0_5 = 0.5
-CONF_BUCKET_0_6 = 0.6
-CONF_BUCKET_0_7 = 0.7
-CONF_BUCKET_0_8 = 0.8
-CONF_BUCKET_0_9 = 0.9
-CONF_BUCKET_1_0 = 1.0
+from src.metrics.signal_accuracy import (
+    CONF_BUCKET_0_5,
+    CONF_BUCKET_0_6,
+    CONF_BUCKET_0_7,
+    CONF_BUCKET_0_8,
+    CONF_BUCKET_0_9,
+    CONF_BUCKET_1_0,
+)
 
 
 @dataclass
@@ -37,11 +37,28 @@ class SignalFlowSummary:
 
 
 @dataclass
+class SankeyNode:
+    """Sankey diagram node."""
+
+    name: str
+    item_style: dict[str, str]
+
+
+@dataclass
+class SankeyLink:
+    """Sankey diagram link."""
+
+    source: str
+    target: str
+    value: int
+
+
+@dataclass
 class SankeyFlowData:
     """Sankey diagram data structure."""
 
-    nodes: list[dict[str, str | dict[str, str]]]
-    links: list[dict[str, str | int]]
+    nodes: list[SankeyNode]
+    links: list[SankeyLink]
 
 
 @dataclass
@@ -142,17 +159,59 @@ class SignalAnalyticsService:
                 return True
         return False
 
-    async def get_flow_summary(self, start: datetime, end: datetime) -> SignalFlowSummary:
+    def _calculate_profitability_metrics(
+        self,
+        signals: Sequence[SignalOutcomeORM],
+        executed_signal_ids: set[str],
+        horizon: str,
+    ) -> tuple[int, int]:
+        """Calculate profitability metrics for executed signals.
+
+        Args:
+            signals: List of all signals
+            executed_signal_ids: Set of executed signal IDs
+            horizon: Time horizon for profitability
+
+        Returns:
+            Tuple of (profitable_count, unprofitable_count)
+        """
+        profitable_count = 0
+        unprofitable_count = 0
+
+        for signal in signals:
+            if str(signal.id) not in executed_signal_ids:
+                continue
+
+            price_field = f"price_at_{horizon}"
+            if getattr(signal, price_field) is None:
+                continue
+
+            is_correct = self._is_signal_correct(signal, horizon)
+            if is_correct is True:
+                profitable_count += 1
+            elif is_correct is False:
+                unprofitable_count += 1
+
+        return profitable_count, unprofitable_count
+
+    async def get_flow_summary(
+        self, start: datetime, end: datetime, horizon: str = "5d"
+    ) -> SignalFlowSummary:
         """Get signal flow summary for date range.
 
         Args:
             start: Start timestamp (inclusive)
             end: End timestamp (inclusive)
+            horizon: Time horizon for profitability (1d/5d/20d)
 
         Returns:
             Signal flow summary metrics
         """
-        cache_key = f"flow_summary:{start.isoformat()}:{end.isoformat()}"
+        if horizon not in ["1d", "5d", "20d"]:
+            msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
+            raise ValueError(msg)
+
+        cache_key = f"flow_summary:{start.isoformat()}:{end.isoformat()}:{horizon}"
         cached = self._get_cached(cache_key)
         if cached:
             return cast("SignalFlowSummary", cached)
@@ -175,10 +234,11 @@ class SignalAnalyticsService:
             total_sell = sum(1 for s in signals if s.signal == "SELL")
 
             # Get analysis records (executions) in expanded window for correlation
+            window_delta = timedelta(seconds=self._correlation_window_seconds)
             analyses_stmt = select(AnalysisRecordORM).where(
                 and_(
-                    AnalysisRecordORM.timestamp >= start,
-                    AnalysisRecordORM.timestamp <= end,
+                    AnalysisRecordORM.timestamp >= start - window_delta,
+                    AnalysisRecordORM.timestamp <= end + window_delta,
                     AnalysisRecordORM.signal.in_(["BUY", "SELL"]),
                 )
             )
@@ -203,25 +263,12 @@ class SignalAnalyticsService:
             not_executed_count = total_signals - executed_count
             execution_rate = (executed_count / total_signals) if total_signals > 0 else 0.0
 
-            # Calculate profitability for executed signals with outcomes (5d horizon)
-            profitable_count = 0
-            unprofitable_count = 0
+            # Calculate profitability for executed signals with outcomes
+            profitable_count, unprofitable_count = self._calculate_profitability_metrics(
+                signals, executed_signals, horizon
+            )
 
-            for signal in signals:
-                if str(signal.id) not in executed_signals:
-                    continue
-
-                # Check if we have outcome data (5d)
-                if signal.price_at_5d is None:
-                    continue
-
-                is_correct = self._is_signal_correct(signal, "5d")
-                if is_correct is True:
-                    profitable_count += 1
-                elif is_correct is False:
-                    unprofitable_count += 1
-
-            # Overall accuracy (5d horizon for executed signals with data)
+            # Overall accuracy for executed signals with data at horizon
             total_with_outcome = profitable_count + unprofitable_count
             overall_accuracy = (profitable_count / total_with_outcome) if total_with_outcome > 0 else 0.0
 
@@ -274,18 +321,18 @@ class SignalAnalyticsService:
 
         return profitable, unprofitable
 
-    def _build_sankey_nodes(self) -> list[dict[str, str | dict[str, str]]]:
+    def _build_sankey_nodes(self) -> list[SankeyNode]:
         """Build Sankey diagram nodes with colors."""
         return [
-            {"name": "BUY", "itemStyle": {"color": "#10b981"}},
-            {"name": "SELL", "itemStyle": {"color": "#ef4444"}},
-            {"name": "Executed", "itemStyle": {"color": "#3b82f6"}},
-            {"name": "Not Executed", "itemStyle": {"color": "#9ca3af"}},
-            {"name": "Profitable", "itemStyle": {"color": "#059669"}},
-            {"name": "Unprofitable", "itemStyle": {"color": "#dc2626"}},
+            SankeyNode(name="BUY", item_style={"color": "#10b981"}),
+            SankeyNode(name="SELL", item_style={"color": "#ef4444"}),
+            SankeyNode(name="Executed", item_style={"color": "#3b82f6"}),
+            SankeyNode(name="Not Executed", item_style={"color": "#9ca3af"}),
+            SankeyNode(name="Profitable", item_style={"color": "#059669"}),
+            SankeyNode(name="Unprofitable", item_style={"color": "#dc2626"}),
         ]
 
-    def _build_sankey_links(self, categorized: _CategorizedSignals) -> list[dict[str, str | int]]:
+    def _build_sankey_links(self, categorized: _CategorizedSignals) -> list[SankeyLink]:
         """Build Sankey diagram links with values.
 
         Args:
@@ -295,24 +342,24 @@ class SignalAnalyticsService:
             List of Sankey links
         """
         links = [
-            {"source": "BUY", "target": "Executed", "value": len(categorized.buy_executed)},
-            {"source": "BUY", "target": "Not Executed", "value": len(categorized.buy_not_executed)},
-            {"source": "SELL", "target": "Executed", "value": len(categorized.sell_executed)},
-            {"source": "SELL", "target": "Not Executed", "value": len(categorized.sell_not_executed)},
-            {
-                "source": "Executed",
-                "target": "Profitable",
-                "value": len(categorized.buy_profitable) + len(categorized.sell_profitable),
-            },
-            {
-                "source": "Executed",
-                "target": "Unprofitable",
-                "value": len(categorized.buy_unprofitable) + len(categorized.sell_unprofitable),
-            },
+            SankeyLink(source="BUY", target="Executed", value=len(categorized.buy_executed)),
+            SankeyLink(source="BUY", target="Not Executed", value=len(categorized.buy_not_executed)),
+            SankeyLink(source="SELL", target="Executed", value=len(categorized.sell_executed)),
+            SankeyLink(source="SELL", target="Not Executed", value=len(categorized.sell_not_executed)),
+            SankeyLink(
+                source="Executed",
+                target="Profitable",
+                value=len(categorized.buy_profitable) + len(categorized.sell_profitable),
+            ),
+            SankeyLink(
+                source="Executed",
+                target="Unprofitable",
+                value=len(categorized.buy_unprofitable) + len(categorized.sell_unprofitable),
+            ),
         ]
-        return [link for link in links if cast("int", link["value"]) > 0]
+        return [link for link in links if link.value > 0]
 
-    async def get_sankey_data(self, start: datetime, end: datetime) -> SankeyFlowData:
+    async def get_sankey_data(self, start: datetime, end: datetime, horizon: str = "5d") -> SankeyFlowData:
         """Get Sankey diagram data for signal flow.
 
         Flow: BUY/SELL → Executed/Not Executed → Profitable/Unprofitable
@@ -320,11 +367,16 @@ class SignalAnalyticsService:
         Args:
             start: Start timestamp
             end: End timestamp
+            horizon: Time horizon for profitability (1d/5d/20d)
 
         Returns:
             Sankey flow data with nodes and links
         """
-        cache_key = f"sankey:{start.isoformat()}:{end.isoformat()}"
+        if horizon not in ["1d", "5d", "20d"]:
+            msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
+            raise ValueError(msg)
+
+        cache_key = f"sankey:{start.isoformat()}:{end.isoformat()}:{horizon}"
         cached = self._get_cached(cache_key)
         if cached:
             return cast("SankeyFlowData", cached)
@@ -369,8 +421,8 @@ class SignalAnalyticsService:
                 target.append(signal)
 
             # Further categorize executed signals by profitability
-            buy_profitable, buy_unprofitable = self._categorize_by_profitability(buy_executed)
-            sell_profitable, sell_unprofitable = self._categorize_by_profitability(sell_executed)
+            buy_profitable, buy_unprofitable = self._categorize_by_profitability(buy_executed, horizon)
+            sell_profitable, sell_unprofitable = self._categorize_by_profitability(sell_executed, horizon)
 
             # Build nodes and links
             categorized = _CategorizedSignals(
