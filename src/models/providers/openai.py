@@ -56,44 +56,26 @@ class OpenAIProvider(BaseLLMProvider):
             json_str: Potentially malformed JSON string
 
         Returns:
-            Repaired JSON string
-
-        Raises:
-            ValueError: If repair is not possible
+            Repaired JSON string (best-effort; the result may still be invalid JSON)
         """
         import re
 
         original = json_str
 
         # Fix 1: Remove duplicate keys (keep last occurrence)
-        # Parse to find duplicate keys and remove earlier ones
+        # Use JSONDecoder with object_pairs_hook to reliably handle all JSON structures
         try:
-            # Simple regex to find duplicate keys - match "key": value pairs
-            pattern = r'"(\w+)"\s*:\s*("[^"]*"|[^,}\]]+)'
-            matches = list(re.finditer(pattern, json_str))
-            seen_keys: dict[str, int] = {}
-            positions_to_remove: list[tuple[int, int]] = []
 
-            for match in matches:
-                key = match.group(1)
-                if key in seen_keys:
-                    # Mark previous occurrence for removal
-                    prev_match = matches[seen_keys[key]]
-                    # Find the end position (include trailing comma if present)
-                    end_pos = prev_match.end()
-                    # Check if there's a comma after this match
-                    if end_pos < len(json_str) and json_str[end_pos : end_pos + 1].strip().startswith(","):
-                        end_pos += 1
-                    positions_to_remove.append((prev_match.start(), end_pos))
-                seen_keys[key] = len(matches) - len([m for m in matches if m.start() >= match.start()])
+            def _keep_last_object_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+                result: dict[str, object] = {}
+                for k, v in pairs:
+                    # Later occurrences overwrite earlier ones
+                    result[k] = v
+                return result
 
-            # Remove duplicates from end to start to preserve positions
-            for start, end in sorted(positions_to_remove, reverse=True):
-                json_str = json_str[:start] + json_str[end:]
-                # Clean up double commas or comma-space patterns
-                json_str = re.sub(r",\s*,", ",", json_str)
-                json_str = re.sub(r",\s*}", "}", json_str)
-                json_str = re.sub(r",\s*\]", "]", json_str)
+            decoder = json.JSONDecoder(object_pairs_hook=_keep_last_object_pairs)
+            parsed = decoder.decode(json_str)
+            json_str = json.dumps(parsed)
         except Exception as e:
             logger.debug(f"Duplicate key removal failed: {e}")
 
@@ -186,9 +168,10 @@ class OpenAIProvider(BaseLLMProvider):
                     except (json.JSONDecodeError, ValueError) as repair_exc:
                         logger.opt(exception=True).error(
                             f"JSON repair failed for '{tc.function.name}': {repair_exc}. "
-                            "Consider using a more reliable model for tool calling."
+                            "Skipping this malformed tool call but continuing with others."
                         )
-                        return None, None
+                        # Skip this malformed tool call but continue processing others
+                        continue
 
                 tool_calls.append(
                     ToolCall(

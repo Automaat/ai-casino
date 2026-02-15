@@ -354,6 +354,78 @@ class TestOpenAIJSONRepair:
         assert tool_calls[0].arguments["universe"] == "COMBINED"
         assert tool_calls[0].arguments["criteria"] == "momentum"
 
+    def test_repair_nested_objects_with_duplicate_keys(self, provider):
+        """Nested objects with duplicate keys should result in valid JSON."""
+        import json
+
+        # Duplicate keys in nested object
+        raw = '{"outer": {"inner": {"key": "first", "key": "second"}}, "other": 1}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert "outer" in data
+        assert "inner" in data["outer"]
+        # Standard JSON parsers keep the last value for duplicate keys
+        assert data["outer"]["inner"]["key"] == "second"
+        assert data["other"] == 1
+
+    def test_repair_strings_with_escaped_quotes(self, provider):
+        """String values with escaped quotes should remain valid after repair."""
+        import json
+
+        raw = r'{"message": "She said, \"hello\"", "ok": true}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["ok"] is True
+        assert data["message"] == 'She said, "hello"'
+
+    def test_repair_multiple_malformations_combined(self, provider):
+        """Combination of duplicate keys and minor quoting issues should be repairable."""
+        import json
+
+        raw = '{"config": {"mode": "fast", "mode": "slow"}, "description": ""Run"}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        # Last duplicate key value should win
+        assert data["config"]["mode"] == "slow"
+        assert data["description"] == "Run"
+
+    def test_repair_duplicate_key_at_end_without_trailing_comma(self, provider):
+        """Duplicate key at the end of an object should still yield valid JSON."""
+        import json
+
+        raw = '{"a": 1, "b": 2, "b": 3}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["a"] == 1
+        # Last value for "b" is kept
+        assert data["b"] == 3
+
+    def test_repair_values_with_commas_and_braces(self, provider):
+        """Values that contain commas/braces/brackets should not confuse repair logic."""
+        import json
+
+        raw = '{"pattern": "{[1,2,3], [4,5,6]}", "note": "a,b,c"}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["pattern"] == "{[1,2,3], [4,5,6]}"
+        assert data["note"] == "a,b,c"
+
+    def test_repair_empty_objects_and_arrays(self, provider):
+        """Empty objects and arrays should pass through unchanged."""
+        import json
+
+        raw = '{"empty_obj": {}, "empty_array": []}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["empty_obj"] == {}
+        assert data["empty_array"] == []
+
 
 class TestAnthropicProviderStructured:
     """Tests for Anthropic provider structured output."""
