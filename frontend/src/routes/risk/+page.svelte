@@ -14,7 +14,7 @@
 	import { risk, correlation, sectorRotation, sectorAttribution } from '$lib/stores/dashboard';
 	import { api } from '$lib/api/client';
 	import { formatPercent, formatDateShort } from '$lib/utils/format';
-	import type { RiskReportResponse } from '$lib/types/api';
+	import type { RiskReportResponse, SectorContributionDetail } from '$lib/types/api';
 
 	$: riskReport = $risk;
 	$: correlationData = $correlation;
@@ -88,7 +88,13 @@
 		}))
 		.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)) || [];
 
-	$: sectorContributionColumns = [
+	const sectorContributionColumns: Array<{
+		key: keyof SectorContributionDetail;
+		label: string;
+		format?: (v: any, row: SectorContributionDetail) => string;
+		class?: string;
+		cellClass?: (v: any, row: SectorContributionDetail) => string;
+	}> = [
 		{ key: 'sector', label: 'Sector', class: 'font-medium' },
 		{ key: 'position_count', label: 'Positions' },
 		{
@@ -245,7 +251,7 @@
 			<!-- Data Table -->
 			<DataTable
 				columns={sectorContributionColumns}
-				rows={sectorAttributionData.contributions}
+				data={sectorAttributionData.contributions}
 				class="mt-4"
 			/>
 		{:else}
