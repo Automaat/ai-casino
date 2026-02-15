@@ -295,6 +295,62 @@ export const api = {
 		query.set('start_date', startDate);
 		query.set('end_date', endDate);
 		return fetchAPI<T.CostByDimensionListResponse>(`/api/cost-analytics/by-model?${query}`);
+	},
+
+	// Signal Analytics
+	async getSignalSummary(startDate: string, endDate: string): Promise<T.SignalFlowSummaryResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.SignalFlowSummaryResponse>(`/api/signal-analytics/summary?${query}`);
+	},
+
+	async getSignalSankey(startDate: string, endDate: string): Promise<T.SankeyFlowResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.SankeyFlowResponse>(`/api/signal-analytics/sankey?${query}`);
+	},
+
+	async getSignalAccuracyByType(
+		startDate: string,
+		endDate: string,
+		horizon: '1d' | '5d' | '20d'
+	): Promise<T.AccuracyByTypeListResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		query.set('horizon', horizon);
+		return fetchAPI<T.AccuracyByTypeListResponse>(`/api/signal-analytics/accuracy-by-type?${query}`);
+	},
+
+	async getSignalCalibration(
+		startDate: string,
+		endDate: string,
+		horizon: '1d' | '5d' | '20d'
+	): Promise<T.CalibrationCurveResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		query.set('horizon', horizon);
+		return fetchAPI<T.CalibrationCurveResponse>(`/api/signal-analytics/calibration?${query}`);
+	},
+
+	async getSignalTiming(startDate: string, endDate: string): Promise<T.TimingAnalysisResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.TimingAnalysisResponse>(`/api/signal-analytics/timing?${query}`);
+	},
+
+	async getSignalExecutionRate(
+		startDate: string,
+		endDate: string
+	): Promise<T.ExecutionRateListResponse> {
+		const query = new URLSearchParams();
+		query.set('start_date', startDate);
+		query.set('end_date', endDate);
+		return fetchAPI<T.ExecutionRateListResponse>(`/api/signal-analytics/execution-rate?${query}`);
 	}
 };
 
