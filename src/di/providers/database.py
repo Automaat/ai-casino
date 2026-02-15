@@ -9,6 +9,7 @@ from src.database.engine import DatabaseEngine, MissingDatabaseURLError
 
 if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
+    from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
     from src.database.repositories.trade import TradeRepository
 
@@ -112,3 +113,17 @@ def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalO
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
 
     return SignalOutcomeRepository(database_engine.session())
+
+
+def create_coordinator_metrics_repository(database_engine: DatabaseEngine) -> CoordinatorMetricsRepository:
+    """Create CoordinatorMetricsRepository with fresh session.
+
+    Args:
+        database_engine: Database engine singleton
+
+    Returns:
+        Repository with new session
+    """
+    from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
+
+    return CoordinatorMetricsRepository(database_engine.session())

@@ -255,6 +255,178 @@ class TestOpenAISchemaProcessing:
         assert set(result["properties"]["address"]["required"]) == {"street", "city"}
 
 
+class TestOpenAIJSONRepair:
+    """Tests for OpenAI JSON repair logic."""
+
+    @pytest.fixture
+    def provider(self):
+        """Create OpenAI provider instance."""
+        with patch("src.models.providers.openai.AsyncOpenAI"):
+            from src.models.providers.openai import OpenAIProvider
+
+            return OpenAIProvider(model="gpt-4o", api_key="test-key")
+
+    def test_repair_double_quotes_before_enum(self, provider):
+        """Test repair fixes double quotes before enum values."""
+        malformed = '{"universe": ""COMBINED", "criteria": "momentum"}'
+        repaired = provider._repair_json(malformed)
+        expected = '{"universe": "COMBINED", "criteria": "momentum"}'
+        assert repaired == expected
+
+    def test_repair_concatenated_values(self, provider):
+        """Test repair removes concatenated uppercase words from enum values."""
+        malformed = '{"criteria": "momentumCOMBINED"}'
+        repaired = provider._repair_json(malformed)
+        expected = '{"criteria": "momentum"}'
+        assert repaired == expected
+
+    def test_repair_duplicate_keys(self, provider):
+        """Test repair removes duplicate keys (keeps last)."""
+        malformed = '{"top_n": 10, "criteria": "value", "criteria": "momentum"}'
+        repaired = provider._repair_json(malformed)
+        # Should have single criteria key
+        import json
+
+        parsed = json.loads(repaired)
+        assert parsed["criteria"] == "momentum"
+        assert parsed["top_n"] == 10
+
+    def test_repair_complex_malformed_json(self, provider):
+        """Test repair handles multiple issues simultaneously."""
+        malformed = (
+            '{"top_n": 10, "universe": ""COMBINED", "criteria": "momentumCOMBINED", "criteria": "momentum"}'
+        )
+        repaired = provider._repair_json(malformed)
+        import json
+
+        # Should be valid JSON after repair
+        parsed = json.loads(repaired)
+        assert parsed["top_n"] == 10
+        assert parsed["universe"] == "COMBINED"
+        assert parsed["criteria"] == "momentum"
+
+    def test_repair_clean_json_unchanged(self, provider):
+        """Test repair leaves clean JSON unchanged."""
+        clean = '{"top_n": 10, "universe": "COMBINED", "criteria": "momentum"}'
+        repaired = provider._repair_json(clean)
+        # Only whitespace normalization expected
+        import json
+
+        assert json.loads(repaired) == json.loads(clean)
+
+    async def test_acomplete_with_tools_repairs_malformed_json(self, provider):
+        """Test acomplete_with_tools attempts repair on malformed tool call JSON."""
+        from src.models.providers.base import ToolCall
+
+        # Mock malformed tool call
+        mock_tool_call = MagicMock()
+        mock_tool_call.id = "call_123"
+        mock_tool_call.function.name = "screen_stocks"
+        mock_tool_call.function.arguments = (
+            '{"top_n": 10, "universe": ""COMBINED", "criteria": "momentumCOMBINED", "criteria": "momentum"}'
+        )
+
+        mock_message = MagicMock()
+        mock_message.tool_calls = [mock_tool_call]
+        mock_message.content = None
+
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.usage = None
+
+        provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        # Should repair and succeed
+        text, tool_calls = await provider.acomplete_with_tools(
+            messages=[{"role": "user", "content": "test"}],
+            tools=[{"type": "function", "function": {"name": "screen_stocks"}}],
+        )
+
+        assert text is None
+        assert tool_calls is not None
+        assert len(tool_calls) == 1
+        assert isinstance(tool_calls[0], ToolCall)
+        assert tool_calls[0].name == "screen_stocks"
+        assert tool_calls[0].arguments["top_n"] == 10
+        assert tool_calls[0].arguments["universe"] == "COMBINED"
+        assert tool_calls[0].arguments["criteria"] == "momentum"
+
+    def test_repair_nested_objects_with_duplicate_keys(self, provider):
+        """Nested objects with duplicate keys should result in valid JSON."""
+        import json
+
+        # Duplicate keys in nested object
+        raw = '{"outer": {"inner": {"key": "first", "key": "second"}}, "other": 1}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert "outer" in data
+        assert "inner" in data["outer"]
+        # Standard JSON parsers keep the last value for duplicate keys
+        assert data["outer"]["inner"]["key"] == "second"
+        assert data["other"] == 1
+
+    def test_repair_strings_with_escaped_quotes(self, provider):
+        """String values with escaped quotes should remain valid after repair."""
+        import json
+
+        raw = r'{"message": "She said, \"hello\"", "ok": true}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["ok"] is True
+        assert data["message"] == 'She said, "hello"'
+
+    def test_repair_multiple_malformations_combined(self, provider):
+        """Combination of duplicate keys and minor quoting issues should be repairable."""
+        import json
+
+        raw = '{"config": {"mode": "fast", "mode": "slow"}, "description": ""Run"}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        # Last duplicate key value should win
+        assert data["config"]["mode"] == "slow"
+        assert data["description"] == "Run"
+
+    def test_repair_duplicate_key_at_end_without_trailing_comma(self, provider):
+        """Duplicate key at the end of an object should still yield valid JSON."""
+        import json
+
+        raw = '{"a": 1, "b": 2, "b": 3}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["a"] == 1
+        # Last value for "b" is kept
+        assert data["b"] == 3
+
+    def test_repair_values_with_commas_and_braces(self, provider):
+        """Values that contain commas/braces/brackets should not confuse repair logic."""
+        import json
+
+        raw = '{"pattern": "{[1,2,3], [4,5,6]}", "note": "a,b,c"}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["pattern"] == "{[1,2,3], [4,5,6]}"
+        assert data["note"] == "a,b,c"
+
+    def test_repair_empty_objects_and_arrays(self, provider):
+        """Empty objects and arrays should pass through unchanged."""
+        import json
+
+        raw = '{"empty_obj": {}, "empty_array": []}'
+        repaired = provider._repair_json(raw)
+        data = json.loads(repaired)
+
+        assert data["empty_obj"] == {}
+        assert data["empty_array"] == []
+
+
 class TestAnthropicProviderStructured:
     """Tests for Anthropic provider structured output."""
 
