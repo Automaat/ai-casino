@@ -1091,3 +1091,48 @@ daemon:
         assert config.coordinator.temperature == 0.5
 
         path.unlink()
+
+
+class TestDatabaseConfig:
+    def test_database_config_pool_params(self):
+        """Test database pool configuration parameters."""
+        from src.daemon.config.infrastructure import DatabaseConfig
+
+        config = DatabaseConfig(
+            pool_size=10,
+            max_overflow=20,
+            pool_timeout=60.0,
+            pool_recycle=1800,
+            pool_pre_ping=False,
+        )
+        assert config.pool_size == 10
+        assert config.max_overflow == 20
+        assert config.pool_timeout == 60.0
+        assert config.pool_recycle == 1800
+        assert config.pool_pre_ping is False
+
+    def test_from_yaml_with_database_pool_params(self):
+        """Test loading database pool params from YAML."""
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL"]
+  database:
+    pool_size: 10
+    max_overflow: 20
+    pool_timeout: 60.0
+    pool_recycle: 1800
+    pool_pre_ping: false
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig.from_yaml(path)
+        assert config.database.pool_size == 10
+        assert config.database.max_overflow == 20
+        assert config.database.pool_timeout == 60.0
+        assert config.database.pool_recycle == 1800
+        assert config.database.pool_pre_ping is False
+
+        path.unlink()

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.daemon.config import DaemonConfig
-from src.database.engine import DatabaseEngine, MissingDatabaseURLError
+from src.database.engine import DatabaseEngine, MissingDatabaseURLError, PoolConfig
 
 if TYPE_CHECKING:
     from src.database.repositories.analysis import AnalysisRecordRepository
@@ -41,9 +41,21 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
         logger.warning("Database URL not configured - database features disabled")
         raise MissingDatabaseURLError
 
-    engine = DatabaseEngine(
-        database_url=database_url,
+    pool_config = PoolConfig(
+        pool_size=daemon_config.database.pool_size,
+        max_overflow=daemon_config.database.max_overflow,
         pool_pre_ping=daemon_config.database.pool_pre_ping,
+        pool_timeout=daemon_config.database.pool_timeout,
+        pool_recycle=daemon_config.database.pool_recycle,
+    )
+
+    engine = DatabaseEngine(database_url=database_url, pool_config=pool_config)
+
+    logger.info(
+        f"Database pool: size={pool_config.pool_size}, "
+        f"overflow={pool_config.max_overflow}, "
+        f"timeout={pool_config.pool_timeout}s, "
+        f"recycle={pool_config.pool_recycle}s"
     )
 
     # Run migrations on startup
