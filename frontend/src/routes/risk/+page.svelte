@@ -33,7 +33,7 @@
 				sectorRotation.fetch(),
 				sectorAttribution.fetch()
 			]);
-			const historyData = await api.getRiskHistory(30);
+			const historyData = await api.getRiskHistory(90);
 			riskHistory = historyData.history;
 		} catch (error) {
 			console.error('Failed to load risk data:', error);
@@ -126,6 +126,131 @@
 			cellClass: (v: number) => v >= 0 ? 'text-green-600' : 'text-red-600'
 		}
 	];
+
+	type DrawdownEvent = { start: string; startDate: Date };
+
+	function calculateDrawdownDuration(history: RiskReportResponse[]): {
+		longestDays: number;
+		events: Array<{ start: string; end: string; days: number }>;
+	} {
+		const threshold = 0.1; // 10%
+		const sorted = [...history].reverse(); // chronological order
+		const events: Array<{ start: string; end: string; days: number }> = [];
+		let currentEvent: DrawdownEvent | null = null;
+
+		sorted.forEach((r) => {
+			if (r.max_drawdown >= threshold) {
+				// In drawdown
+				if (!currentEvent) {
+					currentEvent = { start: r.timestamp, startDate: new Date(r.timestamp) };
+				}
+			} else {
+				// Recovered
+				if (currentEvent) {
+					const endDate = new Date(r.timestamp);
+					const days = Math.ceil((endDate.getTime() - currentEvent.startDate.getTime()) / (1000 * 60 * 60 * 24));
+					events.push({
+						start: currentEvent.start,
+						end: r.timestamp,
+						days
+					});
+					currentEvent = null;
+				}
+			}
+		});
+
+		// Handle ongoing drawdown
+		if (currentEvent !== null) {
+			const event: DrawdownEvent = currentEvent;
+			const endDate = new Date(sorted[sorted.length - 1].timestamp);
+			const days = Math.ceil((endDate.getTime() - event.startDate.getTime()) / (1000 * 60 * 60 * 24));
+			events.push({
+				start: event.start,
+				end: sorted[sorted.length - 1].timestamp,
+				days
+			});
+		}
+
+		return {
+			longestDays: events.length > 0 ? Math.max(...events.map((e) => e.days)) : 0,
+			events
+		};
+	}
+
+	// CVaR/CDaR multi-line series
+	$: cvarCdarSeries = [
+		{
+			name: 'CVaR 95%',
+			data: riskHistory
+				.slice()
+				.reverse()
+				.map((r) => r.cvar_95 * 100),
+			color: '#3b82f6'
+		},
+		{
+			name: 'CVaR 99%',
+			data: riskHistory
+				.slice()
+				.reverse()
+				.map((r) => r.cvar_99 * 100),
+			color: '#ef4444'
+		},
+		{
+			name: 'CDaR 95%',
+			data: riskHistory
+				.slice()
+				.reverse()
+				.map((r) => r.cdar_95 * 100),
+			color: '#8b5cf6'
+		}
+	];
+
+	// VaR exceedance tracker
+	$: varData = riskHistory
+		.slice()
+		.reverse()
+		.map((r) => ({
+			time: formatDateShort(r.timestamp),
+			value: r.var_95 * 100
+		}));
+
+	// Drawdown depth visualization
+	$: drawdownData = riskHistory
+		.slice()
+		.reverse()
+		.map((r) => ({
+			time: formatDateShort(r.timestamp),
+			value: r.max_drawdown * -100
+		}));
+
+	const RISK_STATUS_VALUES = {
+		HEALTHY: 1,
+		WARNING: 2,
+		CRITICAL: 3
+	} as const;
+
+	// Risk status timeline
+	$: riskStatusData = riskHistory
+		.slice()
+		.reverse()
+		.map((r) => ({
+			time: formatDateShort(r.timestamp),
+			value: RISK_STATUS_VALUES[r.risk_status as keyof typeof RISK_STATUS_VALUES] ?? RISK_STATUS_VALUES.CRITICAL
+		}));
+
+	// Metric card calculations
+	$: varBreaches = riskHistory.filter((r) => r.var_95 > 0.03).length;
+	$: drawdownStats = calculateDrawdownDuration(riskHistory);
+	$: currentRiskStatus = riskHistory.length > 0 ? riskHistory[riskHistory.length - 1].risk_status : null;
+
+	// Time axis for multi-series
+	$: timeAxis = riskHistory
+		.slice()
+		.reverse()
+		.map((r) => ({
+			time: formatDateShort(r.timestamp),
+			value: 0
+		}));
 </script>
 
 <svelte:head>
@@ -158,6 +283,28 @@
 			value={riskReport?.var_95 != null ? formatPercent(riskReport.var_95) : 'N/A'}
 			subtitle="Value at Risk"
 			icon="🎲"
+		/>
+	</div>
+
+	<!-- Additional Risk Metrics -->
+	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+		<MetricCard
+			title="VaR Breaches"
+			value={varBreaches.toString()}
+			subtitle="Days exceeding 3% threshold"
+			icon="⚠️"
+		/>
+		<MetricCard
+			title="Longest Drawdown"
+			value={`${drawdownStats.longestDays} days`}
+			subtitle="Max consecutive ≥10% drawdown"
+			icon="📉"
+		/>
+		<MetricCard
+			title="Current Risk Status"
+			value={currentRiskStatus || 'N/A'}
+			subtitle="Latest risk assessment"
+			icon={currentRiskStatus === 'HEALTHY' ? '✅' : currentRiskStatus === 'WARNING' ? '⚠️' : '🚨'}
 		/>
 	</div>
 
@@ -330,8 +477,8 @@
 
 		<Card title="Volatility Trend">
 			{#if !loading && volatilityData.length > 0}
-				<LineChart 
-					data={volatilityData} 
+				<LineChart
+					data={volatilityData}
 					height={300}
 					color="#ef4444"
 					yAxisLabel="Volatility"
@@ -340,6 +487,79 @@
 				<div class="text-center py-12 text-gray-600">Loading...</div>
 			{:else}
 				<div class="text-center py-12 text-gray-600">No volatility data</div>
+			{/if}
+		</Card>
+	</div>
+
+	<!-- CVaR/CDaR & VaR Exceedance -->
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+		<Card title="CVaR & CDaR Trends">
+			{#if !loading && riskHistory.length > 0}
+				<LineChart
+					data={timeAxis}
+					series={cvarCdarSeries}
+					height={300}
+					yAxisLabel="Percentage (%)"
+					showLegend={true}
+					areaFill={false}
+				/>
+			{:else if loading}
+				<div class="text-center py-12 text-gray-600">Loading...</div>
+			{:else}
+				<div class="text-center py-12 text-gray-600">No risk history</div>
+			{/if}
+		</Card>
+
+		<Card title="VaR Exceedance Tracker">
+			{#if !loading && varData.length > 0}
+				<LineChart
+					data={varData}
+					height={300}
+					color="#3b82f6"
+					yAxisLabel="VaR 95% (%)"
+					markLine={{ value: 3, label: '3% Threshold', color: '#ef4444' }}
+					areaFill={false}
+				/>
+			{:else if loading}
+				<div class="text-center py-12 text-gray-600">Loading...</div>
+			{:else}
+				<div class="text-center py-12 text-gray-600">No risk history</div>
+			{/if}
+		</Card>
+	</div>
+
+	<!-- Drawdown Depth & Risk Status Timeline -->
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+		<Card title="Drawdown Depth">
+			{#if !loading && drawdownData.length > 0}
+				<LineChart
+					data={drawdownData}
+					height={300}
+					color="#ef4444"
+					yAxisLabel="Drawdown (%)"
+					markLine={{ value: -10, label: '-10% Threshold', color: '#fbbf24' }}
+					areaFill={true}
+				/>
+			{:else if loading}
+				<div class="text-center py-12 text-gray-600">Loading...</div>
+			{:else}
+				<div class="text-center py-12 text-gray-600">No risk history</div>
+			{/if}
+		</Card>
+
+		<Card title="Risk Status Timeline">
+			{#if !loading && riskStatusData.length > 0}
+				<LineChart
+					data={riskStatusData}
+					height={300}
+					color="#8b5cf6"
+					yAxisLabel="Risk Level"
+					areaFill={false}
+				/>
+			{:else if loading}
+				<div class="text-center py-12 text-gray-600">Loading...</div>
+			{:else}
+				<div class="text-center py-12 text-gray-600">No risk history</div>
 			{/if}
 		</Card>
 	</div>
