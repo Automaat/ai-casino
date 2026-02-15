@@ -11,6 +11,10 @@
 	let refreshInterval: number | null = null;
 	let ws: WebSocket | null = null;
 	let wsConnected = $state(false);
+	let reconnectTimeout: number | null = null;
+	let reconnectAttempts = 0;
+	const MAX_RECONNECT_ATTEMPTS = 5;
+	const RECONNECT_DELAY = 3000;
 
 	let perfState = $derived($workerPerformance);
 	let workers24h = $derived(perfState.workers_24h);
@@ -237,6 +241,7 @@
 
 		ws.onopen = () => {
 			wsConnected = true;
+			reconnectAttempts = 0;
 		};
 
 		ws.onmessage = (event) => {
@@ -252,6 +257,14 @@
 
 		ws.onclose = () => {
 			wsConnected = false;
+
+			if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+				reconnectAttempts++;
+				console.log(`Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+				reconnectTimeout = setTimeout(connectWebSocket, RECONNECT_DELAY);
+			} else {
+				console.error('Failed to connect to WebSocket after multiple attempts');
+			}
 		};
 
 		ws.onerror = (error) => {
@@ -267,6 +280,7 @@
 	});
 
 	onDestroy(() => {
+		if (reconnectTimeout) clearTimeout(reconnectTimeout);
 		if (refreshInterval) clearInterval(refreshInterval);
 		if (ws) {
 			ws.close();
