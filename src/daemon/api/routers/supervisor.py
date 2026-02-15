@@ -96,31 +96,6 @@ async def get_recent_metrics(limit: int = 50, symbol: str | None = None) -> Supe
         raise HTTPException(status_code=500, detail="Failed to fetch metrics") from e
 
 
-@router.get("/metrics/{metric_id}", response_model=SupervisorMetricResponse)
-async def get_metric_by_id(metric_id: UUID) -> SupervisorMetricResponse:
-    """Get supervisor metric by ID.
-
-    Args:
-        metric_id: Supervisor metric UUID
-
-    Returns:
-        Supervisor metric detail
-    """
-    try:
-        async with get_supervisor_metrics_repo() as repo:
-            metric = await repo.get_by_id(str(metric_id))
-
-            if not metric:
-                raise HTTPException(status_code=404, detail="Metric not found")
-
-            return to_supervisor_metric_response(metric)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.opt(exception=True).error(f"Failed to fetch supervisor metric {metric_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch metric") from e
-
-
 @router.get("/metrics/summary", response_model=SupervisorSummaryResponse)
 async def get_summary(hours: int = 24, symbol: str | None = None) -> SupervisorSummaryResponse:
     """Get supervisor metrics summary for time period.
@@ -247,3 +222,28 @@ async def get_error_summary(hours: int = 24) -> ErrorSummaryResponse:
     except Exception as e:
         logger.opt(exception=True).error(f"Failed to fetch error summary: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch error summary") from e
+
+
+@router.get("/metrics/{metric_id}", response_model=SupervisorMetricResponse)
+async def get_metric_by_id(metric_id: UUID) -> SupervisorMetricResponse:
+    """Get supervisor metric by ID.
+
+    Args:
+        metric_id: Supervisor metric UUID
+
+    Returns:
+        Supervisor metric detail
+    """
+    try:
+        async with get_supervisor_metrics_repo() as repo:
+            metric = await repo.get_by_id(str(metric_id))
+
+            if not metric:
+                raise HTTPException(status_code=404, detail="Metric not found")
+
+            return to_supervisor_metric_response(metric)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch supervisor metric {metric_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch metric") from e
