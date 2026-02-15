@@ -683,11 +683,11 @@ class TestParallelToolExecution:
         """Verify semaphore enforces concurrency limit."""
         monkeypatch.setenv("TOOL_EXECUTION_MAX_CONCURRENT", "2")
 
-        # Recreate module-level constants
+        # Recreate module-level constants with monkeypatch for automatic cleanup
         from src.models import llm
 
-        llm.MAX_CONCURRENT_TOOL_EXECUTIONS = 2
-        llm._tool_semaphore_holder.clear()
+        monkeypatch.setattr(llm, "MAX_CONCURRENT_TOOL_EXECUTIONS", 2)
+        monkeypatch.setattr(llm, "_tool_semaphore_holder", {})
 
         _, provider = mock_openai_provider
 
