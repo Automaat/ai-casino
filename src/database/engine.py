@@ -8,6 +8,7 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 
 @dataclass
@@ -58,12 +59,10 @@ class DatabaseEngine:
         pool_config = pool_config or PoolConfig()
         engine_kwargs: dict[str, Any] = {"pool_pre_ping": pool_config.pool_pre_ping}
 
-        # Only pass pool params for databases that support pooling (PostgreSQL)
+        # Only pass pool params for databases that support pooling (PostgreSQL/MySQL)
         # SQLite uses StaticPool which doesn't accept pool parameters
-        from sqlalchemy.pool import NullPool
-
         supports_pooling = self._database_url.startswith(("postgresql", "mysql"))
-        if poolclass is not NullPool and (supports_pooling or poolclass is not None):
+        if supports_pooling and poolclass is not NullPool:
             engine_kwargs.update(
                 {
                     "pool_size": pool_config.pool_size,
@@ -149,14 +148,34 @@ class DatabaseEngine:
         Note: Pool methods (size, checkedout, overflow) are available on QueuePool
         but not part of the base Pool interface. This works at runtime but type
         checker can't verify it due to SQLAlchemy's complex pool type hierarchy.
+
+        Returns:
+            Pool statistics, or error message if pool doesn't support stats.
         """
         pool: Any = self._engine.pool
-        return {
-            "pool_size": pool.size(),
-            "connections_in_use": pool.checkedout(),
-            "connections_available": pool.size() - pool.checkedout(),
-            "overflow_count": pool.overflow(),
-        }
+        # NullPool and StaticPool don't support these methods
+        if isinstance(pool, NullPool):
+            return {
+                "pool_size": 0,
+                "connections_in_use": 0,
+                "connections_available": 0,
+                "overflow_count": 0,
+            }
+        try:
+            return {
+                "pool_size": pool.size(),
+                "connections_in_use": pool.checkedout(),
+                "connections_available": pool.size() - pool.checkedout(),
+                "overflow_count": pool.overflow(),
+            }
+        except AttributeError:
+            # Fallback for pool types that don't support these methods
+            return {
+                "pool_size": 0,
+                "connections_in_use": 0,
+                "connections_available": 0,
+                "overflow_count": 0,
+            }
 
     async def close(self) -> None:
         """Close database connections."""
