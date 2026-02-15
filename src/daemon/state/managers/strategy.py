@@ -295,7 +295,7 @@ class StrategyStateManager(StateManager):
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to get health reports: {e}")
                 return []
-        return self._health_report_cache
+        return self._health_report_cache[:limit]
 
     async def record_trade_journal(self, journal: TradeJournalRecord) -> None:
         """Record trade journal."""
@@ -328,7 +328,7 @@ class StrategyStateManager(StateManager):
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to get trade journals: {e}")
                 return []
-        return self._trade_journal_cache
+        return self._trade_journal_cache[:limit]
 
     async def record_paper_trading_report(self, report: PaperTradingReportRecord) -> None:
         """Record paper trading validation report."""
@@ -376,7 +376,7 @@ class StrategyStateManager(StateManager):
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to get paper trading reports: {e}")
                 return []
-        return self._paper_trading_cache
+        return self._paper_trading_cache[:limit]
 
     def __repr__(self) -> str:
         """Return string representation."""
