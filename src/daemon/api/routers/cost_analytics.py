@@ -16,8 +16,11 @@ from src.metrics.analytics import CostAnalyticsService
 
 router = APIRouter(prefix="/api/cost-analytics", tags=["cost-analytics"])
 
-# Singleton service instance to ensure cache sharing across requests
-_service_instance: CostAnalyticsService | None = None
+
+class _ServiceHolder:
+    """Holder for singleton service instance to avoid global statement."""
+
+    instance: CostAnalyticsService | None = None
 
 
 def _get_service() -> CostAnalyticsService:
@@ -26,10 +29,9 @@ def _get_service() -> CostAnalyticsService:
     Returns:
         CostAnalyticsService instance (shared across all requests)
     """
-    global _service_instance
-    if _service_instance is None:
-        _service_instance = CostAnalyticsService()
-    return _service_instance
+    if _ServiceHolder.instance is None:
+        _ServiceHolder.instance = CostAnalyticsService()
+    return _ServiceHolder.instance
 
 
 @router.get("/summary", response_model=CostAnalyticsSummaryResponse)

@@ -309,7 +309,9 @@ class CostAnalyticsService:
 
         def _read() -> list[dict]:
             if not self._metrics_path.exists():
-                logger.debug(f"Metrics file does not exist at '{self._metrics_path}'. Returning empty metrics list.")
+                logger.debug(
+                    f"Metrics file does not exist at '{self._metrics_path}'. Returning empty metrics list."
+                )
                 return []
 
             metrics = []
