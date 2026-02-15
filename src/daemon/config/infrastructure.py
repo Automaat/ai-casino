@@ -136,7 +136,19 @@ class DatabaseConfig(BaseModel):
     """Database configuration for PostgreSQL persistence."""
 
     database_url: str | None = None
-    pool_size: int = Field(default=5, ge=1, le=20, description="Database connection pool size (1-20)")
-    max_overflow: int = Field(default=10, ge=0, le=50, description="Max connections beyond pool_size (0-50)")
-    pool_pre_ping: bool = Field(default=True, description="Verify connections before use")
+    pool_size: int = Field(default=5, ge=1, le=20, description="Persistent connections (1-20)")
+    max_overflow: int = Field(default=10, ge=0, le=50, description="Burst capacity (0-50)")
+    pool_pre_ping: bool = Field(default=True, description="Verify connection health")
+    pool_timeout: float = Field(
+        default=30.0,
+        ge=10.0,
+        le=120.0,
+        description="Seconds to wait for connection from pool (10-120)",
+    )
+    pool_recycle: int = Field(
+        default=3600,
+        ge=300,
+        le=7200,
+        description="Recycle connections after N seconds to prevent stale (300-7200)",
+    )
     enable_persistence: bool = Field(default=True, description="Enable database persistence")
