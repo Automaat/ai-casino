@@ -445,8 +445,8 @@ class StockUniverseFetcher:
             for row in table.find_all("tr")[1:]:  # Skip header
                 cols = row.find_all("td")
                 if len(cols) >= 3:
-                    raw_name = cols[0].get_text(strip=True)
-                    raw_symbol = cols[1].get_text(strip=True)
+                    raw_symbol = cols[0].get_text(strip=True)
+                    raw_name = cols[1].get_text(strip=True)
                     symbol = raw_symbol.replace(".", "-")
                     name = raw_name
                     sector = cols[2].get_text(strip=True)
@@ -455,7 +455,7 @@ class StockUniverseFetcher:
                     # Validate: symbol should not contain spaces and should be short
                     if " " in symbol or len(symbol) > 6:
                         logger.warning(
-                            f"NASDAQ100 INVALID: col0='{raw_name}' col1='{raw_symbol}' -> "
+                            f"NASDAQ100 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
                             f"symbol='{symbol}' name='{name}'"
                         )
                         continue

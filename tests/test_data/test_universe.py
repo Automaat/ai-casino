@@ -26,9 +26,9 @@ def mock_nasdaq100_html():
     """Mock NASDAQ 100 Wikipedia HTML."""
     return """
     <table id="constituents">
-        <tr><th>Company</th><th>Ticker</th><th>GICS Sector</th><th>GICS Sub-Industry</th></tr>
-        <tr><td>Apple Inc.</td><td>AAPL</td><td>Information Technology</td><td>Technology Hardware</td></tr>
-        <tr><td>NVIDIA Corp</td><td>NVDA</td><td>Information Technology</td><td>Semiconductors</td></tr>
+        <tr><th>Ticker</th><th>Company</th><th>GICS Sector</th><th>GICS Sub-Industry</th></tr>
+        <tr><td>AAPL</td><td>Apple Inc.</td><td>Information Technology</td><td>Technology Hardware</td></tr>
+        <tr><td>NVDA</td><td>NVIDIA Corp</td><td>Information Technology</td><td>Semiconductors</td></tr>
     </table>
     """
 
@@ -277,10 +277,10 @@ class TestStockUniverseFetcher:
         """Test NASDAQ 100 scraper filters symbols with spaces or length > 6."""
         mock_html = """
         <table id="constituents">
-            <tr><th>Company</th><th>Ticker</th><th>GICS Sector</th><th>GICS Sub-Industry</th></tr>
-            <tr><td>Apple Inc.</td><td>AAPL</td><td>Tech</td><td>Hardware</td></tr>
-            <tr><td>Bad Co</td><td>BAD TICK</td><td>Tech</td><td>Software</td></tr>
-            <tr><td>Too Long Inc</td><td>TOOLONG</td><td>Tech</td><td>Services</td></tr>
+            <tr><th>Ticker</th><th>Company</th><th>GICS Sector</th><th>GICS Sub-Industry</th></tr>
+            <tr><td>AAPL</td><td>Apple Inc.</td><td>Tech</td><td>Hardware</td></tr>
+            <tr><td>BAD TICK</td><td>Bad Co</td><td>Tech</td><td>Software</td></tr>
+            <tr><td>TOOLONG</td><td>Too Long Inc</td><td>Tech</td><td>Services</td></tr>
         </table>
         """
         mock_response = MagicMock()
