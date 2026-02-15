@@ -715,6 +715,50 @@ class ExecutionRateListResponse(BaseModel):
     count: int = Field(description="Number of confidence buckets")
 
 
+class ScreeningCandidateResponse(BaseModel):
+    """Single screening candidate."""
+
+    symbol: str = Field(description="Stock symbol")
+    name: str = Field(description="Company name")
+    sector: str = Field(description="Sector")
+    score: float = Field(description="Screening score")
+    signal: str = Field(description="Signal (BUY/SELL/HOLD)")
+    metrics: dict[str, float] = Field(description="Technical metrics")
+    reason: str = Field(description="Screening reason")
+
+
+class ScreeningRecordResponse(BaseModel):
+    """Single screening record."""
+
+    id: str = Field(description="Screening record ID")
+    timestamp: datetime = Field(description="Screening timestamp")
+    criteria: str = Field(description="Screening criteria type")
+    universe: str = Field(description="Universe screened")
+    top_symbols: list[str] = Field(description="Top candidate symbols")
+    candidates: list[ScreeningCandidateResponse] = Field(description="Full candidate details")
+    screened_at: datetime = Field(description="When screening was performed")
+    candidate_count: int = Field(description="Number of candidates")
+
+
+class ScreeningHistoryResponse(BaseModel):
+    """Screening history endpoint response."""
+
+    records: list[ScreeningRecordResponse] = Field(description="Screening records")
+    total_count: int = Field(description="Total records")
+    latest_screening: datetime | None = Field(default=None, description="Latest screening date")
+
+
+class ScreeningInsightsResponse(BaseModel):
+    """Screening insights analytics."""
+
+    total_screenings: int = Field(description="Total screenings performed")
+    latest_screening_date: datetime | None = Field(default=None, description="Latest screening timestamp")
+    criteria_breakdown: dict[str, int] = Field(description="Count by criteria type")
+    sector_distribution: dict[str, int] = Field(description="Top sectors from latest screening")
+    avg_score: float = Field(description="Average screening score")
+    top_signals: dict[str, int] = Field(description="Signal counts (BUY/SELL/HOLD)")
+
+
 __all__ = [
     "AccuracyByTypeListResponse",
     "AccuracyByTypeResponse",
@@ -764,6 +808,10 @@ __all__ = [
     "SankeyFlowResponse",
     "SankeyLinkResponse",
     "SankeyNodeResponse",
+    "ScreeningCandidateResponse",
+    "ScreeningHistoryResponse",
+    "ScreeningInsightsResponse",
+    "ScreeningRecordResponse",
     "SectorRotationResponse",
     "ServiceCheck",
     "ServiceHealthResponse",

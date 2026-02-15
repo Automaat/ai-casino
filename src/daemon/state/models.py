@@ -32,6 +32,7 @@ class AnalysisRecord(BaseModel):
 class ScreeningRecord(BaseModel):
     """Record of an after-hours screening run."""
 
+    id: str | None = None
     timestamp: datetime
     criteria: str
     universe: str

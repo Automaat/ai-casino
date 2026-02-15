@@ -690,3 +690,39 @@ export interface ExecutionRateListResponse {
 	data: ExecutionRateResponse[];
 	count: number;
 }
+
+export interface ScreeningCandidate {
+	symbol: string;
+	name: string;
+	sector: string;
+	score: number;
+	signal: Signal;
+	metrics: Record<string, number>;
+	reason: string;
+}
+
+export interface ScreeningRecord {
+	id: string;
+	timestamp: string;
+	criteria: string;
+	universe: string;
+	top_symbols: string[];
+	candidates: ScreeningCandidate[];
+	screened_at: string;
+	candidate_count: number;
+}
+
+export interface ScreeningHistoryResponse {
+	records: ScreeningRecord[];
+	total_count: number;
+	latest_screening: string | null;
+}
+
+export interface ScreeningInsightsResponse {
+	total_screenings: number;
+	latest_screening_date: string | null;
+	criteria_breakdown: Record<string, number>;
+	sector_distribution: Record<string, number>;
+	avg_score: number;
+	top_signals: Record<string, number>;
+}

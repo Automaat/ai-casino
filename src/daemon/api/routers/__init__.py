@@ -5,6 +5,7 @@ from src.daemon.api.routers.cost_analytics import router as cost_analytics_route
 from src.daemon.api.routers.execution import router as execution_router
 from src.daemon.api.routers.health import router as health_router
 from src.daemon.api.routers.portfolio import router as portfolio_router
+from src.daemon.api.routers.screening import router as screening_router
 from src.daemon.api.routers.signal_analytics import router as signal_analytics_router
 from src.daemon.api.routers.state import router as state_router
 from src.daemon.api.routers.supervisor import router as supervisor_router
@@ -18,6 +19,7 @@ __all__ = [
     "execution_router",
     "health_router",
     "portfolio_router",
+    "screening_router",
     "signal_analytics_router",
     "state_router",
     "supervisor_router",
