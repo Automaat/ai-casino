@@ -1,6 +1,6 @@
 """Configuration for analysis watchers and orchestration."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AnalysisOrchestratorConfig(BaseModel):
@@ -95,3 +95,24 @@ class TrumpWatcherConfig(BaseModel):
     cooldown_minutes: int = Field(default=15, ge=1, le=120)
     max_concurrent_analyses: int = Field(default=2, ge=1, le=10)
     period_days: int = Field(default=60, ge=30, le=180)
+
+
+class NewsTrendingWatcherConfig(BaseModel):
+    """Configuration for news trending watcher (continuous discovery)."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=10, ge=5, le=60)
+    trending_window_minutes: int = Field(default=60, ge=30, le=180)
+    min_mention_threshold: int = Field(default=3, ge=2, le=10)
+    relevance_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    max_candidates_per_cycle: int = Field(default=5, ge=1, le=20)
+    search_queries: list[str] = Field(
+        default_factory=lambda: [
+            "trending stocks today",
+            "hot stocks right now",
+            "stock market movers",
+        ]
+    )
+    max_results_per_query: int = Field(default=10, ge=5, le=20)
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)

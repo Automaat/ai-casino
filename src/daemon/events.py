@@ -264,6 +264,40 @@ class AnomalyEvent(BaseModel):
         return f"AnomalyEvent(symbol={self.symbol}, types={types_str})"
 
 
+class NewsTrendingEvent(BaseModel):
+    """News trending event (symbol appeared frequently in recent news)."""
+
+    event_id: str
+    event_type: Literal["news_trending"] = "news_trending"
+    timestamp: datetime
+    source: str = "news_trending_watcher"
+    symbol: str
+    mention_count: int
+    articles: list[str]
+    baseline_count: float
+    spike_ratio: float
+    trending_window: int
+
+    def to_prompt_text(self) -> str:
+        """Format for LLM triage."""
+        titles = "\n".join(f"  - {t}" for t in self.articles[:5])
+        return (
+            f"NEWS TRENDING:\n"
+            f"Symbol: {self.symbol}\n"
+            f"Mentioned in {self.mention_count} articles (last {self.trending_window}min)\n"
+            f"Baseline: {self.baseline_count:.1f} mentions/hour\n"
+            f"Spike ratio: {self.spike_ratio:.1f}x\n"
+            f"Recent headlines:\n{titles}"
+        )
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"NewsTrendingEvent(symbol={self.symbol}, "
+            f"mentions={self.mention_count}, spike={self.spike_ratio:.1f}x)"
+        )
+
+
 class TriageResult(BaseModel):
     """LLM triage result for an event."""
 
@@ -288,7 +322,7 @@ class TriageResult(BaseModel):
 class EventSignal(BaseModel):
     """Signal emitted after triage + analysis."""
 
-    event: NewsEvent | SocialEvent | TrumpEvent | FilingEvent | AnomalyEvent = Field(
+    event: NewsEvent | SocialEvent | TrumpEvent | FilingEvent | AnomalyEvent | NewsTrendingEvent = Field(
         discriminator="event_type"
     )
     triage: TriageResult
