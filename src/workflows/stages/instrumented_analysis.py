@@ -239,6 +239,7 @@ async def _fetch_and_prepare_strategy(
             enable_multi_timeframe=enable_multi_timeframe,
             trump_mode=ctx.workflow.trump_mode,
             trump_fetcher=ctx.workflow.trump_fetcher,
+            web_search_fetcher=ctx.workflow.web_search_fetcher,
         ),
     )
     _record_stage(ctx.collector, "fetch_data", start)

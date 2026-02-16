@@ -1,6 +1,6 @@
 """News data fetcher for financial news."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import httpx
@@ -14,6 +14,7 @@ from src.metrics.execution import timed_operation
 
 if TYPE_CHECKING:
     from src.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry
+    from src.data.websearch import WebSearchResult
 
 load_dotenv()
 
@@ -300,3 +301,33 @@ class NewsFetcher:
         """String representation."""
         has_key = bool(self.api_key)
         return f"NewsFetcher(authenticated={has_key})"
+
+
+def websearch_to_news_articles(search_results: list[WebSearchResult]) -> list[NewsArticle]:
+    """Convert web search results to NewsArticle format.
+
+    Args:
+        search_results: List of WebSearchResult from web search
+
+    Returns:
+        List of NewsArticle objects
+    """
+    articles = []
+    now = datetime.now(UTC)
+
+    for result in search_results:
+        try:
+            article = NewsArticle(
+                title=result.title,
+                description=result.body[:500] if result.body else "",  # Truncate to 500 chars
+                url=result.url,
+                published_at=result.published_at or now,  # Use current time if not available
+                source=result.source or "web",
+            )
+            articles.append(article)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to convert search result to NewsArticle: {e}")
+            continue
+
+    logger.info(f"Converted {len(articles)}/{len(search_results)} web search results to NewsArticle format")
+    return articles

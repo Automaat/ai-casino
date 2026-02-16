@@ -57,6 +57,7 @@ class TradingWorkflow:
         self.notification_service = components.notification_service
         self._container = components.container
         self.analysis_orchestrator_config = components.analysis_orchestrator_config
+        self.web_search_fetcher = components.web_search_fetcher
         self._original_components = components  # Store for supervisor mode
 
         # Initialize components
@@ -407,6 +408,7 @@ class TradingWorkflow:
             enable_multi_timeframe=False,
             trump_mode=self.trump_mode,
             trump_fetcher=self.trump_fetcher if self.trump_mode else None,
+            web_search_fetcher=self.web_search_fetcher,
         )
         data_output = await data_fetch.fetch_data(
             symbol=symbol,

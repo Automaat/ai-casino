@@ -82,6 +82,7 @@ class WorkflowComponents:
     risk_validation_config: RiskValidationConfig | None = None
     risk_validator: RiskValidator | None = None
     analysis_orchestrator_config: AnalysisOrchestratorConfig | None = None
+    web_search_fetcher: object | None = None  # WebSearchFetcher (avoid circular import)
 
     def __repr__(self) -> str:
         """String representation."""

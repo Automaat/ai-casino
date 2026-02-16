@@ -51,6 +51,7 @@ class WorkflowFactoryParams:
     snapshot_repository: PortfolioSnapshotRepository | None = None
     execution_metric_repository: ExecutionMetricRepository | None = None
     notification_service: NotificationService | None = None
+    web_search_fetcher: object | None = None  # WebSearchFetcher (avoid circular import)
 
 
 def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRConfig | None:
@@ -114,6 +115,7 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
         risk_validation_config=risk_validation_config,
         risk_validator=risk_validator,
         analysis_orchestrator_config=analysis_orchestrator_config,
+        web_search_fetcher=params.web_search_fetcher,
     )
 
     return TradingWorkflow(config, components)
@@ -156,6 +158,7 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
         risk_validation_config=risk_validation_config,
         risk_validator=risk_validator,
         analysis_orchestrator_config=analysis_orchestrator_config,
+        web_search_fetcher=params.web_search_fetcher,
     )
 
     return TradingWorkflow(config, components)
@@ -198,6 +201,7 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
         risk_validation_config=risk_validation_config,
         risk_validator=risk_validator,
         analysis_orchestrator_config=analysis_orchestrator_config,
+        web_search_fetcher=params.web_search_fetcher,
     )
 
     return TradingWorkflow(config, components)
@@ -228,6 +232,7 @@ def create_workflow_meta_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
+    web_search_fetcher: object | None = None,  # WebSearchFetcher (avoid circular import)
 ) -> TradingWorkflow:
     """Wrapper for create_workflow_meta that accepts individual parameters."""
     if container is None:
@@ -249,6 +254,7 @@ def create_workflow_meta_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
         param_store=param_store,
         snapshot_repository=snapshot_repository,
         notification_service=notification_service,
+        web_search_fetcher=web_search_fetcher,
     )
     return create_workflow_meta(params)
 
@@ -268,6 +274,7 @@ def create_workflow_momentum_wrapper(  # noqa: PLR0913 - DI adapter, delegates t
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
+    web_search_fetcher: object | None = None,  # WebSearchFetcher (avoid circular import)
 ) -> TradingWorkflow:
     """Wrapper for create_workflow_momentum that accepts individual parameters."""
     if container is None:
@@ -289,6 +296,7 @@ def create_workflow_momentum_wrapper(  # noqa: PLR0913 - DI adapter, delegates t
         param_store=param_store,
         snapshot_repository=snapshot_repository,
         notification_service=notification_service,
+        web_search_fetcher=web_search_fetcher,
     )
     return create_workflow_momentum(params)
 
@@ -308,6 +316,7 @@ def create_workflow_trump_wrapper(  # noqa: PLR0913 - DI adapter, delegates to c
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
+    web_search_fetcher: object | None = None,  # WebSearchFetcher (avoid circular import)
 ) -> TradingWorkflow:
     """Wrapper for create_workflow_trump that accepts individual parameters."""
     if container is None:
@@ -329,6 +338,7 @@ def create_workflow_trump_wrapper(  # noqa: PLR0913 - DI adapter, delegates to c
         param_store=param_store,
         snapshot_repository=snapshot_repository,
         notification_service=notification_service,
+        web_search_fetcher=web_search_fetcher,
     )
     return create_workflow_trump(params)
 
@@ -348,6 +358,7 @@ def create_workflow_full_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
     param_store: OptimizedParamStore | None = None,
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
+    web_search_fetcher: object | None = None,  # WebSearchFetcher (avoid circular import)
 ) -> TradingWorkflow:
     """Wrapper for create_workflow_full that accepts individual parameters."""
     if container is None:
@@ -369,5 +380,6 @@ def create_workflow_full_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
         param_store=param_store,
         snapshot_repository=snapshot_repository,
         notification_service=notification_service,
+        web_search_fetcher=web_search_fetcher,
     )
     return create_workflow_full(params)
