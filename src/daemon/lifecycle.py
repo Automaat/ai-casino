@@ -31,35 +31,68 @@ class DaemonLifecycle:
         """Return string representation."""
         return f"DaemonLifecycle(running={self.running})"
 
+    async def _initialize_database(self) -> None:
+        """Initialize database engine and run migrations."""
+        if not self.components.config.database.enable_persistence:
+            return
+
+        database_engine = self.components.container.database_engine()
+        await database_engine.ensure_migrated()
+        logger.info("Database migrations applied successfully")
+
+        # Initialize global database singleton for get_session() calls
+        from src.database.connection import _DatabaseEngineHolder
+
+        _DatabaseEngineHolder.initialize(database_engine)
+        logger.info("Global database singleton initialized")
+
+        # Set database engine on position manager (was None during init)
+        if self.components.position_manager:
+            try:
+                trade_repository = self.components.container.trade_repository()
+                self.components.position_manager.set_database(database_engine, trade_repository)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to set position manager database: {e}")
+
+    async def _initialize_broker(self) -> None:
+        """Initialize broker in the main event loop."""
+        if not self.components.broker_manager:
+            return
+
+        await self.components.broker_manager.initialize_broker()
+        self.components.broker = self.components.broker_manager.broker
+        logger.info("Broker initialized successfully")
+
+        # Create position manager now that broker is available
+        if self.components.config.position_management.enabled and self.components.broker:
+            from src.daemon.positions import PositionManager
+
+            self.components.position_manager = PositionManager(
+                self.components.broker,
+                self.components.config.position_management,
+                database_engine=None,
+                trade_repository=None,
+            )
+            logger.info("Position management enabled")
+
     async def startup(self) -> None:
         """Execute startup sequence: DB migrations, signal handlers, API server."""
         self.running = True
 
         # Initialize database (run migrations)
-        # IMPORTANT: Create database engine HERE in the event loop, not during __init__
         try:
-            if self.components.config.database.enable_persistence:
-                database_engine = self.components.container.database_engine()
-                await database_engine.ensure_migrated()
-                logger.info("Database migrations applied successfully")
-
-                # Initialize global database singleton for get_session() calls
-                from src.database.connection import _DatabaseEngineHolder
-
-                _DatabaseEngineHolder.initialize(database_engine)
-                logger.info("Global database singleton initialized")
-
-                # Set database engine on position manager (was None during init)
-                if self.components.position_manager:
-                    try:
-                        trade_repository = self.components.container.trade_repository()
-                        self.components.position_manager.set_database(database_engine, trade_repository)
-                    except Exception as e:
-                        logger.opt(exception=True).warning(f"Failed to set position manager database: {e}")
+            await self._initialize_database()
         except Exception as e:
             logger.opt(exception=True).error(f"Database initialization failed: {e}")
             if self.components.config.database.enable_persistence:
                 raise  # Fail fast if persistence enabled but DB unavailable
+
+        # Initialize broker in the main event loop
+        try:
+            await self._initialize_broker()
+        except Exception as e:
+            logger.opt(exception=True).error(f"Broker initialization failed: {e}")
+            # Non-fatal - daemon can run in watchlist-only mode without broker
 
         # Set up signal handlers
         def shutdown_handler(sig: int, _frame: object) -> None:

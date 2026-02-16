@@ -132,12 +132,9 @@ class DaemonFactory:
         # Phase 1: Core infrastructure
         state, historical_cache = self._setup_repositories_and_state()
 
-        # Phase 2: Broker setup
-        import asyncio
-
+        # Phase 2: Broker setup (deferred to lifecycle.startup() to avoid event loop issues)
         broker_manager = BrokerManager(self.config, state, historical_cache)
-        asyncio.run(broker_manager.initialize_broker())
-        broker = broker_manager.broker
+        broker = None  # Will be initialized in lifecycle.startup()
 
         # Phase 3: Scheduler
         scheduler = self._create_scheduler()
@@ -165,10 +162,8 @@ class DaemonFactory:
         if self.config.rebalancing.enabled:
             daemon_rebalancer = self._create_rebalancer(broker)
 
-        # Phase 7: Position manager (if enabled)
+        # Phase 7: Position manager (deferred to lifecycle.startup() - needs broker from event loop)
         position_manager = None
-        if self.config.position_management.enabled:
-            position_manager = self._create_position_manager(broker)
 
         # Phase 8: Discovery engine (if enabled)
         discovery_engine = None
@@ -407,9 +402,12 @@ class DaemonFactory:
         Raises:
             ValueError: If auto_trade not enabled
         """
-        if not self.config.auto_trade or not broker:
+        if not self.config.auto_trade:
             msg = "position_management requires auto_trade=true"
             raise ValueError(msg)
+
+        # Broker may be None initially (initialized in lifecycle.startup())
+        # PositionManager will handle None broker gracefully
 
         from src.daemon.positions import PositionManager
 
