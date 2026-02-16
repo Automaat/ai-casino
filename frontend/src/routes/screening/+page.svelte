@@ -28,12 +28,12 @@
 	});
 
 	// Criteria filter for history table
-	let criteriaFilter: string = $state('');
+	let criteriaFilter: string | null = $state("");
 
 	// Filtered history records
 	let filteredHistory = $derived.by(() => {
 		if (!history?.records) return [];
-		if (criteriaFilter === '') return history.records;
+		if (!criteriaFilter) return history.records;
 		return history.records.filter((r) => r.criteria === criteriaFilter);
 	});
 

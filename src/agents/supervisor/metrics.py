@@ -97,6 +97,7 @@ class SupervisorMetricsCollector:
         self.worker_timings: dict[str, float] = {}
         self.worker_errors: dict[str, str] = {}
         self.worker_start_times: dict[str, float] = {}
+        self.worker_end_times: dict[str, float] = {}
 
         # Execution timing
         self.group1_start: float = 0.0
@@ -176,6 +177,14 @@ class SupervisorMetricsCollector:
         else:
             self.optional_workers += 1
 
+    def record_worker_end_time(self, worker_name: str) -> None:
+        """Record worker end time immediately when task completes.
+
+        Args:
+            worker_name: Name of worker
+        """
+        self.worker_end_times[worker_name] = time.perf_counter()
+
     def record_worker_complete(self, worker_name: str, result: object) -> None:
         """Record worker completion.
 
@@ -184,9 +193,13 @@ class SupervisorMetricsCollector:
             result: Worker result (None if failed)
         """
         if worker_name in self.worker_start_times:
-            elapsed_ms = (time.perf_counter() - self.worker_start_times[worker_name]) * 1000
+            # Use recorded end time if available, otherwise use current time
+            end_time = self.worker_end_times.get(worker_name, time.perf_counter())
+            elapsed_ms = (end_time - self.worker_start_times[worker_name]) * 1000
             self.worker_timings[worker_name] = elapsed_ms
             del self.worker_start_times[worker_name]
+            if worker_name in self.worker_end_times:
+                del self.worker_end_times[worker_name]
 
         if result is not None:
             self.successful_workers += 1
@@ -202,6 +215,15 @@ class SupervisorMetricsCollector:
         """
         self.worker_errors[worker_name] = error
         self.failed_workers += 1
+
+        # Clean up timing dicts and record elapsed time if worker was started
+        if worker_name in self.worker_start_times:
+            end_time = self.worker_end_times.get(worker_name, time.perf_counter())
+            elapsed_ms = (end_time - self.worker_start_times[worker_name]) * 1000
+            self.worker_timings[worker_name] = elapsed_ms
+            del self.worker_start_times[worker_name]
+            if worker_name in self.worker_end_times:
+                del self.worker_end_times[worker_name]
 
     def record_timeout(self) -> None:
         """Record timeout event."""

@@ -15,7 +15,7 @@ from src.daemon.api.models import (
 )
 from src.daemon.api.routers.shared import get_components
 
-router = APIRouter(tags=["screening"], prefix="/api/screening")
+router = APIRouter(tags=["screening"], prefix="/screening")
 
 
 @router.get("/history", response_model=ScreeningHistoryResponse)
