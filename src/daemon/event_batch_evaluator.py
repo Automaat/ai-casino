@@ -117,21 +117,6 @@ class EventBatchEvaluator:
         from src.agents.supervisor.models import CandidateEvaluationContext, CandidateRanking
         from src.strategies.session import TradingSession
 
-<<<<<<< HEAD
-        # Get portfolio symbols from broker
-        portfolio_symbols = []
-        if self.broker:
-            try:
-                account_info = await asyncio.to_thread(self.broker.get_account_info)
-                portfolio_symbols = list(account_info.positions.keys())
-            except Exception as e:
-                logger.opt(exception=True).debug(f"Failed to fetch positions: {e}")
-
-        # Get watchlist from broker manager
-        watchlist_symbols = await self.broker_manager.get_merged_watchlist()
-
-        # Use discovery max_watchlist_size config
-=======
         if not self.supervisor:
             logger.warning("Supervisor not available, returning empty ranking")
             return CandidateRanking(
@@ -146,7 +131,6 @@ class EventBatchEvaluator:
 
         portfolio_symbols: list[str] = []
         watchlist_symbols = await self.state.get_active_discovery_symbols()
->>>>>>> c6a30cfbbf9252d562c45e1af14dd40a6efb19ad
         max_size = self.config.discovery.max_watchlist_size
         capacity = max_size - len(watchlist_symbols) if not bypass_batch else 999
 
