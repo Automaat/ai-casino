@@ -29,15 +29,51 @@ async def make_decision(
     Returns:
         DecisionOutput with final decision
     """
+    from src.agents.trader import TradingDecision
+    from src.strategies.signal import Signal
+
     logger.info("Making final trading decision")
 
-    # Ensure critical analyses are present
-    if not input_data.technical or not input_data.sentiment or not input_data.news:
-        msg = "Missing critical analyses (technical, sentiment, news)"
-        raise ValueError(msg)
-    if not input_data.bullish or not input_data.bearish:
-        msg = "Missing research analyses (bullish, bearish)"
-        raise ValueError(msg)
+    # Check for missing critical analyses
+    missing_critical = []
+    if not input_data.technical:
+        missing_critical.append("technical")
+    if not input_data.sentiment:
+        missing_critical.append("sentiment")
+    if not input_data.news:
+        missing_critical.append("news")
+
+    missing_research = []
+    if not input_data.bullish:
+        missing_research.append("bullish")
+    if not input_data.bearish:
+        missing_research.append("bearish")
+
+    # If critical analyses missing, return conservative HOLD decision
+    if missing_critical or missing_research:
+        missing_str = ", ".join(missing_critical + missing_research)
+        logger.warning(
+            f"Cannot make informed decision for {input_data.symbol}: missing analyses ({missing_str}). "
+            "Returning HOLD with degraded confidence."
+        )
+        # Extract position info for correct display_action (WAIT vs HOLD)
+        positions = input_data.account_info.positions if input_data.account_info else {}
+        position_qty = positions.get(input_data.symbol)
+
+        return DecisionOutput(
+            final_decision=TradingDecision(
+                action=Signal.HOLD,
+                confidence=0.1,
+                risk_level="HIGH",
+                reasoning=[
+                    f"Insufficient data to make informed trading decision: missing {missing_str} analyses",
+                    "Supervisor routing skipped these analyses due to data unavailability",
+                    "Conservative HOLD recommended until data becomes available",
+                ],
+                owns_position=input_data.owns_position,
+                position_qty=position_qty,
+            )
+        )
 
     # Extract account info for position awareness
     positions = input_data.account_info.positions if input_data.account_info else {}

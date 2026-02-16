@@ -376,6 +376,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     workflow_momentum = providers.Factory(
@@ -388,6 +389,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     workflow_trump = providers.Factory(
@@ -400,6 +402,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     workflow_full = providers.Factory(
@@ -412,6 +415,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     # Daemon component providers
