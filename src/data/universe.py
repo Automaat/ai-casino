@@ -41,10 +41,10 @@ SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 NASDAQ100_URL = "https://en.wikipedia.org/wiki/Nasdaq-100"
 ISHARES_RUSSELL3000_URL = "https://www.ishares.com/us/products/239714/ishares-russell-3000-etf/1467271812596.ajax?fileType=csv&fileName=IWV_holdings&dataType=fund"
 
-# User-Agent to avoid 403 from Wikipedia/iShares
+# User-Agent to avoid 403 from Wikipedia/iShares (updated to Chrome 135/2026)
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 )
 
 
@@ -391,38 +391,53 @@ class StockUniverseFetcher:
             List of StockInfo
         """
         headers = {"User-Agent": USER_AGENT}
-        with httpx.Client(timeout=30.0, headers=headers) as client:
-            response = client.get(SP500_URL)
-            response.raise_for_status()
+        logger.debug(f"Fetching S&P 500 from {SP500_URL}")
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            table = soup.find("table", {"id": "constituents"})
-            if not table:
-                msg = "S&P 500 table not found on Wikipedia"
-                raise ValueError(msg)
+        try:
+            with httpx.Client(timeout=30.0, headers=headers) as client:
+                response = client.get(SP500_URL)
+                response.raise_for_status()
+                logger.debug(f"S&P 500 fetch successful (status={response.status_code})")
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"S&P 500 fetch failed: HTTP {e.response.status_code}\n"
+                f"URL: {SP500_URL}\n"
+                f"Headers: {headers}\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
+        except httpx.HTTPError as e:
+            logger.error(f"S&P 500 fetch failed: {e.__class__.__name__}: {e}")
+            raise
 
-            stocks = []
-            for row in table.find_all("tr")[1:]:  # Skip header
-                cols = row.find_all("td")
-                if len(cols) >= 4:
-                    raw_symbol = cols[0].get_text(strip=True)
-                    raw_name = cols[1].get_text(strip=True)
-                    symbol = raw_symbol.replace(".", "-")  # BRK.B -> BRK-B
-                    name = raw_name
-                    sector = cols[3].get_text(strip=True)
-                    industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
+        soup = BeautifulSoup(response.text, "html.parser")
+        table = soup.find("table", {"id": "constituents"})
+        if not table:
+            msg = "S&P 500 table not found on Wikipedia"
+            raise ValueError(msg)
 
-                    # Validate: symbol should not contain spaces and should be short
-                    if " " in symbol or len(symbol) > 6:
-                        logger.warning(
-                            f"S&P500 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
-                            f"symbol='{symbol}' name='{name}'"
-                        )
-                        continue
+        stocks = []
+        for row in table.find_all("tr")[1:]:  # Skip header
+            cols = row.find_all("td")
+            if len(cols) >= 4:
+                raw_symbol = cols[0].get_text(strip=True)
+                raw_name = cols[1].get_text(strip=True)
+                symbol = raw_symbol.replace(".", "-")  # BRK.B -> BRK-B
+                name = raw_name
+                sector = cols[3].get_text(strip=True)
+                industry = cols[4].get_text(strip=True) if len(cols) > 4 else ""
 
-                    stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+                # Validate: symbol should not contain spaces and should be short
+                if " " in symbol or len(symbol) > 6:
+                    logger.warning(
+                        f"S&P500 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
+                        f"symbol='{symbol}' name='{name}'"
+                    )
+                    continue
 
-            return stocks
+                stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+
+        return stocks
 
     def _scrape_nasdaq100(self) -> list[StockInfo]:
         """Scrape NASDAQ 100 list from Wikipedia.
@@ -431,38 +446,53 @@ class StockUniverseFetcher:
             List of StockInfo
         """
         headers = {"User-Agent": USER_AGENT}
-        with httpx.Client(timeout=30.0, headers=headers) as client:
-            response = client.get(NASDAQ100_URL)
-            response.raise_for_status()
+        logger.debug(f"Fetching NASDAQ 100 from {NASDAQ100_URL}")
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            table = soup.find("table", {"id": "constituents"})
-            if not table:
-                msg = "NASDAQ 100 table not found on Wikipedia"
-                raise ValueError(msg)
+        try:
+            with httpx.Client(timeout=30.0, headers=headers) as client:
+                response = client.get(NASDAQ100_URL)
+                response.raise_for_status()
+                logger.debug(f"NASDAQ 100 fetch successful (status={response.status_code})")
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"NASDAQ 100 fetch failed: HTTP {e.response.status_code}\n"
+                f"URL: {NASDAQ100_URL}\n"
+                f"Headers: {headers}\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
+        except httpx.HTTPError as e:
+            logger.error(f"NASDAQ 100 fetch failed: {e.__class__.__name__}: {e}")
+            raise
 
-            stocks = []
-            for row in table.find_all("tr")[1:]:  # Skip header
-                cols = row.find_all("td")
-                if len(cols) >= 3:
-                    raw_symbol = cols[0].get_text(strip=True)
-                    raw_name = cols[1].get_text(strip=True)
-                    symbol = raw_symbol.replace(".", "-")
-                    name = raw_name
-                    sector = cols[2].get_text(strip=True)
-                    industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
+        soup = BeautifulSoup(response.text, "html.parser")
+        table = soup.find("table", {"id": "constituents"})
+        if not table:
+            msg = "NASDAQ 100 table not found on Wikipedia"
+            raise ValueError(msg)
 
-                    # Validate: symbol should not contain spaces and should be short
-                    if " " in symbol or len(symbol) > 6:
-                        logger.warning(
-                            f"NASDAQ100 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
-                            f"symbol='{symbol}' name='{name}'"
-                        )
-                        continue
+        stocks = []
+        for row in table.find_all("tr")[1:]:  # Skip header
+            cols = row.find_all("td")
+            if len(cols) >= 3:
+                raw_symbol = cols[0].get_text(strip=True)
+                raw_name = cols[1].get_text(strip=True)
+                symbol = raw_symbol.replace(".", "-")
+                name = raw_name
+                sector = cols[2].get_text(strip=True)
+                industry = cols[3].get_text(strip=True) if len(cols) > 3 else ""
 
-                    stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+                # Validate: symbol should not contain spaces and should be short
+                if " " in symbol or len(symbol) > 6:
+                    logger.warning(
+                        f"NASDAQ100 INVALID: col0='{raw_symbol}' col1='{raw_name}' -> "
+                        f"symbol='{symbol}' name='{name}'"
+                    )
+                    continue
 
-            return stocks
+                stocks.append(StockInfo(symbol=symbol, name=name, sector=sector, industry=industry))
+
+        return stocks
 
     def _scrape_ishares_russell3000(self) -> list[StockInfo]:
         """Scrape Russell 3000 list from iShares IWV ETF holdings CSV.
@@ -470,48 +500,66 @@ class StockUniverseFetcher:
         Returns:
             List of StockInfo
         """
-        headers = {"User-Agent": USER_AGENT}
-        with httpx.Client(timeout=30.0, headers=headers) as client:
-            response = client.get(ISHARES_RUSSELL3000_URL)
-            response.raise_for_status()
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Referer": "https://www.ishares.com/us/products/239714/",
+        }
+        logger.debug(f"Fetching Russell 3000 from {ISHARES_RUSSELL3000_URL}")
 
-            # Parse CSV (skip first 10 rows which are metadata)
-            lines = response.text.strip().split("\n")[10:]
-            stocks = []
+        try:
+            with httpx.Client(timeout=30.0, headers=headers) as client:
+                response = client.get(ISHARES_RUSSELL3000_URL)
+                response.raise_for_status()
+                logger.debug(f"Russell 3000 fetch successful (status={response.status_code})")
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Russell 3000 fetch failed: HTTP {e.response.status_code}\n"
+                f"URL: {ISHARES_RUSSELL3000_URL}\n"
+                f"Headers: {headers}\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
+        except httpx.HTTPError as e:
+            logger.error(f"Russell 3000 fetch failed: {e.__class__.__name__}: {e}")
+            raise
 
-            # Use csv.reader to properly handle quoted fields with commas
-            reader = csv.reader(lines)
-            for parts in reader:
-                if len(parts) < 4:
-                    continue
+        # Parse CSV (skip first 10 rows which are metadata)
+        lines = response.text.strip().split("\n")[10:]
+        stocks = []
 
-                # Columns: Ticker, Name, Sector, Asset Class, Market Value, Weight, ...
-                ticker = parts[0].strip()
-                name = parts[1].strip()
-                sector = parts[2].strip()
+        # Use csv.reader to properly handle quoted fields with commas
+        reader = csv.reader(lines)
+        for parts in reader:
+            if len(parts) < 4:
+                continue
 
-                # Skip header row and non-equity entries
-                if ticker in ("Ticker", "-", "") or sector == "-":
-                    continue
+            # Columns: Ticker, Name, Sector, Asset Class, Market Value, Weight, ...
+            ticker = parts[0].strip()
+            name = parts[1].strip()
+            sector = parts[2].strip()
 
-                # Handle BRK.B -> BRK-B conversion
-                symbol = ticker.replace(".", "-")
+            # Skip header row and non-equity entries
+            if ticker in ("Ticker", "-", "") or sector == "-":
+                continue
 
-                # Validate: symbol should not contain spaces and should be short
-                if " " in symbol or len(symbol) > 6:
-                    logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
-                    continue
+            # Handle BRK.B -> BRK-B conversion
+            symbol = ticker.replace(".", "-")
 
-                stocks.append(
-                    StockInfo(
-                        symbol=symbol,
-                        name=name,
-                        sector=sector or "Unknown",
-                        industry="",  # Not available in iShares CSV
-                    )
+            # Validate: symbol should not contain spaces and should be short
+            if " " in symbol or len(symbol) > 6:
+                logger.warning(f"Invalid symbol '{symbol}' (name: {name}), skipping")
+                continue
+
+            stocks.append(
+                StockInfo(
+                    symbol=symbol,
+                    name=name,
+                    sector=sector or "Unknown",
+                    industry="",  # Not available in iShares CSV
                 )
+            )
 
-            return stocks
+        return stocks
 
     def clear_cache(self) -> None:
         """Clear all cached universes."""

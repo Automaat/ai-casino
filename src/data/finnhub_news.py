@@ -53,6 +53,7 @@ class FinnhubNewsFetcher:
         }
 
         try:
+            logger.debug(f"Fetching company news: {url}?symbol={symbol}")
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
@@ -84,8 +85,16 @@ class FinnhubNewsFetcher:
 
                 return articles
 
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Finnhub company news fetch failed: HTTP {e.response.status_code}\n"
+                f"Endpoint: /company-news\n"
+                f"Symbol: {symbol}\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
         except httpx.HTTPError as e:
-            logger.error(f"Finnhub fetch failed: {e}")
+            logger.error(f"Finnhub company news fetch failed: {e.__class__.__name__}: {e}")
             raise
 
     @HTTP_RETRY
@@ -107,6 +116,7 @@ class FinnhubNewsFetcher:
         }
 
         try:
+            logger.debug(f"Fetching market news: {url}?category=general")
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
@@ -133,8 +143,16 @@ class FinnhubNewsFetcher:
                 logger.info(f"Fetched {len(articles)} articles from Finnhub")
                 return articles
 
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Finnhub market news fetch failed: HTTP {e.response.status_code}\n"
+                f"Endpoint: /news\n"
+                f"Category: general\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
         except httpx.HTTPError as e:
-            logger.error(f"Finnhub market news fetch failed: {e}")
+            logger.error(f"Finnhub market news fetch failed: {e.__class__.__name__}: {e}")
             raise
 
     def get_source_name(self) -> str:
