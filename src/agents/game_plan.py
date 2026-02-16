@@ -14,13 +14,20 @@ from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 
 
+class KeyLevel(BaseModel):
+    """Price level for a symbol."""
+
+    symbol: str
+    price: float
+
+
 class GamePlanLLMResponse(BaseModel):
     """LLM response structure for game plan."""
 
     priority_symbols: list[str] = Field(description="3-5 priority symbols")
     risk_stance: Literal["AGGRESSIVE", "DEFENSIVE", "NEUTRAL"]
     sector_focus: list[str] = Field(description="1-3 sectors to focus on")
-    key_levels: dict[str, float] | None = Field(default=None, description="Symbol->price mappings (optional)")
+    key_levels: list[KeyLevel] = Field(default_factory=list, description="Key price levels (optional)")
     reasoning: str = Field(description="Strategic rationale (2-3 sentences)")
     confidence: float = Field(ge=0.0, le=1.0)
 
@@ -105,7 +112,7 @@ class GamePlanAgent:
             priority_symbols = llm_response.priority_symbols
             risk_stance = llm_response.risk_stance
             sector_focus = llm_response.sector_focus
-            key_levels = llm_response.key_levels or {}
+            key_levels = {kl.symbol: kl.price for kl in llm_response.key_levels}
             reasoning = llm_response.reasoning
             confidence = llm_response.confidence
         except StructuredOutputError as e:
