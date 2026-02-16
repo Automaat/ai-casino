@@ -98,10 +98,26 @@ class GenerateGamePlanTool(BaseTool):
             return f"Failed to generate game plan: {e}"
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Sync wrapper (not used - coordinator calls aexecute)."""
+        """Sync wrapper (not used - coordinator calls aexecute).
+
+        Raises:
+            RuntimeError: If called from within a running event loop
+        """
         import asyncio
 
-        return asyncio.run(self.aexecute(**kwargs))
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "GenerateGamePlanTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
 
     def _format_result(self, plan: GamePlan) -> str:
         """Format game plan as markdown.

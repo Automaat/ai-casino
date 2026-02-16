@@ -88,6 +88,11 @@ class PortfolioOptimizer:
             f"Initialized PortfolioOptimizer (period={period_days} days, broker={'yes' if broker else 'no'})"
         )
 
+    def set_broker(self, broker: AlpacaBroker) -> None:
+        """Set broker after initialization (deferred to avoid event loop issues)."""
+        self.broker = broker
+        logger.debug("PortfolioOptimizer broker updated")
+
     def optimize_max_sharpe(self, symbols: list[str]) -> OptimizedPortfolio:
         """Optimize portfolio for maximum Sharpe ratio.
 

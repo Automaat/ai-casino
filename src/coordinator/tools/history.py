@@ -89,20 +89,23 @@ class AnalysisHistoryTool(BaseTool):
 
         Returns:
             Formatted analysis history
+
+        Raises:
+            RuntimeError: If called from within a running event loop
         """
-        symbol = kwargs.get("symbol")
-        if not symbol or not isinstance(symbol, str):
-            return "Error: symbol parameter is required"
-
-        days = min(int(kwargs.get("days", 7)), 30)  # Cap at 30 days
-
-        logger.info(f"Retrieving analysis history for {symbol} (last {days} days)")
-
+        # Guard against being called from within an existing event loop
         try:
-            return asyncio.run(self._memory.get_analysis_history(symbol, days=days))
-        except Exception as e:
-            logger.opt(exception=True).error(f"Analysis history retrieval failed for {symbol}: {e}")
-            return f"Failed to retrieve analysis history for {symbol}: {e}"
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "AnalysisHistoryTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
 
     def __repr__(self) -> str:
         """String representation."""

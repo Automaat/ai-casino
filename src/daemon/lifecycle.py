@@ -70,6 +70,14 @@ class DaemonLifecycle:
         self.components.broker = self.components.broker_manager.broker
         logger.info("Broker initialized successfully")
 
+        # Propagate broker to components that were created with broker=None
+        if self.components.broker:
+            if self.components.daemon_rebalancer:
+                self.components.daemon_rebalancer.set_broker(self.components.broker)
+            if self.components.tearsheet_generator:
+                self.components.tearsheet_generator.set_broker(self.components.broker)
+            # Note: discovery_engine doesn't use broker, optimizer set via rebalancer
+
         # Create position manager now that broker is available
         if self.components.config.position_management.enabled and self.components.broker:
             from src.daemon.positions import PositionManager
@@ -80,6 +88,18 @@ class DaemonLifecycle:
                 database_engine=None,
                 trade_repository=None,
             )
+
+            # If persistence is enabled, inject database into position manager now
+            if self.components.config.database.enable_persistence:
+                try:
+                    database_engine = self.components.container.database_engine()
+                    trade_repository = self.components.container.trade_repository()
+                    self.components.position_manager.set_database(database_engine, trade_repository)
+                except Exception as e:
+                    logger.opt(exception=True).warning(
+                        f"Failed to set position manager database during broker initialization: {e}"
+                    )
+
             logger.info("Position management enabled")
 
     async def startup(self) -> None:
