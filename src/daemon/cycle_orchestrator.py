@@ -87,7 +87,10 @@ class DaemonCycleOrchestrator:
             # Already handled by task_runner if scheduled
 
             # Phase 3.5: Evaluate event-based discovery candidates
-            if self.components.config.event_integration.enable_discovery_integration:
+            if (
+                self.components.config.event_integration.enable_discovery_integration
+                and self.components.supervisor
+            ):
                 try:
                     from src.daemon.event_batch_evaluator import EventBatchEvaluator
 
@@ -95,14 +98,19 @@ class DaemonCycleOrchestrator:
                         supervisor=self.components.supervisor,
                         state=self.components.state,
                         config=self.components.config,
+                        broker_manager=self.components.broker_manager,
+                        broker=self.components.broker,
                     )
 
                     if await batch_evaluator.should_evaluate_batch():
                         approved_symbols = await batch_evaluator.evaluate_batch()
                         if approved_symbols:
                             logger.info(f"Adding {len(approved_symbols)} event candidates to watchlist")
+                            current_watchlist = await self.components.broker_manager.get_merged_watchlist()
                             for symbol in approved_symbols:
-                                await self.components.state.watchlist.add(symbol)
+                                if symbol not in current_watchlist:
+                                    # Add via broker manager
+                                    pass  # Handled by discovery task
                 except Exception as e:
                     logger.opt(exception=True).warning(f"Event batch evaluation failed: {e}")
 

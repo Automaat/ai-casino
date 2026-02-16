@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -10,8 +11,10 @@ from loguru import logger
 if TYPE_CHECKING:
     from src.agents.supervisor.agent import TradingSupervisor
     from src.agents.supervisor.models import CandidateEvaluationContext, CandidateRanking
+    from src.daemon.broker_manager import BrokerManager
     from src.daemon.config import DaemonConfig
     from src.daemon.state import DaemonState
+    from src.data.broker import AlpacaBroker
     from src.discovery.models import DiscoveryCandidate
 
 
@@ -23,6 +26,8 @@ class EventBatchEvaluator:
         supervisor: TradingSupervisor,
         state: DaemonState,
         config: DaemonConfig,
+        broker_manager: BrokerManager,
+        broker: AlpacaBroker | None = None,
     ) -> None:
         """Initialize batch evaluator.
 
@@ -30,10 +35,14 @@ class EventBatchEvaluator:
             supervisor: Trading supervisor for candidate evaluation
             state: Daemon state manager
             config: Daemon configuration
+            broker_manager: Broker manager for watchlist access
+            broker: Optional broker for portfolio access
         """
         self.supervisor = supervisor
         self.state = state
         self.config = config
+        self.broker_manager = broker_manager
+        self.broker = broker
         self._last_batch_evaluation: datetime | None = None
 
     async def should_evaluate_batch(self) -> bool:
@@ -108,9 +117,20 @@ class EventBatchEvaluator:
         from src.agents.supervisor.models import CandidateEvaluationContext
         from src.strategies.session import TradingSession
 
-        portfolio_symbols = self.state.portfolio.holdings
-        watchlist_symbols = self.state.watchlist.symbols
-        max_size = self.config.screening.watchlist_max_size
+        # Get portfolio symbols from broker
+        portfolio_symbols = []
+        if self.broker:
+            try:
+                account_info = await asyncio.to_thread(self.broker.get_account_info)
+                portfolio_symbols = list(account_info.positions.keys())
+            except Exception as e:
+                logger.opt(exception=True).debug(f"Failed to fetch positions: {e}")
+
+        # Get watchlist from broker manager
+        watchlist_symbols = await self.broker_manager.get_merged_watchlist()
+
+        # Use discovery max_watchlist_size config
+        max_size = self.config.discovery.max_watchlist_size
         capacity = max_size - len(watchlist_symbols) if not bypass_batch else 999
 
         context: CandidateEvaluationContext = CandidateEvaluationContext(

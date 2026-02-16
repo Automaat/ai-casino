@@ -15,6 +15,8 @@ from src.discovery.models import ActiveDiscoveryCandidate, DiscoveryCandidate, D
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from src.agents.supervisor.models import CandidateRanking
+
 
 class DiscoveryStateManager(StateManager):
     """Stock discovery with TTL management."""
@@ -156,7 +158,7 @@ class DiscoveryStateManager(StateManager):
         self,
         candidates: list[DiscoveryCandidate],
         added_symbols: list[str],
-        supervisor_ranking: object | None = None,
+        supervisor_ranking: CandidateRanking | None = None,
     ) -> None:
         """Record discovery run and update active candidates.
 

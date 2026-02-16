@@ -370,6 +370,10 @@ class DiscoveryOutcomeTask(TaskExecutor):
             DiscoverySourceMetricsRepository,
         )
 
+        if self.components.market_fetcher is None:
+            logger.warning("Market fetcher not available, skipping discovery outcome tracking")
+            return
+
         async with get_session() as session:
             discovery_repo = DiscoveryHistoryRepository(session)
             metrics_repo = DiscoverySourceMetricsRepository(session)

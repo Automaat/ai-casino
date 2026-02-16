@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -150,7 +150,10 @@ class DiscoveryOutcomeTracker:
 
             for _ in range(max_attempts):
                 if search_date in df.index:
-                    price_at_date = float(df.loc[search_date]["Close"])
+                    close_value = df.loc[search_date]["Close"]
+                    # Pandas Series scalar extraction - cast to Any for type checker
+                    scalar_value: Any = close_value.item() if hasattr(close_value, "item") else close_value
+                    price_at_date = float(scalar_value)
                     break
                 search_date -= timedelta(days=1)
 
