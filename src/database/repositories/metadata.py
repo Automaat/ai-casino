@@ -45,7 +45,9 @@ class MetadataRepository(BaseRepository[dict]):
             Metadata value (datetime, int, str, list, dict, etc.) or None if not found
         """
         try:
-            result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
+            result = await self._session.execute(
+                select(DaemonMetadataORM).where(DaemonMetadataORM.key == key)
+            )
             orm = result.scalar_one_or_none()
             if not orm:
                 return None
@@ -131,7 +133,9 @@ class MetadataRepository(BaseRepository[dict]):
             serialized = value.isoformat() if isinstance(value, datetime) else value
 
             # Check if exists
-            result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
+            result = await self._session.execute(
+                select(DaemonMetadataORM).where(DaemonMetadataORM.key == key)
+            )
             orm = result.scalar_one_or_none()
 
             if orm:
@@ -160,7 +164,9 @@ class MetadataRepository(BaseRepository[dict]):
             True if deleted, False if not found
         """
         try:
-            result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
+            result = await self._session.execute(
+                select(DaemonMetadataORM).where(DaemonMetadataORM.key == key)
+            )
             orm = result.scalar_one_or_none()
             if not orm:
                 return False

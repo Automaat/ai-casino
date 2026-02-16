@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
+from sqlalchemy.engine import Row
 
 from src.daemon.state.models import SignalOutcome, SignalUpdateRecord
 from src.database.models import SignalOutcomeORM
@@ -48,6 +50,48 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
+
+    @staticmethod
+    def _calculate_hit_rate(
+        rows: Sequence[Row[tuple[str, Decimal, float]]],
+    ) -> dict[str, float]:
+        """Calculate hit/miss rate from signal outcome rows.
+
+        Args:
+            rows: List of (signal, entry_price, exit_price) tuples
+
+        Returns:
+            Dict with success_rate, total_decisions, hit_count, miss_count
+        """
+        if not rows:
+            return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
+
+        hit_count = 0
+        miss_count = 0
+
+        for row in rows:
+            signal, entry_price, exit_price = row[0], row[1], row[2]
+            if signal == "BUY":
+                is_hit = exit_price > float(entry_price)
+            elif signal == "SELL":
+                is_hit = exit_price < float(entry_price)
+            else:  # HOLD
+                continue
+
+            if is_hit:
+                hit_count += 1
+            else:
+                miss_count += 1
+
+        total = hit_count + miss_count
+        success_rate = hit_count / total if total > 0 else 0.0
+
+        return {
+            "success_rate": success_rate,
+            "total_decisions": total,
+            "hit_count": hit_count,
+            "miss_count": miss_count,
+        }
 
     async def record_signal(self, input_data: SignalRecordInput) -> SignalOutcome:
         """Record a new trading signal for outcome tracking.
@@ -264,39 +308,7 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
 
             result = await self._session.execute(stmt)
             rows = result.all()
-
-            if not rows:
-                return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
-
-            hit_count = 0
-            miss_count = 0
-
-            for row in rows:
-                signal = row[0]
-                entry_price = float(row[1])
-                exit_price = float(row[2])
-
-                if signal == "BUY":
-                    is_hit = exit_price > entry_price
-                elif signal == "SELL":
-                    is_hit = exit_price < entry_price
-                else:  # HOLD
-                    continue
-
-                if is_hit:
-                    hit_count += 1
-                else:
-                    miss_count += 1
-
-            total = hit_count + miss_count
-            success_rate = hit_count / total if total > 0 else 0.0
-
-            return {
-                "success_rate": success_rate,
-                "total_decisions": total,
-                "hit_count": hit_count,
-                "miss_count": miss_count,
-            }
+            return self._calculate_hit_rate(rows)
         except RuntimeError as e:
             if self._recreate_session_if_needed(e):
                 return await self.get_success_rate_by_regime(
@@ -352,39 +364,7 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
 
             result = await self._session.execute(stmt)
             rows = result.all()
-
-            if not rows:
-                return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
-
-            hit_count = 0
-            miss_count = 0
-
-            for row in rows:
-                signal = row[0]
-                entry_price = float(row[1])
-                exit_price = float(row[2])
-
-                if signal == "BUY":
-                    is_hit = exit_price > entry_price
-                elif signal == "SELL":
-                    is_hit = exit_price < entry_price
-                else:  # HOLD
-                    continue
-
-                if is_hit:
-                    hit_count += 1
-                else:
-                    miss_count += 1
-
-            total = hit_count + miss_count
-            success_rate = hit_count / total if total > 0 else 0.0
-
-            return {
-                "success_rate": success_rate,
-                "total_decisions": total,
-                "hit_count": hit_count,
-                "miss_count": miss_count,
-            }
+            return self._calculate_hit_rate(rows)
         except RuntimeError as e:
             if self._recreate_session_if_needed(e):
                 return await self.get_success_rate_by_strategy(
