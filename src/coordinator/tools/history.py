@@ -58,8 +58,8 @@ class AnalysisHistoryTool(BaseTool):
             ),
         )
 
-    def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute analysis history retrieval for specific symbol.
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute analysis history retrieval asynchronously.
 
         Args:
             **kwargs: Tool arguments (symbol: str required, days: int = 7)
@@ -76,9 +76,30 @@ class AnalysisHistoryTool(BaseTool):
         logger.info(f"Retrieving analysis history for {symbol} (last {days} days)")
 
         try:
-            # Delegate to memory layer (handles async to sync conversion)
-            return asyncio.run(self._memory.get_analysis_history(symbol, days=days))
+            return await self._memory.get_analysis_history(symbol, days=days)
+        except Exception as e:
+            logger.opt(exception=True).error(f"Analysis history retrieval failed for {symbol}: {e}")
+            return f"Failed to retrieve analysis history for {symbol}: {e}"
 
+    def execute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute analysis history retrieval for specific symbol (sync wrapper).
+
+        Args:
+            **kwargs: Tool arguments (symbol: str required, days: int = 7)
+
+        Returns:
+            Formatted analysis history
+        """
+        symbol = kwargs.get("symbol")
+        if not symbol or not isinstance(symbol, str):
+            return "Error: symbol parameter is required"
+
+        days = min(int(kwargs.get("days", 7)), 30)  # Cap at 30 days
+
+        logger.info(f"Retrieving analysis history for {symbol} (last {days} days)")
+
+        try:
+            return asyncio.run(self._memory.get_analysis_history(symbol, days=days))
         except Exception as e:
             logger.opt(exception=True).error(f"Analysis history retrieval failed for {symbol}: {e}")
             return f"Failed to retrieve analysis history for {symbol}: {e}"

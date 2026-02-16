@@ -1,7 +1,5 @@
 """Save observation tool for coordinator."""
 
-import asyncio
-import concurrent.futures
 from typing import TYPE_CHECKING, ClassVar, Final
 
 from loguru import logger
@@ -101,22 +99,10 @@ class SaveObservationTool(BaseTool):
             return f"Failed to save observation: {e}"
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute observation save synchronously.
+        """Sync wrapper (not used - coordinator calls aexecute)."""
+        import asyncio
 
-        Args:
-            **kwargs: Tool arguments
-
-        Returns:
-            Confirmation message
-        """
-
-        def run_in_thread() -> str:
-            return asyncio.run(self.aexecute(**kwargs))
-
-        # Run in thread to avoid nested event loop issues
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(run_in_thread)
-            return future.result()
+        return asyncio.run(self.aexecute(**kwargs))
 
     def __repr__(self) -> str:
         """String representation."""
