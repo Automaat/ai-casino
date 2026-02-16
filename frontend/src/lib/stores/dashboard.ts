@@ -3,6 +3,7 @@
  */
 
 import { writable, derived, readable } from 'svelte/store';
+import { browser } from '$app/environment';
 import { api } from '$lib/api/client';
 import type * as T from '$lib/types/api';
 
@@ -12,6 +13,8 @@ const REFRESH_INTERVAL = 5000;
 // Health store
 function createHealthStore() {
 	return readable<T.HealthResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getHealth();
@@ -36,6 +39,8 @@ function createHealthStore() {
 // State summary store
 function createStateSummaryStore() {
 	return readable<T.StateSummaryResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		let loading = false;
 
 		async function fetch() {
@@ -84,6 +89,8 @@ function createAnalysesStore() {
 // Positions store
 function createPositionsStore() {
 	return readable<T.PositionsResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getPositions();
@@ -175,6 +182,8 @@ function createSectorAttributionStore() {
 // Config store
 function createConfigStore() {
 	return readable<T.FullConfigResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getFullConfig();
@@ -199,6 +208,8 @@ function createConfigStore() {
 // Service health store
 function createServiceHealthStore() {
 	return readable<T.ServiceHealthResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getServiceHealth();
@@ -223,6 +234,8 @@ function createServiceHealthStore() {
 // Game plan store
 function createGamePlanStore() {
 	return readable<T.GamePlanResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getGamePlan();
@@ -247,6 +260,8 @@ function createGamePlanStore() {
 // Watchlist store
 function createWatchlistStore() {
 	return readable<T.WatchlistResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getWatchlist();
@@ -271,6 +286,8 @@ function createWatchlistStore() {
 // Degradation store
 function createDegradationStore() {
 	return readable<T.DegradationResponse | null>(null, (set) => {
+		if (!browser) return;
+
 		async function fetch() {
 			try {
 				const data = await api.getDegradation();

@@ -102,13 +102,18 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         Returns:
             List of AnalysisRecords for symbol
         """
-        result = await self._session.execute(
-            select(AnalysisRecordORM)
-            .where(AnalysisRecordORM.symbol == symbol)
-            .order_by(AnalysisRecordORM.timestamp.desc())
-            .limit(limit)
-        )
-        return [self._to_record(orm) for orm in result.scalars().all()]
+        try:
+            result = await self._session.execute(
+                select(AnalysisRecordORM)
+                .where(AnalysisRecordORM.symbol == symbol)
+                .order_by(AnalysisRecordORM.timestamp.desc())
+                .limit(limit)
+            )
+            return [self._to_record(orm) for orm in result.scalars().all()]
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_by_symbol(symbol, limit)
+            raise
 
     async def get_by_date_range(
         self,
@@ -126,16 +131,21 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         Returns:
             List of AnalysisRecords in date range
         """
-        stmt = select(AnalysisRecordORM).where(
-            AnalysisRecordORM.timestamp >= start,
-            AnalysisRecordORM.timestamp <= end,
-        )
-        if symbol:
-            stmt = stmt.where(AnalysisRecordORM.symbol == symbol)
-        stmt = stmt.order_by(AnalysisRecordORM.timestamp.desc())
+        try:
+            stmt = select(AnalysisRecordORM).where(
+                AnalysisRecordORM.timestamp >= start,
+                AnalysisRecordORM.timestamp <= end,
+            )
+            if symbol:
+                stmt = stmt.where(AnalysisRecordORM.symbol == symbol)
+            stmt = stmt.order_by(AnalysisRecordORM.timestamp.desc())
 
-        result = await self._session.execute(stmt)
-        return [self._to_record(orm) for orm in result.scalars().all()]
+            result = await self._session.execute(stmt)
+            return [self._to_record(orm) for orm in result.scalars().all()]
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_by_date_range(start, end, symbol)
+            raise
 
     async def get_signal_stats(self, symbol: str | None = None, days: int = 30) -> dict[str, int]:
         """Get signal distribution statistics.
@@ -149,19 +159,24 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         """
         from datetime import timedelta
 
-        cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff = cutoff - timedelta(days=days)
+        try:
+            cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff = cutoff - timedelta(days=days)
 
-        stmt = (
-            select(AnalysisRecordORM.signal, func.count(AnalysisRecordORM.id))
-            .where(AnalysisRecordORM.created_at >= cutoff)
-            .group_by(AnalysisRecordORM.signal)
-        )
-        if symbol:
-            stmt = stmt.where(AnalysisRecordORM.symbol == symbol)
+            stmt = (
+                select(AnalysisRecordORM.signal, func.count(AnalysisRecordORM.id))
+                .where(AnalysisRecordORM.created_at >= cutoff)
+                .group_by(AnalysisRecordORM.signal)
+            )
+            if symbol:
+                stmt = stmt.where(AnalysisRecordORM.symbol == symbol)
 
-        result = await self._session.execute(stmt)
-        return {row[0]: row[1] for row in result.all()}
+            result = await self._session.execute(stmt)
+            return {row[0]: row[1] for row in result.all()}
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_signal_stats(symbol, days)
+            raise
 
     async def delete_before(self, cutoff: datetime) -> int:
         """Delete analysis records older than cutoff date.

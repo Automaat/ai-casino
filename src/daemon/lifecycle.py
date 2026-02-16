@@ -98,6 +98,9 @@ class DaemonLifecycle:
         # Wait for background tasks to complete
         await self._wait_for_background_tasks()
 
+        # Close database connections
+        await self._close_database()
+
     async def _close_http_clients(self) -> None:
         """Close HTTP clients (NewsFetcher)."""
         if self.components.prefetcher:
@@ -105,6 +108,18 @@ class DaemonLifecycle:
                 await self.components.prefetcher.aclose()
             except Exception as e:
                 logger.opt(exception=True).warning(f"Error closing prefetcher: {e}")
+
+    async def _close_database(self) -> None:
+        """Close database engine and connections."""
+        if self.components.config.database.enable_persistence:
+            try:
+                from src.database.connection import get_db_engine
+
+                engine = get_db_engine()
+                await engine.close()
+                logger.info("Database connections closed")
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Error closing database: {e}")
 
     async def _wait_for_background_tasks(self) -> None:
         """Wait for all background tasks to complete."""

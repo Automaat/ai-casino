@@ -61,7 +61,16 @@ class BaseRepository(ABC, Generic[T]):
             try:
                 import asyncio
 
-                loop = asyncio.get_event_loop()
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop available
+                    return
+
+                if loop.is_closed():
+                    # Event loop already closed, can't clean up session
+                    return
+
                 if loop.is_running():
                     task = loop.create_task(self._session.close())
                     task.add_done_callback(lambda _: None)
