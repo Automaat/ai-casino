@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
+from sqlalchemy.engine import Row
 
 from src.daemon.state.models import SignalOutcome, SignalUpdateRecord
 from src.database.models import SignalOutcomeORM
@@ -48,6 +50,48 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
+
+    @staticmethod
+    def _calculate_hit_rate(
+        rows: Sequence[Row[tuple[str, Decimal, float]]],
+    ) -> dict[str, float]:
+        """Calculate hit/miss rate from signal outcome rows.
+
+        Args:
+            rows: List of (signal, entry_price, exit_price) tuples
+
+        Returns:
+            Dict with success_rate, total_decisions, hit_count, miss_count
+        """
+        if not rows:
+            return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
+
+        hit_count = 0
+        miss_count = 0
+
+        for row in rows:
+            signal, entry_price, exit_price = row[0], row[1], row[2]
+            if signal == "BUY":
+                is_hit = exit_price > float(entry_price)
+            elif signal == "SELL":
+                is_hit = exit_price < float(entry_price)
+            else:  # HOLD
+                continue
+
+            if is_hit:
+                hit_count += 1
+            else:
+                miss_count += 1
+
+        total = hit_count + miss_count
+        success_rate = hit_count / total if total > 0 else 0.0
+
+        return {
+            "success_rate": success_rate,
+            "total_decisions": total,
+            "hit_count": hit_count,
+            "miss_count": miss_count,
+        }
 
     async def record_signal(self, input_data: SignalRecordInput) -> SignalOutcome:
         """Record a new trading signal for outcome tracking.
@@ -116,15 +160,20 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             List of SignalOutcomes for symbol
         """
-        stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.symbol == symbol)
+        try:
+            stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.symbol == symbol)
 
-        if start_date:
-            stmt = stmt.where(SignalOutcomeORM.timestamp >= start_date)
+            if start_date:
+                stmt = stmt.where(SignalOutcomeORM.timestamp >= start_date)
 
-        stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc()).limit(limit)
+            stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc()).limit(limit)
 
-        result = await self._session.execute(stmt)
-        return [self._to_domain(orm) for orm in result.scalars().all()]
+            result = await self._session.execute(stmt)
+            return [self._to_domain(orm) for orm in result.scalars().all()]
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_by_symbol(symbol, limit, start_date)
+            raise
 
     async def get_signals_needing_update(self, horizon: str) -> list[SignalUpdateRecord]:
         """Get signals that need outcome price updates for given horizon.
@@ -142,34 +191,39 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         days = horizon_days[horizon]
         price_field = f"price_at_{horizon}"
 
-        now = datetime.now(UTC)
-        cutoff = now - timedelta(days=days + 2)  # +2 buffer for weekends
+        try:
+            now = datetime.now(UTC)
+            cutoff = now - timedelta(days=days + 2)  # +2 buffer for weekends
 
-        stmt = (
-            select(SignalOutcomeORM.id, SignalOutcomeORM.symbol, SignalOutcomeORM.timestamp)
-            .where(
-                and_(
-                    SignalOutcomeORM.timestamp <= cutoff,
-                    getattr(SignalOutcomeORM, price_field).is_(None),
+            stmt = (
+                select(SignalOutcomeORM.id, SignalOutcomeORM.symbol, SignalOutcomeORM.timestamp)
+                .where(
+                    and_(
+                        SignalOutcomeORM.timestamp <= cutoff,
+                        getattr(SignalOutcomeORM, price_field).is_(None),
+                    )
                 )
+                .order_by(SignalOutcomeORM.timestamp.desc())
+                .limit(100)
             )
-            .order_by(SignalOutcomeORM.timestamp.desc())
-            .limit(100)
-        )
 
-        result = await self._session.execute(stmt)
-        records = []
-        for row in result.all():
-            target_date = row.timestamp + timedelta(days=days)
-            records.append(
-                SignalUpdateRecord(
-                    id=str(row.id),
-                    symbol=row.symbol,
-                    timestamp=row.timestamp,
-                    target_date=target_date,
+            result = await self._session.execute(stmt)
+            records = []
+            for row in result.all():
+                target_date = row.timestamp + timedelta(days=days)
+                records.append(
+                    SignalUpdateRecord(
+                        id=str(row.id),
+                        symbol=row.symbol,
+                        timestamp=row.timestamp,
+                        target_date=target_date,
+                    )
                 )
-            )
-        return records
+            return records
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_signals_needing_update(horizon)
+            raise
 
     async def update_outcome_prices(
         self,
@@ -230,61 +284,37 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
             raise ValueError(msg)
         price_field = f"price_at_{horizon}"
-        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
-        stmt = select(
-            SignalOutcomeORM.signal,
-            SignalOutcomeORM.price_at_signal,
-            getattr(SignalOutcomeORM, price_field),
-        ).where(
-            and_(
-                SignalOutcomeORM.regime == regime,
-                SignalOutcomeORM.timestamp >= cutoff,
-                getattr(SignalOutcomeORM, price_field).is_not(None),
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=days_back)
+
+            stmt = select(
+                SignalOutcomeORM.signal,
+                SignalOutcomeORM.price_at_signal,
+                getattr(SignalOutcomeORM, price_field),
+            ).where(
+                and_(
+                    SignalOutcomeORM.regime == regime,
+                    SignalOutcomeORM.timestamp >= cutoff,
+                    getattr(SignalOutcomeORM, price_field).is_not(None),
+                )
             )
-        )
 
-        if min_confidence is not None:
-            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+            if min_confidence is not None:
+                stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
 
-        if signal_type:
-            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+            if signal_type:
+                stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
 
-        result = await self._session.execute(stmt)
-        rows = result.all()
-
-        if not rows:
-            return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
-
-        hit_count = 0
-        miss_count = 0
-
-        for row in rows:
-            signal = row[0]
-            entry_price = float(row[1])
-            exit_price = float(row[2])
-
-            if signal == "BUY":
-                is_hit = exit_price > entry_price
-            elif signal == "SELL":
-                is_hit = exit_price < entry_price
-            else:  # HOLD
-                continue
-
-            if is_hit:
-                hit_count += 1
-            else:
-                miss_count += 1
-
-        total = hit_count + miss_count
-        success_rate = hit_count / total if total > 0 else 0.0
-
-        return {
-            "success_rate": success_rate,
-            "total_decisions": total,
-            "hit_count": hit_count,
-            "miss_count": miss_count,
-        }
+            result = await self._session.execute(stmt)
+            rows = result.all()
+            return self._calculate_hit_rate(rows)
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_success_rate_by_regime(
+                    regime, horizon, min_confidence, days_back, signal_type
+                )
+            raise
 
     async def get_success_rate_by_strategy(
         self,
@@ -310,61 +340,37 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             msg = f"Invalid horizon: {horizon}. Must be one of: 1d, 5d, 20d"
             raise ValueError(msg)
         price_field = f"price_at_{horizon}"
-        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
-        stmt = select(
-            SignalOutcomeORM.signal,
-            SignalOutcomeORM.price_at_signal,
-            getattr(SignalOutcomeORM, price_field),
-        ).where(
-            and_(
-                SignalOutcomeORM.strategy_used == strategy,
-                SignalOutcomeORM.timestamp >= cutoff,
-                getattr(SignalOutcomeORM, price_field).is_not(None),
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=days_back)
+
+            stmt = select(
+                SignalOutcomeORM.signal,
+                SignalOutcomeORM.price_at_signal,
+                getattr(SignalOutcomeORM, price_field),
+            ).where(
+                and_(
+                    SignalOutcomeORM.strategy_used == strategy,
+                    SignalOutcomeORM.timestamp >= cutoff,
+                    getattr(SignalOutcomeORM, price_field).is_not(None),
+                )
             )
-        )
 
-        if min_confidence is not None:
-            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+            if min_confidence is not None:
+                stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
 
-        if signal_type:
-            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+            if signal_type:
+                stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
 
-        result = await self._session.execute(stmt)
-        rows = result.all()
-
-        if not rows:
-            return {"success_rate": 0.0, "total_decisions": 0, "hit_count": 0, "miss_count": 0}
-
-        hit_count = 0
-        miss_count = 0
-
-        for row in rows:
-            signal = row[0]
-            entry_price = float(row[1])
-            exit_price = float(row[2])
-
-            if signal == "BUY":
-                is_hit = exit_price > entry_price
-            elif signal == "SELL":
-                is_hit = exit_price < entry_price
-            else:  # HOLD
-                continue
-
-            if is_hit:
-                hit_count += 1
-            else:
-                miss_count += 1
-
-        total = hit_count + miss_count
-        success_rate = hit_count / total if total > 0 else 0.0
-
-        return {
-            "success_rate": success_rate,
-            "total_decisions": total,
-            "hit_count": hit_count,
-            "miss_count": miss_count,
-        }
+            result = await self._session.execute(stmt)
+            rows = result.all()
+            return self._calculate_hit_rate(rows)
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_success_rate_by_strategy(
+                    strategy, horizon, min_confidence, days_back, signal_type
+                )
+            raise
 
     async def get_recent_outcomes(
         self,
@@ -382,19 +388,24 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             List of SignalOutcomes
         """
-        cutoff = datetime.now(UTC) - timedelta(days=window)
-        stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.timestamp >= cutoff)
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=window)
+            stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.timestamp >= cutoff)
 
-        if signal_type:
-            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+            if signal_type:
+                stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
 
-        if min_confidence is not None:
-            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+            if min_confidence is not None:
+                stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
 
-        stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc())
+            stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc())
 
-        result = await self._session.execute(stmt)
-        return [self._to_domain(orm) for orm in result.scalars().all()]
+            result = await self._session.execute(stmt)
+            return [self._to_domain(orm) for orm in result.scalars().all()]
+        except RuntimeError as e:
+            if self._recreate_session_if_needed(e):
+                return await self.get_recent_outcomes(window, signal_type, min_confidence)
+            raise
 
     async def create(self, entity: SignalOutcome) -> SignalOutcome:
         """Create new signal outcome (alternative to record_signal).

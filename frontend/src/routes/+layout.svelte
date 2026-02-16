@@ -4,6 +4,8 @@
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import { health } from '$lib/stores/dashboard';
 
+	let { children } = $props();
+
 	const tabs = [
 		{ id: 'overview', label: 'Overview', href: '/' },
 		{ id: 'portfolio', label: 'Portfolio', href: '/portfolio' },
@@ -85,7 +87,7 @@
 
 	<!-- Main Content -->
 	<main class="container mx-auto px-6 py-8">
-		<slot />
+		{@render children()}
 	</main>
 
 	<!-- Footer -->
