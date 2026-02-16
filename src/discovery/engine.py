@@ -1,6 +1,5 @@
 """Stock discovery orchestration engine."""
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -17,6 +16,7 @@ from src.discovery.models import DiscoveryCandidate, DiscoveryResult, DiscoveryS
 from src.discovery.scoring import MultiFactorScorer, ScoringWeights
 from src.discovery.triggers import TriggerDetector
 from src.screening.screener import ScreeningCriteria, StockScreener
+from src.utils.ticker_extraction import extract_tickers
 
 if TYPE_CHECKING:
     from src.data.websearch import WebSearchFetcher
@@ -463,47 +463,59 @@ class StockDiscoveryEngine:
                 "stock market movers",
             ]
 
-            all_symbols = set()
+            seen_symbols: set[str] = set()
+            valid_count = 0
 
             for query in search_queries:
+                # Stop early if we've already reached the per-cycle limit
+                if valid_count >= self.config.max_discovered_per_cycle:
+                    break
+
                 try:
                     response = self.news_fetcher.search_news(query, max_results=10)
 
                     # Extract symbols from titles and snippets
                     for result in response.results:
+                        # Stop early if we've already reached the per-cycle limit
+                        if valid_count >= self.config.max_discovered_per_cycle:
+                            break
+
                         text = f"{result.title} {result.body}"
                         symbols = self._extract_tickers(text)
-                        all_symbols.update(symbols)
+
+                        # Sort symbols for deterministic ordering
+                        for symbol in sorted(symbols):
+                            # Skip symbols we've already attempted
+                            if symbol in seen_symbols:
+                                continue
+                            seen_symbols.add(symbol)
+
+                            # Stop early if we've already reached the per-cycle limit
+                            if valid_count >= self.config.max_discovered_per_cycle:
+                                break
+
+                            # Fetch stock info (validates symbol exists)
+                            stock_info = self._get_stock_info(symbol)
+                            if not stock_info:
+                                logger.debug(f"Skipping invalid symbol: {symbol}")
+                                continue
+
+                            candidate = DiscoveryCandidate(
+                                symbol=symbol,
+                                name=str(stock_info.get("name", symbol)),
+                                sector=str(stock_info.get("sector", "Unknown")),
+                                sources=[],  # Set by _merge_candidates
+                                composite_score=0.0,  # Calculated later
+                                discovery_timestamp=datetime.now(UTC),
+                                metadata={**stock_info, "source": "news_trending"},
+                                ttl_expires_at=datetime.now(UTC),  # Set later
+                            )
+                            candidates.append(candidate)
+                            valid_count += 1
 
                 except Exception as e:
                     logger.opt(exception=True).warning(f"News search failed for '{query}': {e}")
                     continue
-
-            # Validate symbols and create candidates
-            valid_count = 0
-            for symbol in all_symbols:
-                # Limit to max_discovered_per_cycle
-                if valid_count >= self.config.max_discovered_per_cycle:
-                    break
-
-                # Fetch stock info (validates symbol exists)
-                stock_info = self._get_stock_info(symbol)
-                if not stock_info:
-                    logger.debug(f"Skipping invalid symbol: {symbol}")
-                    continue
-
-                candidate = DiscoveryCandidate(
-                    symbol=symbol,
-                    name=str(stock_info.get("name", symbol)),
-                    sector=str(stock_info.get("sector", "Unknown")),
-                    sources=[],  # Set by _merge_candidates
-                    composite_score=0.0,  # Calculated later
-                    discovery_timestamp=datetime.now(UTC),
-                    metadata={**stock_info, "source": "news_trending"},
-                    ttl_expires_at=datetime.now(UTC),  # Set later
-                )
-                candidates.append(candidate)
-                valid_count += 1
 
             logger.info(f"News trending: {len(candidates)} candidates")
 
@@ -582,8 +594,10 @@ class StockDiscoveryEngine:
         # Exclude common words that match ticker pattern
         excluded_words = frozenset(
             {
+                # Single letters
                 "I",
                 "A",
+                # Common words
                 "THE",
                 "CEO",
                 "CFO",
@@ -595,11 +609,61 @@ class StockDiscoveryEngine:
                 "USA",
                 "NYSE",
                 "NASDAQ",
+                # Reddit/WSB slang
                 "WSB",
                 "DD",
                 "YOLO",
                 "FOMO",
                 "FUD",
+                "HODL",
+                "EOD",
+                "ATH",
+                "ATL",
+                "OTM",
+                "ITM",
+                "IV",
+                "DTE",
+                "EPS",
+                "PE",
+                "PM",
+                "AM",
+                "OP",
+                "IMO",
+                "IMHO",
+                "TL",
+                "DR",
+                "TLDR",
+                "EDIT",
+                "PSA",
+                "FYI",
+                "LMAO",
+                "LOL",
+                "WTF",
+                "BTW",
+                "AMA",
+                "RIP",
+                "ASAP",
+                # Time-related
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI",
+                "SAT",
+                "SUN",
+                "JAN",
+                "FEB",
+                "MAR",
+                "APR",
+                "MAY",
+                "JUN",
+                "JUL",
+                "AUG",
+                "SEP",
+                "OCT",
+                "NOV",
+                "DEC",
+                # Common verbs/adjectives
                 "BUY",
                 "SELL",
                 "HOLD",
@@ -624,19 +688,11 @@ class StockDiscoveryEngine:
                 "WAS",
                 "HAS",
                 "HAD",
+                "RH",  # Robinhood abbreviation
             }
         )
 
-        tickers = set()
-        # Match $SYMBOL or standalone 2-5 letter uppercase words
-        pattern = r"\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b"
-
-        for match in re.finditer(pattern, text):
-            ticker = match.group(1) or match.group(2)
-            if ticker and ticker not in excluded_words:
-                tickers.add(ticker)
-
-        return tickers
+        return extract_tickers(text, excluded_words)
 
     def _get_stock_info(self, symbol: str, cached_ohlcv: pd.DataFrame | None = None) -> dict[str, object]:
         """Fetch stock metadata (name, sector, market cap, etc).
