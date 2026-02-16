@@ -317,11 +317,19 @@ def websearch_to_news_articles(search_results: list[WebSearchResult]) -> list[Ne
 
     for result in search_results:
         try:
+            published_at = result.published_at or now  # Fallback to current time if not available
+            if published_at.tzinfo is None:
+                # Normalize naive datetimes by assuming UTC
+                published_at = published_at.replace(tzinfo=UTC)
+            else:
+                # Convert any non-UTC aware datetimes to UTC
+                published_at = published_at.astimezone(UTC)
+
             article = NewsArticle(
                 title=result.title,
                 description=result.body[:500] if result.body else "",  # Truncate to 500 chars
                 url=result.url,
-                published_at=result.published_at or now,  # Use current time if not available
+                published_at=published_at,
                 source=result.source or "web",
             )
             articles.append(article)

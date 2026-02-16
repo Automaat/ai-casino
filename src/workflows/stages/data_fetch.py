@@ -92,7 +92,7 @@ async def _fetch_multi_source_news(symbol: str, config: DataFetchConfig) -> list
         config: Data fetch configuration
 
     Returns:
-        List of unique NewsArticle objects (up to 10)
+        List of unique NewsArticle objects (up to 20)
     """
     from src.data.news import NewsArticle, websearch_to_news_articles
 
@@ -120,7 +120,8 @@ async def _fetch_multi_source_news(symbol: str, config: DataFetchConfig) -> list
                 logger.warning("web_search_fetcher is not WebSearchFetcher, skipping")
             else:
                 query = f"{symbol} stock latest news"
-                search_response = fetcher.search_news(query, max_results=10)
+                # Offload synchronous search to thread to avoid blocking event loop
+                search_response = await asyncio.to_thread(fetcher.search_news, query, max_results=10)
                 if search_response.results:
                     web_articles = websearch_to_news_articles(search_response.results)
                     all_articles.extend(web_articles)
@@ -130,7 +131,7 @@ async def _fetch_multi_source_news(symbol: str, config: DataFetchConfig) -> list
             logger.opt(exception=True).warning(f"Web search news fetch failed: {e}")
 
     # Deduplicate by title (case-insensitive)
-    unique_articles = _deduplicate_articles(all_articles, max_articles=10)
+    unique_articles = _deduplicate_articles(all_articles, max_articles=20)
 
     if sources_used:
         logger.info(

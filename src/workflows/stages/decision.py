@@ -56,6 +56,10 @@ async def make_decision(
             f"Cannot make informed decision for {input_data.symbol}: missing analyses ({missing_str}). "
             "Returning HOLD with degraded confidence."
         )
+        # Extract position info for correct display_action (WAIT vs HOLD)
+        positions = input_data.account_info.positions if input_data.account_info else {}
+        position_qty = positions.get(input_data.symbol)
+
         return DecisionOutput(
             final_decision=TradingDecision(
                 action=Signal.HOLD,
@@ -66,6 +70,8 @@ async def make_decision(
                     "Supervisor routing skipped these analyses due to data unavailability",
                     "Conservative HOLD recommended until data becomes available",
                 ],
+                owns_position=input_data.owns_position,
+                position_qty=position_qty,
             )
         )
 
