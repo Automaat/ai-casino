@@ -524,57 +524,84 @@
 					class:bg-yellow-100={!validation.ready_for_live}
 					class:text-yellow-800={!validation.ready_for_live}
 				>
-					{validation.ready_for_live ? 'Ready for Live' : 'Not Ready'}
+					{validation.ready_for_live ? 'Ready' : 'Not Ready'}
 				</span>
 			</div>
 
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-				<div class="text-sm">
-					<span class="text-gray-600 dark:text-gray-400">Assessment Date:</span>
-					<span class="ml-2 font-medium"
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
+				<div>
+					<span class="text-gray-500">Assessment Date:</span>
+					<span class="ml-2 text-gray-900 dark:text-gray-100 font-medium"
 						>{new Date(validation.assessment_date).toLocaleDateString()}</span
 					>
 				</div>
-				<div class="text-sm">
-					<span class="text-gray-600 dark:text-gray-400">Paper Trading Duration:</span>
-					<span class="ml-2 font-medium">{validation.paper_trading_duration_days} days</span>
+				<div>
+					<span class="text-gray-500">Paper Trading Duration:</span>
+					<span class="ml-2 text-gray-900 dark:text-gray-100 font-medium"
+						>{validation.paper_trading_duration_days} days</span
+					>
 				</div>
-				<div class="text-sm">
-					<span class="text-gray-600 dark:text-gray-400">Total Paper Trades:</span>
-					<span class="ml-2 font-medium">{validation.total_paper_trades}</span>
+				<div>
+					<span class="text-gray-500">Total Paper Trades:</span>
+					<span class="ml-2 text-gray-900 dark:text-gray-100 font-medium"
+						>{validation.total_paper_trades}</span
+					>
 				</div>
 			</div>
 
-			<div class="space-y-2">
-				<h4 class="font-medium text-sm">Validation Criteria:</h4>
-				{#each validation.criteria as criterion}
-					<div class="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded">
-						<div class="flex items-center gap-2">
-							<span class="text-xl">
-								{#if criterion.passed}
-									✅
-								{:else}
-									❌
-								{/if}
-							</span>
-							<span class="text-sm font-medium">{criterion.name}</span>
+			<div>
+				<h4 class="text-base font-semibold mb-3">Validation Criteria:</h4>
+				<div class="space-y-2">
+					{#each validation.criteria as criterion}
+						<div class="space-y-1">
+							<div class="bg-gray-800 rounded-md px-4 py-3 flex items-center justify-between">
+								<div class="flex items-center gap-3">
+									{#if criterion.passed}
+										<svg
+											class="w-5 h-5 text-green-500 flex-shrink-0"
+											fill="currentColor"
+											viewBox="0 0 20 20"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									{:else}
+										<svg
+											class="w-5 h-5 text-red-500 flex-shrink-0"
+											fill="currentColor"
+											viewBox="0 0 20 20"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									{/if}
+									<span class="text-white font-medium">{criterion.name}</span>
+								</div>
+								<span class="text-gray-300 text-sm font-mono">
+									{criterion.current_value.toFixed(2)} / {criterion.threshold.toFixed(2)}
+								</span>
+							</div>
+							<p class="text-sm text-gray-500 pl-12">{criterion.message}</p>
 						</div>
-						<div class="text-sm text-gray-600 dark:text-gray-400">
-							{criterion.current_value.toFixed(2)} / {criterion.threshold.toFixed(2)}
-						</div>
-					</div>
-					{#if !criterion.passed}
-						<p class="text-xs text-gray-600 dark:text-gray-400 ml-9">{criterion.message}</p>
-					{/if}
-				{/each}
+					{/each}
+				</div>
 			</div>
 
 			{#if validation.recommendations.length > 0}
 				<div class="mt-4">
-					<h4 class="font-medium text-sm mb-2">Recommendations:</h4>
-					<ul class="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
+					<h4 class="text-base font-semibold mb-2">Recommendations:</h4>
+					<ul class="space-y-2">
 						{#each validation.recommendations as recommendation}
-							<li>{recommendation}</li>
+							<li class="flex items-start gap-2 text-sm text-gray-500">
+								<span class="mt-1">•</span>
+								<span>{recommendation}</span>
+							</li>
 						{/each}
 					</ul>
 				</div>

@@ -83,12 +83,7 @@
 	<title>Paper Trading Validation - AI Casino</title>
 </svelte:head>
 
-<div class="space-y-8">
-	<div>
-		<h1 class="text-3xl font-bold text-black">Paper Trading Validation</h1>
-		<p class="mt-2 text-gray-600">Track progress toward live trading promotion</p>
-	</div>
-
+<div class="max-w-5xl mx-auto px-6 py-8">
 	{#if loading}
 		<div class="text-center py-12">
 			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
@@ -99,97 +94,99 @@
 			<p class="text-red-600">{error}</p>
 		</Card>
 	{:else if validation}
-		<!-- Status Badge -->
-		<Card title="Live Trading Status">
-			<div class="flex items-center justify-center py-6">
+		<div class="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+			<!-- Header -->
+			<div class="flex items-center justify-between">
+				<h1 class="text-2xl font-bold text-gray-900">Paper Trading Validation</h1>
 				{#if validation.ready_for_live}
-					<Badge variant="success" class="text-lg px-6 py-3">
-						✓ Ready for Live Trading
-					</Badge>
+					<Badge variant="success" class="text-sm px-4 py-2">Ready</Badge>
 				{:else}
-					<Badge variant="neutral" class="text-lg px-6 py-3">
-						⏳ In Progress
-					</Badge>
+					<Badge variant="neutral" class="text-sm px-4 py-2">Not Ready</Badge>
 				{/if}
 			</div>
-		</Card>
 
-		<!-- Summary Metrics -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-			<MetricCard
-				title="Duration"
-				value={validation.paper_trading_duration_days}
-				subtitle="days in paper trading"
-				icon="📅"
-			/>
-			<MetricCard
-				title="Total Trades"
-				value={validation.total_paper_trades}
-				subtitle="trades executed"
-				icon="📊"
-			/>
-			<MetricCard
-				title="Criteria Met"
-				value={`${validation.criteria.filter(c => c.passed).length}/${validation.criteria.length}`}
-				subtitle="validation criteria"
-				icon="✓"
-			/>
-		</div>
-
-		<!-- Progress Bars -->
-		<Card title="Validation Criteria">
-			<div class="space-y-6">
-				{#each validation.criteria as criterion}
-					{@const percent = getProgressPercent(criterion)}
-					{@const color = getProgressColor(criterion)}
-
-					<div>
-						<div class="flex items-center justify-between mb-2">
-							<div class="flex items-center gap-2">
-								<span class="font-semibold text-black">{criterion.name}</span>
-								{#if criterion.passed}
-									<Badge variant="success">✓ Passed</Badge>
-								{:else}
-									<Badge variant="neutral">In Progress</Badge>
-								{/if}
-							</div>
-							<span class="text-sm text-gray-600">
-								{formatValue(criterion.current_value, criterion.name)} /
-								{formatValue(criterion.threshold, criterion.name)}
-							</span>
-						</div>
-
-						<!-- Progress bar -->
-						<div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-							<div
-								class="h-full transition-all duration-300 {color}"
-								style="width: {percent}%"
-							></div>
-						</div>
-
-						<p class="mt-1 text-sm text-gray-600">{criterion.message}</p>
-					</div>
-				{/each}
+			<!-- Summary Info -->
+			<div class="grid grid-cols-3 gap-8 text-sm">
+				<div>
+					<span class="text-gray-500">Assessment Date:</span>
+					<span class="ml-2 text-gray-900 font-medium">
+						{new Date(validation.assessment_date).toLocaleDateString()}
+					</span>
+				</div>
+				<div>
+					<span class="text-gray-500">Paper Trading Duration:</span>
+					<span class="ml-2 text-gray-900 font-medium">
+						{validation.paper_trading_duration_days} days
+					</span>
+				</div>
+				<div>
+					<span class="text-gray-500">Total Paper Trades:</span>
+					<span class="ml-2 text-gray-900 font-medium">{validation.total_paper_trades}</span>
+				</div>
 			</div>
-		</Card>
 
-		<!-- Recommendations -->
-		{#if validation.recommendations.length > 0}
-			<Card title="Recommendations">
-				<ul class="space-y-3">
-					{#each validation.recommendations as recommendation}
-						<li class="flex items-start gap-3">
-							<span class="text-gray-600 mt-0.5">•</span>
-							<span class="text-gray-700">{recommendation}</span>
-						</li>
+			<!-- Validation Criteria -->
+			<div>
+				<h2 class="text-base font-semibold text-gray-900 mb-4">Validation Criteria:</h2>
+				<div class="space-y-2">
+					{#each validation.criteria as criterion}
+						<div class="space-y-1">
+							<div
+								class="bg-gray-800 rounded-md px-4 py-3 flex items-center justify-between"
+							>
+								<div class="flex items-center gap-3">
+									{#if criterion.passed}
+										<svg
+											class="w-5 h-5 text-green-500 flex-shrink-0"
+											fill="currentColor"
+											viewBox="0 0 20 20"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									{:else}
+										<svg
+											class="w-5 h-5 text-red-500 flex-shrink-0"
+											fill="currentColor"
+											viewBox="0 0 20 20"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									{/if}
+									<span class="text-white font-medium">{criterion.name}</span>
+								</div>
+								<span class="text-gray-300 text-sm font-mono">
+									{formatValue(criterion.current_value, criterion.name)} /
+									{formatValue(criterion.threshold, criterion.name)}
+								</span>
+							</div>
+							<p class="text-sm text-gray-500 pl-12">{criterion.message}</p>
+						</div>
 					{/each}
-				</ul>
-			</Card>
-		{/if}
+				</div>
+			</div>
 
-		<!-- Assessment Info -->
-		<div class="text-center text-sm text-gray-600">
-			Last assessed: {new Date(validation.assessment_date).toLocaleString()}
+			<!-- Recommendations -->
+			{#if validation.recommendations.length > 0}
+				<div>
+					<h2 class="text-base font-semibold text-gray-900 mb-3">Recommendations:</h2>
+					<ul class="space-y-2">
+						{#each validation.recommendations as recommendation}
+							<li class="flex items-start gap-2 text-sm text-gray-500">
+								<span class="mt-1">•</span>
+								<span>{recommendation}</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
