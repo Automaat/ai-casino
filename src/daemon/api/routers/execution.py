@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
@@ -19,116 +20,176 @@ from src.daemon.api.routers.shared import get_components
 router = APIRouter(tags=["execution"])
 
 
+def _read_metrics_from_jsonl(limit: int, symbol: str | None = None) -> list[dict]:
+    """Read metrics from JSONL file.
+
+    Args:
+        limit: Max number of metrics to return
+        symbol: Optional symbol filter
+
+    Returns:
+        List of metric dictionaries
+    """
+    metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
+
+    if not metrics_file.exists():
+        return []
+
+    metrics = []
+    # Read last N lines efficiently (read backwards)
+    with metrics_file.open("rb") as f:
+        f.seek(0, 2)
+        file_size = f.tell()
+        if file_size == 0:
+            return []
+
+        # Read file in chunks from end
+        buffer_size = 8192
+        lines = []
+        buffer = b""
+        pos = file_size
+
+        while pos > 0 and len(lines) < limit:
+            chunk_size = min(buffer_size, pos)
+            pos -= chunk_size
+            f.seek(pos)
+            chunk = f.read(chunk_size)
+            buffer = chunk + buffer
+
+            # Extract complete lines
+            while b"\n" in buffer and len(lines) < limit:
+                buffer, line = buffer.rsplit(b"\n", 1)
+                if line:
+                    lines.insert(0, line)
+
+        # Parse JSONL
+        for line in lines[-limit:]:
+            try:
+                metric = json.loads(line)
+                # Apply symbol filter if provided
+                if symbol and metric.get("symbol") != symbol:
+                    continue
+                metrics.append(metric)
+            except json.JSONDecodeError as e:
+                logger.opt(exception=True).warning(f"Malformed JSONL line: {e}")
+                continue
+
+        # Reverse to get newest first
+        metrics.reverse()
+
+    return metrics
+
+
+def _find_metric_in_jsonl(workflow_id: str) -> tuple[dict | None, bool]:
+    """Find metric by workflow ID in JSONL file.
+
+    Args:
+        workflow_id: Workflow ID to find
+
+    Returns:
+        Tuple of (metric dict or None, file exists boolean)
+    """
+    metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
+
+    if not metrics_file.exists():
+        return None, False
+
+    with metrics_file.open() as f:
+        for line in f:
+            try:
+                metric = json.loads(line)
+                if metric.get("workflow_id") == workflow_id:
+                    return metric, True
+            except json.JSONDecodeError:
+                continue
+
+    return None, True
+
+
 @router.get("/api/execution-metrics", response_model=ExecutionMetricsListResponse)
-async def get_execution_metrics(limit: int = 50) -> ExecutionMetricsListResponse:
-    """Get recent execution metrics from JSONL.
+async def get_execution_metrics(limit: int = 50, symbol: str | None = None) -> ExecutionMetricsListResponse:
+    """Get recent execution metrics from database or JSONL fallback.
 
     Args:
         limit: Max number of metrics to return (clamped to 1-500)
+        symbol: Optional symbol filter
 
     Returns:
-        ExecutionMetricsListResponse with list of metrics
+        ExecutionMetricsListResponse with list of metrics and database status
     """
+    from src.database.connection import get_session
+    from src.database.engine import MissingDatabaseURLError
+    from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
+
     limit = max(1, min(limit, 500))
 
-    def _read_metrics() -> list[dict]:
-        metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
-
-        if not metrics_file.exists():
-            return []
-
-        metrics = []
-        # Read last N lines efficiently (read backwards)
-        with metrics_file.open("rb") as f:
-            f.seek(0, 2)
-            file_size = f.tell()
-            if file_size == 0:
-                return []
-
-            # Read file in chunks from end
-            buffer_size = 8192
-            lines = []
-            buffer = b""
-            pos = file_size
-
-            while pos > 0 and len(lines) < limit:
-                chunk_size = min(buffer_size, pos)
-                pos -= chunk_size
-                f.seek(pos)
-                chunk = f.read(chunk_size)
-                buffer = chunk + buffer
-
-                # Extract complete lines
-                while b"\n" in buffer and len(lines) < limit:
-                    buffer, line = buffer.rsplit(b"\n", 1)
-                    if line:
-                        lines.insert(0, line)
-
-            # Parse JSONL
-            for line in lines[-limit:]:
-                try:
-                    metric = json.loads(line)
-                    metrics.append(metric)
-                except json.JSONDecodeError as e:
-                    logger.opt(exception=True).warning(f"Malformed JSONL line: {e}")
-                    continue
-
-            # Reverse to get newest first
-            metrics.reverse()
-
-        return metrics
-
+    # Try database first
     try:
-        metrics = await asyncio.to_thread(_read_metrics)
+        async with get_session() as session:
+            repo = WorkflowExecutionMetricsRepository(session)
+            metrics_entities = await repo.list_recent(limit=limit, symbol=symbol)
+            metrics = [m.model_dump(mode="json") for m in metrics_entities]
+            return ExecutionMetricsListResponse(metrics=metrics, count=len(metrics), database_enabled=True)
+    except MissingDatabaseURLError:
+        logger.debug("Database not configured, falling back to JSONL for execution metrics")
     except Exception as e:
-        logger.opt(exception=True).error(f"Failed to read execution metrics: {e}")
+        logger.opt(exception=True).error(f"Failed to read execution metrics from database: {e}")
+
+    # Fallback to JSONL
+    try:
+        metrics = await asyncio.to_thread(_read_metrics_from_jsonl, limit, symbol)
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to read execution metrics from JSONL: {e}")
         raise HTTPException(status_code=500, detail="Failed to read execution metrics") from e
 
-    return ExecutionMetricsListResponse(metrics=metrics, count=len(metrics))
+    return ExecutionMetricsListResponse(metrics=metrics, count=len(metrics), database_enabled=False)
 
 
 @router.get("/api/execution-metrics/{workflow_id}", response_model=dict)
-async def get_execution_metric_detail(workflow_id: str) -> dict:
-    """Get single workflow execution detail.
+async def get_execution_metric_detail(workflow_id: UUID) -> dict:
+    """Get single workflow execution detail from database or JSONL fallback.
 
     Args:
-        workflow_id: Workflow ID to fetch
+        workflow_id: Workflow UUID to fetch
 
     Returns:
         WorkflowExecutionMetrics as dict
     """
+    from src.database.connection import get_session
+    from src.database.engine import MissingDatabaseURLError
+    from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
 
-    def _find_metric() -> tuple[dict | None, bool]:
-        """Find metric and return (metric, file_exists)."""
-        metrics_file = Path("logs/execution_metrics.jsonl").expanduser()
+    workflow_id_str = str(workflow_id)
 
-        if not metrics_file.exists():
-            return None, False
-
-        with metrics_file.open() as f:
-            for line in f:
-                try:
-                    metric = json.loads(line)
-                    if metric.get("workflow_id") == workflow_id:
-                        return metric, True
-                except json.JSONDecodeError:
-                    continue
-
-        return None, True
-
+    # Try database first
     try:
-        result, file_exists = await asyncio.to_thread(_find_metric)
+        async with get_session() as session:
+            repo = WorkflowExecutionMetricsRepository(session)
+            metric = await repo.get_by_workflow_id(workflow_id_str)
+            if metric:
+                return metric.model_dump(mode="json")
+            raise HTTPException(status_code=404, detail=f"Workflow {workflow_id_str} not found")
+    except HTTPException:
+        raise
+    except MissingDatabaseURLError:
+        logger.debug("Database not configured, falling back to JSONL for execution metric detail")
+    except Exception as e:
+        logger.opt(exception=True).error(f"Failed to fetch workflow detail from database: {e}")
+
+    # Fallback to JSONL
+    try:
+        result, file_exists = await asyncio.to_thread(_find_metric_in_jsonl, workflow_id_str)
         if result is None:
             if not file_exists:
                 detail = "Execution metrics file not found"
             else:
-                detail = f"Workflow {workflow_id} not found"
+                detail = f"Workflow {workflow_id_str} not found"
             raise HTTPException(status_code=404, detail=detail)
         return result
     except HTTPException:
         raise
     except Exception as e:
-        logger.opt(exception=True).error(f"Failed to fetch workflow detail: {e}")
+        logger.opt(exception=True).error(f"Failed to fetch workflow detail from JSONL: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch workflow detail") from e
 
 

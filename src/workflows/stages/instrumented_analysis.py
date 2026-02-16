@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from src.agents.technical import TechnicalAnalyst
     from src.daemon.degradation import DegradationContext
     from src.data.broker import BrokerPosition
+    from src.metrics.execution import WorkflowExecutionMetrics
     from src.workflows.orchestrator import TradingWorkflow
 
 
@@ -536,6 +537,41 @@ async def _make_decision_and_execute(
     return _ExecutionResult(decision_output, risk_output, execution_output)
 
 
+async def _persist_execution_metrics(execution_metrics: WorkflowExecutionMetrics) -> None:
+    """Persist execution metrics to database with JSONL fallback.
+
+    Args:
+        execution_metrics: Metrics to persist
+    """
+    from src.database.connection import get_session
+    from src.database.engine import MissingDatabaseURLError
+    from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
+    from src.metrics.execution import persist_jsonl
+
+    # Try database first, fallback to JSONL if DB not configured or fails
+    try:
+        async with get_session() as session:
+            repo = WorkflowExecutionMetricsRepository(session)
+            await repo.create(execution_metrics)
+            logger.debug(f"Persisted execution metrics to database: {execution_metrics.workflow_id}")
+    except MissingDatabaseURLError:
+        logger.debug("Database not configured, falling back to JSONL for execution metrics")
+        try:
+            persist_jsonl(execution_metrics)
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to persist execution metrics to JSONL: {e}")
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to persist execution metrics to database: {e}")
+        # Fallback to JSONL on DB failure to avoid data loss
+        try:
+            persist_jsonl(execution_metrics)
+            logger.debug(f"Persisted execution metrics to JSONL fallback: {execution_metrics.workflow_id}")
+        except Exception as jsonl_error:
+            logger.opt(exception=True).error(
+                f"Failed to persist execution metrics to JSONL fallback: {jsonl_error}"
+            )
+
+
 async def _build_and_persist_result(
     ctx: _ExecutionContext,
     prep_result: _PreparationResult,
@@ -553,7 +589,6 @@ async def _build_and_persist_result(
         context_bundle: Decision and degradation contexts
     """
     from src.metrics.db_tracker import DatabaseMetricsTracker
-    from src.metrics.execution import persist_jsonl
 
     execution_metrics = ctx.collector.finalize() if ctx.collector else None
 
@@ -605,10 +640,7 @@ async def _build_and_persist_result(
     )
 
     if execution_metrics:
-        try:
-            persist_jsonl(execution_metrics)
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to persist execution metrics (continuing): {e}")
+        await _persist_execution_metrics(execution_metrics)
 
     if ctx.workflow.metrics_tracker:
         try:

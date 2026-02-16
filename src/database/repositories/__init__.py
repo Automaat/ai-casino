@@ -28,6 +28,7 @@ from src.database.repositories.signal_outcome import SignalOutcomeRepository
 from src.database.repositories.snapshot import PortfolioSnapshotRepository
 from src.database.repositories.tearsheet import TearSheetRepository
 from src.database.repositories.trade import TradeRepository
+from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
 
 __all__ = [
     "ActiveDiscoveryCandidateRepository",
@@ -58,4 +59,5 @@ __all__ = [
     "TearSheetRepository",
     "TradeJournalRepository",
     "TradeRepository",
+    "WorkflowExecutionMetricsRepository",
 ]

@@ -261,6 +261,7 @@ class ExecutionMetricsListResponse(BaseModel):
 
     metrics: list[dict]
     count: int
+    database_enabled: bool = False
 
 
 class ActiveExecutionGraphsResponse(BaseModel):
