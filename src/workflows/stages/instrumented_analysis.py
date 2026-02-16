@@ -552,6 +552,9 @@ async def _build_and_persist_result(
         execution_result: Execution result from earlier stages
         context_bundle: Decision and degradation contexts
     """
+    from src.database.connection import get_session
+    from src.database.engine import MissingDatabaseURLError
+    from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
     from src.metrics.db_tracker import DatabaseMetricsTracker
     from src.metrics.execution import persist_jsonl
 
@@ -605,10 +608,20 @@ async def _build_and_persist_result(
     )
 
     if execution_metrics:
+        # Try database first, fallback to JSONL if DB not configured
         try:
-            persist_jsonl(execution_metrics)
+            async with get_session() as session:
+                repo = WorkflowExecutionMetricsRepository(session)
+                await repo.create(execution_metrics)
+                logger.debug(f"Persisted execution metrics to database: {execution_metrics.workflow_id}")
+        except MissingDatabaseURLError:
+            logger.debug("Database not configured, falling back to JSONL for execution metrics")
+            try:
+                persist_jsonl(execution_metrics)
+            except Exception as e:
+                logger.opt(exception=True).error(f"Failed to persist execution metrics to JSONL: {e}")
         except Exception as e:
-            logger.opt(exception=True).error(f"Failed to persist execution metrics (continuing): {e}")
+            logger.opt(exception=True).error(f"Failed to persist execution metrics to database: {e}")
 
     if ctx.workflow.metrics_tracker:
         try:

@@ -1268,3 +1268,45 @@ class PaperTradingReportORM(Base):
         return (
             f"PaperTradingReportORM(id={self.id}, date={self.assessment_date}, ready={self.ready_for_live})"
         )
+
+
+class WorkflowExecutionMetricsORM(Base):
+    """Workflow execution metrics ORM model."""
+
+    __tablename__ = "workflow_execution_metrics"
+
+    workflow_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+    )
+    symbol: Mapped[str] = mapped_column(String(10), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    total_latency_ms: Mapped[Decimal] = mapped_column(DECIMAL(12, 2), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    total_input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_estimated_cost_usd: Mapped[Decimal] = mapped_column(DECIMAL(12, 6), nullable=False)
+    llm_calls: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    sub_operations: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    agent_timings: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    pipeline_stages: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    __table_args__ = (
+        Index("idx_workflow_execution_metrics_symbol", "symbol"),
+        Index("idx_workflow_execution_metrics_timestamp", "timestamp"),
+        Index("idx_workflow_execution_metrics_symbol_timestamp", "symbol", "timestamp"),
+        Index("idx_workflow_execution_metrics_created_at", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"WorkflowExecutionMetricsORM(workflow_id={self.workflow_id}, symbol={self.symbol}, "
+            f"cost=${self.total_estimated_cost_usd})"
+        )
