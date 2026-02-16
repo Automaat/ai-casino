@@ -20,14 +20,14 @@ class EventBatchEvaluator:
 
     def __init__(
         self,
-        supervisor: TradingSupervisor,
+        supervisor: TradingSupervisor | None,
         state: DaemonState,
         config: DaemonConfig,
     ) -> None:
         """Initialize batch evaluator.
 
         Args:
-            supervisor: Trading supervisor for candidate evaluation
+            supervisor: Trading supervisor for candidate evaluation (optional)
             state: Daemon state manager
             config: Daemon configuration
         """
@@ -105,12 +105,24 @@ class EventBatchEvaluator:
         Returns:
             CandidateRanking with recommendations
         """
-        from src.agents.supervisor.models import CandidateEvaluationContext
+        from src.agents.supervisor.models import CandidateEvaluationContext, CandidateRanking
         from src.strategies.session import TradingSession
 
-        portfolio_symbols = self.state.portfolio.holdings
-        watchlist_symbols = self.state.watchlist.symbols
-        max_size = self.config.screening.watchlist_max_size
+        if not self.supervisor:
+            logger.warning("Supervisor not available, returning empty ranking")
+            return CandidateRanking(
+                evaluations=[],
+                add_watchlist=[],
+                defer=[],
+                skip=[],
+                priority_order=[],
+                overall_reasoning="Supervisor not configured",
+                warnings=["Supervisor not available for candidate evaluation"],
+            )
+
+        portfolio_symbols: list[str] = []
+        watchlist_symbols = await self.state.get_active_discovery_symbols()
+        max_size = self.config.discovery.max_watchlist_size
         capacity = max_size - len(watchlist_symbols) if not bypass_batch else 999
 
         context: CandidateEvaluationContext = CandidateEvaluationContext(

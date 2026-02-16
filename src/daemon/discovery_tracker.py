@@ -20,14 +20,14 @@ class DiscoveryOutcomeTracker:
 
     def __init__(
         self,
-        market_fetcher: MarketDataFetcher,
+        market_fetcher: MarketDataFetcher | None,
         discovery_repo: DiscoveryHistoryRepository,
         metrics_repo: DiscoverySourceMetricsRepository,
     ) -> None:
         """Initialize discovery outcome tracker.
 
         Args:
-            market_fetcher: Market data fetcher for price lookups
+            market_fetcher: Market data fetcher for price lookups (optional)
             discovery_repo: Discovery history repository
             metrics_repo: Discovery source metrics repository
         """
@@ -41,6 +41,10 @@ class DiscoveryOutcomeTracker:
         Returns:
             Dict with counts: {updated_7d, updated_30d, failed}
         """
+        if not self.market_fetcher:
+            logger.warning("Market fetcher not available, skipping outcome updates")
+            return {"updated_7d": 0, "updated_30d": 0, "failed": 0}
+
         logger.info("Starting discovery outcome updates")
 
         discoveries_7d = await self.discovery_repo.get_discoveries_needing_outcome(horizon_days=7)
@@ -135,6 +139,9 @@ class DiscoveryOutcomeTracker:
         Returns:
             Closing price or None if unavailable
         """
+        if not self.market_fetcher:
+            return None
+
         try:
             market_data = await asyncio.to_thread(
                 self.market_fetcher.fetch_daily,
@@ -150,7 +157,13 @@ class DiscoveryOutcomeTracker:
 
             for _ in range(max_attempts):
                 if search_date in df.index:
-                    price_at_date = float(df.loc[search_date]["Close"])
+                    import numpy as np
+
+                    close_value = df.loc[search_date]["Close"]
+                    if hasattr(close_value, "item"):
+                        price_at_date = float(close_value.item())
+                    else:
+                        price_at_date = float(np.asarray(close_value).item())
                     break
                 search_date -= timedelta(days=1)
 

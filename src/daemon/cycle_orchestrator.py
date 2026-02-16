@@ -100,9 +100,9 @@ class DaemonCycleOrchestrator:
                     if await batch_evaluator.should_evaluate_batch():
                         approved_symbols = await batch_evaluator.evaluate_batch()
                         if approved_symbols:
-                            logger.info(f"Adding {len(approved_symbols)} event candidates to watchlist")
-                            for symbol in approved_symbols:
-                                await self.components.state.watchlist.add(symbol)
+                            logger.info(
+                                f"Event batch: {len(approved_symbols)} candidates approved for watchlist"
+                            )
                 except Exception as e:
                     logger.opt(exception=True).warning(f"Event batch evaluation failed: {e}")
 

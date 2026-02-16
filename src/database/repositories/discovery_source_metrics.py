@@ -1,6 +1,9 @@
 """Discovery source metrics repository."""
 
+from __future__ import annotations
+
 from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import and_, desc, func, select
@@ -9,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.daemon.state.models import DiscoverySourceMetrics
 from src.database.models import DiscoverySourceMetricsORM
 from src.database.repositories.base import BaseRepository
+
+if TYPE_CHECKING:
+    from src.database.repositories.discovery import DiscoveryHistoryRepository
 
 
 class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
@@ -20,7 +26,20 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
         Args:
             session: Database session
         """
-        super().__init__(session, DiscoverySourceMetrics, DiscoverySourceMetricsORM)
+        super().__init__(session)
+
+    async def create(self, entity: DiscoverySourceMetrics) -> DiscoverySourceMetrics:
+        """Create new discovery source metrics entity."""
+        return await self.create_or_update_daily_metrics(entity.source_type, entity.measurement_date, entity)
+
+    async def get_by_id(self, entity_id: str) -> DiscoverySourceMetrics | None:
+        """Get entity by ID (composite key lookup).
+
+        Args:
+            entity_id: Format "source_type:YYYY-MM-DD" for composite key lookup
+        """
+        del entity_id
+        return None
 
     async def create_or_update_daily_metrics(
         self, source_type: str, measurement_date: date, metrics: DiscoverySourceMetrics
@@ -41,13 +60,13 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
                 DiscoverySourceMetricsORM.measurement_date == measurement_date,
             )
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         existing = result.scalar_one_or_none()
 
         if existing:
             for key, value in metrics.model_dump(exclude={"source_type", "measurement_date"}).items():
                 setattr(existing, key, value)
-            await self.session.flush()
+            await self._session.flush()
             logger.debug(f"Updated metrics for {source_type} on {measurement_date}")
         else:
             orm = DiscoverySourceMetricsORM(
@@ -55,8 +74,8 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
                 measurement_date=measurement_date,
                 **metrics.model_dump(exclude={"source_type", "measurement_date"}),
             )
-            self.session.add(orm)
-            await self.session.flush()
+            self._session.add(orm)
+            await self._session.flush()
             existing = orm
             logger.debug(f"Created metrics for {source_type} on {measurement_date}")
 
@@ -85,7 +104,7 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
 
         stmt = stmt.order_by(desc(DiscoverySourceMetricsORM.measurement_date))
 
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         orms = result.scalars().all()
 
         return [self._to_domain(orm) for orm in orms]
@@ -121,7 +140,7 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
             .order_by(desc("avg_metric"))
         )
 
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         rows = result.all()
 
         return {row.source_type: float(row.avg_metric) for row in rows}
@@ -142,7 +161,7 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
         """
         from src.database.repositories.discovery import DiscoveryHistoryRepository
 
-        discovery_repo = DiscoveryHistoryRepository(self.session)
+        discovery_repo = DiscoveryHistoryRepository(self._session)
 
         all_sources = await discovery_repo.get_all_sources()
 
@@ -161,7 +180,7 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
         source_type: str,
         measurement_date: date,
         window_days: int,
-        discovery_repo: object,
+        discovery_repo: DiscoveryHistoryRepository,
     ) -> DiscoverySourceMetrics | None:
         """Calculate metrics for a single source.
 
