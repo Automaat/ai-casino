@@ -105,18 +105,9 @@ class DaemonCycleOrchestrator:
                     if await batch_evaluator.should_evaluate_batch():
                         approved_symbols = await batch_evaluator.evaluate_batch()
                         if approved_symbols:
-<<<<<<< HEAD
-                            logger.info(f"Adding {len(approved_symbols)} event candidates to watchlist")
-                            current_watchlist = await self.components.broker_manager.get_merged_watchlist()
-                            for symbol in approved_symbols:
-                                if symbol not in current_watchlist:
-                                    # Add via broker manager
-                                    pass  # Handled by discovery task
-=======
                             logger.info(
                                 f"Event batch: {len(approved_symbols)} candidates approved for watchlist"
                             )
->>>>>>> c6a30cfbbf9252d562c45e1af14dd40a6efb19ad
                 except Exception as e:
                     logger.opt(exception=True).warning(f"Event batch evaluation failed: {e}")
 
