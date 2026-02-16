@@ -126,6 +126,15 @@ class ExecutionMetricsCollector:
             f"model={self._model})"
         )
 
+    @property
+    def workflow_id(self) -> str:
+        """Get workflow ID for this execution.
+
+        Returns:
+            Workflow ID string
+        """
+        return self._workflow_id
+
     def record_llm_call(
         self,
         method: str,

@@ -13,6 +13,10 @@ class HealthResponse(BaseModel):
     uptime_seconds: float = Field(description="Daemon uptime in seconds")
     daemon_running: bool = Field(description="Whether daemon is running")
     last_run: str | None = Field(description="Last analysis run timestamp")
+    market_phase: str | None = Field(
+        default=None, description="Current market phase (PRE_MARKET/REGULAR/AFTER_HOURS), None if closed"
+    )
+    phase_end_time: str | None = Field(default=None, description="ISO when current phase ends")
 
 
 class StateSummaryResponse(BaseModel):

@@ -370,6 +370,7 @@ async def _run_analyses_with_validation(
             is_high_volatility=is_high_volatility,
         )
 
+        planning_fallback_used = False
         try:
             routing_decision = await asyncio.wait_for(
                 ctx.workflow.supervisor.plan_analyses(planning_context, symbol=ctx.symbol),
@@ -378,10 +379,12 @@ async def _run_analyses_with_validation(
         except TimeoutError:
             logger.warning("Supervisor planning timed out, using default routing")
             routing_decision = ctx.workflow.supervisor.default_routing(planning_context)
+            planning_fallback_used = True
 
         _record_stage(ctx.collector, "supervisor_planning", start_planning)
 
         # Run supervised analyses
+        workflow_id = ctx.collector.workflow_id if ctx.collector else None
         analysis_output = await supervised_analysis.run_supervised_analyses(
             analysis_input,
             routing_decision,
@@ -398,6 +401,9 @@ async def _run_analyses_with_validation(
             ctx.workflow.trump_analyst,
             ctx.collector,
             timeout_ms=config.worker_execution_timeout_ms,
+            workflow_id=workflow_id,
+            event_bus=ctx.workflow.event_bus,
+            planning_fallback_used=planning_fallback_used,
         )
     else:
         # Traditional unconditional execution

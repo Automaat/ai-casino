@@ -26,6 +26,7 @@ from src.workflows import TradingWorkflow
 
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent
+    from src.agents.supervisor.agent import TradingSupervisor
     from src.coordinator.agent import TradingCoordinator
     from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.event_bus import EventBus
@@ -74,6 +75,7 @@ class DaemonComponents:
     tearsheet_generator: DaemonTearsheetGenerator | None = None
     prefetcher: DataPrefetcher | None = None
     game_plan_agent: GamePlanAgent | None = None
+    supervisor: TradingSupervisor | None = None
     market_fetcher: MarketDataFetcher | None = None
     param_store: OptimizedParamStore | None = None
     profiler: CycleProfiler | None = None
@@ -197,6 +199,12 @@ class DaemonFactory:
         # Phase 12: Event watchers (if enabled)
         news_watcher, social_watcher, trump_watcher = self._create_event_watchers(historical_cache)
 
+        # Phase 12.5: Supervisor (lazy-initialized via container)
+        supervisor = None
+        if self.config.event_integration.enable_discovery_integration:
+            supervisor = self._container.supervisor()
+            logger.info("Trading supervisor enabled for discovery integration")
+
         # Phase 13: Assemble components
         components = DaemonComponents(
             config=self.config,
@@ -220,6 +228,7 @@ class DaemonFactory:
             tearsheet_generator=tearsheet_generator,
             prefetcher=None,
             game_plan_agent=None,
+            supervisor=supervisor,
             market_fetcher=market_fetcher,
             param_store=param_store,
             profiler=profiler,
@@ -605,6 +614,7 @@ class DaemonFactory:
             param_store=components.param_store,
             notification_service=components.notification_service,
             historical_cache=components.historical_cache,
+            event_bus=components.event_bus,
             container=self._container,
         )
         logger.info("Trading workflow initialized")

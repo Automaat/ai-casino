@@ -54,6 +54,9 @@ class MarketSchedulerConfig:
     enable_pre_market_screening: bool = False
     monte_carlo_time: str = "17:00"
     monte_carlo_days: list[str] | None = None
+    discovery_outcome_time: str = "17:15"
+    discovery_outcome_days: list[str] | None = None
+    enable_discovery_outcome: bool = True
 
 
 class MarketScheduler:
@@ -98,6 +101,9 @@ class MarketScheduler:
         enable_pre_market_screening: bool | None = None,
         monte_carlo_time: str | None = None,
         monte_carlo_days: list[str] | None = None,
+        discovery_outcome_time: str | None = None,
+        discovery_outcome_days: list[str] | None = None,
+        enable_discovery_outcome: bool | None = None,
     ) -> None:
         """Initialize market scheduler.
 
@@ -143,6 +149,9 @@ class MarketScheduler:
             or enable_pre_market_screening is not None
             or monte_carlo_time is not None
             or monte_carlo_days is not None
+            or discovery_outcome_time is not None
+            or discovery_outcome_days is not None
+            or enable_discovery_outcome is not None
         ):
             # Construct config from individual params (overriding defaults)
             defaults = MarketSchedulerConfig()
@@ -273,6 +282,21 @@ class MarketScheduler:
                 monte_carlo_days=(
                     monte_carlo_days if monte_carlo_days is not None else defaults.monte_carlo_days
                 ),
+                discovery_outcome_time=(
+                    discovery_outcome_time
+                    if discovery_outcome_time is not None
+                    else defaults.discovery_outcome_time
+                ),
+                discovery_outcome_days=(
+                    discovery_outcome_days
+                    if discovery_outcome_days is not None
+                    else defaults.discovery_outcome_days
+                ),
+                enable_discovery_outcome=(
+                    enable_discovery_outcome
+                    if enable_discovery_outcome is not None
+                    else defaults.enable_discovery_outcome
+                ),
             )
 
         cfg = config or MarketSchedulerConfig()
@@ -312,6 +336,9 @@ class MarketScheduler:
         self.enable_pre_market_screening = cfg.enable_pre_market_screening
         self.monte_carlo_time = cfg.monte_carlo_time
         self.monte_carlo_days = cfg.monte_carlo_days or ["sun"]
+        self.discovery_outcome_time = cfg.discovery_outcome_time
+        self.discovery_outcome_days = cfg.discovery_outcome_days or ["mon", "tue", "wed", "thu", "fri"]
+        self.enable_discovery_outcome = cfg.enable_discovery_outcome
         logger.info(
             f"MarketScheduler initialized: {cfg.start_time}-{cfg.end_time} {cfg.timezone} "
             f"(pre-market={'enabled' if cfg.enable_pre_market else 'disabled'}, "
@@ -442,6 +469,45 @@ class MarketScheduler:
         )
 
         return max(0, int((market_close - now).total_seconds()))
+
+    def get_current_phase_end(self) -> datetime | None:
+        """Get when the current market phase ends.
+
+        Returns:
+            Datetime when current phase ends, None if market is closed
+        """
+        session = self.get_trading_session()
+        if not session:
+            return None
+
+        now = datetime.now(self.timezone)
+
+        if session == TradingSession.PRE_MARKET:
+            # Pre-market ends when regular market opens
+            return now.replace(
+                hour=self.start_hour,
+                minute=self.start_minute,
+                second=0,
+                microsecond=0,
+            )
+        if session == TradingSession.REGULAR:
+            # Regular market ends at configured close time
+            return now.replace(
+                hour=self.end_hour,
+                minute=self.end_minute,
+                second=0,
+                microsecond=0,
+            )
+        if session == TradingSession.AFTER_HOURS:
+            # After-hours ends at 8:00 PM ET
+            return now.replace(
+                hour=AFTER_HOURS_END[0],
+                minute=AFTER_HOURS_END[1],
+                second=0,
+                microsecond=0,
+            )
+
+        return None
 
     def is_journal_window(self, offset_minutes: int = 15) -> bool:
         """Check if current time is in the after-hours journal window.
@@ -829,6 +895,36 @@ class MarketScheduler:
         except (ValueError, AttributeError) as e:
             logger.opt(exception=True).warning(
                 f"Invalid monte_carlo_time format: {self.monte_carlo_time}: {e}"
+            )
+            return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_discovery_outcome_time(self) -> bool:
+        """Check if current time matches discovery outcome tracking schedule.
+
+        Returns:
+            True if current time is within 1 minute of configured time on configured day
+        """
+        if not self.enable_discovery_outcome:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        normalized_days = {day.lower() for day in self.discovery_outcome_days}
+        if current_day not in normalized_days:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.discovery_outcome_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.opt(exception=True).warning(
+                f"Invalid discovery_outcome_time format: {self.discovery_outcome_time}: {e}"
             )
             return False
 

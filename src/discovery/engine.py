@@ -129,7 +129,25 @@ class StockDiscoveryEngine:
         Returns:
             DiscoveryResult with ranked candidates
         """
-        logger.info("Starting stock discovery")
+        enabled_sources = []
+        if self.config.enable_technical_screening:
+            enabled_sources.append("technical")
+        if self.config.enable_reddit_trending and self.reddit_fetcher:
+            enabled_sources.append("reddit")
+        if self.config.enable_earnings_calendar and self.earnings_fetcher:
+            enabled_sources.append("earnings")
+        if self.config.enable_sector_rotation:
+            enabled_sources.append("sector")
+        if self.config.enable_volume_spikes:
+            enabled_sources.append("volume")
+        if self.config.enable_price_gaps:
+            enabled_sources.append("gaps")
+        if self.config.enable_news_trending and self.news_fetcher:
+            enabled_sources.append("news")
+
+        logger.info(
+            f"Starting stock discovery from {len(enabled_sources)} sources: {', '.join(enabled_sources)}"
+        )
         discovered_at = datetime.now(UTC)
 
         # Fetch from all enabled sources in parallel
@@ -141,42 +159,49 @@ class StockDiscoveryEngine:
             candidates = await self._fetch_technical_candidates()
             self._merge_candidates(all_candidates, candidates, DiscoverySource.TECHNICAL_SCREENING)
             source_breakdown["technical_screening"] = len(candidates)
+            logger.info(f"Technical screening: {len(candidates)} candidates")
 
         # Reddit trending (if enabled and fetcher available)
         if self.config.enable_reddit_trending and self.reddit_fetcher:
             candidates = await self._fetch_reddit_candidates()
             self._merge_candidates(all_candidates, candidates, DiscoverySource.REDDIT_TRENDING)
             source_breakdown["reddit_trending"] = len(candidates)
+            logger.info(f"Reddit trending: {len(candidates)} candidates")
 
         # Earnings calendar (if enabled and fetcher available)
         if self.config.enable_earnings_calendar and self.earnings_fetcher:
             candidates = await self._fetch_earnings_candidates()
             self._merge_candidates(all_candidates, candidates, DiscoverySource.EARNINGS_UPCOMING)
             source_breakdown["earnings_upcoming"] = len(candidates)
+            logger.info(f"Earnings calendar: {len(candidates)} candidates")
 
         # Sector rotation (if enabled and context available)
         if self.config.enable_sector_rotation and sector_context:
             candidates = await self._fetch_sector_rotation_candidates(sector_context)
             self._merge_candidates(all_candidates, candidates, DiscoverySource.SECTOR_ROTATION)
             source_breakdown["sector_rotation"] = len(candidates)
+            logger.info(f"Sector rotation: {len(candidates)} candidates")
 
         # Volume spikes (if enabled)
         if self.config.enable_volume_spikes:
             candidates = await self._fetch_volume_spike_candidates()
             self._merge_candidates(all_candidates, candidates, DiscoverySource.VOLUME_SPIKE)
             source_breakdown["volume_spike"] = len(candidates)
+            logger.info(f"Volume spikes: {len(candidates)} candidates")
 
         # Price gaps (if enabled)
         if self.config.enable_price_gaps:
             candidates = await self._fetch_price_gap_candidates()
             self._merge_candidates(all_candidates, candidates, DiscoverySource.PRICE_GAP)
             source_breakdown["price_gap"] = len(candidates)
+            logger.info(f"Price gaps: {len(candidates)} candidates")
 
         # News trending (if enabled and fetcher available)
         if self.config.enable_news_trending and self.news_fetcher:
             candidates = await self._fetch_news_trending_candidates()
             self._merge_candidates(all_candidates, candidates, DiscoverySource.NEWS_TRENDING)
             source_breakdown["news_trending"] = len(candidates)
+            logger.info(f"News trending: {len(candidates)} candidates")
 
         total_discovered = len(all_candidates)
         logger.info(f"Discovered {total_discovered} unique candidates from {len(source_breakdown)} sources")

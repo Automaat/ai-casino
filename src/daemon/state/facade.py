@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from src.agents.supervisor.models import CandidateRanking
     from src.execution_tracking.models import ExecutionGraph
     from src.execution_tracking.tracker import ExecutionGraphTracker
 
@@ -429,9 +430,14 @@ class DaemonState(BaseModel):
     # Discovery Manager API
     # ===================
 
-    async def record_discovery(self, candidates: list[DiscoveryCandidate], added_symbols: list[str]) -> None:
+    async def record_discovery(
+        self,
+        candidates: list[DiscoveryCandidate],
+        added_symbols: list[str],
+        supervisor_ranking: CandidateRanking | None = None,
+    ) -> None:
         """Delegate to discovery manager."""
-        await self.discovery.record_discovery(candidates, added_symbols)
+        await self.discovery.record_discovery(candidates, added_symbols, supervisor_ranking)
 
     async def expire_stale_candidates(self) -> list[str]:
         """Delegate to discovery manager."""
@@ -448,6 +454,14 @@ class DaemonState(BaseModel):
     async def set_last_discovery(self, value: datetime | None) -> None:
         """Set last discovery timestamp."""
         await self.discovery.set_last_discovery(value)
+
+    async def get_last_discovery_outcome_tracking(self) -> datetime | None:
+        """Get last discovery outcome tracking timestamp."""
+        return await self.discovery.get_last_discovery_outcome_tracking()
+
+    async def set_last_discovery_outcome_tracking(self, value: datetime | None) -> None:
+        """Set last discovery outcome tracking timestamp."""
+        await self.discovery.set_last_discovery_outcome_tracking(value)
 
     async def get_discovery_history(
         self, limit: int = 10, session: AsyncSession | None = None

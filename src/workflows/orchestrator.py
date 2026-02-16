@@ -58,6 +58,7 @@ class TradingWorkflow:
         self._container = components.container
         self.analysis_orchestrator_config = components.analysis_orchestrator_config
         self.web_search_fetcher = components.web_search_fetcher
+        self.event_bus = components.event_bus
         self._original_components = components  # Store for supervisor mode
 
         # Initialize components

@@ -201,17 +201,15 @@
 
 	function getSuccessRateCellClass(rateStr: string): string {
 		const rate = parseFloat(rateStr);
-		if (rate >= 90)
-			return 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-400 font-medium px-2 py-1 rounded';
-		if (rate >= 70)
-			return 'bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 font-medium px-2 py-1 rounded';
-		return 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-400 font-medium px-2 py-1 rounded';
+		if (rate >= 90) return 'bg-green-100 text-green-700 font-semibold px-2 py-1 rounded';
+		if (rate >= 70) return 'bg-yellow-100 text-yellow-700 font-semibold px-2 py-1 rounded';
+		return 'bg-red-100 text-red-700 font-semibold px-2 py-1 rounded';
 	}
 
 	function getStatusBadgeClass(status: string): string {
 		return status === 'Fast'
-			? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 px-2 py-1 rounded text-sm font-medium'
-			: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 px-2 py-1 rounded text-sm font-medium';
+			? 'bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-xs font-semibold'
+			: 'bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-xs font-semibold';
 	}
 
 	function toggleWorker(worker: string) {
@@ -587,45 +585,45 @@
 		<Card>
 			<h3 class="text-lg font-semibold mb-4">Worker Performance Details ({activePeriod})</h3>
 			<div class="overflow-x-auto">
-				<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-					<thead class="bg-gray-50 dark:bg-gray-800">
+				<table class="min-w-full divide-y divide-gray-200">
+					<thead class="bg-gray-100">
 						<tr>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Worker Type</th
 							>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Executions</th
 							>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Success Rate</th
 							>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Failed</th
 							>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Avg Duration</th
 							>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Errors</th
 							>
-							<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+							<th class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
 								>Status</th
 							>
 						</tr>
 					</thead>
-					<tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+					<tbody class="bg-white divide-y divide-gray-200">
 						{#each workerTable as row}
-							<tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
-								<td class="px-4 py-3 text-sm font-medium">{row.name}</td>
-								<td class="px-4 py-3 text-sm">{row.executions}</td>
+							<tr class="hover:bg-gray-50 transition-colors">
+								<td class="px-4 py-3 text-sm font-medium text-gray-900">{row.name}</td>
+								<td class="px-4 py-3 text-sm text-gray-700">{row.executions}</td>
 								<td class="px-4 py-3 text-sm">
 									<span class={getSuccessRateCellClass(row.success_rate)}
 										>{row.success_rate}%</span
 									>
 								</td>
-								<td class="px-4 py-3 text-sm">{row.failed}</td>
-								<td class="px-4 py-3 text-sm">{row.avg_duration}</td>
-								<td class="px-4 py-3 text-sm">{row.errors}</td>
+								<td class="px-4 py-3 text-sm text-gray-700">{row.failed}</td>
+								<td class="px-4 py-3 text-sm text-gray-700">{row.avg_duration}</td>
+								<td class="px-4 py-3 text-sm text-gray-700">{row.errors}</td>
 								<td class="px-4 py-3 text-sm">
 									<span class={getStatusBadgeClass(row.status)}>{row.status}</span>
 								</td>

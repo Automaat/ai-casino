@@ -23,6 +23,14 @@ class AnalysisType(StrEnum):
     TRUMP = "trump"
 
 
+class CandidateRecommendation(StrEnum):
+    """Supervisor recommendation for discovery candidates."""
+
+    ADD_WATCHLIST = "ADD_WATCHLIST"
+    DEFER = "DEFER"
+    SKIP = "SKIP"
+
+
 class AnalysisRoutingDecision(BaseModel):
     """LLM response for analysis planning."""
 
@@ -87,4 +95,42 @@ class SupervisorDecision(BaseModel):
     analysis_weights: AnalysisWeights | None = None
     final_recommendation: str
     confidence: float = Field(ge=0.0, le=1.0)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CandidateEvaluationContext(BaseModel):
+    """Input context for candidate evaluation."""
+
+    candidates: list = Field(description="List of DiscoveryCandidate objects")
+    market_regime: RegimeAnalysis | None
+    portfolio_symbols: list[str]
+    watchlist_symbols: list[str]
+    watchlist_capacity: int
+    sector_exposure: dict[str, float]
+    recent_discovery_outcomes: list[str] | None = None
+    time_budget_ms: int
+    session: TradingSession
+
+
+class CandidateEvaluation(BaseModel):
+    """LLM evaluation for single candidate."""
+
+    symbol: str
+    quality_score: float = Field(ge=0.0, le=1.0)
+    momentum_score: float = Field(ge=0.0, le=1.0)
+    risk_score: float = Field(ge=0.0, le=1.0)
+    portfolio_fit_score: float = Field(ge=0.0, le=1.0)
+    recommendation: CandidateRecommendation
+    reasoning: str
+
+
+class CandidateRanking(BaseModel):
+    """Supervisor's final ranked candidate list."""
+
+    evaluations: list[CandidateEvaluation]
+    add_watchlist: list[str]
+    defer: list[str]
+    skip: list[str]
+    priority_order: list[str]
+    overall_reasoning: str
     warnings: list[str] = Field(default_factory=list)

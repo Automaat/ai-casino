@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time as time_mod
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import BaseModel
@@ -59,6 +59,7 @@ class DaemonCycleOrchestrator:
         self.profiler = profiler
         self._notification_helper = DaemonNotificationHelper()
         self._cycle_counter = 0
+        self._event_batch_evaluator: Any = None  # EventBatchEvaluator (Any to avoid circular import)
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -86,7 +87,33 @@ class DaemonCycleOrchestrator:
             # Phase 3: Run discovery (via task service now)
             # Already handled by task_runner if scheduled
 
-            # Phase 3.5: Cleanup completed execution trackers (persist to database)
+            # Phase 3.5: Evaluate event-based discovery candidates
+            if (
+                self.components.config.event_integration.enable_discovery_integration
+                and self.components.supervisor
+            ):
+                try:
+                    from src.daemon.event_batch_evaluator import EventBatchEvaluator
+
+                    if self._event_batch_evaluator is None:
+                        self._event_batch_evaluator = EventBatchEvaluator(
+                            supervisor=self.components.supervisor,
+                            state=self.components.state,
+                            config=self.components.config,
+                            broker_manager=self.components.broker_manager,
+                            broker=self.components.broker,
+                        )
+
+                    if await self._event_batch_evaluator.should_evaluate_batch():
+                        approved_symbols = await self._event_batch_evaluator.evaluate_batch()
+                        if approved_symbols:
+                            logger.info(
+                                f"Event batch: {len(approved_symbols)} candidates approved for watchlist"
+                            )
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Event batch evaluation failed: {e}")
+
+            # Phase 3.6: Cleanup completed execution trackers (persist to database)
             try:
                 await self.components.state.cleanup_completed_trackers()
             except Exception as e:

@@ -641,8 +641,8 @@ async def run_supervised_analyses(
     collector: ExecutionMetricsCollector | None = None,
     timeout_ms: int = 30000,
     workflow_id: str | None = None,
-    supervisor_metrics_repository: object | None = None,
     event_bus: object | None = None,
+    planning_fallback_used: bool = False,
 ) -> AnalysisOutput:
     """Execute analyses based on supervisor routing decision.
 
@@ -668,8 +668,8 @@ async def run_supervised_analyses(
         collector: Optional metrics collector
         timeout_ms: Timeout for worker execution in milliseconds
         workflow_id: Optional workflow ID for supervisor metrics
-        supervisor_metrics_repository: Optional repository for supervisor metrics
         event_bus: Optional event bus for real-time updates
+        planning_fallback_used: Whether supervisor planning used fallback routing
 
     Returns:
         AnalysisOutput with all analyses
@@ -683,13 +683,10 @@ async def run_supervised_analyses(
 
     # Initialize supervisor metrics collector
     metrics_collector = None
-    if workflow_id and supervisor_metrics_repository:
-        from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
-
-        if isinstance(supervisor_metrics_repository, SupervisorMetricsRepository):
-            metrics_collector = SupervisorMetricsCollector(workflow_id, input_data.symbol)
-            metrics_collector.record_planning_start()
-            metrics_collector.record_planning(routing_decision, fallback_used=False)
+    if workflow_id:
+        metrics_collector = SupervisorMetricsCollector(workflow_id, input_data.symbol)
+        metrics_collector.record_planning_start()
+        metrics_collector.record_planning(routing_decision, fallback_used=planning_fallback_used)
 
     # Publish routing complete event
     await _publish_routing_event(event_bus, workflow_id or "", input_data.symbol, routing_decision)
@@ -739,11 +736,23 @@ async def run_supervised_analyses(
     logger.debug(f"Research analyses completed in {research_ms:.0f}ms")
 
     # Save supervisor metrics
-    if metrics_collector and supervisor_metrics_repository:
+    if metrics_collector:
+        from src.database.connection import get_session
+        from src.database.engine import MissingDatabaseURLError
         from src.database.repositories.supervisor_metrics import SupervisorMetricsRepository
 
-        if isinstance(supervisor_metrics_repository, SupervisorMetricsRepository):
-            await metrics_collector.save(supervisor_metrics_repository)
-            await _publish_metrics_event(event_bus, workflow_id or "", input_data.symbol, metrics_collector)
+        # Create session inline for metrics persistence (per session management pattern)
+        try:
+            async with get_session() as session:
+                repo = SupervisorMetricsRepository(session)
+                await metrics_collector.save(repo)
+                await _publish_metrics_event(
+                    event_bus, workflow_id or "", input_data.symbol, metrics_collector
+                )
+                logger.debug(f"Persisted supervisor metrics to database: workflow_id={workflow_id}")
+        except MissingDatabaseURLError:
+            logger.debug("Database not configured, skipping supervisor metrics persistence")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to persist supervisor metrics: {e}")
 
     return _build_output(group1_results, research_results, warnings)

@@ -12,6 +12,8 @@ export interface HealthResponse {
 	daemon_running: boolean;
 	current_cycle?: number;
 	last_cycle_time?: string;
+	market_phase?: string | null;
+	phase_end_time?: string | null;
 }
 
 export interface StateSummaryResponse {

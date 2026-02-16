@@ -119,6 +119,16 @@ ignore = [
 "src/daemon/*.py" = [
     "PLR2004", # magic values OK for time calculations and limits
     "TRY301",  # raise in try OK for runtime guards
+    "C901",    # complexity OK for orchestration logic
+    "PLR0912", # many branches OK for state machine
+]
+"src/daemon/event_watcher.py" = [
+    "PLR0913", # many args OK for comprehensive watcher config
+]
+"src/discovery/engine.py" = [
+    "C901",    # complexity OK for multi-source discovery orchestration
+    "PLR0912", # many branches OK for source evaluation
+    "PLR0915", # many statements OK for discovery pipeline
 ]
 "src/daemon/api/**/*.py" = [
     "B008",    # Depends() in argument defaults is standard FastAPI pattern
@@ -147,6 +157,8 @@ ignore = [
 ]
 "src/daemon/tasks/*.py" = [
     "ARG002", # unused method args OK in abstract method implementations
+    "C901",   # complexity OK for orchestration tasks
+    "PLR0915", # many statements OK for multi-step task execution
 ]
 "src/daemon/context_builder.py" = [
     "ARG002", # unused args OK in stub implementations awaiting feature completion

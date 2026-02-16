@@ -37,11 +37,25 @@ async def health(request: Request) -> HealthResponse:
 
     status = "healthy" if degradation_tier == "NONE" else "degraded"
 
+    # Get current market phase
+    market_phase = None
+    phase_end_time = None
+    try:
+        session = components.scheduler.get_trading_session()
+        if session:
+            market_phase = session.value
+            phase_end = components.scheduler.get_current_phase_end()
+            phase_end_time = phase_end.isoformat() if phase_end else None
+    except Exception as e:
+        logger.opt(exception=True).debug(f"Failed to get market phase: {e}")
+
     return HealthResponse(
         status=status,
         uptime_seconds=uptime,
         daemon_running=components.running,
         last_run=last_run.isoformat() if last_run else None,
+        market_phase=market_phase,
+        phase_end_time=phase_end_time,
     )
 
 
