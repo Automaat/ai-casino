@@ -92,11 +92,16 @@ def create_analysis_repository(database_engine: DatabaseEngine) -> AnalysisRecor
         database_engine: Database engine singleton
 
     Returns:
-        Repository with new session
+        Repository with new session (caller must close)
+
+    Note:
+        Session must be closed by caller via repo.close() or use as context manager
     """
     from src.database.repositories.analysis import AnalysisRecordRepository
 
-    return AnalysisRecordRepository(database_engine.session())
+    repo = AnalysisRecordRepository(database_engine.session())
+    repo.owns_session = True
+    return repo
 
 
 def create_trade_repository(database_engine: DatabaseEngine) -> TradeRepository:
@@ -106,11 +111,16 @@ def create_trade_repository(database_engine: DatabaseEngine) -> TradeRepository:
         database_engine: Database engine singleton
 
     Returns:
-        Repository with new session
+        Repository with new session (caller must close)
+
+    Note:
+        Session must be closed by caller via repo.close() or use as context manager
     """
     from src.database.repositories.trade import TradeRepository
 
-    return TradeRepository(database_engine.session())
+    repo = TradeRepository(database_engine.session())
+    repo.owns_session = True
+    return repo
 
 
 def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalOutcomeRepository:
@@ -120,11 +130,16 @@ def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalO
         database_engine: Database engine singleton
 
     Returns:
-        Repository with new session
+        Repository with new session (caller must close)
+
+    Note:
+        Session must be closed by caller via repo.close() or use as context manager
     """
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
 
-    return SignalOutcomeRepository(database_engine.session())
+    repo = SignalOutcomeRepository(database_engine.session())
+    repo.owns_session = True
+    return repo
 
 
 def create_coordinator_metrics_repository(database_engine: DatabaseEngine) -> CoordinatorMetricsRepository:
@@ -134,8 +149,13 @@ def create_coordinator_metrics_repository(database_engine: DatabaseEngine) -> Co
         database_engine: Database engine singleton
 
     Returns:
-        Repository with new session
+        Repository with new session (caller must close)
+
+    Note:
+        Session must be closed by caller via repo.close() or use as context manager
     """
     from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
 
-    return CoordinatorMetricsRepository(database_engine.session())
+    repo = CoordinatorMetricsRepository(database_engine.session())
+    repo.owns_session = True
+    return repo
