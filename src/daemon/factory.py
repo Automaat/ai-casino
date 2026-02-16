@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
@@ -21,7 +20,6 @@ from src.daemon.state import DaemonState
 from src.daemon.task_runner import ScheduledTaskRunner
 from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
-from src.database.connection import get_db_engine
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
@@ -327,18 +325,9 @@ class DaemonFactory:
             from src.daemon.paper_trading_validator import PaperTradingValidator
 
             # Initialize tracker for validation
-            trade_repository = None
-            if os.getenv("DATABASE_URL"):
-                try:
-                    from src.database.repositories.trade import TradeRepository
-
-                    db_engine = get_db_engine()
-                    trade_repository = TradeRepository(db_engine.session())
-                    trade_repository.owns_session = True
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
-
-            metrics_tracker = create_metrics_tracker(trade_repository)
+            # NOTE: Skip DB initialization here to avoid event loop conflicts
+            # Database will be initialized properly in lifecycle.startup()
+            metrics_tracker = create_metrics_tracker(None)
 
             validator = PaperTradingValidator(
                 config=self.config.paper_trading,
@@ -614,19 +603,10 @@ class DaemonFactory:
             return components.workflow
 
         # Initialize metrics tracker if not already done
+        # NOTE: Skip DB initialization here to avoid event loop conflicts
+        # Database will be initialized properly in lifecycle.startup()
         if components.metrics_tracker is None:
-            trade_repository = None
-            if os.getenv("DATABASE_URL"):
-                try:
-                    from src.database.repositories.trade import TradeRepository
-
-                    db_engine = get_db_engine()
-                    trade_repository = TradeRepository(db_engine.session())
-                    trade_repository.owns_session = True
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
-
-            components.metrics_tracker = create_metrics_tracker(trade_repository)
+            components.metrics_tracker = create_metrics_tracker(None)
 
         workflow = self._container.workflow_meta(
             broker=components.broker,
