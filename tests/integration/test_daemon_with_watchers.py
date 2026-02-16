@@ -1,7 +1,7 @@
 """Integration tests for Daemon lifecycle with watchers."""
 
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -20,7 +20,7 @@ def mock_news_watcher():
         while watcher.running:
             await asyncio.sleep(0.1)
 
-    watcher.run = AsyncMock(side_effect=run_mock)
+    watcher.run = run_mock
     return watcher
 
 
@@ -43,7 +43,14 @@ def minimal_daemon_components(mock_news_watcher):
     components.news_watcher = mock_news_watcher
     components.social_watcher = None
     components.trump_watcher = None
+    components.news_trending_watcher = None
     components.position_manager = None
+    components.broker_manager = None
+    components.broker = None
+    components.daemon_rebalancer = None
+    components.tearsheet_generator = None
+    components.prefetcher = None
+    components.container = Mock()
 
     return components
 
@@ -95,7 +102,7 @@ async def test_watcher_crash_logged_not_propagated(minimal_daemon_components):
     async def crash_run():
         raise ValueError("Test watcher crash")
 
-    mock_watcher.run = AsyncMock(side_effect=crash_run)
+    mock_watcher.run = crash_run
 
     minimal_daemon_components.news_watcher = mock_watcher
 
@@ -153,8 +160,8 @@ async def test_multiple_watchers_run_independently():
             social_cycles.append(1)
             await asyncio.sleep(0.05)  # Faster cycle
 
-    news_watcher.run = AsyncMock(side_effect=news_run)
-    social_watcher.run = AsyncMock(side_effect=social_run)
+    news_watcher.run = news_run
+    social_watcher.run = social_run
 
     # Create components with both watchers
     config = DaemonConfig()
@@ -167,7 +174,14 @@ async def test_multiple_watchers_run_independently():
     components.news_watcher = news_watcher
     components.social_watcher = social_watcher
     components.trump_watcher = None
+    components.news_trending_watcher = None
     components.position_manager = None
+    components.broker_manager = None
+    components.broker = None
+    components.daemon_rebalancer = None
+    components.tearsheet_generator = None
+    components.prefetcher = None
+    components.container = Mock()
 
     lifecycle = DaemonLifecycle(components)
 
@@ -205,7 +219,7 @@ async def test_shutdown_waits_then_cancels():
             # Sleep longer than shutdown timeout
             await asyncio.sleep(10)
 
-    mock_watcher.run = AsyncMock(side_effect=slow_run)
+    mock_watcher.run = slow_run
 
     config = DaemonConfig()
     config.database.enable_persistence = False
@@ -217,7 +231,14 @@ async def test_shutdown_waits_then_cancels():
     components.news_watcher = mock_watcher
     components.social_watcher = None
     components.trump_watcher = None
+    components.news_trending_watcher = None
     components.position_manager = None
+    components.broker_manager = None
+    components.broker = None
+    components.daemon_rebalancer = None
+    components.tearsheet_generator = None
+    components.prefetcher = None
+    components.container = Mock()
 
     lifecycle = DaemonLifecycle(components)
 
