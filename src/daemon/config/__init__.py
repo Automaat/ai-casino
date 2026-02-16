@@ -19,6 +19,7 @@ from src.daemon.config.analysis import (
     TrumpWatcherConfig,
 )
 from src.daemon.config.base import NotificationTrigger, TradingMode
+from src.daemon.config.events import EventWatcherIntegrationConfig
 from src.daemon.config.infrastructure import (
     ApiConfig,
     ApiKeysConfig,
@@ -75,6 +76,7 @@ __all__ = [
     "DatabaseConfig",
     "DiscoveryConfig",
     "EarningsCalendarConfig",
+    "EventWatcherIntegrationConfig",
     "FilingsWatcherConfig",
     "FinBERTConfig",
     "GamePlanConfig",
@@ -154,6 +156,7 @@ class DaemonConfig(BaseModel):
     trump_watcher: TrumpWatcherConfig = Field(default_factory=TrumpWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
+    event_integration: EventWatcherIntegrationConfig = Field(default_factory=EventWatcherIntegrationConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     finbert: FinBERTConfig = Field(default_factory=FinBERTConfig)
@@ -210,6 +213,7 @@ class DaemonConfig(BaseModel):
             "trump_watcher": daemon_data.pop("trump_watcher", {}) or {},
             "filings_watcher": daemon_data.pop("filings_watcher", {}) or {},
             "anomaly_watcher": daemon_data.pop("anomaly_watcher", {}) or {},
+            "event_integration": daemon_data.pop("event_integration", {}) or {},
             "api": daemon_data.pop("api", {}) or {},
             "llm": daemon_data.pop("llm", {}) or {},
             "finbert": daemon_data.pop("finbert", {}) or {},
@@ -286,6 +290,7 @@ class DaemonConfig(BaseModel):
             trump_watcher=TrumpWatcherConfig(**sections["trump_watcher"]),
             filings_watcher=FilingsWatcherConfig(**sections["filings_watcher"]),
             anomaly_watcher=AnomalyWatcherConfig(**sections["anomaly_watcher"]),
+            event_integration=EventWatcherIntegrationConfig(**sections["event_integration"]),
             api=ApiConfig(
                 **sections["api"], circuit_breaker=CircuitBreakerConfig(**sections["circuit_breaker"])
             ),

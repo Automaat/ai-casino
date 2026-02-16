@@ -65,6 +65,34 @@ class DiscoveryHistoryRecord(BaseModel):
     first_signal_date: datetime | None = None
     outcome_7d: float | None = None
     outcome_30d: float | None = None
+    supervisor_evaluation_score: float | None = None
+    supervisor_recommendation: str | None = None
+    evaluation_reasoning: str | None = None
+    price_at_discovery: float | None = None
+    outcome_updated_at: datetime | None = None
+
+
+class DiscoverySourceMetrics(BaseModel):
+    """Discovery source performance metrics."""
+
+    source_type: str
+    measurement_date: date
+    total_discoveries: int = 0
+    watchlist_additions: int = 0
+    signal_conversions: int = 0
+    discoveries_with_7d_outcome: int = 0
+    positive_7d_outcomes: int = 0
+    avg_7d_return: float | None = None
+    median_7d_return: float | None = None
+    discoveries_with_30d_outcome: int = 0
+    positive_30d_outcomes: int = 0
+    avg_30d_return: float | None = None
+    median_30d_return: float | None = None
+    precision_score: float | None = None
+    recall_score: float | None = None
+    f1_score: float | None = None
+    false_positives: int = 0
+    false_negatives: int = 0
 
 
 class PortfolioAllocationRecord(BaseModel):

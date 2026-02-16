@@ -57,6 +57,8 @@ class EventWatcher(ABC):
         historical_cache: HistoricalCache,
         container: AppContainer | None = None,
         signal_callback: Callable[[EventSignal], None] | None = None,
+        discovery_mode: bool = False,
+        discovery_callback: Callable[[list], None] | None = None,
     ) -> None:
         """Initialize event watcher.
 
@@ -65,6 +67,8 @@ class EventWatcher(ABC):
             historical_cache: Shared cache for market/news data
             container: Optional DI container (auto-created if not provided)
             signal_callback: Optional callback to persist signals (e.g., to state)
+            discovery_mode: If True, route events to discovery engine instead of direct analysis
+            discovery_callback: Callback to receive discovery candidates
         """
         from src.di.container import create_container
 
@@ -76,6 +80,11 @@ class EventWatcher(ABC):
         self.running = False
         self._signal_callback = signal_callback
         self._container = container or create_container()
+
+        # Discovery mode support
+        self._discovery_mode = discovery_mode
+        self._discovery_callback = discovery_callback
+        self._event_adapter = None
 
         # State tracking (in-memory)
         self._last_check: datetime | None = None
@@ -310,6 +319,45 @@ class EventWatcher(ABC):
             return
 
         logger.info(f"Found {len(relevant)} high-relevance event(s)")
+
+        # Route based on discovery mode
+        if self._discovery_mode:
+            await self._route_to_discovery(relevant)
+        else:
+            await self._route_to_direct_analysis(relevant)
+
+    async def _route_to_discovery(self, relevant: list[tuple[BaseEvent, TriageResult]]) -> None:
+        """Convert events to discovery candidates and feed to discovery engine.
+
+        Args:
+            relevant: List of (event, triage) tuples
+        """
+        if self._event_adapter is None:
+            from src.daemon.adapters.event_discovery_adapter import EventDiscoveryAdapter
+
+            self._event_adapter = EventDiscoveryAdapter(self._container.market_fetcher())
+
+        all_candidates = []
+        for event, triage in relevant:
+            try:
+                candidates = await self._event_adapter.convert_event_to_candidate(event, triage)
+                all_candidates.extend(candidates)
+            except Exception as e:
+                logger.opt(exception=True).error(f"Failed to convert event to candidate: {e}")
+
+        if all_candidates and self._discovery_callback:
+            try:
+                self._discovery_callback(all_candidates)
+                logger.info(f"Routed {len(all_candidates)} event candidates to discovery engine")
+            except Exception as e:
+                logger.opt(exception=True).error(f"Discovery callback failed: {e}")
+
+    async def _route_to_direct_analysis(self, relevant: list[tuple[BaseEvent, TriageResult]]) -> None:
+        """Legacy direct analysis path (pre-discovery mode).
+
+        Args:
+            relevant: List of (event, triage) tuples
+        """
         symbols_to_analyze = self._extract_symbols_with_cooldown(relevant)
 
         if not symbols_to_analyze:

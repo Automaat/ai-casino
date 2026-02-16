@@ -86,7 +86,27 @@ class DaemonCycleOrchestrator:
             # Phase 3: Run discovery (via task service now)
             # Already handled by task_runner if scheduled
 
-            # Phase 3.5: Cleanup completed execution trackers (persist to database)
+            # Phase 3.5: Evaluate event-based discovery candidates
+            if self.components.config.event_integration.enable_discovery_integration:
+                try:
+                    from src.daemon.event_batch_evaluator import EventBatchEvaluator
+
+                    batch_evaluator = EventBatchEvaluator(
+                        supervisor=self.components.supervisor,
+                        state=self.components.state,
+                        config=self.components.config,
+                    )
+
+                    if await batch_evaluator.should_evaluate_batch():
+                        approved_symbols = await batch_evaluator.evaluate_batch()
+                        if approved_symbols:
+                            logger.info(f"Adding {len(approved_symbols)} event candidates to watchlist")
+                            for symbol in approved_symbols:
+                                await self.components.state.watchlist.add(symbol)
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Event batch evaluation failed: {e}")
+
+            # Phase 3.6: Cleanup completed execution trackers (persist to database)
             try:
                 await self.components.state.cleanup_completed_trackers()
             except Exception as e:

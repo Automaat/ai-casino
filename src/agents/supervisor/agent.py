@@ -10,6 +10,8 @@ from src.agents.supervisor.models import (
     AnalysisRoutingDecision,
     AnalysisType,
     AnalysisWeights,
+    CandidateEvaluationContext,
+    CandidateRanking,
     PlanningContext,
     SynthesisContext,
 )
@@ -167,6 +169,211 @@ class TradingSupervisor:
         logger.debug(f"Synthesis reasoning: {weights.reasoning}")
 
         return weights
+
+    @track_agent
+    async def evaluate_candidates(self, context: CandidateEvaluationContext) -> CandidateRanking:
+        """Evaluate discovery candidates for watchlist addition.
+
+        Scoring criteria:
+        - Quality (30%): multi-source agreement, data completeness
+        - Momentum (30%): earnings proximity, sector momentum, timing
+        - Risk (20%): volatility, market cap, liquidity
+        - Portfolio Fit (20%): sector diversification, no overlap
+
+        Args:
+            context: Evaluation context with candidates and portfolio state
+            symbol: Trading symbol for execution tracking
+
+        Returns:
+            CandidateRanking with ADD/DEFER/SKIP recommendations
+        """
+        if not context.candidates:
+            logger.info("No candidates to evaluate")
+            return CandidateRanking(
+                evaluations=[],
+                add_watchlist=[],
+                defer=[],
+                skip=[],
+                priority_order=[],
+                overall_reasoning="No candidates provided",
+                warnings=[],
+            )
+
+        prompt = self._build_evaluation_prompt(context)
+        system = self._prompts.load("system")
+
+        try:
+            ranking = await self.llm.astructured(prompt, CandidateRanking, system=system, temperature=0.4)
+        except StructuredOutputError as e:
+            logger.opt(exception=True).warning(f"Structured output failed, fallback: {e}")
+            ranking = self._default_candidate_ranking(context)
+
+        ranking = self._enforce_constraints(ranking, context)
+
+        logger.info(
+            f"Candidate evaluation: {len(ranking.add_watchlist)} add, "
+            f"{len(ranking.defer)} defer, {len(ranking.skip)} skip"
+        )
+
+        return ranking
+
+    def _build_evaluation_prompt(self, context: CandidateEvaluationContext) -> str:
+        """Build evaluation prompt with formatted context."""
+        sector_exposure_summary = self._format_sector_exposure(context.sector_exposure)
+        candidate_summaries = self._format_candidates(context.candidates)
+        recent_outcomes = self._format_recent_outcomes(context.recent_discovery_outcomes)
+
+        regime_str = context.market_regime.regime.value if context.market_regime else "unknown"
+        session_str = context.session.value
+
+        return self._prompts.load(
+            "evaluate_candidates",
+            regime=regime_str,
+            session=session_str,
+            portfolio_size=len(context.portfolio_symbols),
+            watchlist_size=len(context.watchlist_symbols),
+            watchlist_max=len(context.watchlist_symbols) + context.watchlist_capacity,
+            watchlist_capacity=context.watchlist_capacity,
+            sector_exposure_summary=sector_exposure_summary,
+            candidate_count=len(context.candidates),
+            candidate_summaries=candidate_summaries,
+            recent_outcomes=recent_outcomes,
+        )
+
+    def _format_sector_exposure(self, sector_exposure: dict[str, float]) -> str:
+        """Format sector exposure for prompt."""
+        if not sector_exposure:
+            return "No sector exposure data"
+
+        lines = []
+        for sector, ratio in sorted(sector_exposure.items(), key=lambda x: -x[1]):
+            lines.append(f"- {sector}: {ratio:.1%}")
+        return "\n".join(lines)
+
+    def _format_candidates(self, candidates: list) -> str:
+        """Format candidates for prompt."""
+        lines = []
+        for idx, candidate in enumerate(candidates, 1):
+            sources_str = ", ".join(str(s.value if hasattr(s, "value") else s) for s in candidate.sources)
+            metadata_items = []
+            if hasattr(candidate, "metadata") and candidate.metadata:
+                for key, val in candidate.metadata.items():
+                    if key in ["volume", "market_cap", "gap_percent", "volume_ratio"]:
+                        metadata_items.append(f"{key}={val}")
+
+            metadata_str = f" ({', '.join(metadata_items)})" if metadata_items else ""
+
+            lines.append(
+                f"{idx}. {candidate.symbol} - Score: {candidate.composite_score:.2f}, "
+                f"Sources: [{sources_str}], "
+                f"Sector: {getattr(candidate, 'sector', 'Unknown')}{metadata_str}"
+            )
+        return "\n".join(lines)
+
+    def _format_recent_outcomes(self, outcomes: list[str] | None) -> str:
+        """Format recent discovery outcomes for prompt."""
+        if not outcomes:
+            return "No recent outcome data available"
+        return "\n".join(f"- {outcome}" for outcome in outcomes)
+
+    def _default_candidate_ranking(self, context: CandidateEvaluationContext) -> CandidateRanking:
+        """Fallback ranking when LLM unavailable - score-based heuristics.
+
+        Rules:
+        - ADD: composite_score >= 0.75 AND capacity available
+        - DEFER: 0.60 <= composite_score < 0.75
+        - SKIP: composite_score < 0.60 OR sector overconcentrated (>30%)
+        """
+        from src.agents.supervisor.models import CandidateEvaluation, CandidateRecommendation
+
+        evaluations = []
+        add_watchlist = []
+        defer = []
+        skip = []
+
+        for candidate in context.candidates:
+            score = candidate.composite_score
+            symbol = candidate.symbol
+            sector = getattr(candidate, "sector", "Unknown")
+
+            sector_ratio = context.sector_exposure.get(sector, 0.0)
+            sector_overweight = sector_ratio > 0.30
+
+            if score >= 0.75 and not sector_overweight:
+                recommendation = CandidateRecommendation.ADD_WATCHLIST
+                reasoning = f"High score ({score:.2f}), sector not overweight"
+                add_watchlist.append(symbol)
+            elif 0.60 <= score < 0.75:
+                recommendation = CandidateRecommendation.DEFER
+                reasoning = f"Medium score ({score:.2f}), revisit later"
+                defer.append(symbol)
+            else:
+                recommendation = CandidateRecommendation.SKIP
+                if sector_overweight:
+                    reasoning = f"Sector {sector} overweight ({sector_ratio:.1%})"
+                else:
+                    reasoning = f"Low score ({score:.2f})"
+                skip.append(symbol)
+
+            evaluations.append(
+                CandidateEvaluation(
+                    symbol=symbol,
+                    quality_score=score,
+                    momentum_score=score,
+                    risk_score=1.0 - score,
+                    portfolio_fit_score=0.0 if sector_overweight else 1.0,
+                    recommendation=recommendation,
+                    reasoning=reasoning,
+                )
+            )
+
+        priority_order = sorted(
+            add_watchlist,
+            key=lambda s: next(c.composite_score for c in context.candidates if c.symbol == s),
+            reverse=True,
+        )
+
+        return CandidateRanking(
+            evaluations=evaluations,
+            add_watchlist=add_watchlist,
+            defer=defer,
+            skip=skip,
+            priority_order=priority_order,
+            overall_reasoning="Heuristic fallback: score-based ranking with sector constraints",
+            warnings=["LLM unavailable, using fallback heuristics"],
+        )
+
+    def _enforce_constraints(
+        self, ranking: CandidateRanking, context: CandidateEvaluationContext
+    ) -> CandidateRanking:
+        """Enforce capacity limits, remove duplicates, warn on sector concentration."""
+        add_watchlist = ranking.add_watchlist
+        priority_order = ranking.priority_order
+        warnings = list(ranking.warnings)
+
+        all_symbols = context.portfolio_symbols + context.watchlist_symbols
+        add_watchlist = [s for s in add_watchlist if s not in all_symbols]
+        priority_order = [s for s in priority_order if s not in all_symbols]
+
+        if len(add_watchlist) > context.watchlist_capacity:
+            excess = len(add_watchlist) - context.watchlist_capacity
+            warnings.append(f"Truncated {excess} symbols to fit watchlist capacity")
+            add_watchlist = add_watchlist[: context.watchlist_capacity]
+            priority_order = priority_order[: context.watchlist_capacity]
+
+        for sector, ratio in context.sector_exposure.items():
+            if ratio > 0.30:
+                warnings.append(f"Sector {sector} currently overweight at {ratio:.1%}")
+
+        return CandidateRanking(
+            evaluations=ranking.evaluations,
+            add_watchlist=add_watchlist,
+            defer=ranking.defer,
+            skip=ranking.skip,
+            priority_order=priority_order,
+            overall_reasoning=ranking.overall_reasoning,
+            warnings=warnings,
+        )
 
     def default_routing(self, context: PlanningContext) -> AnalysisRoutingDecision:
         """Fallback routing when LLM unavailable - intelligent data-driven decisions.

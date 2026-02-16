@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, distinct, func, select
 
 from src.daemon.state import DiscoveryHistoryRecord
 from src.database.models import DiscoveryHistoryRecordORM
@@ -199,7 +199,146 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
             first_signal_date=orm.first_signal_date,
             outcome_7d=float(orm.outcome_7d) if orm.outcome_7d is not None else None,
             outcome_30d=float(orm.outcome_30d) if orm.outcome_30d is not None else None,
+            supervisor_evaluation_score=(
+                float(orm.supervisor_evaluation_score) if orm.supervisor_evaluation_score else None
+            ),
+            supervisor_recommendation=orm.supervisor_recommendation,
+            evaluation_reasoning=orm.evaluation_reasoning,
+            price_at_discovery=float(orm.price_at_discovery) if orm.price_at_discovery else None,
+            outcome_updated_at=orm.outcome_updated_at,
         )
+
+    async def update_outcome_prices(
+        self,
+        symbol: str,
+        discovered_at: datetime,
+        outcome_7d: float | None,
+        outcome_30d: float | None,
+        price_at_discovery: float,
+    ) -> DiscoveryHistoryRecord | None:
+        """Update outcome prices for specific discovery.
+
+        Args:
+            symbol: Stock ticker symbol
+            discovered_at: Discovery timestamp
+            outcome_7d: 7-day return percentage
+            outcome_30d: 30-day return percentage
+            price_at_discovery: Price at discovery time
+
+        Returns:
+            Updated record or None if not found
+        """
+        result = await self._session.execute(
+            select(DiscoveryHistoryRecordORM).where(
+                DiscoveryHistoryRecordORM.symbol == symbol,
+                DiscoveryHistoryRecordORM.discovered_at == discovered_at,
+            )
+        )
+        orm = result.scalar_one_or_none()
+        if not orm:
+            return None
+
+        if price_at_discovery:
+            orm.price_at_discovery = Decimal(str(price_at_discovery))
+
+        if outcome_7d is not None:
+            orm.outcome_7d = Decimal(str(outcome_7d))
+
+        if outcome_30d is not None:
+            orm.outcome_30d = Decimal(str(outcome_30d))
+
+        orm.outcome_updated_at = datetime.now(UTC)
+
+        await self._session.commit()
+        logger.debug(f"Updated outcomes for {symbol} discovered at {discovered_at}")
+        return self._to_record(orm)
+
+    async def get_discoveries_needing_outcome(
+        self, horizon_days: int, limit: int = 100
+    ) -> list[DiscoveryHistoryRecord]:
+        """Get discoveries that need outcome updates.
+
+        Args:
+            horizon_days: Days since discovery (7 or 30)
+            limit: Maximum number to return
+
+        Returns:
+            Discoveries needing outcome calculation
+        """
+        outcome_7d_horizon = 7
+        outcome_30d_horizon = 30
+
+        cutoff_date = datetime.now(UTC) - timedelta(days=horizon_days)
+
+        if horizon_days == outcome_7d_horizon:
+            condition = DiscoveryHistoryRecordORM.outcome_7d.is_(None)
+        elif horizon_days == outcome_30d_horizon:
+            condition = DiscoveryHistoryRecordORM.outcome_30d.is_(None)
+        else:
+            msg = (
+                f"Invalid horizon_days: {horizon_days} "
+                f"(expected {outcome_7d_horizon} or {outcome_30d_horizon})"
+            )
+            raise ValueError(msg)
+
+        result = await self._session.execute(
+            select(DiscoveryHistoryRecordORM)
+            .where(DiscoveryHistoryRecordORM.discovered_at <= cutoff_date, condition)
+            .order_by(DiscoveryHistoryRecordORM.discovered_at.desc())
+            .limit(limit)
+        )
+
+        return [self._to_record(orm) for orm in result.scalars().all()]
+
+    async def get_discoveries_by_source(
+        self,
+        source_type: str,
+        days_back: int = 30,
+        reference_date: date | None = None,
+    ) -> list[DiscoveryHistoryRecord]:
+        """Get discoveries filtered by source type.
+
+        Args:
+            source_type: Discovery source type
+            days_back: Days to look back
+            reference_date: Reference date (default: today)
+
+        Returns:
+            Filtered discoveries
+        """
+        if reference_date is None:
+            reference_date = datetime.now(UTC).date()
+
+        cutoff = datetime.combine(reference_date, datetime.min.time()).replace(tzinfo=UTC) - timedelta(
+            days=days_back
+        )
+
+        result = await self._session.execute(
+            select(DiscoveryHistoryRecordORM).where(
+                DiscoveryHistoryRecordORM.discovered_at >= cutoff,
+                func.jsonb_exists(
+                    DiscoveryHistoryRecordORM.sources,
+                    func.jsonb_path_query_first(
+                        DiscoveryHistoryRecordORM.sources,
+                        f'$[*] ? (@.source == "{source_type}")',
+                    ).is_not(None),
+                ),
+            )
+        )
+
+        return [self._to_record(orm) for orm in result.scalars().all()]
+
+    async def get_all_sources(self) -> list[str]:
+        """Get all unique discovery source types.
+
+        Returns:
+            List of unique source type strings
+        """
+        result = await self._session.execute(
+            select(distinct(func.jsonb_array_elements(DiscoveryHistoryRecordORM.sources)["source"].astext))
+        )
+
+        return [row[0] for row in result.all()]
 
     def __repr__(self) -> str:
         """Return string representation."""

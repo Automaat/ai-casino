@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -351,3 +351,54 @@ class EarningsFetchTask(TaskExecutor):
             return True
 
         return False
+
+
+class DiscoveryOutcomeTask(TaskExecutor):
+    """Discovery outcome tracking task (T+7d/30d price updates)."""
+
+    @property
+    def task_name(self) -> str:
+        """Task display name."""
+        return "Discovery Outcome Tracking"
+
+    async def execute(self) -> None:
+        """Execute discovery outcome tracking logic."""
+        from src.daemon.discovery_tracker import DiscoveryOutcomeTracker
+        from src.database.connection import get_session
+        from src.database.repositories.discovery import DiscoveryHistoryRepository
+        from src.database.repositories.discovery_source_metrics import (
+            DiscoverySourceMetricsRepository,
+        )
+
+        async with get_session() as session:
+            discovery_repo = DiscoveryHistoryRepository(session)
+            metrics_repo = DiscoverySourceMetricsRepository(session)
+
+            tracker = DiscoveryOutcomeTracker(
+                market_fetcher=self.components.market_fetcher,
+                discovery_repo=discovery_repo,
+                metrics_repo=metrics_repo,
+            )
+
+            stats = await tracker.update_all_outcomes()
+
+            today = datetime.now(UTC).date()
+            metrics = await tracker.calculate_daily_source_metrics(today)
+
+            console.print(
+                f"[bold green]✓[/bold green] Discovery tracking: "
+                f"{stats['updated_7d']} 7d outcomes, {stats['updated_30d']} 30d outcomes"
+            )
+            logger.info(
+                f"Discovery outcome tracking: {stats['updated_7d']} 7d, "
+                f"{stats['updated_30d']} 30d, {stats['failed']} failed, "
+                f"{len(metrics)} source metrics calculated"
+            )
+
+    async def get_last_run(self) -> datetime | None:
+        """Get last discovery outcome tracking timestamp."""
+        return await self.components.state.get_last_discovery_outcome_tracking()
+
+    async def record_success(self, duration: float) -> None:
+        """Record discovery outcome tracking completion."""
+        await self.components.state.set_last_discovery_outcome_tracking(datetime.now(UTC))

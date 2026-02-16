@@ -696,6 +696,29 @@ daemon:
     # Maximum concurrent re-analyses
     max_concurrent_analyses: 2
 
+  event_integration:
+    # Event watcher → discovery integration (Phase 3)
+    # Routes event watchers through discovery engine instead of direct analysis
+    enable_discovery_integration: true
+    # Batch evaluation interval (minutes, 5-60)
+    batch_evaluation_interval_minutes: 15
+    # Maximum candidates per batch evaluation (5-20)
+    max_candidates_per_batch: 10
+    # Urgent candidate threshold for immediate evaluation (0.7-1.0)
+    urgent_evaluation_threshold: 0.85
+    # Bypass batch evaluation for urgent candidates
+    urgent_bypass_batch: true
+    # TTL hours by urgency level
+    urgency_ttl_hours:
+      IMMEDIATE: 4
+      WATCHLIST: 24
+      IGNORE: 0
+    # Per-watcher discovery mode toggles
+    news_watcher_use_discovery: true
+    social_watcher_use_discovery: true
+    anomaly_watcher_use_discovery: false
+    trump_watcher_use_discovery: true
+
   monte_carlo:
     # Monte Carlo stress testing
     enabled: false
