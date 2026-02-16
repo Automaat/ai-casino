@@ -48,7 +48,7 @@ def _record_worker_starts(
         # Attach callback to record end time when task completes
         # Capture collector in closure to ensure it's not None
         def record_end_time(
-            _task: asyncio.Task[object],
+            _task: asyncio.Task,
             worker_name: str = worker_task.analysis_type.value,
             collector: SupervisorMetricsCollector = metrics_collector,
         ) -> None:

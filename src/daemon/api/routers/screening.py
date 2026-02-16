@@ -101,7 +101,7 @@ async def get_screening_insights(
         criteria_breakdown[record.criteria] += 1
 
     # Latest screening for sector distribution and signals
-    latest = records[-1]
+    latest = records[0]
     sector_counts: dict[str, int] = defaultdict(int)
     signal_counts: dict[str, int] = defaultdict(int)
     total_score = 0.0

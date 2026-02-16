@@ -216,6 +216,15 @@ class SupervisorMetricsCollector:
         self.worker_errors[worker_name] = error
         self.failed_workers += 1
 
+        # Clean up timing dicts and record elapsed time if worker was started
+        if worker_name in self.worker_start_times:
+            end_time = self.worker_end_times.get(worker_name, time.perf_counter())
+            elapsed_ms = (end_time - self.worker_start_times[worker_name]) * 1000
+            self.worker_timings[worker_name] = elapsed_ms
+            del self.worker_start_times[worker_name]
+            if worker_name in self.worker_end_times:
+                del self.worker_end_times[worker_name]
+
     def record_timeout(self) -> None:
         """Record timeout event."""
         self.timeout_triggered = True
