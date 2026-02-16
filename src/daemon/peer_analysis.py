@@ -1,18 +1,25 @@
 """Deep peer benchmarking analysis for portfolio positions."""
 
+from __future__ import annotations
+
 import json
 import time as time_mod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yfinance as yf
 from loguru import logger
 from pydantic import BaseModel
 
 from src.cache.historical import HistoricalCache
+from src.daemon.state.models import PeerAnalysisInput
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.universe import StockInfo, StockUniverseFetcher
+
+if TYPE_CHECKING:
+    from src.daemon.state import DaemonState
 
 
 class PeerMetrics(BaseModel):
@@ -153,16 +160,14 @@ class DeepPeerAnalyzer:
                 logger.opt(exception=True).error(f"Peer analysis failed for {symbol}: {e}")
 
         duration = time_mod.time() - start
-        result = DeepPeerAnalysisResult(
+        # Persist is now called by the task, not here
+        return DeepPeerAnalysisResult(
             analyses=analyses,
             total_symbols=len(symbols),
             total_peers_analyzed=total_peers,
             total_duration_seconds=duration,
             analyzed_at=datetime.now(UTC),
         )
-
-        self.persist(result)
-        return result
 
     def _analyze_single(self, symbol: str, universe: list[StockInfo]) -> PeerAnalysisResult:
         """Analyze a single position against its sector peers.
@@ -393,24 +398,49 @@ class DeepPeerAnalyzer:
             analyzed_at=datetime.now(UTC),
         )
 
-    def persist(self, result: DeepPeerAnalysisResult) -> Path:
-        """Write analysis result to JSON file.
+    async def persist(
+        self,
+        result: DeepPeerAnalysisResult,
+        state: DaemonState,
+        enable_file_export: bool = False,
+    ) -> Path | None:
+        """Persist analysis result to database and optionally to JSON file.
 
         Args:
             result: Analysis result to persist
+            state: DaemonState instance for database persistence
+            enable_file_export: Whether to export to JSON file (deprecated)
 
         Returns:
-            Path to written file
+            Path to JSON file if enable_file_export=True, None otherwise
         """
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
-        file_path = self._output_dir / f"{date_str}.json"
+        # Convert to database record - use task's format for compatibility
+        rankings = {a.symbol: a.rank for a in result.analyses}
+        swap_recommendations = [a.swap_recommendation for a in result.analyses if a.swap_recommendation]
 
-        with file_path.open("w") as f:
-            json.dump(result.model_dump(mode="json"), f, indent=2, default=str)
+        # Primary: Database persistence
+        await state.record_peer_analysis(
+            PeerAnalysisInput(
+                symbols_analyzed=[a.symbol for a in result.analyses],
+                rankings=rankings,
+                swap_recommendations=swap_recommendations,
+                analyses=[a.model_dump(mode="json") for a in result.analyses],
+                total_peers=result.total_peers_analyzed,
+                total_duration_seconds=result.total_duration_seconds,
+            )
+        )
 
-        logger.info(f"Persisted peer analysis to {file_path}")
-        return file_path
+        # Optional: File export (deprecated)
+        if enable_file_export:
+            self._output_dir.mkdir(parents=True, exist_ok=True)
+            date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+            file_path = self._output_dir / f"{date_str}.json"
+            with file_path.open("w") as f:
+                json.dump(result.model_dump(mode="json"), f, indent=2, default=str)
+            logger.debug(f"Peer analysis exported to {file_path}")
+            return file_path
+
+        return None
 
     def load_latest(self, symbol: str) -> PeerAnalysisResult | None:
         """Load most recent analysis result for a symbol.

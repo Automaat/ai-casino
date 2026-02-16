@@ -10,7 +10,17 @@ T = TypeVar("T")
 
 
 class BaseRepository(ABC, Generic[T]):
-    """Abstract base class for repositories."""
+    """Abstract base class for repositories with async context manager support.
+
+    Repositories can be used in two ways:
+    1. Direct instantiation (session held until GC) - deprecated
+    2. Async context manager (session properly closed) - recommended
+
+    Example:
+        # Using the repository as an async context manager (recommended):
+        async with MyRepository(session) as repo:
+            await repo.create(entity)
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session.
@@ -19,25 +29,31 @@ class BaseRepository(ABC, Generic[T]):
             session: SQLAlchemy async session
         """
         self._session = session
+        self.owns_session = False
 
-    def _recreate_session_if_needed(self, error: RuntimeError) -> bool:
-        """Recreate session if event loop error detected.
+    async def __aenter__(self) -> BaseRepository[T]:
+        """Enter async context manager."""
+        return self
 
-        Args:
-            error: RuntimeError from database operation
+    async def __aexit__(self, exc_type: type | None, exc_val: BaseException | None, exc_tb: object) -> None:
+        """Exit async context manager and close session if owned."""
+        if self.owns_session:
+            await self._session.close()
 
-        Returns:
-            True if session was recreated, False otherwise
+    async def close(self) -> None:
+        """Explicitly close the session if this repository owns it.
+
+        If the session is not owned by this repository (owns_session is False),
+        this method will be a no-op to avoid closing a shared or externally
+        managed session.
         """
-        error_msg = str(error)
-        if "bound to a different event loop" in error_msg or "attached to a different loop" in error_msg:
-            logger.warning(f"{self.__class__.__name__}: Event loop error, recreating session")
-            from src.database.connection import get_db_engine
-
-            engine = get_db_engine()
-            self._session = engine.session()
-            return True
-        return False
+        if self.owns_session:
+            await self._session.close()
+        else:
+            logger.warning(
+                f"{self.__class__.__name__}.close() called on non-owned session; "
+                "no action taken to avoid closing an external session."
+            )
 
     @abstractmethod
     async def create(self, entity: T) -> T:

@@ -85,12 +85,13 @@ class GetNewsTool(BaseTool):
                 # No event loop running, safe to use asyncio.run()
                 articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
             else:
-                # Event loop already running (e.g., in tests), use run_in_executor
+                # Event loop already running, run in separate thread with new loop
                 import concurrent.futures
 
                 with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Pass lambda to avoid coroutine starting prematurely
                     future = executor.submit(
-                        asyncio.run, fetcher.afetch_company_news(symbol.upper(), limit=limit)
+                        lambda: asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
                     )
                     articles = future.result()
 

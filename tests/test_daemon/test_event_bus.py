@@ -83,7 +83,7 @@ async def test_eventbus_queue_full_drops():
 
     assert received_count == 5
 
-    history = bus.get_history()
+    history = await bus.get_history()
     assert len(history) == 10
 
     await bus.unsubscribe(sub_id)
@@ -97,7 +97,7 @@ async def test_eventbus_history():
         event = DashboardEvent(event_type=EventType.CYCLE_START, data={"iteration": i})
         await bus.publish(event)
 
-    history = bus.get_history()
+    history = await bus.get_history()
     assert len(history) == 10
 
     assert history[0].data == {"iteration": 14}
@@ -112,18 +112,18 @@ async def test_eventbus_history_limit():
         event = DashboardEvent(event_type=EventType.ANALYSIS_COMPLETE, data={"index": i})
         await bus.publish(event)
 
-    history_all = bus.get_history()
+    history_all = await bus.get_history()
     assert len(history_all) == 20
 
-    history_5 = bus.get_history(limit=5)
+    history_5 = await bus.get_history(limit=5)
     assert len(history_5) == 5
     assert history_5[0].data == {"index": 19}
     assert history_5[4].data == {"index": 15}
 
-    history_100 = bus.get_history(limit=100)
+    history_100 = await bus.get_history(limit=100)
     assert len(history_100) == 20
 
-    history_0 = bus.get_history(limit=0)
+    history_0 = await bus.get_history(limit=0)
     assert len(history_0) == 0
 
 
@@ -194,7 +194,7 @@ async def test_eventbus_publish_exception_handling():
 
     await bus.publish(event)
 
-    history = bus.get_history()
+    history = await bus.get_history()
     assert len(history) == 1
     assert history[0].event_type == EventType.STATE_UPDATE
 
@@ -203,10 +203,10 @@ async def test_eventbus_empty_history():
     """Test empty history returns empty list."""
     bus = EventBus(history_size=50, queue_size=10)
 
-    history = bus.get_history()
+    history = await bus.get_history()
     assert history == []
 
-    history_limited = bus.get_history(limit=10)
+    history_limited = await bus.get_history(limit=10)
     assert history_limited == []
 
 

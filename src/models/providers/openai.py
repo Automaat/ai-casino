@@ -49,6 +49,53 @@ class OpenAIProvider(BaseLLMProvider):
             return 1.0
         return temperature
 
+    def _repair_json(self, json_str: str) -> str:
+        """Attempt to repair common JSON errors from unreliable LLMs.
+
+        Args:
+            json_str: Potentially malformed JSON string
+
+        Returns:
+            Repaired JSON string (best-effort; the result may still be invalid JSON)
+        """
+        import re
+
+        original = json_str
+
+        # Fix 1: Remove duplicate keys (keep last occurrence)
+        # Use JSONDecoder with object_pairs_hook to reliably handle all JSON structures
+        try:
+
+            def _keep_last_object_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+                result: dict[str, object] = {}
+                for k, v in pairs:
+                    # Later occurrences overwrite earlier ones
+                    result[k] = v
+                return result
+
+            decoder = json.JSONDecoder(object_pairs_hook=_keep_last_object_pairs)
+            parsed = decoder.decode(json_str)
+            json_str = json.dumps(parsed)
+        except Exception as e:
+            logger.debug(f"Duplicate key removal failed: {e}")
+
+        # Fix 2: Double quotes before enum values (""VALUE" -> "VALUE")
+        json_str = re.sub(r':\s*""([^"]+)"', r': "\1"', json_str)
+
+        # Fix 3: Concatenated values without delimiters (valueCOMBINED -> value)
+        # Look for patterns like "momentum|value|breakout" followed by uppercase word
+        json_str = re.sub(
+            r'"(momentum|value|breakout|SP500|NASDAQ100|COMBINED)([A-Z][A-Z]+)"', r'"\1"', json_str
+        )
+
+        # Fix 4: Clean up whitespace
+        json_str = re.sub(r"\s+", " ", json_str)
+
+        if json_str != original:
+            logger.debug(f"JSON repair applied: {original!r} -> {json_str!r}")
+
+        return json_str
+
     async def close(self) -> None:
         """Close HTTP client."""
         await self._client.close()
@@ -109,10 +156,22 @@ class OpenAIProvider(BaseLLMProvider):
                 try:
                     arguments = json.loads(tc.function.arguments)
                 except json.JSONDecodeError as exc:
-                    logger.opt(exception=True).error(
-                        f"Failed to parse tool call arguments for tool '{tc.function.name}': {exc}"
+                    logger.error(
+                        f"Failed to parse tool call arguments for '{tc.function.name}': {exc}. "
+                        f"Raw arguments: {tc.function.arguments!r}"
                     )
-                    return None, None
+                    # Try to repair common JSON errors from unreliable LLMs
+                    try:
+                        repaired = self._repair_json(tc.function.arguments)
+                        arguments = json.loads(repaired)
+                        logger.info(f"Successfully repaired malformed JSON for '{tc.function.name}'")
+                    except (json.JSONDecodeError, ValueError) as repair_exc:
+                        logger.opt(exception=True).error(
+                            f"JSON repair failed for '{tc.function.name}': {repair_exc}. "
+                            "Skipping this malformed tool call but continuing with others."
+                        )
+                        # Skip this malformed tool call but continue processing others
+                        continue
 
                 tool_calls.append(
                     ToolCall(

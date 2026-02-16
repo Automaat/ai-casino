@@ -29,7 +29,6 @@ class TradeRepository(BaseRepository[TradeRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized TradeRepository")
 
     async def create(self, entity: TradeRecord) -> TradeRecord:
         """Create new trade record.

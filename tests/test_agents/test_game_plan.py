@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agents.game_plan import GamePlan, GamePlanLLMResponse
+from src.agents.game_plan import GamePlan, GamePlanLLMResponse, KeyLevel
 from src.models.providers.base import StructuredOutputError
 
 
@@ -51,7 +51,7 @@ async def test_game_plan_agent_generate(mock_yf_ticker, test_container, mock_mar
             priority_symbols=["AAPL", "TSLA"],
             risk_stance="NEUTRAL",
             sector_focus=["Technology"],
-            key_levels={"AAPL": 175.0},
+            key_levels=[KeyLevel(symbol="AAPL", price=175.0)],
             reasoning="Tech strength overnight",
             confidence=0.8,
         )
@@ -67,6 +67,7 @@ async def test_game_plan_agent_generate(mock_yf_ticker, test_container, mock_mar
     assert isinstance(plan, GamePlan)
     assert plan.priority_symbols == ["AAPL", "TSLA"]
     assert plan.risk_stance == "NEUTRAL"
+    assert plan.key_levels == {"AAPL": 175.0}
     assert 0.0 <= plan.confidence <= 1.0
 
 
@@ -133,7 +134,7 @@ async def test_empty_watchlist_uses_defaults(test_container, mock_market_fetcher
             priority_symbols=["SPY"],
             risk_stance="NEUTRAL",
             sector_focus=["Market"],
-            key_levels={},
+            key_levels=[],
             reasoning="Default watchlist",
             confidence=0.6,
         )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.agents.base_researcher import BaseResearcher, ResearchDirection
 from src.agents.comparative import ComparativeAnalysis
@@ -34,6 +34,14 @@ class ResearchLLMResponse(BaseModel):
     target_downside: float | None = Field(
         default=None, description="Expected downside percentage or null (bearish only)"
     )
+
+    @field_validator("target_upside", "target_downside", mode="before")
+    @classmethod
+    def convert_na_to_none(cls, v: object) -> float | None:
+        """Convert 'N/A' strings to None for optional target fields."""
+        if isinstance(v, str) and v.strip().upper() in ("N/A", "NA", "NULL", "NONE"):
+            return None
+        return v
 
 
 class ResearchAnalysis(BaseModel):

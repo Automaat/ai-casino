@@ -359,11 +359,11 @@ export const api = {
 	async getScreeningHistory(limit: number = 30): Promise<T.ScreeningHistoryResponse> {
 		const query = new URLSearchParams();
 		query.set('limit', limit.toString());
-		return fetchAPI<T.ScreeningHistoryResponse>(`/screening/history?${query}`);
+		return fetchAPI<T.ScreeningHistoryResponse>(`/api/screening/history?${query}`);
 	},
 
 	async getScreeningInsights(): Promise<T.ScreeningInsightsResponse> {
-		return fetchAPI<T.ScreeningInsightsResponse>('/screening/insights');
+		return fetchAPI<T.ScreeningInsightsResponse>('/api/screening/insights');
 	}
 };
 

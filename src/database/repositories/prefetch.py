@@ -28,7 +28,6 @@ class PrefetchRecordRepository(BaseRepository[PrefetchRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized PrefetchRecordRepository")
 
     async def create(self, entity: PrefetchRecord) -> PrefetchRecord:
         """Create new prefetch record.

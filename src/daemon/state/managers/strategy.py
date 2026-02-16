@@ -9,7 +9,13 @@ from loguru import logger
 from pydantic import PrivateAttr
 
 from src.daemon.state.managers.base import StateManager
-from src.daemon.state.models import DegradationRecord, GamePlanRecord
+from src.daemon.state.models import (
+    DegradationRecord,
+    GamePlanRecord,
+    HealthReportRecord,
+    PaperTradingReportRecord,
+    TradeJournalRecord,
+)
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
@@ -21,6 +27,9 @@ class StrategyStateManager(StateManager):
     _database_enabled: bool = PrivateAttr(default=False)
     _game_plan_cache: list[GamePlanRecord] | None = PrivateAttr(default=None)
     _degradation_cache: list[DegradationRecord] | None = PrivateAttr(default=None)
+    _health_report_cache: list[HealthReportRecord] | None = PrivateAttr(default=None)
+    _trade_journal_cache: list[TradeJournalRecord] | None = PrivateAttr(default=None)
+    _paper_trading_cache: list[PaperTradingReportRecord] | None = PrivateAttr(default=None)
 
     def enable_database(self) -> None:
         """Enable database persistence."""
@@ -251,6 +260,123 @@ class StrategyStateManager(StateManager):
         except Exception as e:
             # Don't log with exception=True to avoid infinite recursion
             logger.warning(f"Failed to record error to database: {e}")
+
+    async def record_health_report(self, report: HealthReportRecord) -> None:
+        """Record health report."""
+        if not self._database_enabled:
+            self._health_report_cache = None
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.health import HealthReportRepository
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                health_repo = HealthReportRepository(session)
+                metadata_repo = MetadataRepository(session)
+                await health_repo.create(report)
+                await metadata_repo.set("strategy.last_health_check", report.timestamp)
+            self._health_report_cache = None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record health report: {e}")
+
+    async def get_recent_health_reports(self, limit: int = 100) -> list[HealthReportRecord]:
+        """Get recent health reports."""
+        if not self._database_enabled:
+            return []
+        if self._health_report_cache is None:
+            try:
+                from src.database.connection import get_session
+                from src.database.repositories.health import HealthReportRepository
+
+                async with get_session() as session:
+                    repo = HealthReportRepository(session)
+                    self._health_report_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get health reports: {e}")
+                return []
+        return self._health_report_cache[:limit]
+
+    async def record_trade_journal(self, journal: TradeJournalRecord) -> None:
+        """Record trade journal."""
+        if not self._database_enabled:
+            self._trade_journal_cache = None
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.journal import TradeJournalRepository
+
+            async with get_session() as session:
+                journal_repo = TradeJournalRepository(session)
+                await journal_repo.create(journal)
+            self._trade_journal_cache = None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record trade journal: {e}")
+
+    async def get_recent_trade_journals(self, limit: int = 30) -> list[TradeJournalRecord]:
+        """Get recent trade journals."""
+        if not self._database_enabled:
+            return []
+        if self._trade_journal_cache is None:
+            try:
+                from src.database.connection import get_session
+                from src.database.repositories.journal import TradeJournalRepository
+
+                async with get_session() as session:
+                    repo = TradeJournalRepository(session)
+                    self._trade_journal_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get trade journals: {e}")
+                return []
+        return self._trade_journal_cache[:limit]
+
+    async def record_paper_trading_report(self, report: PaperTradingReportRecord) -> None:
+        """Record paper trading validation report."""
+        if not self._database_enabled:
+            self._paper_trading_cache = None
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.paper_trading import PaperTradingReportRepository
+
+            async with get_session() as session:
+                paper_trading_repo = PaperTradingReportRepository(session)
+                await paper_trading_repo.create(report)
+            self._paper_trading_cache = None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record paper trading report: {e}")
+
+    async def get_latest_paper_trading_report(self) -> PaperTradingReportRecord | None:
+        """Get latest paper trading report."""
+        if not self._database_enabled:
+            return None
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.paper_trading import PaperTradingReportRepository
+
+            async with get_session() as session:
+                repo = PaperTradingReportRepository(session)
+                return await repo.get_latest()
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get paper trading report: {e}")
+            return None
+
+    async def get_recent_paper_trading_reports(self, limit: int = 10) -> list[PaperTradingReportRecord]:
+        """Get recent paper trading reports."""
+        if not self._database_enabled:
+            return []
+        if self._paper_trading_cache is None:
+            try:
+                from src.database.connection import get_session
+                from src.database.repositories.paper_trading import PaperTradingReportRepository
+
+                async with get_session() as session:
+                    repo = PaperTradingReportRepository(session)
+                    self._paper_trading_cache = await repo.get_recent(limit)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to get paper trading reports: {e}")
+                return []
+        return self._paper_trading_cache[:limit]
 
     def __repr__(self) -> str:
         """Return string representation."""

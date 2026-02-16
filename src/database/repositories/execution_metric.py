@@ -27,7 +27,6 @@ class ExecutionMetricRepository(BaseRepository[ExecutionMetric]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized ExecutionMetricRepository")
 
     async def create(self, entity: ExecutionMetric) -> ExecutionMetric:
         """Create execution metric record.

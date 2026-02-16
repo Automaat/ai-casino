@@ -104,7 +104,7 @@ class PositionManager:
 
     def __init__(
         self,
-        broker: AlpacaBroker,
+        broker: AlpacaBroker | None,
         config: PositionManagementConfig,
         database_engine: DatabaseEngine | None = None,
         trade_repository: TradeRepository | None = None,
@@ -112,7 +112,7 @@ class PositionManager:
         """Initialize position manager.
 
         Args:
-            broker: Alpaca broker for order execution
+            broker: Alpaca broker for order execution (None during init, set via set_broker())
             config: Position management configuration
             database_engine: Optional database engine for creating per-task sessions
             trade_repository: Optional trade repository for loading entry metadata
@@ -123,6 +123,18 @@ class PositionManager:
         self._trade_repository = trade_repository
         self._pending_tasks: set[asyncio.Task[Any]] = set()  # Track background tasks
         logger.info(f"PositionManager initialized: {config}")
+
+    def set_broker(self, broker: AlpacaBroker) -> None:
+        """Set broker after initialization (deferred to avoid event loop issues)."""
+        self.broker = broker
+        logger.debug("PositionManager broker updated")
+
+    def _ensure_broker(self) -> AlpacaBroker:
+        """Ensure broker is initialized, raise if not."""
+        if self.broker is None:
+            msg = "Broker not initialized - call set_broker() first"
+            raise RuntimeError(msg)
+        return self.broker
 
     def set_database(
         self,
@@ -154,7 +166,8 @@ class PositionManager:
             Tuple of (new_positions, updated_positions, closed_symbols)
         """
         logger.info("Syncing positions with broker")
-        broker_info = self.broker.get_account_info()
+        broker = self._ensure_broker()
+        broker_info = broker.get_account_info()
         broker_positions = broker_info.positions
 
         new_positions = self._find_new_positions(state_positions, broker_positions)
@@ -395,7 +408,8 @@ class PositionManager:
             action.executed = False
             return
         try:
-            order = self.broker.submit_order(
+            broker = self._ensure_broker()
+            order = broker.submit_order(
                 symbol=position.symbol,
                 qty=int(action.qty_sold),
                 side="sell",
@@ -705,10 +719,12 @@ class PositionManager:
         Returns:
             Order ID if successful, None if failed
         """
+        broker = self._ensure_broker()
+
         # Cancel old stop-loss order if exists
         if position.stop_loss_order_id:
             try:
-                self.broker.cancel_order(position.stop_loss_order_id)
+                broker.cancel_order(position.stop_loss_order_id)
                 logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
             except Exception as e:
                 logger.opt(exception=True).error(
@@ -717,7 +733,7 @@ class PositionManager:
                 return None
 
         # Verify position still exists and get current price
-        broker_info = self.broker.get_account_info()
+        broker_info = broker.get_account_info()
         if position.symbol not in broker_info.positions:
             logger.warning(f"Position closed during stop update: {position.symbol}")
             return None
@@ -750,7 +766,7 @@ class PositionManager:
 
         # Submit new stop-loss order
         try:
-            order = self.broker.submit_stop_order(
+            order = broker.submit_stop_order(
                 symbol=position.symbol,
                 qty=int(position.current_qty),
                 stop_price=new_stop_loss,

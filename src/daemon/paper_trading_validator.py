@@ -364,25 +364,60 @@ class PaperTradingValidator:
 
         return recommendations
 
-    def save_report(
-        self, report: ReadinessReport, path: str = "~/.ai-casino/paper-trading-report.json"
+    async def save_report(
+        self,
+        report: ReadinessReport,
+        path: str | None = None,
+        enable_file_export: bool = False,
     ) -> None:
-        """Save readiness report to JSON file.
+        """Save readiness report to database and optionally to JSON file.
 
         Args:
             report: Readiness report to save
-            path: Path to save report (supports ~ expansion)
+            path: Optional path to save JSON file (supports ~ expansion)
+            enable_file_export: Whether to export to JSON file (deprecated)
         """
-        expanded_path = Path(path).expanduser()
-        expanded_path.parent.mkdir(parents=True, exist_ok=True)
+        from src.daemon.state.models import PaperTradingReportRecord
 
-        try:
-            with expanded_path.open("w") as f:
-                json.dump(report.model_dump(mode="json"), f, indent=2, default=str)
-            logger.info(f"Saved paper trading report to {expanded_path}")
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to save report: {e}")
-            raise
+        # Convert to database record
+        sortino = getattr(report.metrics, "sortino_ratio", None) or report.metrics.sharpe_ratio or 0.0
+
+        record = PaperTradingReportRecord(
+            assessment_date=report.assessment_date,
+            ready_for_live=report.ready_for_live,
+            paper_trading_duration_days=report.paper_trading_duration_days,
+            total_paper_trades=report.total_paper_trades,
+            criteria=[c.model_dump(mode="json") for c in report.criteria],
+            total_pnl=report.metrics.total_pnl,
+            sharpe_ratio=report.metrics.sharpe_ratio or 0.0,
+            sortino_ratio=sortino,
+            max_drawdown=report.metrics.max_drawdown_percent,
+            win_rate=report.metrics.win_rate,
+            simulated_live=report.simulated_live.model_dump(mode="json") if report.simulated_live else None,
+            recommendations=report.recommendations,
+        )
+
+        # Primary: Database persistence
+        await self.state.record_paper_trading_report(record)
+
+        # Optional: File export (deprecated)
+        if enable_file_export and path is not None:
+            import asyncio
+
+            path_str: str = path
+
+            def _write_file() -> None:
+                expanded_path = Path(path_str).expanduser()
+                expanded_path.parent.mkdir(parents=True, exist_ok=True)
+                with expanded_path.open("w") as f:
+                    json.dump(report.model_dump(mode="json"), f, indent=2, default=str)
+                logger.debug(f"Paper trading report exported to {expanded_path}")
+
+            try:
+                await asyncio.to_thread(_write_file)
+            except Exception as e:
+                logger.opt(exception=True).error(f"Failed to export report: {e}")
+                raise
 
     def __repr__(self) -> str:
         """String representation."""

@@ -198,7 +198,9 @@ class MetricsTracker(BaseMetricsTracker):
         """
         super().__init__(risk_free_rate)
         self._trades: list[TradeRecord] = []
-        logger.warning("MetricsTracker is deprecated - use DatabaseMetricsTracker via DI container")
+        logger.debug(
+            "Using in-memory MetricsTracker (enable database.enable_persistence for DatabaseMetricsTracker)"
+        )
         logger.info(f"Initialized MetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
 
     @property

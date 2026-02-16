@@ -1,7 +1,5 @@
 """Generate game plan tool for coordinator."""
 
-import asyncio
-import concurrent.futures
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -100,22 +98,26 @@ class GenerateGamePlanTool(BaseTool):
             return f"Failed to generate game plan: {e}"
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute game plan generation synchronously.
+        """Sync wrapper (not used - coordinator calls aexecute).
 
-        Args:
-            **kwargs: Tool arguments
-
-        Returns:
-            Formatted game plan
+        Raises:
+            RuntimeError: If called from within a running event loop
         """
+        import asyncio
 
-        def run_in_thread() -> str:
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
             return asyncio.run(self.aexecute(**kwargs))
-
-        # Run in thread to avoid nested event loop issues
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(run_in_thread)
-            return future.result()
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "GenerateGamePlanTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
 
     def _format_result(self, plan: GamePlan) -> str:
         """Format game plan as markdown.

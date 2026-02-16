@@ -27,7 +27,6 @@ class SectorRotationRecordRepository(BaseRepository[SectorRotationRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized SectorRotationRecordRepository")
 
     async def create(self, entity: SectorRotationRecord) -> SectorRotationRecord:
         """Create new sector rotation record.

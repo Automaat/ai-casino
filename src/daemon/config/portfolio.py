@@ -32,7 +32,14 @@ class PeerAnalysisConfig(BaseModel):
     run_time: str = "17:30"
     run_days: list[str] = Field(default_factory=lambda: ["sun"])
     max_peers: int = 10
-    output_dir: str = "~/.ai-casino/peer-analysis"
+    enable_file_export: bool = Field(
+        default=False,
+        description="Export peer analysis to JSON files (deprecated, use database)",
+    )
+    output_dir: str = Field(
+        default="~/.ai-casino/peer-analysis",
+        description="DEPRECATED: Peer analysis now stored in database",
+    )
     rate_limit_sleep: float = 13.0
 
     @model_validator(mode="after")
@@ -51,7 +58,10 @@ class CorrelationAuditConfig(BaseModel):
     run_days: list[str] = Field(default_factory=lambda: ["sun"])
     correlation_threshold: float = Field(default=0.8, ge=0.5, le=0.95)
     lookback_days: int = Field(default=90, ge=30, le=180)
-    output_dir: str = "~/.ai-casino/correlation-audits"
+    output_dir: str = Field(
+        default="~/.ai-casino/correlation-audits",
+        description="DEPRECATED: Correlation audits stored in database only (no file export)",
+    )
 
     @model_validator(mode="after")
     def validate_run_time(self) -> CorrelationAuditConfig:

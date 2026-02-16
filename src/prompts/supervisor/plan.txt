@@ -29,8 +29,21 @@ Owns Position: {owns_position}
 1. **Skip sentiment/news if news_count == 0** - Cannot analyze without articles
 2. **Skip technical if market_data_rows < {min_rows_required}** - Insufficient data for indicators
 3. **Pre-market session**: Prioritize news/sentiment in priority_order (breaking developments)
-4. **Research analyses**: Skip if technical skipped (dependency)
+4. **Research analyses (bullish_research, bearish_research)**: Required if technical runs (dependency), skip if technical skipped
 5. **High volatility**: Note for context (risk validation separate stage)
+
+## Available Analysis Types
+
+- technical: Price action, indicators (RSI, MACD, trend)
+- sentiment: FinBERT sentiment from news articles
+- news: LLM-based news analysis
+- fundamental: Financial metrics, valuation
+- comparative: Sector/peer comparison
+- web_research: Real-time web search for catalysts
+- social_sentiment: Social media sentiment analysis
+- bullish_research: Deep research on bullish thesis (requires technical)
+- bearish_research: Deep research on bearish thesis (requires technical)
+- trump: Trump social posts analysis (if posts exist)
 
 ## Analysis Categories
 

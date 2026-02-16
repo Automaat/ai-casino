@@ -1,6 +1,6 @@
 """News data fetcher for financial news."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import httpx
@@ -14,6 +14,7 @@ from src.metrics.execution import timed_operation
 
 if TYPE_CHECKING:
     from src.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry
+    from src.data.websearch import WebSearchResult
 
 load_dotenv()
 
@@ -71,8 +72,16 @@ class NewsFetcher:
         self._circuit_breaker = circuit_breaker
         self._circuit_breaker_registry = circuit_breaker_registry
         self._circuit_breaker_config = circuit_breaker_config
+        self._client: httpx.AsyncClient | None = None
         if not self.api_key:
             logger.warning("marketaux_api_key not set in config - API calls may be limited")
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """Lazily initialize and return reusable HTTP client."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+            logger.debug("Initialized reusable httpx.AsyncClient for NewsFetcher")
+        return self._client
 
     async def _ensure_circuit_breaker(self) -> None:
         """Lazily initialize circuit breaker from registry."""
@@ -159,37 +168,43 @@ class NewsFetcher:
 
         with timed_operation("news_fetch", source="marketaux"):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.get(self.BASE_URL, params=params)
+                client = await self._ensure_client()
+                response = await client.get(self.BASE_URL, params=params)
 
-                    # Log rate limit headers before raising
-                    self._log_rate_limit_headers(response, symbol)
+                # Log rate limit headers before raising
+                self._log_rate_limit_headers(response, symbol)
 
-                    response.raise_for_status()
+                response.raise_for_status()
 
-                    data = response.json()
-                    articles = []
+                data = response.json()
+                articles = []
 
-                    for item in data.get("data", []):
-                        articles.append(
-                            NewsArticle(
-                                title=item.get("title", ""),
-                                description=item.get("description", ""),
-                                url=item.get("url", ""),
-                                published_at=datetime.fromisoformat(item.get("published_at", "")),
-                                source=item.get("source", ""),
-                            )
+                for item in data.get("data", []):
+                    articles.append(
+                        NewsArticle(
+                            title=item.get("title", ""),
+                            description=item.get("description", ""),
+                            url=item.get("url", ""),
+                            published_at=datetime.fromisoformat(item.get("published_at", "")),
+                            source=item.get("source", ""),
                         )
+                    )
 
-                    logger.info(f"Fetched {len(articles)} articles")
+                logger.info(f"Fetched {len(articles)} articles")
 
-                    if self._cache and articles:
-                        self._cache.store_news_articles(symbol, articles)
+                if self._cache and articles:
+                    self._cache.store_news_articles(symbol, articles)
 
-                    return articles
+                return articles
 
             except httpx.HTTPStatusError as e:
                 self._log_rate_limit_headers(e.response, symbol)
+                if e.response.status_code == 402:
+                    logger.warning(
+                        f"Marketaux API payment required (402) for {symbol} - "
+                        "quota exceeded or subscription needed"
+                    )
+                    return []
                 logger.opt(exception=True).error(f"News fetch failed: {e}")
                 raise
             except httpx.HTTPError as e:
@@ -240,27 +255,33 @@ class NewsFetcher:
             params["api_token"] = self.api_key
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(self.BASE_URL, params=params)
-                response.raise_for_status()
+            client = await self._ensure_client()
+            response = await client.get(self.BASE_URL, params=params)
+            response.raise_for_status()
 
-                data = response.json()
-                articles = []
+            data = response.json()
+            articles = []
 
-                for item in data.get("data", []):
-                    articles.append(
-                        NewsArticle(
-                            title=item.get("title", ""),
-                            description=item.get("description", ""),
-                            url=item.get("url", ""),
-                            published_at=datetime.fromisoformat(item.get("published_at", "")),
-                            source=item.get("source", ""),
-                        )
+            for item in data.get("data", []):
+                articles.append(
+                    NewsArticle(
+                        title=item.get("title", ""),
+                        description=item.get("description", ""),
+                        url=item.get("url", ""),
+                        published_at=datetime.fromisoformat(item.get("published_at", "")),
+                        source=item.get("source", ""),
                     )
+                )
 
-                logger.info(f"Fetched {len(articles)} articles")
-                return articles
+            logger.info(f"Fetched {len(articles)} articles")
+            return articles
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 402:
+                logger.warning("Marketaux API payment required (402) - quota exceeded or subscription needed")
+                return []
+            logger.opt(exception=True).error(f"Market news fetch failed: {e}")
+            raise
         except httpx.HTTPError as e:
             logger.opt(exception=True).error(f"Market news fetch failed: {e}")
             raise
@@ -269,7 +290,52 @@ class NewsFetcher:
         """Return source identifier."""
         return "marketaux"
 
+    async def aclose(self) -> None:
+        """Close HTTP client."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+            logger.debug("Closed httpx.AsyncClient for NewsFetcher")
+
     def __repr__(self) -> str:
         """String representation."""
         has_key = bool(self.api_key)
         return f"NewsFetcher(authenticated={has_key})"
+
+
+def websearch_to_news_articles(search_results: list[WebSearchResult]) -> list[NewsArticle]:
+    """Convert web search results to NewsArticle format.
+
+    Args:
+        search_results: List of WebSearchResult from web search
+
+    Returns:
+        List of NewsArticle objects
+    """
+    articles = []
+    now = datetime.now(UTC)
+
+    for result in search_results:
+        try:
+            published_at = result.published_at or now  # Fallback to current time if not available
+            if published_at.tzinfo is None:
+                # Normalize naive datetimes by assuming UTC
+                published_at = published_at.replace(tzinfo=UTC)
+            else:
+                # Convert any non-UTC aware datetimes to UTC
+                published_at = published_at.astimezone(UTC)
+
+            article = NewsArticle(
+                title=result.title,
+                description=result.body[:500] if result.body else "",  # Truncate to 500 chars
+                url=result.url,
+                published_at=published_at,
+                source=result.source or "web",
+            )
+            articles.append(article)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to convert search result to NewsArticle: {e}")
+            continue
+
+    logger.info(f"Converted {len(articles)}/{len(search_results)} web search results to NewsArticle format")
+    return articles

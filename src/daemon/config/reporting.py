@@ -16,8 +16,18 @@ class HealthConfig(BaseModel):
     )
     archive_days: int = 30
     log_max_size_mb: int = 5
-    health_dir: str = "~/.ai-casino/health"
-    archive_dir: str = "~/.ai-casino/archive"
+    enable_file_export: bool = Field(
+        default=False,
+        description="Export health reports to JSON files (deprecated, use database)",
+    )
+    health_dir: str = Field(
+        default="~/.ai-casino/health",
+        description="DEPRECATED: Health reports now stored in database",
+    )
+    archive_dir: str = Field(
+        default="~/.ai-casino/archive",
+        description="DEPRECATED: Archive cleanup still uses this directory",
+    )
 
 
 class ReportingConfig(BaseModel):

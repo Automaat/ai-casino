@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -145,14 +145,9 @@ class HealthChecker:
         )
 
         try:
-            self._persist_report(report)
+            await self._persist_report(report)
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to persist report: {e}")
-
-        try:
-            self._prune_old_reports()
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to prune old reports: {e}")
 
         # Send notification if health failures detected
         failed_services = [c for c in checks if c.status == ServiceStatus.UNHEALTHY]
@@ -522,29 +517,29 @@ class HealthChecker:
                 message=f"Corrupt state backed up to {backup_path.name}",
             )
 
-    def _persist_report(self, report: HealthReport) -> None:
-        """Save health report to disk."""
-        self._health_dir.mkdir(parents=True, exist_ok=True)
-        date_str = report.timestamp.strftime("%Y-%m-%d")
-        report_path = self._health_dir / f"health-{date_str}.json"
-        report_path.write_text(report.model_dump_json(indent=2))
-        logger.info(f"Health report saved to {report_path}")
+    async def _persist_report(self, report: HealthReport) -> None:
+        """Save health report to database and optionally to disk."""
+        from src.daemon.state.models import HealthReportRecord
 
-    def _prune_old_reports(self) -> None:
-        """Remove health reports older than 30 days."""
-        if not self._health_dir.exists():
-            return
+        # Convert to database record
+        record = HealthReportRecord(
+            timestamp=report.timestamp,
+            overall_status=report.overall_status.value,
+            service_checks=[check.model_dump(mode="json") for check in report.service_checks],
+            cleanup_results=[cleanup.model_dump(mode="json") for cleanup in report.cleanup_results],
+            total_duration_ms=report.total_duration_ms,
+        )
 
-        cutoff = datetime.now(UTC) - timedelta(days=30)
-        for report_file in self._health_dir.glob("health-*.json"):
-            try:
-                date_str = report_file.stem.removeprefix("health-")
-                file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
-                if file_date < cutoff:
-                    report_file.unlink()
-                    logger.debug(f"Pruned old health report: {report_file.name}")
-            except ValueError:
-                continue
+        # Primary: Database persistence
+        await self.state.record_health_report(record)
+
+        # Optional: File export (deprecated)
+        if self.config.health.enable_file_export:
+            self._health_dir.mkdir(parents=True, exist_ok=True)
+            date_str = report.timestamp.strftime("%Y-%m-%d")
+            report_path = self._health_dir / f"health-{date_str}.json"
+            report_path.write_text(report.model_dump_json(indent=2))
+            logger.debug(f"Health report exported to {report_path}")
 
     async def _notify_health_failures(self, failed: list[ServiceCheckResult]) -> None:
         """Send health failure notification.

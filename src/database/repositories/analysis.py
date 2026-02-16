@@ -29,7 +29,6 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
             session: SQLAlchemy async session
         """
         super().__init__(session)
-        logger.debug("Initialized AnalysisRecordRepository")
 
     async def create(self, entity: AnalysisRecord) -> AnalysisRecord:
         """Create new analysis record.
@@ -83,15 +82,10 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         Returns:
             List of recent AnalysisRecords
         """
-        try:
-            result = await self._session.execute(
-                select(AnalysisRecordORM).order_by(AnalysisRecordORM.timestamp.desc()).limit(limit)
-            )
-            return [self._to_record(orm) for orm in result.scalars().all()]
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get_recent(limit)
-            raise
+        result = await self._session.execute(
+            select(AnalysisRecordORM).order_by(AnalysisRecordORM.timestamp.desc()).limit(limit)
+        )
+        return [self._to_record(orm) for orm in result.scalars().all()]
 
     async def get_by_symbol(self, symbol: str, limit: int = 100) -> list[AnalysisRecord]:
         """Get analysis records for specific symbol.

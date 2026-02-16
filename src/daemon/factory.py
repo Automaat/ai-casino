@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
@@ -21,7 +20,6 @@ from src.daemon.state import DaemonState
 from src.daemon.task_runner import ScheduledTaskRunner
 from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
-from src.database.connection import get_db_engine
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
@@ -132,12 +130,9 @@ class DaemonFactory:
         # Phase 1: Core infrastructure
         state, historical_cache = self._setup_repositories_and_state()
 
-        # Phase 2: Broker setup
-        import asyncio
-
+        # Phase 2: Broker setup (deferred to lifecycle.startup() to avoid event loop issues)
         broker_manager = BrokerManager(self.config, state, historical_cache)
-        asyncio.run(broker_manager.initialize_broker())
-        broker = broker_manager.broker
+        broker = None  # Will be initialized in lifecycle.startup()
 
         # Phase 3: Scheduler
         scheduler = self._create_scheduler()
@@ -165,10 +160,8 @@ class DaemonFactory:
         if self.config.rebalancing.enabled:
             daemon_rebalancer = self._create_rebalancer(broker)
 
-        # Phase 7: Position manager (if enabled)
+        # Phase 7: Position manager (deferred to lifecycle.startup() - needs broker from event loop)
         position_manager = None
-        if self.config.position_management.enabled:
-            position_manager = self._create_position_manager(broker)
 
         # Phase 8: Discovery engine (if enabled)
         discovery_engine = None
@@ -251,18 +244,9 @@ class DaemonFactory:
         historical_cache = self._container.historical_cache()
         state = DaemonState()
 
-        # Set global database engine singleton for get_session() calls
-        from src.database.connection import _DatabaseEngineHolder
-
-        database_engine = self._container.database_engine()
-        _DatabaseEngineHolder.instance = database_engine
-
-        # Enable database on state managers
-        state.trading.enable_database()
-        state.strategy.enable_database()
-
-        # Inject database engine into position manager for fresh sessions
-        state.positions.set_database_engine(database_engine)
+        # NOTE: Database engine initialization deferred to lifecycle.startup()
+        # to avoid creating engine before event loop exists (causes asyncpg binding issues)
+        # State managers will enable database later during lifecycle startup
 
         return state, historical_cache
 
@@ -332,17 +316,9 @@ class DaemonFactory:
             from src.daemon.paper_trading_validator import PaperTradingValidator
 
             # Initialize tracker for validation
-            trade_repository = None
-            if os.getenv("DATABASE_URL"):
-                try:
-                    from src.database.repositories.trade import TradeRepository
-
-                    db_engine = get_db_engine()
-                    trade_repository = TradeRepository(db_engine.session())
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
-
-            metrics_tracker = create_metrics_tracker(trade_repository)
+            # NOTE: Skip DB initialization here to avoid event loop conflicts
+            # Database will be initialized properly in lifecycle.startup()
+            metrics_tracker = create_metrics_tracker(None)
 
             validator = PaperTradingValidator(
                 config=self.config.paper_trading,
@@ -406,9 +382,12 @@ class DaemonFactory:
         Raises:
             ValueError: If auto_trade not enabled
         """
-        if not self.config.auto_trade or not broker:
+        if not self.config.auto_trade:
             msg = "position_management requires auto_trade=true"
             raise ValueError(msg)
+
+        # Broker may be None initially (initialized in lifecycle.startup())
+        # PositionManager will handle None broker gracefully
 
         from src.daemon.positions import PositionManager
 
@@ -615,18 +594,10 @@ class DaemonFactory:
             return components.workflow
 
         # Initialize metrics tracker if not already done
+        # NOTE: Skip DB initialization here to avoid event loop conflicts
+        # Database will be initialized properly in lifecycle.startup()
         if components.metrics_tracker is None:
-            trade_repository = None
-            if os.getenv("DATABASE_URL"):
-                try:
-                    from src.database.repositories.trade import TradeRepository
-
-                    db_engine = get_db_engine()
-                    trade_repository = TradeRepository(db_engine.session())
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
-
-            components.metrics_tracker = create_metrics_tracker(trade_repository)
+            components.metrics_tracker = create_metrics_tracker(None)
 
         workflow = self._container.workflow_meta(
             broker=components.broker,

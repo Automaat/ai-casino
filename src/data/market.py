@@ -551,10 +551,8 @@ class MarketDataFetcher:
             symbols: Futures symbols (e.g., ["ES=F", "NQ=F"])
 
         Returns:
-            Dict mapping symbol to % change from previous close
-
-        Raises:
-            ValueError: If no data available
+            Dict mapping symbol to % change from previous close.
+            Empty dict if no data available (e.g., outside market hours, API issues).
         """
         logger.info(f"Fetching overnight futures: {symbols}")
         results = {}
@@ -580,9 +578,7 @@ class MarketDataFetcher:
                 continue
 
         if not results:
-            msg = "No futures data available"
-            logger.error(msg)
-            raise ValueError(msg)
+            logger.warning("No futures data available")
 
         return results
 

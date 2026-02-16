@@ -170,7 +170,7 @@ mise ollama:start|stop|status          # Local LLM
 ```
 
 **Config:** `~/.ai-casino/daemon-production.yaml` (see `docs/daemon.yaml.example`)
-**Env fallbacks:** `ALPHA_VANTAGE_API_KEY`, `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LOG_LEVEL`
+**Env fallbacks:** `ALPHA_VANTAGE_API_KEY`, `MARKETAUX_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LOG_LEVEL`, `TOOL_EXECUTION_MAX_CONCURRENT`
 **Logs:** `~/.ai-casino/worker.log` (debug), `~/.ai-casino/chat-history.json`
 
 ## Gotchas

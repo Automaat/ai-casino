@@ -122,16 +122,21 @@ class SentimentAnalyst:
 
         texts = [f"{article.title}. {article.description}" for article in articles]
 
-        loop = asyncio.get_running_loop()
-        # Use ProcessPoolExecutor for true parallelism (avoids GIL)
-        device = getattr(self.finbert, "device", "cpu")
-        executor = get_finbert_executor()
-        score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
+        # Check if using remote FinBERT service or local model
+        if hasattr(self.finbert, "analyze_batch_async"):
+            # Remote service: use async HTTP call directly
+            scores = await self.finbert.analyze_batch_async(texts)
+        else:
+            # Local model: use ProcessPoolExecutor for true parallelism (avoids GIL)
+            loop = asyncio.get_running_loop()
+            device = getattr(self.finbert, "device", "cpu")
+            executor = get_finbert_executor()
+            score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
 
-        # Import here to avoid circular import at module level
-        from src.models.sentiment import SentimentScore
+            # Import here to avoid circular import at module level
+            from src.models.sentiment import SentimentScore
 
-        scores = [SentimentScore(**s) for s in score_dicts]
+            scores = [SentimentScore(**s) for s in score_dicts]
 
         overall_score = self._aggregate_sentiment(scores)
         sentiment_label = self._get_sentiment_label(overall_score)

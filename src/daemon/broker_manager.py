@@ -159,7 +159,6 @@ class BrokerManager:
 
             added = position_symbols - seen
             if added:
-                logger.info(f"Merged {len(added)} positions into watchlist: {sorted(added)}")
                 merged_watchlist.extend(sorted(added))
                 seen.update(added)
         except Exception as e:

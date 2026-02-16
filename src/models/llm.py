@@ -123,6 +123,78 @@ def _get_semaphore() -> asyncio.Semaphore:
     return cast("asyncio.Semaphore", _semaphore_holder["semaphore"])
 
 
+_MIN_CONCURRENT_TOOL_EXECUTIONS = 1
+_MAX_CONCURRENT_TOOL_EXECUTIONS = 10
+_DEFAULT_CONCURRENT_TOOL_EXECUTIONS = 5
+
+
+def _parse_max_concurrent_tool_executions() -> int:
+    """Parse and validate TOOL_EXECUTION_MAX_CONCURRENT environment variable.
+
+    Valid range is 1-10. Falls back to default (5) on invalid values.
+
+    Returns:
+        Validated concurrency limit (1-10)
+    """
+    raw_value = os.getenv("TOOL_EXECUTION_MAX_CONCURRENT")
+
+    if raw_value is None:
+        return _DEFAULT_CONCURRENT_TOOL_EXECUTIONS
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.opt(exception=True).warning(
+            "Invalid TOOL_EXECUTION_MAX_CONCURRENT value %r; using default %d",
+            raw_value,
+            _DEFAULT_CONCURRENT_TOOL_EXECUTIONS,
+        )
+        return _DEFAULT_CONCURRENT_TOOL_EXECUTIONS
+
+    if value < _MIN_CONCURRENT_TOOL_EXECUTIONS:
+        logger.warning(
+            "TOOL_EXECUTION_MAX_CONCURRENT value %d is below minimum %d; clamping to %d",
+            value,
+            _MIN_CONCURRENT_TOOL_EXECUTIONS,
+            _MIN_CONCURRENT_TOOL_EXECUTIONS,
+        )
+        return _MIN_CONCURRENT_TOOL_EXECUTIONS
+
+    if value > _MAX_CONCURRENT_TOOL_EXECUTIONS:
+        logger.warning(
+            "TOOL_EXECUTION_MAX_CONCURRENT value %d exceeds maximum %d; clamping to %d",
+            value,
+            _MAX_CONCURRENT_TOOL_EXECUTIONS,
+            _MAX_CONCURRENT_TOOL_EXECUTIONS,
+        )
+        return _MAX_CONCURRENT_TOOL_EXECUTIONS
+
+    return value
+
+
+# Limit concurrent tool executions (env: TOOL_EXECUTION_MAX_CONCURRENT, default 5)
+# Separate from LLM semaphore - controls backpressure for tool calls
+MAX_CONCURRENT_TOOL_EXECUTIONS = _parse_max_concurrent_tool_executions()
+_tool_semaphore_holder: dict[str, asyncio.Semaphore | int | None] = {}
+
+
+def _get_tool_execution_semaphore() -> asyncio.Semaphore:
+    """Get or create the global tool execution semaphore for current event loop."""
+    try:
+        current_loop = asyncio.get_running_loop()
+        current_loop_id = id(current_loop)
+    except RuntimeError:
+        current_loop_id = None
+
+    # Recreate semaphore if it doesn't exist or is bound to different loop
+    stored_loop_id = _tool_semaphore_holder.get("loop_id")
+    if "semaphore" not in _tool_semaphore_holder or stored_loop_id != current_loop_id:
+        _tool_semaphore_holder["semaphore"] = asyncio.Semaphore(MAX_CONCURRENT_TOOL_EXECUTIONS)
+        _tool_semaphore_holder["loop_id"] = current_loop_id
+
+    return cast("asyncio.Semaphore", _tool_semaphore_holder["semaphore"])
+
+
 class ToolResult(BaseModel):
     """Result of executing a tool."""
 
@@ -426,15 +498,41 @@ class LLMClient:
             # Add assistant message with tool calls
             messages.append(self._format_tool_call_message(tool_calls))
 
-            # Execute tools and add results
-            for tool_call in tool_calls:
+            # Execute all tools concurrently with semaphore backpressure
+            tool_semaphore = _get_tool_execution_semaphore()
+
+            async def execute_with_semaphore(
+                tool_call: ToolCall, sem: asyncio.Semaphore = tool_semaphore
+            ) -> tuple[ToolCall, str]:
+                async with sem:
+                    result = await self._execute_tool_async(tool_call, params.tool_executor)
+                    return (tool_call, result)
+
+            tasks = [execute_with_semaphore(tc) for tc in tool_calls]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Process results sequentially to preserve callback/message ordering
+            for i, result in enumerate(results):
+                tool_call = tool_calls[i]
+
+                # Propagate control-flow exceptions immediately
+                if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+                    raise result
+
+                # Handle errors: log and convert to error string
+                if isinstance(result, Exception):
+                    logger.opt(exception=result).error(f"Tool '{tool_call.name}' failed: {result}")
+                    tool_result = f"Tool '{tool_call.name}' failed: {result}"
+                else:
+                    # Success case: unpack tuple
+                    _, tool_result = cast("tuple[ToolCall, str]", result)
+
                 tool_calls_made += 1
-                result = await self._execute_tool_async(tool_call, params.tool_executor)
 
                 if params.on_tool_call:
-                    params.on_tool_call(tool_call.name, tool_call.arguments, result)
+                    params.on_tool_call(tool_call.name, tool_call.arguments, tool_result)
 
-                messages.append(self._format_tool_result_message(tool_call, result))
+                messages.append(self._format_tool_result_message(tool_call, tool_result))
 
         # Final completion without tools
         async with _get_semaphore():

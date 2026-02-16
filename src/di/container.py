@@ -59,6 +59,11 @@ class AppContainer(containers.DeclarativeContainer):
         database_engine=database_engine,
     )
 
+    coordinator_metrics_repository = providers.Factory(
+        database_providers.create_coordinator_metrics_repository,
+        database_engine=database_engine,
+    )
+
     # Circuit breaker registry - Singleton
     circuit_breaker_registry = providers.Singleton(
         circuit_breaker_providers.create_circuit_breaker_registry,
@@ -194,7 +199,7 @@ class AppContainer(containers.DeclarativeContainer):
     metrics_tracker = providers.Singleton(
         model_providers.create_metrics_tracker,
         daemon_config=daemon_config,
-        trade_repository=None,
+        trade_repository=trade_repository,
     )
 
     quantstats_reporter = providers.Singleton(
@@ -371,6 +376,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     workflow_momentum = providers.Factory(
@@ -383,6 +389,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     workflow_trump = providers.Factory(
@@ -395,6 +402,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     workflow_full = providers.Factory(
@@ -407,6 +415,7 @@ class AppContainer(containers.DeclarativeContainer):
         historical_cache=historical_cache,
         portfolio_var_calculator=portfolio_var_calculator,
         daemon_config=daemon_config,
+        web_search_fetcher=websearch_fetcher,
     )
 
     # Daemon component providers

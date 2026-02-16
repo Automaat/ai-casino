@@ -118,7 +118,7 @@ async def get_events(request: Request, limit: int = 100) -> EventResponse:
 
     limit = max(0, min(limit, 500))
 
-    events = components.event_bus.get_history(limit=limit)
+    events = await components.event_bus.get_history(limit=limit)
 
     events_dict = [e.model_dump(mode="json") for e in events]
 

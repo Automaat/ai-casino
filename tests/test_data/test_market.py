@@ -225,7 +225,7 @@ def test_fetch_overnight_futures_valid():
 
 
 def test_fetch_overnight_futures_insufficient_data():
-    """Test fetch_overnight_futures with insufficient data (skipped symbols)."""
+    """Test fetch_overnight_futures with insufficient data returns empty dict."""
     with patch("src.data.market.yf.Ticker") as mock_ticker:
         mock_instance = MagicMock()
         mock_ticker.return_value = mock_instance
@@ -234,12 +234,12 @@ def test_fetch_overnight_futures_insufficient_data():
 
         fetcher = MarketDataFetcher(use_alpha_vantage=False)
 
-        with pytest.raises(ValueError, match="No futures data available"):
-            fetcher.fetch_overnight_futures(["ES=F"])
+        result = fetcher.fetch_overnight_futures(["ES=F"])
+        assert result == {}
 
 
 def test_fetch_overnight_futures_all_fail():
-    """Test fetch_overnight_futures when all symbols fail."""
+    """Test fetch_overnight_futures when all symbols fail returns empty dict."""
     with patch("src.data.market.yf.Ticker") as mock_ticker:
         mock_instance = MagicMock()
         mock_ticker.return_value = mock_instance
@@ -247,5 +247,5 @@ def test_fetch_overnight_futures_all_fail():
 
         fetcher = MarketDataFetcher(use_alpha_vantage=False)
 
-        with pytest.raises(ValueError, match="No futures data available"):
-            fetcher.fetch_overnight_futures(["ES=F", "NQ=F"])
+        result = fetcher.fetch_overnight_futures(["ES=F", "NQ=F"])
+        assert result == {}

@@ -31,35 +31,95 @@ class DaemonLifecycle:
         """Return string representation."""
         return f"DaemonLifecycle(running={self.running})"
 
+    async def _initialize_database(self) -> None:
+        """Initialize database engine and run migrations."""
+        if not self.components.config.database.enable_persistence:
+            return
+
+        database_engine = self.components.container.database_engine()
+        await database_engine.ensure_migrated()
+        logger.info("Database migrations applied successfully")
+
+        # Initialize global database singleton for get_session() calls
+        from src.database.connection import _DatabaseEngineHolder
+
+        _DatabaseEngineHolder.initialize(database_engine)
+        logger.info("Global database singleton initialized")
+
+        # Enable database on state managers
+        self.components.state.trading.enable_database()
+        self.components.state.strategy.enable_database()
+
+        # Inject database engine into position state manager
+        self.components.state.positions.set_database_engine(database_engine)
+
+        # Set database engine on position manager (was None during init)
+        if self.components.position_manager:
+            try:
+                trade_repository = self.components.container.trade_repository()
+                self.components.position_manager.set_database(database_engine, trade_repository)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to set position manager database: {e}")
+
+    async def _initialize_broker(self) -> None:
+        """Initialize broker in the main event loop."""
+        if not self.components.broker_manager:
+            return
+
+        await self.components.broker_manager.initialize_broker()
+        self.components.broker = self.components.broker_manager.broker
+        logger.info("Broker initialized successfully")
+
+        # Propagate broker to components that were created with broker=None
+        if self.components.broker:
+            if self.components.daemon_rebalancer:
+                self.components.daemon_rebalancer.set_broker(self.components.broker)
+            if self.components.tearsheet_generator:
+                self.components.tearsheet_generator.set_broker(self.components.broker)
+            # Note: discovery_engine doesn't use broker, optimizer set via rebalancer
+
+        # Create position manager now that broker is available
+        if self.components.config.position_management.enabled and self.components.broker:
+            from src.daemon.positions import PositionManager
+
+            self.components.position_manager = PositionManager(
+                self.components.broker,
+                self.components.config.position_management,
+                database_engine=None,
+                trade_repository=None,
+            )
+
+            # If persistence is enabled, inject database into position manager now
+            if self.components.config.database.enable_persistence:
+                try:
+                    database_engine = self.components.container.database_engine()
+                    trade_repository = self.components.container.trade_repository()
+                    self.components.position_manager.set_database(database_engine, trade_repository)
+                except Exception as e:
+                    logger.opt(exception=True).warning(
+                        f"Failed to set position manager database during broker initialization: {e}"
+                    )
+
+            logger.info("Position management enabled")
+
     async def startup(self) -> None:
         """Execute startup sequence: DB migrations, signal handlers, API server."""
         self.running = True
 
         # Initialize database (run migrations)
-        # IMPORTANT: Create database engine HERE in the event loop, not during __init__
         try:
-            if self.components.config.database.enable_persistence:
-                database_engine = self.components.container.database_engine()
-                await database_engine.ensure_migrated()
-                logger.info("Database migrations applied successfully")
-
-                # Initialize global database singleton for get_session() calls
-                from src.database.connection import _DatabaseEngineHolder
-
-                _DatabaseEngineHolder.initialize(database_engine)
-                logger.info("Global database singleton initialized")
-
-                # Set database engine on position manager (was None during init)
-                if self.components.position_manager:
-                    try:
-                        trade_repository = self.components.container.trade_repository()
-                        self.components.position_manager.set_database(database_engine, trade_repository)
-                    except Exception as e:
-                        logger.opt(exception=True).warning(f"Failed to set position manager database: {e}")
+            await self._initialize_database()
         except Exception as e:
             logger.opt(exception=True).error(f"Database initialization failed: {e}")
             if self.components.config.database.enable_persistence:
                 raise  # Fail fast if persistence enabled but DB unavailable
+
+        # Initialize broker in the main event loop
+        try:
+            await self._initialize_broker()
+        except Exception as e:
+            logger.opt(exception=True).error(f"Broker initialization failed: {e}")
+            # Non-fatal - daemon can run in watchlist-only mode without broker
 
         # Set up signal handlers
         def shutdown_handler(sig: int, _frame: object) -> None:
@@ -92,33 +152,57 @@ class DaemonLifecycle:
         # Stop API server before saving state
         await self._stop_api_server()
 
-        # Wait for position manager background tasks to complete
+        # Close HTTP clients
+        await self._close_http_clients()
+
+        # Wait for background tasks to complete
+        await self._wait_for_background_tasks()
+
+        # Close database connections
+        await self._close_database()
+
+    async def _close_http_clients(self) -> None:
+        """Close HTTP clients (NewsFetcher)."""
+        if self.components.prefetcher:
+            try:
+                await self.components.prefetcher.aclose()
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Error closing prefetcher: {e}")
+
+    async def _close_database(self) -> None:
+        """Close database engine and connections."""
+        if self.components.config.database.enable_persistence:
+            try:
+                from src.database.connection import get_db_engine
+
+                engine = get_db_engine()
+                await engine.close()
+                logger.info("Database connections closed")
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Error closing database: {e}")
+
+    async def _wait_for_background_tasks(self) -> None:
+        """Wait for all background tasks to complete."""
+        timeout = 5.0
+
+        # Position manager
         if self.components.position_manager:
             try:
-                await self.components.position_manager.wait_for_pending_tasks(timeout_seconds=5.0)
+                await self.components.position_manager.wait_for_pending_tasks(timeout_seconds=timeout)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Error waiting for position persistence tasks: {e}")
 
-        # Wait for other state manager background tasks to complete
-        if self.components.state.discovery:
-            try:
-                await self.components.state.discovery.wait_for_pending_tasks(timeout_seconds=5.0)
-            except Exception as e:
-                logger.opt(exception=True).warning(
-                    f"Error waiting for discovery state persistence tasks: {e}"
-                )
-
-        if self.components.state.snapshots:
-            try:
-                await self.components.state.snapshots.wait_for_pending_tasks(timeout_seconds=5.0)
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Error waiting for snapshot state persistence tasks: {e}")
-
-        if self.components.state.trading:
-            try:
-                await self.components.state.trading.wait_for_pending_tasks(timeout_seconds=5.0)
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Error waiting for trading state persistence tasks: {e}")
+        # State managers
+        for name, manager in [
+            ("discovery", self.components.state.discovery),
+            ("snapshots", self.components.state.snapshots),
+            ("trading", self.components.state.trading),
+        ]:
+            if manager:
+                try:
+                    await manager.wait_for_pending_tasks(timeout_seconds=timeout)
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Error waiting for {name} state persistence: {e}")
 
         console.print("\n[bold yellow]Daemon stopped[/bold yellow]")
         logger.info("Daemon shutdown complete")

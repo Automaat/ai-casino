@@ -47,6 +47,20 @@ class PaperTradingConfig(BaseModel):
     min_win_rate: float = Field(default=0.45, ge=0.0, le=1.0)
 
 
+class PaperTradingValidationConfig(BaseModel):
+    """Paper trading validation report configuration."""
+
+    enabled: bool = False
+    enable_file_export: bool = Field(
+        default=False,
+        description="Export validation reports to JSON files (deprecated, use database)",
+    )
+    output_dir: str = Field(
+        default="~/.ai-casino/paper-trading-validation",
+        description="Directory for JSON exports if enable_file_export=true",
+    )
+
+
 class OptimizationConfig(BaseModel):
     """Configuration for after-hours strategy parameter optimization."""
 

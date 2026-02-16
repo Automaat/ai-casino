@@ -9,6 +9,7 @@ from typing import cast
 from loguru import logger
 from rich.console import Console
 
+from src.daemon.state.models import PeerAnalysisInput
 from src.daemon.tasks.base import TaskExecutor
 
 console = Console()
@@ -305,11 +306,14 @@ class PeerAnalysisTask(TaskExecutor):
         swaps = [a.swap_recommendation for a in result.analyses if a.swap_recommendation]
 
         await self.components.state.record_peer_analysis(
-            symbols_analyzed=[a.symbol for a in result.analyses],
-            rankings=rankings,
-            swap_recommendations=swaps,
-            total_peers=result.total_peers_analyzed,
-            total_duration_seconds=result.total_duration_seconds,
+            PeerAnalysisInput(
+                symbols_analyzed=[a.symbol for a in result.analyses],
+                rankings=rankings,
+                swap_recommendations=swaps,
+                analyses=[a.model_dump(mode="json") for a in result.analyses],
+                total_peers=result.total_peers_analyzed,
+                total_duration_seconds=result.total_duration_seconds,
+            )
         )
 
         # Console output

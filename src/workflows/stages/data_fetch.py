@@ -40,12 +40,108 @@ class DataFetchConfig:
     enable_multi_timeframe: bool = False
     trump_mode: bool = False
     trump_fetcher: TruthSocialFetcher | None = None
+    web_search_fetcher: object | None = None  # WebSearchFetcher (avoid circular import)
 
 
 def _is_market_hours() -> bool:
     """Check if currently within market hours (4am-8pm ET)."""
     now = datetime.now(ET_TIMEZONE)
     return MARKET_HOURS_START <= now.hour < MARKET_HOURS_END
+
+
+def _deduplicate_articles(articles: list, max_articles: int = 10) -> list:
+    """Deduplicate news articles by title (case-insensitive).
+
+    Args:
+        articles: List of NewsArticle objects
+        max_articles: Maximum articles to return
+
+    Returns:
+        List of unique NewsArticle objects (up to max_articles)
+    """
+    if not articles:
+        return []
+
+    seen_titles = set()
+    unique_articles = []
+
+    for article in articles:
+        # Normalize title for comparison (lowercase, strip whitespace)
+        normalized_title = article.title.lower().strip()
+
+        # Skip if we've seen a similar title
+        if normalized_title in seen_titles:
+            continue
+
+        seen_titles.add(normalized_title)
+        unique_articles.append(article)
+
+        # Stop if we've reached max
+        if len(unique_articles) >= max_articles:
+            break
+
+    logger.debug(f"Deduplication: {len(articles)} articles → {len(unique_articles)} unique articles")
+    return unique_articles
+
+
+async def _fetch_multi_source_news(symbol: str, config: DataFetchConfig) -> list:
+    """Fetch news from multiple sources (Marketaux + web search) and combine.
+
+    Args:
+        symbol: Stock ticker symbol
+        config: Data fetch configuration
+
+    Returns:
+        List of unique NewsArticle objects (up to 20)
+    """
+    from src.data.news import NewsArticle, websearch_to_news_articles
+
+    sources_used = []
+    all_articles: list[NewsArticle] = []
+
+    # Source 1: Marketaux API
+    try:
+        marketaux_articles = await config.news_fetcher.afetch_company_news(symbol, limit=10)
+        if marketaux_articles:
+            all_articles.extend(marketaux_articles)
+            sources_used.append("marketaux")
+            logger.info(f"Fetched {len(marketaux_articles)} articles from Marketaux")
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Marketaux news fetch failed: {e}")
+
+    # Source 2: Web search (DuckDuckGo)
+    if config.web_search_fetcher:
+        try:
+            from src.data.websearch import WebSearchFetcher
+
+            # Type narrow: web_search_fetcher is WebSearchFetcher here
+            fetcher = config.web_search_fetcher
+            if not isinstance(fetcher, WebSearchFetcher):
+                logger.warning("web_search_fetcher is not WebSearchFetcher, skipping")
+            else:
+                query = f"{symbol} stock latest news"
+                # Offload synchronous search to thread to avoid blocking event loop
+                search_response = await asyncio.to_thread(fetcher.search_news, query, max_results=10)
+                if search_response.results:
+                    web_articles = websearch_to_news_articles(search_response.results)
+                    all_articles.extend(web_articles)
+                    sources_used.append("websearch")
+                    logger.info(f"Fetched {len(web_articles)} articles from web search")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Web search news fetch failed: {e}")
+
+    # Deduplicate by title (case-insensitive)
+    unique_articles = _deduplicate_articles(all_articles, max_articles=20)
+
+    if sources_used:
+        logger.info(
+            f"News fetch complete for {symbol}: {len(unique_articles)} unique articles "
+            f"from {len(sources_used)} source(s): {', '.join(sources_used)}"
+        )
+    else:
+        logger.warning(f"No news articles fetched for {symbol} from any source")
+
+    return unique_articles
 
 
 async def _fetch_all_data(
@@ -77,11 +173,8 @@ async def _fetch_all_data(
         return await asyncio.to_thread(config.market_fetcher.fetch_daily, symbol, period_days)
 
     async def fetch_news_safe() -> list:
-        try:
-            return await config.news_fetcher.afetch_company_news(symbol, limit=10)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"News fetch failed, continuing with empty news: {e}")
-            return []
+        """Fetch news from multiple sources and combine."""
+        return await _fetch_multi_source_news(symbol, config)
 
     async def fetch_trump_safe() -> TrumpPostData | None:
         if not config.trump_fetcher:
