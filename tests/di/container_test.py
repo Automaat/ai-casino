@@ -175,7 +175,7 @@ def create_mock_finbert() -> MagicMock:
     """Create mock FinBERT sentiment analyzer.
 
     Returns:
-        Mock with analyze/analyze_batch methods
+        Mock with analyze/analyze_batch/analyze_batch_async methods
     """
     mock = MagicMock()
     mock.device = "cpu"
@@ -189,6 +189,13 @@ def create_mock_finbert() -> MagicMock:
         SentimentScore(positive=0.6, negative=0.2, neutral=0.2),
         SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
     ]
+    mock.analyze_batch_async = AsyncMock(
+        return_value=[
+            SentimentScore(positive=0.7, negative=0.1, neutral=0.2),
+            SentimentScore(positive=0.6, negative=0.2, neutral=0.2),
+            SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
+        ]
+    )
     return mock
 
 
