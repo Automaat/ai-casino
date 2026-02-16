@@ -60,9 +60,7 @@ class DiscoveryOutcomeTracker:
                 price_7d = await self._fetch_price_at_date(discovery.symbol, target_date.date())
 
                 if price_7d and discovery.price_at_discovery:
-                    outcome_7d = (
-                        (price_7d - discovery.price_at_discovery) / discovery.price_at_discovery
-                    ) * 100
+                    outcome_7d = (price_7d - discovery.price_at_discovery) / discovery.price_at_discovery
                     await self.discovery_repo.update_outcome_prices(
                         symbol=discovery.symbol,
                         discovered_at=discovery.discovered_at,
@@ -81,9 +79,7 @@ class DiscoveryOutcomeTracker:
                 price_30d = await self._fetch_price_at_date(discovery.symbol, target_date.date())
 
                 if price_30d and discovery.price_at_discovery:
-                    outcome_30d = (
-                        (price_30d - discovery.price_at_discovery) / discovery.price_at_discovery
-                    ) * 100
+                    outcome_30d = (price_30d - discovery.price_at_discovery) / discovery.price_at_discovery
                     await self.discovery_repo.update_outcome_prices(
                         symbol=discovery.symbol,
                         discovered_at=discovery.discovered_at,

@@ -329,12 +329,9 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
         result = await self._session.execute(
             select(DiscoveryHistoryRecordORM).where(
                 DiscoveryHistoryRecordORM.discovered_at >= cutoff,
-                func.jsonb_exists(
+                func.jsonb_path_exists(
                     DiscoveryHistoryRecordORM.sources,
-                    func.jsonb_path_query_first(
-                        DiscoveryHistoryRecordORM.sources,
-                        f'$[*] ? (@.source == "{source_type}")',
-                    ).is_not(None),
+                    f'$[*] ? (@.source == "{source_type}")',
                 ),
             )
         )

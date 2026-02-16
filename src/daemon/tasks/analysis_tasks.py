@@ -145,7 +145,8 @@ class DiscoveryTask(TaskExecutor):
         ranking = await supervisor.evaluate_candidates(eval_context)
 
         # Use supervisor-approved symbols
-        added_symbols = ranking.priority_order
+        add_watchlist_set = set(ranking.add_watchlist)
+        added_symbols = [symbol for symbol in ranking.priority_order if symbol in add_watchlist_set]
 
         await self.components.state.record_discovery(
             candidates=result.candidates,
