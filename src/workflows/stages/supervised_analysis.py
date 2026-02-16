@@ -38,12 +38,23 @@ T = TypeVar("T")
 def _record_worker_starts(
     tasks: list[_WorkerTask], metrics_collector: SupervisorMetricsCollector | None
 ) -> None:
-    """Record worker starts in metrics collector."""
+    """Record worker starts in metrics collector and attach completion callbacks."""
     if not metrics_collector:
         return
     for worker_task in tasks:
         is_required = worker_task.category == "required"
         metrics_collector.record_worker_start(worker_task.analysis_type.value, is_required)
+
+        # Attach callback to record end time when task completes
+        # Capture collector in closure to ensure it's not None
+        def record_end_time(
+            _task: asyncio.Task[object],
+            worker_name: str = worker_task.analysis_type.value,
+            collector: SupervisorMetricsCollector = metrics_collector,
+        ) -> None:
+            collector.record_worker_end_time(worker_name)
+
+        worker_task.task.add_done_callback(record_end_time)
 
 
 def _record_worker_result(

@@ -168,6 +168,42 @@ class TradingSupervisor:
 
         return weights
 
+    def _route_optional_analyses(
+        self, context: PlanningContext, optional: list[AnalysisType], skip: dict[AnalysisType, str]
+    ) -> None:
+        """Route optional analyses based on context.
+
+        Args:
+            context: Planning context
+            optional: List to append optional analyses
+            skip: Dict to record skipped analyses
+        """
+        # Fundamental: optional unless rate-limited
+        if context.fundamental_rate_limit:
+            skip[AnalysisType.FUNDAMENTAL] = "API rate limited"
+        elif not context.fundamental_available:
+            skip[AnalysisType.FUNDAMENTAL] = "Fundamental data unavailable"
+        else:
+            optional.append(AnalysisType.FUNDAMENTAL)
+
+        # Comparative: optional (adds context)
+        optional.append(AnalysisType.COMPARATIVE)
+
+        # Web research: optional (adds context)
+        optional.append(AnalysisType.WEB_RESEARCH)
+
+        # Social sentiment: optional if available
+        if context.social_available:
+            optional.append(AnalysisType.SOCIAL_SENTIMENT)
+        else:
+            skip[AnalysisType.SOCIAL_SENTIMENT] = "Social sentiment data unavailable"
+
+        # Trump: optional if posts exist
+        if context.trump_count > 0:
+            optional.append(AnalysisType.TRUMP)
+        else:
+            skip[AnalysisType.TRUMP] = "No Trump posts available"
+
     def default_routing(self, context: PlanningContext) -> AnalysisRoutingDecision:
         """Fallback routing when LLM unavailable - intelligent data-driven decisions.
 
@@ -198,21 +234,8 @@ class TradingSupervisor:
         else:
             required.extend([AnalysisType.SENTIMENT, AnalysisType.NEWS])
 
-        # Fundamental: optional unless rate-limited
-        if context.fundamental_rate_limit:
-            skip[AnalysisType.FUNDAMENTAL] = "API rate limited"
-        elif not context.fundamental_available:
-            skip[AnalysisType.FUNDAMENTAL] = "Fundamental data unavailable"
-        else:
-            optional.append(AnalysisType.FUNDAMENTAL)
-
-        # Social sentiment: optional if available
-        if context.social_available:
-            optional.append(AnalysisType.SOCIAL_SENTIMENT)
-
-        # Trump: optional if posts exist
-        if context.trump_count > 0:
-            optional.append(AnalysisType.TRUMP)
+        # Route optional analyses
+        self._route_optional_analyses(context, optional, skip)
 
         # Research: required only if technical not skipped
         if AnalysisType.TECHNICAL not in skip:

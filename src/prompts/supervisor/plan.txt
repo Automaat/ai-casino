@@ -54,8 +54,14 @@ Owns Position: {owns_position}
 ## Output
 
 Determine AnalysisRoutingDecision:
-- required_analyses: Must complete successfully
-- optional_analyses: Run if time/budget permits
-- skip_analyses: Skip with reasoning
-- priority_order: Execution sequence
-- reasoning: Brief explanation of routing logic
+- required_analyses: Must complete successfully (list of AnalysisType)
+- optional_analyses: Run if time/budget permits (list of AnalysisType)
+- skip_analyses: Dict mapping AnalysisType to skip reason string. **MUST include ALL skipped analyses** (e.g., {{"trump": "No Trump posts available"}})
+- priority_order: Execution sequence (list of AnalysisType in order)
+- reasoning: Brief explanation of overall routing logic
+
+**CRITICAL**: If any analysis is not in required_analyses or optional_analyses, it MUST appear in skip_analyses with a reason. Common skips:
+- trump: "No Trump posts available" (when trump_count = 0)
+- technical: "Insufficient market data" (when market_data_rows < min_rows_required)
+- sentiment/news: "No news articles available" (when news_count = 0)
+- fundamental: "API rate limited" or "Fundamental data unavailable"
