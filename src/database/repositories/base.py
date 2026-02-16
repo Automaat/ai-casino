@@ -17,8 +17,8 @@ class BaseRepository(ABC, Generic[T]):
     2. Async context manager (session properly closed) - recommended
 
     Example:
-        async with get_session() as session:
-            repo = MyRepository(session)
+        # Using the repository as an async context manager (recommended):
+        async with MyRepository(session) as repo:
             await repo.create(entity)
     """
 
@@ -41,8 +41,19 @@ class BaseRepository(ABC, Generic[T]):
             await self._session.close()
 
     async def close(self) -> None:
-        """Explicitly close the session."""
-        await self._session.close()
+        """Explicitly close the session if this repository owns it.
+
+        If the session is not owned by this repository (owns_session is False),
+        this method will be a no-op to avoid closing a shared or externally
+        managed session.
+        """
+        if self.owns_session:
+            await self._session.close()
+        else:
+            logger.warning(
+                f"{self.__class__.__name__}.close() called on non-owned session; "
+                "no action taken to avoid closing an external session."
+            )
 
     def __del__(self) -> None:
         """Cleanup on garbage collection."""

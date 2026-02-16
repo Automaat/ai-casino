@@ -95,7 +95,7 @@ def create_analysis_repository(database_engine: DatabaseEngine) -> AnalysisRecor
         Repository with new session (caller must close)
 
     Note:
-        Session must be closed by caller via repo.close() or use as context manager
+        Session must be closed by caller via await repo.close() or use as context manager
     """
     from src.database.repositories.analysis import AnalysisRecordRepository
 
@@ -114,7 +114,7 @@ def create_trade_repository(database_engine: DatabaseEngine) -> TradeRepository:
         Repository with new session (caller must close)
 
     Note:
-        Session must be closed by caller via repo.close() or use as context manager
+        Session must be closed by caller via await repo.close() or use as context manager
     """
     from src.database.repositories.trade import TradeRepository
 
@@ -133,7 +133,7 @@ def create_signal_outcome_repository(database_engine: DatabaseEngine) -> SignalO
         Repository with new session (caller must close)
 
     Note:
-        Session must be closed by caller via repo.close() or use as context manager
+        Session must be closed by caller via await repo.close() or use as context manager
     """
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
 
@@ -152,7 +152,7 @@ def create_coordinator_metrics_repository(database_engine: DatabaseEngine) -> Co
         Repository with new session (caller must close)
 
     Note:
-        Session must be closed by caller via repo.close() or use as context manager
+        Session must be closed by caller via await repo.close() or use as context manager
     """
     from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
 
