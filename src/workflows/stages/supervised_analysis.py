@@ -642,6 +642,7 @@ async def run_supervised_analyses(
     timeout_ms: int = 30000,
     workflow_id: str | None = None,
     event_bus: object | None = None,
+    planning_fallback_used: bool = False,
 ) -> AnalysisOutput:
     """Execute analyses based on supervisor routing decision.
 
@@ -685,7 +686,7 @@ async def run_supervised_analyses(
     if workflow_id:
         metrics_collector = SupervisorMetricsCollector(workflow_id, input_data.symbol)
         metrics_collector.record_planning_start()
-        metrics_collector.record_planning(routing_decision, fallback_used=False)
+        metrics_collector.record_planning(routing_decision, fallback_used=planning_fallback_used)
 
     # Publish routing complete event
     await _publish_routing_event(event_bus, workflow_id or "", input_data.symbol, routing_decision)

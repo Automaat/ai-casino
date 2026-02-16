@@ -271,11 +271,14 @@ class DiscoveryTask(TaskExecutor):
         try:
             import yfinance as yf
 
+            def fetch_sector(sym: str) -> str:
+                ticker = yf.Ticker(sym)
+                info = ticker.info
+                return info.get("sector", "Unknown")
+
             for symbol in all_symbols:
                 try:
-                    ticker = yf.Ticker(symbol)
-                    info = ticker.info
-                    sector = info.get("sector", "Unknown")
+                    sector = await asyncio.to_thread(fetch_sector, symbol)
                     sector_counts[sector] = sector_counts.get(sector, 0) + 1
                     total_count += 1
                 except Exception as e:
