@@ -54,6 +54,17 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
             first_signal_date=entity.first_signal_date,
             outcome_7d=Decimal(str(entity.outcome_7d)) if entity.outcome_7d is not None else None,
             outcome_30d=Decimal(str(entity.outcome_30d)) if entity.outcome_30d is not None else None,
+            supervisor_evaluation_score=(
+                Decimal(str(entity.supervisor_evaluation_score))
+                if entity.supervisor_evaluation_score is not None
+                else None
+            ),
+            supervisor_recommendation=entity.supervisor_recommendation,
+            evaluation_reasoning=entity.evaluation_reasoning,
+            price_at_discovery=(
+                Decimal(str(entity.price_at_discovery)) if entity.price_at_discovery is not None else None
+            ),
+            outcome_updated_at=entity.outcome_updated_at,
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
@@ -200,11 +211,13 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
             outcome_7d=float(orm.outcome_7d) if orm.outcome_7d is not None else None,
             outcome_30d=float(orm.outcome_30d) if orm.outcome_30d is not None else None,
             supervisor_evaluation_score=(
-                float(orm.supervisor_evaluation_score) if orm.supervisor_evaluation_score else None
+                float(orm.supervisor_evaluation_score)
+                if orm.supervisor_evaluation_score is not None
+                else None
             ),
             supervisor_recommendation=orm.supervisor_recommendation,
             evaluation_reasoning=orm.evaluation_reasoning,
-            price_at_discovery=float(orm.price_at_discovery) if orm.price_at_discovery else None,
+            price_at_discovery=float(orm.price_at_discovery) if orm.price_at_discovery is not None else None,
             outcome_updated_at=orm.outcome_updated_at,
         )
 
@@ -238,7 +251,7 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
         if not orm:
             return None
 
-        if price_at_discovery:
+        if price_at_discovery is not None:
             orm.price_at_discovery = Decimal(str(price_at_discovery))
 
         if outcome_7d is not None:

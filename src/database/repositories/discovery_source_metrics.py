@@ -29,7 +29,6 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
         super().__init__(session)
 
     async def create(self, entity: DiscoverySourceMetrics) -> DiscoverySourceMetrics:
-<<<<<<< HEAD
         """Create new discovery source metrics record.
 
         Args:
@@ -40,28 +39,17 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
         """
         return await self.create_or_update_daily_metrics(entity.source_type, entity.measurement_date, entity)
 
-    async def get_by_id(self, _entity_id: str) -> DiscoverySourceMetrics | None:
+    async def get_by_id(self, entity_id: str) -> DiscoverySourceMetrics | None:
         """Get discovery source metrics by ID.
 
         Args:
-            _entity_id: ID string (not used - use get_latest_metrics instead)
+            entity_id: ID string (not used - use get_latest_metrics instead)
 
         Returns:
             None (use get_latest_metrics or create_or_update_daily_metrics instead)
         """
-        logger.warning("get_by_id not implemented for DiscoverySourceMetrics - use get_latest_metrics")
-=======
-        """Create new discovery source metrics entity."""
-        return await self.create_or_update_daily_metrics(entity.source_type, entity.measurement_date, entity)
-
-    async def get_by_id(self, entity_id: str) -> DiscoverySourceMetrics | None:
-        """Get entity by ID (composite key lookup).
-
-        Args:
-            entity_id: Format "source_type:YYYY-MM-DD" for composite key lookup
-        """
         del entity_id
->>>>>>> c6a30cfbbf9252d562c45e1af14dd40a6efb19ad
+        logger.warning("get_by_id not implemented for DiscoverySourceMetrics - use get_latest_metrics")
         return None
 
     async def create_or_update_daily_metrics(
@@ -323,15 +311,15 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
             signal_conversions=orm.signal_conversions,
             discoveries_with_7d_outcome=orm.discoveries_with_7d_outcome,
             positive_7d_outcomes=orm.positive_7d_outcomes,
-            avg_7d_return=float(orm.avg_7d_return) if orm.avg_7d_return else None,
-            median_7d_return=float(orm.median_7d_return) if orm.median_7d_return else None,
+            avg_7d_return=float(orm.avg_7d_return) if orm.avg_7d_return is not None else None,
+            median_7d_return=float(orm.median_7d_return) if orm.median_7d_return is not None else None,
             discoveries_with_30d_outcome=orm.discoveries_with_30d_outcome,
             positive_30d_outcomes=orm.positive_30d_outcomes,
-            avg_30d_return=float(orm.avg_30d_return) if orm.avg_30d_return else None,
-            median_30d_return=float(orm.median_30d_return) if orm.median_30d_return else None,
-            precision_score=float(orm.precision_score) if orm.precision_score else None,
-            recall_score=float(orm.recall_score) if orm.recall_score else None,
-            f1_score=float(orm.f1_score) if orm.f1_score else None,
+            avg_30d_return=float(orm.avg_30d_return) if orm.avg_30d_return is not None else None,
+            median_30d_return=float(orm.median_30d_return) if orm.median_30d_return is not None else None,
+            precision_score=float(orm.precision_score) if orm.precision_score is not None else None,
+            recall_score=float(orm.recall_score) if orm.recall_score is not None else None,
+            f1_score=float(orm.f1_score) if orm.f1_score is not None else None,
             false_positives=orm.false_positives,
             false_negatives=orm.false_negatives,
         )

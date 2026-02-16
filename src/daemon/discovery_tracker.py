@@ -157,20 +157,10 @@ class DiscoveryOutcomeTracker:
 
             for _ in range(max_attempts):
                 if search_date in df.index:
-<<<<<<< HEAD
                     close_value = df.loc[search_date]["Close"]
                     # Pandas Series scalar extraction - cast to Any for type checker
                     scalar_value: Any = close_value.item() if hasattr(close_value, "item") else close_value
                     price_at_date = float(scalar_value)
-=======
-                    import numpy as np
-
-                    close_value = df.loc[search_date]["Close"]
-                    if hasattr(close_value, "item"):
-                        price_at_date = float(close_value.item())
-                    else:
-                        price_at_date = float(np.asarray(close_value).item())
->>>>>>> c6a30cfbbf9252d562c45e1af14dd40a6efb19ad
                     break
                 search_date -= timedelta(days=1)
 
