@@ -668,8 +668,8 @@ async def run_supervised_analyses(
         collector: Optional metrics collector
         timeout_ms: Timeout for worker execution in milliseconds
         workflow_id: Optional workflow ID for supervisor metrics
-        supervisor_metrics_repository: Optional repository for supervisor metrics
         event_bus: Optional event bus for real-time updates
+        planning_fallback_used: Whether supervisor planning used fallback routing
 
     Returns:
         AnalysisOutput with all analyses

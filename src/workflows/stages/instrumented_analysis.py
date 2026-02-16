@@ -384,7 +384,7 @@ async def _run_analyses_with_validation(
         _record_stage(ctx.collector, "supervisor_planning", start_planning)
 
         # Run supervised analyses
-        workflow_id = ctx.collector._workflow_id if ctx.collector else None
+        workflow_id = ctx.collector.workflow_id if ctx.collector else None
         analysis_output = await supervised_analysis.run_supervised_analyses(
             analysis_input,
             routing_decision,

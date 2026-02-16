@@ -182,7 +182,6 @@ class TradingSupervisor:
 
         Args:
             context: Evaluation context with candidates and portfolio state
-            symbol: Trading symbol for execution tracking
 
         Returns:
             CandidateRanking with ADD/DEFER/SKIP recommendations
