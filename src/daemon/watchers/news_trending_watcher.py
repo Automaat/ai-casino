@@ -4,6 +4,7 @@ Polls web search for trending stock news, tracks mention frequency,
 detects spikes, and routes candidates to discovery engine.
 """
 
+import asyncio
 import re
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -147,7 +148,9 @@ class NewsTrendingWatcher(EventWatcher):
         # Search all queries
         for query in self.search_queries:
             try:
-                response = self.websearch_fetcher.search_news(query, max_results=self.max_results_per_query)
+                response = await asyncio.to_thread(
+                    self.websearch_fetcher.search_news, query, max_results=self.max_results_per_query
+                )
 
                 for result in response.results:
                     text = f"{result.title} {result.body}"
@@ -164,9 +167,10 @@ class NewsTrendingWatcher(EventWatcher):
         now = datetime.now(UTC)
         cutoff = now - timedelta(minutes=self.trending_window_minutes)
 
-        for symbol in cycle_mentions:
-            # Add new mentions
-            self._mention_history[symbol].append(now)
+        for symbol, articles in cycle_mentions.items():
+            # Add new mentions (one timestamp per article)
+            for _ in articles:
+                self._mention_history[symbol].append(now)
 
             # Prune old mentions (outside window)
             self._mention_history[symbol] = [ts for ts in self._mention_history[symbol] if ts >= cutoff]
