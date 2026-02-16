@@ -148,8 +148,11 @@ class FinnhubFetcher:
             if to_date:
                 params["to"] = to_date
 
+            url = f"{self.BASE_URL}/stock/social-sentiment"
+            logger.debug(f"Fetching Finnhub social sentiment: {url}?symbol={symbol}")
+
             with httpx.Client(timeout=30.0) as client:
-                response = client.get(f"{self.BASE_URL}/stock/social-sentiment", params=params)
+                response = client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
 
@@ -183,6 +186,14 @@ class FinnhubFetcher:
             logger.info(f"Fetched {symbol} social sentiment: {r_count} reddit, {t_count} twitter")
             return result
 
+        except httpx.HTTPStatusError as e:
+            logger.opt(exception=True).error(
+                f"Finnhub social sentiment fetch failed: HTTP {e.response.status_code}\n"
+                f"Endpoint: /stock/social-sentiment\n"
+                f"Symbol: {symbol}\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
         except Exception as e:
             logger.opt(exception=True).error(f"Finnhub social sentiment fetch failed: {e}")
             raise
@@ -220,8 +231,11 @@ class FinnhubFetcher:
         try:
             params = {"symbol": symbol, "token": self._api_key}
 
+            url = f"{self.BASE_URL}/news-sentiment"
+            logger.debug(f"Fetching Finnhub news sentiment: {url}?symbol={symbol}")
+
             with httpx.Client(timeout=30.0) as client:
-                response = client.get(f"{self.BASE_URL}/news-sentiment", params=params)
+                response = client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
 
@@ -249,6 +263,14 @@ class FinnhubFetcher:
             logger.info(f"Fetched sentiment indicator for {symbol}")
             return result
 
+        except httpx.HTTPStatusError as e:
+            logger.opt(exception=True).error(
+                f"Finnhub sentiment indicator fetch failed: HTTP {e.response.status_code}\n"
+                f"Endpoint: /news-sentiment\n"
+                f"Symbol: {symbol}\n"
+                f"Response preview: {e.response.text[:500]}"
+            )
+            raise
         except Exception as e:
             logger.opt(exception=True).error(f"Finnhub sentiment indicator fetch failed: {e}")
             raise
