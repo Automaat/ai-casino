@@ -605,6 +605,7 @@ class DaemonFactory:
             param_store=components.param_store,
             notification_service=components.notification_service,
             historical_cache=components.historical_cache,
+            event_bus=components.event_bus,
             container=self._container,
         )
         logger.info("Trading workflow initialized")

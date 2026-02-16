@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from src.agents.risk import PortfolioVaRConfig
     from src.cache.historical import HistoricalCache
     from src.daemon.config import AnalysisOrchestratorConfig, PositionSizingConfig, RiskValidationConfig
+    from src.daemon.event_bus import EventBus
     from src.daemon.notifications import NotificationService
     from src.data.broker import AlpacaBroker
     from src.data.fundamental import FundamentalDataFetcher
@@ -83,6 +84,7 @@ class WorkflowComponents:
     risk_validator: RiskValidator | None = None
     analysis_orchestrator_config: AnalysisOrchestratorConfig | None = None
     web_search_fetcher: object | None = None  # WebSearchFetcher (avoid circular import)
+    event_bus: EventBus | None = None
 
     def __repr__(self) -> str:
         """String representation."""
@@ -101,6 +103,7 @@ class WorkflowComponents:
                 self.risk_validation_config is not None,
                 self.risk_validator is not None,
                 self.analysis_orchestrator_config is not None,
+                self.event_bus is not None,
             ]
         )
         return f"WorkflowComponents(required=6, optional={optional_count})"

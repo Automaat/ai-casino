@@ -28,6 +28,7 @@ from src.workflows import TradingWorkflow
 from src.workflows.config import WorkflowComponents, WorkflowConfig
 
 if TYPE_CHECKING:
+    from src.daemon.event_bus import EventBus
     from src.di.container import AppContainer
     from src.validators.risk import RiskValidator
 
@@ -52,6 +53,7 @@ class WorkflowFactoryParams:
     execution_metric_repository: ExecutionMetricRepository | None = None
     notification_service: NotificationService | None = None
     web_search_fetcher: object | None = None  # WebSearchFetcher (avoid circular import)
+    event_bus: EventBus | None = None
 
 
 def _extract_portfolio_var_config(daemon_config: DaemonConfig) -> PortfolioVaRConfig | None:
@@ -116,6 +118,7 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
         risk_validator=risk_validator,
         analysis_orchestrator_config=analysis_orchestrator_config,
         web_search_fetcher=params.web_search_fetcher,
+        event_bus=params.event_bus,
     )
 
     return TradingWorkflow(config, components)
@@ -159,6 +162,7 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
         risk_validator=risk_validator,
         analysis_orchestrator_config=analysis_orchestrator_config,
         web_search_fetcher=params.web_search_fetcher,
+        event_bus=params.event_bus,
     )
 
     return TradingWorkflow(config, components)
@@ -202,6 +206,7 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
         risk_validator=risk_validator,
         analysis_orchestrator_config=analysis_orchestrator_config,
         web_search_fetcher=params.web_search_fetcher,
+        event_bus=params.event_bus,
     )
 
     return TradingWorkflow(config, components)
@@ -233,6 +238,7 @@ def create_workflow_meta_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
     snapshot_repository: PortfolioSnapshotRepository | None = None,
     notification_service: NotificationService | None = None,
     web_search_fetcher: object | None = None,  # WebSearchFetcher (avoid circular import)
+    event_bus: EventBus | None = None,
 ) -> TradingWorkflow:
     """Wrapper for create_workflow_meta that accepts individual parameters."""
     if container is None:
@@ -255,6 +261,7 @@ def create_workflow_meta_wrapper(  # noqa: PLR0913 - DI adapter, delegates to cl
         snapshot_repository=snapshot_repository,
         notification_service=notification_service,
         web_search_fetcher=web_search_fetcher,
+        event_bus=event_bus,
     )
     return create_workflow_meta(params)
 

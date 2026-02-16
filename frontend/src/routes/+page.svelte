@@ -13,7 +13,8 @@
 		serviceHealth,
 		gamePlan,
 		watchlist,
-		degradation
+		degradation,
+		health
 	} from '$lib/stores/dashboard';
 	import { formatPercent, formatDateShort } from '$lib/utils/format';
 	import type { AnalysisRecordResponse, Signal } from '$lib/types/api';
@@ -23,7 +24,57 @@
 	$: plan = $gamePlan;
 	$: wlist = $watchlist;
 	$: deg = $degradation;
+	$: healthData = $health;
 	$: recentAnalyses = summary?.recent_analyses || [];
+
+	// Market phase formatting
+	function getMarketPhaseDisplay(phase: string | null | undefined): string {
+		if (!phase) return 'Closed';
+		const phaseMap: Record<string, string> = {
+			'PRE_MARKET': 'Pre-Market',
+			'REGULAR': 'Regular',
+			'AFTER_HOURS': 'After-Hours'
+		};
+		return phaseMap[phase] || phase;
+	}
+
+	function getTimeRemaining(endTime: string | null | undefined): string {
+		if (!endTime) return '';
+		const end = new Date(endTime);
+		const now = new Date();
+		const diffMs = end.getTime() - now.getTime();
+
+		if (diffMs <= 0) return '';
+
+		const hours = Math.floor(diffMs / (1000 * 60 * 60));
+		const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+		if (hours > 0) {
+			return `${hours}h ${minutes}m`;
+		}
+		return `${minutes}m`;
+	}
+
+	function getMarketPhaseIcon(phase: string | null | undefined): string {
+		if (!phase) return '🌙';
+		const iconMap: Record<string, string> = {
+			'PRE_MARKET': '🌅',
+			'REGULAR': '📈',
+			'AFTER_HOURS': '🌆'
+		};
+		return iconMap[phase] || '⏰';
+	}
+
+	$: marketPhaseValue = (() => {
+		const phase = healthData?.market_phase;
+		const endTime = healthData?.phase_end_time;
+		const phaseDisplay = getMarketPhaseDisplay(phase);
+		const timeRemaining = getTimeRemaining(endTime);
+
+		if (!phase) return 'Market Closed';
+		if (timeRemaining) return `${phaseDisplay} - ${timeRemaining}`;
+		return phaseDisplay;
+	})();
 
 	// Chart data: confidence over time
 	$: confidenceData = recentAnalyses
@@ -134,7 +185,12 @@
 	<DegradationAlert degradation={deg} />
 
 	<!-- Metrics Grid -->
-	<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+	<div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+		<MetricCard
+			title="Market Phase"
+			value={marketPhaseValue}
+			icon={getMarketPhaseIcon(healthData?.market_phase)}
+		/>
 		<MetricCard
 			title="Total Analyses"
 			value={summary?.total_analyses ?? 0}

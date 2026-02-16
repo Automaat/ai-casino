@@ -382,6 +382,7 @@ async def _run_analyses_with_validation(
         _record_stage(ctx.collector, "supervisor_planning", start_planning)
 
         # Run supervised analyses
+        workflow_id = ctx.collector._workflow_id if ctx.collector else None
         analysis_output = await supervised_analysis.run_supervised_analyses(
             analysis_input,
             routing_decision,
@@ -398,6 +399,8 @@ async def _run_analyses_with_validation(
             ctx.workflow.trump_analyst,
             ctx.collector,
             timeout_ms=config.worker_execution_timeout_ms,
+            workflow_id=workflow_id,
+            event_bus=ctx.workflow.event_bus,
         )
     else:
         # Traditional unconditional execution

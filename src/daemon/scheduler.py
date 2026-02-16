@@ -443,6 +443,45 @@ class MarketScheduler:
 
         return max(0, int((market_close - now).total_seconds()))
 
+    def get_current_phase_end(self) -> datetime | None:
+        """Get when the current market phase ends.
+
+        Returns:
+            Datetime when current phase ends, None if market is closed
+        """
+        session = self.get_trading_session()
+        if not session:
+            return None
+
+        now = datetime.now(self.timezone)
+
+        if session == TradingSession.PRE_MARKET:
+            # Pre-market ends when regular market opens
+            return now.replace(
+                hour=self.start_hour,
+                minute=self.start_minute,
+                second=0,
+                microsecond=0,
+            )
+        if session == TradingSession.REGULAR:
+            # Regular market ends at configured close time
+            return now.replace(
+                hour=self.end_hour,
+                minute=self.end_minute,
+                second=0,
+                microsecond=0,
+            )
+        if session == TradingSession.AFTER_HOURS:
+            # After-hours ends at 8:00 PM ET
+            return now.replace(
+                hour=AFTER_HOURS_END[0],
+                minute=AFTER_HOURS_END[1],
+                second=0,
+                microsecond=0,
+            )
+
+        return None
+
     def is_journal_window(self, offset_minutes: int = 15) -> bool:
         """Check if current time is in the after-hours journal window.
 
