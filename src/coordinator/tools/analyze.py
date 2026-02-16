@@ -90,8 +90,11 @@ class AnalyzeSymbolTool(BaseTool):
             ),
         )
 
-    def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute full trading analysis.
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute full trading analysis asynchronously.
+
+        Overrides BaseTool.aexecute() to use native async instead of
+        thread offloading, avoiding event loop conflicts with DB sessions.
 
         Args:
             **kwargs: Tool arguments (symbol: str, period_days: int = 90,
@@ -106,11 +109,32 @@ class AnalyzeSymbolTool(BaseTool):
 
         logger.info(f"Running full analysis for {symbol} ({period_days} days)")
 
+        try:
+            return await self._run_analysis(symbol, period_days, include_position_context)
+        except Exception as e:
+            logger.opt(exception=True).error(f"Analysis failed for {symbol}: {e}")
+            return f"Analysis failed for {symbol}: {e}"
+
+    def execute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute full trading analysis (sync wrapper for compatibility).
+
+        Args:
+            **kwargs: Tool arguments (symbol: str, period_days: int = 90,
+                     include_position_context: bool = False)
+
+        Returns:
+            Formatted analysis summary
+        """
+        # Sync wrapper - should not be called in production (use aexecute)
+        logger.warning("AnalyzeSymbolTool.execute() called - prefer aexecute() to avoid event loop issues")
+        symbol = str(kwargs["symbol"]).upper()
+        period_days = int(kwargs.get("period_days", 90))
+        include_position_context = bool(kwargs.get("include_position_context", False))
+
         def run_in_thread() -> str:
             return asyncio.run(self._run_analysis(symbol, period_days, include_position_context))
 
         try:
-            # Run in thread to avoid nested event loop issues
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_in_thread)
                 return future.result()

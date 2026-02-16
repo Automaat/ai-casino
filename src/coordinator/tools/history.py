@@ -58,8 +58,8 @@ class AnalysisHistoryTool(BaseTool):
             ),
         )
 
-    def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute analysis history retrieval for specific symbol.
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute analysis history retrieval asynchronously.
 
         Args:
             **kwargs: Tool arguments (symbol: str required, days: int = 7)
@@ -76,12 +76,36 @@ class AnalysisHistoryTool(BaseTool):
         logger.info(f"Retrieving analysis history for {symbol} (last {days} days)")
 
         try:
-            # Delegate to memory layer (handles async to sync conversion)
-            return asyncio.run(self._memory.get_analysis_history(symbol, days=days))
-
+            return await self._memory.get_analysis_history(symbol, days=days)
         except Exception as e:
             logger.opt(exception=True).error(f"Analysis history retrieval failed for {symbol}: {e}")
             return f"Failed to retrieve analysis history for {symbol}: {e}"
+
+    def execute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute analysis history retrieval for specific symbol (sync wrapper).
+
+        Args:
+            **kwargs: Tool arguments (symbol: str required, days: int = 7)
+
+        Returns:
+            Formatted analysis history
+
+        Raises:
+            RuntimeError: If called from within a running event loop
+        """
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "AnalysisHistoryTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
 
     def __repr__(self) -> str:
         """String representation."""

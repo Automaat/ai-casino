@@ -68,8 +68,8 @@ class TradingWorkflowResult(BaseModel):
     comparative: ComparativeAnalysis | None = None
     web_research: WebResearchAnalysis | None = None
     social_sentiment: SocialSentimentAnalysis | None = None
-    bullish: BullishResearchAnalysis
-    bearish: BearishResearchAnalysis
+    bullish: BullishResearchAnalysis | None = None
+    bearish: BearishResearchAnalysis | None = None
     decision: TradingDecision
     risk: RiskAssessment
     order: OrderStatus | None = None

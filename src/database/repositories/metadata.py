@@ -44,34 +44,27 @@ class MetadataRepository(BaseRepository[dict]):
         Returns:
             Metadata value (datetime, int, str, list, dict, etc.) or None if not found
         """
-        try:
-            result = await self._session.execute(
-                select(DaemonMetadataORM).where(DaemonMetadataORM.key == key)
-            )
-            orm = result.scalar_one_or_none()
-            if not orm:
-                return None
+        result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
+        orm = result.scalar_one_or_none()
+        if not orm:
+            return None
 
-            # Extract value from JSONB (stored as {"data": <value>})
-            value_dict = orm.value
-            if not isinstance(value_dict, dict) or "data" not in value_dict:
-                return None
+        # Extract value from JSONB (stored as {"data": <value>})
+        value_dict = orm.value
+        if not isinstance(value_dict, dict) or "data" not in value_dict:
+            return None
 
-            value = value_dict["data"]
+        value = value_dict["data"]
 
-            # Parse datetime strings back to datetime objects
-            if isinstance(value, str) and value.endswith("Z"):
-                try:
-                    # Replace Z with UTC timezone - fromisoformat handles +00:00
-                    return datetime.fromisoformat(value.removesuffix("Z")).replace(tzinfo=UTC)
-                except ValueError:
-                    return value
+        # Parse datetime strings back to datetime objects
+        if isinstance(value, str) and value.endswith("Z"):
+            try:
+                # Replace Z with UTC timezone - fromisoformat handles +00:00
+                return datetime.fromisoformat(value.removesuffix("Z")).replace(tzinfo=UTC)
+            except ValueError:
+                return value
 
-            return value
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get(key)
-            raise
+        return value
 
     async def get_datetime(self, key: str) -> datetime | None:
         """Get datetime value by key with type narrowing.
@@ -128,31 +121,24 @@ class MetadataRepository(BaseRepository[dict]):
             key: Metadata key (e.g., "trading.last_run")
             value: Value to store (datetime, int, str, list, dict, etc.)
         """
-        try:
-            # Serialize datetime to ISO format string
-            serialized = value.isoformat() if isinstance(value, datetime) else value
+        # Serialize datetime to ISO format string
+        serialized = value.isoformat() if isinstance(value, datetime) else value
 
-            # Check if exists
-            result = await self._session.execute(
-                select(DaemonMetadataORM).where(DaemonMetadataORM.key == key)
-            )
-            orm = result.scalar_one_or_none()
+        # Check if exists
+        result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
+        orm = result.scalar_one_or_none()
 
-            if orm:
-                # Update existing
-                orm.value = {"data": serialized}
-                orm.updated_at = datetime.now(UTC)
-            else:
-                # Create new
-                orm = DaemonMetadataORM(key=key, value={"data": serialized}, updated_at=datetime.now(UTC))
-                self._session.add(orm)
+        if orm:
+            # Update existing
+            orm.value = {"data": serialized}
+            orm.updated_at = datetime.now(UTC)
+        else:
+            # Create new
+            orm = DaemonMetadataORM(key=key, value={"data": serialized}, updated_at=datetime.now(UTC))
+            self._session.add(orm)
 
-            await self._session.commit()
-            logger.debug(f"Set metadata: {key} = {value}")
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.set(key, value)
-            raise
+        await self._session.commit()
+        logger.debug(f"Set metadata: {key} = {value}")
 
     async def delete(self, key: str) -> bool:
         """Delete metadata by key.
@@ -163,22 +149,15 @@ class MetadataRepository(BaseRepository[dict]):
         Returns:
             True if deleted, False if not found
         """
-        try:
-            result = await self._session.execute(
-                select(DaemonMetadataORM).where(DaemonMetadataORM.key == key)
-            )
-            orm = result.scalar_one_or_none()
-            if not orm:
-                return False
+        result = await self._session.execute(select(DaemonMetadataORM).where(DaemonMetadataORM.key == key))
+        orm = result.scalar_one_or_none()
+        if not orm:
+            return False
 
-            await self._session.delete(orm)
-            await self._session.commit()
-            logger.debug(f"Deleted metadata: {key}")
-            return True
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.delete(key)
-            raise
+        await self._session.delete(orm)
+        await self._session.commit()
+        logger.debug(f"Deleted metadata: {key}")
+        return True
 
     def __repr__(self) -> str:
         """Return string representation."""

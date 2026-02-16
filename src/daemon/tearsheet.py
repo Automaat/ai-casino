@@ -37,6 +37,11 @@ class DaemonTearsheetGenerator:
         self.reporter = QuantStatsReporter(risk_free_rate)
         logger.info("Initialized DaemonTearsheetGenerator")
 
+    def set_broker(self, broker: AlpacaBroker) -> None:
+        """Set broker after initialization (deferred to avoid event loop issues)."""
+        self.broker = broker
+        logger.debug("DaemonTearsheetGenerator broker updated")
+
     def generate_portfolio_tearsheet(
         self,
         analyses: list[AnalysisRecord],

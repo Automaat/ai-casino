@@ -40,6 +40,12 @@ class DaemonRebalancer:
             f"auto_execute={'yes' if broker else 'no'})"
         )
 
+    def set_broker(self, broker: AlpacaBroker) -> None:
+        """Set broker after initialization (deferred to avoid event loop issues)."""
+        self.broker = broker
+        self.optimizer.set_broker(broker)
+        logger.debug("DaemonRebalancer broker updated")
+
     def __repr__(self) -> str:
         """Return string representation."""
         return f"DaemonRebalancer(threshold={self.rebalance_threshold:.2%})"

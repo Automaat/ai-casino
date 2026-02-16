@@ -55,50 +55,6 @@ class BaseRepository(ABC, Generic[T]):
                 "no action taken to avoid closing an external session."
             )
 
-    def __del__(self) -> None:
-        """Cleanup on garbage collection."""
-        if hasattr(self, "_session") and hasattr(self, "owns_session") and self.owns_session:
-            try:
-                import asyncio
-
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    # No event loop available
-                    return
-
-                if loop.is_closed():
-                    # Event loop already closed, can't clean up session
-                    return
-
-                if loop.is_running():
-                    task = loop.create_task(self._session.close())
-                    task.add_done_callback(lambda _: None)
-                else:
-                    loop.run_until_complete(self._session.close())
-            except Exception as e:
-                logger.opt(exception=False).debug(f"Failed to close session during GC: {e}")
-
-    def _recreate_session_if_needed(self, error: RuntimeError) -> bool:
-        """Recreate session if event loop error detected.
-
-        Args:
-            error: RuntimeError from database operation
-
-        Returns:
-            True if session was recreated, False otherwise
-        """
-        error_msg = str(error)
-        if "bound to a different event loop" in error_msg or "attached to a different loop" in error_msg:
-            logger.warning(f"{self.__class__.__name__}: Event loop error, recreating session")
-            from src.database.connection import get_db_engine
-
-            engine = get_db_engine()
-            self._session = engine.session()
-            self.owns_session = True
-            return True
-        return False
-
     @abstractmethod
     async def create(self, entity: T) -> T:
         """Create new entity."""

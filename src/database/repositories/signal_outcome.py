@@ -160,20 +160,15 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             List of SignalOutcomes for symbol
         """
-        try:
-            stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.symbol == symbol)
+        stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.symbol == symbol)
 
-            if start_date:
-                stmt = stmt.where(SignalOutcomeORM.timestamp >= start_date)
+        if start_date:
+            stmt = stmt.where(SignalOutcomeORM.timestamp >= start_date)
 
-            stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc()).limit(limit)
+        stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc()).limit(limit)
 
-            result = await self._session.execute(stmt)
-            return [self._to_domain(orm) for orm in result.scalars().all()]
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get_by_symbol(symbol, limit, start_date)
-            raise
+        result = await self._session.execute(stmt)
+        return [self._to_domain(orm) for orm in result.scalars().all()]
 
     async def get_signals_needing_update(self, horizon: str) -> list[SignalUpdateRecord]:
         """Get signals that need outcome price updates for given horizon.
@@ -191,39 +186,34 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         days = horizon_days[horizon]
         price_field = f"price_at_{horizon}"
 
-        try:
-            now = datetime.now(UTC)
-            cutoff = now - timedelta(days=days + 2)  # +2 buffer for weekends
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(days=days + 2)  # +2 buffer for weekends
 
-            stmt = (
-                select(SignalOutcomeORM.id, SignalOutcomeORM.symbol, SignalOutcomeORM.timestamp)
-                .where(
-                    and_(
-                        SignalOutcomeORM.timestamp <= cutoff,
-                        getattr(SignalOutcomeORM, price_field).is_(None),
-                    )
+        stmt = (
+            select(SignalOutcomeORM.id, SignalOutcomeORM.symbol, SignalOutcomeORM.timestamp)
+            .where(
+                and_(
+                    SignalOutcomeORM.timestamp <= cutoff,
+                    getattr(SignalOutcomeORM, price_field).is_(None),
                 )
-                .order_by(SignalOutcomeORM.timestamp.desc())
-                .limit(100)
             )
+            .order_by(SignalOutcomeORM.timestamp.desc())
+            .limit(100)
+        )
 
-            result = await self._session.execute(stmt)
-            records = []
-            for row in result.all():
-                target_date = row.timestamp + timedelta(days=days)
-                records.append(
-                    SignalUpdateRecord(
-                        id=str(row.id),
-                        symbol=row.symbol,
-                        timestamp=row.timestamp,
-                        target_date=target_date,
-                    )
+        result = await self._session.execute(stmt)
+        records = []
+        for row in result.all():
+            target_date = row.timestamp + timedelta(days=days)
+            records.append(
+                SignalUpdateRecord(
+                    id=str(row.id),
+                    symbol=row.symbol,
+                    timestamp=row.timestamp,
+                    target_date=target_date,
                 )
-            return records
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get_signals_needing_update(horizon)
-            raise
+            )
+        return records
 
     async def update_outcome_prices(
         self,
@@ -285,36 +275,29 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             raise ValueError(msg)
         price_field = f"price_at_{horizon}"
 
-        try:
-            cutoff = datetime.now(UTC) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
-            stmt = select(
-                SignalOutcomeORM.signal,
-                SignalOutcomeORM.price_at_signal,
-                getattr(SignalOutcomeORM, price_field),
-            ).where(
-                and_(
-                    SignalOutcomeORM.regime == regime,
-                    SignalOutcomeORM.timestamp >= cutoff,
-                    getattr(SignalOutcomeORM, price_field).is_not(None),
-                )
+        stmt = select(
+            SignalOutcomeORM.signal,
+            SignalOutcomeORM.price_at_signal,
+            getattr(SignalOutcomeORM, price_field),
+        ).where(
+            and_(
+                SignalOutcomeORM.regime == regime,
+                SignalOutcomeORM.timestamp >= cutoff,
+                getattr(SignalOutcomeORM, price_field).is_not(None),
             )
+        )
 
-            if min_confidence is not None:
-                stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+        if min_confidence is not None:
+            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
 
-            if signal_type:
-                stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+        if signal_type:
+            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
 
-            result = await self._session.execute(stmt)
-            rows = result.all()
-            return self._calculate_hit_rate(rows)
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get_success_rate_by_regime(
-                    regime, horizon, min_confidence, days_back, signal_type
-                )
-            raise
+        result = await self._session.execute(stmt)
+        rows = result.all()
+        return self._calculate_hit_rate(rows)
 
     async def get_success_rate_by_strategy(
         self,
@@ -341,36 +324,29 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
             raise ValueError(msg)
         price_field = f"price_at_{horizon}"
 
-        try:
-            cutoff = datetime.now(UTC) - timedelta(days=days_back)
+        cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
-            stmt = select(
-                SignalOutcomeORM.signal,
-                SignalOutcomeORM.price_at_signal,
-                getattr(SignalOutcomeORM, price_field),
-            ).where(
-                and_(
-                    SignalOutcomeORM.strategy_used == strategy,
-                    SignalOutcomeORM.timestamp >= cutoff,
-                    getattr(SignalOutcomeORM, price_field).is_not(None),
-                )
+        stmt = select(
+            SignalOutcomeORM.signal,
+            SignalOutcomeORM.price_at_signal,
+            getattr(SignalOutcomeORM, price_field),
+        ).where(
+            and_(
+                SignalOutcomeORM.strategy_used == strategy,
+                SignalOutcomeORM.timestamp >= cutoff,
+                getattr(SignalOutcomeORM, price_field).is_not(None),
             )
+        )
 
-            if min_confidence is not None:
-                stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+        if min_confidence is not None:
+            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
 
-            if signal_type:
-                stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+        if signal_type:
+            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
 
-            result = await self._session.execute(stmt)
-            rows = result.all()
-            return self._calculate_hit_rate(rows)
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get_success_rate_by_strategy(
-                    strategy, horizon, min_confidence, days_back, signal_type
-                )
-            raise
+        result = await self._session.execute(stmt)
+        rows = result.all()
+        return self._calculate_hit_rate(rows)
 
     async def get_recent_outcomes(
         self,
@@ -388,24 +364,19 @@ class SignalOutcomeRepository(BaseRepository[SignalOutcome]):
         Returns:
             List of SignalOutcomes
         """
-        try:
-            cutoff = datetime.now(UTC) - timedelta(days=window)
-            stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.timestamp >= cutoff)
+        cutoff = datetime.now(UTC) - timedelta(days=window)
+        stmt = select(SignalOutcomeORM).where(SignalOutcomeORM.timestamp >= cutoff)
 
-            if signal_type:
-                stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
+        if signal_type:
+            stmt = stmt.where(SignalOutcomeORM.signal == signal_type)
 
-            if min_confidence is not None:
-                stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
+        if min_confidence is not None:
+            stmt = stmt.where(SignalOutcomeORM.confidence >= Decimal(str(min_confidence)))
 
-            stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc())
+        stmt = stmt.order_by(SignalOutcomeORM.timestamp.desc())
 
-            result = await self._session.execute(stmt)
-            return [self._to_domain(orm) for orm in result.scalars().all()]
-        except RuntimeError as e:
-            if self._recreate_session_if_needed(e):
-                return await self.get_recent_outcomes(window, signal_type, min_confidence)
-            raise
+        result = await self._session.execute(stmt)
+        return [self._to_domain(orm) for orm in result.scalars().all()]
 
     async def create(self, entity: SignalOutcome) -> SignalOutcome:
         """Create new signal outcome (alternative to record_signal).
