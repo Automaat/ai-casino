@@ -6,6 +6,7 @@ from loguru import logger
 
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
+from src.daemon.watchers.news_trending_watcher import NewsTrendingWatcher
 from src.daemon.watchers.news_watcher import NewsWatcher
 from src.daemon.watchers.social_watcher import SocialWatcher
 from src.daemon.watchers.trump_watcher import TrumpWatcher
@@ -144,3 +145,53 @@ def create_trump_watcher(
         cooldown_minutes=config.cooldown_minutes,
         max_concurrent_analyses=config.max_concurrent_analyses,
     )
+
+
+def create_news_trending_watcher(
+    historical_cache: HistoricalCache,
+    daemon_config: DaemonConfig,
+    container: AppContainer | None = None,
+) -> NewsTrendingWatcher | None:
+    """Create news trending watcher for continuous discovery.
+
+    Args:
+        historical_cache: Historical cache for data persistence
+        daemon_config: Daemon configuration
+        container: Optional DI container (auto-created if not provided)
+
+    Returns:
+        NewsTrendingWatcher instance if enabled, None otherwise
+    """
+    from src.daemon.watchers.news_trending_watcher import NewsTrendingWatcherConfig
+
+    config = daemon_config.news_trending_watcher
+    if not config.enabled:
+        logger.debug("NewsTrendingWatcher disabled in config")
+        return None
+
+    if container is None:
+        from src.di.container import create_container
+
+        container = create_container()
+
+    websearch_fetcher = container.websearch_fetcher()
+
+    watcher_config = NewsTrendingWatcherConfig(
+        poll_interval=config.poll_interval_minutes * 60,
+        trending_window_minutes=config.trending_window_minutes,
+        min_mention_threshold=config.min_mention_threshold,
+        relevance_threshold=config.relevance_threshold,
+        max_candidates_per_cycle=config.max_candidates_per_cycle,
+        search_queries=config.search_queries,
+        max_results_per_query=config.max_results_per_query,
+    )
+
+    watcher = NewsTrendingWatcher(
+        websearch_fetcher=websearch_fetcher,
+        historical_cache=historical_cache,
+        config=watcher_config,
+        container=container,
+    )
+
+    logger.info("News trending watcher created (discovery mode)")
+    return watcher
