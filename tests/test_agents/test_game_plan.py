@@ -67,6 +67,7 @@ async def test_game_plan_agent_generate(mock_yf_ticker, test_container, mock_mar
     assert isinstance(plan, GamePlan)
     assert plan.priority_symbols == ["AAPL", "TSLA"]
     assert plan.risk_stance == "NEUTRAL"
+    assert plan.key_levels == {"AAPL": 175.0}
     assert 0.0 <= plan.confidence <= 1.0
 
 

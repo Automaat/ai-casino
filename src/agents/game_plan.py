@@ -18,7 +18,7 @@ class KeyLevel(BaseModel):
     """Price level for a symbol."""
 
     symbol: str
-    price: float
+    price: float = Field(gt=0.0)
 
 
 class GamePlanLLMResponse(BaseModel):
@@ -112,7 +112,18 @@ class GamePlanAgent:
             priority_symbols = llm_response.priority_symbols
             risk_stance = llm_response.risk_stance
             sector_focus = llm_response.sector_focus
-            key_levels = {kl.symbol: kl.price for kl in llm_response.key_levels}
+            key_levels: dict[str, float] = {}
+            seen_symbols: set[str] = set()
+            for kl in llm_response.key_levels:
+                if kl.symbol in seen_symbols:
+                    logger.warning(
+                        "Duplicate key level symbol from LLM response: {symbol}. "
+                        "Keeping last provided price {price}.",
+                        symbol=kl.symbol,
+                        price=kl.price,
+                    )
+                seen_symbols.add(kl.symbol)
+                key_levels[kl.symbol] = kl.price
             reasoning = llm_response.reasoning
             confidence = llm_response.confidence
         except StructuredOutputError as e:
