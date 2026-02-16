@@ -218,7 +218,7 @@ class DiscoveryTask(TaskExecutor):
         """
         from src.agents.supervisor.models import CandidateEvaluationContext
 
-        sector_exposure = self._calculate_sector_exposure(portfolio_symbols, watchlist_symbols)
+        sector_exposure = await self._calculate_sector_exposure(portfolio_symbols, watchlist_symbols)
 
         recent_outcomes = await self._get_recent_outcomes(days=30)
 
@@ -249,7 +249,7 @@ class DiscoveryTask(TaskExecutor):
         )
         return context
 
-    def _calculate_sector_exposure(
+    async def _calculate_sector_exposure(
         self, portfolio_symbols: list[str], watchlist_symbols: list[str]
     ) -> dict[str, float]:
         """Calculate sector exposure from portfolio and watchlist.
