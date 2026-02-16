@@ -46,6 +46,13 @@ class DaemonLifecycle:
         _DatabaseEngineHolder.initialize(database_engine)
         logger.info("Global database singleton initialized")
 
+        # Enable database on state managers
+        self.components.state.trading.enable_database()
+        self.components.state.strategy.enable_database()
+
+        # Inject database engine into position state manager
+        self.components.state.positions.set_database_engine(database_engine)
+
         # Set database engine on position manager (was None during init)
         if self.components.position_manager:
             try:

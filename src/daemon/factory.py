@@ -244,18 +244,9 @@ class DaemonFactory:
         historical_cache = self._container.historical_cache()
         state = DaemonState()
 
-        # Set global database engine singleton for get_session() calls
-        from src.database.connection import _DatabaseEngineHolder
-
-        database_engine = self._container.database_engine()
-        _DatabaseEngineHolder.instance = database_engine
-
-        # Enable database on state managers
-        state.trading.enable_database()
-        state.strategy.enable_database()
-
-        # Inject database engine into position manager for fresh sessions
-        state.positions.set_database_engine(database_engine)
+        # NOTE: Database engine initialization deferred to lifecycle.startup()
+        # to avoid creating engine before event loop exists (causes asyncpg binding issues)
+        # State managers will enable database later during lifecycle startup
 
         return state, historical_cache
 
