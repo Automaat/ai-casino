@@ -22,6 +22,7 @@ from tenacity import (
 )
 
 from src.cache.historical import HistoricalCache
+from src.utils.ticker_extraction import extract_tickers
 
 # Cache TTL in seconds
 REDDIT_CACHE_TTL = 900  # 15 minutes
@@ -364,16 +365,7 @@ class RedditFetcher:
         Returns:
             Set of ticker symbols
         """
-        tickers = set()
-        # Match $SYMBOL or standalone 2-5 letter uppercase words
-        pattern = r"\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b"
-
-        for match in re.finditer(pattern, text):
-            ticker = match.group(1) or match.group(2)
-            if ticker and ticker not in EXCLUDED_WORDS:
-                tickers.add(ticker)
-
-        return tickers
+        return extract_tickers(text, EXCLUDED_WORDS)
 
     def _aggregate_ticker_data(
         self, reddit: praw.Reddit, subreddits: list[str], limit: int
