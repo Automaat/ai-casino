@@ -51,7 +51,7 @@ dependencies = [
     "uvicorn[standard]==0.40.0",
     # CLI & TUI
     "typer==0.23.1",
-    "textual==7.5.0",
+    "textual==8.0.0",
     "dependency-injector==4.48.3",  # DI container infrastructure
 ]
 
