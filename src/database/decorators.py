@@ -42,6 +42,7 @@ def handle_event_loop_error(func: Callable[P, Awaitable[T]]) -> Callable[P, Awai
 
                 engine = get_db_engine()
                 self._session = engine.session()
+                self.owns_session = True
 
                 # Retry operation with new session
                 return await func(*args, **kwargs)

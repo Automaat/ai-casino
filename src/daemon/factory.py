@@ -339,6 +339,7 @@ class DaemonFactory:
 
                     db_engine = get_db_engine()
                     trade_repository = TradeRepository(db_engine.session())
+                    trade_repository.owns_session = True
                 except Exception as e:
                     logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
@@ -623,6 +624,7 @@ class DaemonFactory:
 
                     db_engine = get_db_engine()
                     trade_repository = TradeRepository(db_engine.session())
+                    trade_repository.owns_session = True
                 except Exception as e:
                     logger.opt(exception=True).warning(f"Failed to init DB metrics tracker: {e}, using JSONL")
 
