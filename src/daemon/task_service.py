@@ -105,6 +105,15 @@ class DaemonTaskService:
 
         await DiscoveryTask(self.components, self.container).run()
 
+    async def run_discovery_outcome(self) -> None:
+        """Run discovery outcome tracking task."""
+        if not self.components.config.discovery.enabled:
+            return
+
+        from src.daemon.tasks.data_tasks import DiscoveryOutcomeTask
+
+        await DiscoveryOutcomeTask(self.components, self.container).run()
+
     async def run_health_check(self) -> None:
         """Run health check task."""
         if not self.components.config.health.enabled:

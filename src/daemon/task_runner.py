@@ -61,6 +61,13 @@ class ScheduledTaskRunner:
         ),
         ScheduledTask("optimization", "is_optimization_time", "_run_optimization", "optimization.enabled"),
         ScheduledTask("signal_tracking", "is_signal_tracking_time", "_run_signal_tracking"),
+        ScheduledTask(
+            "discovery_outcome",
+            "is_discovery_outcome_time",
+            "_run_discovery_outcome",
+            "discovery.enabled",
+            is_async=True,
+        ),
     ]
 
     def __init__(
