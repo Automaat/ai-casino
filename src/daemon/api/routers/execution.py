@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
@@ -145,11 +146,11 @@ async def get_execution_metrics(limit: int = 50, symbol: str | None = None) -> E
 
 
 @router.get("/api/execution-metrics/{workflow_id}", response_model=dict)
-async def get_execution_metric_detail(workflow_id: str) -> dict:
+async def get_execution_metric_detail(workflow_id: UUID) -> dict:
     """Get single workflow execution detail from database or JSONL fallback.
 
     Args:
-        workflow_id: Workflow ID to fetch
+        workflow_id: Workflow UUID to fetch
 
     Returns:
         WorkflowExecutionMetrics as dict
@@ -158,14 +159,16 @@ async def get_execution_metric_detail(workflow_id: str) -> dict:
     from src.database.engine import MissingDatabaseURLError
     from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
 
+    workflow_id_str = str(workflow_id)
+
     # Try database first
     try:
         async with get_session() as session:
             repo = WorkflowExecutionMetricsRepository(session)
-            metric = await repo.get_by_workflow_id(workflow_id)
+            metric = await repo.get_by_workflow_id(workflow_id_str)
             if metric:
                 return metric.model_dump(mode="json")
-            raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+            raise HTTPException(status_code=404, detail=f"Workflow {workflow_id_str} not found")
     except HTTPException:
         raise
     except MissingDatabaseURLError:
@@ -175,12 +178,12 @@ async def get_execution_metric_detail(workflow_id: str) -> dict:
 
     # Fallback to JSONL
     try:
-        result, file_exists = await asyncio.to_thread(_find_metric_in_jsonl, workflow_id)
+        result, file_exists = await asyncio.to_thread(_find_metric_in_jsonl, workflow_id_str)
         if result is None:
             if not file_exists:
                 detail = "Execution metrics file not found"
             else:
-                detail = f"Workflow {workflow_id} not found"
+                detail = f"Workflow {workflow_id_str} not found"
             raise HTTPException(status_code=404, detail=detail)
         return result
     except HTTPException:
