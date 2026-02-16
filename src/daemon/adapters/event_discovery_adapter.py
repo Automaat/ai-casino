@@ -12,6 +12,7 @@ from src.daemon.events import Urgency
 from src.discovery.models import DiscoveryCandidate, DiscoverySource
 
 if TYPE_CHECKING:
+    from src.daemon.config.events import EventWatcherIntegrationConfig
     from src.daemon.events import BaseEvent, TriageResult
     from src.data.market import MarketDataFetcher
 
@@ -19,13 +20,19 @@ if TYPE_CHECKING:
 class EventDiscoveryAdapter:
     """Converts event signals to discovery candidates."""
 
-    def __init__(self, market_fetcher: MarketDataFetcher) -> None:
+    def __init__(
+        self,
+        market_fetcher: MarketDataFetcher,
+        event_integration_config: EventWatcherIntegrationConfig | None = None,
+    ) -> None:
         """Initialize adapter.
 
         Args:
             market_fetcher: Market data fetcher for enrichment
+            event_integration_config: Optional event integration config for TTL mapping
         """
         self.market_fetcher = market_fetcher
+        self._ttl_config = event_integration_config.urgency_ttl_hours if event_integration_config else None
 
     async def convert_event_to_candidate(
         self, event: BaseEvent, triage: TriageResult
@@ -115,6 +122,10 @@ class EventDiscoveryAdapter:
         Returns:
             TTL in hours
         """
+        if self._ttl_config:
+            return self._ttl_config.get(urgency.value, 24)
+
+        # Fallback to defaults
         ttl_map = {
             Urgency.IMMEDIATE: 4,
             Urgency.WATCHLIST: 24,
