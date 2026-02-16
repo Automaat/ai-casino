@@ -86,6 +86,10 @@ class DiscoveryTask(TaskExecutor):
 
     async def execute(self) -> None:
         """Execute stock discovery logic with supervisor evaluation."""
+        import time
+
+        start_time = time.time()
+
         # Type narrowing: discovery_engine checked in run_discovery()
         if self.components.discovery_engine is None:
             msg = "discovery_engine not initialized"
@@ -108,6 +112,10 @@ class DiscoveryTask(TaskExecutor):
         if sector_rotation_history:
             sector_context = sector_rotation_history[-1]
 
+        # Console: Start message
+        console.print("\n[bold cyan]Running stock discovery...[/bold cyan]")
+        console.print(f"[dim]Watchlist: {len(current_watchlist)}, Portfolio: {len(portfolio_symbols)}[/dim]")
+
         # Run discovery
         result = await self.components.discovery_engine.discover(
             current_watchlist=current_watchlist,
@@ -116,6 +124,8 @@ class DiscoveryTask(TaskExecutor):
         )
 
         if not result.candidates:
+            duration = time.time() - start_time
+            console.print(f"[yellow]No discovery candidates found[/yellow] [dim]({duration:.1f}s)[/dim]")
             logger.info("No discovery candidates found")
             await self.components.state.set_last_discovery(datetime.now(UTC))
             return
@@ -144,10 +154,35 @@ class DiscoveryTask(TaskExecutor):
         )
         await self.components.state.set_last_discovery(datetime.now(UTC))
 
+        duration = time.time() - start_time
+
+        # Console: Results with breakdown
+        console.print(f"\n[bold green]✓ Discovery Complete[/bold green] [dim]({duration:.1f}s)[/dim]")
+        console.print(f"  Candidates: {len(result.candidates)} from {len(result.source_breakdown)} sources")
+
+        # Source breakdown
+        if result.source_breakdown:
+            sources_str = ", ".join(f"{src}: {cnt}" for src, cnt in result.source_breakdown.items())
+            console.print(f"  [dim]{sources_str}[/dim]")
+
+        # Supervisor evaluation breakdown
         console.print(
-            f"[bold green]✓[/bold green] Discovery: "
-            f"{len(result.candidates)} candidates, {len(added_symbols)} approved for watchlist"
+            f"  Supervisor: [green]{len(ranking.add_watchlist)} ADD[/green], "
+            f"[yellow]{len(ranking.defer)} DEFER[/yellow], "
+            f"[red]{len(ranking.skip)} SKIP[/red]"
         )
+
+        # Approved symbols
+        if added_symbols:
+            console.print(f"  [bold]Added to watchlist:[/bold] {', '.join(added_symbols[:5])}")
+            if len(added_symbols) > 5:
+                console.print(f"  [dim]...and {len(added_symbols) - 5} more[/dim]")
+
+        # Warnings
+        if ranking.warnings:
+            for warning in ranking.warnings:
+                console.print(f"  [bold yellow]⚠[/bold yellow]  {warning}")
+
         logger.info(
             f"Discovery: {result.total_discovered} discovered, "
             f"{result.filtered_count} filtered, {len(ranking.add_watchlist)} approved, "
