@@ -1,7 +1,9 @@
 """Stock discovery orchestration engine."""
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import yfinance as yf
@@ -16,6 +18,9 @@ from src.discovery.scoring import MultiFactorScorer, ScoringWeights
 from src.discovery.triggers import TriggerDetector
 from src.screening.screener import ScreeningCriteria, StockScreener
 
+if TYPE_CHECKING:
+    from src.data.websearch import WebSearchFetcher
+
 
 @dataclass
 class OptionalServices:
@@ -23,7 +28,7 @@ class OptionalServices:
 
     reddit_fetcher: object | None = None
     earnings_fetcher: object | None = None
-    news_fetcher: object | None = None
+    news_fetcher: WebSearchFetcher | None = None
     broker: object | None = None
 
 
@@ -438,7 +443,7 @@ class StockDiscoveryEngine:
         return candidates
 
     async def _fetch_news_trending_candidates(self) -> list[DiscoveryCandidate]:
-        """Fetch candidates from trending news.
+        """Fetch candidates from trending news via web search.
 
         Returns:
             List of discovery candidates
@@ -446,8 +451,64 @@ class StockDiscoveryEngine:
         logger.debug("Fetching news trending candidates")
         candidates: list[DiscoveryCandidate] = []
 
-        # TODO: Implement news trending integration
-        logger.warning("News trending not implemented yet")
+        if not self.news_fetcher:
+            logger.warning("News fetcher not available")
+            return candidates
+
+        try:
+            # Search for trending stock news
+            search_queries = [
+                "trending stocks today",
+                "hot stocks right now",
+                "stock market movers",
+            ]
+
+            all_symbols = set()
+
+            for query in search_queries:
+                try:
+                    response = self.news_fetcher.search_news(query, max_results=10)
+
+                    # Extract symbols from titles and snippets
+                    for result in response.results:
+                        text = f"{result.title} {result.body}"
+                        symbols = self._extract_tickers(text)
+                        all_symbols.update(symbols)
+
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"News search failed for '{query}': {e}")
+                    continue
+
+            # Validate symbols and create candidates
+            valid_count = 0
+            for symbol in all_symbols:
+                # Limit to max_discovered_per_cycle
+                if valid_count >= self.config.max_discovered_per_cycle:
+                    break
+
+                # Fetch stock info (validates symbol exists)
+                stock_info = self._get_stock_info(symbol)
+                if not stock_info:
+                    logger.debug(f"Skipping invalid symbol: {symbol}")
+                    continue
+
+                candidate = DiscoveryCandidate(
+                    symbol=symbol,
+                    name=str(stock_info.get("name", symbol)),
+                    sector=str(stock_info.get("sector", "Unknown")),
+                    sources=[],  # Set by _merge_candidates
+                    composite_score=0.0,  # Calculated later
+                    discovery_timestamp=datetime.now(UTC),
+                    metadata={**stock_info, "source": "news_trending"},
+                    ttl_expires_at=datetime.now(UTC),  # Set later
+                )
+                candidates.append(candidate)
+                valid_count += 1
+
+            logger.info(f"News trending: {len(candidates)} candidates")
+
+        except Exception as e:
+            logger.opt(exception=True).error(f"News trending fetch failed: {e}")
 
         return candidates
 
@@ -508,6 +569,74 @@ class StockDiscoveryEngine:
                 "sector": "Unknown",
                 "market_cap": 0,
             }
+
+    def _extract_tickers(self, text: str) -> set[str]:
+        """Extract stock tickers from text using regex.
+
+        Args:
+            text: Text to extract tickers from
+
+        Returns:
+            Set of ticker symbols
+        """
+        # Exclude common words that match ticker pattern
+        excluded_words = frozenset(
+            {
+                "I",
+                "A",
+                "THE",
+                "CEO",
+                "CFO",
+                "IPO",
+                "ETF",
+                "GDP",
+                "SEC",
+                "FBI",
+                "USA",
+                "NYSE",
+                "NASDAQ",
+                "WSB",
+                "DD",
+                "YOLO",
+                "FOMO",
+                "FUD",
+                "BUY",
+                "SELL",
+                "HOLD",
+                "LONG",
+                "SHORT",
+                "CALL",
+                "PUT",
+                "ALL",
+                "NEW",
+                "OLD",
+                "BIG",
+                "LOW",
+                "HIGH",
+                "UP",
+                "DOWN",
+                "OUT",
+                "FOR",
+                "AND",
+                "BUT",
+                "NOT",
+                "ARE",
+                "WAS",
+                "HAS",
+                "HAD",
+            }
+        )
+
+        tickers = set()
+        # Match $SYMBOL or standalone 2-5 letter uppercase words
+        pattern = r"\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b"
+
+        for match in re.finditer(pattern, text):
+            ticker = match.group(1) or match.group(2)
+            if ticker and ticker not in excluded_words:
+                tickers.add(ticker)
+
+        return tickers
 
     def _get_stock_info(self, symbol: str, cached_ohlcv: pd.DataFrame | None = None) -> dict[str, object]:
         """Fetch stock metadata (name, sector, market cap, etc).

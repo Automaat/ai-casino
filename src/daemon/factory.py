@@ -502,7 +502,7 @@ class DaemonFactory:
         services = OptionalServices(
             reddit_fetcher=None,
             earnings_fetcher=None,
-            news_fetcher=None,
+            news_fetcher=self._container.websearch_fetcher(),
             broker=broker,
         )
 
