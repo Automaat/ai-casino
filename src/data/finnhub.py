@@ -187,7 +187,7 @@ class FinnhubFetcher:
             return result
 
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"Finnhub social sentiment fetch failed: HTTP {e.response.status_code}\n"
                 f"Endpoint: /stock/social-sentiment\n"
                 f"Symbol: {symbol}\n"
@@ -264,7 +264,7 @@ class FinnhubFetcher:
             return result
 
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"Finnhub sentiment indicator fetch failed: HTTP {e.response.status_code}\n"
                 f"Endpoint: /news-sentiment\n"
                 f"Symbol: {symbol}\n"

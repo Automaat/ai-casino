@@ -399,7 +399,7 @@ class StockUniverseFetcher:
                 response.raise_for_status()
                 logger.debug(f"S&P 500 fetch successful (status={response.status_code})")
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"S&P 500 fetch failed: HTTP {e.response.status_code}\n"
                 f"URL: {SP500_URL}\n"
                 f"Headers: {headers}\n"
@@ -454,7 +454,7 @@ class StockUniverseFetcher:
                 response.raise_for_status()
                 logger.debug(f"NASDAQ 100 fetch successful (status={response.status_code})")
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"NASDAQ 100 fetch failed: HTTP {e.response.status_code}\n"
                 f"URL: {NASDAQ100_URL}\n"
                 f"Headers: {headers}\n"
@@ -512,7 +512,7 @@ class StockUniverseFetcher:
                 response.raise_for_status()
                 logger.debug(f"Russell 3000 fetch successful (status={response.status_code})")
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"Russell 3000 fetch failed: HTTP {e.response.status_code}\n"
                 f"URL: {ISHARES_RUSSELL3000_URL}\n"
                 f"Headers: {headers}\n"

@@ -86,7 +86,7 @@ class FinnhubNewsFetcher:
                 return articles
 
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"Finnhub company news fetch failed: HTTP {e.response.status_code}\n"
                 f"Endpoint: /company-news\n"
                 f"Symbol: {symbol}\n"
@@ -144,7 +144,7 @@ class FinnhubNewsFetcher:
                 return articles
 
         except httpx.HTTPStatusError as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"Finnhub market news fetch failed: HTTP {e.response.status_code}\n"
                 f"Endpoint: /news\n"
                 f"Category: general\n"
