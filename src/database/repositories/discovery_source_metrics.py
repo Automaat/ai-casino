@@ -29,6 +29,7 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
         super().__init__(session)
 
     async def create(self, entity: DiscoverySourceMetrics) -> DiscoverySourceMetrics:
+<<<<<<< HEAD
         """Create new discovery source metrics record.
 
         Args:
@@ -49,6 +50,18 @@ class DiscoverySourceMetricsRepository(BaseRepository[DiscoverySourceMetrics]):
             None (use get_latest_metrics or create_or_update_daily_metrics instead)
         """
         logger.warning("get_by_id not implemented for DiscoverySourceMetrics - use get_latest_metrics")
+=======
+        """Create new discovery source metrics entity."""
+        return await self.create_or_update_daily_metrics(entity.source_type, entity.measurement_date, entity)
+
+    async def get_by_id(self, entity_id: str) -> DiscoverySourceMetrics | None:
+        """Get entity by ID (composite key lookup).
+
+        Args:
+            entity_id: Format "source_type:YYYY-MM-DD" for composite key lookup
+        """
+        del entity_id
+>>>>>>> c6a30cfbbf9252d562c45e1af14dd40a6efb19ad
         return None
 
     async def create_or_update_daily_metrics(
