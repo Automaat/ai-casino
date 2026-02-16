@@ -2,6 +2,6 @@
 
 from src.database.connection import get_session
 from src.database.engine import DatabaseEngine
-from src.database.models import PortfolioSnapshotORM, TradeORM
+from src.database.models import Base, PortfolioSnapshotORM, TradeORM
 
-__all__ = ["DatabaseEngine", "PortfolioSnapshotORM", "TradeORM", "get_session"]
+__all__ = ["Base", "DatabaseEngine", "PortfolioSnapshotORM", "TradeORM", "get_session"]
