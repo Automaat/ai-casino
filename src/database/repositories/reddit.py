@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.daemon.events import Sentiment
@@ -157,23 +157,6 @@ class RedditPostRepository(BaseRepository[RedditPost]):
         result = await self._session.execute(query)
         return [self._to_post(orm) for orm in result.scalars().all()]
 
-    async def delete_before(self, cutoff: datetime) -> int:
-        """Delete posts older than cutoff date.
-
-        Args:
-            cutoff: Delete posts with created_utc < cutoff
-
-        Returns:
-            Number of posts deleted
-        """
-        result: Result = await self._session.execute(
-            delete(RedditPostORM).where(RedditPostORM.created_utc < cutoff)
-        )
-        await self._session.commit()
-        deleted_count = getattr(result, "rowcount", 0) or 0
-        logger.info(f"Deleted {deleted_count} Reddit posts before {cutoff}")
-        return deleted_count
-
     def _to_post(self, orm: RedditPostORM) -> RedditPost:
         """Convert ORM model to RedditPost.
 
@@ -290,22 +273,6 @@ class RedditCommentRepository(BaseRepository[RedditComment]):
         orm = result.scalar_one_or_none()
         return self._to_comment(orm) if orm else None
 
-    async def get_by_post_id(self, post_reddit_id: str) -> list[RedditComment]:
-        """Get comments for a specific post.
-
-        Args:
-            post_reddit_id: Reddit post ID
-
-        Returns:
-            List of RedditComments for the post
-        """
-        result = await self._session.execute(
-            select(RedditCommentORM)
-            .where(RedditCommentORM.parent_post_reddit_id == post_reddit_id)
-            .order_by(RedditCommentORM.score.desc())
-        )
-        return [self._to_comment(orm) for orm in result.scalars().all()]
-
     def _to_comment(self, orm: RedditCommentORM) -> RedditComment:
         """Convert ORM model to RedditComment.
 
@@ -348,7 +315,7 @@ class RedditTickerMentionRepository(BaseRepository[TickerMention]):
         Returns:
             Created TickerMention
         """
-        msg = "Use bulk_insert_from_post() or bulk_insert_from_comment() instead"
+        msg = "Use bulk_insert_from_post() instead"
         raise NotImplementedError(msg)
 
     async def bulk_insert_from_post(

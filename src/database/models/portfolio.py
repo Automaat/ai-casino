@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String, text
+from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
@@ -150,9 +150,7 @@ class PeerAnalysisRecordORM(Base):
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     symbols_analyzed: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     rankings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    swap_recommendations: Mapped[list] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
+    swap_recommendations: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     analyses: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     total_peers: Mapped[int] = mapped_column(Integer, nullable=False)
     total_duration_seconds: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)

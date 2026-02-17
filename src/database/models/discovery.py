@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
+from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
