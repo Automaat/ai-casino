@@ -96,15 +96,6 @@ class DaemonTaskService:
 
         await PrefetchTask(self.components, self.container).run()
 
-    async def run_discovery(self) -> None:
-        """Run stock discovery task."""
-        if not self.components.config.discovery.enabled or not self.components.discovery_engine:
-            return
-
-        from src.daemon.tasks.analysis_tasks import DiscoveryTask
-
-        await DiscoveryTask(self.components, self.container).run()
-
     async def run_discovery_outcome(self) -> None:
         """Run discovery outcome tracking task."""
         if not self.components.config.discovery.enabled:
@@ -188,27 +179,6 @@ class DaemonTaskService:
                 logger.info("Sent paper trading readiness notification")
         except Exception as e:
             logger.debug(f"Paper readiness check failed: {e}")
-
-    def _is_discovery_time(self) -> bool:
-        """Check if current time matches discovery schedule.
-
-        Returns:
-            True if discovery should run
-        """
-        now = datetime.now(self.components.scheduler.timezone)
-
-        # Check day
-        day_name = now.strftime("%a").lower()[:3]  # mon, tue, etc.
-        if day_name not in [d.lower()[:3] for d in self.components.config.discovery.discovery_days]:
-            return False
-
-        # Check time window (16:00-20:00)
-        discovery_hour, discovery_min = map(int, self.components.config.discovery.discovery_time.split(":"))
-        current_time = now.hour * 60 + now.minute
-        discovery_time_mins = discovery_hour * 60 + discovery_min
-
-        # Within 5-minute window
-        return abs(current_time - discovery_time_mins) <= 5
 
     def _publish_event_sync(self, event_type: str, data: dict[str, object]) -> None:
         """Publish event synchronously (helper for non-async methods).

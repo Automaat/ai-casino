@@ -100,7 +100,7 @@ class TrumpWatcherConfig(BaseModel):
 class NewsTrendingWatcherConfig(BaseModel):
     """Configuration for news trending watcher (continuous discovery)."""
 
-    enabled: bool = False
+    enabled: bool = True  # Default enabled for continuous discovery
     poll_interval_minutes: int = Field(default=10, ge=5, le=60)
     trending_window_minutes: int = Field(default=60, ge=30, le=180)
     min_mention_threshold: int = Field(default=3, ge=2, le=10)

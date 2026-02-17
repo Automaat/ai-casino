@@ -27,13 +27,12 @@ class ScreeningConfig(BaseModel):
 
 
 class DiscoveryConfig(BaseModel):
-    """Configuration for automated stock discovery."""
+    """Configuration for automated stock discovery (legacy, use event watchers for continuous discovery)."""
 
+    # Core enablement flag (kept for backward compatibility, mainly for discovery outcome tracking)
     enabled: bool = False
-    discovery_time: str = "16:30"
-    discovery_days: list[str] = Field(default_factory=lambda: ["mon", "wed", "fri"])
 
-    # Source enablement
+    # Source enablement (used by StockDiscoveryEngine if discovery task is manually triggered)
     enable_technical_screening: bool = True
     enable_reddit_trending: bool = False
     enable_earnings_calendar: bool = True
@@ -92,13 +91,6 @@ class DiscoveryConfig(BaseModel):
     # State tracking
     track_outcomes: bool = True
     outcome_lookback_days: int = 90
-
-    @model_validator(mode="after")
-    def validate_discovery_time(self) -> DiscoveryConfig:
-        """Validate discovery_time is within 16:00-20:00."""
-        if self.enabled:
-            validate_time_range(self.discovery_time, "discovery_time", "after_hours")
-        return self
 
 
 class LiquidityFilterConfig(BaseModel):
