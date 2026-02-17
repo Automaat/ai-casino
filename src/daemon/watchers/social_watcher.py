@@ -52,6 +52,7 @@ class SocialWatcher(EventWatcher):
         config: SocialWatcherConfig | None = None,
         container: AppContainer | None = None,
         state: DaemonState | None = None,
+        discovery_mode: bool = False,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,
@@ -67,7 +68,8 @@ class SocialWatcher(EventWatcher):
             historical_cache: Shared cache for social data
             config: Configuration (uses defaults if not provided)
             container: Optional DI container (auto-created if not provided)
-            state: Optional daemon state for WATCHLIST event persistence
+            state: DaemonState for discovery routing and WATCHLIST persistence
+            discovery_mode: If True, route IMMEDIATE events to discovery engine
             **Individual params for backward compatibility (prefer config object)
         """
         # Backward compat: construct config from individual params if provided
@@ -119,7 +121,9 @@ class SocialWatcher(EventWatcher):
             max_concurrent_analyses=cfg.max_concurrent_analyses,
             period_days=cfg.period_days,
         )
-        super().__init__(base_config, historical_cache, container=container, state=state)
+        super().__init__(
+            base_config, historical_cache, container=container, discovery_mode=discovery_mode, state=state
+        )
         self.volume_spike_threshold = cfg.volume_spike_threshold
         self.viral_score_threshold = cfg.viral_score_threshold
         self.viral_upvote_ratio = cfg.viral_upvote_ratio

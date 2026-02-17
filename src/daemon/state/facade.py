@@ -385,6 +385,14 @@ class DaemonState(BaseModel):
         """Get prefetch history."""
         return await self.data_pipeline.get_prefetch_history(limit)
 
+    async def get_last_reddit_scraping(self) -> datetime | None:
+        """Get last Reddit scraping timestamp."""
+        return await self.data_pipeline.get_last_reddit_scraping()
+
+    async def set_last_reddit_scraping(self, value: datetime | None) -> None:
+        """Set last Reddit scraping timestamp."""
+        await self.data_pipeline.set_last_reddit_scraping(value)
+
     async def get_last_earnings_fetch(self) -> datetime | None:
         """Get last earnings fetch timestamp."""
         return await self.data_pipeline.get_last_earnings_fetch()

@@ -73,7 +73,6 @@ class DaemonRunner:
         self._daemon_optimizer = self._components.daemon_optimizer
         self._daemon_rebalancer = self._components.daemon_rebalancer
         self._position_manager = self._components.position_manager
-        self._discovery_engine = self._components.discovery_engine
         self.notification_service = self._components.notification_service
         self._tearsheet_generator = self._components.tearsheet_generator
         self._prefetcher = self._components.prefetcher

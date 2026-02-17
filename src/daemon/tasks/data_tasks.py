@@ -302,9 +302,6 @@ class DiscoveryOutcomeTask(TaskExecutor):
 class PeriodicRedditScrapingTask(TaskExecutor):
     """Periodic Reddit scraping task using Playwright."""
 
-    # Class-level state for interval tracking (shared across instances)
-    _last_run_time: datetime | None = None
-
     def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
         """Initialize periodic Reddit scraping task."""
         super().__init__(components, container)
@@ -336,19 +333,18 @@ class PeriodicRedditScrapingTask(TaskExecutor):
             self._skipped = True
             return
 
-        # Check interval-based dedup
+        # Check interval-based dedup via DB state
         now = datetime.now(UTC)
         interval_minutes = self.components.config.reddit_scraper.interval_minutes
-        if PeriodicRedditScrapingTask._last_run_time is not None:
-            elapsed = (now - PeriodicRedditScrapingTask._last_run_time).total_seconds() / 60
+        last_run = await self.components.state.get_last_reddit_scraping()
+        if last_run is not None:
+            elapsed = (now - last_run).total_seconds() / 60
             if elapsed < interval_minutes:
                 logger.debug(
                     f"Reddit scraping skipped (last run {elapsed:.1f}min ago, interval={interval_minutes}min)"
                 )
                 self._skipped = True
                 return
-
-        PeriodicRedditScrapingTask._last_run_time = now
 
         cfg = self.components.config.reddit_scraper
         logger.info(
@@ -451,14 +447,13 @@ class PeriodicRedditScrapingTask(TaskExecutor):
 
     async def get_last_run(self) -> datetime | None:
         """Get last Reddit scraping timestamp."""
-        # TODO: Add state tracking in future iteration
-        return None
+        return await self.components.state.get_last_reddit_scraping()
 
     async def record_success(self, duration: float) -> None:
         """Record Reddit scraping completion."""
         if self._skipped:
             return
-        # TODO: Add state tracking in future iteration
+        await self.components.state.set_last_reddit_scraping(datetime.now(UTC))
         logger.debug(
             f"Reddit scraping stats: {self._posts_scraped} posts, "
             f"{self._comments_scraped} comments, {self._mentions_extracted} mentions"

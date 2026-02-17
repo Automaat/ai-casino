@@ -24,6 +24,9 @@ def mock_components():
     )
     components.container = Mock()
     components.container.llm_client = Mock(return_value=Mock())
+    components.state = AsyncMock()
+    components.state.get_last_reddit_scraping = AsyncMock(return_value=None)
+    components.state.set_last_reddit_scraping = AsyncMock()
     return components
 
 
@@ -38,8 +41,6 @@ def mock_container():
 @pytest.fixture
 def reddit_task(mock_components, mock_container):
     """Create PeriodicRedditScrapingTask instance."""
-    # Reset class-level state before each test
-    PeriodicRedditScrapingTask._last_run_time = None
     return PeriodicRedditScrapingTask(components=mock_components, container=mock_container)
 
 
@@ -255,8 +256,13 @@ async def test_execute_closes_scraper_on_exception(reddit_task):
         patch("src.database.connection.get_session") as mock_get_session,
         patch("src.database.repositories.reddit.RedditPostRepository", return_value=mock_post_repo),
         patch("src.database.repositories.reddit.RedditCommentRepository", return_value=mock_comment_repo),
-        patch("src.database.repositories.reddit.RedditTickerMentionRepository", return_value=mock_mention_repo),
-        patch("src.database.repositories.reddit.RedditTickerSentimentRepository", return_value=mock_sentiment_repo),
+        patch(
+            "src.database.repositories.reddit.RedditTickerMentionRepository", return_value=mock_mention_repo
+        ),
+        patch(
+            "src.database.repositories.reddit.RedditTickerSentimentRepository",
+            return_value=mock_sentiment_repo,
+        ),
     ):
         mock_get_session.return_value.__aenter__.return_value = mock_session
 
@@ -271,20 +277,22 @@ async def test_execute_closes_scraper_on_exception(reddit_task):
 
 @pytest.mark.unit
 async def test_get_last_run(reddit_task):
-    """Test get_last_run returns None (not yet implemented)."""
+    """Test get_last_run delegates to state."""
     last_run = await reddit_task.get_last_run()
     assert last_run is None
+    reddit_task.components.state.get_last_reddit_scraping.assert_called_once()
 
 
 @pytest.mark.unit
 async def test_record_success(reddit_task):
-    """Test record_success logs stats."""
+    """Test record_success persists timestamp via state."""
     reddit_task._posts_scraped = 10
     reddit_task._comments_scraped = 50
     reddit_task._mentions_extracted = 15
 
-    # Should not raise (just logs for now)
     await reddit_task.record_success(duration=5.0)
+
+    reddit_task.components.state.set_last_reddit_scraping.assert_called_once()
 
 
 @pytest.mark.unit

@@ -59,7 +59,6 @@ class EventWatcher(ABC):
         container: AppContainer | None = None,
         signal_callback: Callable[[EventSignal], None] | None = None,
         discovery_mode: bool = False,
-        discovery_callback: Callable[[list], None] | None = None,
         state: DaemonState | None = None,
     ) -> None:
         """Initialize event watcher.
@@ -70,8 +69,7 @@ class EventWatcher(ABC):
             container: Optional DI container (auto-created if not provided)
             signal_callback: Optional callback to persist signals (e.g., to state)
             discovery_mode: If True, route events to discovery engine instead of direct analysis
-            discovery_callback: Callback to receive discovery candidates
-            state: Optional DaemonState for WATCHLIST event persistence
+            state: DaemonState for discovery routing and WATCHLIST event persistence
         """
         from src.di.container import create_container
 
@@ -86,10 +84,9 @@ class EventWatcher(ABC):
 
         # Discovery mode support
         self._discovery_mode = discovery_mode
-        self._discovery_callback = discovery_callback
         self._event_adapter = None
 
-        # State manager for WATCHLIST events
+        # State for discovery routing and WATCHLIST event persistence
         self._state = state
 
         # State tracking (in-memory)
@@ -410,12 +407,13 @@ class EventWatcher(ABC):
             except Exception as e:
                 logger.opt(exception=True).error(f"Failed to convert event to candidate: {e}")
 
-        if all_candidates and self._discovery_callback:
-            try:
-                self._discovery_callback(all_candidates)
-                logger.info(f"Routed {len(all_candidates)} event candidates to discovery engine")
-            except Exception as e:
-                logger.opt(exception=True).error(f"Discovery callback failed: {e}")
+        if not all_candidates or not self._state:
+            return
+        try:
+            await self._state.discovery.add_event_candidates(all_candidates)
+            logger.info(f"Routed {len(all_candidates)} event candidates to discovery")
+        except Exception as e:
+            logger.opt(exception=True).error(f"Discovery routing failed: {e}")
 
     async def _route_to_direct_analysis(self, relevant: list[tuple[BaseEvent, TriageResult]]) -> None:
         """Legacy direct analysis path (pre-discovery mode).

@@ -38,10 +38,6 @@ class RedditScraperConfig(BaseModel):
     interval_minutes: int = Field(default=60, ge=1)
     jitter_minutes: int = Field(default=15, ge=0)
 
-    # Discovery thresholds
-    min_mentions_for_trending: int = Field(default=25, ge=1)
-    mention_velocity_threshold: float = Field(default=2.0, ge=0.0)
-
     # LLM extraction
     use_llm_extraction: bool = True
     extraction_model: str = "haiku"

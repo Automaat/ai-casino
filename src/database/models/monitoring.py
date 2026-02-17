@@ -55,9 +55,7 @@ class DegradationRecordORM(Base):
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     tier: Mapped[str] = mapped_column(String(20), nullable=False)
-    unavailable_services: Mapped[list] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
+    unavailable_services: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     confidence_adjustment: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     halt_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
