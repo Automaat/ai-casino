@@ -204,7 +204,7 @@ class DaemonFactory:
             social_watcher,
             trump_watcher,
             news_trending_watcher,
-        ) = self._create_event_watchers(historical_cache)
+        ) = self._create_event_watchers(historical_cache, state)
 
         # Phase 12.5: Supervisor (lazy-initialized via container)
         supervisor = None
@@ -550,12 +550,13 @@ class DaemonFactory:
         return profiler
 
     def _create_event_watchers(
-        self, historical_cache: HistoricalCache
+        self, historical_cache: HistoricalCache, state: DaemonState
     ) -> tuple[NewsWatcher | None, SocialWatcher | None, TrumpWatcher | None, NewsTrendingWatcher | None]:
         """Create event watchers based on config.
 
         Args:
             historical_cache: Historical cache for deduplication
+            state: Daemon state for WATCHLIST event persistence
 
         Returns:
             Tuple of (news_watcher, social_watcher, trump_watcher, news_trending_watcher)
@@ -581,6 +582,7 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
+                state,
             )
 
         if self.config.social_watcher.enabled:
@@ -588,6 +590,7 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
+                state,
             )
 
         if self.config.trump_watcher.enabled:
@@ -595,6 +598,7 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
+                state,
             )
 
         if self.config.news_trending_watcher.enabled:
@@ -602,6 +606,7 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
+                state,
             )
 
         logger.info("Event watchers initialized")

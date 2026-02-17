@@ -18,6 +18,7 @@ from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher, TrendingTicker
 
 if TYPE_CHECKING:
+    from src.daemon.state.facade import DaemonState
     from src.di.container import AppContainer
 
 
@@ -48,6 +49,7 @@ class SocialWatcher(EventWatcher):
         historical_cache: HistoricalCache,
         config: SocialWatcherConfig | None = None,
         container: AppContainer | None = None,
+        state: DaemonState | None = None,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,
@@ -63,6 +65,7 @@ class SocialWatcher(EventWatcher):
             historical_cache: Shared cache for social data
             config: Configuration (uses defaults if not provided)
             container: Optional DI container (auto-created if not provided)
+            state: Optional daemon state for WATCHLIST event persistence
             **Individual params for backward compatibility (prefer config object)
         """
         # Backward compat: construct config from individual params if provided
@@ -114,7 +117,7 @@ class SocialWatcher(EventWatcher):
             max_concurrent_analyses=cfg.max_concurrent_analyses,
             period_days=cfg.period_days,
         )
-        super().__init__(base_config, historical_cache, container=container)
+        super().__init__(base_config, historical_cache, container=container, state=state)
         self.volume_spike_threshold = cfg.volume_spike_threshold
         self.viral_score_threshold = cfg.viral_score_threshold
         self.viral_upvote_ratio = cfg.viral_upvote_ratio
