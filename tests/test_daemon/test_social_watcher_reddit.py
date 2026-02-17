@@ -86,6 +86,9 @@ async def insert_test_post(
     subreddit: str = "wallstreetbets",
 ) -> RedditPost:
     """Helper to insert test post into DB."""
+    # Create timestamp with UTC timezone
+    timestamp = datetime.now(UTC) - timedelta(minutes=age_minutes)
+
     post = RedditPost(
         id=post_id,
         title=title,
@@ -94,7 +97,7 @@ async def insert_test_post(
         score=score,
         upvote_ratio=upvote_ratio,
         url=f"https://reddit.com/r/{subreddit}/comments/{post_id}",
-        created_utc=datetime.now(UTC) - timedelta(minutes=age_minutes),
+        created_utc=timestamp,
         num_comments=50,
     )
 
@@ -102,6 +105,8 @@ async def insert_test_post(
         repo = RedditPostRepository(session)
         await repo.create(post)
 
+    # Return post with timezone-aware datetime (in case DB strips it)
+    post.created_utc = timestamp.replace(tzinfo=UTC) if post.created_utc.tzinfo is None else post.created_utc
     return post
 
 
@@ -179,17 +184,17 @@ async def test_volume_spike_detection_from_db(setup_reddit_tables, social_watche
 @pytest.mark.asyncio
 async def test_viral_post_detection_from_db(setup_reddit_tables, social_watcher):
     """Test viral post detection using DB queries."""
-    # Insert viral post (recent, high score, high ratio)
+    # Insert viral post (recent, high score, high ratio) - within 15min window
     viral_post = await insert_test_post(
         post_id="viral123",
         title="TSLA to the moon! 🚀",
         score=2500,
         upvote_ratio=0.95,
-        age_minutes=30,
+        age_minutes=10,
     )
 
     # Insert ticker mention for this post
-    await insert_test_mention("TSLA", "viral123", "BULLISH", 0.95, age_minutes=30)
+    await insert_test_mention("TSLA", "viral123", "BULLISH", 0.95, age_minutes=10)
 
     events = await social_watcher._fetch_events()
 
@@ -247,15 +252,15 @@ async def test_viral_post_filters_low_score(setup_reddit_tables, social_watcher)
 @pytest.mark.asyncio
 async def test_viral_post_deduplication(setup_reddit_tables, social_watcher):
     """Test duplicate viral posts are filtered."""
-    # Insert viral post
+    # Insert viral post - within 15min window
     await insert_test_post(
         post_id="dup123",
         title="Duplicate check",
         score=2000,
         upvote_ratio=0.95,
-        age_minutes=30,
+        age_minutes=10,
     )
-    await insert_test_mention("GOOGL", "dup123", "BULLISH", 0.9, age_minutes=30)
+    await insert_test_mention("GOOGL", "dup123", "BULLISH", 0.9, age_minutes=10)
 
     # First fetch
     events1 = await social_watcher._fetch_events()
@@ -292,9 +297,9 @@ async def test_multiple_symbols_same_window(setup_reddit_tables, social_watcher)
 @pytest.mark.asyncio
 async def test_combined_volume_and_viral_events(setup_reddit_tables, social_watcher):
     """Test detecting both volume spike and viral post for same symbol."""
-    # Establish baseline
-    await insert_test_mention("AAPL", "base1", "NEUTRAL", 0.8, age_minutes=20)
-    await insert_test_mention("AAPL", "base2", "NEUTRAL", 0.8, age_minutes=18)
+    # Establish baseline - within 15min window
+    await insert_test_mention("AAPL", "base1", "NEUTRAL", 0.8, age_minutes=12)
+    await insert_test_mention("AAPL", "base2", "NEUTRAL", 0.8, age_minutes=11)
 
     events1 = await social_watcher._fetch_events()
     assert len(events1) == 0  # No baseline yet

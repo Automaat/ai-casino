@@ -38,6 +38,8 @@ def mock_container():
 @pytest.fixture
 def reddit_task(mock_components, mock_container):
     """Create PeriodicRedditScrapingTask instance."""
+    # Reset class-level state before each test
+    PeriodicRedditScrapingTask._last_run_time = None
     return PeriodicRedditScrapingTask(components=mock_components, container=mock_container)
 
 
@@ -147,15 +149,15 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
     with (
         patch("src.data.reddit_scraper.RedditPlaywrightScraper", return_value=mock_scraper),
         patch("src.data.reddit_ticker_extractor.RedditTickerExtractor", return_value=mock_extractor),
-        patch("src.daemon.tasks.data_tasks.get_session") as mock_get_session,
-        patch("src.daemon.tasks.data_tasks.RedditPostRepository", return_value=mock_post_repo),
-        patch("src.daemon.tasks.data_tasks.RedditCommentRepository", return_value=mock_comment_repo),
+        patch("src.database.connection.get_session") as mock_get_session,
+        patch("src.database.repositories.reddit.RedditPostRepository", return_value=mock_post_repo),
+        patch("src.database.repositories.reddit.RedditCommentRepository", return_value=mock_comment_repo),
         patch(
-            "src.daemon.tasks.data_tasks.RedditTickerMentionRepository",
+            "src.database.repositories.reddit.RedditTickerMentionRepository",
             return_value=mock_mention_repo,
         ),
         patch(
-            "src.daemon.tasks.data_tasks.RedditTickerSentimentRepository",
+            "src.database.repositories.reddit.RedditTickerSentimentRepository",
             return_value=mock_sentiment_repo,
         ),
     ):
@@ -208,15 +210,15 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
     with (
         patch("src.data.reddit_scraper.RedditPlaywrightScraper", return_value=mock_scraper),
         patch("src.data.reddit_ticker_extractor.RedditTickerExtractor", return_value=mock_extractor),
-        patch("src.daemon.tasks.data_tasks.get_session") as mock_get_session,
-        patch("src.daemon.tasks.data_tasks.RedditPostRepository", return_value=mock_post_repo),
-        patch("src.daemon.tasks.data_tasks.RedditCommentRepository", return_value=mock_comment_repo),
+        patch("src.database.connection.get_session") as mock_get_session,
+        patch("src.database.repositories.reddit.RedditPostRepository", return_value=mock_post_repo),
+        patch("src.database.repositories.reddit.RedditCommentRepository", return_value=mock_comment_repo),
         patch(
-            "src.daemon.tasks.data_tasks.RedditTickerMentionRepository",
+            "src.database.repositories.reddit.RedditTickerMentionRepository",
             return_value=mock_mention_repo,
         ),
         patch(
-            "src.daemon.tasks.data_tasks.RedditTickerSentimentRepository",
+            "src.database.repositories.reddit.RedditTickerSentimentRepository",
             return_value=mock_sentiment_repo,
         ),
     ):
@@ -233,21 +235,38 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
 async def test_execute_closes_scraper_on_exception(reddit_task):
     """Test scraper is closed even if exception occurs."""
     mock_scraper = AsyncMock()
-    mock_scraper.start = AsyncMock()
-    mock_scraper.close = AsyncMock()
     mock_scraper.scrape_subreddit_posts = AsyncMock(side_effect=Exception("Fatal error"))
 
-    mock_extractor = Mock()
+    mock_extractor = AsyncMock()
+
+    # Mock database to avoid table errors
+    mock_session = AsyncMock()
+    mock_post_repo = AsyncMock()
+    mock_post_repo.bulk_insert = AsyncMock(return_value=0)
+    mock_comment_repo = AsyncMock()
+    mock_comment_repo.bulk_insert = AsyncMock(return_value=0)
+    mock_mention_repo = AsyncMock()
+    mock_sentiment_repo = AsyncMock()
+    mock_sentiment_repo.compute_hourly_aggregates = AsyncMock(return_value=0)
 
     with (
         patch("src.data.reddit_scraper.RedditPlaywrightScraper", return_value=mock_scraper),
         patch("src.data.reddit_ticker_extractor.RedditTickerExtractor", return_value=mock_extractor),
+        patch("src.database.connection.get_session") as mock_get_session,
+        patch("src.database.repositories.reddit.RedditPostRepository", return_value=mock_post_repo),
+        patch("src.database.repositories.reddit.RedditCommentRepository", return_value=mock_comment_repo),
+        patch("src.database.repositories.reddit.RedditTickerMentionRepository", return_value=mock_mention_repo),
+        patch("src.database.repositories.reddit.RedditTickerSentimentRepository", return_value=mock_sentiment_repo),
     ):
-        with pytest.raises(Exception, match="Fatal error"):
-            await reddit_task.execute()
+        mock_get_session.return_value.__aenter__.return_value = mock_session
 
-        # Scraper should still be closed
-        assert mock_scraper.close.called
+        # Should not raise - exceptions in scraping are caught and logged
+        await reddit_task.execute()
+
+    # Scraper should still be closed even after exception
+    assert mock_scraper.close.called
+    # No posts/comments scraped due to exception
+    assert reddit_task._posts_scraped == 0
 
 
 @pytest.mark.unit

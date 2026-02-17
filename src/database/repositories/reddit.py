@@ -183,6 +183,13 @@ class RedditPostRepository(BaseRepository[RedditPost]):
         Returns:
             RedditPost
         """
+        # Ensure timezone-aware datetime (SQLite may strip timezone)
+        created_utc = orm.created_utc
+        if created_utc.tzinfo is None:
+            from datetime import UTC
+
+            created_utc = created_utc.replace(tzinfo=UTC)
+
         return RedditPost(
             id=orm.reddit_id,
             title=orm.title,
@@ -191,7 +198,7 @@ class RedditPostRepository(BaseRepository[RedditPost]):
             score=orm.score,
             upvote_ratio=float(orm.upvote_ratio),
             url=orm.url,
-            created_utc=orm.created_utc,
+            created_utc=created_utc,
             num_comments=orm.num_comments,
         )
 
