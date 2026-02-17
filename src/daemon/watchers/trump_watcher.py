@@ -16,6 +16,7 @@ from src.daemon.events import BaseEvent, TrumpEvent
 from src.data.truth_social import TruthSocialFetcher
 
 if TYPE_CHECKING:
+    from src.daemon.state.facade import DaemonState
     from src.di.container import AppContainer
 
 
@@ -41,6 +42,7 @@ class TrumpWatcher(EventWatcher):
         historical_cache: HistoricalCache,
         config: TrumpWatcherConfig | None = None,
         container: AppContainer | None = None,
+        state: DaemonState | None = None,
         **kwargs: int | float,
     ) -> None:
         """Initialize Trump watcher.
@@ -49,6 +51,7 @@ class TrumpWatcher(EventWatcher):
             historical_cache: Shared cache for Truth Social data
             config: Configuration (uses defaults if not provided)
             container: Optional DI container (auto-created if not provided)
+            state: Optional daemon state for WATCHLIST event persistence
             **kwargs: Backward compat params (poll_interval, relevance_threshold, etc.)
         """
         # Backward compat: construct config from kwargs if provided
@@ -70,7 +73,7 @@ class TrumpWatcher(EventWatcher):
             cooldown_minutes=cfg.cooldown_minutes,
             max_concurrent_analyses=cfg.max_concurrent_analyses,
         )
-        super().__init__(base_config, historical_cache, container=container)
+        super().__init__(base_config, historical_cache, container=container, state=state)
 
         # Truth Social fetcher (lazy init)
         self._truth_fetcher: TruthSocialFetcher | None = None

@@ -13,6 +13,7 @@ from src.daemon.watchers.trump_watcher import TrumpWatcher
 from src.data.base_news_fetcher import BaseNewsFetcher
 
 if TYPE_CHECKING:
+    from src.daemon.state.facade import DaemonState
     from src.di.container import AppContainer
 
 
@@ -87,6 +88,7 @@ def create_social_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
+    state: DaemonState | None = None,
 ) -> SocialWatcher | None:
     """Create social media watcher if enabled.
 
@@ -94,6 +96,7 @@ def create_social_watcher(
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
         container: Optional DI container (auto-created if not provided)
+        state: Optional daemon state for WATCHLIST event persistence
 
     Returns:
         SocialWatcher instance if enabled, None otherwise
@@ -106,6 +109,7 @@ def create_social_watcher(
     return SocialWatcher(
         historical_cache=historical_cache,
         container=container,
+        state=state,
         poll_interval=config.poll_interval_minutes * 60,
         relevance_threshold=config.relevance_threshold,
         cooldown_minutes=config.cooldown_minutes,
@@ -121,6 +125,7 @@ def create_trump_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
+    state: DaemonState | None = None,
 ) -> TrumpWatcher | None:
     """Create Trump Truth Social watcher if enabled.
 
@@ -128,6 +133,7 @@ def create_trump_watcher(
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
         container: Optional DI container (auto-created if not provided)
+        state: Optional daemon state for WATCHLIST event persistence
 
     Returns:
         TrumpWatcher instance if enabled, None otherwise
@@ -140,6 +146,7 @@ def create_trump_watcher(
     return TrumpWatcher(
         historical_cache=historical_cache,
         container=container,
+        state=state,
         poll_interval=config.poll_interval_minutes * 60,
         relevance_threshold=config.relevance_threshold,
         cooldown_minutes=config.cooldown_minutes,

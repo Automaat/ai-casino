@@ -83,7 +83,6 @@ class NewsWatcher(EventWatcher):
         self,
         historical_cache: HistoricalCache,
         fetchers: list[BaseNewsFetcher] | None = None,
-        source_weights: dict[str, float] | None = None,
         config: NewsWatcherConfig | None = None,
         container: AppContainer | None = None,
         **kwargs: int | float,
@@ -93,7 +92,6 @@ class NewsWatcher(EventWatcher):
         Args:
             historical_cache: Shared cache for news data
             fetchers: List of news fetchers (uses Marketaux fallback if not provided)
-            source_weights: Custom source weights for deduplication
             config: Configuration (uses defaults if not provided)
             container: Optional DI container (auto-created if not provided)
             **kwargs: Backward compat params (poll_interval, relevance_threshold, etc.)
@@ -125,7 +123,7 @@ class NewsWatcher(EventWatcher):
         super().__init__(base_config, historical_cache, container=container)
         self.breaking_threshold_minutes = cfg.breaking_threshold_minutes
         self._fetchers = fetchers or []
-        self._weights = source_weights or self.SOURCE_WEIGHTS
+        self._weights = self.SOURCE_WEIGHTS
         self._news_fetcher: NewsFetcher | None = None
         self._seen_urls: dict[str, str] = {}  # url -> source
 

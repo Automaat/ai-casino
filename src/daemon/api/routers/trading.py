@@ -71,6 +71,7 @@ async def get_watchlist(
     components = get_components(request)
 
     symbols = await components.broker_manager.get_merged_watchlist(session=session)
+    symbol_set = set(symbols)
 
     config_count = len([s for s in components.config.watchlist if s in symbols])
 
@@ -88,6 +89,17 @@ async def get_watchlist(
         latest = screening_history[-1]
         screening_count = len([s for s in latest.top_symbols if s in symbols])
 
+    event_watchlist_count = 0
+    try:
+        from src.discovery.models import DiscoverySource
+
+        active_candidates = await components.state.get_active_discovery_candidates(session=session)
+        for candidate in active_candidates:
+            if DiscoverySource.EVENT_WATCHLIST in candidate.sources and candidate.symbol in symbol_set:
+                event_watchlist_count += 1
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to count event watchlist candidates: {e}")
+
     return WatchlistResponse(
         symbols=symbols,
         count=len(symbols),
@@ -95,6 +107,7 @@ async def get_watchlist(
             "config": config_count,
             "broker": broker_count,
             "screening": screening_count,
+            "event_watchlist": event_watchlist_count,
         },
     )
 

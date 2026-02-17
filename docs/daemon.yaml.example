@@ -685,6 +685,7 @@ daemon:
     social_watcher_use_discovery: true
     anomaly_watcher_use_discovery: false
     trump_watcher_use_discovery: true
+    news_trending_watcher_use_discovery: true  # Always uses discovery (built-in)
 
   monte_carlo:
     # Monte Carlo stress testing
