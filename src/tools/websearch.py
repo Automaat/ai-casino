@@ -9,7 +9,7 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
-    from src.di.container import AppContainer
+    from src.data.websearch import WebSearchFetcher
 
 BODY_TRUNCATE_LENGTH = 300
 
@@ -19,16 +19,13 @@ class WebSearchTool(BaseTool):
 
     TOOL_NAME = "web_search"
 
-    def __init__(self, container: AppContainer | None = None) -> None:
-        """Initialize web search tool with optional container.
+    def __init__(self, fetcher: WebSearchFetcher) -> None:
+        """Initialize web search tool with websearch fetcher.
 
         Args:
-            container: DI container (auto-created if not provided)
+            fetcher: WebSearchFetcher for executing searches
         """
-        from src.di.container import create_container
-
-        self._container = container or create_container()
-        self.fetcher = self._container.websearch_fetcher()
+        self.fetcher = fetcher
         logger.info("Initialized WebSearchTool")
 
     @property

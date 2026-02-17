@@ -25,15 +25,15 @@ MIN_AVG_FINDING_LENGTH = 50  # Minimum average finding length for quality boost
 class WebResearchWorker:
     """Worker for web-based research on stocks - stateless implementation."""
 
-    def __init__(self, llm_client: LLMClient, search_tool: WebSearchTool | None = None) -> None:
+    def __init__(self, llm_client: LLMClient, search_tool: WebSearchTool) -> None:
         """Initialize web research worker.
 
         Args:
             llm_client: LLM client for analysis
-            search_tool: Web search tool. Creates default if not provided.
+            search_tool: Web search tool for data fetching
         """
         self.llm = llm_client
-        self.search_tool = search_tool or WebSearchTool()
+        self.search_tool = search_tool
         self._prompts = PromptLoader("web_researcher")
         logger.info(f"Initialized WebResearchWorker (tools_enabled={llm_client.supports_tools})")
 
