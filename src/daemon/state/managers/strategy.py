@@ -171,20 +171,9 @@ class StrategyStateManager(StateManager):
                 return []
         return self._degradation_cache
 
-    async def record_game_plan(
-        self,
-        priority_symbols: list[str],
-        risk_stance: str,
-        sector_focus: list[str],
-    ) -> None:
+    async def record_game_plan(self, record: GamePlanRecord) -> None:
         """Record game plan generation."""
         now = datetime.now(UTC)
-        record = GamePlanRecord(
-            timestamp=now,
-            priority_symbols=priority_symbols,
-            risk_stance=risk_stance,
-            sector_focus=sector_focus,
-        )
 
         if not self._database_enabled:
             self._game_plan_cache = None

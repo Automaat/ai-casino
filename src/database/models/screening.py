@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, text
+from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -118,6 +118,11 @@ class GamePlanRecordORM(Base):
     priority_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     risk_stance: Mapped[str] = mapped_column(String(20), nullable=False)
     sector_focus: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4), nullable=True)
+    overnight_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    key_levels: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    generated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
@@ -127,6 +132,7 @@ class GamePlanRecordORM(Base):
     __table_args__ = (
         Index("idx_game_plan_records_timestamp", "timestamp"),
         Index("idx_game_plan_records_created_at", "created_at"),
+        Index("idx_game_plan_records_generated_at", "generated_at", postgresql_ops={"generated_at": "DESC"}),
     )
 
     def __repr__(self) -> str:

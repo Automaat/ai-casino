@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -43,6 +44,11 @@ class GamePlanRecordRepository(BaseRepository[GamePlanRecord]):
             priority_symbols=entity.priority_symbols,
             risk_stance=entity.risk_stance,
             sector_focus=entity.sector_focus,
+            reasoning=entity.reasoning,
+            confidence=Decimal(str(entity.confidence)) if entity.confidence is not None else None,
+            overnight_summary=entity.overnight_summary,
+            key_levels=entity.key_levels,
+            generated_at=entity.generated_at or datetime.now(UTC),
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
@@ -93,6 +99,11 @@ class GamePlanRecordRepository(BaseRepository[GamePlanRecord]):
             priority_symbols=orm.priority_symbols if isinstance(orm.priority_symbols, list) else [],
             risk_stance=orm.risk_stance,
             sector_focus=orm.sector_focus if isinstance(orm.sector_focus, list) else [],
+            reasoning=orm.reasoning,
+            confidence=float(orm.confidence) if orm.confidence is not None else None,
+            overnight_summary=orm.overnight_summary,
+            key_levels=orm.key_levels if isinstance(orm.key_levels, dict) else {},
+            generated_at=orm.generated_at,
         )
 
     def __repr__(self) -> str:
