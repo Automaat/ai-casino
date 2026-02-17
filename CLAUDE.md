@@ -220,3 +220,4 @@ docker exec ai-casino-postgres psql -U ai_casino -d ai_casino -c "SELECT COUNT(*
 
 - Plan: ./implem-plan.md | Research: ./agentic-stock-trading-system-research.md
 - Config: pyproject.toml, ruff.toml | CI: .github/workflows/ci.yml
+- Adding data sources to discovery: ./docs/reddit-discovery-wiring.md
