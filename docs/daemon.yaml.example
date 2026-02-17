@@ -152,9 +152,10 @@ daemon:
   # ========================================
   # Stock discovery via continuous news trending watcher
   # See news_trending_watcher section below for configuration
-  # Discovery outcome tracking (T+7d/30d price performance) runs automatically
+  # Discovery outcome tracking (T+7d/30d price performance) requires discovery.enabled: true
   discovery:
-    # Enable discovery outcome tracking only (scheduled discovery removed)
+    # Enable discovery engine, candidate merging, and outcome tracking
+    # Set to true if using news_trending_watcher or want outcome tracking
     enabled: false
 
   # ========================================

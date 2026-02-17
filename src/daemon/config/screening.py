@@ -27,9 +27,13 @@ class ScreeningConfig(BaseModel):
 
 
 class DiscoveryConfig(BaseModel):
-    """Configuration for automated stock discovery (legacy, use event watchers for continuous discovery)."""
+    """Configuration for automated stock discovery (legacy, use event watchers for continuous discovery).
 
-    # Core enablement flag (kept for backward compatibility, mainly for discovery outcome tracking)
+    Controls discovery engine creation, active candidate merging into watchlist, and outcome tracking.
+    Kept for backward compatibility and discovery outcome tracking.
+    """
+
+    # Core enablement flag controlling discovery engine activation, candidate merging, and outcome tracking
     enabled: bool = False
 
     # Source enablement (used by StockDiscoveryEngine if discovery task is manually triggered)
