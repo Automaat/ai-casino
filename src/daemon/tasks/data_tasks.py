@@ -302,6 +302,9 @@ class DiscoveryOutcomeTask(TaskExecutor):
 class PeriodicRedditScrapingTask(TaskExecutor):
     """Periodic Reddit scraping task using Playwright."""
 
+    # Class-level state for interval tracking (shared across instances)
+    _last_run_time: datetime | None = None
+
     def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
         """Initialize periodic Reddit scraping task."""
         super().__init__(components, container)
@@ -332,6 +335,20 @@ class PeriodicRedditScrapingTask(TaskExecutor):
             logger.debug("Reddit scraping disabled in config")
             self._skipped = True
             return
+
+        # Check interval-based dedup
+        now = datetime.now(UTC)
+        interval_minutes = self.components.config.reddit_scraper.interval_minutes
+        if PeriodicRedditScrapingTask._last_run_time is not None:
+            elapsed = (now - PeriodicRedditScrapingTask._last_run_time).total_seconds() / 60
+            if elapsed < interval_minutes:
+                logger.debug(
+                    f"Reddit scraping skipped (last run {elapsed:.1f}min ago, interval={interval_minutes}min)"
+                )
+                self._skipped = True
+                return
+
+        PeriodicRedditScrapingTask._last_run_time = now
 
         cfg = self.components.config.reddit_scraper
         logger.info(

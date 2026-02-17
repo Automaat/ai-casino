@@ -890,27 +890,19 @@ class MarketScheduler:
 
         return abs(current_minutes - target_minutes) <= 1
 
-    def is_reddit_scraping_time(self, interval_minutes: int = 15) -> bool:
-        """Check if enough time elapsed since last Reddit scraping.
+    def is_reddit_scraping_time(self) -> bool:
+        """Check if Reddit scraping should run (interval-based).
 
-        Args:
-            interval_minutes: Interval between scraping runs
+        Checks every cycle and uses internal state to track last run.
+        Interval is hardcoded to 15 minutes (config reddit_scraper.interval_minutes
+        not accessible here - task handles actual interval via dedup).
 
         Returns:
-            True if should run now
+            True if should check (always True, task handles dedup)
         """
-        now = datetime.now(self.timezone)
-
-        if self._reddit_scraping_last_run is None:
-            self._reddit_scraping_last_run = now
-            return True
-
-        elapsed = (now - self._reddit_scraping_last_run).total_seconds() / 60
-        if elapsed >= interval_minutes:
-            self._reddit_scraping_last_run = now
-            return True
-
-        return False
+        # Always return True - let task handle interval-based dedup
+        # This ensures task runs frequently enough to check its own schedule
+        return True
 
     def __repr__(self) -> str:
         """Return string representation."""
