@@ -136,10 +136,10 @@ Extract tickers:"""
         input_text = "\n\n".join(input_parts)
         truncated_body, truncated_comments = self._truncate_content(post, comments, input_text)
 
-        # Load prompt template
+        # Load and render prompt
         try:
-            prompt_template = self.prompt_loader.load("ticker_extraction")
-            prompt = prompt_template.format(
+            prompt = self.prompt_loader.load(
+                "ticker_extraction",
                 title=post.title,
                 body=truncated_body or "(no body)",
                 comments="\n".join(
