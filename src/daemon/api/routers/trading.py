@@ -1,8 +1,5 @@
 """Trading and analysis endpoints."""
 
-import asyncio
-import json
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -117,36 +114,29 @@ async def get_game_plan(request: Request) -> GamePlanResponse | None:
     """Get latest game plan (if enabled and generated)."""
     components = get_components(request)
 
-    game_plan_history = await components.state.get_game_plan_history(limit=1)
-    if not components.config.game_plan.enabled or not game_plan_history:
+    if not components.config.game_plan.enabled:
         return None
 
-    latest = game_plan_history[-1]
-
-    def _load_plan_file() -> dict | None:
-        plan_dir = Path(components.config.game_plan.plan_dir).expanduser()
-        plan_file = plan_dir / f"{latest.timestamp.date()}.json"
-
-        if not plan_file.exists():
-            logger.warning(f"Game plan file not found: {plan_file}")
+    try:
+        game_plan_history = await components.state.get_game_plan_history(limit=1)
+        if not game_plan_history:
             return None
 
-        with plan_file.open() as f:
-            return json.load(f)
+        latest = game_plan_history[-1]
 
-    try:
-        plan_data = await asyncio.to_thread(_load_plan_file)
-        if not plan_data:
+        # Return None if essential fields are missing (old records)
+        if not latest.reasoning or latest.confidence is None or not latest.generated_at:
+            logger.warning("Game plan missing required fields (old record)")
             return None
 
         return GamePlanResponse(
-            date=plan_data["date"],
-            priority_symbols=plan_data["priority_symbols"],
-            risk_stance=plan_data["risk_stance"],
-            sector_focus=plan_data["sector_focus"],
-            reasoning=plan_data["reasoning"],
-            confidence=plan_data["confidence"],
-            generated_at=plan_data["generated_at"],
+            date=latest.timestamp.date().isoformat(),
+            priority_symbols=latest.priority_symbols,
+            risk_stance=latest.risk_stance,
+            sector_focus=latest.sector_focus,
+            reasoning=latest.reasoning,
+            confidence=latest.confidence,
+            generated_at=latest.generated_at.isoformat(),
         )
     except Exception as e:
         logger.opt(exception=True).error(f"Failed to load game plan: {e}")

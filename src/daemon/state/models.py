@@ -199,6 +199,11 @@ class GamePlanRecord(BaseModel):
     priority_symbols: list[str]
     risk_stance: str
     sector_focus: list[str]
+    reasoning: str | None = None
+    confidence: float | None = None
+    overnight_summary: str | None = None
+    key_levels: dict[str, float] = Field(default_factory=dict)
+    generated_at: datetime | None = None
 
 
 class RiskReportRecord(BaseModel):

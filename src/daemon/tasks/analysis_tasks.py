@@ -50,10 +50,20 @@ class GamePlanTask(TaskExecutor):
 
         plan_path = agent.persist(plan, self.components.config.game_plan.plan_dir)
 
+        from src.daemon.state.models import GamePlanRecord
+
         await self.components.state.record_game_plan(
-            priority_symbols=plan.priority_symbols,
-            risk_stance=plan.risk_stance,
-            sector_focus=plan.sector_focus,
+            GamePlanRecord(
+                timestamp=plan.generated_at,
+                priority_symbols=plan.priority_symbols,
+                risk_stance=plan.risk_stance,
+                sector_focus=plan.sector_focus,
+                reasoning=plan.reasoning,
+                confidence=plan.confidence,
+                overnight_summary=plan.overnight_summary,
+                key_levels=plan.key_levels,
+                generated_at=plan.generated_at,
+            )
         )
 
         console.print("[bold green]✓ Game Plan Generated[/bold green]")
