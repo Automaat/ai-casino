@@ -143,7 +143,7 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
     mock_comment_repo = Mock()
     mock_comment_repo.bulk_insert = AsyncMock(return_value=2)
     mock_mention_repo = Mock()
-    mock_mention_repo.bulk_insert_from_post = AsyncMock(return_value=2)
+    mock_mention_repo.bulk_insert_all = AsyncMock(return_value=2)
     mock_sentiment_repo = Mock()
     mock_sentiment_repo.compute_hourly_aggregates = AsyncMock(return_value=1)
 
@@ -177,7 +177,7 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
         # Verify DB inserts
         assert mock_post_repo.bulk_insert.called
         assert mock_comment_repo.bulk_insert.called
-        assert mock_mention_repo.bulk_insert_from_post.called
+        assert mock_mention_repo.bulk_insert_all.called
         assert mock_sentiment_repo.compute_hourly_aggregates.called
 
         # Verify stats recorded
@@ -205,6 +205,7 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
     mock_comment_repo = Mock()
     mock_comment_repo.bulk_insert = AsyncMock(return_value=0)
     mock_mention_repo = Mock()
+    mock_mention_repo.bulk_insert_all = AsyncMock(return_value=0)
     mock_sentiment_repo = Mock()
     mock_sentiment_repo.compute_hourly_aggregates = AsyncMock(return_value=0)
 

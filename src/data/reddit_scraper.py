@@ -1,13 +1,16 @@
 """Reddit web scraper using Playwright with anti-bot measures."""
 
+from __future__ import annotations
+
 import asyncio
+import contextlib
 import json
 import random
 from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
-from playwright.async_api import Browser, ElementHandle, Page, async_playwright
+from playwright.async_api import Browser, Page, async_playwright
 from playwright_stealth import Stealth
 
 from src.cache.historical import HistoricalCache
@@ -45,6 +48,36 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0",
 ]
+
+_JS_EXTRACT_POSTS = """
+() => Array.from(document.querySelectorAll('div.thing.link[data-fullname]')).map(el => ({
+    id: (el.dataset.fullname || '').replace('t3_', ''),
+    title: el.querySelector('a.title')?.textContent?.trim() || '',
+    url: (() => {
+        const h = el.querySelector('a.title')?.getAttribute('href');
+        return h && !h.startsWith('http') ? 'https://old.reddit.com' + h : (h || '');
+    })(),
+    score: parseInt(el.querySelector('div.score.unvoted')?.textContent?.replace(/[^0-9]/g, '') || '0') || 0,
+    num_comments: parseInt(
+        (el.querySelector('a.comments')?.textContent || '0 comments').split(' ')[0]
+    ) || 0,
+    created_utc: el.querySelector('time')?.getAttribute('datetime') || null,
+    body: el.querySelector('div.usertext-body div.md')?.textContent?.trim() || ''
+}))
+"""
+
+_JS_EXTRACT_COMMENTS = """
+(limit) => Array.from(document.querySelectorAll('div.comment[data-fullname]'))
+    .slice(0, limit)
+    .map(el => ({
+        id: (el.dataset.fullname || '').replace('t1_', ''),
+        body: el.querySelector('div.md')?.textContent?.trim() || '',
+        score: (() => {
+            const t = el.querySelector('div.score.unvoted')?.textContent?.trim().split(' ')[0];
+            return parseInt(t) || 1;
+        })()
+    }))
+"""
 
 
 class RedditPlaywrightScraper:
@@ -175,6 +208,57 @@ class RedditPlaywrightScraper:
         except Exception:
             logger.opt(exception=True).warning("Failed to save cookies")
 
+    def _parse_post(self, raw: dict, subreddit: str) -> RedditPost | None:
+        """Parse raw JS-evaluated dict into RedditPost.
+
+        Args:
+            raw: Dict from page.evaluate JS extraction
+            subreddit: Subreddit name
+
+        Returns:
+            RedditPost or None if id missing
+        """
+        if not raw.get("id"):
+            return None
+
+        created_utc = datetime.now(UTC)
+        with contextlib.suppress(ValueError, AttributeError):
+            if raw.get("created_utc"):
+                created_utc = datetime.fromisoformat(raw["created_utc"])
+
+        return RedditPost(
+            id=raw["id"],
+            title=raw.get("title", ""),
+            body=raw.get("body", ""),
+            subreddit=subreddit,
+            score=raw.get("score", 0),
+            upvote_ratio=0.0,  # Sentinel value (not available on listing)
+            url=raw.get("url", ""),
+            created_utc=created_utc,
+            num_comments=raw.get("num_comments", 0),
+        )
+
+    def _parse_comment(self, raw: dict, parent_post_id: str) -> RedditComment | None:
+        """Parse raw JS-evaluated dict into RedditComment.
+
+        Args:
+            raw: Dict from page.evaluate JS extraction
+            parent_post_id: Parent post Reddit ID
+
+        Returns:
+            RedditComment or None if id or body missing
+        """
+        if not raw.get("id") or not raw.get("body"):
+            return None
+
+        return RedditComment(
+            id=raw["id"],
+            parent_post_id=parent_post_id,
+            body=raw["body"],
+            score=raw.get("score", 1),
+            created_utc=datetime.now(UTC),
+        )
+
     async def scrape_subreddit_posts(
         self,
         subreddit: str,
@@ -196,7 +280,6 @@ class RedditPlaywrightScraper:
             msg = "Browser failed to start"
             raise RuntimeError(msg)
 
-        # Create new page with random user agent and viewport
         user_agent = random.choice(USER_AGENTS)
         context = await self._browser.new_context(
             user_agent=user_agent,
@@ -204,44 +287,34 @@ class RedditPlaywrightScraper:
         )
         page = await context.new_page()
 
-        # Apply stealth
         await self._apply_stealth(page)
-
-        # Load cookies
         await self._load_cookies(page)
 
         try:
-            # Navigate to subreddit
             url = f"https://old.reddit.com/r/{subreddit}/"
             logger.info(f"Scraping r/{subreddit} (limit={limit})")
 
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
             await self._random_delay(self.config.delay_page_load_min, self.config.delay_page_load_max)
 
-            # Scroll to trigger lazy load
             for scroll_num in range(3):
                 await page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
                 await self._random_delay(self.config.delay_action_min, self.config.delay_action_max)
                 logger.debug(f"Scroll {scroll_num + 1}/3")
 
-            # Extract posts
+            raw_posts: list[dict] = await page.evaluate(_JS_EXTRACT_POSTS)
+            logger.info(f"Found {len(raw_posts)} post containers on r/{subreddit}")
+
             posts = []
-            post_containers = await page.query_selector_all("div.thing.link[data-fullname]")
-
-            logger.info(f"Found {len(post_containers)} post containers on r/{subreddit}")
-
-            for container in post_containers[:limit]:
+            for raw in raw_posts[:limit]:
                 try:
-                    post = await self._extract_post(container, subreddit)
+                    post = self._parse_post(raw, subreddit)
                     if post:
                         posts.append(post)
                 except Exception:
-                    logger.opt(exception=True).warning("Failed to extract post")
-                    continue
+                    logger.opt(exception=True).warning("Failed to parse post")
 
-            # Save cookies
             await self._save_cookies(page)
-
             logger.info(f"Scraped {len(posts)} posts from r/{subreddit}")
             return posts
 
@@ -252,141 +325,6 @@ class RedditPlaywrightScraper:
         finally:
             await page.close()
             await context.close()
-
-    async def _extract_reddit_id(self, container: ElementHandle) -> str | None:
-        """Extract Reddit ID from container.
-
-        Args:
-            container: Post container element
-
-        Returns:
-            Reddit ID or None if not found
-        """
-        reddit_id_attr = await container.get_attribute("data-fullname")
-        if not reddit_id_attr:
-            return None
-        return reddit_id_attr.replace("t3_", "")
-
-    async def _extract_title_and_url(self, container: ElementHandle) -> tuple[str, str]:
-        """Extract title and URL from container.
-
-        Args:
-            container: Post container element
-
-        Returns:
-            Tuple of (title, url)
-        """
-        title_elem = await container.query_selector("a.title")
-        title = await title_elem.text_content() if title_elem else ""
-        title = title.strip() if title else ""
-
-        url = await title_elem.get_attribute("href") if title_elem else None
-        if url and not url.startswith("http"):
-            url = f"https://old.reddit.com{url}"
-        if not url:
-            url = ""
-
-        return title, url
-
-    async def _extract_score(self, container: ElementHandle) -> int:
-        """Extract score from container.
-
-        Args:
-            container: Post container element
-
-        Returns:
-            Score as integer
-        """
-        score_elem = await container.query_selector("div.score.unvoted")
-        score_text = await score_elem.text_content() if score_elem else "0"
-        score_text = score_text.strip().replace("•", "").strip() if score_text else "0"
-        try:
-            return int(score_text) if score_text and score_text.isdigit() else 0
-        except ValueError:
-            return 0
-
-    async def _extract_comments_count(self, container: ElementHandle) -> int:
-        """Extract comments count from container.
-
-        Args:
-            container: Post container element
-
-        Returns:
-            Number of comments
-        """
-        comments_elem = await container.query_selector("a.comments")
-        comments_text = await comments_elem.text_content() if comments_elem else "0 comments"
-        if not comments_text or "comment" not in comments_text:
-            return 0
-
-        num_text = comments_text.split()[0]
-        try:
-            return int(num_text) if num_text.isdigit() else 0
-        except ValueError:
-            return 0
-
-    async def _extract_timestamp(self, container: ElementHandle) -> datetime:
-        """Extract timestamp from container.
-
-        Args:
-            container: Post container element
-
-        Returns:
-            Post creation datetime
-        """
-        time_elem = await container.query_selector("time")
-        if time_elem:
-            timestamp_attr = await time_elem.get_attribute("datetime")
-            if timestamp_attr:
-                try:
-                    return datetime.fromisoformat(timestamp_attr)
-                except ValueError:
-                    logger.debug(f"Failed to parse timestamp: {timestamp_attr}")
-                except AttributeError:
-                    logger.debug(f"Failed to parse timestamp: {timestamp_attr}")
-
-        return datetime.now(UTC)
-
-    async def _extract_post(self, container: ElementHandle, subreddit: str) -> RedditPost | None:
-        """Extract post data from container element.
-
-        Args:
-            container: Post container element
-            subreddit: Subreddit name
-
-        Returns:
-            RedditPost or None if extraction fails
-        """
-        try:
-            reddit_id = await self._extract_reddit_id(container)
-            if not reddit_id:
-                return None
-
-            title, url = await self._extract_title_and_url(container)
-            score = await self._extract_score(container)
-            num_comments = await self._extract_comments_count(container)
-            created_utc = await self._extract_timestamp(container)
-
-            # Body (self-posts only)
-            body_elem = await container.query_selector("div.usertext-body div.md")
-            body = await body_elem.text_content() if body_elem else ""
-            body = body.strip() if body else ""
-
-            return RedditPost(
-                id=reddit_id,
-                title=title,
-                body=body,
-                subreddit=subreddit,
-                score=score,
-                upvote_ratio=0.0,  # Sentinel value (not available on listing)
-                url=url,
-                created_utc=created_utc,
-                num_comments=num_comments,
-            )
-
-        except Exception:
-            logger.opt(exception=True).debug("Failed to extract post data")
-            return None
 
     async def scrape_post_comments(
         self,
@@ -409,7 +347,6 @@ class RedditPlaywrightScraper:
             msg = "Browser failed to start"
             raise RuntimeError(msg)
 
-        # Create new page with random user agent and viewport
         user_agent = random.choice(USER_AGENTS)
         context = await self._browser.new_context(
             user_agent=user_agent,
@@ -417,10 +354,7 @@ class RedditPlaywrightScraper:
         )
         page = await context.new_page()
 
-        # Apply stealth
         await self._apply_stealth(page)
-
-        # Load cookies
         await self._load_cookies(page)
 
         try:
@@ -429,18 +363,16 @@ class RedditPlaywrightScraper:
             await page.goto(post.url, wait_until="domcontentloaded", timeout=30000)
             await self._random_delay(self.config.delay_page_load_min, self.config.delay_page_load_max)
 
-            # Extract comments
-            comments = []
-            comment_containers = await page.query_selector_all("div.comment[data-fullname]")
+            raw_comments: list[dict] = await page.evaluate(_JS_EXTRACT_COMMENTS, limit)
 
-            for container in comment_containers[:limit]:
+            comments = []
+            for raw in raw_comments:
                 try:
-                    comment = await self._extract_comment(container, post.id)
+                    comment = self._parse_comment(raw, post.id)
                     if comment:
                         comments.append(comment)
                 except Exception:
-                    logger.opt(exception=True).debug("Failed to extract comment")
-                    continue
+                    logger.opt(exception=True).debug("Failed to parse comment")
 
             logger.debug(f"Scraped {len(comments)} comments for post {post.id}")
             return comments
@@ -452,55 +384,6 @@ class RedditPlaywrightScraper:
         finally:
             await page.close()
             await context.close()
-
-    async def _extract_comment(self, container: ElementHandle, parent_post_id: str) -> RedditComment | None:
-        """Extract comment data from container element.
-
-        Args:
-            container: Comment container element
-            parent_post_id: Parent post Reddit ID
-
-        Returns:
-            RedditComment or None if extraction fails
-        """
-        try:
-            # Comment ID
-            comment_id_attr = await container.get_attribute("data-fullname")
-            if not comment_id_attr:
-                return None
-            comment_id = comment_id_attr.replace("t1_", "")
-
-            # Body
-            body_elem = await container.query_selector("div.md")
-            body = await body_elem.text_content() if body_elem else ""
-            body = body.strip() if body else ""
-
-            if not body:
-                return None
-
-            # Score
-            score_elem = await container.query_selector("div.score.unvoted")
-            score_text = await score_elem.text_content() if score_elem else "1"
-            score_text = score_text.strip().split()[0] if score_text else "1"  # "123 points" -> "123"
-            try:
-                score = int(score_text) if score_text.lstrip("-").isdigit() else 1
-            except ValueError:
-                score = 1
-
-            # Created UTC (not easily available, use current time)
-            created_utc = datetime.now(UTC)
-
-            return RedditComment(
-                id=comment_id,
-                parent_post_id=parent_post_id,
-                body=body,
-                score=score,
-                created_utc=created_utc,
-            )
-
-        except Exception:
-            logger.opt(exception=True).debug("Failed to extract comment data")
-            return None
 
     def __repr__(self) -> str:
         """Return string representation."""

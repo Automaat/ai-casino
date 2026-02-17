@@ -1,6 +1,7 @@
 """Stock screener engine for finding investment opportunities."""
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -162,6 +163,9 @@ class StockScreener:
         period = "1y" if criteria == ScreeningCriteria.BREAKOUT else "3mo"
         market_data = self._fetch_batch_data(symbols, period=period)
 
+        # Pre-fetch all ticker fundamentals in parallel (only needed for VALUE)
+        ticker_infos = self._prefetch_value_infos(symbols) if criteria == ScreeningCriteria.VALUE else {}
+
         # Score each stock
         results = []
         errors = []
@@ -177,7 +181,7 @@ class StockScreener:
                 if criteria == ScreeningCriteria.MOMENTUM:
                     result = self._score_momentum(df, info)
                 elif criteria == ScreeningCriteria.VALUE:
-                    result = self._score_value(df, info, symbol)
+                    result = self._score_value(df, info, ticker_infos.get(symbol, {}))
                 else:
                     result = self._score_breakout(df, info)
 
@@ -250,6 +254,25 @@ class StockScreener:
         logger.info(f"Fetched data for {len(all_data)} symbols")
         return all_data
 
+    def _prefetch_value_infos(self, symbols: list[str]) -> dict[str, dict]:
+        """Fetch yfinance fundamentals for all symbols in parallel.
+
+        Args:
+            symbols: List of stock symbols
+
+        Returns:
+            Dict mapping symbol to yfinance .info dict
+        """
+
+        def _fetch_one(sym: str) -> tuple[str, dict]:
+            try:
+                return sym, yf.Ticker(sym).info
+            except Exception:
+                return sym, {}
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            return dict(executor.map(_fetch_one, symbols))
+
     def _score_momentum(self, df: pd.DataFrame, info: StockInfo) -> ScreeningResult | None:
         """Score stock for momentum criteria.
 
@@ -303,7 +326,7 @@ class StockScreener:
             reason=f"RSI {rsi:.1f} (oversold), MACD bullish ({macd_hist:.4f}), above 50-day MA",
         )
 
-    def _score_value(self, df: pd.DataFrame, info: StockInfo, symbol: str) -> ScreeningResult | None:
+    def _score_value(self, df: pd.DataFrame, info: StockInfo, ticker_info: dict) -> ScreeningResult | None:
         """Score stock for value criteria.
 
         Criteria: Low P/E vs market + P/B < 3 + positive price momentum
@@ -311,18 +334,11 @@ class StockScreener:
         Args:
             df: OHLCV DataFrame
             info: Stock info
-            symbol: Stock symbol
+            ticker_info: Pre-fetched yfinance .info dict
 
         Returns:
             ScreeningResult or None if doesn't match
         """
-        try:
-            ticker = yf.Ticker(symbol)
-            ticker_info = ticker.info
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to fetch yfinance info for {symbol}: {e}")
-            return None
-
         pe = ticker_info.get("trailingPE")
         pb = ticker_info.get("priceToBook")
         forward_pe = ticker_info.get("forwardPE")
