@@ -58,7 +58,6 @@ dev = [
     { name = "pytest-asyncio", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pytest-cov", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pytest-mock", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "ruff", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 profiling = [
     { name = "snakeviz", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -107,7 +106,6 @@ requires-dist = [
     { name = "quantstats", specifier = "==0.0.81" },
     { name = "rich", specifier = "==14.3.2" },
     { name = "riskfolio-lib", specifier = "==6.3.1" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.1" },
     { name = "snakeviz", marker = "extra == 'profiling'", specifier = ">=2.2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.0.46" },
     { name = "tenacity", specifier = "==9.1.4" },
