@@ -240,12 +240,12 @@ Extract tickers:"""
         Returns:
             True if valid, False otherwise
         """
-        # Uppercase, 1-5 alphanumeric chars (allow . for BRK.B)
-        if not symbol or not (1 <= len(symbol) <= 6):
+        # Uppercase, 1-5 chars (allow . for BRK.B style class shares)
+        if not symbol or not (1 <= len(symbol) <= 5):
             return False
 
-        # Must be mostly uppercase letters (allow one . for class shares)
-        if not symbol.replace(".", "").replace("-", "").isalnum():
+        # Must be uppercase letters only — no digits (SP500, etc. are indices not tickers)
+        if not symbol.replace(".", "").replace("-", "").isalpha():
             return False
 
         if not symbol[0].isupper():
