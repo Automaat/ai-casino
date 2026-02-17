@@ -130,16 +130,12 @@ class DegradationPolicy:
 
         Finnhub only affects agents when premium features enabled.
         """
-        # Check if premium enabled
-        premium_enabled = (
-            self.config.data_sources.finnhub_premium.enable_social_sentiment
-            or self.config.data_sources.finnhub_premium.enable_news_sentiment
-        )
-
+        # Map features to agents granularly
         finnhub_agents = []
-        if premium_enabled:
-            # Penalize when premium expected but unavailable
-            finnhub_agents = [AgentType.FUNDAMENTAL, AgentType.SOCIAL]
+        if self.config.data_sources.finnhub_premium.enable_social_sentiment:
+            finnhub_agents.append(AgentType.SOCIAL)
+        if self.config.data_sources.finnhub_premium.enable_news_sentiment:
+            finnhub_agents.append(AgentType.FUNDAMENTAL)
 
         return {
             "alpha_vantage": [AgentType.TECHNICAL],

@@ -197,7 +197,7 @@ class FinnhubFetcher:
                 symbol=symbol,
                 reddit=reddit_entries,
                 twitter=twitter_entries,
-                fetched_at=datetime.now(),
+                fetched_at=datetime.now(UTC),
             )
 
             self._cache.set(cache_key, result.model_dump(mode="json"), expire=FINNHUB_CACHE_TTL)
@@ -287,7 +287,7 @@ class FinnhubFetcher:
                     bearish_percent=sentiment_data.get("bearishPercent", 0.0),
                     bullish_percent=sentiment_data.get("bullishPercent", 0.0),
                 ),
-                fetched_at=datetime.now(),
+                fetched_at=datetime.now(UTC),
             )
 
             self._cache.set(cache_key, result.model_dump(mode="json"), expire=FINNHUB_CACHE_TTL)

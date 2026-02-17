@@ -31,6 +31,7 @@ class PrefetchTask(TaskExecutor):
         self._failed = 0
         self._finbert_ready = False
         self._duration = 0.0
+        self._skipped = False
 
     @property
     def task_name(self) -> str:
@@ -42,6 +43,7 @@ class PrefetchTask(TaskExecutor):
         prefetcher = self.components.prefetcher
         if prefetcher is None:
             logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
+            self._skipped = True
             return
 
         watchlist = await self.components.broker_manager.get_merged_watchlist()
@@ -85,6 +87,8 @@ class PrefetchTask(TaskExecutor):
 
     async def record_success(self, duration: float) -> None:
         """Record prefetch completion."""
+        if self._skipped:
+            return
         await self.components.state.record_prefetch(
             symbols_prefetched=self._succeeded,
             symbols_failed=self._failed,
@@ -96,6 +100,11 @@ class PrefetchTask(TaskExecutor):
 class PreMarketRefreshTask(TaskExecutor):
     """Pre-market data refresh task to update stale cache."""
 
+    def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+        """Initialize pre-market refresh task."""
+        super().__init__(components, container)
+        self._skipped = False
+
     @property
     def task_name(self) -> str:
         """Task display name."""
@@ -106,6 +115,7 @@ class PreMarketRefreshTask(TaskExecutor):
         prefetcher = self.components.prefetcher
         if prefetcher is None:
             logger.warning("Prefetcher unavailable (missing ALPHA_VANTAGE_API_KEY), skipping")
+            self._skipped = True
             return
 
         watchlist = await self.components.broker_manager.get_merged_watchlist()
@@ -129,6 +139,8 @@ class PreMarketRefreshTask(TaskExecutor):
 
     async def record_success(self, duration: float) -> None:
         """Record pre-market refresh completion."""
+        if self._skipped:
+            return
         await self.components.state.set_last_pre_market_refresh(
             datetime.now(self.components.scheduler.timezone)
         )
@@ -366,6 +378,11 @@ class EarningsFetchTask(TaskExecutor):
 class DiscoveryOutcomeTask(TaskExecutor):
     """Discovery outcome tracking task (T+7d/30d price updates)."""
 
+    def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+        """Initialize discovery outcome task."""
+        super().__init__(components, container)
+        self._skipped = False
+
     @property
     def task_name(self) -> str:
         """Task display name."""
@@ -382,6 +399,7 @@ class DiscoveryOutcomeTask(TaskExecutor):
 
         if self.components.market_fetcher is None:
             logger.warning("Market fetcher not available, skipping discovery outcome tracking")
+            self._skipped = True
             return
 
         async with get_session() as session:
@@ -415,4 +433,6 @@ class DiscoveryOutcomeTask(TaskExecutor):
 
     async def record_success(self, duration: float) -> None:
         """Record discovery outcome tracking completion."""
+        if self._skipped:
+            return
         await self.components.state.set_last_discovery_outcome_tracking(datetime.now(UTC))
