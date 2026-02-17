@@ -36,7 +36,7 @@ class RedditTickerExtractor:
         """
         self.llm_client = llm_client
         self.config = config
-        self.prompt_loader = PromptLoader(agent_name="reddit_extractor")
+        self.prompt_loader = PromptLoader(agent_name="reddit")
 
     async def extract_tickers(
         self,
@@ -80,7 +80,7 @@ class RedditTickerExtractor:
 
         # Load prompt template
         try:
-            prompt_template = self.prompt_loader.load("reddit/ticker_extraction.txt")
+            prompt_template = self.prompt_loader.load("ticker_extraction.txt")
             prompt = prompt_template.format(
                 title=post.title,
                 body=post.body or "(no body)",
