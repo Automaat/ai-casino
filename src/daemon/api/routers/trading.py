@@ -125,7 +125,7 @@ async def get_game_plan(request: Request) -> GamePlanResponse | None:
         latest = game_plan_history[-1]
 
         # Return None if essential fields are missing (old records)
-        if not latest.reasoning or latest.confidence is None or not latest.generated_at:
+        if latest.reasoning is None or latest.confidence is None or latest.generated_at is None:
             logger.warning("Game plan missing required fields (old record)")
             return None
 
