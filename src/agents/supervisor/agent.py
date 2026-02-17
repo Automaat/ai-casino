@@ -610,6 +610,7 @@ class SupervisorWorkflow:
         supervisor: TradingSupervisor,
         target_allocations: dict[str, float] | None = None,
     ) -> None:
+        """Initialize SupervisorWorkflow with components and configuration."""
         self._init_components(components)
         self._init_config(components, config)
         self._init_conditional_components(components)
@@ -706,10 +707,13 @@ class SupervisorWorkflow:
         )
 
     def get_default_strategy(self) -> EnsembleStrategy | MomentumStrategy:
+        """Return the default trading strategy."""
         return self._default_strategy
 
     def get_container(self) -> AppContainer:
+        """Return the DI container."""
         return self._container
 
     def get_target_allocation(self, symbol: str) -> float | None:
+        """Return target allocation for symbol, or None if not configured."""
         return self._target_allocations.get(symbol) if self._target_allocations else None

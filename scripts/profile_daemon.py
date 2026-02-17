@@ -30,7 +30,6 @@ from rich.table import Table
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.daemon.config import DaemonConfig
-from src.daemon.factory import DaemonFactory
 
 console = Console()
 
@@ -48,10 +47,7 @@ def create_profiling_config(
     Returns:
         DaemonConfig with profiling enabled
     """
-    if config_file:
-        config = DaemonConfig.from_yaml(config_file)
-    else:
-        config = DaemonConfig()
+    config = DaemonConfig.from_yaml(config_file) if config_file else DaemonConfig()
 
     config.watchlist = stocks
     config.market_hours_only = False  # Allow profiling outside market hours
