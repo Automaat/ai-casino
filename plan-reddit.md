@@ -1,8 +1,8 @@
 # Reddit Sentiment Integration - Implementation Plan
 
 **Branch:** `feat/reddit-sentiment-playwright-scraping`
-**Commit:** `bc2ac32`
-**Status:** 6/8 phases complete (75%)
+**Commit:** `bc2ac32` (latest: Phase 4 complete)
+**Status:** 7/8 phases complete (87.5%)
 
 ---
 
@@ -106,6 +106,36 @@ python -m src.database.migrations.add_reddit_tables
 
 **DI wiring:** Config integrated, but providers not yet created (see Phase 4 TODO)
 
+### Phase 4: Enhanced SocialWatcher ✅
+**File modified:** `src/daemon/watchers/social_watcher.py`
+
+**Changes implemented:**
+
+1. **DB-first approach with API fallback:**
+   - Queries `reddit_posts` and `reddit_ticker_mentions` tables
+   - Falls back to `RedditFetcher.fetch_trending_tickers()` if DB empty/unavailable
+   - Maintains backward compatibility with existing tests
+
+2. **Volume spike detection (DB-based):**
+   - Uses `RedditTickerMentionRepository.get_mentions_in_window()`
+   - Aggregates mention counts by symbol
+   - Compares to `_previous_mention_counts` baseline
+   - Detects >50% spikes as before
+
+3. **Viral post detection (DB-based):**
+   - Queries recent posts via `RedditPostRepository.get_posts_in_window()`
+   - Maps posts to symbols via `get_post_symbols_map()`
+   - Checks viral criteria: score >1000, age <1hr, upvote_ratio >0.8
+   - Deduplicates via `_seen_post_ids` as before
+
+4. **New repository method:**
+   - `RedditTickerMentionRepository.get_post_symbols_map()` - maps post_reddit_id → symbols list
+
+**Testing:**
+- ✅ All existing tests pass (15/15)
+- ✅ Type check passes
+- ✅ No new lint issues
+
 ### Phase 7: Dependencies ✅
 **Added:**
 - `playwright ^1.58.0`
@@ -118,55 +148,6 @@ python -m src.database.migrations.add_reddit_tables
 ---
 
 ## 🔲 Remaining Work
-
-### Phase 4: Enhanced SocialWatcher 🔲
-**File to modify:** `src/daemon/watchers/social_watcher.py`
-
-**Current state:** Uses `RedditFetcher.fetch_trending_tickers()` (API-based)
-
-**Changes needed:**
-
-1. **Replace API calls with DB queries:**
-   ```python
-   from src.database.connection import get_session
-   from src.database.repositories.reddit import RedditPostRepository
-
-   async with get_session() as session:
-       repo = RedditPostRepository(session)
-       recent_posts = await repo.get_posts_in_window(
-           window_minutes=15,
-           subreddits=self.subreddits
-       )
-   ```
-
-2. **Aggregate mentions in-memory:**
-   - Count mentions per symbol from `recent_posts`
-   - Compare to previous window (stored in daemon state)
-   - Detect volume spikes (>50% increase)
-
-3. **Viral post detection:**
-   - Criteria: score >1000, created_utc <1hr, upvote_ratio >0.8
-   - Create `SocialEvent` with metadata
-
-4. **Feed existing flow:**
-   - `SocialEvent` → `EventTriageAgent.analyze()` → `TriageResult`
-   - WATCHLIST urgency → `EventDiscoveryAdapter` → `DiscoveryStateManager.add_event_candidates()`
-
-**Repository method to add:**
-```python
-# src/database/repositories/reddit.py
-async def get_posts_in_window(
-    self,
-    window_minutes: int,
-    subreddits: list[str] | None = None,
-) -> list[RedditPost]:
-    """Get posts within time window (already implemented ✅)."""
-```
-
-**Files to check:**
-- `src/daemon/watchers/social_watcher.py` - Modify `_fetch_events()`
-- `src/daemon/event_watcher.py` - Existing triage flow (no changes needed)
-- `src/daemon/state/managers/discovery.py` - Existing candidate management (no changes needed)
 
 ### Phase 6: Comprehensive Tests 🔲
 
@@ -475,12 +456,10 @@ mise test:cov                # >80% coverage for new code
 
 ## Timeline Estimate
 
-**Remaining work:**
-- **Phase 4 (SocialWatcher):** 4 hours
-  - Modify `_fetch_events()` to use DB: 2h
-  - Test volume spike detection: 1h
-  - Integration testing: 1h
+**Completed:**
+- ~~Phase 4 (SocialWatcher): 4 hours~~ ✅ Done
 
+**Remaining work:**
 - **Phase 6 (Tests):** 8 hours
   - Unit tests (scraper + extractor): 4h
   - Integration tests: 2h
@@ -491,7 +470,7 @@ mise test:cov                # >80% coverage for new code
   - DI providers: 1h
   - Scheduler integration: 1h
 
-**Total remaining:** ~14 hours (~2 working days)
+**Total remaining:** ~10 hours (~1.5 working days)
 
 ---
 

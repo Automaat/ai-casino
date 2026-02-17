@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 class RedditPostRepository(BaseRepository[RedditPost]):
     """Repository for Reddit post persistence."""
 
-    def __init__(self, session: "AsyncSession") -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session.
 
         Args:
@@ -203,7 +203,7 @@ class RedditPostRepository(BaseRepository[RedditPost]):
 class RedditCommentRepository(BaseRepository[RedditComment]):
     """Repository for Reddit comment persistence."""
 
-    def __init__(self, session: "AsyncSession") -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session.
 
         Args:
@@ -324,7 +324,7 @@ class RedditCommentRepository(BaseRepository[RedditComment]):
 class RedditTickerMentionRepository(BaseRepository[TickerMention]):
     """Repository for Reddit ticker mention persistence."""
 
-    def __init__(self, session: "AsyncSession") -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session.
 
         Args:
@@ -434,6 +434,35 @@ class RedditTickerMentionRepository(BaseRepository[TickerMention]):
         result = await self._session.execute(query)
         return [(row[0], row[1]) for row in result.all()]
 
+    async def get_post_symbols_map(self, window_minutes: int) -> dict[str, list[str]]:
+        """Get mapping of post_reddit_id to list of mentioned symbols.
+
+        Args:
+            window_minutes: Time window in minutes
+
+        Returns:
+            Dict mapping post_reddit_id to list of symbols
+        """
+        cutoff = datetime.now(UTC) - timedelta(minutes=window_minutes)
+
+        query = (
+            select(RedditTickerMentionORM.source_reddit_id, RedditTickerMentionORM.symbol)
+            .where(RedditTickerMentionORM.created_utc >= cutoff)
+            .where(RedditTickerMentionORM.source_type == "post")
+        )
+
+        result = await self._session.execute(query)
+        rows = result.all()
+
+        post_symbols: dict[str, list[str]] = {}
+        for post_id, symbol in rows:
+            if post_id not in post_symbols:
+                post_symbols[post_id] = []
+            if symbol not in post_symbols[post_id]:
+                post_symbols[post_id].append(symbol)
+
+        return post_symbols
+
     def _to_mention(self, orm: RedditTickerMentionORM) -> TickerMention:
         """Convert ORM model to TickerMention.
 
@@ -458,7 +487,7 @@ class RedditTickerMentionRepository(BaseRepository[TickerMention]):
 class RedditTickerSentimentRepository(BaseRepository[dict]):
     """Repository for Reddit ticker sentiment aggregates."""
 
-    def __init__(self, session: "AsyncSession") -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session.
 
         Args:

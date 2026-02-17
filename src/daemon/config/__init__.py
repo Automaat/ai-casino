@@ -31,7 +31,6 @@ from src.daemon.config.infrastructure import (
     LLMConfig,
     PrefetchConfig,
 )
-from src.daemon.config.reddit import RedditScraperConfig
 from src.daemon.config.logging import LoggingConfig
 from src.daemon.config.notifications import NotificationsConfig, TelegramNotificationConfig
 from src.daemon.config.portfolio import (
@@ -42,6 +41,7 @@ from src.daemon.config.portfolio import (
 )
 from src.daemon.config.pre_market import PreMarketScreeningConfig
 from src.daemon.config.profiling import ProfilingConfig
+from src.daemon.config.reddit import RedditScraperConfig
 from src.daemon.config.reporting import HealthConfig, MetricsConfig, ReportingConfig, SignalTrackingConfig
 from src.daemon.config.risk import (
     MonteCarloConfig,
