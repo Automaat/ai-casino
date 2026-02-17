@@ -37,9 +37,9 @@
 					</div>
 				</div>
 				<div class="bg-purple-50 rounded p-2">
-					<div class="text-xs text-gray-600">Screening</div>
+					<div class="text-xs text-gray-600">Discovery</div>
 					<div class="text-lg font-semibold text-purple-700">
-						{watchlist.sources.screening || 0}
+						{watchlist.sources.discovery || 0}
 					</div>
 				</div>
 			</div>

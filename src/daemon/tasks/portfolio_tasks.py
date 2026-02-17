@@ -250,9 +250,6 @@ class CorrelationAuditTask(TaskExecutor):
             )
             return
 
-        screening_history = await self.components.state.get_screening_history()
-        screening_results = screening_history[-1].candidates if screening_history else None
-
         workflow = self.components.workflow
         if not workflow:
             logger.warning("Workflow not initialized")
@@ -266,7 +263,7 @@ class CorrelationAuditTask(TaskExecutor):
         )
 
         start = time_mod.time()
-        self._result = await asyncio.to_thread(auditor.audit, positions, screening_results)
+        self._result = await asyncio.to_thread(auditor.audit, positions, None)
         self._duration = time_mod.time() - start
 
         self._print_results(self._result, self._duration)

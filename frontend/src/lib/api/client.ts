@@ -237,14 +237,14 @@ export const api = {
 
 	// Discovery
 	async getDiscoveryInsights(): Promise<T.DiscoveryInsightsResponse> {
-		return fetchAPI<T.DiscoveryInsightsResponse>('/api/discovery/insights');
+		return fetchAPI<T.DiscoveryInsightsResponse>('/discovery/insights');
 	},
 
 	async getActiveDiscovery(
 		sourceFilter: 'all' | 'batch' | 'continuous' = 'all'
 	): Promise<T.ActiveDiscoveryResponse> {
 		return fetchAPI<T.ActiveDiscoveryResponse>(
-			`/api/discovery/active?source_filter=${sourceFilter}`
+			`/discovery/active?source_filter=${sourceFilter}`
 		);
 	},
 
@@ -361,17 +361,6 @@ export const api = {
 		query.set('start_date', startDate);
 		query.set('end_date', endDate);
 		return fetchAPI<T.ExecutionRateListResponse>(`/api/signal-analytics/execution-rate?${query}`);
-	},
-
-	// Screening
-	async getScreeningHistory(limit: number = 30): Promise<T.ScreeningHistoryResponse> {
-		const query = new URLSearchParams();
-		query.set('limit', limit.toString());
-		return fetchAPI<T.ScreeningHistoryResponse>(`/api/screening/history?${query}`);
-	},
-
-	async getScreeningInsights(): Promise<T.ScreeningInsightsResponse> {
-		return fetchAPI<T.ScreeningInsightsResponse>('/api/screening/insights');
 	}
 };
 

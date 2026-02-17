@@ -48,7 +48,6 @@ from src.database.models.screening import (
     GamePlanRecordORM,
     PrefetchRecordORM,
     ScoringWeightsHistoryORM,
-    ScreeningRecordORM,
 )
 from src.database.models.trading import (
     PortfolioSnapshotORM,
@@ -89,7 +88,6 @@ __all__ = [
     "RiskAuditORM",
     "RiskReportRecordORM",
     "ScoringWeightsHistoryORM",
-    "ScreeningRecordORM",
     "SectorAttributionRecordORM",
     "SectorRotationRecordORM",
     "SignalOutcomeORM",

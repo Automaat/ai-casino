@@ -65,7 +65,6 @@ async def config_full(request: Request) -> FullConfigResponse:
         journal=cfg.journal.model_dump(),
         health=cfg.health.model_dump(),
         optimization=cfg.optimization.model_dump(),
-        screening=cfg.screening.model_dump(),
         prefetch=cfg.prefetch.model_dump(),
         sector_rotation=cfg.sector_rotation.model_dump(),
         earnings_calendar=cfg.earnings_calendar.model_dump(),

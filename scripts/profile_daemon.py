@@ -63,7 +63,6 @@ def create_profiling_config(
     config.logging.log_level = "INFO"
 
     # Disable optional components for cleaner profile
-    config.screening.enabled = False
     config.rebalancing.enabled = False
     config.optimization.enabled = False
     config.discovery.enabled = False

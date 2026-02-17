@@ -46,7 +46,6 @@ from src.daemon.state.models import (
     PrefetchRecord,
     ProfilingRecord,
     RiskReportRecord,
-    ScreeningRecord,
     SectorAttributionRecord,
     SectorRotationRecord,
     TradeJournalRecord,
@@ -54,7 +53,6 @@ from src.daemon.state.models import (
 from src.discovery.models import DiscoveryCandidate
 from src.execution_tracking.models import ExecutionGraph
 from src.execution_tracking.tracker import ExecutionGraphTracker
-from src.screening.screener import ScreeningResult
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
@@ -354,19 +352,6 @@ class DaemonState(BaseModel):
             symbols_prefetched, symbols_failed, finbert_ready, total_duration_seconds
         )
 
-    async def record_after_hours_screening(
-        self,
-        criteria: str,
-        universe: str,
-        candidates: list[ScreeningResult],
-        top_n: int = 10,
-        screened_at: datetime | None = None,
-    ) -> None:
-        """Delegate to data pipeline manager."""
-        await self.data_pipeline.record_after_hours_screening(
-            criteria, universe, candidates, top_n, screened_at
-        )
-
     async def record_earnings_fetch(
         self,
         events: list[EarningsEventRecord],
@@ -399,20 +384,6 @@ class DaemonState(BaseModel):
     async def get_prefetch_history(self, limit: int = 10) -> list[PrefetchRecord]:
         """Get prefetch history."""
         return await self.data_pipeline.get_prefetch_history(limit)
-
-    async def get_last_after_hours_screening(self) -> datetime | None:
-        """Get last after-hours screening timestamp."""
-        return await self.data_pipeline.get_last_after_hours_screening()
-
-    async def set_last_after_hours_screening(self, value: datetime | None) -> None:
-        """Set last after-hours screening timestamp."""
-        await self.data_pipeline.set_last_after_hours_screening(value)
-
-    async def get_screening_history(
-        self, limit: int = 10, session: AsyncSession | None = None
-    ) -> list[ScreeningRecord]:
-        """Get screening history."""
-        return await self.data_pipeline.get_screening_history(limit, session=session)
 
     async def get_last_earnings_fetch(self) -> datetime | None:
         """Get last earnings fetch timestamp."""

@@ -53,12 +53,6 @@ class ScheduledTaskRunner:
             "_run_monte_carlo_stress_testing",
             "monte_carlo.enabled",
         ),
-        ScheduledTask(
-            "after_hours_screening",
-            "is_after_hours_screening_time",
-            "_run_after_hours_screening",
-            is_async=True,
-        ),
         ScheduledTask("optimization", "is_optimization_time", "_run_optimization", "optimization.enabled"),
         ScheduledTask("signal_tracking", "is_signal_tracking_time", "_run_signal_tracking"),
         ScheduledTask(
