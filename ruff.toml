@@ -172,6 +172,10 @@ ignore = [
 "src/tui/commands.py" = [
     "ARG002", # unused args OK in command handlers with reserved parameters
 ]
+"src/database/types.py" = [
+    "ANN401", # Any required for SQLAlchemy TypeDecorator interface (dynamic type system)
+    "ARG002", # unused method args OK in TypeDecorator interface implementation
+]
 
 [lint.mccabe]
 max-complexity = 10

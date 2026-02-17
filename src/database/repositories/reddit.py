@@ -380,8 +380,12 @@ class RedditTickerMentionRepository(BaseRepository[TickerMention]):
             for mention in mentions
         ]
 
-        stmt = insert(RedditTickerMentionORM).values(values).on_conflict_do_nothing(
-            index_elements=["source_type", "source_reddit_id", "symbol", "extraction_method"]
+        stmt = (
+            insert(RedditTickerMentionORM)
+            .values(values)
+            .on_conflict_do_nothing(
+                index_elements=["source_type", "source_reddit_id", "symbol", "extraction_method"]
+            )
         )
         result: Result = await self._session.execute(stmt)
         await self._session.commit()

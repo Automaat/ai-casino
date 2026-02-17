@@ -2,31 +2,13 @@
 
 import json
 import uuid
+from typing import Any
 
 from sqlalchemy import TypeDecorator
 from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.schema import FetchedValue
-from sqlalchemy.types import CHAR, TEXT
-
-
-def pg_server_default(value):
-    """Create server default that only applies to PostgreSQL.
-
-    For SQLite, returns FetchedValue() which skips the server default.
-    This prevents PostgreSQL-specific SQL from being used in SQLite DDL.
-    """
-    from sqlalchemy.sql import text
-    from sqlalchemy.sql.schema import DefaultClause
-
-    class DialectAwareDefault(DefaultClause):
-        def _compiler_dispatch(self, visitor, **kw):
-            if visitor.dialect.name == "postgresql":
-                return super()._compiler_dispatch(visitor, **kw)
-            return ""
-
-    return DialectAwareDefault(text(value))
+from sqlalchemy.types import CHAR, TEXT, TypeEngine
 
 
 class UUID(TypeDecorator):
@@ -39,14 +21,13 @@ class UUID(TypeDecorator):
     impl = CHAR
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Any) -> TypeEngine[Any]:
         """Select UUID for PostgreSQL, CHAR(36) for others."""
         if dialect.name == "postgresql":
             return dialect.type_descriptor(PG_UUID(as_uuid=True))
-        else:
-            return dialect.type_descriptor(CHAR(36))
+        return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Any) -> str | uuid.UUID | None:
         """Convert UUID to string for binding."""
         if value is None:
             return None
@@ -54,9 +35,10 @@ class UUID(TypeDecorator):
             return str(value) if dialect.name != "postgresql" else value
         if isinstance(value, str):
             return value
-        raise TypeError(f"Expected UUID or str, got {type(value)}")
+        msg = f"Expected UUID or str, got {type(value)}"
+        raise TypeError(msg)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Any) -> uuid.UUID | None:
         """Convert string to UUID when loading."""
         if value is None:
             return None
@@ -75,14 +57,13 @@ class JSONB(TypeDecorator):
     impl = TEXT
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Any) -> TypeEngine[Any]:
         """Select JSONB for PostgreSQL, TEXT for others."""
         if dialect.name == "postgresql":
             return dialect.type_descriptor(PG_JSONB())
-        else:
-            return dialect.type_descriptor(TEXT())
+        return dialect.type_descriptor(TEXT())
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:
         """Convert dict/list to JSON string for SQLite."""
         if value is None:
             return None
@@ -90,7 +71,7 @@ class JSONB(TypeDecorator):
             return value
         return json.dumps(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Any) -> Any:
         """Convert JSON string to dict/list for SQLite."""
         if value is None:
             return None
@@ -109,19 +90,19 @@ class ARRAY(TypeDecorator):
     impl = TEXT
     cache_ok = True
 
-    def __init__(self, item_type=None, *args, **kwargs):
+    def __init__(self, item_type: Any = None, *args: Any, **kwargs: Any) -> None:
         """Initialize ARRAY type."""
         super().__init__(*args, **kwargs)
         self.item_type = item_type
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Any) -> TypeEngine[Any]:
         """Select ARRAY for PostgreSQL, TEXT for others."""
         if dialect.name == "postgresql":
-            return dialect.type_descriptor(PG_ARRAY(self.item_type) if self.item_type else PG_ARRAY())
-        else:
-            return dialect.type_descriptor(TEXT())
+            pg_item_type = self.item_type or TEXT()
+            return dialect.type_descriptor(PG_ARRAY(pg_item_type))
+        return dialect.type_descriptor(TEXT())
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:
         """Convert list to JSON array string for SQLite."""
         if value is None:
             return None
@@ -129,7 +110,7 @@ class ARRAY(TypeDecorator):
             return value
         return json.dumps(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Any) -> Any:
         """Convert JSON array string to list for SQLite."""
         if value is None:
             return None

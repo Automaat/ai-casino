@@ -29,12 +29,16 @@ async def setup_reddit_tables():
 
     # Create metadata with only Reddit tables
     reddit_metadata = MetaData()
-    reddit_metadata._add_table(RedditPostORM.__table__.name, RedditPostORM.__table__.schema, RedditPostORM.__table__)
+    reddit_metadata._add_table(
+        RedditPostORM.__table__.name, RedditPostORM.__table__.schema, RedditPostORM.__table__
+    )
     reddit_metadata._add_table(
         RedditCommentORM.__table__.name, RedditCommentORM.__table__.schema, RedditCommentORM.__table__
     )
     reddit_metadata._add_table(
-        RedditTickerMentionORM.__table__.name, RedditTickerMentionORM.__table__.schema, RedditTickerMentionORM.__table__
+        RedditTickerMentionORM.__table__.name,
+        RedditTickerMentionORM.__table__.schema,
+        RedditTickerMentionORM.__table__,
     )
 
     # Create tables

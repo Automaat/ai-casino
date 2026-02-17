@@ -1,13 +1,12 @@
 """ORM models for Reddit data storage."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import text
 
 from src.database.models.base import Base
 from src.database.types import UUID

@@ -97,9 +97,7 @@ class RedditPlaywrightScraper:
         playwright = await self._playwright_context.__aenter__()
 
         # Random viewport
-        self._viewport_width = random.randint(
-            self.config.viewport_width_min, self.config.viewport_width_max
-        )
+        self._viewport_width = random.randint(self.config.viewport_width_min, self.config.viewport_width_max)
         self._viewport_height = random.randint(
             self.config.viewport_height_min, self.config.viewport_height_max
         )
@@ -255,6 +253,98 @@ class RedditPlaywrightScraper:
             await page.close()
             await context.close()
 
+    async def _extract_reddit_id(self, container: ElementHandle) -> str | None:
+        """Extract Reddit ID from container.
+
+        Args:
+            container: Post container element
+
+        Returns:
+            Reddit ID or None if not found
+        """
+        reddit_id_attr = await container.get_attribute("data-fullname")
+        if not reddit_id_attr:
+            return None
+        return reddit_id_attr.replace("t3_", "")
+
+    async def _extract_title_and_url(self, container: ElementHandle) -> tuple[str, str]:
+        """Extract title and URL from container.
+
+        Args:
+            container: Post container element
+
+        Returns:
+            Tuple of (title, url)
+        """
+        title_elem = await container.query_selector("a.title")
+        title = await title_elem.text_content() if title_elem else ""
+        title = title.strip() if title else ""
+
+        url = await title_elem.get_attribute("href") if title_elem else None
+        if url and not url.startswith("http"):
+            url = f"https://old.reddit.com{url}"
+        if not url:
+            url = ""
+
+        return title, url
+
+    async def _extract_score(self, container: ElementHandle) -> int:
+        """Extract score from container.
+
+        Args:
+            container: Post container element
+
+        Returns:
+            Score as integer
+        """
+        score_elem = await container.query_selector("div.score.unvoted")
+        score_text = await score_elem.text_content() if score_elem else "0"
+        score_text = score_text.strip().replace("•", "").strip() if score_text else "0"
+        try:
+            return int(score_text) if score_text and score_text.isdigit() else 0
+        except ValueError:
+            return 0
+
+    async def _extract_comments_count(self, container: ElementHandle) -> int:
+        """Extract comments count from container.
+
+        Args:
+            container: Post container element
+
+        Returns:
+            Number of comments
+        """
+        comments_elem = await container.query_selector("a.comments")
+        comments_text = await comments_elem.text_content() if comments_elem else "0 comments"
+        if not comments_text or "comment" not in comments_text:
+            return 0
+
+        num_text = comments_text.split()[0]
+        try:
+            return int(num_text) if num_text.isdigit() else 0
+        except ValueError:
+            return 0
+
+    async def _extract_timestamp(self, container: ElementHandle) -> datetime:
+        """Extract timestamp from container.
+
+        Args:
+            container: Post container element
+
+        Returns:
+            Post creation datetime
+        """
+        time_elem = await container.query_selector("time")
+        if time_elem:
+            timestamp_attr = await time_elem.get_attribute("datetime")
+            if timestamp_attr:
+                try:
+                    return datetime.fromisoformat(timestamp_attr)
+                except (ValueError, AttributeError):
+                    logger.debug(f"Failed to parse timestamp: {timestamp_attr}")
+
+        return datetime.now(UTC)
+
     async def _extract_post(self, container: ElementHandle, subreddit: str) -> RedditPost | None:
         """Extract post data from container element.
 
@@ -266,63 +356,19 @@ class RedditPlaywrightScraper:
             RedditPost or None if extraction fails
         """
         try:
-            # Reddit ID
-            reddit_id_attr = await container.get_attribute("data-fullname")
-            if not reddit_id_attr:
+            reddit_id = await self._extract_reddit_id(container)
+            if not reddit_id:
                 return None
-            reddit_id = reddit_id_attr.replace("t3_", "")
 
-            # Title
-            title_elem = await container.query_selector("a.title")
-            title = await title_elem.text_content() if title_elem else ""
-            title = title.strip() if title else ""
-
-            # URL
-            url_elem = await container.query_selector("a.title")
-            url = await url_elem.get_attribute("href") if url_elem else None
-            if url and not url.startswith("http"):
-                url = f"https://old.reddit.com{url}"
-            if not url:
-                url = ""
-
-            # Score
-            score_elem = await container.query_selector("div.score.unvoted")
-            score_text = await score_elem.text_content() if score_elem else "0"
-            score_text = score_text.strip().replace("•", "").strip() if score_text else "0"
-            try:
-                score = int(score_text) if score_text and score_text.isdigit() else 0
-            except ValueError:
-                score = 0
-
-            # Comments count
-            comments_elem = await container.query_selector("a.comments")
-            comments_text = await comments_elem.text_content() if comments_elem else "0 comments"
-            num_comments = 0
-            if comments_text and "comment" in comments_text:
-                num_text = comments_text.split()[0]
-                try:
-                    num_comments = int(num_text) if num_text.isdigit() else 0
-                except ValueError:
-                    num_comments = 0
+            title, url = await self._extract_title_and_url(container)
+            score = await self._extract_score(container)
+            num_comments = await self._extract_comments_count(container)
+            created_utc = await self._extract_timestamp(container)
 
             # Body (self-posts only)
             body_elem = await container.query_selector("div.usertext-body div.md")
             body = await body_elem.text_content() if body_elem else ""
             body = body.strip() if body else ""
-
-            # Created UTC (extract from time element)
-            created_utc = datetime.now(UTC)
-            time_elem = await container.query_selector("time")
-            if time_elem:
-                timestamp_attr = await time_elem.get_attribute("datetime")
-                if timestamp_attr:
-                    try:
-                        created_utc = datetime.fromisoformat(timestamp_attr.replace("Z", "+00:00"))
-                    except (ValueError, AttributeError):
-                        logger.debug(f"Failed to parse timestamp: {timestamp_attr}")
-
-            # Upvote ratio (not available on listing, use sentinel)
-            upvote_ratio = 0.0  # Sentinel value (real data requires post detail page)
 
             return RedditPost(
                 id=reddit_id,
@@ -330,7 +376,7 @@ class RedditPlaywrightScraper:
                 body=body,
                 subreddit=subreddit,
                 score=score,
-                upvote_ratio=upvote_ratio,
+                upvote_ratio=0.0,  # Sentinel value (not available on listing)
                 url=url,
                 created_utc=created_utc,
                 num_comments=num_comments,

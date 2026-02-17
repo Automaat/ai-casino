@@ -107,6 +107,89 @@ Ignore:
 
 Extract tickers:"""
 
+    def _build_extraction_input(
+        self, post: RedditPost, comments: list[RedditComment] | None
+    ) -> tuple[str, str | None, list[RedditComment] | None]:
+        """Build input text and truncate if needed.
+
+        Args:
+            post: RedditPost to extract from
+            comments: Optional list of comments
+
+        Returns:
+            Tuple of (input_text, truncated_body, truncated_comments)
+        """
+        input_parts = [f"Title: {post.title}"]
+        if post.body:
+            input_parts.append(f"Body: {post.body}")
+        if comments:
+            top_comments = sorted(comments, key=lambda c: c.score, reverse=True)[:3]
+            for idx, comment in enumerate(top_comments, 1):
+                input_parts.append(f"Comment {idx}: {comment.body}")
+
+        input_text = "\n\n".join(input_parts)
+        truncated_body, truncated_comments = self._truncate_content(post, comments, input_text)
+        return input_text, truncated_body, truncated_comments
+
+    def _prepare_prompt(
+        self, post: RedditPost, truncated_body: str | None, truncated_comments: list[RedditComment] | None
+    ) -> str:
+        """Prepare extraction prompt with fallback.
+
+        Args:
+            post: Reddit post
+            truncated_body: Truncated post body
+            truncated_comments: Truncated comments list
+
+        Returns:
+            Formatted prompt string
+        """
+        try:
+            return self.prompt_loader.load(
+                "ticker_extraction",
+                title=post.title,
+                body=truncated_body or "(no body)",
+                comments="\n".join(
+                    f"{idx}. {c.body[:200]}" for idx, c in enumerate(truncated_comments[:3], 1)
+                )
+                if truncated_comments
+                else "(no comments)",
+            )
+        except Exception:
+            logger.opt(exception=True).warning("Failed to load prompt template, using fallback")
+            return self._build_fallback_prompt(post, truncated_body, truncated_comments)
+
+    def _filter_and_validate_mentions(
+        self, mentions: list[TickerMention], total_mentions: int
+    ) -> list[TickerMention]:
+        """Filter mentions by confidence and validate symbols.
+
+        Args:
+            mentions: Raw mentions from LLM
+            total_mentions: Total count before filtering
+
+        Returns:
+            List of valid, normalized mentions
+        """
+        high_confidence = [m for m in mentions if m.confidence >= self.config.extraction_min_confidence]
+
+        valid_mentions = []
+        for mention in high_confidence:
+            if self._is_valid_symbol(mention.symbol):
+                normalized_mention = TickerMention(
+                    symbol=mention.symbol,
+                    sentiment=self._normalize_sentiment(mention.sentiment),
+                    context=mention.context,
+                    confidence=mention.confidence,
+                )
+                valid_mentions.append(normalized_mention)
+
+        if len(valid_mentions) < total_mentions:
+            filtered_count = total_mentions - len(valid_mentions)
+            logger.debug(f"Filtered out {filtered_count} mentions (low confidence or invalid symbols)")
+
+        return valid_mentions
+
     async def extract_tickers(
         self,
         post: RedditPost,
@@ -124,36 +207,10 @@ Extract tickers:"""
         if not self.config.use_llm_extraction:
             return []
 
-        # Build input text for length check
-        input_parts = [f"Title: {post.title}"]
-        if post.body:
-            input_parts.append(f"Body: {post.body}")
-        if comments:
-            top_comments = sorted(comments, key=lambda c: c.score, reverse=True)[:3]
-            for idx, comment in enumerate(top_comments, 1):
-                input_parts.append(f"Comment {idx}: {comment.body}")
-
-        input_text = "\n\n".join(input_parts)
-        truncated_body, truncated_comments = self._truncate_content(post, comments, input_text)
-
-        # Load and render prompt
-        try:
-            prompt = self.prompt_loader.load(
-                "ticker_extraction",
-                title=post.title,
-                body=truncated_body or "(no body)",
-                comments="\n".join(
-                    f"{idx}. {c.body[:200]}" for idx, c in enumerate(truncated_comments[:3], 1)
-                )
-                if truncated_comments
-                else "(no comments)",
-            )
-        except Exception:
-            logger.opt(exception=True).warning("Failed to load prompt template, using fallback")
-            prompt = self._build_fallback_prompt(post, truncated_body, truncated_comments)
+        _, truncated_body, truncated_comments = self._build_extraction_input(post, comments)
+        prompt = self._prepare_prompt(post, truncated_body, truncated_comments)
 
         try:
-            # Use LLM structured output with timeout
             response = await asyncio.wait_for(
                 self.llm_client.astructured(
                     prompt=prompt,
@@ -163,30 +220,7 @@ Extract tickers:"""
                 timeout=self.config.extraction_timeout_s,
             )
 
-            # Filter by confidence threshold
-            high_confidence_mentions = [
-                mention
-                for mention in response.mentions
-                if mention.confidence >= self.config.extraction_min_confidence
-            ]
-
-            # Normalize sentiment and validate symbols
-            valid_mentions = []
-            for mention in high_confidence_mentions:
-                if self._is_valid_symbol(mention.symbol):
-                    # Normalize sentiment before adding
-                    normalized_mention = TickerMention(
-                        symbol=mention.symbol,
-                        sentiment=self._normalize_sentiment(mention.sentiment),
-                        context=mention.context,
-                        confidence=mention.confidence,
-                    )
-                    valid_mentions.append(normalized_mention)
-
-            if len(valid_mentions) < len(response.mentions):
-                filtered_count = len(response.mentions) - len(valid_mentions)
-                logger.debug(f"Filtered out {filtered_count} mentions (low confidence or invalid symbols)")
-
+            valid_mentions = self._filter_and_validate_mentions(response.mentions, len(response.mentions))
             logger.info(f"Extracted {len(valid_mentions)} tickers from post {post.id} (r/{post.subreddit})")
             return valid_mentions
 

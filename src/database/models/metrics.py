@@ -16,9 +16,7 @@ class SupervisorMetricsORM(Base):
 
     __tablename__ = "supervisor_metrics"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID, primary_key=True, server_default=text("uuid_generate_v4()")
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, server_default=text("uuid_generate_v4()"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
 
     # Identifiers
