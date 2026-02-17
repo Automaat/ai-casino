@@ -447,9 +447,9 @@ class DaemonState(BaseModel):
         """Delegate to discovery manager."""
         return await self.discovery.get_active_discovery_symbols()
 
-    async def get_last_discovery(self) -> datetime | None:
+    async def get_last_discovery(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last discovery timestamp."""
-        return await self.discovery.get_last_discovery()
+        return await self.discovery.get_last_discovery(session=session)
 
     async def set_last_discovery(self, value: datetime | None) -> None:
         """Set last discovery timestamp."""

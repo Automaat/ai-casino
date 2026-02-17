@@ -536,6 +536,26 @@ export interface DiscoveryInsightsResponse {
 	total_discoveries: number;
 }
 
+export interface ActiveDiscoverySourceDetail {
+	source_type: string;
+	weight: number;
+}
+
+export interface ActiveDiscoveryCandidate {
+	symbol: string;
+	discovered_at: string;
+	composite_score: number;
+	sources: ActiveDiscoverySourceDetail[];
+	ttl_expires_at: string;
+	time_remaining_minutes: number;
+}
+
+export interface ActiveDiscoveryResponse {
+	candidates: ActiveDiscoveryCandidate[];
+	count: number;
+	last_discovery: string | null;
+}
+
 export interface PositionManagementActionResponse {
 	action_type: string;
 	timestamp: string;

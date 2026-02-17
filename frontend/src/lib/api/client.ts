@@ -240,6 +240,14 @@ export const api = {
 		return fetchAPI<T.DiscoveryInsightsResponse>('/api/discovery/insights');
 	},
 
+	async getActiveDiscovery(
+		sourceFilter: 'all' | 'batch' | 'continuous' = 'all'
+	): Promise<T.ActiveDiscoveryResponse> {
+		return fetchAPI<T.ActiveDiscoveryResponse>(
+			`/api/discovery/active?source_filter=${sourceFilter}`
+		);
+	},
+
 	// Trades
 	async getTrades(params?: {
 		limit?: number;

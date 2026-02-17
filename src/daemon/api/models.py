@@ -516,6 +516,32 @@ class DiscoveryInsightsResponse(BaseModel):
     total_discoveries: int = Field(description="Total discoveries in period")
 
 
+class ActiveDiscoverySourceDetail(BaseModel):
+    """Source detail for active discovery candidate."""
+
+    source_type: str = Field(description="Source type")
+    weight: float = Field(description="Source weight")
+
+
+class ActiveDiscoveryCandidate(BaseModel):
+    """Active discovery candidate."""
+
+    symbol: str = Field(description="Stock symbol")
+    discovered_at: datetime = Field(description="Discovery timestamp")
+    composite_score: float = Field(description="Composite score")
+    sources: list[ActiveDiscoverySourceDetail] = Field(description="Discovery sources")
+    ttl_expires_at: datetime = Field(description="TTL expiration")
+    time_remaining_minutes: int = Field(description="Minutes until expiration")
+
+
+class ActiveDiscoveryResponse(BaseModel):
+    """Active discovery candidates response."""
+
+    candidates: list[ActiveDiscoveryCandidate] = Field(description="Active candidates")
+    count: int = Field(description="Number of active candidates")
+    last_discovery: datetime | None = Field(default=None, description="Last discovery run timestamp")
+
+
 class PositionManagementActionResponse(BaseModel):
     """Single position management action."""
 
@@ -767,6 +793,9 @@ class ScreeningInsightsResponse(BaseModel):
 __all__ = [
     "AccuracyByTypeListResponse",
     "AccuracyByTypeResponse",
+    "ActiveDiscoveryCandidate",
+    "ActiveDiscoveryResponse",
+    "ActiveDiscoverySourceDetail",
     "ActiveExecutionGraphsResponse",
     "AnalysesResponse",
     "AnalysisRecordResponse",
