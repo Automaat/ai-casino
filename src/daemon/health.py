@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -327,7 +327,10 @@ class HealthChecker:
             )
 
     async def _check_finnhub(self) -> ServiceCheckResult:
-        """Check Finnhub API connectivity."""
+        """Check Finnhub API connectivity.
+
+        Uses free endpoint when premium disabled, premium endpoint when enabled.
+        """
         api_key = self.config.api_keys.finnhub_api_key or os.getenv("FINNHUB_API_KEY")
         if not api_key:
             return ServiceCheckResult(
@@ -338,19 +341,56 @@ class HealthChecker:
                 checked_at=datetime.now(UTC),
             )
 
+        # Select endpoint based on enabled features
+        enable_social = self.config.data_sources.finnhub_premium.enable_social_sentiment
+        enable_news = self.config.data_sources.finnhub_premium.enable_news_sentiment
+
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://finnhub.io/api/v1/news-sentiment",
-                    params={"symbol": "SPY", "token": api_key},
-                )
+                if enable_news:
+                    # Check news sentiment endpoint (covers both if both enabled)
+                    response = await client.get(
+                        "https://finnhub.io/api/v1/news-sentiment",
+                        params={"symbol": "SPY", "token": api_key},
+                    )
+                elif enable_social:
+                    # Check social sentiment endpoint
+                    response = await client.get(
+                        "https://finnhub.io/api/v1/stock/social-sentiment",
+                        params={"symbol": "SPY", "token": api_key},
+                    )
+                else:
+                    # Check free endpoint (use recent 30-day window)
+                    today = datetime.now(UTC).date()
+                    from_date = (today - timedelta(days=30)).isoformat()
+                    to_date = today.isoformat()
+                    response = await client.get(
+                        "https://finnhub.io/api/v1/company-news",
+                        params={
+                            "symbol": "AAPL",
+                            "from": from_date,
+                            "to": to_date,
+                            "token": api_key,
+                        },
+                    )
                 response.raise_for_status()
+
             duration = (time.perf_counter() - start) * 1000
             return ServiceCheckResult(
                 service="finnhub",
                 status=ServiceStatus.HEALTHY,
                 message="API responding normally",
+                duration_ms=duration,
+                checked_at=datetime.now(UTC),
+            )
+
+        except httpx.HTTPStatusError as e:
+            duration = (time.perf_counter() - start) * 1000
+            return ServiceCheckResult(
+                service="finnhub",
+                status=ServiceStatus.UNHEALTHY,
+                message=f"HTTP {e.response.status_code}",
                 duration_ms=duration,
                 checked_at=datetime.now(UTC),
             )

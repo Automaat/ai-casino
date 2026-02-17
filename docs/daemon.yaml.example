@@ -1075,6 +1075,14 @@ daemon:
     # Use alpha_vantage for higher data quality if you have API key
     market_data: "yfinance"
 
+    # Finnhub premium features (requires paid subscription, disabled by default)
+    # Free tier includes company-news and market-news (always enabled)
+    finnhub_premium:
+      # Social sentiment from Reddit/Twitter (premium only, ~$50/month)
+      enable_social_sentiment: false
+      # News sentiment indicators with buzz metrics (premium only, ~$50/month)
+      enable_news_sentiment: false
+
   # Profiling Configuration (performance monitoring)
   profiling:
     # Enable per-cycle CPU profiling with yappi (default: false)

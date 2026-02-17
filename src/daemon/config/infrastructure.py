@@ -78,10 +78,18 @@ class LLMConfig(BaseModel):
     ollama_base_url: str = "http://localhost:11434"
 
 
+class FinnhubSourcesConfig(BaseModel):
+    """Finnhub premium feature toggles."""
+
+    enable_social_sentiment: bool = False
+    enable_news_sentiment: bool = False
+
+
 class DataSourcesConfig(BaseModel):
     """Data sources configuration."""
 
     market_data: Literal["yfinance", "alpha_vantage"] = "yfinance"
+    finnhub_premium: FinnhubSourcesConfig = Field(default_factory=FinnhubSourcesConfig)
 
 
 class ApiKeysConfig(BaseModel):

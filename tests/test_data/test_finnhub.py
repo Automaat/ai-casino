@@ -54,7 +54,12 @@ def mock_indicator_response():
 @pytest.fixture
 def fetcher(tmp_path):
     """Create FinnhubFetcher with temp cache dir and mock API key."""
-    return FinnhubFetcher(cache_dir=str(tmp_path / "cache"), api_key="test_api_key")
+    return FinnhubFetcher(
+        cache_dir=str(tmp_path / "cache"),
+        api_key="test_api_key",
+        enable_social_sentiment=True,
+        enable_news_sentiment=True,
+    )
 
 
 class TestSocialSentimentEntry:

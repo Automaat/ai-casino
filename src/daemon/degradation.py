@@ -126,11 +126,21 @@ class DegradationPolicy:
         }
 
     def _build_service_mapping(self) -> dict[str, list[AgentType]]:
-        """Map health check services to dependent agents."""
+        """Map health check services to dependent agents.
+
+        Finnhub only affects agents when premium features enabled.
+        """
+        # Map features to agents granularly
+        finnhub_agents = []
+        if self.config.data_sources.finnhub_premium.enable_social_sentiment:
+            finnhub_agents.append(AgentType.SOCIAL)
+        if self.config.data_sources.finnhub_premium.enable_news_sentiment:
+            finnhub_agents.append(AgentType.FUNDAMENTAL)
+
         return {
             "alpha_vantage": [AgentType.TECHNICAL],
             "marketaux": [AgentType.SENTIMENT, AgentType.NEWS],
-            "finnhub": [AgentType.FUNDAMENTAL, AgentType.SOCIAL],
+            "finnhub": finnhub_agents,
         }
 
     def evaluate_degradation(self, health_report: HealthReport | None) -> DegradationContext:

@@ -27,6 +27,7 @@ from src.daemon.config.infrastructure import (
     DatabaseConfig,
     DataSourcesConfig,
     FinBERTConfig,
+    FinnhubSourcesConfig,
     LLMConfig,
     PrefetchConfig,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "EventWatcherIntegrationConfig",
     "FilingsWatcherConfig",
     "FinBERTConfig",
+    "FinnhubSourcesConfig",
     "GamePlanConfig",
     "HealthConfig",
     "JournalConfig",
@@ -238,6 +240,7 @@ class DaemonConfig(BaseModel):
         sections["circuit_breaker"] = sections["api"].pop("circuit_breaker", {}) or {}
         sections["adaptive_thresholds"] = sections["coordinator"].pop("adaptive_thresholds", {}) or {}
         sections["pattern_detection"] = sections["coordinator"].pop("pattern_detection", {}) or {}
+        sections["finnhub_premium"] = sections["data_sources"].pop("finnhub_premium", {}) or {}
 
         return sections
 
@@ -302,7 +305,10 @@ class DaemonConfig(BaseModel):
             llm=LLMConfig(**sections["llm"]),
             finbert=FinBERTConfig(**sections["finbert"]),
             api_keys=ApiKeysConfig(**sections["api_keys"]),
-            data_sources=DataSourcesConfig(**sections["data_sources"]),
+            data_sources=DataSourcesConfig(
+                **sections["data_sources"],
+                finnhub_premium=FinnhubSourcesConfig(**sections["finnhub_premium"]),
+            ),
             database=DatabaseConfig(**sections["database"]),
             coordinator=CoordinatorConfig(
                 **sections["coordinator"],
