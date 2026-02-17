@@ -224,7 +224,9 @@ async def test_extract_tickers_truncates_long_content(extractor, mock_llm_client
 
 
 @pytest.mark.unit
-async def test_extract_tickers_includes_top_comments(extractor, mock_llm_client, sample_post, sample_comments):
+async def test_extract_tickers_includes_top_comments(
+    extractor, mock_llm_client, sample_post, sample_comments
+):
     """Test that top comments are included in extraction."""
     mock_response = TickerExtractionResponse(mentions=[])
     mock_llm_client.astructured.return_value = mock_response

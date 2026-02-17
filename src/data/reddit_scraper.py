@@ -5,10 +5,9 @@ import json
 import random
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
-from playwright.async_api import Browser, Page, async_playwright
+from playwright.async_api import Browser, ElementHandle, Page, async_playwright
 from playwright_stealth import Stealth
 
 from src.cache.historical import HistoricalCache
@@ -17,13 +16,31 @@ from src.data.reddit import RedditComment, RedditPost
 
 # User agent pool (realistic Chrome/Firefox 2024-2026)
 USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.2 Safari/605.1.15"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+    ),
+    ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
     "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0",
@@ -53,12 +70,17 @@ class RedditPlaywrightScraper:
         self._cookie_file = Path.home() / ".ai-casino" / "cache" / "reddit_cookies.json"
         self._cookie_file.parent.mkdir(parents=True, exist_ok=True)
 
-    async def __aenter__(self) -> "RedditPlaywrightScraper":
+    async def __aenter__(self) -> RedditPlaywrightScraper:
         """Enter async context manager."""
         await self.start()
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
         """Exit async context manager."""
         await self.close()
 
@@ -85,7 +107,8 @@ class RedditPlaywrightScraper:
         )
 
         logger.info(
-            f"Playwright browser started (headless={self.config.headless}, viewport={viewport_width}x{viewport_height})"
+            f"Playwright browser started (headless={self.config.headless}, "
+            f"viewport={viewport_width}x{viewport_height})"
         )
 
     async def close(self) -> None:
@@ -163,7 +186,9 @@ class RedditPlaywrightScraper:
         if not self._browser:
             await self.start()
 
-        assert self._browser is not None
+        if not self._browser:
+            msg = "Browser failed to start"
+            raise RuntimeError(msg)
 
         # Create new page with random user agent
         user_agent = random.choice(USER_AGENTS)
@@ -219,7 +244,7 @@ class RedditPlaywrightScraper:
             await page.close()
             await context.close()
 
-    async def _extract_post(self, container: Any, subreddit: str) -> RedditPost | None:
+    async def _extract_post(self, container: ElementHandle, subreddit: str) -> RedditPost | None:
         """Extract post data from container element.
 
         Args:
@@ -239,18 +264,20 @@ class RedditPlaywrightScraper:
             # Title
             title_elem = await container.query_selector("a.title")
             title = await title_elem.text_content() if title_elem else ""
-            title = title.strip()
+            title = title.strip() if title else ""
 
             # URL
             url_elem = await container.query_selector("a.title")
-            url = await url_elem.get_attribute("href") if url_elem else ""
+            url = await url_elem.get_attribute("href") if url_elem else None
             if url and not url.startswith("http"):
                 url = f"https://old.reddit.com{url}"
+            if not url:
+                url = ""
 
             # Score
             score_elem = await container.query_selector("div.score.unvoted")
             score_text = await score_elem.text_content() if score_elem else "0"
-            score_text = score_text.strip().replace("•", "").strip()
+            score_text = score_text.strip().replace("•", "").strip() if score_text else "0"
             try:
                 score = int(score_text) if score_text and score_text.isdigit() else 0
             except ValueError:
@@ -270,7 +297,7 @@ class RedditPlaywrightScraper:
             # Body (self-posts only)
             body_elem = await container.query_selector("div.usertext-body div.md")
             body = await body_elem.text_content() if body_elem else ""
-            body = body.strip()
+            body = body.strip() if body else ""
 
             # Upvote ratio (estimate from score, not available on listing)
             upvote_ratio = 0.8  # Default estimate
@@ -311,7 +338,9 @@ class RedditPlaywrightScraper:
         if not self._browser:
             await self.start()
 
-        assert self._browser is not None
+        if not self._browser:
+            msg = "Browser failed to start"
+            raise RuntimeError(msg)
 
         # Create new page with random user agent
         user_agent = random.choice(USER_AGENTS)
@@ -354,7 +383,7 @@ class RedditPlaywrightScraper:
             await page.close()
             await context.close()
 
-    async def _extract_comment(self, container: Any, parent_post_id: str) -> RedditComment | None:
+    async def _extract_comment(self, container: ElementHandle, parent_post_id: str) -> RedditComment | None:
         """Extract comment data from container element.
 
         Args:
@@ -374,7 +403,7 @@ class RedditPlaywrightScraper:
             # Body
             body_elem = await container.query_selector("div.md")
             body = await body_elem.text_content() if body_elem else ""
-            body = body.strip()
+            body = body.strip() if body else ""
 
             if not body:
                 return None
@@ -382,7 +411,7 @@ class RedditPlaywrightScraper:
             # Score
             score_elem = await container.query_selector("span.score.unvoted")
             score_text = await score_elem.text_content() if score_elem else "1"
-            score_text = score_text.strip().split()[0]  # "123 points" -> "123"
+            score_text = score_text.strip().split()[0] if score_text else "1"  # "123 points" -> "123"
             try:
                 score = int(score_text) if score_text.lstrip("-").isdigit() else 1
             except ValueError:

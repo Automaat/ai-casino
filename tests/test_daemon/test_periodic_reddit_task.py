@@ -150,8 +150,14 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
         patch("src.daemon.tasks.data_tasks.get_session") as mock_get_session,
         patch("src.daemon.tasks.data_tasks.RedditPostRepository", return_value=mock_post_repo),
         patch("src.daemon.tasks.data_tasks.RedditCommentRepository", return_value=mock_comment_repo),
-        patch("src.daemon.tasks.data_tasks.RedditTickerMentionRepository", return_value=mock_mention_repo),
-        patch("src.daemon.tasks.data_tasks.RedditTickerSentimentRepository", return_value=mock_sentiment_repo),
+        patch(
+            "src.daemon.tasks.data_tasks.RedditTickerMentionRepository",
+            return_value=mock_mention_repo,
+        ),
+        patch(
+            "src.daemon.tasks.data_tasks.RedditTickerSentimentRepository",
+            return_value=mock_sentiment_repo,
+        ),
     ):
         mock_get_session.return_value.__aenter__.return_value = mock_session
 
@@ -184,9 +190,7 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
     mock_scraper.close = AsyncMock()
 
     # First subreddit succeeds, second fails
-    mock_scraper.scrape_subreddit_posts = AsyncMock(
-        side_effect=[sample_posts, Exception("Subreddit banned")]
-    )
+    mock_scraper.scrape_subreddit_posts = AsyncMock(side_effect=[sample_posts, Exception("Subreddit banned")])
     mock_scraper.scrape_post_comments = AsyncMock(return_value=[])
 
     mock_extractor = Mock()
@@ -207,8 +211,14 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
         patch("src.daemon.tasks.data_tasks.get_session") as mock_get_session,
         patch("src.daemon.tasks.data_tasks.RedditPostRepository", return_value=mock_post_repo),
         patch("src.daemon.tasks.data_tasks.RedditCommentRepository", return_value=mock_comment_repo),
-        patch("src.daemon.tasks.data_tasks.RedditTickerMentionRepository", return_value=mock_mention_repo),
-        patch("src.daemon.tasks.data_tasks.RedditTickerSentimentRepository", return_value=mock_sentiment_repo),
+        patch(
+            "src.daemon.tasks.data_tasks.RedditTickerMentionRepository",
+            return_value=mock_mention_repo,
+        ),
+        patch(
+            "src.daemon.tasks.data_tasks.RedditTickerSentimentRepository",
+            return_value=mock_sentiment_repo,
+        ),
     ):
         mock_get_session.return_value.__aenter__.return_value = mock_session
 

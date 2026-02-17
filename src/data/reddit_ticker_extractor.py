@@ -25,7 +25,7 @@ class RedditTickerExtractor:
 
     def __init__(
         self,
-        llm_client: "LLMClient",
+        llm_client: LLMClient,
         config: RedditScraperConfig,
     ) -> None:
         """Initialize Reddit ticker extractor.

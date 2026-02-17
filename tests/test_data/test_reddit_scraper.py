@@ -1,13 +1,11 @@
 """Tests for RedditPlaywrightScraper."""
 
-from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.daemon.config.reddit import RedditScraperConfig
-from src.data.reddit import RedditComment, RedditPost
 from src.data.reddit_scraper import RedditPlaywrightScraper
 
 
@@ -107,18 +105,18 @@ async def test_extract_post_from_html(scraper, tmp_path):
 
     # Mock Playwright page with fixture HTML
     mock_container = MagicMock()
-    mock_container.get_attribute = MagicMock(side_effect=lambda attr: {
-        "data-fullname": "t3_abc123",
-    }.get(attr))
+    attr_map = {"data-fullname": "t3_abc123"}
+    mock_container.get_attribute = MagicMock(side_effect=attr_map.get)
 
     # Mock selectors
     title_elem = MagicMock()
     title_elem.text_content = AsyncMock(return_value="TSLA to the moon! 🚀")
-    mock_container.query_selector = MagicMock(side_effect=lambda sel: {
+    selector_map = {
         "a.title": title_elem,
         "div.score.unvoted": MagicMock(text_content=AsyncMock(return_value="2500")),
         "a.comments": MagicMock(text_content=AsyncMock(return_value="150 comments")),
-    }.get(sel))
+    }
+    mock_container.query_selector = MagicMock(side_effect=selector_map.get)
 
     # Test extraction
     post = await scraper._extract_post(mock_container, "wallstreetbets")
@@ -141,10 +139,11 @@ async def test_extract_comment_from_html(scraper):
     body_elem = MagicMock()
     body_elem.text_content = AsyncMock(return_value="TSLA $350 by EOW! This is the way 🚀")
 
-    mock_container.query_selector = MagicMock(side_effect=lambda sel: {
+    comment_selector_map = {
         "div.md": body_elem,
         "div.score.unvoted": MagicMock(text_content=AsyncMock(return_value="450")),
-    }.get(sel))
+    }
+    mock_container.query_selector = MagicMock(side_effect=comment_selector_map.get)
 
     comment = await scraper._extract_comment(mock_container, "t3_abc123")
 
