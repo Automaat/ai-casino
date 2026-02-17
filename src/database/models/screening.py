@@ -132,7 +132,7 @@ class GamePlanRecordORM(Base):
     __table_args__ = (
         Index("idx_game_plan_records_timestamp", "timestamp"),
         Index("idx_game_plan_records_created_at", "created_at"),
-        Index("idx_game_plan_records_generated_at", "generated_at"),
+        Index("idx_game_plan_records_generated_at", "generated_at", postgresql_ops={"generated_at": "DESC"}),
     )
 
     def __repr__(self) -> str:

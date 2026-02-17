@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -44,7 +45,7 @@ class GamePlanRecordRepository(BaseRepository[GamePlanRecord]):
             risk_stance=entity.risk_stance,
             sector_focus=entity.sector_focus,
             reasoning=entity.reasoning,
-            confidence=entity.confidence,
+            confidence=Decimal(str(entity.confidence)) if entity.confidence is not None else None,
             overnight_summary=entity.overnight_summary,
             key_levels=entity.key_levels,
             generated_at=entity.generated_at or datetime.now(UTC),

@@ -208,7 +208,9 @@ class BrokerManager:
                 seen.update(discovery_symbols)
 
                 # Mark discovery history records as added to watchlist
-                await self.state.discovery.mark_candidates_added_to_watchlist(candidates_to_add, session=session)
+                await self.state.discovery.mark_candidates_added_to_watchlist(
+                    candidates_to_add, session=session
+                )
         elif self.config.screening.enabled:
             screening_history = await self.state.get_screening_history(limit=1, session=session)
             if screening_history:
