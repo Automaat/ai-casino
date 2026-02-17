@@ -89,14 +89,20 @@ class RedditPlaywrightScraper:
     async def start(self) -> None:
         """Start Playwright browser."""
         if self._browser:
+            logger.debug("Browser already running, skipping start")
             return
 
+        logger.info("Starting Playwright browser for Reddit scraping")
         self._playwright_context = async_playwright()
         playwright = await self._playwright_context.__aenter__()
 
         # Random viewport
-        self._viewport_width = random.randint(self.config.viewport_width_min, self.config.viewport_width_max)
-        self._viewport_height = random.randint(self.config.viewport_height_min, self.config.viewport_height_max)
+        self._viewport_width = random.randint(
+            self.config.viewport_width_min, self.config.viewport_width_max
+        )
+        self._viewport_height = random.randint(
+            self.config.viewport_height_min, self.config.viewport_height_max
+        )
 
         # Launch browser with anti-detection
         self._browser = await playwright.chromium.launch(

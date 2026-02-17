@@ -213,6 +213,7 @@ class DaemonConfig(BaseModel):
             "analysis_orchestration": daemon_data.pop("analysis_orchestration", {}) or {},
             "news_watcher": daemon_data.pop("news_watcher", {}) or {},
             "social_watcher": daemon_data.pop("social_watcher", {}) or {},
+            "reddit_scraper": daemon_data.pop("reddit_scraper", {}) or {},
             "trump_watcher": daemon_data.pop("trump_watcher", {}) or {},
             "filings_watcher": daemon_data.pop("filings_watcher", {}) or {},
             "anomaly_watcher": daemon_data.pop("anomaly_watcher", {}) or {},
@@ -291,6 +292,7 @@ class DaemonConfig(BaseModel):
                 **sections["news_watcher"], sources=NewsSourcesConfig(**sections["news_sources"])
             ),
             social_watcher=SocialWatcherConfig(**sections["social_watcher"]),
+            reddit_scraper=RedditScraperConfig(**sections["reddit_scraper"]),
             trump_watcher=TrumpWatcherConfig(**sections["trump_watcher"]),
             filings_watcher=FilingsWatcherConfig(**sections["filings_watcher"]),
             anomaly_watcher=AnomalyWatcherConfig(**sections["anomaly_watcher"]),

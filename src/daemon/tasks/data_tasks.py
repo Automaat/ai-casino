@@ -333,12 +333,19 @@ class PeriodicRedditScrapingTask(TaskExecutor):
             self._skipped = True
             return
 
+        cfg = self.components.config.reddit_scraper
+        logger.info(
+            f"Starting Reddit scraping: {len(cfg.high_priority_subreddits)} subreddits, "
+            f"{cfg.posts_per_subreddit} posts each"
+        )
+
         # Initialize scraper and extractor
-        scraper = RedditPlaywrightScraper(config=self.components.config.reddit_scraper)
+        scraper = RedditPlaywrightScraper(config=cfg)
         extractor = RedditTickerExtractor(
             llm_client=self.components.container.llm_client(),
-            config=self.components.config.reddit_scraper,
+            config=cfg,
         )
+        logger.debug(f"Initialized scraper and extractor (LLM={cfg.use_llm_extraction})")
 
         try:
             await scraper.start()
@@ -350,15 +357,18 @@ class PeriodicRedditScrapingTask(TaskExecutor):
             # Scrape each subreddit
             for subreddit in self.components.config.reddit_scraper.high_priority_subreddits:
                 try:
+                    logger.info(f"Scraping r/{subreddit}")
                     # Scrape posts
                     posts = await scraper.scrape_subreddit_posts(
                         subreddit=subreddit,
                         limit=self.components.config.reddit_scraper.posts_per_subreddit,
                     )
                     all_posts.extend(posts)
+                    logger.info(f"Scraped {len(posts)} posts from r/{subreddit}")
 
                     # Scrape comments from top posts
                     top_posts = sorted(posts, key=lambda p: p.score, reverse=True)[:10]
+                    logger.debug(f"Scraping comments from top {len(top_posts)} posts")
                     for post in top_posts:
                         comments = await scraper.scrape_post_comments(
                             post=post,
@@ -368,7 +378,10 @@ class PeriodicRedditScrapingTask(TaskExecutor):
 
                         # Extract tickers
                         if self.components.config.reddit_scraper.use_llm_extraction:
+                            logger.debug(f"Extracting tickers from post {post.id}")
                             mentions = await extractor.extract_tickers(post=post, comments=comments)
+                            if mentions:
+                                logger.info(f"Extracted {len(mentions)} ticker mentions from post {post.id}")
                             all_mentions.append((post, mentions))
 
                 except Exception:

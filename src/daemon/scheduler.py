@@ -321,6 +321,7 @@ class MarketScheduler:
         self.discovery_outcome_time = cfg.discovery_outcome_time
         self.discovery_outcome_days = cfg.discovery_outcome_days or ["mon", "tue", "wed", "thu", "fri"]
         self.enable_discovery_outcome = cfg.enable_discovery_outcome
+        self._reddit_scraping_last_run: datetime | None = None
         logger.info(
             f"MarketScheduler initialized: {cfg.start_time}-{cfg.end_time} {cfg.timezone} "
             f"(pre-market={'enabled' if cfg.enable_pre_market else 'disabled'}, "
@@ -888,6 +889,28 @@ class MarketScheduler:
         target_minutes = target_hour * 60 + target_minute
 
         return abs(current_minutes - target_minutes) <= 1
+
+    def is_reddit_scraping_time(self, interval_minutes: int = 15) -> bool:
+        """Check if enough time elapsed since last Reddit scraping.
+
+        Args:
+            interval_minutes: Interval between scraping runs
+
+        Returns:
+            True if should run now
+        """
+        now = datetime.now(self.timezone)
+
+        if self._reddit_scraping_last_run is None:
+            self._reddit_scraping_last_run = now
+            return True
+
+        elapsed = (now - self._reddit_scraping_last_run).total_seconds() / 60
+        if elapsed >= interval_minutes:
+            self._reddit_scraping_last_run = now
+            return True
+
+        return False
 
     def __repr__(self) -> str:
         """Return string representation."""

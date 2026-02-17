@@ -62,6 +62,13 @@ class ScheduledTaskRunner:
             "discovery.enabled",
             is_async=True,
         ),
+        ScheduledTask(
+            "reddit_scraping",
+            "is_reddit_scraping_time",
+            "_run_reddit_scraping",
+            "reddit_scraper.enabled",
+            is_async=True,
+        ),
     ]
 
     def __init__(
