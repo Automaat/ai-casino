@@ -21,7 +21,6 @@ def create_news_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
-    state: DaemonState | None = None,
 ) -> NewsWatcher | None:
     """Create news watcher with enabled sources.
 
@@ -29,7 +28,6 @@ def create_news_watcher(
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
         container: Optional DI container (auto-created if not provided)
-        state: Optional daemon state for WATCHLIST event persistence
 
     Returns:
         NewsWatcher instance if enabled, None otherwise
@@ -78,7 +76,6 @@ def create_news_watcher(
         historical_cache=historical_cache,
         fetchers=fetchers,
         container=container,
-        state=state,
         poll_interval=config.poll_interval_minutes * 60,
         relevance_threshold=config.relevance_threshold,
         cooldown_minutes=config.cooldown_minutes,
@@ -161,7 +158,6 @@ def create_news_trending_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
-    state: DaemonState | None = None,
 ) -> NewsTrendingWatcher | None:
     """Create news trending watcher for continuous discovery.
 
@@ -169,7 +165,6 @@ def create_news_trending_watcher(
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
         container: Optional DI container (auto-created if not provided)
-        state: Optional daemon state for WATCHLIST event persistence
 
     Returns:
         NewsTrendingWatcher instance if enabled, None otherwise

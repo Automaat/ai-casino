@@ -582,7 +582,6 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
-                state,
             )
 
         if self.config.social_watcher.enabled:
@@ -606,7 +605,6 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
-                state,
             )
 
         logger.info("Event watchers initialized")
