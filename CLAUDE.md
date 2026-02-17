@@ -98,6 +98,22 @@ Markers: `@pytest.mark.unit`, `.integration`, `.slow`. Mock all external APIs.
 
 All deps via `__init__`. Use `dependency-injector` container (`src/di/container.py`). Singletons for stateful services, Factories for per-request.
 
+**Constructor-only injection:** All dependencies pass through `__init__` as non-null typed params. Initialize all instance attributes in `__init__` with defaults (never leave uninitialized). NEVER use setter methods or `| None` for required dependencies.
+
+```python
+# ❌ Setter injection or nullable deps
+class Service:
+    def __init__(self):
+        self.dep: Dependency | None = None
+    def set_dep(self, dep: Dependency): ...
+
+# ✅ Constructor injection with non-null types
+class Service:
+    def __init__(self, dep: Dependency):
+        self.dep = dep
+        self._state = 0  # Initialize all attrs
+```
+
 **CRITICAL:** `providers.Self()` doesn't work with Factory — always pass container explicitly:
 
 ```python
