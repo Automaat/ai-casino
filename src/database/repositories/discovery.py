@@ -182,7 +182,6 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
 
         orm.added_to_watchlist = True
         await self._session.commit()
-        logger.info(f"Marked {symbol} (discovered {discovered_at}) as added to watchlist")
         return True
 
     async def delete_before(self, cutoff: datetime) -> int:
