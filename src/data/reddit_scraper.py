@@ -65,6 +65,8 @@ class RedditPlaywrightScraper:
         self.cache = cache
         self._browser: Browser | None = None
         self._playwright_context = None
+        self._viewport_width = 0
+        self._viewport_height = 0
 
         # Cookie persistence
         self._cookie_file = Path.home() / ".ai-casino" / "cache" / "reddit_cookies.json"
@@ -93,8 +95,8 @@ class RedditPlaywrightScraper:
         playwright = await self._playwright_context.__aenter__()
 
         # Random viewport
-        viewport_width = random.randint(self.config.viewport_width_min, self.config.viewport_width_max)
-        viewport_height = random.randint(self.config.viewport_height_min, self.config.viewport_height_max)
+        self._viewport_width = random.randint(self.config.viewport_width_min, self.config.viewport_width_max)
+        self._viewport_height = random.randint(self.config.viewport_height_min, self.config.viewport_height_max)
 
         # Launch browser with anti-detection
         self._browser = await playwright.chromium.launch(
@@ -108,7 +110,7 @@ class RedditPlaywrightScraper:
 
         logger.info(
             f"Playwright browser started (headless={self.config.headless}, "
-            f"viewport={viewport_width}x{viewport_height})"
+            f"viewport={self._viewport_width}x{self._viewport_height})"
         )
 
     async def close(self) -> None:
@@ -190,9 +192,12 @@ class RedditPlaywrightScraper:
             msg = "Browser failed to start"
             raise RuntimeError(msg)
 
-        # Create new page with random user agent
+        # Create new page with random user agent and viewport
         user_agent = random.choice(USER_AGENTS)
-        context = await self._browser.new_context(user_agent=user_agent)
+        context = await self._browser.new_context(
+            user_agent=user_agent,
+            viewport={"width": self._viewport_width, "height": self._viewport_height},
+        )
         page = await context.new_page()
 
         # Apply stealth
@@ -299,11 +304,19 @@ class RedditPlaywrightScraper:
             body = await body_elem.text_content() if body_elem else ""
             body = body.strip() if body else ""
 
-            # Upvote ratio (estimate from score, not available on listing)
-            upvote_ratio = 0.8  # Default estimate
-
-            # Created UTC (not easily available on listing, use current time)
+            # Created UTC (extract from time element)
             created_utc = datetime.now(UTC)
+            time_elem = await container.query_selector("time")
+            if time_elem:
+                timestamp_attr = await time_elem.get_attribute("datetime")
+                if timestamp_attr:
+                    try:
+                        created_utc = datetime.fromisoformat(timestamp_attr.replace("Z", "+00:00"))
+                    except (ValueError, AttributeError):
+                        logger.debug(f"Failed to parse timestamp: {timestamp_attr}")
+
+            # Upvote ratio (not available on listing, use sentinel)
+            upvote_ratio = 0.0  # Sentinel value (real data requires post detail page)
 
             return RedditPost(
                 id=reddit_id,
@@ -342,9 +355,12 @@ class RedditPlaywrightScraper:
             msg = "Browser failed to start"
             raise RuntimeError(msg)
 
-        # Create new page with random user agent
+        # Create new page with random user agent and viewport
         user_agent = random.choice(USER_AGENTS)
-        context = await self._browser.new_context(user_agent=user_agent)
+        context = await self._browser.new_context(
+            user_agent=user_agent,
+            viewport={"width": self._viewport_width, "height": self._viewport_height},
+        )
         page = await context.new_page()
 
         # Apply stealth
@@ -409,7 +425,7 @@ class RedditPlaywrightScraper:
                 return None
 
             # Score
-            score_elem = await container.query_selector("span.score.unvoted")
+            score_elem = await container.query_selector("div.score.unvoted")
             score_text = await score_elem.text_content() if score_elem else "1"
             score_text = score_text.strip().split()[0] if score_text else "1"  # "123 points" -> "123"
             try:

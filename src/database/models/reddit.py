@@ -120,6 +120,14 @@ class RedditTickerMentionORM(Base):
         Index("idx_reddit_ticker_mentions_symbol_created", "symbol", "created_utc"),
         Index("idx_reddit_ticker_mentions_subreddit", "subreddit"),
         Index("idx_reddit_ticker_mentions_created_utc", "created_utc", postgresql_using="btree"),
+        Index(
+            "idx_reddit_ticker_mentions_unique",
+            "source_type",
+            "source_reddit_id",
+            "symbol",
+            "extraction_method",
+            unique=True,
+        ),
     )
 
     def __repr__(self) -> str:
@@ -159,6 +167,7 @@ class RedditTickerSentimentORM(Base):
         Index("idx_reddit_ticker_sentiment_symbol_window", "symbol", "window_start"),
         Index("idx_reddit_ticker_sentiment_mention_count", "mention_count", postgresql_using="btree"),
         Index("idx_reddit_ticker_sentiment_window_start", "window_start", postgresql_using="btree"),
+        Index("idx_reddit_ticker_sentiment_unique", "symbol", "subreddit", "window_start", unique=True),
     )
 
     def __repr__(self) -> str:

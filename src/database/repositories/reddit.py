@@ -380,12 +380,14 @@ class RedditTickerMentionRepository(BaseRepository[TickerMention]):
             for mention in mentions
         ]
 
-        stmt = insert(RedditTickerMentionORM).values(values)
+        stmt = insert(RedditTickerMentionORM).values(values).on_conflict_do_nothing(
+            index_elements=["source_type", "source_reddit_id", "symbol", "extraction_method"]
+        )
         result: Result = await self._session.execute(stmt)
         await self._session.commit()
 
         inserted_count = getattr(result, "rowcount", 0) or 0
-        logger.debug(f"Inserted {inserted_count} ticker mentions from post {post.id}")
+        logger.debug(f"Inserted {inserted_count} ticker mentions from post {post.id} (deduped)")
         return inserted_count
 
     async def get_by_id(self, entity_id: str) -> TickerMention | None:
@@ -535,11 +537,12 @@ class RedditTickerSentimentRepository(BaseRepository[dict]):
 
         cutoff = datetime.now(UTC) - timedelta(hours=lookback_hours)
 
-        # Aggregate mentions by symbol and subreddit for 1-hour windows
+        # Aggregate mentions by symbol, subreddit, and hour
         query = (
             select(
                 RedditTickerMentionORM.symbol,
                 RedditTickerMentionORM.subreddit,
+                func.date_trunc("hour", RedditTickerMentionORM.created_utc).label("window_start"),
                 func.count(RedditTickerMentionORM.id).label("mention_count"),
                 func.sum(case((RedditTickerMentionORM.sentiment == Sentiment.BULLISH, 1), else_=0)).label(
                     "bullish_count"
@@ -551,11 +554,13 @@ class RedditTickerSentimentRepository(BaseRepository[dict]):
                     "neutral_count"
                 ),
                 func.avg(RedditTickerMentionORM.confidence).label("avg_confidence"),
-                func.min(RedditTickerMentionORM.created_utc).label("window_start"),
-                func.max(RedditTickerMentionORM.created_utc).label("window_end"),
             )
             .where(RedditTickerMentionORM.extracted_at >= cutoff)
-            .group_by(RedditTickerMentionORM.symbol, RedditTickerMentionORM.subreddit)
+            .group_by(
+                RedditTickerMentionORM.symbol,
+                RedditTickerMentionORM.subreddit,
+                func.date_trunc("hour", RedditTickerMentionORM.created_utc),
+            )
         )
 
         result = await self._session.execute(query)
@@ -581,13 +586,15 @@ class RedditTickerSentimentRepository(BaseRepository[dict]):
             raw_score = (bullish - bearish) / total
             avg_sentiment = (raw_score + 1) / 2  # Map [-1, 1] to [0, 1]
 
+            # Window end is 1 hour after start
+            window_end = row.window_start + timedelta(hours=1)
+
             aggregates.append(
                 {
-                    "id": uuid.uuid4(),
                     "symbol": row.symbol,
                     "subreddit": row.subreddit,
                     "window_start": row.window_start,
-                    "window_end": row.window_end,
+                    "window_end": window_end,
                     "mention_count": row.mention_count,
                     "avg_sentiment": Decimal(str(avg_sentiment)),
                     "bullish_count": bullish,
@@ -600,11 +607,25 @@ class RedditTickerSentimentRepository(BaseRepository[dict]):
             )
 
         if aggregates:
+            # Upsert to ensure idempotency
             stmt = insert(RedditTickerSentimentORM).values(aggregates)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol", "subreddit", "window_start"],
+                set_={
+                    "window_end": stmt.excluded.window_end,
+                    "mention_count": stmt.excluded.mention_count,
+                    "avg_sentiment": stmt.excluded.avg_sentiment,
+                    "bullish_count": stmt.excluded.bullish_count,
+                    "bearish_count": stmt.excluded.bearish_count,
+                    "neutral_count": stmt.excluded.neutral_count,
+                    "avg_confidence": stmt.excluded.avg_confidence,
+                    "computed_at": stmt.excluded.computed_at,
+                },
+            )
             result: Result = await self._session.execute(stmt)
             await self._session.commit()
             inserted_count = getattr(result, "rowcount", 0) or 0
-            logger.info(f"Computed {inserted_count} sentiment aggregates")
+            logger.info(f"Upserted {inserted_count} sentiment aggregates")
             return inserted_count
 
         return 0

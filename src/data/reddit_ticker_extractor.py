@@ -1,5 +1,6 @@
 """LLM-based ticker extraction from Reddit content."""
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -152,11 +153,14 @@ Extract tickers:"""
             prompt = self._build_fallback_prompt(post, truncated_body, truncated_comments)
 
         try:
-            # Use LLM structured output
-            response = await self.llm_client.astructured(
-                prompt=prompt,
-                response_model=TickerExtractionResponse,
-                temperature=self.config.extraction_temperature,
+            # Use LLM structured output with timeout
+            response = await asyncio.wait_for(
+                self.llm_client.astructured(
+                    prompt=prompt,
+                    response_model=TickerExtractionResponse,
+                    temperature=self.config.extraction_temperature,
+                ),
+                timeout=self.config.extraction_timeout_s,
             )
 
             # Filter by confidence threshold
@@ -166,10 +170,18 @@ Extract tickers:"""
                 if mention.confidence >= self.config.extraction_min_confidence
             ]
 
-            # Validate symbols (uppercase, 1-5 chars, alphanumeric)
-            valid_mentions = [
-                mention for mention in high_confidence_mentions if self._is_valid_symbol(mention.symbol)
-            ]
+            # Normalize sentiment and validate symbols
+            valid_mentions = []
+            for mention in high_confidence_mentions:
+                if self._is_valid_symbol(mention.symbol):
+                    # Normalize sentiment before adding
+                    normalized_mention = TickerMention(
+                        symbol=mention.symbol,
+                        sentiment=self._normalize_sentiment(mention.sentiment),
+                        context=mention.context,
+                        confidence=mention.confidence,
+                    )
+                    valid_mentions.append(normalized_mention)
 
             if len(valid_mentions) < len(response.mentions):
                 filtered_count = len(response.mentions) - len(valid_mentions)

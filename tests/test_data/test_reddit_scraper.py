@@ -156,7 +156,7 @@ async def test_extract_comment_from_html(scraper):
     async def query_selector_side_effect(selector):
         if selector == "div.md":
             return body_elem
-        if selector == "span.score.unvoted":
+        if selector == "div.score.unvoted":
             return score_elem
         return None
 
