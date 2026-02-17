@@ -80,3 +80,38 @@ async def test_delete_before(async_session, discovery_record: DiscoveryHistoryRe
     deleted_count = await repo.delete_before(cutoff)
 
     assert deleted_count == 1
+
+
+@pytest.mark.asyncio
+async def test_mark_added_to_watchlist(async_session) -> None:
+    """Test marking discovery record as added to watchlist."""
+    from src.database.repositories.discovery import DiscoveryHistoryRepository
+
+    repo = DiscoveryHistoryRepository(async_session)
+    discovered_at = datetime.now(UTC)
+    record = DiscoveryHistoryRecord(
+        symbol="AAPL",
+        discovered_at=discovered_at,
+        composite_score=0.65,
+        sources=[DiscoverySource.EVENT_WATCHLIST],
+        added_to_watchlist=False,
+        ttl_expires_at=datetime.now(UTC) + timedelta(days=3),
+    )
+    await repo.create(record)
+
+    result = await repo.mark_added_to_watchlist("AAPL", discovered_at)
+    assert result is True
+
+    records = await repo.get_by_symbol("AAPL")
+    assert len(records) == 1
+    assert records[0].added_to_watchlist is True
+
+
+@pytest.mark.asyncio
+async def test_mark_added_to_watchlist_missing_record(async_session) -> None:
+    """Test marking non-existent discovery record returns False."""
+    from src.database.repositories.discovery import DiscoveryHistoryRepository
+
+    repo = DiscoveryHistoryRepository(async_session)
+    result = await repo.mark_added_to_watchlist("NONEXISTENT", datetime.now(UTC))
+    assert result is False
