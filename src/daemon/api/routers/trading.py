@@ -12,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
-    ActiveDiscoveryCandidate,
     ActiveDiscoveryResponse,
-    ActiveDiscoverySourceDetail,
     AnalysesResponse,
     AnalysisRecordResponse,
+    ApiActiveDiscoveryCandidate,
+    ApiActiveDiscoverySourceDetail,
     DiscoveryInsightsResponse,
     DiscoveryRecord,
     DiscoverySourceBreakdown,
@@ -388,9 +388,25 @@ async def get_active_discovery(
     # Get active discovery candidates
     active_candidates = await components.state.get_active_discovery_candidates(session=session)
 
-    # Define source categories
-    batch_sources = {"technical_screening", "earnings_upcoming", "sector_rotation"}
-    continuous_sources = {"reddit_trending", "volume_spike", "price_gap", "news_trending", "pre_market"}
+    # Define source categories using enum values
+    from src.discovery.models import DiscoverySource
+
+    batch_sources = {
+        DiscoverySource.TECHNICAL_SCREENING.value,
+        DiscoverySource.EARNINGS_UPCOMING.value,
+        DiscoverySource.SECTOR_ROTATION.value,
+    }
+    continuous_sources = {
+        DiscoverySource.REDDIT_TRENDING.value,
+        DiscoverySource.VOLUME_SPIKE.value,
+        DiscoverySource.PRICE_GAP.value,
+        DiscoverySource.NEWS_TRENDING.value,
+        DiscoverySource.PRE_MARKET.value,
+    }
+
+    # Filter out expired candidates
+    now = datetime.now(UTC)
+    active_candidates = [c for c in active_candidates if c.ttl_expires_at > now]
 
     # Filter candidates by source type
     if source_filter == "batch":
@@ -404,13 +420,12 @@ async def get_active_discovery(
     last_discovery = await components.state.get_last_discovery(session=session)
 
     # Convert to response models
-    now = datetime.now(UTC)
     candidates = []
     for candidate in active_candidates:
         time_remaining = int((candidate.ttl_expires_at - now).total_seconds() / 60)
 
         sources = [
-            ActiveDiscoverySourceDetail(
+            ApiActiveDiscoverySourceDetail(
                 source_type=str(source.value),
                 weight=candidate.source_scores.get(str(source.value), 0.0),
             )
@@ -418,7 +433,7 @@ async def get_active_discovery(
         ]
 
         candidates.append(
-            ActiveDiscoveryCandidate(
+            ApiActiveDiscoveryCandidate(
                 symbol=candidate.symbol,
                 discovered_at=candidate.discovery_timestamp,
                 composite_score=candidate.composite_score,
