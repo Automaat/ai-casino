@@ -35,7 +35,7 @@ class WorkflowConfig(BaseModel):
     use_meta_agent: bool = Field(default=True, description="Use meta-agent for strategy selection")
     trump_mode: bool = Field(default=False, description="Enable Trump social media analysis")
     analysis_pattern: Literal["sequential", "supervisor"] = Field(
-        default="sequential",
+        default="supervisor",
         description=(
             "Workflow pattern: sequential (agents, 8-stage pipeline) "
             "or supervisor (workers, adaptive orchestration)"

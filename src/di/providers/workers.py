@@ -4,7 +4,9 @@ from typing import Literal
 
 from src.data.comparative import ComparativeDataFetcher
 from src.data.earnings import EarningsCalendarFetcher
+from src.data.finnhub import FinnhubFetcher
 from src.data.fundamental import FundamentalDataFetcher
+from src.data.reddit import RedditFetcher
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
 from src.tools.websearch import WebSearchTool
@@ -12,6 +14,7 @@ from src.workers.comparative import ComparativeWorker
 from src.workers.fundamental import FundamentalWorker
 from src.workers.news import NewsWorker
 from src.workers.sentiment import SentimentWorker
+from src.workers.social import SocialSentimentWorker
 from src.workers.technical import TechnicalWorker
 from src.workers.thesis_research import ThesisResearchWorker
 from src.workers.trump import TrumpWorker
@@ -125,3 +128,23 @@ def create_trump_worker(llm_client: LLMClient) -> TrumpWorker:
         TrumpWorker instance
     """
     return TrumpWorker(llm_client)
+
+
+def create_social_sentiment_worker(
+    llm_client: LLMClient,
+    finnhub_fetcher: FinnhubFetcher,
+    reddit_fetcher: RedditFetcher,
+    finbert: FinBERTSentiment,
+) -> SocialSentimentWorker:
+    """Create SocialSentimentWorker.
+
+    Args:
+        llm_client: LLM client
+        finnhub_fetcher: Finnhub data fetcher
+        reddit_fetcher: Reddit data fetcher
+        finbert: FinBERT sentiment model
+
+    Returns:
+        SocialSentimentWorker instance
+    """
+    return SocialSentimentWorker(llm_client, finnhub_fetcher, reddit_fetcher, finbert)

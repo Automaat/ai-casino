@@ -363,6 +363,43 @@ class AppContainer(containers.DeclarativeContainer):
         earnings_fetcher=earnings_fetcher,
     )
 
+    comparative_worker = providers.Factory(
+        worker_providers.create_comparative_worker,
+        llm_client=llm_client,
+        comparative_fetcher=comparative_fetcher,
+    )
+
+    web_research_worker = providers.Factory(
+        worker_providers.create_web_research_worker,
+        llm_client=llm_client,
+        search_tool=web_search_tool,
+    )
+
+    trump_worker = providers.Factory(
+        worker_providers.create_trump_worker,
+        llm_client=llm_client,
+    )
+
+    bullish_thesis_worker = providers.Factory(
+        worker_providers.create_thesis_worker,
+        llm_client=llm_client,
+        direction=providers.Object("bullish"),
+    )
+
+    bearish_thesis_worker = providers.Factory(
+        worker_providers.create_thesis_worker,
+        llm_client=llm_client,
+        direction=providers.Object("bearish"),
+    )
+
+    social_sentiment_worker = providers.Factory(
+        worker_providers.create_social_sentiment_worker,
+        llm_client=llm_client,
+        finnhub_fetcher=finnhub_fetcher,
+        reddit_fetcher=reddit_fetcher,
+        finbert=finbert_sentiment,
+    )
+
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides
     # Note: container must be passed explicitly when calling these factories
     # (providers.Self() doesn't work reliably with Factory providers)

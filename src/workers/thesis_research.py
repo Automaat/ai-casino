@@ -136,7 +136,7 @@ class ThesisResearchWorker:
         # Build analysis summaries
         technical_summary = (
             f"Signal: {inputs.technical.signal.value}, "
-            f"RSI: {inputs.technical.rsi:.1f if inputs.technical.rsi else 'N/A'}, "
+            f"RSI: {f'{inputs.technical.rsi:.1f}' if inputs.technical.rsi else 'N/A'}, "
             f"Confidence: {inputs.technical.confidence:.2f}"
         )
 

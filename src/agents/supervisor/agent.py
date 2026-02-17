@@ -587,10 +587,10 @@ class TradingSupervisor:
         )
 
         # Create minimal workflow and delegate to existing pipeline
-        workflow = _MinimalWorkflow(components, config, self, target_allocations)
+        workflow = SupervisorWorkflow(components, config, self, target_allocations)
         session = trading_session or TradingSession.REGULAR
         params = AnalysisRequestParams(period_days, session, extra_context)
-        # _MinimalWorkflow duck-types as TradingWorkflow (structural compatibility)
+        # SupervisorWorkflow duck-types as TradingWorkflow (structural compatibility)
         request = AnalysisRequest(workflow, symbol, params, collector)  # pyrefly: ignore[bad-argument-type]
 
         return await run_instrumented_analysis(request)
@@ -600,7 +600,7 @@ class TradingSupervisor:
         return f"TradingSupervisor(llm={self.llm.provider})"
 
 
-class _MinimalWorkflow:
+class SupervisorWorkflow:
     """Minimal workflow object for instrumented analysis delegation."""
 
     def __init__(
@@ -630,6 +630,8 @@ class _MinimalWorkflow:
         self.notification_service = components.notification_service
         self._container = components.container
         self.analysis_orchestrator_config = components.analysis_orchestrator_config
+        self.event_bus = components.event_bus
+        self.web_search_fetcher = components.web_search_fetcher
 
     def _init_config(self, components: WorkflowComponents, config: WorkflowConfig) -> None:
         """Initialize configuration attributes."""
@@ -644,17 +646,15 @@ class _MinimalWorkflow:
 
     def _init_conditional_components(self, components: WorkflowComponents) -> None:
         """Initialize conditional components (Trump, meta-agent, backtest)."""
-        # Trump components
+        # Trump fetcher
         if self.trump_mode:
             from src.data.truth_social import TruthSocialFetcher
 
             self.trump_fetcher: TruthSocialFetcher | None = TruthSocialFetcher(
                 historical_cache=components.historical_cache
             )
-            self.trump_analyst = self._container.trump_analyst()
         else:
             self.trump_fetcher: TruthSocialFetcher | None = None
-            self.trump_analyst = None  # pyrefly: ignore[bad-assignment]
 
         # Meta-agent
         if self.use_meta_agent:
@@ -681,19 +681,22 @@ class _MinimalWorkflow:
             self.vectorbt_runner: VectorBTRunner | None = None
 
     def _init_agents(self, components: WorkflowComponents) -> None:
-        """Initialize analysis and risk agents."""
-        from src.agents.fundamental import FundamentalAnalyst
+        """Initialize workers and risk agents."""
         from src.agents.risk import RiskManagementAgent
-        from src.agents.sentiment import SentimentAnalyst
 
-        self.sentiment_analyst = SentimentAnalyst(components.finbert)
-        self.news_analyst = self._container.news_analyst()
-        self.fundamental_analyst = FundamentalAnalyst(components.llm_client, components.fundamental_fetcher)
-        self.comparative_analyst = self._container.comparative_analyst()
-        self.web_researcher = self._container.web_research_agent()
-        self.social_analyst = self._container.social_sentiment_analyst()
-        self.bullish_researcher = self._container.bullish_researcher()
-        self.bearish_researcher = self._container.bearish_researcher()
+        self.technical_worker = self._container.technical_worker()
+        self.sentiment_worker = self._container.sentiment_worker()
+        self.news_worker = self._container.news_worker()
+        self.fundamental_worker = self._container.fundamental_worker()
+        self.comparative_worker = self._container.comparative_worker()
+        self.web_researcher = self._container.web_research_worker()
+        self.social_worker = self._container.social_sentiment_worker()
+        self.bullish_researcher = self._container.bullish_thesis_worker()
+        self.bearish_researcher = self._container.bearish_thesis_worker()
+        if self.trump_mode:
+            self.trump_worker = self._container.trump_worker()
+        else:
+            self.trump_worker = None  # pyrefly: ignore[bad-assignment]
         self.trader = self._container.trader_agent()
         self.risk_manager = RiskManagementAgent(
             components.llm_client,

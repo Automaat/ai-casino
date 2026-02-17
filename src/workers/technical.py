@@ -7,6 +7,7 @@ import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.agents.technical import TechnicalAnalysis
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
@@ -33,18 +34,6 @@ StrategyType = MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy
 IndicatorsType = MomentumIndicators | MeanReversionIndicators | TrendFollowingIndicators | EnsembleResult
 
 
-class TechnicalAnalysis(BaseModel):
-    """Technical analysis result."""
-
-    signal: Signal
-    rsi: float | None = None
-    macd_hist: float | None = None
-    interpretation: str
-    confidence: float
-    ensemble_result: EnsembleResult | None = None
-    multi_timeframe: MultiTimeframeAnalysis | None = None
-
-
 class TechnicalWorker:
     """Technical analysis worker - Pydantic AI migration POC.
 
@@ -68,7 +57,7 @@ class TechnicalWorker:
         self,
         symbol: str,
         market_data: pd.DataFrame | MultiTimeframeData,
-        strategy: StrategyType,
+        strategy: StrategyType | None,
         enable_multi_timeframe: bool = False,
     ) -> TechnicalAnalysis:
         """Perform technical analysis on market data.
@@ -82,6 +71,10 @@ class TechnicalWorker:
         Returns:
             TechnicalAnalysis with signal and interpretation
         """
+        if strategy is None:
+            msg = "strategy is required for technical analysis"
+            raise ValueError(msg)
+
         # Multi-timeframe analysis path
         if isinstance(market_data, MultiTimeframeData) and enable_multi_timeframe:
             return await self._analyze_multi_timeframe(symbol, market_data, strategy)
