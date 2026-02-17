@@ -18,7 +18,6 @@ from src.daemon.state.models import (
     PrefetchRecord,
     ProfilingRecord,
     RiskReportRecord,
-    ScreeningRecord,
     SectorRotationRecord,
 )
 
@@ -60,6 +59,5 @@ __all__ = [
     "PrefetchRecord",
     "ProfilingRecord",
     "RiskReportRecord",
-    "ScreeningRecord",
     "SectorRotationRecord",
 ]

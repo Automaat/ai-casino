@@ -211,16 +211,6 @@ class BrokerManager:
                 await self.state.discovery.mark_candidates_added_to_watchlist(
                     candidates_to_add, session=session
                 )
-        elif self.config.screening.enabled:
-            screening_history = await self.state.get_screening_history(limit=1, session=session)
-            if screening_history:
-                # Fallback to old screening (backward compatible)
-                latest = screening_history[-1]
-                new_symbols = [s for s in latest.top_symbols if s not in seen]
-                if new_symbols:
-                    logger.info(f"Merged {len(new_symbols)} screening candidates: {new_symbols}")
-                    merged_watchlist.extend(new_symbols)
-                    seen.update(new_symbols)
 
     def is_available(self) -> bool:
         """Check if broker available.

@@ -7,25 +7,6 @@ from pydantic import BaseModel, Field, model_validator
 from src.daemon.config._validators import validate_time_range
 
 
-class ScreeningConfig(BaseModel):
-    """Configuration for after-hours watchlist screening."""
-
-    enabled: bool = False
-    screen_time: str = "16:30"
-    screen_days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
-    criteria: Literal["momentum", "value", "breakout"] = "momentum"
-    universe: Literal["SP500", "NASDAQ100", "COMBINED", "RUSSELL3000", "US_LIQUID"] = "COMBINED"
-    top_n: int = 10
-    watchlist_name: str = "daemon-screening"
-
-    @model_validator(mode="after")
-    def validate_screen_time(self) -> ScreeningConfig:
-        """Validate screen_time is within 16:00-20:00."""
-        if self.enabled:
-            validate_time_range(self.screen_time, "screen_time", "after_hours")
-        return self
-
-
 class DiscoveryConfig(BaseModel):
     """Configuration for automated stock discovery (legacy, use event watchers for continuous discovery).
 

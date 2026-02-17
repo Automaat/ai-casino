@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.daemon.state import ScreeningRecord
     from src.screening.exporter import Watchlist
     from src.workflows.types import TradingWorkflowResult
 
@@ -107,34 +106,17 @@ def format_news(result: TradingWorkflowResult) -> str:
 {result.news.recommendation}"""
 
 
-def format_candidates(record: ScreeningRecord | dict) -> str:
-    """Format screening candidates for display.
+def format_candidates(_record: dict) -> str:
+    """Format screening candidates for display (deprecated).
 
     Args:
-        record: ScreeningRecord instance or dict
+        _record: dict with screening data (unused)
 
     Returns:
         Formatted markdown string
     """
-    from src.daemon.state import ScreeningRecord
-
-    if isinstance(record, dict):
-        record = ScreeningRecord.model_validate(record)
-
-    lines = [
-        "## After-Hours Screening Candidates",
-        f"*{record.criteria.title()} | {record.universe} | {record.screened_at.strftime('%Y-%m-%d %H:%M')}*",
-        "",
-    ]
-
-    for i, candidate in enumerate(record.candidates, 1):
-        lines.append(
-            f"{i}. **{candidate.symbol}** ({candidate.name}) - Score: {candidate.score:.2f}\n"
-            f"   {candidate.reason}"
-        )
-
-    lines.append("\n*Use `/candidates add SYMBOL [SYMBOL...]` to add to watchlist*")
-    return "\n".join(lines)
+    # Legacy function - screening removed from system
+    return "## Screening Candidates\n\n*Screening functionality has been removed. Use discovery instead.*"
 
 
 def format_watchlist(watchlist: Watchlist) -> str:

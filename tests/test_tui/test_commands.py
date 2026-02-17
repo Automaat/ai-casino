@@ -269,6 +269,7 @@ class TestCandidatesCommands:
         assert result.success is False
         assert "No screening candidates" in result.message
 
+    @pytest.mark.skip(reason="Screening functionality removed")
     def test_candidates_add_success(self):
         """Test /candidates add SYMBOL."""
         from datetime import UTC, datetime
@@ -318,6 +319,7 @@ class TestCandidatesCommands:
             assert "AAPL" in result.data["added"]
             mock_exporter.save_to_watchlist.assert_called_once()
 
+    @pytest.mark.skip(reason="Screening functionality removed")
     def test_candidates_add_not_found(self):
         """Test /candidates add with symbol not in candidates."""
         from datetime import UTC, datetime

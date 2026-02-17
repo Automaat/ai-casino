@@ -7,7 +7,6 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 from src.discovery.models import DiscoverySource
-from src.screening.screener import ScreeningResult
 from src.strategies.session import TradingSession
 
 
@@ -27,18 +26,6 @@ class AnalysisRecord(BaseModel):
     technical_analysis_reasoning: str | None = None
     sentiment_analysis_reasoning: str | None = None
     news_analysis_reasoning: str | None = None
-
-
-class ScreeningRecord(BaseModel):
-    """Record of an after-hours screening run."""
-
-    id: str | None = None
-    timestamp: datetime
-    criteria: str
-    universe: str
-    top_symbols: list[str]
-    candidates: list[ScreeningResult]
-    screened_at: datetime
 
 
 class PortfolioSnapshot(BaseModel):

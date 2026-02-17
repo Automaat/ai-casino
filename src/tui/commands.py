@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from src.tui import formatters
 
 if TYPE_CHECKING:
-    from src.daemon.state import DaemonState, ScreeningRecord
+    from src.daemon.state import DaemonState
     from src.screening.exporter import ScreeningExporter, Watchlist
     from src.workflows.types import TradingWorkflowResult
 
@@ -675,11 +675,11 @@ Type freely to chat about markets or ask questions."""
             message="Command deprecated - state is now database-backed (requires async rewrite).",
         )
 
-    def _format_candidates(self, record: ScreeningRecord | dict) -> str:
+    def _format_candidates(self, record: dict) -> str:
         """Format screening candidates for display.
 
         Args:
-            record: ScreeningRecord instance or dict
+            record: dict with screening data
         """
         return formatters.format_candidates(record)
 

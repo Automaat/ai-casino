@@ -54,7 +54,6 @@ from src.daemon.config.screening import (
     DiscoveryConfig,
     EarningsCalendarConfig,
     LiquidityFilterConfig,
-    ScreeningConfig,
     SectorRotationConfig,
 )
 from src.daemon.config.trading import (
@@ -108,7 +107,6 @@ __all__ = [
     "RiskLimitsConfig",
     "RiskValidationConfig",
     "ScheduleConfig",
-    "ScreeningConfig",
     "SectorRotationConfig",
     "SignalTrackingConfig",
     "SocialWatcherConfig",
@@ -135,7 +133,6 @@ class DaemonConfig(BaseModel):
     journal: JournalConfig = Field(default_factory=JournalConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
-    screening: ScreeningConfig = Field(default_factory=ScreeningConfig)
     discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
     liquidity_filters: LiquidityFilterConfig = Field(default_factory=LiquidityFilterConfig)
     prefetch: PrefetchConfig = Field(default_factory=PrefetchConfig)
@@ -193,7 +190,6 @@ class DaemonConfig(BaseModel):
             "journal": daemon_data.pop("journal", {}) or {},
             "health": daemon_data.pop("health", {}) or {},
             "optimization": daemon_data.pop("optimization", {}) or {},
-            "screening": daemon_data.pop("screening", {}) or {},
             "discovery": daemon_data.pop("discovery", {}) or {},
             "liquidity_filters": daemon_data.pop("liquidity_filters", {}) or {},
             "prefetch": daemon_data.pop("prefetch", {}) or {},
@@ -268,7 +264,6 @@ class DaemonConfig(BaseModel):
             journal=JournalConfig(**sections["journal"]),
             health=HealthConfig(**sections["health"]),
             optimization=OptimizationConfig(**sections["optimization"]),
-            screening=ScreeningConfig(**sections["screening"]),
             discovery=DiscoveryConfig(**sections["discovery"]),
             liquidity_filters=LiquidityFilterConfig(**sections["liquidity_filters"]),
             prefetch=PrefetchConfig(**sections["prefetch"]),
