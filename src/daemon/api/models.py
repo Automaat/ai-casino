@@ -98,7 +98,7 @@ class WatchlistResponse(BaseModel):
 
     symbols: list[str]
     count: int
-    sources: dict[str, int] = Field(description="Breakdown: config/broker/screening")
+    sources: dict[str, int] = Field(description="Breakdown: config/broker/screening/event_watchlist")
 
 
 class SnapshotRecord(BaseModel):

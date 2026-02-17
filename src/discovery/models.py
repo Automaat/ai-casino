@@ -17,6 +17,7 @@ class DiscoverySource(StrEnum):
     PRICE_GAP = "price_gap"
     NEWS_TRENDING = "news_trending"
     PRE_MARKET = "pre_market"
+    EVENT_WATCHLIST = "event_watchlist"
 
 
 class DiscoveryCandidate(BaseModel):

@@ -28,6 +28,7 @@ from src.workflows import TradingWorkflow
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
+    from src.daemon.state.facade import DaemonState
     from src.di.container import AppContainer
 
 console = Console()
@@ -59,6 +60,7 @@ class EventWatcher(ABC):
         signal_callback: Callable[[EventSignal], None] | None = None,
         discovery_mode: bool = False,
         discovery_callback: Callable[[list], None] | None = None,
+        state: DaemonState | None = None,
     ) -> None:
         """Initialize event watcher.
 
@@ -69,6 +71,7 @@ class EventWatcher(ABC):
             signal_callback: Optional callback to persist signals (e.g., to state)
             discovery_mode: If True, route events to discovery engine instead of direct analysis
             discovery_callback: Callback to receive discovery candidates
+            state: Optional DaemonState for WATCHLIST event persistence
         """
         from src.di.container import create_container
 
@@ -85,6 +88,9 @@ class EventWatcher(ABC):
         self._discovery_mode = discovery_mode
         self._discovery_callback = discovery_callback
         self._event_adapter = None
+
+        # State manager for WATCHLIST events
+        self._state = state
 
         # State tracking (in-memory)
         self._last_check: datetime | None = None
@@ -285,6 +291,65 @@ class EventWatcher(ABC):
                 relevant.append((event, triage))
         return relevant
 
+    async def _add_watchlist_candidates(
+        self, events: list[BaseEvent], triage_results: list[TriageResult | BaseException]
+    ) -> None:
+        """Add WATCHLIST events to discovery candidates for later analysis.
+
+        Args:
+            events: List of events
+            triage_results: Corresponding triage results
+        """
+        from datetime import timedelta
+
+        from src.discovery.models import DiscoveryCandidate, DiscoverySource
+
+        if not self._state:
+            return
+
+        watchlist_events = []
+        for event, triage in zip(events, triage_results, strict=True):
+            if isinstance(triage, BaseException):
+                continue
+            if triage.urgency == Urgency.WATCHLIST and triage.relevance >= self.relevance_threshold:
+                watchlist_events.append((event, triage))
+
+        if not watchlist_events:
+            return
+
+        # Convert to discovery candidates
+        candidates = []
+        now = datetime.now(UTC)
+        ttl_hours = 24
+
+        for event, triage in watchlist_events:
+            for symbol in triage.symbols:
+                candidate = DiscoveryCandidate(
+                    symbol=symbol,
+                    name="Unknown",
+                    sector="Unknown",
+                    sources=[DiscoverySource.EVENT_WATCHLIST],
+                    composite_score=triage.relevance,
+                    source_scores={"event_watchlist": triage.relevance},
+                    discovery_timestamp=now,
+                    ttl_expires_at=now + timedelta(hours=ttl_hours),
+                    metadata={
+                        "event_id": event.event_id,
+                        "event_type": event.event_type,
+                        "sentiment": triage.sentiment.value,
+                        "confidence": triage.confidence,
+                        "reasoning": triage.reasoning,
+                    },
+                )
+                candidates.append(candidate)
+
+        # Add to state
+        try:
+            await self._state.discovery.add_event_candidates(candidates)
+            logger.info(f"Added {len(candidates)} WATCHLIST events to discovery candidates")
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to add WATCHLIST candidates: {e}")
+
     def _extract_symbols_with_cooldown(self, relevant: list[tuple[BaseEvent, TriageResult]]) -> set[str]:
         """Extract symbols from relevant events and check cooldowns."""
         symbols_to_analyze = set()
@@ -310,6 +375,7 @@ class EventWatcher(ABC):
 
         logger.info(f"Found {len(events)} new event(s)")
         triage_results = await self._triage_events(events)
+        await self._add_watchlist_candidates(events, triage_results)
         relevant = self._filter_relevant_events(events, triage_results)
 
         if not relevant:
