@@ -11,7 +11,7 @@ class AnalysisOrchestratorConfig(BaseModel):
     enable_position_sync: bool = True
 
     enable_supervisor_routing: bool = Field(
-        default=False, description="Enable supervisor-driven conditional worker execution"
+        default=True, description="Enable supervisor-driven conditional worker execution"
     )
     supervisor_planning_timeout_ms: int = Field(
         default=5000, ge=1000, le=10000, description="Timeout for supervisor planning phase"

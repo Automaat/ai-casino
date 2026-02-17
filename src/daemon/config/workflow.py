@@ -9,7 +9,7 @@ class WorkflowConfigDaemon(BaseModel):
     """Workflow execution configuration for daemon."""
 
     analysis_pattern: Literal["sequential", "supervisor"] = Field(
-        default="sequential",
+        default="supervisor",
         description=(
             "Workflow execution pattern: sequential (agents, 8-stage pipeline) "
             "or supervisor (workers, adaptive orchestration)"

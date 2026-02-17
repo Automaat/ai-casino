@@ -38,7 +38,7 @@ daemon:
     # Workflow execution pattern
     # - sequential: Use 8-stage pipeline with agents (legacy, stable)
     # - supervisor: Use supervisor-driven adaptive workflow with workers (new, experimental)
-    analysis_pattern: sequential
+    analysis_pattern: supervisor
 
     # Use ensemble strategy combining multiple technical indicators
     use_ensemble: false
@@ -777,9 +777,9 @@ daemon:
     # Enable position syncing with broker before analysis
     enable_position_sync: true
 
-    # Supervisor-driven conditional execution (default: disabled for backward compatibility)
-    # When enabled, TradingSupervisor determines which analyses to run based on context
-    enable_supervisor_routing: false
+    # Supervisor-driven conditional execution
+    # TradingSupervisor determines which analyses to run based on context
+    enable_supervisor_routing: true
 
     # Supervisor planning timeout in milliseconds (1000-10000, default: 5000)
     # Time allowed for supervisor to decide which analyses to run

@@ -136,7 +136,7 @@ class ThesisResearchWorker:
         # Build analysis summaries
         technical_summary = (
             f"Signal: {inputs.technical.signal.value}, "
-            f"RSI: {inputs.technical.rsi:.1f if inputs.technical.rsi else 'N/A'}, "
+            f"RSI: {f'{inputs.technical.rsi:.1f}' if inputs.technical.rsi else 'N/A'}, "
             f"Confidence: {inputs.technical.confidence:.2f}"
         )
 
@@ -178,12 +178,12 @@ class ThesisResearchWorker:
         return self._prompts.load(
             "user",
             symbol=symbol,
-            technical_summary=technical_summary,
-            sentiment_summary=sentiment_summary,
-            news_summary=news_summary,
-            fundamental_summary=fundamental_summary,
-            comparative_summary=comparative_summary,
-            trump_summary=trump_summary,
+            tech_str=technical_summary,
+            sent_str=sentiment_summary,
+            news_str=news_summary,
+            fund_str=fundamental_summary,
+            comp_str=comparative_summary,
+            trump_str=trump_summary,
         )
 
     def _calculate_confidence(

@@ -12,6 +12,7 @@ from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 from src.data.comparative import ComparativeData, PerformanceData
 from src.data.comparative import StockInfo as ComparativeStockInfo
 from src.data.market import MarketData
+from src.data.news import NewsArticle
 from src.di.container import AppContainer
 from src.models.sentiment import SentimentScore
 
@@ -233,10 +234,27 @@ def create_mock_news_fetcher() -> MagicMock:
     Returns:
         Mock with fetch_news and fetch_company_news methods
     """
+    _sample_articles = [
+        NewsArticle(
+            title="Company reports strong earnings",
+            description="Quarterly earnings exceed expectations",
+            url="https://example.com/1",
+            published_at=datetime(2024, 1, 15, 10, 0),
+            source="Reuters",
+        ),
+        NewsArticle(
+            title="New product launch announced",
+            description="Company unveils innovative product line",
+            url="https://example.com/2",
+            published_at=datetime(2024, 1, 15, 12, 0),
+            source="Bloomberg",
+        ),
+    ]
     mock = MagicMock()
     mock.api_key = "test_news_key"
-    mock.fetch_news.return_value = []
-    mock.fetch_company_news.return_value = []
+    mock.fetch_news.return_value = _sample_articles
+    mock.fetch_company_news.return_value = _sample_articles
+    mock.afetch_company_news = AsyncMock(return_value=_sample_articles)
     return mock
 
 
@@ -267,9 +285,17 @@ def create_mock_finnhub_fetcher() -> MagicMock:
     Returns:
         Mock with fetch_social_sentiment method
     """
+    from src.data.finnhub import SocialSentimentData, SocialSentimentEntry
+
     mock = MagicMock()
     mock.api_key = "test_finnhub_key"
-    mock.fetch_social_sentiment.return_value = {"reddit": 0.5, "twitter": 0.6}
+    mock.fetch_social_sentiment.return_value = SocialSentimentData(
+        symbol="AAPL",
+        reddit=[SocialSentimentEntry(at_time=datetime(2024, 1, 15, 10, 0), mention=100, score=0.5)],
+        twitter=[SocialSentimentEntry(at_time=datetime(2024, 1, 15, 10, 0), mention=200, score=0.6)],
+        fetched_at=datetime(2024, 1, 15, 10, 0),
+    )
+    mock.fetch_news_sentiment.return_value = None
     return mock
 
 

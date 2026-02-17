@@ -3,6 +3,7 @@
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.agents.news import NewsAnalysis
 from src.data.news import NewsArticle
 from src.models.llm import LLMClient
 from src.models.providers.base import StructuredOutputError
@@ -16,14 +17,6 @@ class NewsLLMResponse(BaseModel):
     key_themes: list[str] = Field(description="Top 3-5 key themes from the news")
     impact_assessment: str = Field(description="Assessment of market impact")
     recommendation: str = Field(description="Trading recommendation based on news")
-
-
-class NewsAnalysis(BaseModel):
-    """News analysis result."""
-
-    key_themes: list[str]
-    impact_assessment: str
-    recommendation: str
 
 
 class NewsWorker:
@@ -57,6 +50,7 @@ class NewsWorker:
                 key_themes=["No recent news"],
                 impact_assessment="Insufficient data for assessment",
                 recommendation="Wait for more information",
+                confidence=0.0,
             )
 
         headlines_text = self._format_articles(articles)
@@ -64,6 +58,9 @@ class NewsWorker:
         prompt = self._prompts.load("user", symbol=symbol, headlines_text=headlines_text)
         system_prompt = self._prompts.load("system")
 
+        # 0.6: structured output gives reliable schema-validated response, but LLM
+        # reasoning quality is not guaranteed — moderate confidence baseline
+        confidence = 0.6
         try:
             llm_response = await self.llm.astructured(
                 prompt, NewsLLMResponse, system=system_prompt, temperature=0.4
@@ -77,6 +74,8 @@ class NewsWorker:
             key_themes = self._extract_themes(response)
             impact = self._extract_section(response, "impact")
             recommendation = self._extract_section(response, "recommendation")
+            # 0.4: regex-based text parsing is lossy and fragile — lower confidence
+            confidence = 0.4
 
         logger.info(f"News analysis complete: {len(key_themes)} themes identified")
 
@@ -84,6 +83,7 @@ class NewsWorker:
             key_themes=key_themes,
             impact_assessment=impact,
             recommendation=recommendation,
+            confidence=confidence,
         )
 
     def _format_articles(self, articles: list[NewsArticle]) -> str:

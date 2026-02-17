@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -33,6 +33,7 @@ from src.workflows.stages.risk_validation import validate_analyses_stage
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 if TYPE_CHECKING:
+    from src.agents.supervisor.agent import SupervisorWorkflow
     from src.agents.technical import TechnicalAnalyst
     from src.daemon.degradation import DegradationContext
     from src.data.broker import BrokerPosition
@@ -336,6 +337,7 @@ async def _run_analyses_with_validation(
         news_articles=prep_result.data_output.news_articles,
         trump_posts=prep_result.data_output.trump_posts,
         enable_multi_timeframe=enable_multi_timeframe,
+        strategy=prep_result.strategy_output.strategy_instance,
     )
 
     routing_decision = None
@@ -384,25 +386,27 @@ async def _run_analyses_with_validation(
         _record_stage(ctx.collector, "supervisor_planning", start_planning)
 
         # Run supervised analyses
+        # ctx.workflow is SupervisorWorkflow at runtime (duck-typed as TradingWorkflow)
+        supervisor_workflow = cast("SupervisorWorkflow", ctx.workflow)
         workflow_id = ctx.collector.workflow_id if ctx.collector else None
         analysis_output = await supervised_analysis.run_supervised_analyses(
             analysis_input,
             routing_decision,
-            prep_result.technical_analyst,
-            ctx.workflow.sentiment_analyst,
-            ctx.workflow.news_analyst,
-            ctx.workflow.fundamental_analyst,
-            ctx.workflow.comparative_analyst,
-            ctx.workflow.web_researcher,
-            ctx.workflow.social_analyst,
-            ctx.workflow.bullish_researcher,
-            ctx.workflow.bearish_researcher,
-            ctx.workflow.trump_mode,
-            ctx.workflow.trump_analyst,
+            supervisor_workflow.technical_worker,
+            supervisor_workflow.sentiment_worker,
+            supervisor_workflow.news_worker,
+            supervisor_workflow.fundamental_worker,
+            supervisor_workflow.comparative_worker,
+            supervisor_workflow.web_researcher,
+            supervisor_workflow.social_worker,
+            supervisor_workflow.bullish_researcher,
+            supervisor_workflow.bearish_researcher,
+            supervisor_workflow.trump_mode,
+            supervisor_workflow.trump_worker,
             ctx.collector,
             timeout_ms=config.worker_execution_timeout_ms,
             workflow_id=workflow_id,
-            event_bus=ctx.workflow.event_bus,
+            event_bus=supervisor_workflow.event_bus,
             planning_fallback_used=planning_fallback_used,
         )
     else:

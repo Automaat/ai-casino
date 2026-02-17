@@ -4,26 +4,14 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
 
+from src.agents.sentiment import SentimentAnalysis
 from src.data.news import NewsArticle
 from src.models.sentiment import _analyze_batch_worker, get_finbert_executor
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.models.sentiment import SentimentScore
-
-
-class SentimentAnalysis(BaseModel):
-    """Sentiment analysis result."""
-
-    overall_sentiment: str
-    sentiment_score: float
-    positive_ratio: float
-    negative_ratio: float
-    neutral_ratio: float
-    article_count: int
-    summary: str
 
 
 class SentimentWorker:
@@ -63,6 +51,7 @@ class SentimentWorker:
                 neutral_ratio=1.0,
                 article_count=0,
                 summary="No news articles available for analysis",
+                confidence=0.0,
             )
 
         texts = [f"{article.title}. {article.description}" for article in articles]
@@ -87,6 +76,7 @@ class SentimentWorker:
         total = len(scores)
 
         summary = self._generate_summary(symbol, sentiment_label, overall_score, scores)
+        confidence = min(abs(overall_score), 1.0)
 
         logger.info(
             f"Sentiment: {sentiment_label} (score={overall_score:.2f}, "
@@ -101,6 +91,7 @@ class SentimentWorker:
             neutral_ratio=neutral_count / total,
             article_count=total,
             summary=summary,
+            confidence=confidence,
         )
 
     def _aggregate_sentiment(self, scores: list[SentimentScore]) -> float:

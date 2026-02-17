@@ -16,7 +16,11 @@ from src.agents.trump import TrumpAnalysis
 from src.agents.web_researcher import WebResearchAnalysis
 from src.data.news import NewsArticle
 from src.data.truth_social import TruthPost
+from src.strategies.ensemble import EnsembleStrategy
+from src.strategies.mean_reversion import MeanReversionStrategy
+from src.strategies.momentum import MomentumStrategy
 from src.strategies.timeframe import MultiTimeframeData, Timeframe
+from src.strategies.trend_following import TrendFollowingStrategy
 
 
 class AnalysisInput(BaseModel):
@@ -27,6 +31,9 @@ class AnalysisInput(BaseModel):
     news_articles: list[NewsArticle] | None
     trump_posts: list[TruthPost] | None
     enable_multi_timeframe: bool
+    strategy: MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None = (
+        None
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

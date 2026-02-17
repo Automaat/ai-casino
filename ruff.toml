@@ -107,6 +107,12 @@ ignore = [
     "SLF001",  # private member access OK for tightly-coupled workflow components
     "ANN401",  # Any required for workflow parameter (circular import)
 ]
+"scripts/*.py" = [
+    "SLF001",  # private member access OK in profiling/benchmarking scripts
+    "T201",    # print OK in scripts
+    "ANN",     # type annotations not required in scripts
+    "S101",    # assert OK in scripts
+]
 "src/main.py" = [
     "T201",    # print OK in CLI
     "PLR2004", # magic values OK for CLI args
