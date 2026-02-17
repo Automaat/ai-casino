@@ -58,6 +58,8 @@ class NewsWorker:
         prompt = self._prompts.load("user", symbol=symbol, headlines_text=headlines_text)
         system_prompt = self._prompts.load("system")
 
+        # 0.6: structured output gives reliable schema-validated response, but LLM
+        # reasoning quality is not guaranteed — moderate confidence baseline
         confidence = 0.6
         try:
             llm_response = await self.llm.astructured(
@@ -72,6 +74,7 @@ class NewsWorker:
             key_themes = self._extract_themes(response)
             impact = self._extract_section(response, "impact")
             recommendation = self._extract_section(response, "recommendation")
+            # 0.4: regex-based text parsing is lossy and fragile — lower confidence
             confidence = 0.4
 
         logger.info(f"News analysis complete: {len(key_themes)} themes identified")
