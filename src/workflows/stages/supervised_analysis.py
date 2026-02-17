@@ -445,8 +445,7 @@ async def _run_supervised_research(
     # Research requires all three core analyses; skip if any are missing
     if technical is None or sentiment is None or news is None:
         logger.warning(
-            f"Skipping research for {symbol}: "
-            "required analyses (technical/sentiment/news) not available"
+            f"Skipping research for {symbol}: required analyses (technical/sentiment/news) not available"
         )
         return {}
 

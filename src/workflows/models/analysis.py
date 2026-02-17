@@ -31,9 +31,9 @@ class AnalysisInput(BaseModel):
     news_articles: list[NewsArticle] | None
     trump_posts: list[TruthPost] | None
     enable_multi_timeframe: bool
-    strategy: (
-        MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None
-    ) = None
+    strategy: MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy | None = (
+        None
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
