@@ -12,7 +12,9 @@ from rich.console import Console
 from src.daemon.tasks.base import TaskExecutor
 
 if TYPE_CHECKING:
+    from src.daemon.factory import DaemonComponents
     from src.daemon.state import SectorRotationRecord
+    from src.di.container import AppContainer
     from src.metrics.sector_rotation import SectorRotationAnalysis
     from src.screening.screener import ScreeningResult
 
@@ -21,6 +23,14 @@ console = Console()
 
 class PrefetchTask(TaskExecutor):
     """After-hours data prefetch task."""
+
+    def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+        """Initialize prefetch task."""
+        super().__init__(components, container)
+        self._succeeded = 0
+        self._failed = 0
+        self._finbert_ready = False
+        self._duration = 0.0
 
     @property
     def task_name(self) -> str:

@@ -145,9 +145,14 @@ def create_finnhub_fetcher(
         daemon_config.api_keys.finnhub_api_key,
         "FINNHUB_API_KEY",
     )
+
+    premium_config = daemon_config.data_sources.finnhub_premium
+
     return FinnhubFetcher(
         api_key=api_key,
         cache_dir="data/cache/finnhub",
+        enable_social_sentiment=premium_config.enable_social_sentiment,
+        enable_news_sentiment=premium_config.enable_news_sentiment,
     )
 
 

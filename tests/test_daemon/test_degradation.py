@@ -103,8 +103,14 @@ def test_degraded_mode_marketaux_down(policy):
     assert "marketaux" in context.unavailable_services
 
 
-def test_degraded_mode_finnhub_down(policy):
-    """Verify DEGRADED tier when fundamental API down."""
+def test_degraded_mode_finnhub_down():
+    """Verify DEGRADED tier when fundamental API down (with premium enabled)."""
+    # Create config with premium enabled
+    config = DaemonConfig()
+    config.data_sources.finnhub_premium.enable_social_sentiment = True
+    config.data_sources.finnhub_premium.enable_news_sentiment = True
+    policy = DegradationPolicy(config)
+
     health_report = HealthReport(
         timestamp=datetime.now(UTC),
         overall_status=ServiceStatus.UNHEALTHY,
@@ -248,8 +254,14 @@ def test_stale_health_report_different_llm_provider():
     assert "llm_ollama" not in context.unavailable_services
 
 
-def test_confidence_penalty_capped_at_50_percent(policy):
-    """Verify cumulative penalty never exceeds 50%."""
+def test_confidence_penalty_capped_at_50_percent():
+    """Verify cumulative penalty never exceeds 50% (with premium enabled)."""
+    # Create config with premium enabled
+    config = DaemonConfig()
+    config.data_sources.finnhub_premium.enable_social_sentiment = True
+    config.data_sources.finnhub_premium.enable_news_sentiment = True
+    policy = DegradationPolicy(config)
+
     health_report = HealthReport(
         timestamp=datetime.now(UTC),
         overall_status=ServiceStatus.UNHEALTHY,
@@ -296,8 +308,14 @@ def test_no_health_report_defaults_to_full(policy):
     assert context.confidence_adjustment == 1.0
 
 
-def test_minimal_tier_when_few_agents_available(policy):
-    """Verify MINIMAL tier when <3 agents available."""
+def test_minimal_tier_when_few_agents_available():
+    """Verify MINIMAL tier when <3 agents available (with premium enabled)."""
+    # Create config with premium enabled
+    config = DaemonConfig()
+    config.data_sources.finnhub_premium.enable_social_sentiment = True
+    config.data_sources.finnhub_premium.enable_news_sentiment = True
+    policy = DegradationPolicy(config)
+
     health_report = HealthReport(
         timestamp=datetime.now(UTC),
         overall_status=ServiceStatus.UNHEALTHY,
@@ -350,8 +368,14 @@ def test_agent_classifications_complete(policy):
     assert AgentType.BEARISH in classifications
 
 
-def test_service_to_agent_mapping(policy):
-    """Verify service to agent mappings are correct."""
+def test_service_to_agent_mapping():
+    """Verify service to agent mappings are correct (with premium enabled)."""
+    # Create config with premium enabled
+    config = DaemonConfig()
+    config.data_sources.finnhub_premium.enable_social_sentiment = True
+    config.data_sources.finnhub_premium.enable_news_sentiment = True
+    policy = DegradationPolicy(config)
+
     mapping = policy._build_service_mapping()
 
     assert AgentType.TECHNICAL in mapping["alpha_vantage"]
@@ -359,3 +383,14 @@ def test_service_to_agent_mapping(policy):
     assert AgentType.NEWS in mapping["marketaux"]
     assert AgentType.FUNDAMENTAL in mapping["finnhub"]
     assert AgentType.SOCIAL in mapping["finnhub"]
+
+
+def test_service_to_agent_mapping_premium_disabled(policy):
+    """Verify finnhub doesn't affect agents when premium disabled."""
+    mapping = policy._build_service_mapping()
+
+    assert AgentType.TECHNICAL in mapping["alpha_vantage"]
+    assert AgentType.SENTIMENT in mapping["marketaux"]
+    assert AgentType.NEWS in mapping["marketaux"]
+    # Finnhub should not affect any agents when premium disabled
+    assert mapping["finnhub"] == []

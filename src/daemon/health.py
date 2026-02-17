@@ -327,7 +327,10 @@ class HealthChecker:
             )
 
     async def _check_finnhub(self) -> ServiceCheckResult:
-        """Check Finnhub API connectivity."""
+        """Check Finnhub API connectivity.
+
+        Uses free endpoint when premium disabled, premium endpoint when enabled.
+        """
         api_key = self.config.api_keys.finnhub_api_key or os.getenv("FINNHUB_API_KEY")
         if not api_key:
             return ServiceCheckResult(
@@ -338,19 +341,49 @@ class HealthChecker:
                 checked_at=datetime.now(UTC),
             )
 
+        # Check if any premium feature enabled
+        premium_enabled = (
+            self.config.data_sources.finnhub_premium.enable_social_sentiment
+            or self.config.data_sources.finnhub_premium.enable_news_sentiment
+        )
+
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://finnhub.io/api/v1/news-sentiment",
-                    params={"symbol": "SPY", "token": api_key},
-                )
+                if premium_enabled:
+                    # Check premium endpoint
+                    response = await client.get(
+                        "https://finnhub.io/api/v1/news-sentiment",
+                        params={"symbol": "SPY", "token": api_key},
+                    )
+                else:
+                    # Check free endpoint
+                    response = await client.get(
+                        "https://finnhub.io/api/v1/company-news",
+                        params={
+                            "symbol": "AAPL",
+                            "from": "2024-01-01",
+                            "to": "2024-01-31",
+                            "token": api_key,
+                        },
+                    )
                 response.raise_for_status()
+
             duration = (time.perf_counter() - start) * 1000
             return ServiceCheckResult(
                 service="finnhub",
                 status=ServiceStatus.HEALTHY,
                 message="API responding normally",
+                duration_ms=duration,
+                checked_at=datetime.now(UTC),
+            )
+
+        except httpx.HTTPStatusError as e:
+            duration = (time.perf_counter() - start) * 1000
+            return ServiceCheckResult(
+                service="finnhub",
+                status=ServiceStatus.UNHEALTHY,
+                message=f"HTTP {e.response.status_code}",
                 duration_ms=duration,
                 checked_at=datetime.now(UTC),
             )

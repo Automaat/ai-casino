@@ -79,14 +79,24 @@ class FinnhubFetcher:
 
     BASE_URL = "https://finnhub.io/api/v1"
 
-    def __init__(self, api_key: str | None = None, cache_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        cache_dir: str | None = None,
+        enable_social_sentiment: bool = False,
+        enable_news_sentiment: bool = False,
+    ) -> None:
         """Initialize Finnhub fetcher.
 
         Args:
             api_key: Finnhub API key
             cache_dir: Cache directory path
+            enable_social_sentiment: Enable social sentiment (premium)
+            enable_news_sentiment: Enable news sentiment (premium)
         """
         self._api_key = api_key
+        self._enable_social_sentiment = enable_social_sentiment
+        self._enable_news_sentiment = enable_news_sentiment
 
         self._cache_dir = Path(cache_dir or "data/cache/finnhub")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -125,6 +135,15 @@ class FinnhubFetcher:
             SocialSentimentData with Reddit and Twitter sentiment
         """
         logger.info(f"Fetching Finnhub social sentiment for {symbol}")
+
+        if not self._enable_social_sentiment:
+            logger.debug(f"Social sentiment disabled - returning empty data for {symbol}")
+            return SocialSentimentData(
+                symbol=symbol,
+                reddit=[],
+                twitter=[],
+                fetched_at=datetime.now(tz=UTC),
+            )
 
         cache_key = self._cache_key("social", symbol, from_date or "", to_date or "")
         cached = self._cache.get(cache_key)
@@ -209,6 +228,18 @@ class FinnhubFetcher:
             NewsSentimentData with buzz and sentiment metrics
         """
         logger.info(f"Fetching Finnhub sentiment indicator for {symbol}")
+
+        if not self._enable_news_sentiment:
+            logger.debug(f"News sentiment disabled - returning empty data for {symbol}")
+            return NewsSentimentData(
+                symbol=symbol,
+                buzz=BuzzData(articles_in_last_week=0, buzz=0.0, weekly_average=0.0),
+                company_news_score=0.0,
+                sector_avg_bullish_percent=0.0,
+                sector_avg_news_score=0.0,
+                sentiment=SentimentBreakdown(bearish_percent=0.0, bullish_percent=0.0),
+                fetched_at=datetime.now(tz=UTC),
+            )
 
         cache_key = self._cache_key("indicator", symbol)
         cached = self._cache.get(cache_key)
