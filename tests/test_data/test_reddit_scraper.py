@@ -1,6 +1,5 @@
 """Tests for RedditPlaywrightScraper."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -94,43 +93,21 @@ async def test_context_manager():
 
 
 @pytest.mark.unit
-async def test_extract_post_from_html(scraper, tmp_path):
-    """Test post extraction from HTML fixture."""
-    fixture_path = Path(__file__).parent.parent / "fixtures" / "reddit_html" / "subreddit_listing.html"
+def test_parse_post(scraper_config):
+    """Test _parse_post converts raw JS dict to RedditPost."""
+    scraper = RedditPlaywrightScraper(config=scraper_config)
 
-    if not fixture_path.exists():
-        pytest.skip("HTML fixture not found")
+    raw = {
+        "id": "abc123",
+        "title": "TSLA to the moon! 🚀",
+        "url": "https://reddit.com/r/wallstreetbets/post1",
+        "score": 2500,
+        "num_comments": 150,
+        "created_utc": "2024-01-15T12:00:00+00:00",
+        "body": "",
+    }
 
-    html_content = fixture_path.read_text()
-
-    # Mock Playwright page with fixture HTML
-    mock_container = AsyncMock()
-    mock_container.get_attribute = AsyncMock(return_value="t3_abc123")
-
-    # Mock selectors
-    title_elem = AsyncMock()
-    title_elem.text_content = AsyncMock(return_value="TSLA to the moon! 🚀")
-    title_elem.get_attribute = AsyncMock(return_value="https://reddit.com/r/wallstreetbets/post1")
-
-    score_elem = AsyncMock()
-    score_elem.text_content = AsyncMock(return_value="2500")
-
-    comments_elem = AsyncMock()
-    comments_elem.text_content = AsyncMock(return_value="150 comments")
-
-    async def query_selector_side_effect(selector):
-        if selector == "a.title":
-            return title_elem
-        if selector == "div.score.unvoted":
-            return score_elem
-        if selector == "a.comments":
-            return comments_elem
-        return None
-
-    mock_container.query_selector = AsyncMock(side_effect=query_selector_side_effect)
-
-    # Test extraction
-    post = await scraper._extract_post(mock_container, "wallstreetbets")
+    post = scraper._parse_post(raw, "wallstreetbets")
 
     assert post is not None
     assert post.id == "abc123"
@@ -141,34 +118,37 @@ async def test_extract_post_from_html(scraper, tmp_path):
 
 
 @pytest.mark.unit
-async def test_extract_comment_from_html(scraper):
-    """Test comment extraction."""
-    mock_container = AsyncMock()
-    mock_container.get_attribute = AsyncMock(return_value="t1_comment1")
+def test_parse_post_missing_id(scraper_config):
+    """Test _parse_post returns None when id is missing."""
+    scraper = RedditPlaywrightScraper(config=scraper_config)
 
-    # Mock selectors
-    body_elem = AsyncMock()
-    body_elem.text_content = AsyncMock(return_value="TSLA $350 by EOW! This is the way 🚀")
+    post = scraper._parse_post({"id": "", "title": "test"}, "wallstreetbets")
+    assert post is None
 
-    score_elem = AsyncMock()
-    score_elem.text_content = AsyncMock(return_value="450")
 
-    async def query_selector_side_effect(selector):
-        if selector == "div.md":
-            return body_elem
-        if selector == "div.score.unvoted":
-            return score_elem
-        return None
+@pytest.mark.unit
+def test_parse_comment(scraper_config):
+    """Test _parse_comment converts raw JS dict to RedditComment."""
+    scraper = RedditPlaywrightScraper(config=scraper_config)
 
-    mock_container.query_selector = AsyncMock(side_effect=query_selector_side_effect)
+    raw = {"id": "comment1", "body": "TSLA $350 by EOW! This is the way 🚀", "score": 450}
 
-    comment = await scraper._extract_comment(mock_container, "t3_abc123")
+    comment = scraper._parse_comment(raw, "t3_abc123")
 
     assert comment is not None
     assert comment.id == "comment1"
     assert comment.parent_post_id == "t3_abc123"
     assert comment.body == "TSLA $350 by EOW! This is the way 🚀"
     assert comment.score == 450
+
+
+@pytest.mark.unit
+def test_parse_comment_missing_body(scraper_config):
+    """Test _parse_comment returns None when body is empty."""
+    scraper = RedditPlaywrightScraper(config=scraper_config)
+
+    comment = scraper._parse_comment({"id": "c1", "body": "", "score": 1}, "post1")
+    assert comment is None
 
 
 @pytest.mark.unit
@@ -191,8 +171,8 @@ async def test_scrape_with_mock_browser(scraper_config):
         mock_context.new_page = AsyncMock(return_value=mock_page)
         mock_context.close = AsyncMock()
 
-        # Mock empty posts list
-        mock_page.query_selector_all = AsyncMock(return_value=[])
+        # Mock empty posts list via evaluate
+        mock_page.evaluate = AsyncMock(return_value=[])
         mock_page.goto = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
         mock_page.close = AsyncMock()

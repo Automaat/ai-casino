@@ -377,6 +377,58 @@ class RedditTickerMentionRepository(BaseRepository[TickerMention]):
         logger.debug(f"Inserted {inserted_count} ticker mentions from post {post.id} (deduped)")
         return inserted_count
 
+    async def bulk_insert_all(
+        self,
+        post_mentions: list[tuple[RedditPost, list[TickerMention]]],
+        extraction_method: ExtractionMethod = ExtractionMethod.LLM,
+    ) -> int:
+        """Bulk insert ticker mentions from multiple posts in one statement.
+
+        Args:
+            post_mentions: List of (post, mentions) tuples
+            extraction_method: LLM or REGEX
+
+        Returns:
+            Number of mentions inserted
+        """
+        values = []
+        for post, mentions in post_mentions:
+            for mention in mentions:
+                values.append(
+                    {
+                        "id": uuid.uuid4(),
+                        "symbol": mention.symbol.upper(),
+                        "source_type": "post",
+                        "source_reddit_id": post.id,
+                        "subreddit": post.subreddit,
+                        "sentiment": mention.sentiment,
+                        "mention_context": mention.context[:200] if mention.context else None,
+                        "confidence": Decimal(str(mention.confidence)),
+                        "extraction_method": extraction_method.value,
+                        "created_utc": post.created_utc,
+                        "extracted_at": datetime.now(UTC),
+                    }
+                )
+
+        if not values:
+            return 0
+
+        stmt = (
+            insert(RedditTickerMentionORM)
+            .values(values)
+            .on_conflict_do_nothing(
+                index_elements=["source_type", "source_reddit_id", "symbol", "extraction_method"]
+            )
+        )
+        result: Result = await self._session.execute(stmt)
+        await self._session.commit()
+
+        inserted_count = getattr(result, "rowcount", 0) or 0
+        logger.info(
+            f"Bulk inserted {inserted_count} ticker mentions across {len(post_mentions)} posts (deduped)"
+        )
+        return inserted_count
+
     async def get_by_id(self, entity_id: str) -> TickerMention | None:
         """Get ticker mention by ID.
 

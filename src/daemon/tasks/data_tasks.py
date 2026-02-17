@@ -317,6 +317,7 @@ class PeriodicRedditScrapingTask(TaskExecutor):
 
     async def execute(self) -> None:
         """Execute Reddit scraping logic."""
+        from src.data.reddit import RedditPost
         from src.data.reddit_scraper import RedditPlaywrightScraper
         from src.data.reddit_ticker_extractor import RedditTickerExtractor
         from src.database.connection import get_session
@@ -363,43 +364,58 @@ class PeriodicRedditScrapingTask(TaskExecutor):
         try:
             await scraper.start()
 
-            all_posts = []
-            all_comments = []
-            all_mentions = []
+            all_posts: list = []
+            all_top_posts: list = []
 
-            # Scrape each subreddit
+            # Scrape listing pages sequentially (rate-limit friendly)
             for subreddit in self.components.config.reddit_scraper.high_priority_subreddits:
                 try:
                     logger.info(f"Scraping r/{subreddit}")
-                    # Scrape posts
                     posts = await scraper.scrape_subreddit_posts(
                         subreddit=subreddit,
                         limit=self.components.config.reddit_scraper.posts_per_subreddit,
                     )
                     all_posts.extend(posts)
                     logger.info(f"Scraped {len(posts)} posts from r/{subreddit}")
-
-                    # Scrape comments from top posts
                     top_posts = sorted(posts, key=lambda p: p.score, reverse=True)[:10]
-                    logger.debug(f"Scraping comments from top {len(top_posts)} posts")
-                    for post in top_posts:
-                        comments = await scraper.scrape_post_comments(
-                            post=post,
-                            limit=self.components.config.reddit_scraper.comments_per_post,
-                        )
-                        all_comments.extend(comments)
-
-                        # Extract tickers
-                        if self.components.config.reddit_scraper.use_llm_extraction:
-                            logger.debug(f"Extracting tickers from post {post.id}")
-                            mentions = await extractor.extract_tickers(post=post, comments=comments)
-                            if mentions:
-                                logger.info(f"Extracted {len(mentions)} ticker mentions from post {post.id}")
-                            all_mentions.append((post, mentions))
-
+                    all_top_posts.extend(top_posts)
                 except Exception:
                     logger.opt(exception=True).warning(f"Failed to scrape r/{subreddit}")
                     continue
+
+            # Scrape comments + extract tickers in parallel across all top posts
+            semaphore = asyncio.Semaphore(3)
+
+            async def _scrape_and_extract(post: RedditPost) -> tuple:
+                async with semaphore:
+                    comments = await scraper.scrape_post_comments(
+                        post=post,
+                        limit=cfg.comments_per_post,
+                    )
+                mentions = []
+                if cfg.use_llm_extraction:
+                    logger.debug(f"Extracting tickers from post {post.id}")
+                    mentions = await extractor.extract_tickers(post=post, comments=comments)
+                    if mentions:
+                        logger.info(f"Extracted {len(mentions)} ticker mentions from post {post.id}")
+                return post, comments, mentions
+
+            logger.debug(f"Scraping comments from {len(all_top_posts)} top posts in parallel")
+            gather_results = await asyncio.gather(
+                *[_scrape_and_extract(p) for p in all_top_posts],
+                return_exceptions=True,
+            )
+
+            all_comments: list = []
+            all_mentions: list = []
+            for result in gather_results:
+                if isinstance(result, BaseException):
+                    logger.warning(f"Failed to scrape/extract post: {result}")
+                    continue
+                post, comments, mentions = result
+                all_comments.extend(comments)
+                if mentions:
+                    all_mentions.append((post, mentions))
 
             # Store to database
             async with get_session() as session:
@@ -411,17 +427,12 @@ class PeriodicRedditScrapingTask(TaskExecutor):
                 comment_repo = RedditCommentRepository(session)
                 comments_inserted = await comment_repo.bulk_insert(all_comments)
 
-                # Insert ticker mentions
+                # Bulk insert all ticker mentions in one statement
                 mention_repo = RedditTickerMentionRepository(session)
-                mentions_inserted = 0
-                for post, mentions in all_mentions:
-                    if mentions:
-                        count = await mention_repo.bulk_insert_from_post(
-                            post=post,
-                            mentions=mentions,
-                            extraction_method=ExtractionMethod.LLM,
-                        )
-                        mentions_inserted += count
+                mentions_inserted = await mention_repo.bulk_insert_all(
+                    post_mentions=all_mentions,
+                    extraction_method=ExtractionMethod.LLM,
+                )
 
                 # Compute sentiment aggregates
                 sentiment_repo = RedditTickerSentimentRepository(session)
