@@ -38,6 +38,74 @@ class RedditTickerExtractor:
         self.config = config
         self.prompt_loader = PromptLoader(agent_name="reddit")
 
+    def _truncate_content(
+        self, post: RedditPost, comments: list[RedditComment] | None, input_text: str
+    ) -> tuple[str | None, list[RedditComment] | None]:
+        """Truncate post body and comments if needed.
+
+        Args:
+            post: Original post
+            comments: Original comments
+            input_text: Combined input text for length check
+
+        Returns:
+            Tuple of (truncated_body, truncated_comments)
+        """
+        max_chars = self.config.extraction_max_tokens * 4
+        if len(input_text) <= max_chars:
+            return post.body, comments
+
+        # Truncate body proportionally
+        body_ratio = len(post.body or "") / len(input_text) if input_text else 0
+        max_body_chars = int(max_chars * body_ratio)
+        truncated_body = post.body
+        if post.body and len(post.body) > max_body_chars:
+            truncated_body = post.body[:max_body_chars] + "..."
+
+        # Limit comments to top 3
+        truncated_comments = comments[:3] if comments else None
+
+        logger.debug(f"Truncated input to ~{max_chars} chars (~{self.config.extraction_max_tokens} tokens)")
+        return truncated_body, truncated_comments
+
+    def _build_fallback_prompt(
+        self, post: RedditPost, truncated_body: str | None, truncated_comments: list[RedditComment] | None
+    ) -> str:
+        """Build fallback prompt when template fails to load.
+
+        Args:
+            post: Reddit post
+            truncated_body: Truncated post body
+            truncated_comments: Truncated comments list
+
+        Returns:
+            Fallback prompt string
+        """
+        fallback_parts = [f"Title: {post.title}"]
+        if truncated_body:
+            fallback_parts.append(f"Body: {truncated_body}")
+        if truncated_comments:
+            for idx, comment in enumerate(truncated_comments[:3], 1):
+                fallback_parts.append(f"Comment {idx}: {comment.body[:200]}")
+        truncated_input = "\n\n".join(fallback_parts)
+
+        return f"""Extract stock tickers mentioned in this Reddit post.
+
+For each ticker:
+- Symbol (e.g., AAPL, TSLA) - uppercase, 1-5 chars
+- Sentiment: BULLISH (positive/buying), BEARISH (negative/selling), NEUTRAL (mention only)
+- Context: brief snippet showing why ticker was mentioned (max 50 chars)
+- Confidence: 0.0-1.0 (how certain this is a stock ticker)
+
+Ignore:
+- Common abbreviations (CEO, IPO, DD, YOLO, ATH)
+- Non-stock mentions (company names without ticker context)
+- Sarcasm or jokes (e.g., "$ROPE", "$MOON")
+
+{truncated_input}
+
+Extract tickers:"""
+
     async def extract_tickers(
         self,
         post: RedditPost,
@@ -55,57 +123,33 @@ class RedditTickerExtractor:
         if not self.config.use_llm_extraction:
             return []
 
-        # Build input text (limit to max_tokens)
-        input_parts = [
-            f"Title: {post.title}",
-        ]
-
+        # Build input text for length check
+        input_parts = [f"Title: {post.title}"]
         if post.body:
             input_parts.append(f"Body: {post.body}")
-
         if comments:
             top_comments = sorted(comments, key=lambda c: c.score, reverse=True)[:3]
             for idx, comment in enumerate(top_comments, 1):
                 input_parts.append(f"Comment {idx}: {comment.body}")
 
         input_text = "\n\n".join(input_parts)
-
-        # Truncate if too long (rough token estimate: 1 token ~= 4 chars)
-        max_chars = self.config.extraction_max_tokens * 4
-        if len(input_text) > max_chars:
-            input_text = input_text[:max_chars] + "..."
-            logger.debug(
-                f"Truncated input to {max_chars} chars (~{self.config.extraction_max_tokens} tokens)"
-            )
+        truncated_body, truncated_comments = self._truncate_content(post, comments, input_text)
 
         # Load prompt template
         try:
-            prompt_template = self.prompt_loader.load("ticker_extraction.txt")
+            prompt_template = self.prompt_loader.load("ticker_extraction")
             prompt = prompt_template.format(
                 title=post.title,
-                body=post.body or "(no body)",
-                comments="\n".join(f"{idx}. {c.body[:200]}" for idx, c in enumerate(comments[:3], 1))
-                if comments
+                body=truncated_body or "(no body)",
+                comments="\n".join(
+                    f"{idx}. {c.body[:200]}" for idx, c in enumerate(truncated_comments[:3], 1)
+                )
+                if truncated_comments
                 else "(no comments)",
             )
         except Exception:
             logger.opt(exception=True).warning("Failed to load prompt template, using fallback")
-            prompt = f"""Extract stock tickers mentioned in this Reddit post.
-
-For each ticker:
-- Symbol (e.g., AAPL, TSLA) - uppercase, 1-5 chars
-- Sentiment: BULLISH (positive/buying), BEARISH (negative/selling), NEUTRAL (mention only)
-- Context: brief snippet showing why ticker was mentioned (max 50 chars)
-- Confidence: 0.0-1.0 (how certain this is a stock ticker)
-
-Ignore:
-- Common abbreviations (CEO, IPO, DD, YOLO, ATH)
-- Non-stock mentions (company names without ticker context)
-- Sarcasm or jokes (e.g., "$ROPE", "$MOON")
-
-{input_text}
-
-Extract tickers:"""
+            prompt = self._build_fallback_prompt(post, truncated_body, truncated_comments)
 
         try:
             # Use LLM structured output

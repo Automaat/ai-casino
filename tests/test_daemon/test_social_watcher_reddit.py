@@ -26,7 +26,7 @@ async def setup_reddit_tables():
     engine = get_db_engine()
 
     # Create tables
-    async with engine.get_engine().begin() as conn:
+    async with engine.engine.begin() as conn:
         await conn.run_sync(RedditPostORM.metadata.create_all)
         await conn.run_sync(RedditCommentORM.metadata.create_all)
         await conn.run_sync(RedditTickerMentionORM.metadata.create_all)
@@ -34,7 +34,7 @@ async def setup_reddit_tables():
     yield
 
     # Cleanup
-    async with engine.get_engine().begin() as conn:
+    async with engine.engine.begin() as conn:
         await conn.run_sync(RedditPostORM.metadata.drop_all)
         await conn.run_sync(RedditCommentORM.metadata.drop_all)
         await conn.run_sync(RedditTickerMentionORM.metadata.drop_all)

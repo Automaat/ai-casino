@@ -194,9 +194,16 @@ async def test_extract_tickers_handles_empty_response(extractor, mock_llm_client
 
 
 @pytest.mark.unit
-async def test_extract_tickers_truncates_long_content(extractor, mock_llm_client):
+async def test_extract_tickers_truncates_long_content(mock_llm_client):
     """Test content truncation for long posts."""
-    long_body = "A" * 3000  # Exceeds max tokens
+    # Create extractor with smaller max_tokens to trigger truncation
+    config = RedditScraperConfig(
+        use_llm_extraction=True,
+        extraction_max_tokens=500,  # 500 tokens * 4 = 2000 chars max
+    )
+    extractor = RedditTickerExtractor(llm_client=mock_llm_client, config=config)
+
+    long_body = "A" * 3000  # Exceeds max tokens (500 * 4 = 2000 chars)
     long_post = RedditPost(
         id="long123",
         title="Long post",

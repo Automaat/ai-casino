@@ -145,8 +145,8 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
     mock_sentiment_repo.compute_hourly_aggregates = AsyncMock(return_value=1)
 
     with (
-        patch("src.daemon.tasks.data_tasks.RedditPlaywrightScraper", return_value=mock_scraper),
-        patch("src.daemon.tasks.data_tasks.RedditTickerExtractor", return_value=mock_extractor),
+        patch("src.data.reddit_scraper.RedditPlaywrightScraper", return_value=mock_scraper),
+        patch("src.data.reddit_ticker_extractor.RedditTickerExtractor", return_value=mock_extractor),
         patch("src.daemon.tasks.data_tasks.get_session") as mock_get_session,
         patch("src.daemon.tasks.data_tasks.RedditPostRepository", return_value=mock_post_repo),
         patch("src.daemon.tasks.data_tasks.RedditCommentRepository", return_value=mock_comment_repo),
@@ -206,8 +206,8 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
     mock_sentiment_repo.compute_hourly_aggregates = AsyncMock(return_value=0)
 
     with (
-        patch("src.daemon.tasks.data_tasks.RedditPlaywrightScraper", return_value=mock_scraper),
-        patch("src.daemon.tasks.data_tasks.RedditTickerExtractor", return_value=mock_extractor),
+        patch("src.data.reddit_scraper.RedditPlaywrightScraper", return_value=mock_scraper),
+        patch("src.data.reddit_ticker_extractor.RedditTickerExtractor", return_value=mock_extractor),
         patch("src.daemon.tasks.data_tasks.get_session") as mock_get_session,
         patch("src.daemon.tasks.data_tasks.RedditPostRepository", return_value=mock_post_repo),
         patch("src.daemon.tasks.data_tasks.RedditCommentRepository", return_value=mock_comment_repo),
@@ -240,8 +240,8 @@ async def test_execute_closes_scraper_on_exception(reddit_task):
     mock_extractor = Mock()
 
     with (
-        patch("src.daemon.tasks.data_tasks.RedditPlaywrightScraper", return_value=mock_scraper),
-        patch("src.daemon.tasks.data_tasks.RedditTickerExtractor", return_value=mock_extractor),
+        patch("src.data.reddit_scraper.RedditPlaywrightScraper", return_value=mock_scraper),
+        patch("src.data.reddit_ticker_extractor.RedditTickerExtractor", return_value=mock_extractor),
     ):
         with pytest.raises(Exception, match="Fatal error"):
             await reddit_task.execute()
