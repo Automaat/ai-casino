@@ -86,17 +86,17 @@ class TradingChatApp(App):
     def _create_tool_registry(self) -> ToolRegistry:
         """Create and populate tool registry."""
         registry = ToolRegistry()
-        registry.register(WebSearchTool())
-        registry.register(GetMarketDataTool())
-        registry.register(GetNewsTool())
+        registry.register(WebSearchTool(fetcher=self._container.websearch_fetcher()))
+        registry.register(GetMarketDataTool(container=self._container))
+        registry.register(GetNewsTool(container=self._container))
         registry.register(AnalyzeStockTool(container=self._container))
         registry.register(ScreenStocksTool(container=self._container))
         registry.register(TrumpAnalysisTool(container=self._container))
         registry.register(GetSocialSentimentTool(container=self._container))
-        registry.register(GetRiskMetricsTool())
-        registry.register(RunBacktestTool())
-        registry.register(GenerateTearsheetTool())
-        registry.register(OptimizePortfolioTool())
+        registry.register(GetRiskMetricsTool(container=self._container))
+        registry.register(RunBacktestTool(container=self._container))
+        registry.register(GenerateTearsheetTool(container=self._container))
+        registry.register(OptimizePortfolioTool(container=self._container))
         return registry
 
     def _get_model_name(self) -> str:

@@ -18,15 +18,13 @@ if TYPE_CHECKING:
 class ScreenStocksTool(BaseTool):
     """Tool to screen stocks for investment opportunities."""
 
-    def __init__(self, container: AppContainer | None = None) -> None:
-        """Initialize tool with optional container.
+    def __init__(self, container: AppContainer) -> None:
+        """Initialize tool with DI container.
 
         Args:
-            container: DI container (auto-created if not provided)
+            container: DI container for dependency resolution
         """
-        from src.di.container import create_container
-
-        self._container = container or create_container()
+        self._container = container
 
     @property
     def name(self) -> str:

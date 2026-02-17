@@ -90,14 +90,12 @@ def create_comparative_worker(
     return ComparativeWorker(llm_client, comparative_fetcher)
 
 
-def create_web_research_worker(
-    llm_client: LLMClient, search_tool: WebSearchTool | None = None
-) -> WebResearchWorker:
+def create_web_research_worker(llm_client: LLMClient, search_tool: WebSearchTool) -> WebResearchWorker:
     """Create WebResearchWorker.
 
     Args:
         llm_client: LLM client
-        search_tool: Web search tool (creates default if not provided)
+        search_tool: Web search tool for data fetching
 
     Returns:
         WebResearchWorker instance

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from src.data.market import MarketDataFetcher
     from src.data.news import NewsFetcher
     from src.data.universe import StockUniverseFetcher
+    from src.data.websearch import WebSearchFetcher
     from src.database.repositories.trade import TradeRepository
     from src.di.container import AppContainer
     from src.metrics.execution import ExecutionMetricsCollector
@@ -129,18 +130,18 @@ def create_portfolio_var_calculator(
     return PortfolioVaRCalculator(risk_calculator, market_fetcher)
 
 
-def create_web_search_tool(container: AppContainer) -> WebSearchTool:
-    """Create WebSearchTool with DI container.
+def create_web_search_tool(websearch_fetcher: WebSearchFetcher) -> WebSearchTool:
+    """Create WebSearchTool with websearch fetcher.
 
     Args:
-        container: DI container for dependency resolution
+        websearch_fetcher: WebSearchFetcher for executing searches
 
     Returns:
         WebSearchTool instance
     """
     from src.tools.websearch import WebSearchTool
 
-    return WebSearchTool(container)
+    return WebSearchTool(websearch_fetcher)
 
 
 def create_market_regime_detector() -> MarketRegimeDetector:

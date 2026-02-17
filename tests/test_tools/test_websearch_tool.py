@@ -55,12 +55,12 @@ class TestWebSearchTool:
 
     def test_tool_name(self, test_container_full):
         """Test tool name property."""
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
         assert tool.name == "web_search"
 
     def test_get_tool_definition(self, test_container_full):
         """Test tool definition format."""
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
         definition = tool.get_tool_definition().model_dump(mode="json", by_alias=True, exclude_none=True)
 
         assert definition["type"] == "function"
@@ -79,7 +79,7 @@ class TestWebSearchTool:
         mock_fetcher.search.return_value = mock_general_response
         test_container_full.websearch_fetcher.override(mock_fetcher)
 
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
 
         result = tool.execute(query="AAPL stock", search_type="general", max_results=5)
 
@@ -94,7 +94,7 @@ class TestWebSearchTool:
         mock_fetcher.search_news.return_value = mock_news_response
         test_container_full.websearch_fetcher.override(mock_fetcher)
 
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
 
         result = tool.execute(query="AAPL news", search_type="news", max_results=5)
 
@@ -115,7 +115,7 @@ class TestWebSearchTool:
         mock_fetcher.search.return_value = empty_response
         test_container_full.websearch_fetcher.override(mock_fetcher)
 
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
         result = tool.execute(query="nonexistent query", search_type="general")
 
         assert "No results found" in result
@@ -139,7 +139,7 @@ class TestWebSearchTool:
         mock_fetcher.search.return_value = long_response
         test_container_full.websearch_fetcher.override(mock_fetcher)
 
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
 
         result = tool.execute(query="test", search_type="general")
 
@@ -148,6 +148,6 @@ class TestWebSearchTool:
 
     def test_repr(self, test_container_full):
         """Test string representation."""
-        tool = WebSearchTool(container=test_container_full)
+        tool = WebSearchTool(fetcher=test_container_full.websearch_fetcher())
         repr_str = repr(tool)
         assert "WebSearchTool" in repr_str

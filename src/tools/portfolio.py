@@ -15,15 +15,13 @@ if TYPE_CHECKING:
 class OptimizePortfolioTool(BaseTool):
     """Tool to optimize trading strategy parameters with Optuna."""
 
-    def __init__(self, container: AppContainer | None = None) -> None:
-        """Initialize tool with optional container.
+    def __init__(self, container: AppContainer) -> None:
+        """Initialize tool with DI container.
 
         Args:
-            container: DI container (auto-created if not provided)
+            container: DI container for dependency resolution
         """
-        from src.di.container import create_container
-
-        self._container = container or create_container()
+        self._container = container
 
     @property
     def name(self) -> str:

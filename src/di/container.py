@@ -179,7 +179,7 @@ class AppContainer(containers.DeclarativeContainer):
 
     web_search_tool = providers.Singleton(
         model_providers.create_web_search_tool,
-        container=providers.Self(),
+        websearch_fetcher=websearch_fetcher,
     )
 
     market_regime_detector = providers.Singleton(
