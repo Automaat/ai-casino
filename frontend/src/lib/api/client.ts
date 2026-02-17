@@ -237,14 +237,14 @@ export const api = {
 
 	// Discovery
 	async getDiscoveryInsights(): Promise<T.DiscoveryInsightsResponse> {
-		return fetchAPI<T.DiscoveryInsightsResponse>('/api/discovery/insights');
+		return fetchAPI<T.DiscoveryInsightsResponse>('/discovery/insights');
 	},
 
 	async getActiveDiscovery(
 		sourceFilter: 'all' | 'batch' | 'continuous' = 'all'
 	): Promise<T.ActiveDiscoveryResponse> {
 		return fetchAPI<T.ActiveDiscoveryResponse>(
-			`/api/discovery/active?source_filter=${sourceFilter}`
+			`/discovery/active?source_filter=${sourceFilter}`
 		);
 	},
 

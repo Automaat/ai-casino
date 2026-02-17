@@ -410,13 +410,16 @@ class DiscoveryStateManager(StateManager):
             session: Optional session for transaction context
         """
         from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+        from src.database.repositories.discovery import DiscoveryHistoryRepository
 
         score_boost_factor = 1.1
 
         if session:
-            repo = ActiveDiscoveryCandidateRepository(session)
+            active_repo = ActiveDiscoveryCandidateRepository(session)
+            history_repo = DiscoveryHistoryRepository(session)
+
             for candidate in candidates:
-                existing = await repo.get_by_symbol(candidate.symbol)
+                existing = await active_repo.get_by_symbol(candidate.symbol)
 
                 if existing:
                     new_sources = {str(s.value) for s in candidate.sources}
@@ -435,7 +438,7 @@ class DiscoveryStateManager(StateManager):
                         for source_type in all_sources
                     ]
 
-                    await repo.delete_by_symbol(candidate.symbol)
+                    await active_repo.delete_by_symbol(candidate.symbol)
                     updated_candidate = ActiveDiscoveryCandidate(
                         symbol=candidate.symbol,
                         discovered_at=existing.discovered_at,
@@ -443,13 +446,14 @@ class DiscoveryStateManager(StateManager):
                         sources=merged_sources,
                         ttl_expires_at=new_ttl,
                     )
-                    await repo.create(updated_candidate)
+                    await active_repo.create(updated_candidate)
                     logger.info(
                         f"Merged event candidate {candidate.symbol}: "
                         f"score {existing.composite_score:.2f}→{boosted_score:.2f}, "
                         f"sources {len(existing_sources)}→{len(all_sources)}"
                     )
                 else:
+                    # New candidate - create both active and history records
                     sources = [
                         DiscoverySourceDetail(
                             source_type=str(source.value),
@@ -465,7 +469,19 @@ class DiscoveryStateManager(StateManager):
                         sources=sources,
                         ttl_expires_at=candidate.ttl_expires_at,
                     )
-                    await repo.create(active_candidate)
+                    await active_repo.create(active_candidate)
+
+                    # Create discovery history record
+                    history_record = DiscoveryHistoryRecord(
+                        symbol=candidate.symbol,
+                        discovered_at=candidate.discovery_timestamp,
+                        composite_score=candidate.composite_score,
+                        sources=candidate.sources,
+                        added_to_watchlist=False,  # Will be updated when added to watchlist
+                        ttl_expires_at=candidate.ttl_expires_at,
+                    )
+                    await history_repo.create(history_record)
+
                     logger.info(
                         f"Added event candidate {candidate.symbol} score={candidate.composite_score:.2f}"
                     )
@@ -473,9 +489,11 @@ class DiscoveryStateManager(StateManager):
             from src.database.connection import get_session
 
             async with get_session() as fresh_session:
-                repo = ActiveDiscoveryCandidateRepository(fresh_session)
+                active_repo = ActiveDiscoveryCandidateRepository(fresh_session)
+                history_repo = DiscoveryHistoryRepository(fresh_session)
+
                 for candidate in candidates:
-                    existing = await repo.get_by_symbol(candidate.symbol)
+                    existing = await active_repo.get_by_symbol(candidate.symbol)
 
                     if existing:
                         new_sources = {str(s.value) for s in candidate.sources}
@@ -494,7 +512,7 @@ class DiscoveryStateManager(StateManager):
                             for source_type in all_sources
                         ]
 
-                        await repo.delete_by_symbol(candidate.symbol)
+                        await active_repo.delete_by_symbol(candidate.symbol)
                         updated_candidate = ActiveDiscoveryCandidate(
                             symbol=candidate.symbol,
                             discovered_at=existing.discovered_at,
@@ -502,13 +520,14 @@ class DiscoveryStateManager(StateManager):
                             sources=merged_sources,
                             ttl_expires_at=new_ttl,
                         )
-                        await repo.create(updated_candidate)
+                        await active_repo.create(updated_candidate)
                         logger.info(
                             f"Merged event candidate {candidate.symbol}: "
                             f"score {existing.composite_score:.2f}→{boosted_score:.2f}, "
                             f"sources {len(existing_sources)}→{len(all_sources)}"
                         )
                     else:
+                        # New candidate - create both active and history records
                         sources = [
                             DiscoverySourceDetail(
                                 source_type=str(source.value),
@@ -524,10 +543,48 @@ class DiscoveryStateManager(StateManager):
                             sources=sources,
                             ttl_expires_at=candidate.ttl_expires_at,
                         )
-                        await repo.create(active_candidate)
+                        await active_repo.create(active_candidate)
+
+                        # Create discovery history record
+                        history_record = DiscoveryHistoryRecord(
+                            symbol=candidate.symbol,
+                            discovered_at=candidate.discovery_timestamp,
+                            composite_score=candidate.composite_score,
+                            sources=candidate.sources,
+                            added_to_watchlist=False,  # Will be updated when added to watchlist
+                            ttl_expires_at=candidate.ttl_expires_at,
+                        )
+                        await history_repo.create(history_record)
+
                         logger.info(
                             f"Added event candidate {candidate.symbol} score={candidate.composite_score:.2f}"
                         )
+
+    async def mark_candidates_added_to_watchlist(
+        self, candidates: list[DiscoveryCandidate], session: AsyncSession | None = None
+    ) -> None:
+        """Mark discovery history records as added to watchlist.
+
+        Args:
+            candidates: Discovery candidates that were added to watchlist
+            session: Optional session for transaction context
+        """
+        from src.database.repositories.discovery import DiscoveryHistoryRepository
+
+        if session:
+            repo = DiscoveryHistoryRepository(session)
+            for candidate in candidates:
+                await repo.mark_added_to_watchlist(candidate.symbol, candidate.discovery_timestamp)
+        else:
+            try:
+                from src.database.connection import get_session
+
+                async with get_session() as fresh_session:
+                    repo = DiscoveryHistoryRepository(fresh_session)
+                    for candidate in candidates:
+                        await repo.mark_added_to_watchlist(candidate.symbol, candidate.discovery_timestamp)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to mark candidates as added to watchlist: {e}")
 
     async def get_last_discovery_outcome_tracking(
         self, session: AsyncSession | None = None

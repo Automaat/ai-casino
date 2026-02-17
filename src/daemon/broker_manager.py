@@ -199,11 +199,16 @@ class BrokerManager:
             # Add active candidates (already sorted by score in discovery engine)
             # Refresh active candidates after expiration
             active_candidates = await self.state.get_active_discovery_candidates(session=session)
-            discovery_symbols = [c.symbol for c in active_candidates if c.symbol not in seen]
-            if discovery_symbols:
+            candidates_to_add = [c for c in active_candidates if c.symbol not in seen]
+
+            if candidates_to_add:
+                discovery_symbols = [c.symbol for c in candidates_to_add]
                 logger.info(f"Merged {len(discovery_symbols)} discovery candidates: {discovery_symbols}")
                 merged_watchlist.extend(discovery_symbols)
                 seen.update(discovery_symbols)
+
+                # Mark discovery history records as added to watchlist
+                await self.state.discovery.mark_candidates_added_to_watchlist(candidates_to_add, session=session)
         elif self.config.screening.enabled:
             screening_history = await self.state.get_screening_history(limit=1, session=session)
             if screening_history:

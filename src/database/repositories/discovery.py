@@ -161,6 +161,30 @@ class DiscoveryHistoryRepository(BaseRepository[DiscoveryHistoryRecord]):
         logger.info(f"Updated discovery outcome for {symbol}: 7d={outcome_7d}, 30d={outcome_30d}")
         return self._to_record(orm)
 
+    async def mark_added_to_watchlist(self, symbol: str, discovered_at: datetime) -> bool:
+        """Mark discovery record as added to watchlist.
+
+        Args:
+            symbol: Stock ticker symbol
+            discovered_at: Discovery timestamp to identify specific record
+
+        Returns:
+            True if record was found and updated, False otherwise
+        """
+        result = await self._session.execute(
+            select(DiscoveryHistoryRecordORM)
+            .where(DiscoveryHistoryRecordORM.symbol == symbol)
+            .where(DiscoveryHistoryRecordORM.discovered_at == discovered_at)
+        )
+        orm = result.scalar_one_or_none()
+        if not orm:
+            return False
+
+        orm.added_to_watchlist = True
+        await self._session.commit()
+        logger.info(f"Marked {symbol} (discovered {discovered_at}) as added to watchlist")
+        return True
+
     async def delete_before(self, cutoff: datetime) -> int:
         """Delete discovery history records older than cutoff date.
 
