@@ -1,7 +1,7 @@
 """ORM models for screening operations."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
@@ -19,18 +19,18 @@ class ScreeningRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     criteria: Mapped[str] = mapped_column(String(100), nullable=False)
     universe: Mapped[str] = mapped_column(String(50), nullable=False)
-    top_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    candidates: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    top_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    candidates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     screened_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -51,7 +51,7 @@ class PrefetchRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     symbols_prefetched: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -61,7 +61,7 @@ class PrefetchRecordORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -82,16 +82,16 @@ class EarningsCalendarRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    events: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    events: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     symbols_fetched: Mapped[int] = mapped_column(Integer, nullable=False)
     symbols_failed: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -112,21 +112,21 @@ class GamePlanRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    priority_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    priority_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     risk_stance: Mapped[str] = mapped_column(String(20), nullable=False)
-    sector_focus: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    sector_focus: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4), nullable=True)
     overnight_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    key_levels: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    key_levels: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     generated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -148,7 +148,7 @@ class ScoringWeightsHistoryORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     regime: Mapped[str | None] = mapped_column(String(30), nullable=True)
     technical_weight: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
@@ -159,12 +159,12 @@ class ScoringWeightsHistoryORM(Base):
     training_window_days: Mapped[int] = mapped_column(Integer, nullable=False)
     discoveries_analyzed: Mapped[int] = mapped_column(Integer, nullable=False)
     avg_performance_improvement: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     activated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

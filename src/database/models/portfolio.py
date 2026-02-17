@@ -1,7 +1,7 @@
 """ORM models for portfolio operations."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String, text
@@ -19,16 +19,16 @@ class OptimizationRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    symbols_optimized: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    symbols_skipped: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    symbols_optimized: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    symbols_skipped: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     total_time_seconds: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -49,7 +49,7 @@ class RebalancingRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     method: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -62,7 +62,7 @@ class RebalancingRecordORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -83,18 +83,18 @@ class SectorRotationRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    leading_sectors: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    lagging_sectors: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    sector_strengths: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    sector_momenta: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    flagged_positions: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    leading_sectors: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    lagging_sectors: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    sector_strengths: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    sector_momenta: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    flagged_positions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -115,16 +115,16 @@ class SectorAttributionRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     total_portfolio_value: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
-    benchmark_name: Mapped[str] = mapped_column(String(20), nullable=False, server_default="'SPY'")
-    contributions: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    benchmark_name: Mapped[str] = mapped_column(String(20), nullable=False, default="SPY")
+    contributions: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -145,21 +145,21 @@ class PeerAnalysisRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    symbols_analyzed: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    rankings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    symbols_analyzed: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    rankings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     swap_recommendations: Mapped[list] = mapped_column(
-        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+        JSONB, nullable=False, default=list
     )
-    analyses: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    analyses: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     total_peers: Mapped[int] = mapped_column(Integer, nullable=False)
     total_duration_seconds: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -180,7 +180,7 @@ class CorrelationAuditRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     num_positions: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -193,7 +193,7 @@ class CorrelationAuditRecordORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

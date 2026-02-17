@@ -1,7 +1,7 @@
 """ORM models for monitoring operations."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
@@ -19,17 +19,17 @@ class HealthReportORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     overall_status: Mapped[str] = mapped_column(String(20), nullable=False)
-    service_checks: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    cleanup_results: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    service_checks: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    cleanup_results: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     total_duration_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -51,19 +51,19 @@ class DegradationRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     tier: Mapped[str] = mapped_column(String(20), nullable=False)
     unavailable_services: Mapped[list] = mapped_column(
-        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+        JSONB, nullable=False, default=list
     )
     confidence_adjustment: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     halt_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -84,7 +84,7 @@ class RiskAuditORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -106,7 +106,7 @@ class RiskAuditORM(Base):
     warnings: Mapped[list[str]] = mapped_column(
         ARRAY(Text),
         nullable=False,
-        server_default=text("'{}'::text[]"),
+        default=list,
     )
 
     portfolio_var_95: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4))
@@ -115,7 +115,7 @@ class RiskAuditORM(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -162,7 +162,7 @@ class DaemonMetadataORM(Base):
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (Index("idx_daemon_metadata_updated_at", "updated_at"),)
@@ -180,11 +180,11 @@ class CoordinatorMetricsORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     cycle_num: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -192,7 +192,7 @@ class CoordinatorMetricsORM(Base):
     symbols_analyzed: Mapped[list[str]] = mapped_column(
         ARRAY(Text),
         nullable=False,
-        server_default=text("'{}'::text[]"),
+        default=list,
     )
     tool_calls_made: Mapped[int] = mapped_column(Integer, nullable=False)
     trades_proposed: Mapped[int] = mapped_column(Integer, nullable=False)

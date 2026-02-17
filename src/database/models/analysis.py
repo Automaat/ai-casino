@@ -1,7 +1,7 @@
 """ORM models for analysis operations."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, String, Text, text
@@ -19,22 +19,22 @@ class AnalysisRecordORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     signal: Mapped[str] = mapped_column(String(10), nullable=False)
     confidence: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
-    executed_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    trading_session: Mapped[str] = mapped_column(String(20), nullable=False, server_default="REGULAR")
-    is_paper_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    executed_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    trading_session: Mapped[str] = mapped_column(String(20), nullable=False, default="REGULAR")
+    is_paper_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     rsi: Mapped[Decimal | None] = mapped_column(DECIMAL(6, 2), nullable=True)
     macd_hist: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True)
-    reasoning: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    reasoning: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -61,7 +61,7 @@ class SignalOutcomeORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -70,7 +70,7 @@ class SignalOutcomeORM(Base):
     price_at_signal: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     strategy_used: Mapped[str | None] = mapped_column(String(50), nullable=True)
     regime: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    trading_session: Mapped[str] = mapped_column(String(20), nullable=False, server_default="'REGULAR'")
+    trading_session: Mapped[str] = mapped_column(String(20), nullable=False, default="REGULAR")
     technical_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
     sentiment_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
     news_signal: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -86,7 +86,7 @@ class SignalOutcomeORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -132,7 +132,7 @@ class ExecutionGraphORM(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     workflow_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     symbol: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -140,12 +140,12 @@ class ExecutionGraphORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
