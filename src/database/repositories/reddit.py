@@ -92,14 +92,23 @@ class RedditPostRepository(BaseRepository[RedditPost]):
             for post in posts
         ]
 
-        stmt = insert(RedditPostORM).values(values).on_conflict_do_nothing(index_elements=["reddit_id"])
+        stmt = insert(RedditPostORM).values(values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["reddit_id"],
+            set_={
+                "score": stmt.excluded.score,
+                "upvote_ratio": stmt.excluded.upvote_ratio,
+                "num_comments": stmt.excluded.num_comments,
+                "fetched_at": stmt.excluded.fetched_at,
+            },
+        )
 
         result: Result = await self._session.execute(stmt)
         await self._session.commit()
 
-        inserted_count = getattr(result, "rowcount", 0) or 0
-        logger.info(f"Bulk inserted {inserted_count}/{len(posts)} Reddit posts (deduped by reddit_id)")
-        return inserted_count
+        upserted_count = getattr(result, "rowcount", 0) or 0
+        logger.info(f"Upserted {upserted_count}/{len(posts)} Reddit posts (score/ratio refreshed)")
+        return upserted_count
 
     async def get_by_id(self, entity_id: str) -> RedditPost | None:
         """Get Reddit post by database ID.

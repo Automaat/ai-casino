@@ -243,17 +243,16 @@ class SocialWatcher(EventWatcher):
                 post_repo = RedditPostRepository(session)
                 mention_repo = RedditTickerMentionRepository(session)
 
-                # Query posts and mentions from last poll interval
-                window_minutes = self.poll_interval // 60
+                # Volume spike detection: only recent poll window
+                poll_window = self.poll_interval // 60
+                # Viral detection: full 1-hour window (matches _check_viral_post age limit)
+                viral_window = 60
+
+                mention_counts = await mention_repo.get_mentions_in_window(window_minutes=poll_window)
                 recent_posts = await post_repo.get_posts_in_window(
-                    window_minutes=window_minutes, subreddits=self.subreddits
+                    window_minutes=viral_window, subreddits=self.subreddits
                 )
-
-                # Aggregate mentions from DB (grouped by symbol)
-                mention_counts = await mention_repo.get_mentions_in_window(window_minutes=window_minutes)
-
-                # Get post-to-symbols mapping for viral post detection
-                post_symbols_map = await mention_repo.get_post_symbols_map(window_minutes=window_minutes)
+                post_symbols_map = await mention_repo.get_post_symbols_map(window_minutes=viral_window)
 
                 # If we got data from DB, use it
                 if mention_counts or recent_posts:
@@ -280,7 +279,10 @@ class SocialWatcher(EventWatcher):
                                 # Only emit one viral event per post (for first symbol)
                                 break
 
-                    logger.debug(f"Fetched {len(events)} events from DB (posts={len(recent_posts)})")
+                    logger.debug(
+                        f"Fetched {len(events)} events from DB "
+                        f"(posts={len(recent_posts)}, viral_window={viral_window}min)"
+                    )
                     return events
 
         except Exception as e:
