@@ -5,13 +5,19 @@
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import PieChart from '$lib/components/charts/PieChart.svelte';
 	import BarChart from '$lib/components/charts/BarChart.svelte';
-	import { discoveryInsights, fetchDiscoveryInsights } from '$lib/stores/discovery';
+	import {
+		activeDiscovery,
+		discoveryInsights,
+		fetchActiveDiscovery,
+		fetchDiscoveryInsights
+	} from '$lib/stores/discovery';
 
 	let wsConnected = $state(false);
 	let ws: WebSocket | null = null;
 	let refreshInterval: number | null = null;
 
 	const insights = $derived($discoveryInsights);
+	const active = $derived($activeDiscovery);
 
 	// Pie chart data for source breakdown
 	const pieChartData = $derived.by(() => {
@@ -39,16 +45,58 @@
 		return Object.entries(buckets).map(([label, value]) => ({ label, value }));
 	});
 
+	// Active candidates table
+	const activeCandidatesColumns = [
+		{ key: 'symbol' as const, label: 'Symbol', class: 'font-medium' },
+		{
+			key: 'discovered_at' as const,
+			label: 'Discovered',
+			format: (v: string) => new Date(v).toLocaleDateString()
+		},
+		{ key: 'composite_score' as const, label: 'Score', format: (v: number) => v.toFixed(3) },
+		{
+			key: 'sources' as const,
+			label: 'Sources',
+			format: (v: any[]) => v.map((s) => s.source_type).join(', ')
+		},
+		{
+			key: 'time_remaining_minutes' as const,
+			label: 'TTL',
+			format: (v: number) => `${v}m`
+		},
+		{
+			key: 'ttl_expires_at' as const,
+			label: 'Expires',
+			format: (v: string) => new Date(v).toLocaleTimeString()
+		}
+	];
+
 	// Recent discoveries table
 	const discoveryColumns = [
 		{ key: 'symbol' as const, label: 'Symbol', class: 'font-medium' },
-		{ key: 'discovered_at' as const, label: 'Discovered', format: (v: string) => new Date(v).toLocaleDateString() },
+		{
+			key: 'discovered_at' as const,
+			label: 'Discovered',
+			format: (v: string) => new Date(v).toLocaleDateString()
+		},
 		{ key: 'composite_score' as const, label: 'Score', format: (v: number) => v.toFixed(3) },
 		{ key: 'sources' as const, label: 'Sources', format: (v: string[]) => v.length.toString() },
-		{ key: 'added_to_watchlist' as const, label: 'Added', format: (v: boolean) => v ? '✓' : '–' },
+		{
+			key: 'added_to_watchlist' as const,
+			label: 'Added',
+			format: (v: boolean) => (v ? '✓' : '–')
+		},
 		{ key: 'first_signal' as const, label: 'Signal', format: (v: string | null) => v || '–' },
-		{ key: 'outcome_7d' as const, label: '7d Return', format: (v: number | null) => v !== null ? `${(v * 100).toFixed(1)}%` : '–' },
-		{ key: 'outcome_30d' as const, label: '30d Return', format: (v: number | null) => v !== null ? `${(v * 100).toFixed(1)}%` : '–' }
+		{
+			key: 'outcome_7d' as const,
+			label: '7d Return',
+			format: (v: number | null) => (v !== null ? `${(v * 100).toFixed(1)}%` : '–')
+		},
+		{
+			key: 'outcome_30d' as const,
+			label: '30d Return',
+			format: (v: number | null) => (v !== null ? `${(v * 100).toFixed(1)}%` : '–')
+		}
 	];
 
 	const WS_URL =
@@ -78,6 +126,7 @@
 				const msg = JSON.parse(event.data);
 				if (msg.event_type === 'CYCLE_COMPLETE') {
 					fetchDiscoveryInsights();
+					fetchActiveDiscovery('continuous');
 				}
 			} catch (error) {
 				console.error('Failed to parse WebSocket message:', error);
@@ -104,8 +153,12 @@
 
 	onMount(() => {
 		fetchDiscoveryInsights();
+		fetchActiveDiscovery('continuous');
 		connectWebSocket();
-		refreshInterval = setInterval(() => fetchDiscoveryInsights(), 60000); // Refresh every minute
+		refreshInterval = setInterval(() => {
+			fetchDiscoveryInsights();
+			fetchActiveDiscovery('continuous');
+		}, 60000); // Refresh every minute
 	});
 
 	onDestroy(() => {
@@ -132,11 +185,52 @@
 		</div>
 	</div>
 
+	<!-- Active Candidates (Real-time - Continuous Discovery Only) -->
+	<Card title="Active Discovery Candidates (Continuous - Live)">
+		<div class="space-y-4">
+			<div class="flex justify-between items-center px-4 pt-2">
+				<div>
+					<p class="text-sm text-gray-600">
+						Currently tracking <span class="font-semibold">{active?.count || 0}</span> candidates
+						from event watchers
+					</p>
+					<p class="text-xs text-gray-500 mt-1">
+						Sources: News, Social Media, Volume/Price Anomalies, Pre-Market
+					</p>
+				</div>
+				{#if active?.last_discovery}
+					<p class="text-sm text-gray-500">
+						Last batch: {new Date(active.last_discovery).toLocaleString()}
+					</p>
+				{/if}
+			</div>
+			{#if active?.candidates && active.candidates.length > 0}
+				<DataTable data={active.candidates} columns={activeCandidatesColumns} />
+			{:else}
+				<div class="text-center py-12 text-gray-600">
+					No active continuous discovery candidates
+				</div>
+			{/if}
+		</div>
+	</Card>
+
 	<!-- Stats Cards -->
 	<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-		<MetricCard title="Total Discovered" value={insights?.total_discoveries?.toString() || '0'} icon="🔍" />
-		<MetricCard title="Added to Watchlist" value={insights?.success_metrics?.added_to_watchlist?.toString() || '0'} icon="⭐" />
-		<MetricCard title="Received Signal" value={insights?.success_metrics?.received_signal?.toString() || '0'} icon="📊" />
+		<MetricCard
+			title="Total Discovered"
+			value={insights?.total_discoveries?.toString() || '0'}
+			icon="🔍"
+		/>
+		<MetricCard
+			title="Added to Watchlist"
+			value={insights?.success_metrics?.added_to_watchlist?.toString() || '0'}
+			icon="⭐"
+		/>
+		<MetricCard
+			title="Received Signal"
+			value={insights?.success_metrics?.received_signal?.toString() || '0'}
+			icon="📊"
+		/>
 		<MetricCard title="Signal Rate" value={`${insights?.success_metrics?.signal_rate || 0}%`} icon="🎯" />
 	</div>
 

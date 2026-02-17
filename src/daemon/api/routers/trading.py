@@ -12,8 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import (
+    ActiveDiscoveryResponse,
     AnalysesResponse,
     AnalysisRecordResponse,
+    ApiActiveDiscoveryCandidate,
+    ApiActiveDiscoverySourceDetail,
     DiscoveryInsightsResponse,
     DiscoveryRecord,
     DiscoverySourceBreakdown,
@@ -359,4 +362,89 @@ async def get_discovery_insights(
         recent_discoveries=recent_discoveries,
         avg_composite_score=avg_composite_score,
         total_discoveries=total_discovered,
+    )
+
+
+@router.get("/discovery/active", response_model=ActiveDiscoveryResponse)
+async def get_active_discovery(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    source_filter: Literal["all", "batch", "continuous"] = "all",
+) -> ActiveDiscoveryResponse:
+    """Get active discovery candidates (currently tracked with TTL).
+
+    Args:
+        request: FastAPI request
+        session: Database session
+        source_filter: Filter by source type (all, batch, continuous)
+
+    Returns:
+        ActiveDiscoveryResponse with filtered candidates
+    """
+    from datetime import UTC, datetime
+
+    components = get_components(request)
+
+    # Get active discovery candidates
+    active_candidates = await components.state.get_active_discovery_candidates(session=session)
+
+    # Define source categories using enum values
+    from src.discovery.models import DiscoverySource
+
+    batch_sources = {
+        DiscoverySource.TECHNICAL_SCREENING.value,
+        DiscoverySource.EARNINGS_UPCOMING.value,
+        DiscoverySource.SECTOR_ROTATION.value,
+    }
+    continuous_sources = {
+        DiscoverySource.REDDIT_TRENDING.value,
+        DiscoverySource.VOLUME_SPIKE.value,
+        DiscoverySource.PRICE_GAP.value,
+        DiscoverySource.NEWS_TRENDING.value,
+        DiscoverySource.PRE_MARKET.value,
+    }
+
+    # Filter out expired candidates
+    now = datetime.now(UTC)
+    active_candidates = [c for c in active_candidates if c.ttl_expires_at > now]
+
+    # Filter candidates by source type
+    if source_filter == "batch":
+        active_candidates = [c for c in active_candidates if any(s.value in batch_sources for s in c.sources)]
+    elif source_filter == "continuous":
+        active_candidates = [
+            c for c in active_candidates if any(s.value in continuous_sources for s in c.sources)
+        ]
+
+    # Get last discovery timestamp
+    last_discovery = await components.state.get_last_discovery(session=session)
+
+    # Convert to response models
+    candidates = []
+    for candidate in active_candidates:
+        time_remaining = int((candidate.ttl_expires_at - now).total_seconds() / 60)
+
+        sources = [
+            ApiActiveDiscoverySourceDetail(
+                source_type=str(source.value),
+                weight=candidate.source_scores.get(str(source.value), 0.0),
+            )
+            for source in candidate.sources
+        ]
+
+        candidates.append(
+            ApiActiveDiscoveryCandidate(
+                symbol=candidate.symbol,
+                discovered_at=candidate.discovery_timestamp,
+                composite_score=candidate.composite_score,
+                sources=sources,
+                ttl_expires_at=candidate.ttl_expires_at,
+                time_remaining_minutes=max(0, time_remaining),
+            )
+        )
+
+    return ActiveDiscoveryResponse(
+        candidates=candidates,
+        count=len(candidates),
+        last_discovery=last_discovery,
     )
