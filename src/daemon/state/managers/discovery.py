@@ -430,7 +430,7 @@ class DiscoveryStateManager(StateManager):
                         DiscoverySourceDetail(
                             source_type=source_type,
                             weight=candidate.source_scores.get(source_type, 0.0),
-                            metadata={},
+                            metadata=candidate.metadata or {},
                         )
                         for source_type in all_sources
                     ]
@@ -454,7 +454,7 @@ class DiscoveryStateManager(StateManager):
                         DiscoverySourceDetail(
                             source_type=str(source.value),
                             weight=candidate.source_scores.get(str(source.value), 0.0),
-                            metadata={},
+                            metadata=candidate.metadata or {},
                         )
                         for source in candidate.sources
                     ]
@@ -489,7 +489,7 @@ class DiscoveryStateManager(StateManager):
                             DiscoverySourceDetail(
                                 source_type=source_type,
                                 weight=candidate.source_scores.get(source_type, 0.0),
-                                metadata={},
+                                metadata=candidate.metadata or {},
                             )
                             for source_type in all_sources
                         ]
@@ -513,7 +513,7 @@ class DiscoveryStateManager(StateManager):
                             DiscoverySourceDetail(
                                 source_type=str(source.value),
                                 weight=candidate.source_scores.get(str(source.value), 0.0),
-                                metadata={},
+                                metadata=candidate.metadata or {},
                             )
                             for source in candidate.sources
                         ]

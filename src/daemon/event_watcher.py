@@ -320,7 +320,8 @@ class EventWatcher(ABC):
         # Convert to discovery candidates
         candidates = []
         now = datetime.now(UTC)
-        ttl_hours = 24
+        config = self._container.daemon_config()
+        ttl_hours = config.event_integration.urgency_ttl_hours.get("WATCHLIST", 24)
 
         for event, triage in watchlist_events:
             for symbol in triage.symbols:
