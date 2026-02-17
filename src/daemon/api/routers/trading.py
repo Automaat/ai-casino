@@ -394,9 +394,7 @@ async def get_active_discovery(
 
     # Filter candidates by source type
     if source_filter == "batch":
-        active_candidates = [
-            c for c in active_candidates if any(s.value in batch_sources for s in c.sources)
-        ]
+        active_candidates = [c for c in active_candidates if any(s.value in batch_sources for s in c.sources)]
     elif source_filter == "continuous":
         active_candidates = [
             c for c in active_candidates if any(s.value in continuous_sources for s in c.sources)
