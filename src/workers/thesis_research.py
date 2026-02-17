@@ -178,12 +178,12 @@ class ThesisResearchWorker:
         return self._prompts.load(
             "user",
             symbol=symbol,
-            technical_summary=technical_summary,
-            sentiment_summary=sentiment_summary,
-            news_summary=news_summary,
-            fundamental_summary=fundamental_summary,
-            comparative_summary=comparative_summary,
-            trump_summary=trump_summary,
+            tech_str=technical_summary,
+            sent_str=sentiment_summary,
+            news_str=news_summary,
+            fund_str=fundamental_summary,
+            comp_str=comparative_summary,
+            trump_str=trump_summary,
         )
 
     def _calculate_confidence(

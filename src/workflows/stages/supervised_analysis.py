@@ -120,10 +120,55 @@ def _validate_input_data(input_data: AnalysisInput) -> None:
         logger.warning("news_articles is None; sentiment/news analyses may be skipped")
 
 
+def _handle_worker_result(
+    worker_task: _WorkerTask,
+    result: Any,
+    output: dict[AnalysisType, Any],
+    metrics_collector: SupervisorMetricsCollector | None,
+    warnings: list[str] | None,
+) -> tuple[int, int]:
+    """Handle a single worker result, returning (success_delta, error_delta).
+
+    Args:
+        worker_task: Worker task metadata
+        result: Worker execution result or exception
+        output: Output dict to populate
+        metrics_collector: Optional supervisor metrics collector
+        warnings: Optional list to append failure warnings
+
+    Returns:
+        Tuple of (success_count_increment, error_count_increment)
+
+    Raises:
+        Exception: If result is a control-flow exception or required worker failure
+    """
+    analysis_type = worker_task.analysis_type
+    category = worker_task.category
+
+    if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
+        raise result
+
+    if isinstance(result, Exception):
+        _record_worker_result(analysis_type.value, result, is_error=True, metrics_collector=metrics_collector)
+        if category == "required":
+            logger.opt(exception=result).error(f"Required worker {analysis_type.value} failed")
+            raise result
+        logger.opt(exception=result).warning(f"Optional worker {analysis_type.value} failed")
+        output[analysis_type] = None
+        if warnings is not None:
+            warnings.append(f"Optional analysis {analysis_type.value} failed: {result}")
+        return 0, 1
+
+    _record_worker_result(analysis_type.value, result, is_error=False, metrics_collector=metrics_collector)
+    output[analysis_type] = result
+    return 1, 0
+
+
 async def _execute_workers_with_gather(
     tasks: list[_WorkerTask],
     timeout_ms: int,
     metrics_collector: SupervisorMetricsCollector | None = None,
+    warnings: list[str] | None = None,
 ) -> dict[AnalysisType, Any]:
     """Execute workers using asyncio.gather with timeout and error handling.
 
@@ -131,6 +176,7 @@ async def _execute_workers_with_gather(
         tasks: List of worker tasks with metadata
         timeout_ms: Timeout in milliseconds
         metrics_collector: Optional supervisor metrics collector
+        warnings: Optional list to append optional worker failure messages
 
     Returns:
         Dict mapping analysis type to result (None for failures)
@@ -180,34 +226,69 @@ async def _execute_workers_with_gather(
             f"{error_count} errors, duration {duration_ms:.0f}ms"
         )
 
-    # Record worker completions and errors
     for worker_task, result in zip(tasks, results, strict=True):
-        analysis_type = worker_task.analysis_type
-        category = worker_task.category
-
-        # Control-flow exceptions - propagate immediately
-        if isinstance(result, (asyncio.CancelledError, KeyboardInterrupt)):
-            raise result
-
-        # Worker failures
-        if isinstance(result, Exception):
-            _record_worker_result(
-                analysis_type.value, result, is_error=True, metrics_collector=metrics_collector
-            )
-            error_count += 1
-            if category == "required":
-                logger.opt(exception=result).error(f"Required worker {analysis_type.value} failed")
-                raise result
-            logger.opt(exception=result).warning(f"Optional worker {analysis_type.value} failed")
-            output[analysis_type] = None
-        else:
-            _record_worker_result(
-                analysis_type.value, result, is_error=False, metrics_collector=metrics_collector
-            )
-            success_count += 1
-            output[analysis_type] = result
+        s, e = _handle_worker_result(worker_task, result, output, metrics_collector, warnings)
+        success_count += s
+        error_count += e
 
     return output
+
+
+def _build_group1_coros(
+    input_data: AnalysisInput,
+    technical_worker: TechnicalWorker,
+    sentiment_worker: SentimentWorker,
+    news_worker: NewsWorker,
+    fundamental_worker: FundamentalWorker,
+    comparative_worker: ComparativeWorker,
+    web_researcher: WebResearchWorker,
+    social_worker: SocialSentimentWorker,
+    trump_mode: bool,
+    trump_worker: TrumpWorker | None,
+    collector: ExecutionMetricsCollector | None,
+) -> dict[AnalysisType, Coroutine[Any, Any, Any]]:
+    """Build coroutines for each group-1 analysis type."""
+    market_data = cast("pd.DataFrame | MultiTimeframeData", input_data.market_data)
+    news_articles = cast("list[NewsArticle]", input_data.news_articles)
+    trump_posts = input_data.trump_posts or None
+
+    coros: dict[AnalysisType, Coroutine[Any, Any, Any]] = {
+        AnalysisType.TECHNICAL: _timed_agent_call(
+            "technical",
+            technical_worker.analyze(
+                input_data.symbol,
+                market_data,
+                strategy=input_data.strategy,
+                enable_multi_timeframe=input_data.enable_multi_timeframe,
+            ),
+            collector,
+        ),
+        AnalysisType.SENTIMENT: _timed_agent_call(
+            "sentiment", sentiment_worker.analyze(input_data.symbol, news_articles), collector
+        ),
+        AnalysisType.NEWS: _timed_agent_call(
+            "news", news_worker.analyze(input_data.symbol, news_articles), collector
+        ),
+        AnalysisType.FUNDAMENTAL: _timed_agent_call(
+            "fundamental",
+            fundamental_worker.analyze(input_data.symbol, input_data.get_current_price()),
+            collector,
+        ),
+        AnalysisType.COMPARATIVE: _timed_agent_call(
+            "comparative", comparative_worker.analyze(input_data.symbol), collector
+        ),
+        AnalysisType.WEB_RESEARCH: _timed_agent_call(
+            "web_research", web_researcher.research(input_data.symbol), collector
+        ),
+        AnalysisType.SOCIAL_SENTIMENT: _timed_agent_call(
+            "social", social_worker.analyze(input_data.symbol), collector
+        ),
+    }
+
+    if trump_mode and trump_worker and trump_posts:
+        coros[AnalysisType.TRUMP] = _timed_agent_call("trump", trump_worker.analyze(trump_posts), collector)
+
+    return coros
 
 
 def _setup_workers_group1(
@@ -226,106 +307,27 @@ def _setup_workers_group1(
     collector: ExecutionMetricsCollector | None,
 ) -> list[_WorkerTask]:
     """Setup worker tasks for group 1 analyses."""
+    coros = _build_group1_coros(
+        input_data,
+        technical_worker,
+        sentiment_worker,
+        news_worker,
+        fundamental_worker,
+        comparative_worker,
+        web_researcher,
+        social_worker,
+        trump_mode,
+        trump_worker,
+        collector,
+    )
+
     tasks: list[_WorkerTask] = []
-
-    # Cast after validation - we already validated in run_supervised_analyses
-    market_data = cast("pd.DataFrame | MultiTimeframeData", input_data.market_data)
-    news_articles = cast("list[NewsArticle]", input_data.news_articles)
-    trump_posts = input_data.trump_posts or None
-
-    # Technical analysis
-    worker = _create_worker_if_needed(
-        AnalysisType.TECHNICAL,
-        required,
-        optional,
-        _timed_agent_call(
-            "technical",
-            technical_worker.analyze(
-                input_data.symbol,
-                market_data,
-                strategy=input_data.strategy,
-                enable_multi_timeframe=input_data.enable_multi_timeframe,
-            ),
-            collector,
-        ),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # Sentiment analysis
-    worker = _create_worker_if_needed(
-        AnalysisType.SENTIMENT,
-        required,
-        optional,
-        _timed_agent_call("sentiment", sentiment_worker.analyze(input_data.symbol, news_articles), collector),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # News analysis
-    worker = _create_worker_if_needed(
-        AnalysisType.NEWS,
-        required,
-        optional,
-        _timed_agent_call("news", news_worker.analyze(input_data.symbol, news_articles), collector),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # Fundamental analysis
-    worker = _create_worker_if_needed(
-        AnalysisType.FUNDAMENTAL,
-        required,
-        optional,
-        _timed_agent_call(
-            "fundamental",
-            fundamental_worker.analyze(input_data.symbol, input_data.get_current_price()),
-            collector,
-        ),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # Comparative analysis
-    worker = _create_worker_if_needed(
-        AnalysisType.COMPARATIVE,
-        required,
-        optional,
-        _timed_agent_call("comparative", comparative_worker.analyze(input_data.symbol), collector),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # Web research
-    worker = _create_worker_if_needed(
-        AnalysisType.WEB_RESEARCH,
-        required,
-        optional,
-        _timed_agent_call("web_research", web_researcher.research(input_data.symbol), collector),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # Social sentiment
-    worker = _create_worker_if_needed(
-        AnalysisType.SOCIAL_SENTIMENT,
-        required,
-        optional,
-        _timed_agent_call("social", social_worker.analyze(input_data.symbol), collector),
-    )
-    if worker:
-        tasks.append(worker)
-
-    # Trump analysis
-    if trump_mode and trump_worker and trump_posts:
-        worker = _create_worker_if_needed(
-            AnalysisType.TRUMP,
-            required,
-            optional,
-            _timed_agent_call("trump", trump_worker.analyze(trump_posts), collector),
-        )
+    for analysis_type, coro in coros.items():
+        worker = _create_worker_if_needed(analysis_type, required, optional, coro)
         if worker:
             tasks.append(worker)
+        else:
+            coro.close()  # Prevent "coroutine was never awaited" warning
 
     return tasks
 
@@ -345,6 +347,7 @@ async def _run_supervised_group1(
     collector: ExecutionMetricsCollector | None,
     timeout_ms: int,
     metrics_collector: SupervisorMetricsCollector | None = None,
+    warnings: list[str] | None = None,
 ) -> dict[AnalysisType, Any]:
     """Run first group of analyses based on routing decision.
 
@@ -363,6 +366,7 @@ async def _run_supervised_group1(
         collector: Optional metrics collector
         timeout_ms: Timeout in milliseconds
         metrics_collector: Optional supervisor metrics collector
+        warnings: Optional list to append optional worker failure messages
 
     Returns:
         Dict mapping analysis type to result
@@ -403,7 +407,7 @@ async def _run_supervised_group1(
         f"{len(optional_tasks)} optional: {optional_types})"
     )
 
-    return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector)
+    return await _execute_workers_with_gather(tasks, timeout_ms, metrics_collector, warnings)
 
 
 async def _run_supervised_research(
@@ -700,6 +704,7 @@ async def run_supervised_analyses(
         collector,
         timeout_ms,
         metrics_collector,
+        warnings,
     )
     group1_ms = (time.perf_counter() - start) * 1000
     if metrics_collector:

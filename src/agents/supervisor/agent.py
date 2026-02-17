@@ -620,6 +620,8 @@ class SupervisorWorkflow:
 
     def _init_components(self, components: WorkflowComponents) -> None:
         """Initialize core component references."""
+        from src.daemon.config import AnalysisOrchestratorConfig
+
         self.market_fetcher = components.market_fetcher
         self.news_fetcher = components.news_fetcher
         self.finbert = components.finbert
@@ -630,7 +632,10 @@ class SupervisorWorkflow:
         self.execution_metric_repository = components.execution_metric_repository
         self.notification_service = components.notification_service
         self._container = components.container
-        self.analysis_orchestrator_config = components.analysis_orchestrator_config
+        # Always use supervisor routing - default config if not provided
+        self.analysis_orchestrator_config = (
+            components.analysis_orchestrator_config or AnalysisOrchestratorConfig()
+        )
         self.event_bus = components.event_bus
         self.web_search_fetcher = components.web_search_fetcher
 

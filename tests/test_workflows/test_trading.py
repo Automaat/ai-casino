@@ -33,6 +33,7 @@ def create_test_workflow(
     metrics_tracker=None,
     notification_service=None,
     snapshot_on_trade=False,
+    analysis_pattern="sequential",
 ):
     """Helper to create TradingWorkflow with new config/components pattern."""
     config = WorkflowConfig(
@@ -41,6 +42,7 @@ def create_test_workflow(
         trump_mode=trump_mode,
         snapshot_on_trade=snapshot_on_trade,
         pre_trade_backtest_config=pre_trade_backtest_config,
+        analysis_pattern=analysis_pattern,
     )
 
     components = WorkflowComponents(
@@ -520,14 +522,14 @@ async def test_account_info_passed_to_trader(
     assert final_decision.position_qty == 100.0
 
 
-async def test_workflow_continues_when_fundamental_rate_limited(test_container):
+async def test_workflow_continues_when_fundamental_rate_limited(test_container_full):
     """Test workflow continues with fundamental=None and captures warning when rate limited."""
     # Override fundamental fetcher to raise rate limit error
     mock_fundamental_fetcher = MagicMock()
     mock_fundamental_fetcher.fetch_overview.side_effect = Exception("API rate limit: 5 api calls per minute")
-    test_container.fundamental_fetcher.override(mock_fundamental_fetcher)
+    test_container_full.fundamental_fetcher.override(mock_fundamental_fetcher)
 
-    workflow = test_container.workflow_momentum(container=test_container)
+    workflow = test_container_full.workflow_momentum(container=test_container_full)
     result = await workflow.analyze("AAPL", period_days=90)
 
     assert result.fundamental is None
@@ -541,14 +543,15 @@ async def test_workflow_continues_when_fundamental_rate_limited(test_container):
     assert any("rate limit" in w.lower() for w in result.warnings)
 
 
-async def test_workflow_raises_when_fundamental_fails_non_rate_limit(test_container):
-    """Test workflow re-raises non-rate-limit errors from fundamental analysis."""
+async def test_workflow_raises_when_fundamental_fails_non_rate_limit(test_container_full):
+    """Test sequential workflow re-raises non-rate-limit errors from fundamental analysis."""
     # Override fundamental fetcher to raise non-rate-limit error
     mock_fundamental_fetcher = MagicMock()
     mock_fundamental_fetcher.fetch_overview.side_effect = Exception("Invalid API key")
-    test_container.fundamental_fetcher.override(mock_fundamental_fetcher)
+    test_container_full.fundamental_fetcher.override(mock_fundamental_fetcher)
 
-    workflow = test_container.workflow_momentum(container=test_container)
+    # Sequential mode: fundamental is a required stage that propagates errors
+    workflow = create_test_workflow(test_container_full, analysis_pattern="sequential")
 
     with pytest.raises(Exception, match="Invalid API key"):
         await workflow.analyze("AAPL", period_days=90)
