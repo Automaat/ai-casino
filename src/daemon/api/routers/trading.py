@@ -405,6 +405,7 @@ async def get_active_discovery(
         DiscoverySource.PRICE_GAP.value,
         DiscoverySource.NEWS_TRENDING.value,
         DiscoverySource.PRE_MARKET.value,
+        DiscoverySource.EVENT_WATCHLIST.value,
     }
 
     # Filter out expired candidates

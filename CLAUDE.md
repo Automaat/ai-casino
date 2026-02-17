@@ -198,6 +198,24 @@ mise ollama:start|stop|status          # Local LLM
 - Transformers logging: suppress BEFORE import cascade — env vars at `src/cli/app.py` + `hf_logging.set_verbosity_error()`
 - OpenAI structured output: requires `additionalProperties: false` recursively
 
+### Database Debugging
+
+**Local development always uses PostgreSQL via Docker:**
+- Container: `ai-casino-postgres` (postgres:18-alpine)
+- Connection: `postgresql+asyncpg://ai_casino:ai_casino_secure_pass_2025@localhost:5432/ai_casino`
+- Configured in `~/.ai-casino/daemon-production.yaml`
+
+**Quick checks:**
+```bash
+docker ps | grep postgres                           # Check container running
+docker exec ai-casino-postgres psql -U ai_casino -d ai_casino -c "\dt"  # List tables
+docker exec ai-casino-postgres psql -U ai_casino -d ai_casino -c "SELECT COUNT(*) FROM discovery_history;"  # Query
+```
+
+**Common issues:**
+- Container not running → `docker start ai-casino-postgres`
+- Empty tables despite daemon running → check if data written to correct DB (not SQLite fallback)
+
 ## Resources
 
 - Plan: ./implem-plan.md | Research: ./agentic-stock-trading-system-research.md
