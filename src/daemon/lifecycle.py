@@ -76,8 +76,6 @@ class DaemonLifecycle:
                 self.components.daemon_rebalancer.set_broker(self.components.broker)
             if self.components.tearsheet_generator:
                 self.components.tearsheet_generator.set_broker(self.components.broker)
-            # Note: discovery_engine doesn't use broker, optimizer set via rebalancer
-
         # Create position manager now that broker is available
         if self.components.config.position_management.enabled and self.components.broker:
             from src.daemon.positions import PositionManager

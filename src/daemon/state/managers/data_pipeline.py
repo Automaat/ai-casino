@@ -89,6 +89,32 @@ class DataPipelineStateManager(StateManager):
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to set pre-market refresh: {e}")
 
+    async def get_last_reddit_scraping(self) -> datetime | None:
+        """Get last Reddit scraping timestamp from DB."""
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as fresh_session:
+                key = "data_pipeline.last_reddit_scraping"
+                return await MetadataRepository(fresh_session).get_datetime(key)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get reddit scraping: {e}")
+            return None
+
+    async def set_last_reddit_scraping(self, value: datetime | None) -> None:
+        """Set last Reddit scraping timestamp in DB."""
+        if value is None:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+
+            async with get_session() as session:
+                await MetadataRepository(session).set("data_pipeline.last_reddit_scraping", value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to set reddit scraping: {e}")
+
     async def get_last_earnings_fetch(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last earnings fetch timestamp from DB."""
         from src.database.repositories.metadata import MetadataRepository

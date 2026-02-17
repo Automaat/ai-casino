@@ -374,3 +374,12 @@ class DaemonTaskService:
         from src.daemon.tasks.monitoring_tasks import MonteCarloTask
 
         await MonteCarloTask(self.components, self.container).run()
+
+    async def run_reddit_scraping(self) -> None:
+        """Run periodic Reddit scraping task."""
+        if not self.components.config.reddit_scraper.enabled:
+            return
+
+        from src.daemon.tasks.data_tasks import PeriodicRedditScrapingTask
+
+        await PeriodicRedditScrapingTask(self.components, self.container).run()

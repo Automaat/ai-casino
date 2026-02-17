@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from src.daemon.watchers.social_watcher import SocialWatcher
     from src.daemon.watchers.trump_watcher import TrumpWatcher
     from src.di.container import AppContainer
-    from src.discovery.engine import StockDiscoveryEngine
 
 
 @dataclass
@@ -71,7 +70,6 @@ class DaemonComponents:
     daemon_optimizer: DaemonOptimizer | None = None
     daemon_rebalancer: DaemonRebalancer | None = None
     position_manager: PositionManager | None = None
-    discovery_engine: StockDiscoveryEngine | None = None
     notification_service: NotificationService | None = None
     tearsheet_generator: DaemonTearsheetGenerator | None = None
     prefetcher: DataPrefetcher | None = None
@@ -167,11 +165,8 @@ class DaemonFactory:
         # Phase 7: Position manager (deferred to lifecycle.startup() - needs broker from event loop)
         position_manager = None
 
-        # Phase 8: Discovery engine (if enabled)
-        discovery_engine = None
-        market_fetcher = None
-        if self.config.discovery.enabled:
-            discovery_engine, market_fetcher = self._create_discovery_engine(broker)
+        # Phase 8: Market fetcher (for discovery outcome tracking)
+        market_fetcher = self._container.market_fetcher() if self.config.discovery.enabled else None
 
         # Phase 9: Notifications (if enabled)
         notification_service = None
@@ -230,7 +225,6 @@ class DaemonFactory:
             daemon_optimizer=daemon_optimizer,
             daemon_rebalancer=daemon_rebalancer,
             position_manager=position_manager,
-            discovery_engine=discovery_engine,
             notification_service=notification_service,
             tearsheet_generator=tearsheet_generator,
             prefetcher=None,
@@ -417,109 +411,6 @@ class DaemonFactory:
         logger.info("Position management enabled")
         return position_manager
 
-    def _create_discovery_engine(
-        self, broker: AlpacaBroker | None
-    ) -> tuple[StockDiscoveryEngine, MarketDataFetcher]:
-        """Create stock discovery engine and market fetcher.
-
-        Args:
-            broker: Broker instance for discovery (optional)
-
-        Returns:
-            Tuple of (StockDiscoveryEngine, MarketDataFetcher)
-        """
-        from src.discovery.engine import (
-            CoreDependencies,
-            DiscoveryEngineConfig,
-            OptionalServices,
-            StockDiscoveryEngine,
-        )
-        from src.discovery.filters import PortfolioFilterConfig
-        from src.discovery.scoring import ScoringWeights
-        from src.discovery.triggers import TriggerDetector
-        from src.screening.screener import StockScreener
-
-        # Parse portfolio filters from daemon config
-        portfolio_filters_data = self.config.discovery.portfolio_filters or {}
-        portfolio_filters = PortfolioFilterConfig(
-            max_watchlist_size=portfolio_filters_data.get("max_watchlist_size", 50),
-            max_sector_concentration=portfolio_filters_data.get("max_sector_concentration", 0.3),
-            min_market_cap=portfolio_filters_data.get("min_market_cap", 1_000_000_000),
-            min_avg_volume=portfolio_filters_data.get("min_avg_volume", 1_000_000),
-            price_range=tuple(portfolio_filters_data.get("price_range", [10.0, 500.0])),
-            exclude_sectors=portfolio_filters_data.get("exclude_sectors", []),
-        )
-
-        # Create discovery config from daemon config
-        discovery_config = DiscoveryEngineConfig(
-            enable_technical_screening=self.config.discovery.enable_technical_screening,
-            enable_reddit_trending=self.config.discovery.enable_reddit_trending,
-            enable_earnings_calendar=self.config.discovery.enable_earnings_calendar,
-            enable_sector_rotation=self.config.discovery.enable_sector_rotation,
-            enable_volume_spikes=self.config.discovery.enable_volume_spikes,
-            enable_price_gaps=self.config.discovery.enable_price_gaps,
-            enable_news_trending=self.config.discovery.enable_news_trending,
-            screening_criteria=list(self.config.discovery.screening_criteria),  # type: ignore[arg-type]
-            screening_universe=self.config.discovery.screening_universe,
-            screening_top_n=self.config.discovery.screening_top_n,
-            reddit_min_mentions=self.config.discovery.reddit_min_mentions,
-            reddit_min_upvote_ratio=self.config.discovery.reddit_min_upvote_ratio,
-            earnings_lookahead_days=self.config.discovery.earnings_lookahead_days,
-            volume_spike_threshold=self.config.discovery.volume_spike_threshold,
-            price_gap_threshold=self.config.discovery.price_gap_threshold,
-            scoring_weights=ScoringWeights(**self.config.discovery.scoring_weights),
-            max_discovered_per_cycle=self.config.discovery.max_discovered_per_cycle,
-            min_composite_score=self.config.discovery.min_composite_score,
-            max_watchlist_size=self.config.discovery.max_watchlist_size,
-            candidate_ttl_days=self.config.discovery.candidate_ttl_days,
-            auto_remove_on_signal=self.config.discovery.auto_remove_on_signal,
-            track_outcomes=self.config.discovery.track_outcomes,
-            outcome_lookback_days=self.config.discovery.outcome_lookback_days,
-            portfolio_filters=portfolio_filters,
-        )
-
-        # Create screener
-        screener = StockScreener(
-            universe_fetcher=self._container.stock_universe_fetcher(),
-            liquidity_filters=self.config.liquidity_filters,
-            cache_dir="data/cache/screening",
-        )
-
-        # Market fetcher
-        market_fetcher = self._container.market_fetcher()
-
-        # Trigger detector
-        trigger_detector = TriggerDetector(
-            market_fetcher=market_fetcher,
-            volume_spike_threshold=self.config.discovery.volume_spike_threshold,
-            price_gap_threshold=self.config.discovery.price_gap_threshold,
-        )
-
-        # Core dependencies
-        deps = CoreDependencies(
-            screener=screener,
-            market_fetcher=market_fetcher,
-            universe_fetcher=self._container.stock_universe_fetcher(),
-            trigger_detector=trigger_detector,
-        )
-
-        # Optional services (broker passed from create_components)
-        services = OptionalServices(
-            reddit_fetcher=None,
-            earnings_fetcher=None,
-            news_fetcher=self._container.websearch_fetcher(),
-            broker=broker,
-        )
-
-        engine = StockDiscoveryEngine(
-            deps=deps,
-            config=discovery_config,
-            services=services,
-        )
-
-        logger.info("Stock discovery engine initialized")
-        return engine, market_fetcher
-
     def _create_profiler(self) -> CycleProfiler:
         """Create cycle profiler.
 
@@ -602,6 +493,7 @@ class DaemonFactory:
                 historical_cache,
                 self.config,
                 self._container,
+                state,
             )
 
         logger.info("Event watchers initialized")

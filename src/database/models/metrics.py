@@ -1,14 +1,14 @@
 """ORM models for metrics operations."""
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import ARRAY, JSONB, UUID
 
 
 class SupervisorMetricsORM(Base):
@@ -16,10 +16,8 @@ class SupervisorMetricsORM(Base):
 
     __tablename__ = "supervisor_metrics"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v4()")
-    )
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(UTC))
 
     # Identifiers
     workflow_id: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -29,7 +27,7 @@ class SupervisorMetricsORM(Base):
     # Routing decision
     required_analyses: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
     optional_analyses: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
-    skip_analyses: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    skip_analyses: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     routing_reasoning: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Execution metrics
@@ -46,8 +44,8 @@ class SupervisorMetricsORM(Base):
     total_supervisor_overhead_ms: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
 
     # Worker execution details
-    worker_timings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    worker_errors: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    worker_timings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    worker_errors: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     # LLM usage metrics
     total_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -81,7 +79,7 @@ class WorkflowExecutionMetricsORM(Base):
     __tablename__ = "workflow_execution_metrics"
 
     workflow_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -92,14 +90,14 @@ class WorkflowExecutionMetricsORM(Base):
     total_input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     total_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     total_estimated_cost_usd: Mapped[Decimal] = mapped_column(DECIMAL(12, 6), nullable=False)
-    llm_calls: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    sub_operations: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    agent_timings: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    pipeline_stages: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    llm_calls: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    sub_operations: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    agent_timings: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    pipeline_stages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -123,9 +121,9 @@ class MonteCarloRecordORM(Base):
     __tablename__ = "monte_carlo_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     simulation_method: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -138,12 +136,12 @@ class MonteCarloRecordORM(Base):
     median_recovery_days: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), nullable=True)
     exceeds_risk_tolerance: Mapped[bool] = mapped_column(Boolean, nullable=False)
     alert_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    portfolio_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    portfolio_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     total_market_value: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -162,9 +160,9 @@ class TearSheetORM(Base):
     __tablename__ = "tearsheets"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     start_date: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -182,7 +180,7 @@ class TearSheetORM(Base):
     avg_loss: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
     best_day: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
     worst_day: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
-    monthly_returns: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    monthly_returns: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     benchmark_symbol: Mapped[str | None] = mapped_column(String(10), nullable=True)
     benchmark_cagr: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
     benchmark_sharpe: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
@@ -192,7 +190,7 @@ class TearSheetORM(Base):
     generated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -211,26 +209,26 @@ class PaperTradingReportORM(Base):
     __tablename__ = "paper_trading_reports"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     assessment_date: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     ready_for_live: Mapped[bool] = mapped_column(Boolean, nullable=False)
     paper_trading_duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
     total_paper_trades: Mapped[int] = mapped_column(Integer, nullable=False)
-    criteria: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    criteria: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     total_pnl: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
     sharpe_ratio: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
     sortino_ratio: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
     max_drawdown: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
     win_rate: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     simulated_live: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    recommendations: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    recommendations: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -252,9 +250,9 @@ class ExecutionMetricORM(Base):
     __tablename__ = "execution_metrics"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     order_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -266,13 +264,13 @@ class ExecutionMetricORM(Base):
     filled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     slippage_bps: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 2), nullable=True)
-    broker: Mapped[str] = mapped_column(String(50), nullable=False, server_default="'alpaca'")
+    broker: Mapped[str] = mapped_column(String(50), nullable=False, default="alpaca")
     venue: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -297,9 +295,9 @@ class ProfilingRecordORM(Base):
     __tablename__ = "profiling_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     cycle_number: Mapped[int] = mapped_column(Integer, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -310,7 +308,7 @@ class ProfilingRecordORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -330,16 +328,16 @@ class TradeJournalORM(Base):
     __tablename__ = "trade_journals"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     date: Mapped[date] = mapped_column(DATE, nullable=False, unique=True)
-    outcomes: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    winners: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    losers: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    lessons: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    tomorrows_focus: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    outcomes: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    winners: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    losers: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    lessons: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    tomorrows_focus: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     overall_assessment: Mapped[str] = mapped_column(Text, nullable=False)
     markdown_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_signals: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -348,7 +346,7 @@ class TradeJournalORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -367,9 +365,9 @@ class RiskReportRecordORM(Base):
     __tablename__ = "risk_report_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     var_95: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
@@ -387,7 +385,7 @@ class RiskReportRecordORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

@@ -1,81 +1,22 @@
 """Stock screening and discovery configuration."""
 
-from typing import Any, Literal
-
 from pydantic import BaseModel, Field, model_validator
 
 from src.daemon.config._validators import validate_time_range
 
 
 class DiscoveryConfig(BaseModel):
-    """Configuration for automated stock discovery (legacy, use event watchers for continuous discovery).
+    """Configuration for discovery outcome tracking.
 
-    Controls discovery engine creation, active candidate merging into watchlist, and outcome tracking.
-    Kept for backward compatibility and discovery outcome tracking.
+    Controls candidate TTL and outcome analytics (T+7d/30d returns).
+    Continuous candidate discovery is handled by EventWatchers.
     """
 
-    # Core enablement flag controlling discovery engine activation, candidate merging, and outcome tracking
     enabled: bool = False
-
-    # Source enablement (used by StockDiscoveryEngine if discovery task is manually triggered)
-    enable_technical_screening: bool = True
-    enable_reddit_trending: bool = False
-    enable_earnings_calendar: bool = True
-    enable_sector_rotation: bool = True
-    enable_volume_spikes: bool = False
-    enable_price_gaps: bool = False
-    enable_news_trending: bool = False
-
-    # Technical screening
-    screening_criteria: list[str] = Field(default_factory=lambda: ["momentum"])
-    screening_universe: Literal["SP500", "NASDAQ100", "COMBINED", "RUSSELL3000", "US_LIQUID"] = "COMBINED"
-    screening_top_n: int = 20
-
-    # Social/Reddit
-    reddit_min_mentions: int = 5
-    reddit_min_upvote_ratio: float = 0.75
-
-    # Earnings
-    earnings_lookahead_days: int = 7
-
-    # Trigger thresholds for intraday detection
-    volume_spike_threshold: float = 2.0
-    price_gap_threshold: float = 5.0
-
-    # Scoring weights
-    scoring_weights: dict[str, float] = Field(
-        default_factory=lambda: {
-            "technical_weight": 0.35,
-            "liquidity_weight": 0.25,
-            "timing_weight": 0.20,
-            "social_weight": 0.15,
-            "volatility_weight": 0.05,
-        }
-    )
-
-    # Limits
-    max_discovered_per_cycle: int = 5
-    min_composite_score: float = 0.60
-    max_watchlist_size: int = 50
-
-    # Portfolio filters
-    portfolio_filters: Any = Field(
-        default_factory=lambda: {
-            "max_sector_concentration": 0.30,
-            "min_market_cap": 1e9,
-            "min_avg_volume": 1_000_000,
-            "price_range": [10.0, 500.0],
-            "exclude_sectors": [],
-        }
-    )
-
-    # Lifecycle management
     candidate_ttl_days: int = 7
-    auto_remove_on_signal: bool = False
-
-    # State tracking
     track_outcomes: bool = True
     outcome_lookback_days: int = 90
+    max_watchlist_size: int = Field(default=10, ge=1)
 
 
 class LiquidityFilterConfig(BaseModel):

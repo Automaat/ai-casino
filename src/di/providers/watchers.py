@@ -110,6 +110,7 @@ def create_social_watcher(
         historical_cache=historical_cache,
         container=container,
         state=state,
+        discovery_mode=daemon_config.event_integration.social_watcher_use_discovery,
         poll_interval=config.poll_interval_minutes * 60,
         relevance_threshold=config.relevance_threshold,
         cooldown_minutes=config.cooldown_minutes,
@@ -158,6 +159,7 @@ def create_news_trending_watcher(
     historical_cache: HistoricalCache,
     daemon_config: DaemonConfig,
     container: AppContainer | None = None,
+    state: DaemonState | None = None,
 ) -> NewsTrendingWatcher | None:
     """Create news trending watcher for continuous discovery.
 
@@ -165,6 +167,7 @@ def create_news_trending_watcher(
         historical_cache: Historical cache for data persistence
         daemon_config: Daemon configuration
         container: Optional DI container (auto-created if not provided)
+        state: DaemonState for discovery routing
 
     Returns:
         NewsTrendingWatcher instance if enabled, None otherwise
@@ -198,6 +201,7 @@ def create_news_trending_watcher(
         historical_cache=historical_cache,
         config=watcher_config,
         container=container,
+        state=state,
     )
 
     logger.info("News trending watcher created (discovery mode)")

@@ -37,6 +37,12 @@ from src.database.models.portfolio import (
     SectorAttributionRecordORM,
     SectorRotationRecordORM,
 )
+from src.database.models.reddit import (
+    RedditCommentORM,
+    RedditPostORM,
+    RedditTickerMentionORM,
+    RedditTickerSentimentORM,
+)
 from src.database.models.screening import (
     EarningsCalendarRecordORM,
     GamePlanRecordORM,
@@ -75,6 +81,10 @@ __all__ = [
     "PrefetchRecordORM",
     "ProfilingRecordORM",
     "RebalancingRecordORM",
+    "RedditCommentORM",
+    "RedditPostORM",
+    "RedditTickerMentionORM",
+    "RedditTickerSentimentORM",
     "RiskAuditORM",
     "RiskReportRecordORM",
     "ScoringWeightsHistoryORM",

@@ -26,7 +26,7 @@ RUN uv sync --frozen --no-dev --extra profiling
 # Runtime stage - minimal image with only Python and compiled wheels
 FROM python:3.14.3-slim
 
-# Install only runtime dependencies (curl for healthcheck)
+# Install runtime dependencies (curl for healthcheck + Playwright deps)
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -44,6 +44,9 @@ COPY --from=builder /app/pyproject.toml /app/uv.lock /app/README.md /app/
 
 # Create directory for daemon state
 RUN mkdir -p /root/.ai-casino
+
+# Install Playwright browsers and system dependencies
+RUN /app/.venv/bin/playwright install --with-deps chromium
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -297,3 +297,164 @@ class DiscoveryOutcomeTask(TaskExecutor):
         if self._skipped:
             return
         await self.components.state.set_last_discovery_outcome_tracking(datetime.now(UTC))
+
+
+class PeriodicRedditScrapingTask(TaskExecutor):
+    """Periodic Reddit scraping task using Playwright."""
+
+    def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+        """Initialize periodic Reddit scraping task."""
+        super().__init__(components, container)
+        self._posts_scraped = 0
+        self._comments_scraped = 0
+        self._mentions_extracted = 0
+        self._skipped = False
+
+    @property
+    def task_name(self) -> str:
+        """Task display name."""
+        return "Reddit Scraping"
+
+    async def execute(self) -> None:
+        """Execute Reddit scraping logic."""
+        from src.data.reddit_scraper import RedditPlaywrightScraper
+        from src.data.reddit_ticker_extractor import RedditTickerExtractor
+        from src.database.connection import get_session
+        from src.database.models.reddit import ExtractionMethod
+        from src.database.repositories.reddit import (
+            RedditCommentRepository,
+            RedditPostRepository,
+            RedditTickerMentionRepository,
+            RedditTickerSentimentRepository,
+        )
+
+        if not self.components.config.reddit_scraper.enabled:
+            logger.debug("Reddit scraping disabled in config")
+            self._skipped = True
+            return
+
+        # Check interval-based dedup via DB state
+        now = datetime.now(UTC)
+        interval_minutes = self.components.config.reddit_scraper.interval_minutes
+        last_run = await self.components.state.get_last_reddit_scraping()
+        if last_run is not None:
+            elapsed = (now - last_run).total_seconds() / 60
+            if elapsed < interval_minutes:
+                logger.debug(
+                    f"Reddit scraping skipped (last run {elapsed:.1f}min ago, interval={interval_minutes}min)"
+                )
+                self._skipped = True
+                return
+
+        cfg = self.components.config.reddit_scraper
+        logger.info(
+            f"Starting Reddit scraping: {len(cfg.high_priority_subreddits)} subreddits, "
+            f"{cfg.posts_per_subreddit} posts each"
+        )
+
+        # Initialize scraper and extractor
+        scraper = RedditPlaywrightScraper(config=cfg)
+        extractor = RedditTickerExtractor(
+            llm_client=self.components.container.llm_client(),
+            config=cfg,
+        )
+        logger.debug(f"Initialized scraper and extractor (LLM={cfg.use_llm_extraction})")
+
+        try:
+            await scraper.start()
+
+            all_posts = []
+            all_comments = []
+            all_mentions = []
+
+            # Scrape each subreddit
+            for subreddit in self.components.config.reddit_scraper.high_priority_subreddits:
+                try:
+                    logger.info(f"Scraping r/{subreddit}")
+                    # Scrape posts
+                    posts = await scraper.scrape_subreddit_posts(
+                        subreddit=subreddit,
+                        limit=self.components.config.reddit_scraper.posts_per_subreddit,
+                    )
+                    all_posts.extend(posts)
+                    logger.info(f"Scraped {len(posts)} posts from r/{subreddit}")
+
+                    # Scrape comments from top posts
+                    top_posts = sorted(posts, key=lambda p: p.score, reverse=True)[:10]
+                    logger.debug(f"Scraping comments from top {len(top_posts)} posts")
+                    for post in top_posts:
+                        comments = await scraper.scrape_post_comments(
+                            post=post,
+                            limit=self.components.config.reddit_scraper.comments_per_post,
+                        )
+                        all_comments.extend(comments)
+
+                        # Extract tickers
+                        if self.components.config.reddit_scraper.use_llm_extraction:
+                            logger.debug(f"Extracting tickers from post {post.id}")
+                            mentions = await extractor.extract_tickers(post=post, comments=comments)
+                            if mentions:
+                                logger.info(f"Extracted {len(mentions)} ticker mentions from post {post.id}")
+                            all_mentions.append((post, mentions))
+
+                except Exception:
+                    logger.opt(exception=True).warning(f"Failed to scrape r/{subreddit}")
+                    continue
+
+            # Store to database
+            async with get_session() as session:
+                # Bulk insert posts
+                post_repo = RedditPostRepository(session)
+                posts_inserted = await post_repo.bulk_insert(all_posts)
+
+                # Bulk insert comments
+                comment_repo = RedditCommentRepository(session)
+                comments_inserted = await comment_repo.bulk_insert(all_comments)
+
+                # Insert ticker mentions
+                mention_repo = RedditTickerMentionRepository(session)
+                mentions_inserted = 0
+                for post, mentions in all_mentions:
+                    if mentions:
+                        count = await mention_repo.bulk_insert_from_post(
+                            post=post,
+                            mentions=mentions,
+                            extraction_method=ExtractionMethod.LLM,
+                        )
+                        mentions_inserted += count
+
+                # Compute sentiment aggregates
+                sentiment_repo = RedditTickerSentimentRepository(session)
+                aggregates = await sentiment_repo.compute_hourly_aggregates(lookback_hours=1)
+
+            # Store stats
+            self._posts_scraped = posts_inserted
+            self._comments_scraped = comments_inserted
+            self._mentions_extracted = mentions_inserted
+
+            console.print(
+                f"[bold green]✓[/bold green] Reddit scraping: "
+                f"{posts_inserted} posts, {comments_inserted} comments, "
+                f"{mentions_inserted} ticker mentions, {aggregates} aggregates"
+            )
+            logger.info(
+                f"Reddit scraping completed: {posts_inserted} posts, {comments_inserted} comments, "
+                f"{mentions_inserted} mentions, {aggregates} aggregates"
+            )
+
+        finally:
+            await scraper.close()
+
+    async def get_last_run(self) -> datetime | None:
+        """Get last Reddit scraping timestamp."""
+        return await self.components.state.get_last_reddit_scraping()
+
+    async def record_success(self, duration: float) -> None:
+        """Record Reddit scraping completion."""
+        if self._skipped:
+            return
+        await self.components.state.set_last_reddit_scraping(datetime.now(UTC))
+        logger.debug(
+            f"Reddit scraping stats: {self._posts_scraped} posts, "
+            f"{self._comments_scraped} comments, {self._mentions_extracted} mentions"
+        )

@@ -18,6 +18,7 @@ from src.daemon.events import BaseEvent, NewsTrendingEvent
 
 if TYPE_CHECKING:
     from src.cache.historical import HistoricalCache
+    from src.daemon.state.facade import DaemonState
     from src.data.websearch import WebSearchFetcher
     from src.di.container import AppContainer
 
@@ -49,6 +50,7 @@ class NewsTrendingWatcher(EventWatcher):
         historical_cache: HistoricalCache,
         config: NewsTrendingWatcherConfig,
         container: AppContainer | None = None,
+        state: DaemonState | None = None,
     ) -> None:
         """Initialize news trending watcher.
 
@@ -57,6 +59,7 @@ class NewsTrendingWatcher(EventWatcher):
             historical_cache: Shared cache for data persistence
             config: Watcher configuration
             container: Optional DI container
+            state: DaemonState for discovery routing
         """
         base_config = EventWatcherConfig(
             poll_interval=config.poll_interval,
@@ -64,7 +67,7 @@ class NewsTrendingWatcher(EventWatcher):
             cooldown_minutes=0,
             max_concurrent_analyses=0,
         )
-        super().__init__(base_config, historical_cache, container=container, discovery_mode=True)
+        super().__init__(base_config, historical_cache, container=container, discovery_mode=True, state=state)
 
         self.websearch_fetcher = websearch_fetcher
         self.trending_window_minutes = config.trending_window_minutes

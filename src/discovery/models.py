@@ -38,20 +38,6 @@ class DiscoveryCandidate(BaseModel):
         return f"DiscoveryCandidate(symbol={self.symbol}, score={self.composite_score:.2f})"
 
 
-class DiscoveryResult(BaseModel):
-    """Result of discovery run."""
-
-    candidates: list[DiscoveryCandidate]
-    total_discovered: int
-    filtered_count: int
-    discovered_at: datetime
-    source_breakdown: dict[str, int] = Field(default_factory=dict)
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return f"DiscoveryResult(candidates={len(self.candidates)}, total={self.total_discovered})"
-
-
 class DiscoverySourceDetail(BaseModel):
     """Detailed discovery source information."""
 

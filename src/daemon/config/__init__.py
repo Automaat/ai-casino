@@ -41,6 +41,7 @@ from src.daemon.config.portfolio import (
 )
 from src.daemon.config.pre_market import PreMarketScreeningConfig
 from src.daemon.config.profiling import ProfilingConfig
+from src.daemon.config.reddit import RedditScraperConfig
 from src.daemon.config.reporting import HealthConfig, MetricsConfig, ReportingConfig, SignalTrackingConfig
 from src.daemon.config.risk import (
     MonteCarloConfig,
@@ -154,6 +155,7 @@ class DaemonConfig(BaseModel):
     analysis_orchestration: AnalysisOrchestratorConfig = Field(default_factory=AnalysisOrchestratorConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
+    reddit_scraper: RedditScraperConfig = Field(default_factory=RedditScraperConfig)
     trump_watcher: TrumpWatcherConfig = Field(default_factory=TrumpWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
@@ -211,6 +213,7 @@ class DaemonConfig(BaseModel):
             "analysis_orchestration": daemon_data.pop("analysis_orchestration", {}) or {},
             "news_watcher": daemon_data.pop("news_watcher", {}) or {},
             "social_watcher": daemon_data.pop("social_watcher", {}) or {},
+            "reddit_scraper": daemon_data.pop("reddit_scraper", {}) or {},
             "trump_watcher": daemon_data.pop("trump_watcher", {}) or {},
             "filings_watcher": daemon_data.pop("filings_watcher", {}) or {},
             "anomaly_watcher": daemon_data.pop("anomaly_watcher", {}) or {},
@@ -289,6 +292,7 @@ class DaemonConfig(BaseModel):
                 **sections["news_watcher"], sources=NewsSourcesConfig(**sections["news_sources"])
             ),
             social_watcher=SocialWatcherConfig(**sections["social_watcher"]),
+            reddit_scraper=RedditScraperConfig(**sections["reddit_scraper"]),
             trump_watcher=TrumpWatcherConfig(**sections["trump_watcher"]),
             filings_watcher=FilingsWatcherConfig(**sections["filings_watcher"]),
             anomaly_watcher=AnomalyWatcherConfig(**sections["anomaly_watcher"]),

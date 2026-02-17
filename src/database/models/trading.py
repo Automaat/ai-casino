@@ -1,14 +1,14 @@
 """ORM models for trading operations."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import JSONB, UUID
 
 
 class TradeORM(Base):
@@ -17,9 +17,9 @@ class TradeORM(Base):
     __tablename__ = "trades"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -30,17 +30,17 @@ class TradeORM(Base):
     stop_loss_price: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     confidence: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     risk_level: Mapped[str] = mapped_column(String(10), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="OPEN")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="OPEN")
     pnl: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
     pnl_percent: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 4), nullable=True)
     strategy_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     broker_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    is_paper_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_paper_trade: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     closed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -62,16 +62,16 @@ class PortfolioSnapshotORM(Base):
     __tablename__ = "portfolio_snapshots"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     balance: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
     available_cash: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
     total_exposure: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
     portfolio_value: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
-    positions: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    positions: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     trigger: Mapped[str] = mapped_column(String(50), nullable=False)
 
     __table_args__ = (Index("idx_portfolio_snapshots_timestamp", "timestamp"),)
@@ -87,9 +87,9 @@ class PositionRecordORM(Base):
     __tablename__ = "position_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
     entry_timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -100,16 +100,16 @@ class PositionRecordORM(Base):
     current_stop_loss: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     initial_stop_loss: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
     stop_loss_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    profit_targets: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    days_held: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    profit_targets: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    days_held: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_updated: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    trailing_stop_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    breakeven_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    trailing_stop_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    breakeven_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     high_water_mark: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -128,9 +128,9 @@ class PositionManagementActionORM(Base):
     __tablename__ = "position_management_actions"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     action_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -145,7 +145,7 @@ class PositionManagementActionORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

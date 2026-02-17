@@ -15,7 +15,9 @@ from loguru import logger
 from src.cache.historical import HistoricalCache
 from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, SocialEvent
-from src.data.reddit import RedditFetcher, TrendingTicker
+from src.data.reddit import RedditFetcher, RedditPost, TrendingTicker
+from src.database.connection import get_session
+from src.database.repositories.reddit import RedditPostRepository, RedditTickerMentionRepository
 
 if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState
@@ -50,6 +52,7 @@ class SocialWatcher(EventWatcher):
         config: SocialWatcherConfig | None = None,
         container: AppContainer | None = None,
         state: DaemonState | None = None,
+        discovery_mode: bool = False,
         poll_interval: int | None = None,
         relevance_threshold: float | None = None,
         cooldown_minutes: int | None = None,
@@ -65,7 +68,8 @@ class SocialWatcher(EventWatcher):
             historical_cache: Shared cache for social data
             config: Configuration (uses defaults if not provided)
             container: Optional DI container (auto-created if not provided)
-            state: Optional daemon state for WATCHLIST event persistence
+            state: DaemonState for discovery routing and WATCHLIST persistence
+            discovery_mode: If True, route IMMEDIATE events to discovery engine
             **Individual params for backward compatibility (prefer config object)
         """
         # Backward compat: construct config from individual params if provided
@@ -117,7 +121,9 @@ class SocialWatcher(EventWatcher):
             max_concurrent_analyses=cfg.max_concurrent_analyses,
             period_days=cfg.period_days,
         )
-        super().__init__(base_config, historical_cache, container=container, state=state)
+        super().__init__(
+            base_config, historical_cache, container=container, discovery_mode=discovery_mode, state=state
+        )
         self.volume_spike_threshold = cfg.volume_spike_threshold
         self.viral_score_threshold = cfg.viral_score_threshold
         self.viral_upvote_ratio = cfg.viral_upvote_ratio
@@ -189,42 +195,105 @@ class SocialWatcher(EventWatcher):
         events: list[SocialEvent] = []
 
         for post in ticker.sample_posts:
-            age_seconds = (now - post.created_utc).total_seconds()
-            if age_seconds > 3600:  # >1hr old
-                continue
-            if post.score < self.viral_score_threshold:
-                continue
-            if post.upvote_ratio < self.viral_upvote_ratio:
-                continue
-            if post.id in self._seen_post_ids:
-                continue
-
-            events.append(
-                SocialEvent(
-                    event_id=f"reddit_viral_{post.id}",
-                    event_type="social",
-                    timestamp=post.created_utc,
-                    source="reddit",
-                    symbol=symbol,
-                    mention_count=None,
-                    mention_delta_pct=None,
-                    viral_post=post,
-                )
-            )
-            self._seen_post_ids.append(post.id)
-            logger.info(
-                f"Viral post detected: {symbol} - {post.title[:60]}... "
-                f"(score: {post.score}, ratio: {post.upvote_ratio:.1%}, age: {age_seconds / 60:.1f}m)"
-            )
+            event = self._check_viral_post(post, symbol, now)
+            if event:
+                events.append(event)
 
         return events
+
+    def _check_viral_post(self, post: RedditPost, symbol: str, now: datetime) -> SocialEvent | None:
+        """Check if single post is viral and return event if detected."""
+        age_seconds = (now - post.created_utc).total_seconds()
+        if age_seconds > 3600:  # >1hr old
+            return None
+        if post.score < self.viral_score_threshold:
+            return None
+        if post.upvote_ratio < self.viral_upvote_ratio:
+            return None
+        if post.id in self._seen_post_ids:
+            return None
+
+        self._seen_post_ids.append(post.id)
+        logger.info(
+            f"Viral post detected: {symbol} - {post.title[:60]}... "
+            f"(score: {post.score}, ratio: {post.upvote_ratio:.1%}, age: {age_seconds / 60:.1f}m)"
+        )
+
+        return SocialEvent(
+            event_id=f"reddit_viral_{post.id}",
+            event_type="social",
+            timestamp=post.created_utc,
+            source="reddit",
+            symbol=symbol,
+            mention_count=None,
+            mention_delta_pct=None,
+            viral_post=post,
+        )
 
     async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch social events from Reddit (volume spikes + viral posts).
 
+        Tries DB-based approach first (if tables exist), falls back to API-based.
+
         Returns:
             List of SocialEvent objects for detected signals
         """
+        events: list[BaseEvent] = []
+        now = datetime.now(UTC)
+
+        # Try DB-based approach first
+        try:
+            async with get_session() as session:
+                post_repo = RedditPostRepository(session)
+                mention_repo = RedditTickerMentionRepository(session)
+
+                # Volume spike detection: only recent poll window
+                poll_window = self.poll_interval // 60
+                # Viral detection: full 1-hour window (matches _check_viral_post age limit)
+                viral_window = 60
+
+                mention_counts = await mention_repo.get_mentions_in_window(window_minutes=poll_window)
+                recent_posts = await post_repo.get_posts_in_window(
+                    window_minutes=viral_window, subreddits=self.subreddits
+                )
+                post_symbols_map = await mention_repo.get_post_symbols_map(window_minutes=viral_window)
+
+                # If we got data from DB, use it
+                if mention_counts or recent_posts:
+                    # Phase 1: Volume spike detection
+                    for symbol, current_count in mention_counts:
+                        volume_event = self._check_volume_spike(symbol, current_count, now)
+                        if volume_event:
+                            events.append(cast("BaseEvent", volume_event))
+
+                        # Update baseline for next poll
+                        self._update_mention_baseline(symbol, current_count)
+
+                    # Phase 2: Viral post detection
+                    for post in recent_posts:
+                        symbols = post_symbols_map.get(post.id, [])
+                        if not symbols:
+                            continue
+
+                        # Check if post is viral for any of its mentioned symbols
+                        for symbol in symbols:
+                            viral_event = self._check_viral_post(post, symbol, now)
+                            if viral_event:
+                                events.append(cast("BaseEvent", viral_event))
+                                # Only emit one viral event per post (for first symbol)
+                                break
+
+                    logger.debug(
+                        f"Fetched {len(events)} events from DB "
+                        f"(posts={len(recent_posts)}, viral_window={viral_window}min)"
+                    )
+                    return events
+
+        except Exception as e:
+            # DB tables don't exist or other DB error - fall back to API
+            logger.debug(f"DB fetch failed ({e}), falling back to API-based approach")
+
+        # Fallback: API-based approach (for backward compatibility + when DB is empty)
         self._init_components()
         if self._reddit_fetcher is None:
             msg = "Failed to initialize RedditFetcher"
@@ -233,9 +302,6 @@ class SocialWatcher(EventWatcher):
         trending = self._reddit_fetcher.fetch_trending_tickers(
             subreddits=self.subreddits, limit=100, min_mentions=1
         )
-
-        events: list[BaseEvent] = []
-        now = datetime.now(UTC)
 
         for ticker in trending:
             symbol = ticker.symbol
@@ -253,6 +319,7 @@ class SocialWatcher(EventWatcher):
             # Update baseline for next poll
             self._update_mention_baseline(symbol, current_count)
 
+        logger.debug(f"Fetched {len(events)} events from API (trending={len(trending)})")
         return events
 
     def __repr__(self) -> str:

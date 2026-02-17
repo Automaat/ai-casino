@@ -321,6 +321,7 @@ class MarketScheduler:
         self.discovery_outcome_time = cfg.discovery_outcome_time
         self.discovery_outcome_days = cfg.discovery_outcome_days or ["mon", "tue", "wed", "thu", "fri"]
         self.enable_discovery_outcome = cfg.enable_discovery_outcome
+        self._reddit_scraping_last_run: datetime | None = None
         logger.info(
             f"MarketScheduler initialized: {cfg.start_time}-{cfg.end_time} {cfg.timezone} "
             f"(pre-market={'enabled' if cfg.enable_pre_market else 'disabled'}, "
@@ -888,6 +889,20 @@ class MarketScheduler:
         target_minutes = target_hour * 60 + target_minute
 
         return abs(current_minutes - target_minutes) <= 1
+
+    def is_reddit_scraping_time(self) -> bool:
+        """Check if Reddit scraping should run (interval-based).
+
+        Checks every cycle and uses internal state to track last run.
+        Interval is hardcoded to 15 minutes (config reddit_scraper.interval_minutes
+        not accessible here - task handles actual interval via dedup).
+
+        Returns:
+            True if should check (always True, task handles dedup)
+        """
+        # Always return True - let task handle interval-based dedup
+        # This ensures task runs frequently enough to check its own schedule
+        return True
 
     def __repr__(self) -> str:
         """Return string representation."""
