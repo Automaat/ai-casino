@@ -1,112 +1,147 @@
-# Reddit → Discovery Pipeline: Wiring Gaps
+# Adding a New Data Source to Constant Discovery
 
-Current state as of 2026-02-17. Documents what works, what's broken, and what needs to be connected.
+Guide for wiring any new data source (social media, news, alternative data) into the continuous discovery pipeline.
 
 ---
 
-## Intended Flow
+## How Discovery Works
+
+The discovery pipeline continuously surfaces stock candidates from multiple sources and funnels them into the trading workflow:
 
 ```
-PeriodicRedditScrapingTask (Playwright)
-  → reddit_posts / reddit_ticker_mentions (DB)
-    → SocialWatcher (polls DB every 15min)
-      → SocialEvent (volume spike / viral post)
+Data Source (scraper / API / watcher)
+  → DB storage (raw data)
+    → EventWatcher (polls, detects signals)
+      → SocialEvent / NewsEvent / ...
         → EventTriageAgent (LLM urgency scoring)
           → IMMEDIATE → discovery_callback → StockDiscoveryEngine
           → WATCHLIST → state.discovery.add_event_candidates()
-            → StockDiscoveryEngine._fetch_reddit_candidates()
-              → TradingWorkflow (full analysis)
+            → StockDiscoveryEngine (merges + deduplicates candidates)
+              → TradingWorkflow (full analysis → BUY/SELL/HOLD)
+```
+
+There are two entry points into `StockDiscoveryEngine`:
+- **Event-driven** (via `EventWatcher`): signals detected in real time (volume spikes, viral posts, breaking news)
+- **Pull-based** (via `_fetch_*_candidates()` methods): periodic polling of DB aggregates or external APIs
+
+---
+
+## Checklist: Adding a New Data Source
+
+### 1. Data Collection Layer
+
+Create a scraper or fetcher in `src/data/`:
+- Use `async` for all I/O
+- Return typed dataclasses (`RedditPost`, `NewsArticle`, etc.) — not dicts
+- Include a `PeriodicXxxTask` in `src/daemon/tasks/` for scheduled execution (follow `EarningsCalendarFetch` as a pattern)
+- Persist raw data to DB via repository classes in `src/database/repositories/`
+
+**State persistence requirement:** `get_last_run()` must return a real timestamp from daemon state, not `None`. `record_success()` must persist. Without this, dedup resets on every daemon restart.
+
+```python
+# Pattern from EarningsCalendarFetch
+async def get_last_run(self) -> datetime | None:
+    return await self.components.state.get_last_xxx_fetch()
+
+async def record_success(self, duration: float) -> None:
+    await self.components.state.set_last_xxx_fetch(datetime.now(UTC))
 ```
 
 ---
 
-## What Actually Works
+### 2. Signal Detection Layer (`EventWatcher`)
 
-- `PeriodicRedditScrapingTask` scrapes posts/comments via Playwright, extracts tickers via LLM, writes to `reddit_posts`, `reddit_comments`, `reddit_ticker_mentions`, `reddit_ticker_sentiment` tables
-- `SocialWatcher._fetch_events()` reads those DB tables (DB-first path, falls back to PRAW API)
-- Volume spike and viral post detection logic works correctly
-- `WATCHLIST` urgency events reach `state.discovery.add_event_candidates()` — this path is functional
+Create a watcher in `src/daemon/watchers/` that extends `EventWatcher`:
+
+```python
+class XxxWatcher(EventWatcher):
+    async def _fetch_events(self) -> list[BaseEvent]:
+        # Query DB or API, detect signals, return events
+        ...
+```
+
+Signal types to detect (examples from `SocialWatcher`):
+- **Volume spike**: mention count grew ≥ threshold since last poll
+- **Viral post**: high score + high upvote ratio + recent age
+- **Trending**: sudden appearance in top N
+
+**Window sizing:** use separate windows for different detection types. Volume spikes use the poll interval; viral/trending checks should use the full age window (e.g., 60 min to match `_check_viral_post`'s `age_seconds > 3600` guard).
+
+Register the watcher in:
+- `src/di/providers/watchers.py` — `create_xxx_watcher()` function
+- `src/daemon/factory.py` → `_create_event_watchers()`
+- `src/daemon/lifecycle.py` → `_start_watchers()`
 
 ---
 
-## Gaps To Fix
+### 3. Wiring to Discovery (critical — easy to miss)
 
-### 1. `SocialWatcher` missing `discovery_mode` and `discovery_callback`
-
-**File:** `src/di/providers/watchers.py` → `create_social_watcher()`
-
-`SocialWatcher` is instantiated without `discovery_mode=True` or `discovery_callback`. Result: `IMMEDIATE` urgency events bypass discovery entirely and fire a direct `TradingWorkflow` instead of queuing a `DiscoveryCandidate`.
-
-**Fix:** Pass `discovery_mode=True` and wire a `discovery_callback` that calls the discovery engine's candidate intake. The `EventWatcherIntegrationConfig.social_watcher_use_discovery` flag already exists in config — read it.
+When creating the watcher in `src/di/providers/watchers.py`, **always pass both**:
 
 ```python
-# src/di/providers/watchers.py
-return SocialWatcher(
+return XxxWatcher(
     ...
-    discovery_mode=config.event_watchers.social_watcher_use_discovery,
-    discovery_callback=discovery_engine.add_candidates,  # needs discovery_engine injected
+    discovery_mode=config.event_watchers.xxx_use_discovery,   # read from config
+    discovery_callback=discovery_engine.add_candidates,        # must not be None
 )
 ```
 
----
+**Without `discovery_mode=True`:** IMMEDIATE urgency events skip discovery and fire a direct `TradingWorkflow` — bypassing candidate deduplication and rate limiting.
 
-### 2. Dead config: `EventWatcherIntegrationConfig.social_watcher_use_discovery`
+**Without `discovery_callback`:** `_route_to_discovery()` in the base class silently no-ops. No error, no log — candidates are dropped.
 
-**File:** `src/daemon/config/events.py`
+Add the config flag to `EventWatcherIntegrationConfig` in `src/daemon/config/events.py`:
 
-The flag `social_watcher_use_discovery: bool = True` is declared but never read anywhere. No code path in factory, providers, or lifecycle consumes it.
-
-**Fix:** Read it in `create_social_watcher()` (see gap 1).
-
----
-
-### 3. `NewsTrendingWatcher` has `discovery_mode=True` but no `discovery_callback`
-
-**File:** `src/daemon/watchers/news_trending_watcher.py` (hardcodes `discovery_mode=True` in `__init__`)
-**File:** `src/di/providers/watchers.py` → `create_news_trending_watcher()`
-
-`_route_to_discovery()` in `EventWatcher` base class guards on `if all_candidates and self._discovery_callback:` — since `discovery_callback=None`, all IMMEDIATE candidates are silently dropped.
-
-**Fix:** Wire the same `discovery_callback` to `NewsTrendingWatcher` as to `SocialWatcher` (see gap 1). Also applies to any other watcher with `discovery_mode=True`.
-
----
-
-### 4. `StockDiscoveryEngine._fetch_reddit_candidates()` is a stub
-
-**File:** `src/daemon/` (StockDiscoveryEngine, exact file TBD)
-
-Contains `# TODO: Implement Reddit trending integration` and always returns `[]`. The `enable_reddit_trending` config flag enables dead code.
-
-**Fix:** Implement using `RedditTickerMentionRepository.get_mentions_in_window()` and `RedditTickerSentimentRepository` aggregates — the data is already in DB, just needs to be queried and converted to `DiscoveryCandidate` objects with `source=DiscoverySource.REDDIT`.
-
----
-
-### 5. `StockDiscoveryEngine` created with `reddit_fetcher=None`
-
-**File:** `src/daemon/factory.py` → `_create_discovery_engine()`
-
-`OptionalServices(reddit_fetcher=None, ...)` — Reddit fetcher is explicitly excluded from discovery services even though the container has a `reddit_fetcher` singleton.
-
-**Fix:** Pass `reddit_fetcher=container.reddit_fetcher()` once gap 4 is implemented.
-
----
-
-### 6. `PeriodicRedditScrapingTask` has no state persistence
-
-**File:** `src/daemon/tasks/data_tasks.py`
-
-`get_last_run()` always returns `None`. `record_success()` has `# TODO` comments. The interval-based dedup uses an in-memory class variable (`_last_run_time`) that resets on daemon restart.
-
-**Fix:** Persist last run timestamp to daemon state (same pattern as `EarningsCalendarFetch` uses `state.set_last_earnings_fetch()`). Requires adding `get_last_reddit_scraping()` / `set_last_reddit_scraping()` to the state facade.
-
----
-
-## Dependency Order for Fixes
-
-```
-6 (state persistence) — independent
-4 + 5 (discovery engine stub) — independent, needs DB repos
-1 + 2 + 3 (watcher wiring) — depends on 4 being implemented first
+```python
+xxx_use_discovery: bool = True
 ```
 
-Gaps 4 and 6 can be done in parallel. Gap 1/2/3 should be done after gap 4 so the discovery_callback has something real to call.
+And expose it in `docs/daemon.yaml.example`.
+
+---
+
+### 4. Pull-Based Discovery (optional, for DB aggregates)
+
+If the data source populates DB tables with aggregated signals (e.g., `reddit_ticker_sentiment`), implement a fetch method in `StockDiscoveryEngine`:
+
+```python
+async def _fetch_xxx_candidates(self) -> list[DiscoveryCandidate]:
+    mentions = await self._xxx_repo.get_mentions_in_window(window_minutes=60)
+    return [
+        DiscoveryCandidate(
+            symbol=symbol,
+            source=DiscoverySource.XXX,
+            confidence=self._compute_confidence(count),
+            discovery_timestamp=datetime.now(UTC),
+        )
+        for symbol, count in mentions
+        if count >= self._config.min_mentions
+    ]
+```
+
+Wire the repository into `StockDiscoveryEngine` via `OptionalServices` in `src/daemon/factory.py` → `_create_discovery_engine()`.
+
+---
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---------|---------|-----|
+| `discovery_callback=None` | IMMEDIATE candidates silently dropped, no error | Pass `discovery_engine.add_candidates` |
+| `discovery_mode=False` (default) | IMMEDIATE events trigger direct TradingWorkflow, bypassing dedup | Pass `discovery_mode=True` |
+| Config flag declared but not read | Changing config has no effect | Read flag in provider function, not just declare it |
+| `get_last_run()` returns `None` | Interval dedup resets on restart, scraper runs too frequently | Persist to daemon state |
+| Viral window = poll interval | Posts 16–60 min old never checked for viral status | Use `viral_window = 60` separate from `poll_window` |
+| `on_conflict_do_nothing` on scores | Stale scores in DB, viral detection misses posts that gained score | Use `on_conflict_do_update` for mutable fields (score, upvote_ratio) |
+
+---
+
+## Reference Implementations
+
+| Component | Good example |
+|-----------|-------------|
+| Periodic scraping task | `EarningsCalendarFetch` in `src/daemon/tasks/data_tasks.py` |
+| EventWatcher with signal detection | `SocialWatcher` in `src/daemon/watchers/social_watcher.py` |
+| DB repository with upsert | `RedditPostRepository.bulk_insert()` in `src/database/repositories/reddit.py` |
+| Pull-based discovery fetch | `StockDiscoveryEngine._fetch_news_candidates()` |
+| DI wiring for watcher | `create_news_trending_watcher()` in `src/di/providers/watchers.py` |
