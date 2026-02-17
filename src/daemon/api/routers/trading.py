@@ -80,22 +80,20 @@ async def get_watchlist(
     except Exception as e:
         logger.opt(exception=True).warning(f"Unable to derive broker symbols for watchlist: {e}")
 
-    screening_count = 0
-    screening_history = await components.state.get_screening_history(limit=1, session=session)
-    if components.config.screening.enabled and screening_history:
-        latest = screening_history[-1]
-        screening_count = len([s for s in latest.top_symbols if s in symbols])
-
+    discovery_count = 0
     event_watchlist_count = 0
-    try:
-        from src.discovery.models import DiscoverySource
+    if components.config.discovery.enabled:
+        try:
+            from src.discovery.models import DiscoverySource
 
-        active_candidates = await components.state.get_active_discovery_candidates(session=session)
-        for candidate in active_candidates:
-            if DiscoverySource.EVENT_WATCHLIST in candidate.sources and candidate.symbol in symbol_set:
-                event_watchlist_count += 1
-    except Exception as e:
-        logger.opt(exception=True).warning(f"Failed to count event watchlist candidates: {e}")
+            active_candidates = await components.state.get_active_discovery_candidates(session=session)
+            for candidate in active_candidates:
+                if candidate.symbol in symbol_set:
+                    discovery_count += 1
+                    if DiscoverySource.EVENT_WATCHLIST in candidate.sources:
+                        event_watchlist_count += 1
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to count discovery candidates: {e}")
 
     return WatchlistResponse(
         symbols=symbols,
@@ -103,7 +101,7 @@ async def get_watchlist(
         sources={
             "config": config_count,
             "broker": broker_count,
-            "screening": screening_count,
+            "discovery": discovery_count,
             "event_watchlist": event_watchlist_count,
         },
     )

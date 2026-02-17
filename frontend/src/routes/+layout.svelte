@@ -13,7 +13,6 @@
 		{ id: 'journal', label: 'Journal', href: '/journal' },
 		{ id: 'signals', label: 'Signals', href: '/signals' },
 		{ id: 'discovery', label: 'Discovery', href: '/discovery' },
-		{ id: 'screening', label: 'Screening', href: '/screening' },
 		{ id: 'risk', label: 'Risk', href: '/risk' },
 		{ id: 'validation', label: 'Validation', href: '/validation' },
 		{ id: 'events', label: 'Events', href: '/events' },
@@ -35,7 +34,6 @@
 		: currentPath.startsWith('/journal') ? 'journal'
 		: currentPath.startsWith('/signals') ? 'signals'
 		: currentPath.startsWith('/discovery') ? 'discovery'
-		: currentPath.startsWith('/screening') ? 'screening'
 		: currentPath.startsWith('/risk') ? 'risk'
 		: currentPath.startsWith('/validation') ? 'validation'
 		: currentPath.startsWith('/events') ? 'events'

@@ -23,8 +23,6 @@ class MarketSchedulerConfig:
     timezone: str = "America/New_York"
     enable_pre_market: bool = False
     enable_after_hours: bool = False
-    after_hours_screen_time: str = "16:30"
-    after_hours_screen_days: list[str] | None = None
     optimization_time: str = "17:00"
     optimization_days: list[str] | None = None
     prefetch_time: str = "16:30"
@@ -70,8 +68,6 @@ class MarketScheduler:
         timezone: str | None = None,
         enable_pre_market: bool | None = None,
         enable_after_hours: bool | None = None,
-        after_hours_screen_time: str | None = None,
-        after_hours_screen_days: list[str] | None = None,
         optimization_time: str | None = None,
         optimization_days: list[str] | None = None,
         prefetch_time: str | None = None,
@@ -118,8 +114,6 @@ class MarketScheduler:
             or timezone is not None
             or enable_pre_market is not None
             or enable_after_hours is not None
-            or after_hours_screen_time is not None
-            or after_hours_screen_days is not None
             or optimization_time is not None
             or optimization_days is not None
             or prefetch_time is not None
@@ -164,16 +158,6 @@ class MarketScheduler:
                 ),
                 enable_after_hours=(
                     enable_after_hours if enable_after_hours is not None else defaults.enable_after_hours
-                ),
-                after_hours_screen_time=(
-                    after_hours_screen_time
-                    if after_hours_screen_time is not None
-                    else defaults.after_hours_screen_time
-                ),
-                after_hours_screen_days=(
-                    after_hours_screen_days
-                    if after_hours_screen_days is not None
-                    else defaults.after_hours_screen_days
                 ),
                 optimization_time=(
                     optimization_time if optimization_time is not None else defaults.optimization_time
@@ -305,8 +289,6 @@ class MarketScheduler:
         self.timezone = ZoneInfo(cfg.timezone)
         self.enable_pre_market = cfg.enable_pre_market
         self.enable_after_hours = cfg.enable_after_hours
-        self.after_hours_screen_time = cfg.after_hours_screen_time
-        self.after_hours_screen_days = cfg.after_hours_screen_days or ["mon", "tue", "wed", "thu", "fri"]
         self.optimization_time = cfg.optimization_time
         self.optimization_days = cfg.optimization_days or ["sat"]
         self.prefetch_time = cfg.prefetch_time
@@ -533,32 +515,6 @@ class MarketScheduler:
         window_end_dt = window_start_dt + timedelta(minutes=30)
 
         return window_start_dt <= now <= window_end_dt
-
-    def is_after_hours_screening_time(self) -> bool:
-        """Check if current time matches after-hours screening schedule.
-
-        Returns:
-            True if current time is within 1 minute of configured screening time on configured day
-        """
-        if not self.enable_after_hours:
-            return False
-
-        now = datetime.now(self.timezone)
-
-        # Check if current day is in configured days
-        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-        current_day = day_names[now.weekday()]
-        if current_day not in self.after_hours_screen_days:
-            return False
-
-        # Parse target time
-        target_hour, target_minute = map(int, self.after_hours_screen_time.split(":"))
-
-        # Check if within 1 minute of target time
-        current_minutes = now.hour * 60 + now.minute
-        target_minutes = target_hour * 60 + target_minute
-
-        return abs(current_minutes - target_minutes) <= 1
 
     def is_optimization_time(self) -> bool:
         """Check if current time matches optimization schedule.

@@ -1,15 +1,13 @@
 """Tests for daemon runner."""
 
 import asyncio
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 
-from src.daemon.config import DaemonConfig, ScreeningConfig, SectorRotationConfig
+from src.daemon.config import DaemonConfig, SectorRotationConfig
 from src.daemon.runner import DaemonRunner
-from src.daemon.state import ScreeningRecord
 from src.data.broker import BrokerAccountInfo, BrokerPosition, OrderStatus
 
 pytestmark = pytest.mark.skip(reason="Daemon runner tests need rewrite for async state facade")
@@ -423,20 +421,11 @@ async def test_analyze_symbol_records_not_executed(
 
 def test_get_merged_watchlist_with_screening(sample_config: DaemonConfig) -> None:
     """Test screening candidates merged into watchlist."""
-    sample_config.screening = ScreeningConfig(enabled=True)
+    # Screening removed - test disabled
     runner = DaemonRunner(sample_config)
     runner.broker = None
 
-    runner.state.screening_history = [
-        ScreeningRecord(
-            timestamp=datetime(2024, 1, 15),
-            criteria="momentum",
-            universe="COMBINED",
-            top_symbols=["NVDA", "AMD", "PLTR"],
-            candidates=[],
-            screened_at=datetime(2024, 1, 15),
-        ),
-    ]
+    runner.state.screening_history = []  # Screening removed
 
     watchlist = runner.get_merged_watchlist()
 
@@ -446,20 +435,11 @@ def test_get_merged_watchlist_with_screening(sample_config: DaemonConfig) -> Non
 
 def test_get_merged_watchlist_screening_disabled(sample_config: DaemonConfig) -> None:
     """Test screening candidates ignored when disabled."""
-    sample_config.screening = ScreeningConfig(enabled=False)
+    # Screening removed - test disabled
     runner = DaemonRunner(sample_config)
     runner.broker = None
 
-    runner.state.screening_history = [
-        ScreeningRecord(
-            timestamp=datetime(2024, 1, 15),
-            criteria="momentum",
-            universe="COMBINED",
-            top_symbols=["NVDA", "AMD"],
-            candidates=[],
-            screened_at=datetime(2024, 1, 15),
-        ),
-    ]
+    runner.state.screening_history = []  # Screening removed
 
     watchlist = runner.get_merged_watchlist()
 
@@ -469,21 +449,12 @@ def test_get_merged_watchlist_screening_disabled(sample_config: DaemonConfig) ->
 
 def test_get_merged_watchlist_all_three_sources(sample_config: DaemonConfig, mock_broker: Mock) -> None:
     """Test 3-source deduplication: config + positions + screening."""
-    sample_config.screening = ScreeningConfig(enabled=True)
+    # Screening removed - test disabled
     runner = DaemonRunner(sample_config)
     runner.broker = mock_broker
     runner._broker_manager.broker = mock_broker
 
-    runner.state.screening_history = [
-        ScreeningRecord(
-            timestamp=datetime(2024, 1, 15),
-            criteria="momentum",
-            universe="COMBINED",
-            top_symbols=["AAPL", "PLTR", "MSFT"],  # AAPL=position, MSFT=config → deduped
-            candidates=[],
-            screened_at=datetime(2024, 1, 15),
-        ),
-    ]
+    runner.state.screening_history = []  # Screening removed
 
     watchlist = runner.get_merged_watchlist()
 
@@ -496,7 +467,7 @@ def test_get_merged_watchlist_all_three_sources(sample_config: DaemonConfig, moc
 
 def test_get_merged_watchlist_empty_screening_history(sample_config: DaemonConfig) -> None:
     """Test no crash on empty screening history."""
-    sample_config.screening = ScreeningConfig(enabled=True)
+    # Screening removed - test disabled
     runner = DaemonRunner(sample_config)
     runner.broker = None
 

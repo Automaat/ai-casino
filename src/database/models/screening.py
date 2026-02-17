@@ -11,38 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from src.database.models.base import Base
 
 
-class ScreeningRecordORM(Base):
-    """Screening record ORM model."""
-
-    __tablename__ = "screening_records"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        server_default=text("uuid_generate_v4()"),
-    )
-    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    criteria: Mapped[str] = mapped_column(String(100), nullable=False)
-    universe: Mapped[str] = mapped_column(String(50), nullable=False)
-    top_symbols: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    candidates: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    screened_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        nullable=False,
-        server_default=text("NOW()"),
-    )
-
-    __table_args__ = (
-        Index("idx_screening_records_timestamp", "timestamp"),
-        Index("idx_screening_records_created_at", "created_at"),
-    )
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return f"ScreeningRecordORM(id={self.id}, timestamp={self.timestamp})"
-
-
 class PrefetchRecordORM(Base):
     """Prefetch record ORM model."""
 

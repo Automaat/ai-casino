@@ -276,12 +276,6 @@ class DaemonTaskService:
 
         await PreMarketRefreshTask(self.components, self.container).run()
 
-    async def run_after_hours_screening(self) -> None:
-        """Run after-hours screening for watchlist candidates."""
-        from src.daemon.tasks.data_tasks import ScreeningTask
-
-        await ScreeningTask(self.components, self.container).run()
-
     async def run_sector_rotation(self) -> None:
         """Run sector rotation analysis."""
         from src.daemon.tasks.analysis_tasks import SectorRotationTask

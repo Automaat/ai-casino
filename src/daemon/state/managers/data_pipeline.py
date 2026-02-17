@@ -14,19 +14,16 @@ from src.daemon.state.models import (
     EarningsEventRecord,
     PrefetchRecord,
     ProfilingRecord,
-    ScreeningRecord,
 )
-from src.screening.screener import ScreeningResult
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class DataPipelineStateManager(StateManager):
-    """Background data operations (prefetch, screening, earnings)."""
+    """Background data operations (prefetch, earnings)."""
 
     _prefetch_cache: list[PrefetchRecord] | None = PrivateAttr(default=None)
-    _screening_cache: list[ScreeningRecord] | None = PrivateAttr(default=None)
     _earnings_cache: list[EarningsCalendarRecord] | None = PrivateAttr(default=None)
     _profiling_cache: list[ProfilingRecord] | None = PrivateAttr(default=None)
 
@@ -92,37 +89,6 @@ class DataPipelineStateManager(StateManager):
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to set pre-market refresh: {e}")
 
-    async def get_last_after_hours_screening(self, session: AsyncSession | None = None) -> datetime | None:
-        """Get last after-hours screening timestamp from DB."""
-        from src.database.repositories.metadata import MetadataRepository
-
-        if session:
-            repo = MetadataRepository(session)
-            return await repo.get_datetime("data_pipeline.last_after_hours_screening")
-
-        try:
-            from src.database.connection import get_session
-
-            async with get_session() as fresh_session:
-                repo = MetadataRepository(fresh_session)
-                return await repo.get_datetime("data_pipeline.last_after_hours_screening")
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to get after-hours screening: {e}")
-            return None
-
-    async def set_last_after_hours_screening(self, value: datetime | None) -> None:
-        """Set last after-hours screening timestamp in DB."""
-        if value is None:
-            return
-        try:
-            from src.database.connection import get_session
-            from src.database.repositories.metadata import MetadataRepository
-
-            async with get_session() as session:
-                await MetadataRepository(session).set("data_pipeline.last_after_hours_screening", value)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to set after-hours screening: {e}")
-
     async def get_last_earnings_fetch(self, session: AsyncSession | None = None) -> datetime | None:
         """Get last earnings fetch timestamp from DB."""
         from src.database.repositories.metadata import MetadataRepository
@@ -162,28 +128,6 @@ class DataPipelineStateManager(StateManager):
                 logger.opt(exception=True).warning(f"Failed to get prefetch history: {e}")
                 return []
         return self._prefetch_cache
-
-    async def get_screening_history(
-        self, limit: int = 30, session: AsyncSession | None = None
-    ) -> list[ScreeningRecord]:
-        """Get screening history with lazy loading."""
-        from src.database.repositories.screening import ScreeningRecordRepository
-
-        if session:
-            repo = ScreeningRecordRepository(session)
-            return await repo.get_recent(limit)
-
-        if self._screening_cache is None:
-            try:
-                from src.database.connection import get_session
-
-                async with get_session() as fresh_session:
-                    repo = ScreeningRecordRepository(fresh_session)
-                    self._screening_cache = await repo.get_recent(limit)
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Failed to get screening history: {e}")
-                return []
-        return self._screening_cache
 
     async def get_earnings_calendar_history(
         self, limit: int = 10, session: AsyncSession | None = None
@@ -258,39 +202,6 @@ class DataPipelineStateManager(StateManager):
             logger.opt(exception=True).warning(f"Failed to record prefetch: {e}")
 
         self._prefetch_cache = None
-
-    async def record_after_hours_screening(
-        self,
-        criteria: str,
-        universe: str,
-        candidates: list[ScreeningResult],
-        top_n: int = 10,
-        screened_at: datetime | None = None,
-    ) -> None:
-        """Record after-hours screening results."""
-        now = datetime.now(UTC)
-        top_symbols = [c.symbol for c in candidates[:top_n]]
-        record = ScreeningRecord(
-            timestamp=now,
-            criteria=criteria,
-            universe=universe,
-            top_symbols=top_symbols,
-            candidates=candidates[:top_n],
-            screened_at=screened_at or now,
-        )
-
-        try:
-            from src.database.connection import get_session
-            from src.database.repositories.metadata import MetadataRepository
-            from src.database.repositories.screening import ScreeningRecordRepository
-
-            async with get_session() as session:
-                await ScreeningRecordRepository(session).create(record)
-                await MetadataRepository(session).set("data_pipeline.last_after_hours_screening", now)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to record screening: {e}")
-
-        self._screening_cache = None
 
     async def record_earnings_fetch(
         self,

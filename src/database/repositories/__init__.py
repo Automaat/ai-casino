@@ -22,7 +22,6 @@ from src.database.repositories.prefetch import PrefetchRecordRepository
 from src.database.repositories.profiling import ProfilingRecordRepository
 from src.database.repositories.rebalancing import RebalancingRecordRepository
 from src.database.repositories.risk_report import RiskReportRecordRepository
-from src.database.repositories.screening import ScreeningRecordRepository
 from src.database.repositories.sector_rotation import SectorRotationRecordRepository
 from src.database.repositories.signal_outcome import SignalOutcomeRepository
 from src.database.repositories.snapshot import PortfolioSnapshotRepository
@@ -53,7 +52,6 @@ __all__ = [
     "ProfilingRecordRepository",
     "RebalancingRecordRepository",
     "RiskReportRecordRepository",
-    "ScreeningRecordRepository",
     "SectorRotationRecordRepository",
     "SignalOutcomeRepository",
     "TearSheetRepository",
