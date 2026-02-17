@@ -1,0 +1,24 @@
+Extract stock tickers mentioned in the following Reddit post and comments.
+
+For each ticker found, provide:
+- Symbol: Stock ticker symbol (e.g., AAPL, TSLA, BRK.B) - uppercase, 1-5 characters
+- Sentiment: BULLISH (positive outlook, buying interest), BEARISH (negative outlook, selling pressure), or NEUTRAL (factual mention only)
+- Context: Brief snippet (max 50 chars) showing why the ticker was mentioned
+- Confidence: Float between 0.0-1.0 indicating certainty this is a valid stock ticker
+
+Rules:
+1. Only extract legitimate stock ticker symbols
+2. Ignore common abbreviations: CEO, CFO, IPO, DD, YOLO, FOMO, ATH, EPS, PE, etc.
+3. Ignore non-stock mentions: company names without ticker context
+4. Ignore sarcasm/jokes: $ROPE, $MOON, $LAMBO are NOT valid tickers
+5. Context should be verbatim text excerpt, not paraphrased
+6. Confidence should reflect likelihood of being actual stock ticker (not sentiment strength)
+
+Post Title: {title}
+
+Post Body: {body}
+
+Top Comments:
+{comments}
+
+Extract all valid ticker mentions with their sentiment and context.

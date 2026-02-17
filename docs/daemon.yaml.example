@@ -582,6 +582,40 @@ daemon:
     # Maximum concurrent re-analyses
     max_concurrent_analyses: 2
 
+  reddit_scraper:
+    # Reddit web scraping via Playwright (no API key required)
+    enabled: true
+    # Use Playwright scraping (vs. API fallback if key available)
+    use_playwright: true
+    # High-priority subreddits to scrape
+    high_priority_subreddits: ["wallstreetbets", "stocks", "Daytrading"]
+    # Posts to scrape per subreddit
+    posts_per_subreddit: 50
+    # Comments to scrape per post (top comments only)
+    comments_per_post: 10
+    # Anti-detection: random delay range for page loads (seconds)
+    delay_page_load_min: 2.0
+    delay_page_load_max: 8.0
+    # Anti-detection: random delay range for actions (seconds)
+    delay_action_min: 0.5
+    delay_action_max: 2.0
+    # Browser settings
+    use_stealth_mode: true
+    headless: true
+    # Scraping schedule
+    interval_minutes: 60
+    jitter_minutes: 15
+    # Discovery thresholds
+    min_mentions_for_trending: 25
+    mention_velocity_threshold: 2.0  # 200% increase
+    # LLM-based ticker extraction
+    use_llm_extraction: true
+    extraction_model: "haiku"  # Fast, cheap model for extraction
+    extraction_temperature: 0.3
+    extraction_timeout_s: 10.0
+    extraction_min_confidence: 0.7
+    extraction_max_tokens: 2000
+
   trump_watcher:
     # Trump Truth Social watcher (monitor market-relevant Trump posts)
     # Polls CNN's Truth Social archive for Trump's posts

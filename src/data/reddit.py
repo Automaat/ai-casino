@@ -150,6 +150,25 @@ class RedditPost(BaseModel):
     num_comments: int
 
 
+class RedditComment(BaseModel):
+    """Single Reddit comment."""
+
+    id: str
+    parent_post_id: str
+    body: str
+    score: int
+    created_utc: datetime
+
+
+class TickerMention(BaseModel):
+    """Ticker mention extracted from Reddit content."""
+
+    symbol: str
+    sentiment: str  # BULLISH, BEARISH, NEUTRAL
+    context: str
+    confidence: float
+
+
 class RedditSentimentData(BaseModel):
     """Reddit sentiment data for a symbol."""
 

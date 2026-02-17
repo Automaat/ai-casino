@@ -31,6 +31,7 @@ from src.daemon.config.infrastructure import (
     LLMConfig,
     PrefetchConfig,
 )
+from src.daemon.config.reddit import RedditScraperConfig
 from src.daemon.config.logging import LoggingConfig
 from src.daemon.config.notifications import NotificationsConfig, TelegramNotificationConfig
 from src.daemon.config.portfolio import (
@@ -157,6 +158,7 @@ class DaemonConfig(BaseModel):
     analysis_orchestration: AnalysisOrchestratorConfig = Field(default_factory=AnalysisOrchestratorConfig)
     news_watcher: NewsWatcherConfig = Field(default_factory=NewsWatcherConfig)
     social_watcher: SocialWatcherConfig = Field(default_factory=SocialWatcherConfig)
+    reddit_scraper: RedditScraperConfig = Field(default_factory=RedditScraperConfig)
     trump_watcher: TrumpWatcherConfig = Field(default_factory=TrumpWatcherConfig)
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
