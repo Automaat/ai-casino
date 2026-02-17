@@ -340,7 +340,7 @@ class RedditPlaywrightScraper:
             if timestamp_attr:
                 try:
                     return datetime.fromisoformat(timestamp_attr)
-                except (ValueError, AttributeError):
+                except ValueError, AttributeError:
                     logger.debug(f"Failed to parse timestamp: {timestamp_attr}")
 
         return datetime.now(UTC)
