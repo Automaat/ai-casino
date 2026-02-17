@@ -6,11 +6,11 @@ from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import text
 
 from src.database.models.base import Base
+from src.database.types import UUID
 
 
 class ExtractionMethod(StrEnum):
@@ -26,9 +26,9 @@ class RedditPostORM(Base):
     __tablename__ = "reddit_posts"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     reddit_id: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -42,7 +42,7 @@ class RedditPostORM(Base):
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -64,9 +64,9 @@ class RedditCommentORM(Base):
     __tablename__ = "reddit_comments"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     reddit_id: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
     parent_post_reddit_id: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -76,7 +76,7 @@ class RedditCommentORM(Base):
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -96,9 +96,9 @@ class RedditTickerMentionORM(Base):
     __tablename__ = "reddit_ticker_mentions"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'post' or 'comment'
@@ -112,7 +112,7 @@ class RedditTickerMentionORM(Base):
     extracted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (
@@ -133,9 +133,9 @@ class RedditTickerSentimentORM(Base):
     __tablename__ = "reddit_ticker_sentiment"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid.uuid4,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
     subreddit: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -151,7 +151,7 @@ class RedditTickerSentimentORM(Base):
     computed_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        server_default=text("NOW()"),
+        default=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (

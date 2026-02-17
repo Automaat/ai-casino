@@ -5,10 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Index, Integer, String, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import JSONB, UUID
 
 
 class OptimizationRecordORM(Base):
@@ -17,7 +17,7 @@ class OptimizationRecordORM(Base):
     __tablename__ = "optimization_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -47,7 +47,7 @@ class RebalancingRecordORM(Base):
     __tablename__ = "rebalancing_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -81,7 +81,7 @@ class SectorRotationRecordORM(Base):
     __tablename__ = "sector_rotation_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -113,7 +113,7 @@ class SectorAttributionRecordORM(Base):
     __tablename__ = "sector_attribution"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -143,7 +143,7 @@ class PeerAnalysisRecordORM(Base):
     __tablename__ = "peer_analysis_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -178,7 +178,7 @@ class CorrelationAuditRecordORM(Base):
     __tablename__ = "correlation_audit_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )

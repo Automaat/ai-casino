@@ -5,10 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, String, Text, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import JSONB, UUID
 
 
 class AnalysisRecordORM(Base):
@@ -17,7 +17,7 @@ class AnalysisRecordORM(Base):
     __tablename__ = "analysis_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -59,7 +59,7 @@ class SignalOutcomeORM(Base):
     __tablename__ = "signal_outcomes"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -130,7 +130,7 @@ class ExecutionGraphORM(Base):
     __tablename__ = "execution_graphs"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )

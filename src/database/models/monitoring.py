@@ -5,10 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import ARRAY, JSONB, UUID
 
 
 class HealthReportORM(Base):
@@ -17,7 +17,7 @@ class HealthReportORM(Base):
     __tablename__ = "health_reports"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -49,7 +49,7 @@ class DegradationRecordORM(Base):
     __tablename__ = "degradation_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -82,7 +82,7 @@ class RiskAuditORM(Base):
     __tablename__ = "risk_audit"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -178,7 +178,7 @@ class CoordinatorMetricsORM(Base):
     __tablename__ = "coordinator_metrics"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )

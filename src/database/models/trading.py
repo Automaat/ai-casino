@@ -5,10 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import JSONB, UUID
 
 
 class TradeORM(Base):
@@ -17,7 +17,7 @@ class TradeORM(Base):
     __tablename__ = "trades"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -62,7 +62,7 @@ class PortfolioSnapshotORM(Base):
     __tablename__ = "portfolio_snapshots"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -87,7 +87,7 @@ class PositionRecordORM(Base):
     __tablename__ = "position_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -128,7 +128,7 @@ class PositionManagementActionORM(Base):
     __tablename__ = "position_management_actions"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )

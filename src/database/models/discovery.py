@@ -5,10 +5,10 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import JSONB, UUID
 
 
 class DiscoveryHistoryRecordORM(Base):
@@ -17,7 +17,7 @@ class DiscoveryHistoryRecordORM(Base):
     __tablename__ = "discovery_history"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -60,7 +60,7 @@ class DiscoverySourceMetricsORM(Base):
     __tablename__ = "discovery_source_metrics"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -107,7 +107,7 @@ class ActiveDiscoveryCandidateORM(Base):
     __tablename__ = "active_discovery_candidates"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )

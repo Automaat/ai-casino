@@ -5,10 +5,10 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import DATE, DECIMAL, TIMESTAMP, Boolean, Index, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.models.base import Base
+from src.database.types import ARRAY, JSONB, UUID
 
 
 class SupervisorMetricsORM(Base):
@@ -17,7 +17,7 @@ class SupervisorMetricsORM(Base):
     __tablename__ = "supervisor_metrics"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v4()")
+        UUID, primary_key=True, server_default=text("uuid_generate_v4()")
     )
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
 
@@ -81,7 +81,7 @@ class WorkflowExecutionMetricsORM(Base):
     __tablename__ = "workflow_execution_metrics"
 
     workflow_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
     )
     symbol: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -123,7 +123,7 @@ class MonteCarloRecordORM(Base):
     __tablename__ = "monte_carlo_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -162,7 +162,7 @@ class TearSheetORM(Base):
     __tablename__ = "tearsheets"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -211,7 +211,7 @@ class PaperTradingReportORM(Base):
     __tablename__ = "paper_trading_reports"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -252,7 +252,7 @@ class ExecutionMetricORM(Base):
     __tablename__ = "execution_metrics"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -297,7 +297,7 @@ class ProfilingRecordORM(Base):
     __tablename__ = "profiling_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -330,7 +330,7 @@ class TradeJournalORM(Base):
     __tablename__ = "trade_journals"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
@@ -367,7 +367,7 @@ class RiskReportRecordORM(Base):
     __tablename__ = "risk_report_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        UUID,
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )

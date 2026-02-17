@@ -23,21 +23,29 @@ from src.database.repositories.reddit import (
 @pytest.fixture
 async def setup_reddit_tables():
     """Setup Reddit tables in test database."""
+    from sqlalchemy import MetaData
+
     engine = get_db_engine()
+
+    # Create metadata with only Reddit tables
+    reddit_metadata = MetaData()
+    reddit_metadata._add_table(RedditPostORM.__table__.name, RedditPostORM.__table__.schema, RedditPostORM.__table__)
+    reddit_metadata._add_table(
+        RedditCommentORM.__table__.name, RedditCommentORM.__table__.schema, RedditCommentORM.__table__
+    )
+    reddit_metadata._add_table(
+        RedditTickerMentionORM.__table__.name, RedditTickerMentionORM.__table__.schema, RedditTickerMentionORM.__table__
+    )
 
     # Create tables
     async with engine.engine.begin() as conn:
-        await conn.run_sync(RedditPostORM.metadata.create_all)
-        await conn.run_sync(RedditCommentORM.metadata.create_all)
-        await conn.run_sync(RedditTickerMentionORM.metadata.create_all)
+        await conn.run_sync(reddit_metadata.create_all)
 
     yield
 
     # Cleanup
     async with engine.engine.begin() as conn:
-        await conn.run_sync(RedditPostORM.metadata.drop_all)
-        await conn.run_sync(RedditCommentORM.metadata.drop_all)
-        await conn.run_sync(RedditTickerMentionORM.metadata.drop_all)
+        await conn.run_sync(reddit_metadata.drop_all)
 
 
 @pytest.fixture
@@ -109,15 +117,20 @@ async def insert_test_mention(
         confidence=confidence,
     )
 
-    # Need to insert post first
-    await insert_test_post(
-        post_id=post_id,
-        title=f"{symbol} discussion",
-        score=500,
-        upvote_ratio=0.85,
-        age_minutes=age_minutes,
-        subreddit=subreddit,
-    )
+    # Check if post exists first, create if not
+    async with get_db_engine().session() as session:
+        post_repo = RedditPostRepository(session)
+        post = await post_repo.get_by_reddit_id(post_id)
+
+    if not post:
+        await insert_test_post(
+            post_id=post_id,
+            title=f"{symbol} discussion",
+            score=500,
+            upvote_ratio=0.85,
+            age_minutes=age_minutes,
+            subreddit=subreddit,
+        )
 
     async with get_db_engine().session() as session:
         mention_repo = RedditTickerMentionRepository(session)
