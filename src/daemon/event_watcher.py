@@ -282,12 +282,12 @@ class EventWatcher(ABC):
         events: list[BaseEvent],
         triage_results: list[TriageResult | BaseException],
     ) -> list[tuple[BaseEvent, TriageResult]]:
-        """Filter triage results by relevance/urgency, log failures."""
+        """Filter triage results by urgency only, log failures."""
         relevant = []
         for event, triage in zip(events, triage_results, strict=True):
             if isinstance(triage, BaseException):
                 logger.error(f"Event triage failed: {triage}")
-            elif triage.relevance >= self.relevance_threshold and triage.urgency == Urgency.IMMEDIATE:
+            elif triage.urgency == Urgency.IMMEDIATE:
                 relevant.append((event, triage))
         return relevant
 
@@ -311,7 +311,7 @@ class EventWatcher(ABC):
         for event, triage in zip(events, triage_results, strict=True):
             if isinstance(triage, BaseException):
                 continue
-            if triage.urgency == Urgency.WATCHLIST and triage.relevance >= self.relevance_threshold:
+            if triage.urgency == Urgency.WATCHLIST:
                 watchlist_events.append((event, triage))
 
         if not watchlist_events:
@@ -379,9 +379,7 @@ class EventWatcher(ABC):
         relevant = self._filter_relevant_events(events, triage_results)
 
         if not relevant:
-            logger.debug(
-                f"No events above threshold (relevance>={self.relevance_threshold}, urgency=IMMEDIATE)"
-            )
+            logger.debug("No events with urgency=IMMEDIATE")
             return
 
         logger.info(f"Found {len(relevant)} high-relevance event(s)")
