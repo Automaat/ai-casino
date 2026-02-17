@@ -483,14 +483,9 @@ class DaemonState(BaseModel):
     # Strategy Manager API
     # ===================
 
-    async def record_game_plan(
-        self,
-        priority_symbols: list[str],
-        risk_stance: str,
-        sector_focus: list[str],
-    ) -> None:
+    async def record_game_plan(self, record: GamePlanRecord) -> None:
         """Delegate to strategy manager."""
-        await self.strategy.record_game_plan(priority_symbols, risk_stance, sector_focus)
+        await self.strategy.record_game_plan(record)
 
     async def record_degradation(self, context: DegradationContext) -> None:
         """Delegate to strategy manager."""
