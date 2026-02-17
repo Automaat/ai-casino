@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (pinned version for reproducible builds)
-COPY --from=ghcr.io/astral-sh/uv:0.10.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10.4 /uv /usr/local/bin/uv
 
 # Set working directory
 WORKDIR /app
@@ -32,7 +32,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (pinned version for reproducible builds)
-COPY --from=ghcr.io/astral-sh/uv:0.10.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10.4 /uv /usr/local/bin/uv
 
 # Set working directory
 WORKDIR /app
