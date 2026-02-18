@@ -706,6 +706,19 @@ daemon:
     # FRED API cache TTL (10-120 minutes)
     cache_ttl_minutes: 30
 
+  options_flow_watcher:
+    # Options flow analysis (institutional positioning via yfinance)
+    # Detects unusual volume, high-premium contracts, put/call ratio
+    # Injects per-symbol flow signal into supervisor planning context
+    # No API key needed (uses yfinance free data)
+    enabled: false
+    # How often to poll options chains (5-60 minutes)
+    poll_interval_minutes: 15
+    # Volume spike detection threshold (1.5-5.0x average)
+    volume_spike_threshold: 2.0
+    # Minimum premium to flag as block trade ($10k-$1M)
+    block_trade_threshold: 100000
+
   event_integration:
     # Event watcher → discovery integration (Phase 3)
     # Routes event watchers through discovery engine instead of direct analysis

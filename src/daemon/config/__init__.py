@@ -17,6 +17,7 @@ from src.daemon.config.analysis import (
     NewsSourcesConfig,
     NewsTrendingWatcherConfig,
     NewsWatcherConfig,
+    OptionsFlowWatcherConfig,
     SocialWatcherConfig,
     TrumpWatcherConfig,
 )
@@ -97,6 +98,7 @@ __all__ = [
     "NotificationTrigger",
     "NotificationsConfig",
     "OptimizationConfig",
+    "OptionsFlowWatcherConfig",
     "PaperTradingConfig",
     "PeerAnalysisConfig",
     "PortfolioRebalancingConfig",
@@ -165,6 +167,7 @@ class DaemonConfig(BaseModel):
     economic_calendar_watcher: EconomicCalendarWatcherConfig = Field(
         default_factory=EconomicCalendarWatcherConfig
     )
+    options_flow_watcher: OptionsFlowWatcherConfig = Field(default_factory=OptionsFlowWatcherConfig)
     event_integration: EventWatcherIntegrationConfig = Field(default_factory=EventWatcherIntegrationConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -224,6 +227,7 @@ class DaemonConfig(BaseModel):
             "anomaly_watcher": daemon_data.pop("anomaly_watcher", {}) or {},
             "news_trending_watcher": daemon_data.pop("news_trending_watcher", {}) or {},
             "economic_calendar_watcher": daemon_data.pop("economic_calendar_watcher", {}) or {},
+            "options_flow_watcher": daemon_data.pop("options_flow_watcher", {}) or {},
             "event_integration": daemon_data.pop("event_integration", {}) or {},
             "api": daemon_data.pop("api", {}) or {},
             "llm": daemon_data.pop("llm", {}) or {},
@@ -304,6 +308,7 @@ class DaemonConfig(BaseModel):
             anomaly_watcher=AnomalyWatcherConfig(**sections["anomaly_watcher"]),
             news_trending_watcher=NewsTrendingWatcherConfig(**sections["news_trending_watcher"]),
             economic_calendar_watcher=EconomicCalendarWatcherConfig(**sections["economic_calendar_watcher"]),
+            options_flow_watcher=OptionsFlowWatcherConfig(**sections["options_flow_watcher"]),
             event_integration=EventWatcherIntegrationConfig(**sections["event_integration"]),
             api=ApiConfig(
                 **sections["api"], circuit_breaker=CircuitBreakerConfig(**sections["circuit_breaker"])

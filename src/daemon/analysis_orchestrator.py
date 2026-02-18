@@ -123,6 +123,7 @@ class AnalysisOrchestrator:
                 self._signal_outcome_repo = components.container.signal_outcome_repository()
 
         self._economic_watcher = components.economic_calendar_watcher
+        self._options_flow_watcher = components.options_flow_watcher
 
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
@@ -461,6 +462,17 @@ class AnalysisOrchestrator:
                     f"Events: {', '.join(e.event for e in signal.upcoming_events[:3])}"
                 )
 
+        options_flow_ctx = None
+        if self._options_flow_watcher:
+            sig = self._options_flow_watcher.get_signal(symbol)
+            if sig and sig.significance_score >= 0.3:
+                options_flow_ctx = (
+                    f"OPTIONS FLOW: {sig.net_premium_direction} | "
+                    f"P/C={sig.put_call_ratio:.2f} | Vol {sig.volume_vs_avg:.1f}x | "
+                    f"Score={sig.significance_score:.2f} | "
+                    f"Blocks={len(sig.block_trades)} | {sig.reason}"
+                )
+
         return WorkflowExtraContext(
             sector_rotation_context=sector_ctx,
             earnings_context=earnings_ctx,
@@ -469,6 +481,7 @@ class AnalysisOrchestrator:
             position_context=position_context,
             degradation_context=degradation_context,
             economic_calendar_context=economic_ctx,
+            options_flow_context=options_flow_ctx,
         )
 
     async def _run_workflow_analysis(

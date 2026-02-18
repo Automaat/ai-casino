@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from src.daemon.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.daemon.watchers.news_trending_watcher import NewsTrendingWatcher
     from src.daemon.watchers.news_watcher import NewsWatcher
+    from src.daemon.watchers.options_flow_watcher import OptionsFlowWatcher
     from src.daemon.watchers.social_watcher import SocialWatcher
     from src.daemon.watchers.trump_watcher import TrumpWatcher
     from src.di.container import AppContainer
@@ -85,6 +86,7 @@ class DaemonComponents:
     trump_watcher: TrumpWatcher | None = None
     news_trending_watcher: NewsTrendingWatcher | None = None
     economic_calendar_watcher: EconomicCalendarWatcher | None = None
+    options_flow_watcher: OptionsFlowWatcher | None = None
 
 
 class DaemonFactory:
@@ -202,6 +204,7 @@ class DaemonFactory:
             trump_watcher,
             news_trending_watcher,
             economic_calendar_watcher,
+            options_flow_watcher,
         ) = self._create_event_watchers(historical_cache, state)
 
         # Phase 12.5: Supervisor (lazy-initialized via container)
@@ -241,6 +244,7 @@ class DaemonFactory:
             trump_watcher=trump_watcher,
             news_trending_watcher=news_trending_watcher,
             economic_calendar_watcher=economic_calendar_watcher,
+            options_flow_watcher=options_flow_watcher,
         )
 
         # Phase 14: Create task runner (needs components reference)
@@ -448,6 +452,7 @@ class DaemonFactory:
         TrumpWatcher | None,
         NewsTrendingWatcher | None,
         EconomicCalendarWatcher | None,
+        OptionsFlowWatcher | None,
     ]:
         """Create event watchers based on config.
 
@@ -457,13 +462,14 @@ class DaemonFactory:
 
         Returns:
             Tuple of (news_watcher, social_watcher, trump_watcher, news_trending_watcher,
-                      economic_calendar_watcher)
+                      economic_calendar_watcher, options_flow_watcher)
         """
         news_watcher = None
         social_watcher = None
         trump_watcher = None
         news_trending_watcher = None
         economic_calendar_watcher = None
+        options_flow_watcher = None
 
         any_enabled = (
             self.config.news_watcher.enabled
@@ -471,6 +477,7 @@ class DaemonFactory:
             or self.config.trump_watcher.enabled
             or self.config.news_trending_watcher.enabled
             or self.config.economic_calendar_watcher.enabled
+            or self.config.options_flow_watcher.enabled
         )
         if not any_enabled:
             return (
@@ -479,6 +486,7 @@ class DaemonFactory:
                 trump_watcher,
                 news_trending_watcher,
                 economic_calendar_watcher,
+                options_flow_watcher,
             )
 
         # Call provider functions directly to pass container (providers.Self() doesn't work reliably)
@@ -520,6 +528,11 @@ class DaemonFactory:
                 self.config,
             )
 
+        if self.config.options_flow_watcher.enabled:
+            options_flow_watcher = watcher_providers.create_options_flow_watcher(
+                self.config,
+            )
+
         logger.info("Event watchers initialized")
         return (
             news_watcher,
@@ -527,6 +540,7 @@ class DaemonFactory:
             trump_watcher,
             news_trending_watcher,
             economic_calendar_watcher,
+            options_flow_watcher,
         )
 
     def init_workflow(self, components: DaemonComponents) -> TradingWorkflow:

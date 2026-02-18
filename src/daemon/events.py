@@ -357,6 +357,52 @@ class EconomicEventSignal(BaseModel):
         )
 
 
+class OptionsFlowDirection(StrEnum):
+    """Net premium direction from options flow."""
+
+    BULLISH = "BULLISH"
+    BEARISH = "BEARISH"
+    NEUTRAL = "NEUTRAL"
+
+
+class BlockTrade(BaseModel):
+    """High-premium options contract detection."""
+
+    strike: float
+    expiry: str
+    premium: float
+    volume: int
+    option_type: str = Field(description="call or put")
+    is_itm: bool
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"BlockTrade({self.option_type} {self.strike} ${self.premium:,.0f})"
+
+
+class OptionsFlowSignal(BaseModel):
+    """Options flow assessment for a single symbol."""
+
+    symbol: str
+    put_call_ratio: float
+    volume_vs_avg: float
+    has_unusual_activity: bool
+    block_trades: list[BlockTrade] = Field(default_factory=list)
+    net_premium_direction: OptionsFlowDirection
+    significance_score: float = Field(ge=0.0, le=1.0)
+    reason: str
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"OptionsFlowSignal({self.symbol} "
+            f"P/C={self.put_call_ratio:.2f} "
+            f"dir={self.net_premium_direction} "
+            f"score={self.significance_score:.2f})"
+        )
+
+
 class TriageResult(BaseModel):
     """LLM triage result for an event."""
 
