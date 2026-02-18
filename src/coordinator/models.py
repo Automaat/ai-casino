@@ -63,7 +63,7 @@ class CoordinatorConfig(BaseModel):
         default=10.0, ge=1.0, le=100.0, description="Maximum position size as % of portfolio"
     )
     min_confidence_to_trade: float = Field(
-        default=0.7, ge=0.0, le=1.0, description="Minimum signal confidence required to execute trade"
+        default=0.6, ge=0.0, le=1.0, description="Minimum signal confidence required to execute trade"
     )
     pattern_detection: PatternDetectionConfig = Field(default_factory=PatternDetectionConfig)
     adaptive_thresholds: AdaptiveThresholdConfig = Field(default_factory=AdaptiveThresholdConfig)

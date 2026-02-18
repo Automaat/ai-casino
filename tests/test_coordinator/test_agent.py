@@ -21,7 +21,7 @@ def coordinator_config():
         cycle_timeout_seconds=60,
         max_daily_trades=5,
         max_position_pct=10.0,
-        min_confidence_to_trade=0.7,
+        min_confidence_to_trade=0.6,
     )
 
 
@@ -294,7 +294,7 @@ def test_format_risk_limits(coordinator):
     assert "Risk Limits" in result
     assert "10.0%" in result
     assert "5" in result
-    assert "70%" in result
+    assert "60%" in result
     assert "auto" in result
 
 

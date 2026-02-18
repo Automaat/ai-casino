@@ -258,6 +258,9 @@ class DaemonCycleOrchestrator:
 
         cycle_start_time = time_mod.time()
 
+        # Sync positions with broker every cycle
+        await self._sync_coordinator_positions()
+
         # Run coordinator cycle
         coordinator_result: CoordinatorCycleResult = await self.runner._run_coordinator_cycle(  # type: ignore[attr-defined]  # noqa: SLF001
             watchlist, degradation_context, trading_session
@@ -310,6 +313,37 @@ class DaemonCycleOrchestrator:
             degradation_tier=degradation_context.tier.value,
             results_count=len(coordinator_result.symbols_analyzed),
         )
+
+    async def _sync_coordinator_positions(self) -> None:
+        """Sync daemon state positions with broker (reconciliation)."""
+        position_manager = self.components.position_manager
+        if not position_manager:
+            return
+
+        try:
+            active_positions_dict = await self.components.state.get_active_positions()
+            state_positions: dict[str, Any] = {}
+            for sym in active_positions_dict:
+                pos = await self.components.state.get_position(sym)
+                if pos is not None:
+                    state_positions[sym] = pos
+
+            new_positions, updated_positions, closed_symbols = position_manager.sync_with_broker(
+                state_positions
+            )
+            for pos in new_positions:
+                await self.components.state.add_position(pos)
+            for pos in updated_positions:
+                await self.components.state.update_position(pos)
+            for symbol in closed_symbols:
+                await self.components.state.remove_position(symbol)
+
+            if new_positions or updated_positions or closed_symbols:
+                logger.info(
+                    f"Position sync: +{len(new_positions)} ~{len(updated_positions)} -{len(closed_symbols)}"
+                )
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Coordinator position sync failed: {e}")
 
     async def _run_legacy_cycle(
         self,
