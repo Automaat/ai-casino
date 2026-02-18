@@ -1,7 +1,7 @@
 """Tests for CoordinatorMemory enhanced functionality."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -320,12 +320,22 @@ async def test_get_portfolio_summary_broker_error(tmp_path):
 @pytest.mark.asyncio
 async def test_get_analysis_history_from_db(mock_analysis_repo, tmp_path):
     """Test get_analysis_history querying database."""
-    memory = CoordinatorMemory(
-        memory_file=tmp_path / "memory.jsonl",
-        analysis_repo=mock_analysis_repo,
-    )
+    mock_analysis_repo.__aenter__ = AsyncMock(return_value=mock_analysis_repo)
+    mock_analysis_repo.__aexit__ = AsyncMock(return_value=False)
 
-    result = await memory.get_analysis_history("AAPL", days=7)
+    mock_engine = MagicMock()
+    mock_engine.session.return_value = AsyncMock()
+
+    with patch(
+        "src.database.repositories.analysis.AnalysisRecordRepository",
+        return_value=mock_analysis_repo,
+    ):
+        memory = CoordinatorMemory(
+            memory_file=tmp_path / "memory.jsonl",
+            database_engine=mock_engine,
+        )
+
+        result = await memory.get_analysis_history("AAPL", days=7)
 
     assert "# Analysis History - AAPL (last 7 days)" in result
     assert "BUY" in result
@@ -346,13 +356,22 @@ async def test_get_analysis_history_from_db(mock_analysis_repo, tmp_path):
 async def test_get_analysis_history_no_records(mock_analysis_repo, tmp_path):
     """Test get_analysis_history with no records found."""
     mock_analysis_repo.get_by_date_range.return_value = []
+    mock_analysis_repo.__aenter__ = AsyncMock(return_value=mock_analysis_repo)
+    mock_analysis_repo.__aexit__ = AsyncMock(return_value=False)
 
-    memory = CoordinatorMemory(
-        memory_file=tmp_path / "memory.jsonl",
-        analysis_repo=mock_analysis_repo,
-    )
+    mock_engine = MagicMock()
+    mock_engine.session.return_value = AsyncMock()
 
-    result = await memory.get_analysis_history("NVDA", days=7)
+    with patch(
+        "src.database.repositories.analysis.AnalysisRecordRepository",
+        return_value=mock_analysis_repo,
+    ):
+        memory = CoordinatorMemory(
+            memory_file=tmp_path / "memory.jsonl",
+            database_engine=mock_engine,
+        )
+
+        result = await memory.get_analysis_history("NVDA", days=7)
     assert "No analysis history found for NVDA in last 7 days" in result
 
 
@@ -422,18 +441,18 @@ def test_truncate_to_budget():
 def test_memory_repr_with_dependencies(mock_broker, tmp_path):
     """Test __repr__ shows dependencies."""
     state = Mock()
-    repo = AsyncMock()
+    engine = MagicMock()
 
     memory = CoordinatorMemory(
         memory_file=tmp_path / "memory.jsonl",
         daemon_state=state,
-        analysis_repo=repo,
+        database_engine=engine,
         broker=mock_broker,
     )
 
     repr_str = repr(memory)
     assert "daemon_state" in repr_str
-    assert "analysis_repo" in repr_str
+    assert "database_engine" in repr_str
     assert "broker" in repr_str
     assert str(tmp_path / "memory.jsonl") in repr_str
 
@@ -446,4 +465,4 @@ def test_memory_repr_without_dependencies(tmp_path):
     repr_str = repr(memory)
     assert str(tmp_path / "memory.jsonl") in repr_str
     assert "daemon_state" not in repr_str
-    assert "analysis_repo" not in repr_str
+    assert "database_engine" not in repr_str

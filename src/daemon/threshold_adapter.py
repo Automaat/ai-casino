@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from src.coordinator.models import AdaptiveThresholdConfig
     from src.daemon.state.models import SignalOutcome
-    from src.database.repositories.signal_outcome import SignalOutcomeRepository
+    from src.database.engine import DatabaseEngine
 
 
 class AdaptiveThresholds(BaseModel):
@@ -35,16 +35,16 @@ class AdaptiveThresholdManager:
     def __init__(
         self,
         config: AdaptiveThresholdConfig,
-        signal_outcome_repo: SignalOutcomeRepository,
+        database_engine: DatabaseEngine,
     ) -> None:
         """Initialize threshold manager.
 
         Args:
             config: Adaptive threshold configuration
-            signal_outcome_repo: Repository for signal outcomes
+            database_engine: Database engine for per-request repo creation
         """
         self._config = config
-        self._repo = signal_outcome_repo
+        self._database_engine = database_engine
         self._thresholds = AdaptiveThresholds(
             buy_threshold=config.min_threshold,
             sell_threshold=config.min_threshold,
@@ -64,14 +64,19 @@ class AdaptiveThresholdManager:
 
         # Query recent outcomes for BUY and SELL
         try:
-            buy_outcomes = await self._repo.get_recent_outcomes(
-                window=self._config.min_sample_size,
-                signal_type="BUY",
-            )
-            sell_outcomes = await self._repo.get_recent_outcomes(
-                window=self._config.min_sample_size,
-                signal_type="SELL",
-            )
+            from src.database.repositories.signal_outcome import SignalOutcomeRepository
+
+            repo = SignalOutcomeRepository(self._database_engine.session())
+            repo.owns_session = True
+            async with repo:
+                buy_outcomes = await repo.get_recent_outcomes(
+                    window=self._config.min_sample_size,
+                    signal_type="BUY",
+                )
+                sell_outcomes = await repo.get_recent_outcomes(
+                    window=self._config.min_sample_size,
+                    signal_type="SELL",
+                )
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to query signal outcomes: {e}")
             return self._thresholds
