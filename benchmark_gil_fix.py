@@ -94,7 +94,9 @@ async def main() -> None:
     # Warm up FinBERT model
     logger.info("Warming up FinBERT model...")
     finbert_obj = get_finbert_sentiment()
-    assert hasattr(finbert_obj, "analyze_batch")
+    if not hasattr(finbert_obj, "analyze_batch"):
+        msg = "FinBERT object missing analyze_batch method"
+        raise RuntimeError(msg)
     finbert_obj.analyze_batch(["Test sentence for warmup"])
 
     # Benchmark single stock (baseline)

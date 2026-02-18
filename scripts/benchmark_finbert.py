@@ -82,12 +82,12 @@ async def main():
     print("Results")
     print("=" * 60)
     print()
-    print(f"Local (in-process):")
+    print("Local (in-process):")
     print(f"  Mean:   {local['mean_ms']:.1f} ms ± {local['stdev_ms']:.1f} ms")
     print(f"  Min:    {local['min_ms']:.1f} ms")
     print(f"  Max:    {local['max_ms']:.1f} ms")
     print()
-    print(f"Remote (microservice):")
+    print("Remote (microservice):")
     print(f"  Mean:   {remote['mean_ms']:.1f} ms ± {remote['stdev_ms']:.1f} ms")
     print(f"  Min:    {remote['min_ms']:.1f} ms")
     print(f"  Max:    {remote['max_ms']:.1f} ms")
@@ -98,9 +98,10 @@ async def main():
     overhead_ms = remote["mean_ms"] - local["mean_ms"]
     overhead_pct = (overhead_ms / local["mean_ms"]) * 100
     print(f"Overhead:        {overhead_ms:.1f} ms ({overhead_pct:.1f}%)")
-    print(f"Target overhead: <25% (acceptable)")
+    target_overhead_pct = 25
+    print(f"Target overhead: <{target_overhead_pct}% (acceptable)")
     print()
-    if overhead_pct < 25:
+    if overhead_pct < target_overhead_pct:
         print("✓ Remote overhead is acceptable")
     else:
         print("✗ Remote overhead exceeds target")

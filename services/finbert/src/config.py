@@ -12,4 +12,6 @@ class Settings(BaseSettings):
     port: int = Field(default=8485, description="Service port")
 
     class Config:
+        """Pydantic settings configuration."""
+
         env_prefix = "FINBERT_"
