@@ -107,6 +107,7 @@ class CriticAgent:
                 CriticLLMResponse,
                 system=system,
                 temperature=0.3,
+                max_tokens=1024,
             )
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed for critique, falling back: {e}")

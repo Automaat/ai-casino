@@ -216,6 +216,7 @@ Extract tickers:"""
                     prompt=prompt,
                     response_model=TickerExtractionResponse,
                     temperature=self.config.extraction_temperature,
+                    max_tokens=256,
                 ),
                 timeout=self.config.extraction_timeout_s,
             )

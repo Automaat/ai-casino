@@ -26,3 +26,5 @@ Downgrade events that:
 - Have low social engagement metrics
 
 Be conservative with IMMEDIATE urgency - only for truly market-moving events.
+
+Keep reasoning under 50 words.

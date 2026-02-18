@@ -25,6 +25,7 @@ class OpenAIProvider(BaseLLMProvider):
         api_key: str | None = None,
         base_url: str | None = None,
         enable_caching: bool = False,
+        max_tokens: int = 2048,
     ) -> None:
         """Initialize OpenAI provider.
 
@@ -33,6 +34,7 @@ class OpenAIProvider(BaseLLMProvider):
             api_key: API key (defaults to OPENAI_API_KEY env var)
             base_url: Custom base URL (defaults to OPENAI_API_BASE env var)
             enable_caching: Enable cache metrics extraction from responses
+            max_tokens: Default max output tokens (default: 2048)
 
         Raises:
             ValueError: If API key is not provided and OPENAI_API_KEY env var is empty
@@ -44,12 +46,13 @@ class OpenAIProvider(BaseLLMProvider):
             raise ValueError(msg)
 
         self._model = model
+        self._max_tokens = max_tokens
         self._is_gpt5 = model.startswith("gpt-5")
         self._client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
         )
-        logger.debug(f"Initialized OpenAIProvider: model={model}")
+        logger.debug(f"Initialized OpenAIProvider: model={model}, max_tokens={max_tokens}")
 
     def _effective_temperature(self, temperature: float) -> float:
         """Get effective temperature, forcing 1.0 for GPT-5 models."""
@@ -129,13 +132,15 @@ class OpenAIProvider(BaseLLMProvider):
         await self._client.close()
 
     @retry(max_attempts=3, delay=1.0)
-    async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
+    async def acomplete(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Generate completion from messages."""
         response = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
-            max_tokens=8192,
+            max_tokens=max_tokens or self._max_tokens,
         )
         if response.usage:
             self._last_usage = self._extract_usage(response.usage)
@@ -143,13 +148,15 @@ class OpenAIProvider(BaseLLMProvider):
         logger.debug(f"OpenAI response length: {len(content)} chars")
         return content
 
-    async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
+    async def astream(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> AsyncIterator[str]:
         """Stream completion tokens."""
         stream = await self._client.chat.completions.create(  # type: ignore[arg-type]
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
-            max_tokens=8192,
+            max_tokens=max_tokens or self._max_tokens,
             stream=True,
         )
         async for chunk in stream:
@@ -162,6 +169,7 @@ class OpenAIProvider(BaseLLMProvider):
         messages: list[dict],
         tools: list[dict],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Generate completion with tool calling support."""
         response = await self._client.chat.completions.create(  # type: ignore[arg-type]
@@ -169,7 +177,7 @@ class OpenAIProvider(BaseLLMProvider):
             messages=messages,
             tools=tools,
             temperature=self._effective_temperature(temperature),
-            max_tokens=8192,
+            max_tokens=max_tokens or self._max_tokens,
         )
         if response.usage:
             self._last_usage = self._extract_usage(response.usage)
@@ -299,6 +307,7 @@ class OpenAIProvider(BaseLLMProvider):
         messages: list[dict],
         response_model: type[T],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> T:
         """Generate structured output using native JSON schema."""
         # Deep copy to avoid mutating cached schema
@@ -310,7 +319,7 @@ class OpenAIProvider(BaseLLMProvider):
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
-            max_tokens=8192,
+            max_tokens=max_tokens or self._max_tokens,
             response_format={
                 "type": "json_schema",
                 "json_schema": {

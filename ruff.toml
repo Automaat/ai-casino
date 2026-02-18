@@ -153,6 +153,9 @@ ignore = [
 "src/models/llm.py" = [
     "PLR0913", # many args OK for provider-specific connection params
 ]
+"src/models/llm_cache.py" = [
+    "PLR0913", # many args OK for cache key with all response-affecting params
+]
 "src/metrics/execution.py" = [
     "PLR0913", # many args OK for cost estimation with cache params
 ]

@@ -101,7 +101,7 @@ class FundamentalWorker:
         # Get LLM interpretation with structured output and fallback
         try:
             llm_response = await self.llm.astructured(
-                prompt, FundamentalLLMResponse, system=system, temperature=0.5
+                prompt, FundamentalLLMResponse, system=system, temperature=0.5, max_tokens=512
             )
             interpretation = llm_response.interpretation
             confidence = self._calculate_confidence_from_keywords(metrics, llm_response.confidence_keywords)
