@@ -121,13 +121,15 @@ class TechnicalWorker:
         # Try structured output with fallback
         try:
             llm_response = await self.llm_client.astructured(
-                prompt, TechnicalLLMResponse, system=system_prompt, temperature=0.3
+                prompt, TechnicalLLMResponse, system=system_prompt, temperature=0.3, max_tokens=512
             )
             interpretation = llm_response.interpretation
             confidence_keywords = llm_response.confidence_keywords
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, falling back: {e}")
-            interpretation = await self.llm_client.acomplete(prompt, system=system_prompt, temperature=0.3)
+            interpretation = await self.llm_client.acomplete(
+                prompt, system=system_prompt, temperature=0.3, max_tokens=512
+            )
             confidence_keywords = []
 
         # Extract indicator values and calculate confidence
@@ -186,7 +188,7 @@ class TechnicalWorker:
 
             try:
                 llm_response = await self.llm_client.astructured(
-                    prompt, TechnicalLLMResponse, system=system_prompt, temperature=0.3
+                    prompt, TechnicalLLMResponse, system=system_prompt, temperature=0.3, max_tokens=512
                 )
                 interpretation = llm_response.interpretation
                 confidence_keywords = llm_response.confidence_keywords
@@ -195,7 +197,7 @@ class TechnicalWorker:
                     f"Structured output failed for {timeframe}, falling back: {e}"
                 )
                 interpretation = await self.llm_client.acomplete(
-                    prompt, system=system_prompt, temperature=0.3
+                    prompt, system=system_prompt, temperature=0.3, max_tokens=512
                 )
                 confidence_keywords = []
 

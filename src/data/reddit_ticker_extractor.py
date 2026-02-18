@@ -21,6 +21,24 @@ class TickerExtractionResponse(BaseModel):
     mentions: list[TickerMention] = Field(default_factory=list, description="List of ticker mentions found")
 
 
+class BatchTickerMention(BaseModel):
+    """Single ticker mention with source post attribution."""
+
+    post_id: str = Field(description="Reddit post ID this mention came from")
+    symbol: str = Field(description="Stock ticker symbol (e.g., AAPL)")
+    sentiment: str = Field(description="BULLISH, BEARISH, or NEUTRAL")
+    context: str = Field(description="Brief context snippet (max 50 chars)")
+    confidence: float = Field(description="0.0-1.0 certainty this is a valid ticker")
+
+
+class BatchTickerExtractionResponse(BaseModel):
+    """LLM response for batch ticker extraction."""
+
+    mentions: list[BatchTickerMention] = Field(
+        default_factory=list, description="Ticker mentions with post attribution"
+    )
+
+
 class RedditTickerExtractor:
     """Extract stock tickers from Reddit posts and comments using LLM."""
 
@@ -216,6 +234,7 @@ Extract tickers:"""
                     prompt=prompt,
                     response_model=TickerExtractionResponse,
                     temperature=self.config.extraction_temperature,
+                    max_tokens=256,
                 ),
                 timeout=self.config.extraction_timeout_s,
             )
@@ -230,6 +249,143 @@ Extract tickers:"""
         except Exception:
             logger.opt(exception=True).warning(f"Failed to extract tickers from post {post.id}")
             return []
+
+    async def extract_tickers_batch(
+        self,
+        posts_with_comments: list[tuple[RedditPost, list[RedditComment]]],
+        batch_size: int = 5,
+    ) -> dict[str, list[TickerMention]]:
+        """Extract tickers from multiple posts in batched LLM calls.
+
+        Args:
+            posts_with_comments: List of (post, comments) tuples
+            batch_size: Posts per LLM call
+
+        Returns:
+            Dict mapping post_id to list of TickerMention
+        """
+        if not self.config.use_llm_extraction or not posts_with_comments:
+            return {}
+
+        result: dict[str, list[TickerMention]] = {}
+        batches = [
+            posts_with_comments[i : i + batch_size] for i in range(0, len(posts_with_comments), batch_size)
+        ]
+
+        tasks = [self._extract_batch(batch) for batch in batches]
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for batch_result in batch_results:
+            if isinstance(batch_result, BaseException):
+                logger.warning(f"Batch extraction failed: {batch_result}")
+                continue
+            for post_id, mentions in batch_result.items():
+                result[post_id] = mentions
+
+        total = sum(len(m) for m in result.values())
+        logger.info(f"Batch extraction: {total} tickers from {len(result)} posts ({len(batches)} batches)")
+        return result
+
+    def _build_batch_prompt(
+        self,
+        batch: list[tuple[RedditPost, list[RedditComment]]],
+    ) -> str:
+        """Build combined prompt for a batch of posts.
+
+        Args:
+            batch: List of (post, comments) tuples
+
+        Returns:
+            Formatted prompt string
+        """
+        post_sections = []
+        for post, comments in batch:
+            section_parts = [f"[post_id={post.id}]", f"Title: {post.title}"]
+            if post.body:
+                body = post.body[:500] if len(post.body) > 500 else post.body
+                section_parts.append(f"Body: {body}")
+            if comments:
+                top_comments = sorted(comments, key=lambda c: c.score, reverse=True)[:2]
+                for idx, c in enumerate(top_comments, 1):
+                    section_parts.append(f"Comment {idx}: {c.body[:150]}")
+            post_sections.append("\n".join(section_parts))
+
+        posts_text = "\n\n---\n\n".join(post_sections)
+
+        try:
+            return self.prompt_loader.load("ticker_extraction_batch", posts=posts_text)
+        except Exception:
+            logger.opt(exception=True).warning("Failed to load batch prompt template, using inline")
+            return (
+                "Extract stock tickers from these Reddit posts. "
+                "Include post_id for each mention.\n\n" + posts_text
+            )
+
+    def _validate_batch_mentions(
+        self,
+        mentions: list[BatchTickerMention],
+        valid_post_ids: set[str],
+    ) -> dict[str, list[TickerMention]]:
+        """Validate and group batch mentions by post_id.
+
+        Args:
+            mentions: Raw mentions from LLM
+            valid_post_ids: Set of valid post IDs from the batch
+
+        Returns:
+            Dict mapping post_id to list of validated TickerMention
+        """
+        result: dict[str, list[TickerMention]] = {}
+        for mention in mentions:
+            if mention.post_id not in valid_post_ids:
+                continue
+            if mention.confidence < self.config.extraction_min_confidence:
+                continue
+            if not self._is_valid_symbol(mention.symbol):
+                continue
+
+            ticker_mention = TickerMention(
+                symbol=mention.symbol,
+                sentiment=self._normalize_sentiment(mention.sentiment),
+                context=mention.context,
+                confidence=mention.confidence,
+            )
+            result.setdefault(mention.post_id, []).append(ticker_mention)
+        return result
+
+    async def _extract_batch(
+        self,
+        batch: list[tuple[RedditPost, list[RedditComment]]],
+    ) -> dict[str, list[TickerMention]]:
+        """Extract tickers from a single batch of posts.
+
+        Args:
+            batch: List of (post, comments) tuples
+
+        Returns:
+            Dict mapping post_id to list of TickerMention
+        """
+        prompt = self._build_batch_prompt(batch)
+
+        try:
+            response = await asyncio.wait_for(
+                self.llm_client.astructured(
+                    prompt=prompt,
+                    response_model=BatchTickerExtractionResponse,
+                    temperature=self.config.extraction_temperature,
+                ),
+                timeout=self.config.extraction_timeout_s * len(batch),
+            )
+        except TimeoutError:
+            post_ids = [p.id for p, _ in batch]
+            logger.warning(f"Batch extraction timeout for posts: {post_ids}")
+            return {}
+        except Exception:
+            logger.opt(exception=True).warning("Batch extraction LLM call failed")
+            return {}
+
+        valid_post_ids = {post.id for post, _ in batch}
+        return self._validate_batch_mentions(response.mentions, valid_post_ids)
 
     def _is_valid_symbol(self, symbol: str) -> bool:
         """Validate stock ticker symbol.

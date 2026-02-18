@@ -153,11 +153,57 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
     )
 
-    # Model providers
+    # Model providers — shared default LLM client (used by components without overrides)
     llm_client = providers.Factory(
         model_providers.create_llm_client,
         daemon_config=daemon_config,
         metrics_collector=None,
+    )
+
+    # Per-agent LLM clients (support model_overrides from config)
+    _event_triage_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="event_triage"
+    )
+    _game_plan_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="game_plan"
+    )
+    _critic_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="critic"
+    )
+    _trader_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="trader"
+    )
+    _supervisor_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="supervisor"
+    )
+    _coordinator_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="coordinator"
+    )
+    _journal_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="journal"
+    )
+    _technical_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="technical"
+    )
+    _news_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="news"
+    )
+    _fundamental_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="fundamental"
+    )
+    _comparative_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="comparative"
+    )
+    _trump_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="trump"
+    )
+    _social_sentiment_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent,
+        daemon_config=daemon_config,
+        agent_name="social_sentiment",
+    )
+    _thesis_research_llm = providers.Factory(
+        model_providers.create_llm_client_for_agent, daemon_config=daemon_config, agent_name="thesis_research"
     )
 
     finbert_sentiment = providers.Singleton(
@@ -225,36 +271,36 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_state=None,
     )
 
-    # Agent providers
+    # Agent providers (using per-agent LLM clients for model routing)
     critic_agent = providers.Factory(
         agent_providers.create_critic_agent,
-        llm_client=llm_client,
+        llm_client=_critic_llm,
     )
 
     trader_agent = providers.Factory(
         agent_providers.create_trader_agent,
-        llm_client=llm_client,
+        llm_client=_trader_llm,
     )
 
     supervisor = providers.Singleton(
         agent_providers.create_supervisor,
-        llm_client=llm_client,
+        llm_client=_supervisor_llm,
     )
 
     event_triage_agent = providers.Factory(
         agent_providers.create_event_triage_agent,
-        llm_client=llm_client,
+        llm_client=_event_triage_llm,
     )
 
     game_plan_agent = providers.Factory(
         agent_providers.create_game_plan_agent,
-        llm_client=llm_client,
+        llm_client=_game_plan_llm,
         market_fetcher=market_fetcher,
     )
 
     trade_journal_agent = providers.Factory(
         agent_providers.create_trade_journal_agent,
-        llm_client=llm_client,
+        llm_client=_journal_llm,
         market_fetcher=market_fetcher,
     )
 
@@ -277,14 +323,14 @@ class AppContainer(containers.DeclarativeContainer):
     # (providers.Self() doesn't work reliably with Factory providers)
     coordinator_agent = providers.Factory(
         agent_providers.create_trading_coordinator,
-        llm_client=llm_client,
+        llm_client=_coordinator_llm,
         daemon_config=daemon_config,
     )
 
-    # Workers (Pydantic AI pattern)
+    # Workers (using per-agent LLM clients for model routing)
     technical_worker = providers.Factory(
         worker_providers.create_technical_worker,
-        llm_client=llm_client,
+        llm_client=_technical_llm,
     )
 
     sentiment_worker = providers.Factory(
@@ -294,19 +340,19 @@ class AppContainer(containers.DeclarativeContainer):
 
     news_worker = providers.Factory(
         worker_providers.create_news_worker,
-        llm_client=llm_client,
+        llm_client=_news_llm,
     )
 
     fundamental_worker = providers.Singleton(
         worker_providers.create_fundamental_worker,
-        llm_client=llm_client,
+        llm_client=_fundamental_llm,
         fundamental_fetcher=fundamental_fetcher,
         earnings_fetcher=earnings_fetcher,
     )
 
     comparative_worker = providers.Factory(
         worker_providers.create_comparative_worker,
-        llm_client=llm_client,
+        llm_client=_comparative_llm,
         comparative_fetcher=comparative_fetcher,
     )
 
@@ -318,24 +364,24 @@ class AppContainer(containers.DeclarativeContainer):
 
     trump_worker = providers.Factory(
         worker_providers.create_trump_worker,
-        llm_client=llm_client,
+        llm_client=_trump_llm,
     )
 
     bullish_thesis_worker = providers.Factory(
         worker_providers.create_thesis_worker,
-        llm_client=llm_client,
+        llm_client=_thesis_research_llm,
         direction=providers.Object("bullish"),
     )
 
     bearish_thesis_worker = providers.Factory(
         worker_providers.create_thesis_worker,
-        llm_client=llm_client,
+        llm_client=_thesis_research_llm,
         direction=providers.Object("bearish"),
     )
 
     social_sentiment_worker = providers.Factory(
         worker_providers.create_social_sentiment_worker,
-        llm_client=llm_client,
+        llm_client=_social_sentiment_llm,
         finnhub_fetcher=finnhub_fetcher,
         reddit_fetcher=reddit_fetcher,
         finbert=finbert_sentiment,

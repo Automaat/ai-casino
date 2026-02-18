@@ -1140,6 +1140,35 @@ daemon:
     # Ollama base URL (only for ollama provider)
     ollama_base_url: "http://localhost:11434"
 
+    # Per-agent model overrides (optional)
+    # Routes specific agents to cheaper/free models to reduce costs.
+    # Value: model string (inherits provider) or {provider, model} for cross-provider.
+    # Agents not listed here use the default provider/model above.
+    # model_overrides:
+    #   # Free tier: simple classification/extraction ($0.00/MTok via OpenRouter)
+    #   event_triage: "openrouter/free"
+    #   game_plan: "openrouter/free"
+    #   social_sentiment: "openrouter/free"
+    #   trump: "openrouter/free"
+    #   # Cheap tier: moderate complexity ($0.10/$0.40/MTok)
+    #   technical: "google/gemini-2.5-flash-lite"
+    #   news: "google/gemini-2.5-flash-lite"
+    #   fundamental: "google/gemini-2.5-flash-lite"
+    #   comparative: "google/gemini-2.5-flash-lite"
+    #   thesis_research: "google/gemini-2.5-flash-lite"
+    #   supervisor: "google/gemini-2.5-flash-lite"
+    #   # Default tier (inherited): trader, critic, coordinator stay on main model
+    #   # Cross-provider example:
+    #   # coordinator:
+    #   #   provider: "anthropic"
+    #   #   model: "claude-sonnet-4-20250514"
+
+    # LLM response cache TTL in seconds (0=disabled, max 3600)
+    # Caches structured/completion responses to avoid redundant calls
+    # when watchers re-trigger analyses for the same symbol
+    response_cache_ttl_seconds: 0
+    response_cache_max_entries: 500
+
   # ========================================
   # FINBERT SENTIMENT CONFIGURATION
   # ========================================

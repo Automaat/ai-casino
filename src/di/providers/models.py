@@ -55,6 +55,7 @@ def create_llm_client(
     else:
         api_key = None
 
+    cache_ttl = daemon_config.llm.response_cache_ttl_seconds
     llm_client = LLMClient(
         provider=provider,
         model=daemon_config.llm.model or "qwen3:14b",
@@ -62,6 +63,65 @@ def create_llm_client(
         api_key=api_key,
         openai_base_url=daemon_config.api_keys.openai_api_base,
         enable_prompt_caching=daemon_config.llm.enable_prompt_caching,
+        cache_ttl=cache_ttl,
+        cache_max_entries=daemon_config.llm.response_cache_max_entries,
+    )
+
+    if metrics_collector is not None:
+        llm_client.set_metrics_collector(metrics_collector)
+
+    return llm_client
+
+
+def create_llm_client_for_agent(
+    daemon_config: DaemonConfig,
+    agent_name: str,
+    metrics_collector: ExecutionMetricsCollector | None = None,
+) -> LLMClient:
+    """Create LLMClient with per-agent model override support.
+
+    Checks daemon_config.llm.model_overrides for agent_name. If found,
+    uses overridden model (and optionally provider). Otherwise falls back
+    to default provider/model.
+
+    Args:
+        daemon_config: Daemon configuration
+        agent_name: Agent identifier for override lookup
+        metrics_collector: Optional metrics collector for instrumentation
+
+    Returns:
+        Configured LLMClient (possibly with different model/provider)
+    """
+    from loguru import logger
+
+    from src.di.config import resolve_config_or_env
+
+    override = daemon_config.llm.get_resolved_override(agent_name)
+    if override:
+        provider = override.provider or daemon_config.llm.provider
+        model = override.model
+        logger.debug(f"LLM override for {agent_name}: provider={provider}, model={model}")
+    else:
+        provider = daemon_config.llm.provider or "ollama"
+        model = daemon_config.llm.model or "qwen3:14b"
+
+    if provider == "anthropic":
+        api_key = resolve_config_or_env(daemon_config.api_keys.anthropic_api_key, "ANTHROPIC_API_KEY")
+    elif provider == "openai":
+        api_key = resolve_config_or_env(daemon_config.api_keys.openai_api_key, "OPENAI_API_KEY")
+    else:
+        api_key = None
+
+    cache_ttl = daemon_config.llm.response_cache_ttl_seconds
+    llm_client = LLMClient(
+        provider=provider,
+        model=model,
+        base_url=daemon_config.llm.ollama_base_url or "http://localhost:11434",
+        api_key=api_key,
+        openai_base_url=daemon_config.api_keys.openai_api_base,
+        enable_prompt_caching=daemon_config.llm.enable_prompt_caching,
+        cache_ttl=cache_ttl,
+        cache_max_entries=daemon_config.llm.response_cache_max_entries,
     )
 
     if metrics_collector is not None:

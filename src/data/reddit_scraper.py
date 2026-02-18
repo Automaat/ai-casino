@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
-from playwright.async_api import Browser, Page, async_playwright
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from playwright_stealth import Stealth
 
 from src.cache.historical import HistoricalCache
@@ -101,6 +101,14 @@ class RedditPlaywrightScraper:
         self._viewport_width = 0
         self._viewport_height = 0
 
+        # Context pool for comment scraping (reuse instead of create/destroy)
+        self._context_pool: asyncio.Queue[BrowserContext] = asyncio.Queue()
+        self._pool_size = 3
+        self._pool_initialized = False
+        self._pool_init_lock = asyncio.Lock()
+        self._pool_nav_counts: dict[int, int] = {}
+        self._ua_rotate_interval = 15
+
         # Cookie persistence
         self._cookie_file = Path.home() / ".ai-casino" / "cache" / "reddit_cookies.json"
         self._cookie_file.parent.mkdir(parents=True, exist_ok=True)
@@ -150,8 +158,68 @@ class RedditPlaywrightScraper:
             f"viewport={self._viewport_width}x{self._viewport_height})"
         )
 
+    async def _init_context_pool(self) -> None:
+        """Initialize persistent browser context pool for comment scraping."""
+        if self._pool_initialized or not self._browser:
+            return
+
+        for _ in range(self._pool_size):
+            ctx = await self._create_context()
+            self._context_pool.put_nowait(ctx)
+            self._pool_nav_counts[id(ctx)] = 0
+
+        self._pool_initialized = True
+        logger.debug(f"Initialized context pool with {self._pool_size} contexts")
+
+    async def _create_context(self) -> BrowserContext:
+        """Create a new browser context with stealth settings."""
+        if not self._browser:
+            msg = "Browser not started"
+            raise RuntimeError(msg)
+
+        user_agent = random.choice(USER_AGENTS)
+        return await self._browser.new_context(
+            user_agent=user_agent,
+            viewport={"width": self._viewport_width, "height": self._viewport_height},
+        )
+
+    async def _acquire_context(self) -> BrowserContext:
+        """Acquire a context from pool, rotating user-agent if stale."""
+        if not self._pool_initialized:
+            async with self._pool_init_lock:
+                if not self._pool_initialized:
+                    await self._init_context_pool()
+
+        ctx = await self._context_pool.get()
+        nav_count = self._pool_nav_counts.get(id(ctx), 0)
+
+        # Rotate context if too many navigations
+        if nav_count >= self._ua_rotate_interval:
+            await ctx.close()
+            ctx = await self._create_context()
+            self._pool_nav_counts[id(ctx)] = 0
+            logger.debug("Rotated context user-agent")
+
+        return ctx
+
+    async def _release_context(self, ctx: BrowserContext) -> None:
+        """Return context to pool, incrementing navigation count."""
+        self._pool_nav_counts[id(ctx)] = self._pool_nav_counts.get(id(ctx), 0) + 1
+        self._context_pool.put_nowait(ctx)
+
+    async def _drain_context_pool(self) -> None:
+        """Close all contexts in the pool."""
+        while not self._context_pool.empty():
+            ctx = self._context_pool.get_nowait()
+            with contextlib.suppress(Exception):
+                await ctx.close()
+        self._pool_initialized = False
+        self._pool_nav_counts.clear()
+
     async def close(self) -> None:
         """Close Playwright browser."""
+        await self._drain_context_pool()
+
         if self._browser:
             await self._browser.close()
             self._browser = None
@@ -331,7 +399,7 @@ class RedditPlaywrightScraper:
         post: RedditPost,
         limit: int = 10,
     ) -> list[RedditComment]:
-        """Scrape top comments from post.
+        """Scrape top comments from post using pooled browser context.
 
         Args:
             post: RedditPost to scrape comments from
@@ -347,12 +415,8 @@ class RedditPlaywrightScraper:
             msg = "Browser failed to start"
             raise RuntimeError(msg)
 
-        user_agent = random.choice(USER_AGENTS)
-        context = await self._browser.new_context(
-            user_agent=user_agent,
-            viewport={"width": self._viewport_width, "height": self._viewport_height},
-        )
-        page = await context.new_page()
+        ctx = await self._acquire_context()
+        page = await ctx.new_page()
 
         await self._apply_stealth(page)
         await self._load_cookies(page)
@@ -384,7 +448,7 @@ class RedditPlaywrightScraper:
 
         finally:
             await page.close()
-            await context.close()
+            await self._release_context(ctx)
 
     def __repr__(self) -> str:
         """Return string representation."""

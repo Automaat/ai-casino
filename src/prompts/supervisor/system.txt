@@ -11,3 +11,5 @@ Principles:
 - High-quality data > quantity of analyses
 - Flag missing critical information
 - Never skip technical analysis for active trades
+
+Be terse.

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
+from src.strategies.signal import Signal
 
 
 class PositionPnLContext(BaseModel):
@@ -161,3 +162,44 @@ class CandidateRanking(BaseModel):
     priority_order: list[str]
     overall_reasoning: str
     warnings: list[str] = Field(default_factory=list)
+
+
+class TradeApprovalContext(BaseModel):
+    """Full research context for supervisor trade approval gate."""
+
+    symbol: str
+    action: Signal
+    confidence: float
+    risk_level: str
+    risk_score: float
+    current_price: float
+    recommended_shares: int
+    position_value: float
+    stop_loss_price: float
+    reward_risk_ratio: float | None
+    decision_reasoning: list[str]
+    risk_warnings: list[str]
+    technical_summary: str | None = None
+    sentiment_summary: str | None = None
+    news_summary: str | None = None
+    bullish_summary: str | None = None
+    bearish_summary: str | None = None
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"TradeApprovalContext(symbol={self.symbol}, action={self.action.value}, "
+            f"confidence={self.confidence:.2f}, risk={self.risk_level})"
+        )
+
+
+class TradeApprovalDecision(BaseModel):
+    """Supervisor approval/rejection decision for a trade."""
+
+    approved: bool
+    reasoning: str
+    key_concerns: list[str] = Field(default_factory=list)
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"TradeApprovalDecision(approved={self.approved}, reasoning={self.reasoning!r})"

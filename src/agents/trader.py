@@ -171,7 +171,7 @@ class TraderAgent:
 
         try:
             llm_response = await self.llm.astructured(
-                prompt, TraderLLMResponse, system=system_prompt, temperature=0.5
+                prompt, TraderLLMResponse, system=system_prompt, temperature=0.5, max_tokens=1024
             )
             action = Signal(llm_response.action)
             confidence = llm_response.confidence

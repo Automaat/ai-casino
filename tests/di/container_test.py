@@ -70,7 +70,28 @@ def create_test_container(
         from dependency_injector import providers
 
         mock_llm = create_mock_llm_client()
-        container.llm_client.override(providers.Factory(lambda: mock_llm))
+        mock_llm_factory = providers.Factory(lambda: mock_llm)
+        container.llm_client.override(mock_llm_factory)
+
+        # Override all per-agent LLM factories (from per-agent model routing)
+        for attr in (
+            "_event_triage_llm",
+            "_game_plan_llm",
+            "_critic_llm",
+            "_trader_llm",
+            "_supervisor_llm",
+            "_coordinator_llm",
+            "_journal_llm",
+            "_technical_llm",
+            "_news_llm",
+            "_fundamental_llm",
+            "_comparative_llm",
+            "_trump_llm",
+            "_social_sentiment_llm",
+            "_thesis_research_llm",
+        ):
+            if hasattr(container, attr):
+                getattr(container, attr).override(mock_llm_factory)
 
     # FinBERT override (Singleton pattern)
     if override_finbert:
@@ -118,6 +139,20 @@ def reset_test_container(container: AppContainer, providers: list[str] | None = 
         "database_engine",
         "risk_audit_repository",
         "llm_client",
+        "_event_triage_llm",
+        "_game_plan_llm",
+        "_critic_llm",
+        "_trader_llm",
+        "_supervisor_llm",
+        "_coordinator_llm",
+        "_journal_llm",
+        "_technical_llm",
+        "_news_llm",
+        "_fundamental_llm",
+        "_comparative_llm",
+        "_trump_llm",
+        "_social_sentiment_llm",
+        "_thesis_research_llm",
         "finbert_sentiment",
         "market_fetcher",
         "yfinance_market_fetcher",

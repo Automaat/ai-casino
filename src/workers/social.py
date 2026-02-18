@@ -399,7 +399,7 @@ class SocialSentimentWorker:
 
         try:
             llm_response = await self.llm.astructured(
-                prompt, SocialSentimentLLMResponse, system=system_prompt, temperature=0.4
+                prompt, SocialSentimentLLMResponse, system=system_prompt, temperature=0.4, max_tokens=256
             )
             return (
                 llm_response.interpretation,

@@ -180,6 +180,12 @@ class DaemonLifecycle:
         """Wait for all background tasks to complete."""
         timeout = 5.0
 
+        # Scheduled background tasks (e.g. Reddit scraping)
+        try:
+            await self.components.task_runner.stop_background_tasks(wait_seconds=timeout)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Error stopping scheduled background tasks: {e}")
+
         # Position manager
         if self.components.position_manager:
             try:

@@ -459,7 +459,7 @@ class PortfolioHealthCheckTask(TaskExecutor):
         system = prompts.load("system")
 
         response = await llm_client.astructured(
-            prompt, PortfolioHealthLLMResponse, system=system, temperature=0.3
+            prompt, PortfolioHealthLLMResponse, system=system, temperature=0.3, max_tokens=512
         )
         return response.recommendations, response.constraints
 

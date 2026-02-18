@@ -64,7 +64,7 @@ class ComparativeWorker:
             # Try structured output with fallback
             try:
                 llm_response = await self.llm.astructured(
-                    user_prompt, ComparativeLLMResponse, system=system, temperature=0.5
+                    user_prompt, ComparativeLLMResponse, system=system, temperature=0.5, max_tokens=512
                 )
                 interpretation = llm_response.interpretation
                 confidence = self._calculate_confidence_from_keywords(
