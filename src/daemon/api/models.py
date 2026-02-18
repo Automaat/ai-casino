@@ -84,6 +84,7 @@ class PositionResponse(BaseModel):
     breakeven_activated: bool
     profit_targets: list[float]
     current_price: float
+    broker_unrealized_pnl: float | None = None
 
 
 class PositionsResponse(BaseModel):
@@ -91,6 +92,7 @@ class PositionsResponse(BaseModel):
 
     positions: list[PositionResponse]
     count: int
+    account_equity: float | None = None
 
 
 class WatchlistResponse(BaseModel):

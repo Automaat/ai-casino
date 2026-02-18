@@ -36,6 +36,9 @@ def sample_trade_orm() -> MagicMock:
     orm.pnl = None
     orm.pnl_percent = None
     orm.strategy_name = "momentum"
+    orm.broker_order_id = None
+    orm.is_paper_trade = True
+    orm.closed_at = None
     return orm
 
 

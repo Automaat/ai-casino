@@ -26,9 +26,9 @@
 		unrealized_pnl_percent: p.entry_price ? ((p.current_price / p.entry_price) - 1) * 100 : 0
 	}));
 
-	// Portfolio totals
-	$: portfolioValue = positionsList.reduce((sum, p) => sum + p.market_value, 0);
-	$: totalPnl = positionsList.reduce((sum, p) => sum + p.unrealized_pnl, 0);
+	// Portfolio totals — use broker equity (includes cash/margin) for accurate portfolio value
+	$: portfolioValue = portfolio?.account_equity ?? positionsList.reduce((sum, p) => sum + p.market_value, 0);
+	$: totalPnl = positionsList.reduce((sum, p) => sum + (p.broker_unrealized_pnl ?? p.unrealized_pnl), 0);
 
 	let snapshotsData: SnapshotsResponse | null = null;
 	let rebalance: RebalanceResponse | null = null;

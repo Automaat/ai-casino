@@ -41,6 +41,7 @@ async def get_positions(request: Request) -> PositionsResponse:
 
     async with get_broker_account_info_cached(components) as account_info:
         broker_positions = account_info["positions"] if account_info else {}
+        account_equity = account_info["balance"] if account_info else None
 
         active_positions = await components.state.get_active_positions()
         positions = []
@@ -49,11 +50,13 @@ async def get_positions(request: Request) -> PositionsResponse:
                 pos = PositionRecord.model_validate(pos_dict)
 
                 current_price = pos.entry_price
+                broker_unrealized_pnl = None
                 if symbol in broker_positions:
                     broker_pos = broker_positions[symbol]
                     current_price = (
                         broker_pos.market_value / broker_pos.qty if broker_pos.qty > 0 else pos.entry_price
                     )
+                    broker_unrealized_pnl = broker_pos.unrealized_pnl
 
                 positions.append(
                     PositionResponse(
@@ -69,13 +72,14 @@ async def get_positions(request: Request) -> PositionsResponse:
                         breakeven_activated=pos.breakeven_activated,
                         profit_targets=pos.profit_targets,
                         current_price=current_price,
+                        broker_unrealized_pnl=broker_unrealized_pnl,
                     )
                 )
             except Exception as e:
                 logger.opt(exception=True).error(f"Failed to parse position {symbol}: {e}")
                 continue
 
-        return PositionsResponse(positions=positions, count=len(positions))
+        return PositionsResponse(positions=positions, count=len(positions), account_equity=account_equity)
 
 
 @router.get("/portfolio/snapshots", response_model=SnapshotsResponse)

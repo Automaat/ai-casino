@@ -50,6 +50,9 @@ class TestTradeRepository:
         orm.pnl = None
         orm.pnl_percent = None
         orm.strategy_name = sample_trade_record.strategy_name
+        orm.broker_order_id = None
+        orm.is_paper_trade = True
+        orm.closed_at = None
 
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [orm]
