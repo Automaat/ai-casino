@@ -1,0 +1,19 @@
+Symbol: {symbol} | Action: {action} | Confidence: {confidence:.1%}
+Risk: {risk_level} (score: {risk_score:.2f}) | Price: ${current_price:.2f}
+Position: {recommended_shares} shares (${position_value:.0f}) | Stop: ${stop_loss_price:.2f}
+Reward/Risk: {reward_risk_ratio}
+
+Decision reasoning:
+{decision_reasoning}
+
+Research:
+TECHNICAL: {technical_summary}
+SENTIMENT: {sentiment_summary}
+NEWS: {news_summary}
+BULLISH: {bullish_summary}
+BEARISH: {bearish_summary}
+
+Risk warnings: {risk_warnings}
+
+Review this trade proposal. Approve only if research supports the action and risk is justified.
+Output TradeApprovalDecision: approved (bool), reasoning, key_concerns.
