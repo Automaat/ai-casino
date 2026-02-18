@@ -26,7 +26,7 @@ Owns Position: {owns_position}
 
 ## Routing Rules
 
-1. **Skip sentiment/news if news_count == 0** - Cannot analyze without articles
+1. **Optional sentiment/news if news_count == 0** - Workers return defaults for empty input; skip only if explicitly avoiding LLM calls
 2. **Skip technical if market_data_rows < {min_rows_required}** - Insufficient data for indicators
 3. **Pre-market session**: Prioritize news/sentiment in priority_order (breaking developments)
 4. **Research analyses (bullish_research, bearish_research)**: Required if technical runs (dependency), skip if technical skipped
@@ -63,5 +63,5 @@ Determine AnalysisRoutingDecision:
 **CRITICAL**: If any analysis is not in required_analyses or optional_analyses, it MUST appear in skip_analyses with a reason. Common skips:
 - trump: "No Trump posts available" (when trump_count = 0)
 - technical: "Insufficient market data" (when market_data_rows < min_rows_required)
-- sentiment/news: "No news articles available" (when news_count = 0)
+- sentiment/news: prefer optional over skip (when news_count = 0) - workers handle empty gracefully
 - fundamental: "API rate limited" or "Fundamental data unavailable"
