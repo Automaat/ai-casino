@@ -298,19 +298,19 @@ class ExecutionMetricsCollector:
         cache_read = cache_tokens[0] or 0
         cache_write = cache_tokens[1] or 0
 
-        # Determine cache multipliers by provider
         if provider == "anthropic":
-            # Anthropic: cache reads 0.10x, cache writes 1.25x base input
-            read_mult, write_mult = 0.10, 1.25
+            # Anthropic reports input_tokens (non-cached), cache_creation_input_tokens,
+            # and cache_read_input_tokens separately — they are additive, not subsets.
+            # Cost: regular 1.00x, cache reads 0.10x, cache writes 1.25x base input price.
+            input_cost = (total_input / 1_000_000) * input_price
+            input_cost += (cache_read / 1_000_000) * input_price * 0.10
+            input_cost += (cache_write / 1_000_000) * input_price * 1.25
         else:
-            # OpenAI/OpenRouter: cached reads 0.50x, writes free (already in input)
-            read_mult, write_mult = 0.50, 1.0
-
-        # Regular input = total input minus cached portions
-        regular_input = max(0, total_input - cache_read - cache_write)
-        input_cost = (regular_input / 1_000_000) * input_price
-        input_cost += (cache_read / 1_000_000) * input_price * read_mult
-        input_cost += (cache_write / 1_000_000) * input_price * write_mult
+            # OpenAI/OpenRouter: prompt_tokens includes cached_tokens (subset accounting).
+            # Regular = prompt_tokens - cached_tokens; cached reads billed at 0.50x.
+            regular_input = max(0, total_input - cache_read)
+            input_cost = (regular_input / 1_000_000) * input_price
+            input_cost += (cache_read / 1_000_000) * input_price * 0.50
         output_cost = ((output_tokens or 0) / 1_000_000) * output_price
         return input_cost + output_cost
 

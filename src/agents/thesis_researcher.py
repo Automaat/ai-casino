@@ -97,9 +97,12 @@ BearishResearchAnalysis = ResearchAnalysis
 def _parse_numeric_range(text: str) -> float | None:
     """Parse a numeric value or range midpoint (e.g. "20-30" → 25.0)."""
     try:
+        # Check for range: hyphen with digits on both sides (not a negative number)
         if "-" in text:
-            lo, hi = text.split("-", 1)
-            return (float(lo.strip()) + float(hi.strip())) / 2
+            parts = text.split("-", 1)
+            lo, hi = parts[0].strip(), parts[1].strip()
+            if lo and hi:
+                return (float(lo) + float(hi)) / 2
         return float(text)
     except ValueError:
         return None
