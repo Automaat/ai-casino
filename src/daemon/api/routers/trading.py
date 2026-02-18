@@ -120,7 +120,7 @@ async def get_game_plan(request: Request) -> GamePlanResponse | None:
         if not game_plan_history:
             return None
 
-        latest = game_plan_history[-1]
+        latest = game_plan_history[0]
 
         # Return None if essential fields are missing (old records)
         if latest.reasoning is None or latest.confidence is None or latest.generated_at is None:
