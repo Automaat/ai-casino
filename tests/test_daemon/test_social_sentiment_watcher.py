@@ -64,9 +64,7 @@ class TestSocialSentimentWatcher:
     """Tests for SocialSentimentWatcher."""
 
     @pytest.mark.asyncio
-    async def test_apewisdom_only_signal(
-        self, watcher: SocialSentimentWatcher
-    ) -> None:
+    async def test_apewisdom_only_signal(self, watcher: SocialSentimentWatcher) -> None:
         """Verify signal generated from ApeWisdom data alone (no Reddit DB)."""
         ape_ticker = _make_ape_ticker("GME", rank=3, mentions=500, mentions_24h_ago=200)
         ape_map = {"GME": ape_ticker}
@@ -114,9 +112,7 @@ class TestSocialSentimentWatcher:
         assert signal.platform_breakdown[0].platform == "reddit"
 
     @pytest.mark.asyncio
-    async def test_both_platforms_signal(
-        self, watcher: SocialSentimentWatcher
-    ) -> None:
+    async def test_both_platforms_signal(self, watcher: SocialSentimentWatcher) -> None:
         """Verify signal merges both Reddit and ApeWisdom data."""
         ape_ticker = _make_ape_ticker("TSLA", rank=10, mentions=300, mentions_24h_ago=200)
         ape_map = {"TSLA": ape_ticker}
@@ -140,9 +136,7 @@ class TestSocialSentimentWatcher:
         assert signal.confidence == 1.0  # 2 platforms * 0.5
 
     @pytest.mark.asyncio
-    async def test_no_data_produces_no_signal(
-        self, watcher: SocialSentimentWatcher
-    ) -> None:
+    async def test_no_data_produces_no_signal(self, watcher: SocialSentimentWatcher) -> None:
         """Verify no signal when neither platform has data."""
         with patch.object(watcher, "_query_reddit_sentiment", new_callable=AsyncMock, return_value=None):
             await watcher._fetch_and_assess_symbol("UNKNOWN", {})
