@@ -557,7 +557,7 @@ async def test_workflow_raises_when_fundamental_fails_non_rate_limit(test_contai
         await workflow.analyze("AAPL", period_days=90)
 
 
-async def test_backtest_validation_pass(test_container):
+async def test_backtest_validation_pass(test_container_full):
     """Test backtest validation passes with good metrics - confidence unchanged."""
     config = PreTradeBacktestingConfig(
         enabled=True,
@@ -567,7 +567,7 @@ async def test_backtest_validation_pass(test_container):
         confidence_penalty_multiplier=0.7,
     )
 
-    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
 
     mock_backtest_result = VectorBTResult(
         sharpe_ratio=1.2,
@@ -596,7 +596,7 @@ async def test_backtest_validation_pass(test_container):
     assert len(result.backtest_validation.failure_reasons) == 0
 
 
-async def test_backtest_validation_fail_sharpe(test_container):
+async def test_backtest_validation_fail_sharpe(test_container_full):
     """Test backtest validation fails on low Sharpe - confidence penalized."""
     config = PreTradeBacktestingConfig(
         enabled=True,
@@ -606,7 +606,7 @@ async def test_backtest_validation_fail_sharpe(test_container):
         confidence_penalty_multiplier=0.7,
     )
 
-    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
 
     mock_backtest_result = VectorBTResult(
         sharpe_ratio=0.2,
@@ -636,11 +636,11 @@ async def test_backtest_validation_fail_sharpe(test_container):
     assert any("Backtest FAILED" in w for w in result.warnings)
 
 
-async def test_backtest_validation_disabled(test_container):
+async def test_backtest_validation_disabled(test_container_full):
     """Test backtest validation disabled - no validation runs."""
     config = PreTradeBacktestingConfig(enabled=False)
 
-    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
 
     result = await workflow.analyze("AAPL", period_days=90)
 
@@ -648,7 +648,7 @@ async def test_backtest_validation_disabled(test_container):
     assert workflow.vectorbt_runner is None
 
 
-async def test_backtest_validation_error(test_container):
+async def test_backtest_validation_error(test_container_full):
     """Test backtest validation error handling - graceful degradation."""
     config = PreTradeBacktestingConfig(
         enabled=True,
@@ -657,7 +657,7 @@ async def test_backtest_validation_error(test_container):
         max_drawdown_threshold=0.25,
     )
 
-    workflow = create_test_workflow(test_container, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
 
     with patch.object(workflow.vectorbt_runner, "run_backtest", side_effect=ValueError("Insufficient data")):
         result = await workflow.analyze("AAPL", period_days=90)
@@ -666,14 +666,14 @@ async def test_backtest_validation_error(test_container):
     assert any("Backtest error" in w for w in result.warnings)
 
 
-async def test_broker_api_failure_blocks_trade(test_container):
+async def test_broker_api_failure_blocks_trade(test_container_full):
     """Broker API failure prevents trade execution."""
     from src.data.broker import BrokerAPIError
 
     mock_broker = MagicMock()
     mock_broker.get_account_info.side_effect = BrokerAPIError("API timeout")
 
-    workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
+    workflow = create_test_workflow(test_container_full, broker=mock_broker, use_meta_agent=False)
 
     # Mock trader to force BUY signal
     mock_decision = TradingDecision(
@@ -694,9 +694,9 @@ async def test_broker_api_failure_blocks_trade(test_container):
     assert any("Broker API unavailable" in w for w in result.warnings)
 
 
-async def test_paper_trading_unaffected(test_container):
+async def test_paper_trading_unaffected(test_container_full):
     """Paper trading (broker=None) still uses mock data."""
-    workflow = create_test_workflow(test_container, broker=None, use_meta_agent=False)
+    workflow = create_test_workflow(test_container_full, broker=None, use_meta_agent=False)
 
     result = await workflow.analyze("AAPL")
 
@@ -704,7 +704,7 @@ async def test_paper_trading_unaffected(test_container):
     assert not any("Broker API" in w for w in result.warnings)
 
 
-async def test_order_submission_failure_handled(test_container):
+async def test_order_submission_failure_handled(test_container_full):
     """Order submission failures handled gracefully."""
     from src.data.broker import BrokerAccountInfo, BrokerAPIError
 
@@ -718,7 +718,7 @@ async def test_order_submission_failure_handled(test_container):
     )
     mock_broker.submit_order.side_effect = BrokerAPIError("Order rejected")
 
-    workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
+    workflow = create_test_workflow(test_container_full, broker=mock_broker, use_meta_agent=False)
 
     # Mock trader to force BUY signal
     mock_decision = TradingDecision(
