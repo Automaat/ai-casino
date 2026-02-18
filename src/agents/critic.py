@@ -20,8 +20,8 @@ class DecisionEvaluationRequest(BaseModel):
     symbol: str
     decision: TradingDecision
     technical: TechnicalAnalysis
-    sentiment: SentimentAnalysis
-    news: NewsAnalysis
+    sentiment: SentimentAnalysis | None = None
+    news: NewsAnalysis | None = None
     fundamental: FundamentalAnalysis | None
     risk: RiskAssessment
     game_plan_context: str | None
@@ -160,13 +160,20 @@ class CriticAgent:
         tech_str = ", ".join(tech_indicators) if tech_indicators else "N/A"
 
         # Format sentiment
-        sentiment_str = request.sentiment.overall_sentiment
-        if hasattr(request.sentiment, "positive_ratio"):
-            sentiment_str += f" ({request.sentiment.positive_ratio:.0%} positive)"
+        if request.sentiment:
+            sentiment_str = request.sentiment.overall_sentiment
+            if hasattr(request.sentiment, "positive_ratio"):
+                sentiment_str += f" ({request.sentiment.positive_ratio:.0%} positive)"
+        else:
+            sentiment_str = "Unavailable"
 
         # Format news themes
-        news_themes = ", ".join(request.news.key_themes) if request.news.key_themes else "None"
-        news_impact = request.news.impact_assessment
+        if request.news:
+            news_themes = ", ".join(request.news.key_themes) if request.news.key_themes else "None"
+            news_impact = request.news.impact_assessment
+        else:
+            news_themes = "Unavailable"
+            news_impact = "Unavailable"
 
         # Format constraints
         constraints_str = "None"

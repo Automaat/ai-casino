@@ -62,8 +62,8 @@ class TradingWorkflowResult(BaseModel):
     symbol: str
     trading_session: TradingSession = TradingSession.REGULAR
     technical: TechnicalAnalysis
-    sentiment: SentimentAnalysis
-    news: NewsAnalysis
+    sentiment: SentimentAnalysis | None = None
+    news: NewsAnalysis | None = None
     trump: TrumpAnalysis | None = None
     fundamental: FundamentalAnalysis | None = None
     comparative: ComparativeAnalysis | None = None

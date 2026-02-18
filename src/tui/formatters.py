@@ -33,13 +33,10 @@ def format_analysis_result(result: TradingWorkflowResult) -> str:
 - Confidence: {result.technical.confidence:.2f}
 
 ### Sentiment
-- Overall: {result.sentiment.overall_sentiment}
-- Score: {result.sentiment.sentiment_score:.2f}
-- Articles analyzed: {result.sentiment.article_count}
+{_format_sentiment_section(result)}
 
 ### News
-- Key themes: {", ".join(result.news.key_themes[:3])}
-- Impact: {result.news.impact_assessment[:100]}
+{_format_news_section(result)}
 
 ### Reasoning
 {result.decision.reasoning}"""
@@ -67,6 +64,27 @@ def format_technical(result: TradingWorkflowResult) -> str:
 {result.technical.interpretation}"""
 
 
+def _format_sentiment_section(result: TradingWorkflowResult) -> str:
+    """Format inline sentiment section."""
+    if not result.sentiment:
+        return "*Unavailable*"
+    return (
+        f"- Overall: {result.sentiment.overall_sentiment}\n"
+        f"- Score: {result.sentiment.sentiment_score:.2f}\n"
+        f"- Articles analyzed: {result.sentiment.article_count}"
+    )
+
+
+def _format_news_section(result: TradingWorkflowResult) -> str:
+    """Format inline news section."""
+    if not result.news:
+        return "*Unavailable*"
+    return (
+        f"- Key themes: {', '.join(result.news.key_themes[:3])}\n"
+        f"- Impact: {result.news.impact_assessment[:100]}"
+    )
+
+
 def format_sentiment(result: TradingWorkflowResult) -> str:
     """Format sentiment analysis as markdown.
 
@@ -76,6 +94,8 @@ def format_sentiment(result: TradingWorkflowResult) -> str:
     Returns:
         Formatted markdown string
     """
+    if not result.sentiment:
+        return f"## Sentiment Analysis for {result.symbol}\n\n*Unavailable*"
     return f"""## Sentiment Analysis for {result.symbol}
 
 - **Overall:** {result.sentiment.overall_sentiment}
@@ -94,6 +114,8 @@ def format_news(result: TradingWorkflowResult) -> str:
     Returns:
         Formatted markdown string
     """
+    if not result.news:
+        return f"## News Analysis for {result.symbol}\n\n*Unavailable*"
     themes = ", ".join(result.news.key_themes[:5]) if result.news.key_themes else "None"
     return f"""## News Analysis for {result.symbol}
 

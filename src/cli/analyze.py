@@ -107,6 +107,10 @@ def _print_ensemble_technical(result: TradingWorkflowResult) -> None:
 
 def _print_sentiment(result: TradingWorkflowResult) -> None:
     """Print sentiment analysis."""
+    if not result.sentiment:
+        console.print(Panel("[yellow]Sentiment analysis unavailable[/yellow]"))
+        return
+
     sentiment_table = Table(title="Sentiment Analysis", show_header=True)
     sentiment_table.add_column("Metric", style="cyan")
     sentiment_table.add_column("Value", style="yellow")
@@ -122,6 +126,10 @@ def _print_sentiment(result: TradingWorkflowResult) -> None:
 
 def _print_news(result: TradingWorkflowResult) -> None:
     """Print news analysis."""
+    if not result.news:
+        console.print(Panel("[yellow]News analysis unavailable[/yellow]"))
+        return
+
     news_table = Table(title="News Analysis", show_header=True)
     news_table.add_column("Aspect", style="cyan")
     news_table.add_column("Details", style="yellow")
