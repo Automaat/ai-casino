@@ -123,6 +123,9 @@ ignore = [
     "SLF001",  # private member access OK for tightly-coupled workflow components
     "ANN401",  # Any required for workflow parameter (circular import)
 ]
+"src/daemon/cycle_orchestrator.py" = [
+    "SLF001",  # private member access OK: orchestrator is tightly coupled to runner (circular import prevents proper typing)
+]
 "scripts/*.py" = [
     "SLF001",  # private member access OK in profiling/benchmarking scripts
     "T201",    # print OK in scripts

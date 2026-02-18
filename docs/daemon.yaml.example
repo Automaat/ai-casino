@@ -955,6 +955,14 @@ daemon:
       # Also serves as initial/reset value for both BUY and SELL
       min_threshold: 0.5
 
+    sweep_pass:
+      # Analyze stale watchlist symbols after each coordinator cycle
+      enabled: true
+      # Hours before a symbol is considered stale (1-24)
+      stale_hours: 4
+      # Max symbols to sweep per cycle (1-50)
+      max_symbols: 20
+
     # ===== EXAMPLES =====
     #
     # CONSERVATIVE (manual approval):

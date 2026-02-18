@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 # Re-export all config classes (backward compatibility)
 from src.circuit_breaker.models import CircuitBreakerConfig
 from src.coordinator import CoordinatorConfig
-from src.coordinator.models import AdaptiveThresholdConfig, PatternDetectionConfig
+from src.coordinator.models import AdaptiveThresholdConfig, PatternDetectionConfig, SweepPassConfig
 from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
     AnomalyWatcherConfig,
@@ -120,6 +120,7 @@ __all__ = [
     "SocialSentimentWatcherConfig",
     "SocialWatcherConfig",
     "StateConfig",
+    "SweepPassConfig",
     "TelegramNotificationConfig",
     "TradingMode",
     "TrumpWatcherConfig",
@@ -259,6 +260,7 @@ class DaemonConfig(BaseModel):
         sections["circuit_breaker"] = sections["api"].pop("circuit_breaker", {}) or {}
         sections["adaptive_thresholds"] = sections["coordinator"].pop("adaptive_thresholds", {}) or {}
         sections["pattern_detection"] = sections["coordinator"].pop("pattern_detection", {}) or {}
+        sections["sweep_pass"] = sections["coordinator"].pop("sweep_pass", {}) or {}
         sections["finnhub_premium"] = sections["data_sources"].pop("finnhub_premium", {}) or {}
 
         return sections
@@ -337,6 +339,7 @@ class DaemonConfig(BaseModel):
                 **sections["coordinator"],
                 adaptive_thresholds=AdaptiveThresholdConfig(**sections["adaptive_thresholds"]),
                 pattern_detection=PatternDetectionConfig(**sections["pattern_detection"]),
+                sweep_pass=SweepPassConfig(**sections["sweep_pass"]),
             ),
             profiling=ProfilingConfig(**sections["profiling"]),
             metrics=MetricsConfig(**sections["metrics"]),

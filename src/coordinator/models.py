@@ -37,6 +37,20 @@ class AdaptiveThresholdConfig(BaseModel):
         return f"AdaptiveThresholdConfig(enabled={self.enabled}, interval={self.adaptation_interval_cycles})"
 
 
+class SweepPassConfig(BaseModel):
+    """Configuration for the watchlist sweep pass after coordinator cycle."""
+
+    enabled: bool = True
+    stale_hours: int = Field(default=4, ge=1, le=24)
+    max_symbols: int = Field(default=20, ge=1, le=50)
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"SweepPassConfig(enabled={self.enabled}, stale_hours={self.stale_hours}, max={self.max_symbols})"
+        )
+
+
 class CoordinatorConfig(BaseModel):
     """Configuration for the coordinator agent."""
 
@@ -67,6 +81,7 @@ class CoordinatorConfig(BaseModel):
     )
     pattern_detection: PatternDetectionConfig = Field(default_factory=PatternDetectionConfig)
     adaptive_thresholds: AdaptiveThresholdConfig = Field(default_factory=AdaptiveThresholdConfig)
+    sweep_pass: SweepPassConfig = Field(default_factory=SweepPassConfig)
 
     def __repr__(self) -> str:
         """Return string representation."""
