@@ -37,6 +37,8 @@ class MomentumIndicators(BaseModel):
 _EXHAUSTION_MIN_BARS = 5
 _EXHAUSTION_MIN_HIST_BARS = 3
 _EXHAUSTION_LOOKBACK = 6
+# Weights sum to 1.0 at max signal strength:
+# divergence (0.4) + hist_bars * 0.12 capped at 3*0.12=0.36 + adx_down (0.24) = 1.0
 _DIVERGENCE_WEIGHT = 0.4
 _HIST_BAR_WEIGHT = 0.12
 _ADX_DOWN_WEIGHT = 0.24

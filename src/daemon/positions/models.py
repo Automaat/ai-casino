@@ -55,9 +55,9 @@ class PositionRecord(BaseModel):
     high_water_mark: float | None = None
     current_conviction: float | None = None
     last_analysis_timestamp: datetime | None = None
-    conviction_history: list[float] = []
+    conviction_history: list[float] = Field(default_factory=list)
     initial_risk_per_share: float | None = None
-    r_multiple_targets_hit: list[int] = []
+    r_multiple_targets_hit: list[int] = Field(default_factory=list)
     pending_sell_signal_count: int = 0
 
 

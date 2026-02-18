@@ -535,7 +535,7 @@ class AnalysisOrchestrator:
 
             return (
                 f"## RECENT TRADE HISTORY\n\n{summary}\n\n"
-                f"Aggregate (30d): Win Rate {win_rate:.0f}%, Avg Gain {avg_gain:.1f}%"
+                f"Portfolio aggregate (30d, all symbols): Win Rate {win_rate:.0f}%, Avg Gain {avg_gain:.1f}%"
             )
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to build recent trades context: {e}")

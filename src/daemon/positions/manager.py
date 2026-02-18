@@ -153,6 +153,7 @@ class PositionManager:
             current_qty=broker_pos.qty,
             current_stop_loss=initial_stop,
             initial_stop_loss=initial_stop,
+            initial_risk_per_share=entry_price - initial_stop,
             profit_targets=profit_targets,
             last_updated=datetime.now(UTC),
         )

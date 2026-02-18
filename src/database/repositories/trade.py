@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 
 from src.database.models import TradeORM
 from src.database.repositories.base import BaseRepository
@@ -256,7 +256,10 @@ class TradeRepository(BaseRepository[TradeRecord]):
         """
         cutoff = datetime.now(UTC) - timedelta(days=days)
         result = await self._session.execute(
-            select(TradeORM).where(TradeORM.status == "CLOSED", TradeORM.closed_at >= cutoff)
+            select(TradeORM).where(
+                TradeORM.status == "CLOSED",
+                or_(TradeORM.closed_at >= cutoff, TradeORM.closed_at.is_(None)),
+            )
         )
         trades = result.scalars().all()
 
