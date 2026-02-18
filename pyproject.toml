@@ -125,6 +125,7 @@ project-excludes = [
     "tests/**",
     "services/**",
     "src/agents/thesis_researcher.py",  # Decorator wrapper changes Awaitable->Coroutine signature
+    "src/daemon/positions.py",  # Pyrefly module path resolution bug with BaseRepository[T] generics
 ]
 
 [tool.uv]

@@ -14,7 +14,7 @@ from src.metrics.tracker import BaseMetricsTracker, PerformanceMetrics, TradeRec
 from src.strategies.signal import Signal
 
 if TYPE_CHECKING:
-    from src.database.repositories.trade import TradeRepository
+    from src.database.engine import DatabaseEngine
     from src.workflows.types import TradingWorkflowResult
 
 
@@ -23,17 +23,17 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     def __init__(
         self,
-        trade_repository: TradeRepository,
+        database_engine: DatabaseEngine,
         risk_free_rate: float,
     ) -> None:
         """Initialize database metrics tracker.
 
         Args:
-            trade_repository: Repository for trade persistence
+            database_engine: Database engine for creating per-request sessions
             risk_free_rate: Annual risk-free rate for Sharpe ratio
         """
         super().__init__(risk_free_rate)
-        self._repo = trade_repository
+        self._database_engine = database_engine
         self._trades_cache: list[TradeRecord] | None = None
         logger.info(f"Initialized DatabaseMetricsTracker (risk_free_rate={self.risk_free_rate:.4f})")
 
@@ -51,9 +51,12 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
     async def _get_trades(self) -> list[TradeRecord]:
         """Get all trades from database (cached)."""
+        from src.database.repositories.trade import TradeRepository
+
         if self._trades_cache is None:
-            trades = await self._repo.get_all()
-            self._trades_cache = trades
+            async with self._database_engine.session() as session:
+                repo = TradeRepository(session)
+                self._trades_cache = await repo.get_all()
         return self._trades_cache
 
     def _invalidate_cache(self) -> None:
@@ -113,7 +116,11 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
             is_paper_trade=is_paper_trade,
         )
 
-        await self._repo.create(trade)
+        from src.database.repositories.trade import TradeRepository
+
+        async with self._database_engine.session() as session:
+            repo = TradeRepository(session)
+            await repo.create(trade)
         self._invalidate_cache()
         return trade
 
@@ -130,42 +137,46 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
         Returns:
             List of closed trades
         """
+        from src.database.repositories.trade import TradeRepository
+
         closed_trades = []
-        open_trades = await self._repo.get_open_trades()
+        async with self._database_engine.session() as session:
+            repo = TradeRepository(session)
+            open_trades = await repo.get_open_trades()
 
-        for trade in open_trades:
-            current_price = current_prices.get(trade.symbol)
-            if current_price is None:
-                logger.warning(f"No price data for {trade.symbol}, skipping exit simulation")
-                continue
+            for trade in open_trades:
+                current_price = current_prices.get(trade.symbol)
+                if current_price is None:
+                    logger.warning(f"No price data for {trade.symbol}, skipping exit simulation")
+                    continue
 
-            should_close = False
+                should_close = False
 
-            if trade.action == Signal.BUY and current_price <= trade.stop_loss_price:
-                should_close = True
-                logger.info(
-                    f"Stop-loss hit for BUY {trade.symbol}: "
-                    f"price={current_price:.2f} <= stop={trade.stop_loss_price:.2f}"
-                )
-            elif trade.action == Signal.SELL and current_price >= trade.stop_loss_price:
-                should_close = True
-                logger.info(
-                    f"Stop-loss hit for SELL {trade.symbol}: "
-                    f"price={current_price:.2f} >= stop={trade.stop_loss_price:.2f}"
-                )
-
-            if should_close:
-                trade.close_trade(current_price)
-                closed_trades.append(trade)
-                if trade.id:
-                    await self._repo.update(
-                        trade.id,
-                        status=trade.status,
-                        exit_price=trade.exit_price,
-                        pnl=trade.pnl,
-                        pnl_percent=trade.pnl_percent,
-                        closed_at=trade.closed_at,
+                if trade.action == Signal.BUY and current_price <= trade.stop_loss_price:
+                    should_close = True
+                    logger.info(
+                        f"Stop-loss hit for BUY {trade.symbol}: "
+                        f"price={current_price:.2f} <= stop={trade.stop_loss_price:.2f}"
                     )
+                elif trade.action == Signal.SELL and current_price >= trade.stop_loss_price:
+                    should_close = True
+                    logger.info(
+                        f"Stop-loss hit for SELL {trade.symbol}: "
+                        f"price={current_price:.2f} >= stop={trade.stop_loss_price:.2f}"
+                    )
+
+                if should_close:
+                    trade.close_trade(current_price)
+                    closed_trades.append(trade)
+                    if trade.id:
+                        await repo.update(
+                            trade.id,
+                            status=trade.status,
+                            exit_price=trade.exit_price,
+                            pnl=trade.pnl,
+                            pnl_percent=trade.pnl_percent,
+                            closed_at=trade.closed_at,
+                        )
 
         self._invalidate_cache()
         return closed_trades
@@ -193,7 +204,11 @@ class DatabaseMetricsTracker(BaseMetricsTracker):
 
         logger.info(f"Calculating metrics for window: {window}")
 
-        filtered_trades = await self._repo.get_by_window(window)
+        from src.database.repositories.trade import TradeRepository
+
+        async with self._database_engine.session() as session:
+            repo = TradeRepository(session)
+            filtered_trades = await repo.get_by_window(window)
 
         if not filtered_trades:
             logger.warning(f"No trades found for window: {window}")

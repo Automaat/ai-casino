@@ -1,10 +1,8 @@
 """Paper trading validation endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.daemon.api.dependencies import get_db_session
 from src.daemon.api.models import PaperTradingValidationResponse, ValidationCriterionResponse
 from src.daemon.api.routers.shared import get_components
 
@@ -12,9 +10,7 @@ router = APIRouter(tags=["validation"])
 
 
 @router.get("/validation/paper-trading", response_model=PaperTradingValidationResponse)
-async def get_paper_trading_validation(
-    request: Request, session: AsyncSession = Depends(get_db_session)
-) -> PaperTradingValidationResponse:
+async def get_paper_trading_validation(request: Request) -> PaperTradingValidationResponse:
     """Get paper trading validation status and progress toward live promotion.
 
     Returns:
@@ -22,12 +18,14 @@ async def get_paper_trading_validation(
     """
     components = get_components(request)
 
-    # Create metrics tracker for this request (avoid mutating shared component)
-    from src.database.repositories.trade import TradeRepository
+    # Create metrics tracker using database engine (per-request sessions internally)
     from src.metrics.tracker import create_metrics_tracker
 
-    trade_repo = TradeRepository(session)
-    metrics_tracker = create_metrics_tracker(trade_repository=trade_repo)
+    database_engine = None
+    db_config = components.config.database
+    if db_config.enable_persistence and db_config.database_url:
+        database_engine = components.container.database_engine()
+    metrics_tracker = create_metrics_tracker(database_engine=database_engine)
 
     # Create validator
     from src.daemon.paper_trading_validator import PaperTradingValidator

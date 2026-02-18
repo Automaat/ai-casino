@@ -456,8 +456,7 @@ class DaemonCycleOrchestrator:
 
             # Create pattern analyzer with coordinator's memory
             pattern_analyzer = PatternAnalyzer(
-                analysis_repo=self.components.container.analysis_repository(),
-                trade_repo=self.components.container.trade_repository(),
+                database_engine=self.components.container.database_engine(),
                 memory=self.components.coordinator.memory,
                 min_sample_size=pattern_config.min_sample_size,
             )

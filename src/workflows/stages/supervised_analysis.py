@@ -87,30 +87,6 @@ class _WorkerTask:
         self.category = category
 
 
-def _create_worker_if_needed(
-    analysis_type: AnalysisType,
-    required: set[AnalysisType],
-    optional: set[AnalysisType],
-    coro: Coroutine[Any, Any, Any],
-) -> _WorkerTask | None:
-    """Create worker task if analysis is required or optional.
-
-    Args:
-        analysis_type: Type of analysis
-        required: Set of required analysis types
-        optional: Set of optional analysis types
-        coro: Coroutine to execute
-
-    Returns:
-        WorkerTask if needed, None otherwise
-    """
-    if analysis_type not in required and analysis_type not in optional:
-        return None
-    category = "required" if analysis_type in required else "optional"
-    task = asyncio.create_task(coro)
-    return _WorkerTask(analysis_type, task, category)
-
-
 def _validate_input_data(input_data: AnalysisInput) -> None:
     """Validate input data, raise on critical errors."""
     if input_data.market_data is None:
@@ -236,6 +212,7 @@ async def _execute_workers_with_gather(
 
 def _build_group1_coros(
     input_data: AnalysisInput,
+    needed: set[AnalysisType],
     technical_worker: TechnicalWorker,
     sentiment_worker: SentimentWorker,
     news_worker: NewsWorker,
@@ -247,13 +224,15 @@ def _build_group1_coros(
     trump_worker: TrumpWorker | None,
     collector: ExecutionMetricsCollector | None,
 ) -> dict[AnalysisType, Coroutine[Any, Any, Any]]:
-    """Build coroutines for each group-1 analysis type."""
+    """Build coroutines only for needed group-1 analysis types."""
     market_data = cast("pd.DataFrame | MultiTimeframeData", input_data.market_data)
-    news_articles = cast("list[NewsArticle]", input_data.news_articles)
+    news_articles = cast("list[NewsArticle]", input_data.news_articles or [])
     trump_posts = input_data.trump_posts or None
 
-    coros: dict[AnalysisType, Coroutine[Any, Any, Any]] = {
-        AnalysisType.TECHNICAL: _timed_agent_call(
+    coros: dict[AnalysisType, Coroutine[Any, Any, Any]] = {}
+
+    if AnalysisType.TECHNICAL in needed:
+        coros[AnalysisType.TECHNICAL] = _timed_agent_call(
             "technical",
             technical_worker.analyze(
                 input_data.symbol,
@@ -262,30 +241,35 @@ def _build_group1_coros(
                 enable_multi_timeframe=input_data.enable_multi_timeframe,
             ),
             collector,
-        ),
-        AnalysisType.SENTIMENT: _timed_agent_call(
+        )
+    if AnalysisType.SENTIMENT in needed:
+        coros[AnalysisType.SENTIMENT] = _timed_agent_call(
             "sentiment", sentiment_worker.analyze(input_data.symbol, news_articles), collector
-        ),
-        AnalysisType.NEWS: _timed_agent_call(
+        )
+    if AnalysisType.NEWS in needed:
+        coros[AnalysisType.NEWS] = _timed_agent_call(
             "news", news_worker.analyze(input_data.symbol, news_articles), collector
-        ),
-        AnalysisType.FUNDAMENTAL: _timed_agent_call(
+        )
+    if AnalysisType.FUNDAMENTAL in needed:
+        coros[AnalysisType.FUNDAMENTAL] = _timed_agent_call(
             "fundamental",
             fundamental_worker.analyze(input_data.symbol, input_data.get_current_price()),
             collector,
-        ),
-        AnalysisType.COMPARATIVE: _timed_agent_call(
+        )
+    if AnalysisType.COMPARATIVE in needed:
+        coros[AnalysisType.COMPARATIVE] = _timed_agent_call(
             "comparative", comparative_worker.analyze(input_data.symbol), collector
-        ),
-        AnalysisType.WEB_RESEARCH: _timed_agent_call(
+        )
+    if AnalysisType.WEB_RESEARCH in needed:
+        coros[AnalysisType.WEB_RESEARCH] = _timed_agent_call(
             "web_research", web_researcher.research(input_data.symbol), collector
-        ),
-        AnalysisType.SOCIAL_SENTIMENT: _timed_agent_call(
+        )
+    if AnalysisType.SOCIAL_SENTIMENT in needed:
+        coros[AnalysisType.SOCIAL_SENTIMENT] = _timed_agent_call(
             "social", social_worker.analyze(input_data.symbol), collector
-        ),
-    }
+        )
 
-    if trump_mode and trump_worker and trump_posts:
+    if AnalysisType.TRUMP in needed and trump_mode and trump_worker and trump_posts:
         coros[AnalysisType.TRUMP] = _timed_agent_call("trump", trump_worker.analyze(trump_posts), collector)
 
     return coros
@@ -307,8 +291,10 @@ def _setup_workers_group1(
     collector: ExecutionMetricsCollector | None,
 ) -> list[_WorkerTask]:
     """Setup worker tasks for group 1 analyses."""
+    needed = required | optional
     coros = _build_group1_coros(
         input_data,
+        needed,
         technical_worker,
         sentiment_worker,
         news_worker,
@@ -323,11 +309,9 @@ def _setup_workers_group1(
 
     tasks: list[_WorkerTask] = []
     for analysis_type, coro in coros.items():
-        worker = _create_worker_if_needed(analysis_type, required, optional, coro)
-        if worker:
-            tasks.append(worker)
-        else:
-            coro.close()  # Prevent "coroutine was never awaited" warning
+        category = "required" if analysis_type in required else "optional"
+        task = asyncio.create_task(coro)
+        tasks.append(_WorkerTask(analysis_type, task, category))
 
     return tasks
 

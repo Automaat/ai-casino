@@ -410,7 +410,6 @@ class DaemonFactory:
             broker,
             self.config.position_management,
             database_engine=None,
-            trade_repository=None,
         )
         logger.info("Position management enabled")
         return position_manager
