@@ -359,6 +359,38 @@ class TradeJournalORM(Base):
         return f"TradeJournalORM(id={self.id}, date={self.date}, accuracy={self.accuracy_pct}%)"
 
 
+class PortfolioHealthRecordORM(Base):
+    """Portfolio health check record ORM model."""
+
+    __tablename__ = "portfolio_health_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    total_positions: Mapped[int] = mapped_column(Integer, nullable=False)
+    portfolio_value: Mapped[Decimal] = mapped_column(DECIMAL(16, 4), nullable=False)
+    cash_percent: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    max_concentration_percent: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    max_concentration_symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    total_pnl_percent: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    biggest_drawdown_symbol: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    biggest_drawdown_percent: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
+    health_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    recommendations: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    constraints: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+    __table_args__ = (
+        Index("idx_portfolio_health_timestamp", "timestamp"),
+        Index("idx_portfolio_health_status", "health_status"),
+    )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"PortfolioHealthRecordORM(id={self.id}, status={self.health_status})"
+
+
 class RiskReportRecordORM(Base):
     """Risk report record ORM model."""
 

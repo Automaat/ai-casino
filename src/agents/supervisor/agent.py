@@ -67,6 +67,24 @@ class TradingSupervisor:
 
         from src.strategies.regime import MIN_ROWS_FOR_REGIME
 
+        # Format position P&L section
+        position_pnl_section = ""
+        if context.position_pnl:
+            p = context.position_pnl
+            position_pnl_section = (
+                f"## Position P&L\n\n"
+                f"- Entry Price: ${p.entry_price:.2f}\n"
+                f"- Unrealized P&L: {p.unrealized_pnl_percent:+.2f}%\n"
+                f"- Days Held: {p.days_held}\n"
+                f"- Quantity: {p.current_qty}"
+            )
+
+        # Format portfolio summary section
+        portfolio_summary_section = self._format_portfolio_summary(context)
+
+        # Format health constraints section
+        health_constraints_section = context.portfolio_health_constraints or "None"
+
         prompt = self._prompts.load(
             "plan",
             symbol=symbol,
@@ -83,6 +101,9 @@ class TradingSupervisor:
             fundamental_api_status="rate limited" if context.fundamental_rate_limit else "available",
             time_budget_ms=context.time_budget_ms,
             economic_risk=context.economic_risk or "None",
+            position_pnl_section=position_pnl_section,
+            portfolio_summary_section=portfolio_summary_section,
+            health_constraints_section=health_constraints_section,
         )
         system = self._prompts.load("system")
 
@@ -126,6 +147,34 @@ class TradingSupervisor:
         logger.debug(f"Routing reasoning: {decision.reasoning}")
 
         return decision
+
+    def _format_portfolio_summary(self, context: PlanningContext) -> str:
+        """Format portfolio summary section for the planning prompt.
+
+        Args:
+            context: Planning context with optional portfolio summary
+
+        Returns:
+            Formatted string for prompt injection
+        """
+        if not context.portfolio_summary:
+            return "No portfolio data"
+        ps = context.portfolio_summary
+        if not ps.total_positions:
+            return "No open positions"
+        winner_str = (
+            f"{ps.biggest_winner} ({ps.biggest_winner_pnl_percent:+.2f}%)" if ps.biggest_winner else "N/A"
+        )
+        loser_str = (
+            f"{ps.biggest_loser} ({ps.biggest_loser_pnl_percent:+.2f}%)" if ps.biggest_loser else "N/A"
+        )
+        return (
+            f"- Positions: {ps.total_positions}\n"
+            f"- Exposure: {ps.total_exposure_percent:.1f}%\n"
+            f"- Portfolio P&L: {ps.portfolio_pnl_percent:+.2f}%\n"
+            f"- Biggest Winner: {winner_str}\n"
+            f"- Biggest Loser: {loser_str}"
+        )
 
     @track_agent
     async def synthesize_results(

@@ -5,18 +5,32 @@ from __future__ import annotations
 import asyncio
 import time as time_mod
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from loguru import logger
 from rich.console import Console
 
 from src.daemon.state.managers.portfolio import CorrelationAuditInput, PortfolioRebalancingInput
+from src.daemon.state.models import PortfolioHealthRecord
 from src.daemon.tasks.base import TaskExecutor
 
 if TYPE_CHECKING:
+    from src.daemon.config.portfolio import PortfolioHealthConfig
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
     from src.metrics.correlation import CorrelationAuditResult
+
+
+class _PortfolioMetrics(TypedDict):
+    total_positions: int
+    total_exposure_percent: float
+    cash_percent: float
+    max_concentration_percent: float
+    max_concentration_symbol: str
+    total_pnl_percent: float
+    biggest_drawdown_percent: float
+    biggest_drawdown_symbol: str | None
+
 
 console = Console()
 
@@ -209,6 +223,301 @@ class RebalancingTask(TaskExecutor):
     async def record_success(self, duration: float) -> None:
         """Record rebalancing completion."""
         # State already recorded in execute()
+
+
+class PortfolioHealthCheckTask(TaskExecutor):
+    """Portfolio health check task with LLM-powered recommendations."""
+
+    def __init__(self, components: DaemonComponents, container: AppContainer) -> None:
+        """Initialize portfolio health check task.
+
+        Args:
+            components: Daemon components
+            container: DI container
+        """
+        super().__init__(components, container)
+        self._record: PortfolioHealthRecord | None = None
+
+    @property
+    def task_name(self) -> str:
+        """Task display name."""
+        return "Portfolio Health Check"
+
+    async def execute(self) -> None:
+        """Execute portfolio health check logic."""
+        if not self.components.broker:
+            logger.warning("No broker configured for health check")
+            return
+
+        account_info = await asyncio.to_thread(self.components.broker.get_account_info)
+        positions = account_info.positions
+        portfolio_value = float(account_info.portfolio_value)
+        cash = float(account_info.available_cash)
+
+        if portfolio_value <= 0:
+            logger.warning("Portfolio value is zero, skipping health check")
+            return
+
+        config = self.components.config.portfolio_health
+        metrics = self._compute_metrics(positions, portfolio_value, cash)
+        health_status = self._determine_status(metrics, config)
+
+        # Try LLM analysis, fallback to rule-based
+        recommendations, constraints = await self._analyze(
+            metrics, health_status, positions, config, portfolio_value
+        )
+
+        self._record = PortfolioHealthRecord(
+            timestamp=datetime.now(self.components.scheduler.timezone),
+            total_positions=metrics["total_positions"],
+            portfolio_value=portfolio_value,
+            cash_percent=metrics["cash_percent"],
+            max_concentration_percent=metrics["max_concentration_percent"],
+            max_concentration_symbol=metrics["max_concentration_symbol"],
+            total_pnl_percent=metrics["total_pnl_percent"],
+            biggest_drawdown_symbol=metrics["biggest_drawdown_symbol"],
+            biggest_drawdown_percent=metrics["biggest_drawdown_percent"],
+            health_status=health_status,
+            recommendations=recommendations,
+            constraints=constraints,
+        )
+
+        console.print(f"[bold]Status: {health_status}[/bold]")
+        console.print(
+            f"[dim]Positions: {metrics['total_positions']} | "
+            f"Exposure: {metrics['total_exposure_percent']:.1f}% | "
+            f"Cash: {metrics['cash_percent']:.1f}%[/dim]"
+        )
+        if constraints:
+            console.print(f"[yellow]Constraints: {', '.join(constraints)}[/yellow]")
+
+    def _compute_metrics(
+        self,
+        positions: dict,
+        portfolio_value: float,
+        cash: float,
+    ) -> _PortfolioMetrics:
+        """Compute portfolio health metrics.
+
+        Args:
+            positions: Broker positions dict
+            portfolio_value: Total portfolio value
+            cash: Available cash
+
+        Returns:
+            Dict of computed metrics
+        """
+        total_exposure = 0.0
+        total_unrealized_pnl = 0.0
+        max_concentration = 0.0
+        max_concentration_symbol = "N/A"
+        biggest_drawdown = 0.0
+        biggest_drawdown_symbol: str | None = None
+
+        for symbol, pos in positions.items():
+            market_value = pos.market_value
+            total_exposure += market_value
+            total_unrealized_pnl += pos.unrealized_pnl
+
+            concentration = (market_value / portfolio_value) * 100 if portfolio_value > 0 else 0.0
+            if concentration > max_concentration:
+                max_concentration = concentration
+                max_concentration_symbol = symbol
+
+            cost_basis = pos.avg_entry_price * pos.qty
+            pnl_pct = (pos.unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0.0
+            if pnl_pct < biggest_drawdown:
+                biggest_drawdown = pnl_pct
+                biggest_drawdown_symbol = symbol
+
+        return {
+            "total_positions": len(positions),
+            "total_exposure_percent": (
+                (total_exposure / portfolio_value * 100) if portfolio_value > 0 else 0.0
+            ),
+            "cash_percent": (cash / portfolio_value * 100) if portfolio_value > 0 else 100.0,
+            "max_concentration_percent": max_concentration,
+            "max_concentration_symbol": max_concentration_symbol,
+            "total_pnl_percent": (
+                (total_unrealized_pnl / portfolio_value * 100) if portfolio_value > 0 else 0.0
+            ),
+            "biggest_drawdown_percent": biggest_drawdown,
+            "biggest_drawdown_symbol": biggest_drawdown_symbol,
+        }
+
+    def _determine_status(
+        self,
+        metrics: _PortfolioMetrics,
+        config: PortfolioHealthConfig,
+    ) -> str:
+        """Determine health status from metrics and config thresholds.
+
+        Args:
+            metrics: Computed metrics
+            config: PortfolioHealthConfig
+
+        Returns:
+            HEALTHY, WARNING, or CRITICAL
+        """
+        issues = 0
+
+        max_conc = metrics["max_concentration_percent"]
+        cash_pct = metrics["cash_percent"]
+        drawdown = abs(metrics["biggest_drawdown_percent"])
+
+        if max_conc > config.max_position_concentration * 100:
+            issues += 1
+        if cash_pct < config.min_cash_percent * 100:
+            issues += 1
+        if drawdown > config.drawdown_alert_threshold * 100:
+            issues += 1
+
+        if issues >= 2:
+            return "CRITICAL"
+        if issues >= 1:
+            return "WARNING"
+        return "HEALTHY"
+
+    async def _analyze(
+        self,
+        metrics: _PortfolioMetrics,
+        health_status: str,
+        positions: dict,
+        config: PortfolioHealthConfig,
+        portfolio_value: float,
+    ) -> tuple[list[str], list[str]]:
+        """Analyze portfolio with LLM, fallback to rule-based.
+
+        Args:
+            metrics: Computed metrics
+            health_status: HEALTHY/WARNING/CRITICAL
+            positions: Broker positions
+            config: PortfolioHealthConfig
+            portfolio_value: Total portfolio value
+
+        Returns:
+            Tuple of (recommendations, constraints)
+        """
+        try:
+            return await self._analyze_with_llm(metrics, health_status, positions, config, portfolio_value)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"LLM analysis failed, using rules: {e}")
+            return self._rule_based_analysis(metrics, health_status, config)
+
+    async def _analyze_with_llm(
+        self,
+        metrics: _PortfolioMetrics,
+        health_status: str,
+        positions: dict,
+        config: PortfolioHealthConfig,
+        portfolio_value: float,
+    ) -> tuple[list[str], list[str]]:
+        """Use LLM for portfolio health analysis.
+
+        Args:
+            metrics: Computed metrics
+            health_status: HEALTHY/WARNING/CRITICAL
+            positions: Broker positions
+            config: PortfolioHealthConfig
+            portfolio_value: Total portfolio value
+
+        Returns:
+            Tuple of (recommendations, constraints)
+        """
+        from src.agents.portfolio_health.models import PortfolioHealthLLMResponse
+        from src.prompts import PromptLoader
+
+        llm_client = self.container.llm_client()
+        prompts = PromptLoader("portfolio_health")
+
+        # Build position details string
+        position_lines = []
+        for symbol, pos in positions.items():
+            cost_basis = pos.avg_entry_price * pos.qty
+            pnl_pct = (pos.unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0.0
+            position_lines.append(
+                f"- {symbol}: ${pos.market_value:,.0f} | P&L: {pnl_pct:+.1f}% | Qty: {pos.qty}"
+            )
+        position_details = "\n".join(position_lines) if position_lines else "No positions"
+
+        prompt = prompts.load(
+            "analyze",
+            total_positions=metrics["total_positions"],
+            portfolio_value=portfolio_value,
+            cash_percent=metrics["cash_percent"],
+            max_concentration_symbol=metrics["max_concentration_symbol"],
+            max_concentration_percent=metrics["max_concentration_percent"],
+            total_pnl_percent=metrics["total_pnl_percent"],
+            biggest_drawdown_symbol=metrics["biggest_drawdown_symbol"] or "N/A",
+            biggest_drawdown_percent=metrics["biggest_drawdown_percent"],
+            max_position_concentration=config.max_position_concentration,
+            min_cash_percent=config.min_cash_percent,
+            drawdown_alert_threshold=config.drawdown_alert_threshold,
+            health_status=health_status,
+            position_details=position_details,
+        )
+        system = prompts.load("system")
+
+        response = await llm_client.astructured(
+            prompt, PortfolioHealthLLMResponse, system=system, temperature=0.3
+        )
+        return response.recommendations, response.constraints
+
+    def _rule_based_analysis(
+        self,
+        metrics: _PortfolioMetrics,
+        health_status: str,
+        config: PortfolioHealthConfig,
+    ) -> tuple[list[str], list[str]]:
+        """Rule-based fallback analysis.
+
+        Args:
+            metrics: Computed metrics
+            health_status: HEALTHY/WARNING/CRITICAL
+            config: PortfolioHealthConfig
+
+        Returns:
+            Tuple of (recommendations, constraints)
+        """
+        recommendations: list[str] = []
+        constraints: list[str] = []
+
+        max_conc = metrics["max_concentration_percent"]
+        max_conc_sym = metrics["max_concentration_symbol"]
+        cash_pct = metrics["cash_percent"]
+        drawdown = metrics["biggest_drawdown_percent"]
+        drawdown_sym = metrics["biggest_drawdown_symbol"]
+
+        if max_conc > config.max_position_concentration * 100:
+            recommendations.append(
+                f"Reduce {max_conc_sym} concentration from {max_conc:.1f}% "
+                f"(threshold: {config.max_position_concentration:.0%})"
+            )
+            constraints.append(f"reduce:{max_conc_sym}")
+
+        if cash_pct < config.min_cash_percent * 100:
+            recommendations.append(
+                f"Increase cash reserves from {cash_pct:.1f}% (minimum: {config.min_cash_percent:.0%})"
+            )
+            constraints.append("block_buy:ALL")
+
+        if drawdown_sym and abs(drawdown) > config.drawdown_alert_threshold * 100:
+            recommendations.append(f"Review {drawdown_sym} position ({drawdown:+.1f}% drawdown)")
+            constraints.append(f"force_review:{drawdown_sym}")
+
+        if not recommendations:
+            recommendations.append("Portfolio health is within all thresholds")
+
+        return recommendations, constraints
+
+    async def get_last_run(self) -> datetime | None:
+        """Get last portfolio health check timestamp."""
+        return await self.components.state.get_last_portfolio_health()
+
+    async def record_success(self, duration: float) -> None:
+        """Record portfolio health check completion."""
+        if self._record:
+            await self.components.state.record_portfolio_health(self._record)
 
 
 class CorrelationAuditTask(TaskExecutor):

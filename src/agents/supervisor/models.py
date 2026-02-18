@@ -8,6 +8,27 @@ from src.strategies.regime import RegimeAnalysis
 from src.strategies.session import TradingSession
 
 
+class PositionPnLContext(BaseModel):
+    """Per-symbol position P&L for supervisor routing."""
+
+    entry_price: float
+    unrealized_pnl_percent: float
+    days_held: int
+    current_qty: float
+
+
+class PortfolioSummary(BaseModel):
+    """Portfolio-level summary for supervisor routing."""
+
+    total_positions: int
+    total_exposure_percent: float
+    portfolio_pnl_percent: float
+    biggest_winner: str | None = None
+    biggest_winner_pnl_percent: float = 0.0
+    biggest_loser: str | None = None
+    biggest_loser_pnl_percent: float = 0.0
+
+
 class AnalysisType(StrEnum):
     """Available analyses for routing."""
 
@@ -72,6 +93,9 @@ class PlanningContext(BaseModel):
     is_high_volatility: bool = False
     economic_risk: str | None = None  # e.g. "HIGH: Fed in 1.5h - avoid new positions"
     options_flow: str | None = None  # e.g. "BULLISH | P/C=0.65 | Vol 2.3x | Score=0.72"
+    position_pnl: PositionPnLContext | None = None
+    portfolio_summary: PortfolioSummary | None = None
+    portfolio_health_constraints: str | None = None
     social_sentiment: str | None = None  # e.g. "BULLISH | Buzz=0.72 | Trending #5"
 
 

@@ -256,6 +256,20 @@ daemon:
     # Output directory for audit reports
     output_dir: "~/.ai-casino/correlation-audits"
 
+  portfolio_health:
+    # Periodic portfolio health check with LLM recommendations
+    enabled: true
+    # Time to run health check (HH:MM)
+    run_time: "16:30"
+    # Days to run health check
+    run_days: ["mon", "wed", "fri"]
+    # Max single position concentration (0.05-0.50)
+    max_position_concentration: 0.25
+    # Minimum cash reserve percent (0.0-0.50)
+    min_cash_percent: 0.05
+    # Drawdown alert threshold (0.01-0.50)
+    drawdown_alert_threshold: 0.10
+
   reporting:
     # Automated performance reporting (tearsheets)
     enabled: false

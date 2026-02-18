@@ -392,7 +392,7 @@ class AnalysisOrchestrator:
             session = self.scheduler.get_trading_session() or TradingSession.REGULAR
             await self._publish_event("ANALYSIS_START", {"symbol": symbol, "trading_session": session.value})
 
-            extra_context = self._build_extra_context(symbol, position_context, degradation_context)
+            extra_context = await self._build_extra_context(symbol, position_context, degradation_context)
             result = await self._run_workflow_analysis(symbol, session, target_allocations, extra_context)
 
             await self._handle_notifications(result)
@@ -417,7 +417,7 @@ class AnalysisOrchestrator:
             await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
             return None
 
-    def _build_extra_context(
+    async def _build_extra_context(
         self,
         symbol: str,
         position_context: dict[str, object] | None,
@@ -463,6 +463,15 @@ class AnalysisOrchestrator:
                     f"Blocks={len(sig.block_trades)} | {sig.reason}"
                 )
 
+        # Fetch active portfolio health constraints
+        portfolio_health_ctx = None
+        try:
+            constraints = await self.state.get_active_constraints()
+            if constraints:
+                portfolio_health_ctx = f"ACTIVE CONSTRAINTS: {', '.join(constraints)}"
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to fetch portfolio health constraints: {e}")
+
         social_sentiment_ctx = None
         if self._social_sentiment_watcher:
             sig = self._social_sentiment_watcher.get_signal(symbol)
@@ -483,6 +492,7 @@ class AnalysisOrchestrator:
             degradation_context=degradation_context,
             economic_calendar_context=economic_ctx,
             options_flow_context=options_flow_ctx,
+            portfolio_health_context=portfolio_health_ctx,
             social_sentiment_context=social_sentiment_ctx,
         )
 

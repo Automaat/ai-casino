@@ -41,6 +41,7 @@ from src.daemon.state.models import (
     PaperTradingReportRecord,
     PeerAnalysisInput,
     PeerAnalysisRecord,
+    PortfolioHealthRecord,
     PortfolioRebalancingRecord,
     PortfolioSnapshot,
     PrefetchRecord,
@@ -335,6 +336,18 @@ class DaemonState(BaseModel):
     async def get_last_tearsheet(self) -> datetime | None:
         """Get last tearsheet timestamp."""
         return await self.portfolio.get_last_tearsheet()
+
+    async def get_last_portfolio_health(self) -> datetime | None:
+        """Get last portfolio health check timestamp."""
+        return await self.portfolio.get_last_portfolio_health()
+
+    async def record_portfolio_health(self, record: PortfolioHealthRecord) -> None:
+        """Delegate to portfolio manager."""
+        await self.portfolio.record_portfolio_health(record)
+
+    async def get_active_constraints(self) -> list[str]:
+        """Get active portfolio health constraints."""
+        return await self.portfolio.get_active_constraints()
 
     # ===================
     # Data Pipeline Manager API

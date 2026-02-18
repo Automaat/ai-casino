@@ -7,6 +7,16 @@ Market Regime: {regime}
 Trading Session: {session}
 Owns Position: {owns_position}
 
+{position_pnl_section}
+
+## Portfolio Summary
+
+{portfolio_summary_section}
+
+## Portfolio Health Constraints
+
+{health_constraints_section}
+
 ## Data Availability
 
 - News articles: {news_count}
@@ -44,6 +54,9 @@ Owns Position: {owns_position}
 3. **Pre-market session**: Prioritize news/sentiment in priority_order (breaking developments)
 4. **Research analyses (bullish_research, bearish_research)**: Required if technical runs (dependency), skip if technical skipped
 5. **High volatility**: Note for context (risk validation separate stage)
+6. **Position P&L aware routing**: Large losing position (>-10%) → add web_research + fundamental to required. Small profitable position with short hold → optional analyses suffice.
+7. **Portfolio concentration**: Exposure >90% → conservative routing. Biggest loser <-15% → prioritize deep analysis.
+8. **Health constraints**: If portfolio_health_constraints contains "block_buy:SECTOR" or "reduce:SYMBOL", factor into routing and reasoning.
 
 ## Available Analysis Types
 

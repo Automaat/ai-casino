@@ -55,6 +55,9 @@ class MarketSchedulerConfig:
     discovery_outcome_time: str = "17:15"
     discovery_outcome_days: list[str] | None = None
     enable_discovery_outcome: bool = True
+    portfolio_health_time: str = "16:30"
+    portfolio_health_days: list[str] | None = None
+    enable_portfolio_health: bool = True
 
 
 class MarketScheduler:
@@ -100,6 +103,9 @@ class MarketScheduler:
         discovery_outcome_time: str | None = None,
         discovery_outcome_days: list[str] | None = None,
         enable_discovery_outcome: bool | None = None,
+        portfolio_health_time: str | None = None,
+        portfolio_health_days: list[str] | None = None,
+        enable_portfolio_health: bool | None = None,
     ) -> None:
         """Initialize market scheduler.
 
@@ -146,6 +152,9 @@ class MarketScheduler:
             or discovery_outcome_time is not None
             or discovery_outcome_days is not None
             or enable_discovery_outcome is not None
+            or portfolio_health_time is not None
+            or portfolio_health_days is not None
+            or enable_portfolio_health is not None
         ):
             # Construct config from individual params (overriding defaults)
             defaults = MarketSchedulerConfig()
@@ -281,6 +290,21 @@ class MarketScheduler:
                     if enable_discovery_outcome is not None
                     else defaults.enable_discovery_outcome
                 ),
+                portfolio_health_time=(
+                    portfolio_health_time
+                    if portfolio_health_time is not None
+                    else defaults.portfolio_health_time
+                ),
+                portfolio_health_days=(
+                    portfolio_health_days
+                    if portfolio_health_days is not None
+                    else defaults.portfolio_health_days
+                ),
+                enable_portfolio_health=(
+                    enable_portfolio_health
+                    if enable_portfolio_health is not None
+                    else defaults.enable_portfolio_health
+                ),
             )
 
         cfg = config or MarketSchedulerConfig()
@@ -321,6 +345,9 @@ class MarketScheduler:
         self.discovery_outcome_time = cfg.discovery_outcome_time
         self.discovery_outcome_days = cfg.discovery_outcome_days or ["mon", "tue", "wed", "thu", "fri"]
         self.enable_discovery_outcome = cfg.enable_discovery_outcome
+        self.portfolio_health_time = cfg.portfolio_health_time
+        self.portfolio_health_days = cfg.portfolio_health_days or ["mon", "wed", "fri"]
+        self.enable_portfolio_health = cfg.enable_portfolio_health
         self._reddit_scraping_last_run: datetime | None = None
         logger.info(
             f"MarketScheduler initialized: {cfg.start_time}-{cfg.end_time} {cfg.timezone} "
@@ -882,6 +909,35 @@ class MarketScheduler:
         except (ValueError, AttributeError) as e:
             logger.opt(exception=True).warning(
                 f"Invalid discovery_outcome_time format: {self.discovery_outcome_time}: {e}"
+            )
+            return False
+
+        current_minutes = now.hour * 60 + now.minute
+        target_minutes = target_hour * 60 + target_minute
+
+        return abs(current_minutes - target_minutes) <= 1
+
+    def is_portfolio_health_time(self) -> bool:
+        """Check if current time matches portfolio health check schedule.
+
+        Returns:
+            True if within 1 minute of configured time on configured day
+        """
+        if not self.enable_portfolio_health:
+            return False
+
+        now = datetime.now(self.timezone)
+
+        day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = day_names[now.weekday()]
+        if current_day not in self.portfolio_health_days:
+            return False
+
+        try:
+            target_hour, target_minute = map(int, self.portfolio_health_time.split(":"))
+        except (ValueError, AttributeError) as e:
+            logger.opt(exception=True).warning(
+                f"Malformed portfolio_health_time '{self.portfolio_health_time}': {e}"
             )
             return False
 

@@ -17,6 +17,7 @@ from src.daemon.state.models import (
     PeerAnalysisInput,
     PeerAnalysisRecord,
     PortfolioAllocationRecord,
+    PortfolioHealthRecord,
     PortfolioRebalancingRecord,
     RiskReportRecord,
     SectorAttributionRecord,
@@ -64,6 +65,7 @@ class PortfolioStateManager(StateManager):
     _correlation_audit_cache: list[CorrelationAuditRecord] | None = PrivateAttr(default=None)
     _risk_report_cache: list[RiskReportRecord] | None = PrivateAttr(default=None)
     _monte_carlo_cache: list[MonteCarloRecord] | None = PrivateAttr(default=None)
+    _portfolio_health_cache: list[PortfolioHealthRecord] | None = PrivateAttr(default=None)
 
     async def _get_metadata_datetime(self, key: str, session: AsyncSession | None = None) -> datetime | None:
         """Get datetime metadata value with fresh session.
@@ -578,6 +580,44 @@ class PortfolioStateManager(StateManager):
             logger.opt(exception=True).warning(f"Failed to record tearsheet: {e}")
 
         logger.info(f"Recorded tearsheet generation for {symbol} at {html_path}")
+
+    async def get_last_portfolio_health(self, session: AsyncSession | None = None) -> datetime | None:
+        """Get last portfolio health check timestamp from DB."""
+        return await self._get_metadata_datetime("portfolio.last_portfolio_health", session)
+
+    async def record_portfolio_health(self, record: PortfolioHealthRecord) -> None:
+        """Record a portfolio health check."""
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.metadata import MetadataRepository
+            from src.database.repositories.portfolio_health import PortfolioHealthRecordRepository
+
+            async with get_session() as session:
+                await PortfolioHealthRecordRepository(session).create(record)
+                await MetadataRepository(session).set("portfolio.last_portfolio_health", record.timestamp)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to record portfolio health: {e}")
+
+        self._portfolio_health_cache = None
+
+    async def get_active_constraints(self) -> list[str]:
+        """Get active constraints from latest portfolio health report.
+
+        Returns:
+            List of constraint strings (e.g. ["block_buy:TECH", "reduce:AAPL"])
+        """
+        from src.database.repositories.portfolio_health import PortfolioHealthRecordRepository
+
+        try:
+            from src.database.connection import get_session
+
+            async with get_session() as session:
+                repo = PortfolioHealthRecordRepository(session)
+                latest = await repo.get_latest()
+                return latest.constraints if latest else []
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get active constraints: {e}")
+            return []
 
     def __repr__(self) -> str:
         """Return string representation."""

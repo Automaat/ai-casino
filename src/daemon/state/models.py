@@ -211,6 +211,23 @@ class RiskReportRecord(BaseModel):
     risk_status: str
 
 
+class PortfolioHealthRecord(BaseModel):
+    """Record of a portfolio health check."""
+
+    timestamp: datetime
+    total_positions: int
+    portfolio_value: float
+    cash_percent: float
+    max_concentration_percent: float
+    max_concentration_symbol: str
+    total_pnl_percent: float
+    biggest_drawdown_symbol: str | None
+    biggest_drawdown_percent: float
+    health_status: str  # HEALTHY, WARNING, CRITICAL
+    recommendations: list[str]
+    constraints: list[str]
+
+
 class MonteCarloRecord(BaseModel):
     """Record of Monte Carlo stress test execution."""
 

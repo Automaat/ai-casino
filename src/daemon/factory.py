@@ -313,6 +313,9 @@ class DaemonFactory:
             enable_game_plan=self.config.game_plan.enabled,
             monte_carlo_time=self.config.monte_carlo.schedule_time,
             monte_carlo_days=self.config.monte_carlo.schedule_days,
+            portfolio_health_time=self.config.portfolio_health.run_time,
+            portfolio_health_days=self.config.portfolio_health.run_days,
+            enable_portfolio_health=self.config.portfolio_health.enabled,
         )
         return MarketScheduler(scheduler_config)
 
