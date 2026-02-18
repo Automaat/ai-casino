@@ -154,8 +154,6 @@ def test_workflow_trump_provider():
 
         assert workflow.use_meta_agent is True
         assert workflow.trump_mode is True
-        # Trump analyst instantiated in __init__
-        assert workflow.trump_analyst is not None
 
 
 def test_workflow_momentum_provider():

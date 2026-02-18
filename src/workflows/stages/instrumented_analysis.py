@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Sized
 from typing import TYPE_CHECKING, cast
 
 from loguru import logger
@@ -21,7 +22,6 @@ from src.workflows.models.risk import RiskAssessmentInput, RiskAssessmentOutput
 from src.workflows.models.risk_validation import RiskValidationInput, RiskValidationOutput
 from src.workflows.models.strategy import StrategySelectionInput, StrategySelectionOutput
 from src.workflows.stages import (
-    analysis,
     data_fetch,
     decision,
     execution,
@@ -34,7 +34,6 @@ from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 if TYPE_CHECKING:
     from src.agents.supervisor.agent import SupervisorWorkflow
-    from src.agents.technical import TechnicalAnalyst
     from src.daemon.degradation import DegradationContext
     from src.data.broker import BrokerPosition
     from src.metrics.execution import WorkflowExecutionMetrics
@@ -120,13 +119,11 @@ class _PreparationResult:
         account_output: AccountInfoOutput,
         strategy_output: StrategySelectionOutput,
         backtest_output: BacktestValidationOutput,
-        technical_analyst: TechnicalAnalyst,
     ) -> None:
         self.data_output = data_output
         self.account_output = account_output
         self.strategy_output = strategy_output
         self.backtest_output = backtest_output
-        self.technical_analyst = technical_analyst
 
 
 class _AnalysisResult:
@@ -275,13 +272,7 @@ async def _fetch_and_prepare_strategy(
     )
     _record_stage(ctx.collector, "backtest_validation", start)
 
-    # Create TechnicalAnalyst with selected strategy
-    container = ctx.workflow.get_container()
-    technical_analyst = container.technical_analyst()(strategy_output.strategy_instance)
-
-    return _PreparationResult(
-        data_output, account_output, strategy_output, backtest_output, technical_analyst
-    )
+    return _PreparationResult(data_output, account_output, strategy_output, backtest_output)
 
 
 def _check_owns_position(positions: dict[str, BrokerPosition] | None, symbol: str) -> bool:
@@ -305,9 +296,12 @@ def _get_market_data_length(market_data: object) -> int:
     if market_data is None:
         return 0
     if isinstance(market_data, MultiTimeframeData):
-        # Use primary (shortest) timeframe
+        if not market_data.timeframes:
+            return 0
         return min(len(df) for df in market_data.timeframes.values())
-    return len(market_data)  # pyrefly: ignore[bad-argument-type]
+    if isinstance(market_data, Sized):
+        return len(market_data)
+    return 0
 
 
 async def _run_analyses_with_validation(
@@ -343,89 +337,79 @@ async def _run_analyses_with_validation(
     routing_decision = None
     config = ctx.workflow.analysis_orchestrator_config
 
-    if config and config.enable_supervisor_routing:
-        # Supervisor-driven conditional execution
-        start_planning = time.perf_counter()
-
-        # Collect routing context
-        from src.strategies.regime import MarketRegime
-
-        market_data_rows = _get_market_data_length(prep_result.data_output.market_data)
-        is_high_volatility = (
-            prep_result.strategy_output.regime_analysis.regime == MarketRegime.HIGH_VOLATILITY
-            if prep_result.strategy_output.regime_analysis
-            else False
+    if not (config and config.enable_supervisor_routing):
+        msg = (
+            "Supervisor routing is required for analysis, but either "
+            "`workflow.analysis_orchestrator_config` is missing or "
+            "`analysis_orchestrator_config.enable_supervisor_routing` is False. "
+            "Configure `workflow.analysis_orchestrator_config` and set "
+            "`enable_supervisor_routing = True`; non-supervisor routing is no longer supported."
         )
+        raise RuntimeError(msg)
 
-        planning_context = PlanningContext(
-            symbol=ctx.symbol,
-            regime=prep_result.strategy_output.regime_analysis,
-            trading_session=ctx.trading_session,
-            owns_position=_check_owns_position(prep_result.account_output.broker_positions, ctx.symbol),
-            news_count=len(prep_result.data_output.news_articles or []),
-            fundamental_available=True,
-            social_available=True,
-            trump_count=len(prep_result.data_output.trump_posts or []),
-            fundamental_rate_limit=False,  # TODO: Check circuit breaker
-            time_budget_ms=config.worker_execution_timeout_ms,
-            market_data_rows=market_data_rows,
-            is_high_volatility=is_high_volatility,
+    # Supervisor-driven conditional execution
+    start_planning = time.perf_counter()
+
+    from src.strategies.regime import MarketRegime
+
+    market_data_rows = _get_market_data_length(prep_result.data_output.market_data)
+    is_high_volatility = (
+        prep_result.strategy_output.regime_analysis.regime == MarketRegime.HIGH_VOLATILITY
+        if prep_result.strategy_output.regime_analysis
+        else False
+    )
+
+    planning_context = PlanningContext(
+        symbol=ctx.symbol,
+        regime=prep_result.strategy_output.regime_analysis,
+        trading_session=ctx.trading_session,
+        owns_position=_check_owns_position(prep_result.account_output.broker_positions, ctx.symbol),
+        news_count=len(prep_result.data_output.news_articles or []),
+        fundamental_available=True,
+        social_available=True,
+        trump_count=len(prep_result.data_output.trump_posts or []),
+        fundamental_rate_limit=False,
+        time_budget_ms=config.worker_execution_timeout_ms,
+        market_data_rows=market_data_rows,
+        is_high_volatility=is_high_volatility,
+    )
+
+    planning_fallback_used = False
+    try:
+        routing_decision = await asyncio.wait_for(
+            ctx.workflow.supervisor.plan_analyses(planning_context, symbol=ctx.symbol),
+            timeout=config.supervisor_planning_timeout_ms / 1000,
         )
+    except TimeoutError:
+        logger.warning("Supervisor planning timed out, using default routing")
+        routing_decision = ctx.workflow.supervisor.default_routing(planning_context)
+        planning_fallback_used = True
 
-        planning_fallback_used = False
-        try:
-            routing_decision = await asyncio.wait_for(
-                ctx.workflow.supervisor.plan_analyses(planning_context, symbol=ctx.symbol),
-                timeout=config.supervisor_planning_timeout_ms / 1000,
-            )
-        except TimeoutError:
-            logger.warning("Supervisor planning timed out, using default routing")
-            routing_decision = ctx.workflow.supervisor.default_routing(planning_context)
-            planning_fallback_used = True
+    _record_stage(ctx.collector, "supervisor_planning", start_planning)
 
-        _record_stage(ctx.collector, "supervisor_planning", start_planning)
-
-        # Run supervised analyses
-        # ctx.workflow is SupervisorWorkflow at runtime (duck-typed as TradingWorkflow)
-        supervisor_workflow = cast("SupervisorWorkflow", ctx.workflow)
-        workflow_id = ctx.collector.workflow_id if ctx.collector else None
-        analysis_output = await supervised_analysis.run_supervised_analyses(
-            analysis_input,
-            routing_decision,
-            supervisor_workflow.technical_worker,
-            supervisor_workflow.sentiment_worker,
-            supervisor_workflow.news_worker,
-            supervisor_workflow.fundamental_worker,
-            supervisor_workflow.comparative_worker,
-            supervisor_workflow.web_researcher,
-            supervisor_workflow.social_worker,
-            supervisor_workflow.bullish_researcher,
-            supervisor_workflow.bearish_researcher,
-            supervisor_workflow.trump_mode,
-            supervisor_workflow.trump_worker,
-            ctx.collector,
-            timeout_ms=config.worker_execution_timeout_ms,
-            workflow_id=workflow_id,
-            event_bus=supervisor_workflow.event_bus,
-            planning_fallback_used=planning_fallback_used,
-        )
-    else:
-        # Traditional unconditional execution
-        analysis_output = await analysis.run_analyses(
-            analysis_input,
-            prep_result.technical_analyst,
-            ctx.workflow.sentiment_analyst,
-            ctx.workflow.news_analyst,
-            ctx.workflow.fundamental_analyst,
-            ctx.workflow.comparative_analyst,
-            ctx.workflow.web_researcher,
-            ctx.workflow.social_analyst,
-            ctx.workflow.bullish_researcher,
-            ctx.workflow.bearish_researcher,
-            ctx.workflow.trump_mode,
-            ctx.workflow.trump_analyst,
-            ctx.collector,
-        )
+    # Run supervised analyses
+    supervisor_workflow = cast("SupervisorWorkflow", ctx.workflow)
+    workflow_id = ctx.collector.workflow_id if ctx.collector else None
+    analysis_output = await supervised_analysis.run_supervised_analyses(
+        analysis_input,
+        routing_decision,
+        supervisor_workflow.technical_worker,
+        supervisor_workflow.sentiment_worker,
+        supervisor_workflow.news_worker,
+        supervisor_workflow.fundamental_worker,
+        supervisor_workflow.comparative_worker,
+        supervisor_workflow.web_researcher,
+        supervisor_workflow.social_worker,
+        supervisor_workflow.bullish_researcher,
+        supervisor_workflow.bearish_researcher,
+        supervisor_workflow.trump_mode,
+        supervisor_workflow.trump_worker,
+        ctx.collector,
+        timeout_ms=config.worker_execution_timeout_ms,
+        workflow_id=workflow_id,
+        event_bus=supervisor_workflow.event_bus,
+        planning_fallback_used=planning_fallback_used,
+    )
 
     _record_stage(ctx.collector, "analyses", start)
 
@@ -559,7 +543,6 @@ async def _persist_execution_metrics(execution_metrics: WorkflowExecutionMetrics
     from src.database.repositories.workflow_execution_metrics import WorkflowExecutionMetricsRepository
     from src.metrics.execution import persist_jsonl
 
-    # Try database first, fallback to JSONL if DB not configured or fails
     try:
         async with get_session() as session:
             repo = WorkflowExecutionMetricsRepository(session)
@@ -573,7 +556,6 @@ async def _persist_execution_metrics(execution_metrics: WorkflowExecutionMetrics
             logger.opt(exception=True).error(f"Failed to persist execution metrics to JSONL: {e}")
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to persist execution metrics to database: {e}")
-        # Fallback to JSONL on DB failure to avoid data loss
         try:
             persist_jsonl(execution_metrics)
             logger.debug(f"Persisted execution metrics to JSONL fallback: {execution_metrics.workflow_id}")
@@ -603,7 +585,6 @@ async def _build_and_persist_result(
 
     execution_metrics = ctx.collector.finalize() if ctx.collector else None
 
-    # Extract degradation fields
     degradation_tier = (
         context_bundle.degradation_context.tier.value if context_bundle.degradation_context else None
     )
@@ -613,7 +594,6 @@ async def _build_and_persist_result(
         else None
     )
 
-    # Aggregate warnings
     all_warnings = []
     all_warnings.extend(prep_result.data_output.warnings)
     all_warnings.extend(prep_result.account_output.warnings)

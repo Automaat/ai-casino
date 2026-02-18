@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -10,9 +10,6 @@ if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
     from src.di.container import AppContainer
 
-from src.agents.fundamental import FundamentalAnalyst
-from src.agents.sentiment import SentimentAnalyst
-from src.agents.trump import TrumpAnalyst
 from src.backtesting import VectorBTRunner
 from src.data.truth_social import TruthSocialFetcher
 from src.metrics.execution import ExecutionMetricsCollector, current_collector
@@ -39,7 +36,6 @@ class TradingWorkflow:
         self.use_ensemble = config.use_ensemble
         self.use_meta_agent = config.use_meta_agent
         self.trump_mode = config.trump_mode
-        self.analysis_pattern = config.analysis_pattern
         self.snapshot_on_trade = config.snapshot_on_trade or False
         self.execution_metrics_enabled = config.execution_metrics_enabled
         self.pre_trade_backtest_config = config.pre_trade_backtest_config
@@ -77,10 +73,8 @@ class TradingWorkflow:
     def _initialize_trump_components(self, components: WorkflowComponents) -> None:
         """Initialize Trump mode components."""
         self.trump_fetcher: TruthSocialFetcher | None = None
-        self.trump_analyst: TrumpAnalyst | None = None
         if self.trump_mode:
             self.trump_fetcher = TruthSocialFetcher(historical_cache=components.historical_cache)
-            self.trump_analyst = self._container.trump_analyst()
 
     def _initialize_meta_agent(self, components: WorkflowComponents) -> None:
         """Initialize meta-agent for dynamic strategy selection."""
@@ -101,17 +95,9 @@ class TradingWorkflow:
         )
 
     def _initialize_agents(self, components: WorkflowComponents) -> None:
-        """Initialize all analysis and trading agents."""
+        """Initialize trading and risk agents."""
         from src.agents.risk import RiskManagementAgent
 
-        self.sentiment_analyst = SentimentAnalyst(components.finbert)
-        self.news_analyst = self._container.news_analyst()
-        self.fundamental_analyst = FundamentalAnalyst(components.llm_client, components.fundamental_fetcher)
-        self.comparative_analyst = self._container.comparative_analyst()
-        self.web_researcher = self._container.web_research_agent()
-        self.social_analyst = self._container.social_sentiment_analyst()
-        self.bullish_researcher = self._container.bullish_researcher()
-        self.bearish_researcher = self._container.bearish_researcher()
         self.trader = self._container.trader_agent()
         self.risk_manager = RiskManagementAgent(
             components.llm_client,
@@ -239,44 +225,7 @@ class TradingWorkflow:
             collector: Optional metrics collector
             extra_context: Optional context with degradation_context, enable_multi_timeframe, etc
         """
-        # Branch based on analysis pattern
-        if self.analysis_pattern == "supervisor":
-            # Supervisor-driven workflow using workers
-            return await self._analyze_supervisor(
-                symbol, period_days, trading_session, collector, extra_context
-            )
-        # Sequential pipeline using agents (legacy)
-        return await self._analyze_sequential(symbol, period_days, trading_session, collector, extra_context)
-
-    async def _analyze_sequential(
-        self,
-        symbol: str,
-        period_days: int,
-        trading_session: TradingSession,
-        collector: ExecutionMetricsCollector | None,
-        extra_context: WorkflowExtraContext | None = None,
-    ) -> TradingWorkflowResult:
-        """Run sequential pipeline workflow using agents (legacy).
-
-        Args:
-            symbol: Stock ticker symbol
-            period_days: Days of historical data
-            trading_session: Trading session type
-            collector: Optional metrics collector
-            extra_context: Optional workflow context
-
-        Returns:
-            TradingWorkflowResult from instrumented analysis
-        """
-        from src.workflows.stages.instrumented_analysis import (
-            AnalysisRequest,
-            AnalysisRequestParams,
-            run_instrumented_analysis,
-        )
-
-        params = AnalysisRequestParams(period_days, trading_session, extra_context)
-        request = AnalysisRequest(cast("Any", self), symbol, params, collector)
-        return await run_instrumented_analysis(request)
+        return await self._analyze_supervisor(symbol, period_days, trading_session, collector, extra_context)
 
     async def _analyze_supervisor(
         self,
@@ -332,7 +281,6 @@ class TradingWorkflow:
             use_ensemble=self.use_ensemble,
             use_meta_agent=self.use_meta_agent,
             trump_mode=self.trump_mode,
-            analysis_pattern=self.analysis_pattern,
             snapshot_on_trade=self.snapshot_on_trade,
             execution_metrics_enabled=self.execution_metrics_enabled,
             pre_trade_backtest_config=self.pre_trade_backtest_config,
@@ -509,4 +457,4 @@ class TradingWorkflow:
         """String representation."""
         mode = "meta-agent" if self.use_meta_agent else ("ensemble" if self.use_ensemble else "momentum")
         trump_str = "+trump" if self.trump_mode else ""
-        return f"TradingWorkflow(agents=9, mode={mode}{trump_str})"
+        return f"TradingWorkflow(mode={mode}{trump_str})"

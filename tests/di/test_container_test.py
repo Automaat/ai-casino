@@ -61,9 +61,9 @@ def test_test_container_fixture(test_container):
     """Test that test_container fixture works correctly."""
     assert test_container is not None
 
-    # Verify agent can be created
-    news_analyst = test_container.news_analyst()
-    assert news_analyst is not None
+    # Verify worker can be created
+    news_worker = test_container.news_worker()
+    assert news_worker is not None
 
 
 def test_test_container_full_fixture(test_container_full):
@@ -105,6 +105,6 @@ async def test_custom_override(test_container):
     test_container.llm_client.override(providers.Factory(lambda: custom_llm))
 
     # Verify override works
-    analyst = test_container.news_analyst()
-    result = await analyst.llm.acomplete("test")
+    worker = test_container.news_worker()
+    result = await worker.llm.acomplete("test")
     assert result == "Custom response"

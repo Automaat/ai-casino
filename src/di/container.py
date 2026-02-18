@@ -4,7 +4,6 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
-from src.agents.base_researcher import ResearchDirection
 from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
 from src.di.providers import circuit_breaker as circuit_breaker_providers
@@ -232,35 +231,6 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
     )
 
-    news_analyst = providers.Factory(
-        agent_providers.create_news_analyst,
-        llm_client=llm_client,
-    )
-
-    sentiment_analyst = providers.Factory(
-        agent_providers.create_sentiment_analyst,
-        finbert_sentiment=finbert_sentiment,
-    )
-
-    trump_analyst = providers.Factory(
-        agent_providers.create_trump_analyst,
-        llm_client=llm_client,
-    )
-
-    fundamental_analyst = providers.Factory(
-        agent_providers.create_fundamental_analyst,
-        llm_client=llm_client,
-        fundamental_fetcher=fundamental_fetcher,
-    )
-
-    social_sentiment_analyst = providers.Factory(
-        agent_providers.create_social_sentiment_analyst,
-        llm_client=llm_client,
-        finnhub_fetcher=finnhub_fetcher,
-        reddit_fetcher=reddit_fetcher,
-        finbert_sentiment=finbert_sentiment,
-    )
-
     trader_agent = providers.Factory(
         agent_providers.create_trader_agent,
         llm_client=llm_client,
@@ -271,27 +241,9 @@ class AppContainer(containers.DeclarativeContainer):
         llm_client=llm_client,
     )
 
-    bullish_researcher = providers.Factory(
-        agent_providers.create_thesis_researcher,
-        llm_client=llm_client,
-        direction=providers.Object(ResearchDirection.BULLISH),
-    )
-
-    bearish_researcher = providers.Factory(
-        agent_providers.create_thesis_researcher,
-        llm_client=llm_client,
-        direction=providers.Object(ResearchDirection.BEARISH),
-    )
-
     event_triage_agent = providers.Factory(
         agent_providers.create_event_triage_agent,
         llm_client=llm_client,
-    )
-
-    comparative_analyst = providers.Factory(
-        agent_providers.create_comparative_analyst,
-        llm_client=llm_client,
-        comparative_fetcher=comparative_fetcher,
     )
 
     game_plan_agent = providers.Factory(
@@ -304,17 +256,6 @@ class AppContainer(containers.DeclarativeContainer):
         agent_providers.create_trade_journal_agent,
         llm_client=llm_client,
         market_fetcher=market_fetcher,
-    )
-
-    technical_analyst = providers.Factory(
-        agent_providers.create_technical_analyst,
-        llm_client=llm_client,
-    )
-
-    web_research_agent = providers.Factory(
-        agent_providers.create_web_research_agent,
-        llm_client=llm_client,
-        search_tool=web_search_tool,
     )
 
     meta_agent = providers.Factory(

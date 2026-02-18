@@ -35,11 +35,6 @@ daemon:
 
   # Workflow execution configuration
   workflow:
-    # Workflow execution pattern
-    # - sequential: Use 8-stage pipeline with agents (legacy, stable)
-    # - supervisor: Use supervisor-driven adaptive workflow with workers (new, experimental)
-    analysis_pattern: supervisor
-
     # Use ensemble strategy combining multiple technical indicators
     use_ensemble: false
 

@@ -8,9 +8,9 @@ import time
 
 from loguru import logger
 
-from src.agents.sentiment import SentimentAnalyst
 from src.data.news import NewsArticle
 from src.models.sentiment import get_finbert_sentiment
+from src.workers.sentiment import SentimentWorker
 
 # Sample news articles for testing
 SAMPLE_ARTICLES = [
@@ -49,7 +49,7 @@ async def benchmark_parallel_analysis(symbols: list[str], articles: list[NewsArt
         Time taken in seconds
     """
     finbert = get_finbert_sentiment()
-    analysts = [SentimentAnalyst(finbert) for _ in symbols]
+    analysts = [SentimentWorker(finbert) for _ in symbols]
 
     start = time.perf_counter()
 
@@ -73,7 +73,7 @@ async def benchmark_single_analysis(symbol: str, articles: list[NewsArticle]) ->
         Time taken in seconds
     """
     finbert = get_finbert_sentiment()
-    analyst = SentimentAnalyst(finbert)
+    analyst = SentimentWorker(finbert)
 
     start = time.perf_counter()
     await analyst.analyze(symbol, articles)
