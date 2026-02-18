@@ -50,16 +50,19 @@ class OllamaProvider(BaseLLMProvider):
             self._client = httpx.Client(base_url=self._base_url, timeout=120.0)
         return self._client
 
-    def _sync_complete(self, messages: list[dict], temperature: float) -> str:
+    def _sync_complete(self, messages: list[dict], temperature: float, max_tokens: int | None = None) -> str:
         """Synchronous completion - runs in thread to avoid anyio issues."""
         client = self._get_client()
+        options: dict = {"temperature": temperature}
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
         response = client.post(
             "/api/chat",
             json={
                 "model": self._model,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": temperature},
+                "options": options,
             },
         )
         response.raise_for_status()
@@ -79,11 +82,15 @@ class OllamaProvider(BaseLLMProvider):
             self._client = None
 
     @retry(max_attempts=3, delay=1.0)
-    async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
+    async def acomplete(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Generate completion from messages."""
-        return await asyncio.to_thread(self._sync_complete, messages, temperature)
+        return await asyncio.to_thread(self._sync_complete, messages, temperature, max_tokens)
 
-    def _sync_stream(self, messages: list[dict], temperature: float) -> list[str]:
+    def _sync_stream(
+        self, messages: list[dict], temperature: float, max_tokens: int | None = None
+    ) -> list[str]:
         """Synchronous streaming - collects all tokens then returns.
 
         For true streaming in async context, we'd need a more complex queue-based
@@ -91,6 +98,9 @@ class OllamaProvider(BaseLLMProvider):
         """
         tokens = []
         client = self._get_client()
+        options: dict = {"temperature": temperature}
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
         with client.stream(
             "POST",
             "/api/chat",
@@ -98,7 +108,7 @@ class OllamaProvider(BaseLLMProvider):
                 "model": self._model,
                 "messages": messages,
                 "stream": True,
-                "options": {"temperature": temperature},
+                "options": options,
             },
         ) as response:
             response.raise_for_status()
@@ -109,10 +119,12 @@ class OllamaProvider(BaseLLMProvider):
                         tokens.append(content)
         return tokens
 
-    async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
+    async def astream(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> AsyncIterator[str]:
         """Stream completion tokens."""
         # Run sync streaming in thread, then yield tokens
-        tokens = await asyncio.to_thread(self._sync_stream, messages, temperature)
+        tokens = await asyncio.to_thread(self._sync_stream, messages, temperature, max_tokens)
         for token in tokens:
             yield token
 
@@ -121,6 +133,7 @@ class OllamaProvider(BaseLLMProvider):
         messages: list[dict],
         tools: list[dict],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Tool calling not supported by Ollama."""
         msg = "Ollama does not support tool calling"
@@ -136,6 +149,7 @@ class OllamaProvider(BaseLLMProvider):
         messages: list[dict],
         response_model: type[T],
         temperature: float,
+        max_tokens: int | None = None,
     ) -> T:
         """Synchronous structured output with retry on validation failure."""
         schema = response_model.model_json_schema()
@@ -153,6 +167,9 @@ class OllamaProvider(BaseLLMProvider):
         client = self._get_client()
         last_error: Exception | None = None
         last_response: str = ""
+        options: dict = {"temperature": temperature}
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
 
         for attempt in range(2):  # 1 initial + 1 retry
             response = client.post(
@@ -162,7 +179,7 @@ class OllamaProvider(BaseLLMProvider):
                     "messages": augmented_messages,
                     "stream": False,
                     "format": "json",
-                    "options": {"temperature": temperature},
+                    "options": options,
                 },
             )
             response.raise_for_status()
@@ -197,9 +214,12 @@ class OllamaProvider(BaseLLMProvider):
         messages: list[dict],
         response_model: type[T],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> T:
         """Generate structured output using JSON mode with schema in prompt."""
-        return await asyncio.to_thread(self._sync_structured, messages, response_model, temperature)
+        return await asyncio.to_thread(
+            self._sync_structured, messages, response_model, temperature, max_tokens
+        )
 
     @property
     def supports_structured_output(self) -> bool:

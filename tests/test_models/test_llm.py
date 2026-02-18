@@ -637,7 +637,7 @@ class TestParallelToolExecution:
         messages_log = []
 
         # Capture messages passed to provider
-        async def capture_messages(msgs, tools, temp):
+        async def capture_messages(msgs, tools, temp, max_tokens=None):
             messages_log.append(list(msgs))
             if len(messages_log) == 1:
                 return (None, tool_calls)

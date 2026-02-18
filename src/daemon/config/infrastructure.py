@@ -69,6 +69,13 @@ class ApiConfig(BaseModel):
         return v
 
 
+class ModelOverride(BaseModel):
+    """Per-agent model override (cross-provider supported)."""
+
+    provider: str | None = None
+    model: str
+
+
 class LLMConfig(BaseModel):
     """LLM provider configuration."""
 
@@ -80,6 +87,49 @@ class LLMConfig(BaseModel):
         description="Enable prompt caching (Anthropic: explicit, OpenAI/OpenRouter: metrics only)",
     )
     ollama_base_url: str = "http://localhost:11434"
+    model_overrides: dict[str, str | ModelOverride] = Field(
+        default_factory=dict,
+        description="Per-agent model overrides. Value: model string or {provider, model} dict.",
+    )
+    response_cache_ttl_seconds: int = Field(
+        default=0,
+        ge=0,
+        le=3600,
+        description="LLM response cache TTL in seconds (0=disabled)",
+    )
+    response_cache_max_entries: int = Field(default=500, ge=100, le=5000)
+
+    @field_validator("model_overrides", mode="before")
+    @classmethod
+    def coerce_model_overrides(cls, v: dict) -> dict[str, str | ModelOverride]:
+        """Accept both str and dict values from YAML."""
+        if not isinstance(v, dict):
+            return v
+        result: dict[str, str | ModelOverride] = {}
+        for key, val in v.items():
+            if isinstance(val, str):
+                result[key] = val
+            elif isinstance(val, dict):
+                result[key] = ModelOverride(**val)
+            else:
+                result[key] = val
+        return result
+
+    def get_resolved_override(self, agent_name: str) -> ModelOverride | None:
+        """Get resolved ModelOverride for an agent.
+
+        Args:
+            agent_name: Agent identifier (e.g. "event_triage", "trader")
+
+        Returns:
+            ModelOverride with provider/model, or None if no override
+        """
+        raw = self.model_overrides.get(agent_name)
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            return ModelOverride(provider=None, model=raw)
+        return raw
 
 
 class FinnhubSourcesConfig(BaseModel):

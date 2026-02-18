@@ -45,7 +45,7 @@ class AnthropicProvider(BaseLLMProvider):
         self,
         model: str,
         api_key: str | None = None,
-        max_tokens: int = 4096,
+        max_tokens: int = 1024,
         enable_caching: bool = False,
     ) -> None:
         """Initialize Anthropic provider.
@@ -53,7 +53,7 @@ class AnthropicProvider(BaseLLMProvider):
         Args:
             model: Model name (e.g., "claude-sonnet-4-20250514")
             api_key: API key (defaults to ANTHROPIC_API_KEY env var)
-            max_tokens: Maximum tokens in response (default: 4096)
+            max_tokens: Maximum tokens in response (default: 1024)
             enable_caching: Enable prompt caching via cache_control blocks
 
         Raises:
@@ -134,7 +134,9 @@ class AnthropicProvider(BaseLLMProvider):
         )
 
     @retry(max_attempts=3, delay=1.0)
-    async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
+    async def acomplete(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Generate completion from messages."""
         system, chat_messages = self._extract_system(messages)
 
@@ -142,7 +144,7 @@ class AnthropicProvider(BaseLLMProvider):
             "model": self._model,
             "messages": chat_messages,
             "temperature": temperature,
-            "max_tokens": self._max_tokens,
+            "max_tokens": max_tokens or self._max_tokens,
         }
         system_param = self._build_system_param(system)
         if system_param:
@@ -154,7 +156,9 @@ class AnthropicProvider(BaseLLMProvider):
         logger.debug(f"Anthropic response length: {len(content)} chars")
         return content
 
-    async def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
+    async def astream(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> AsyncIterator[str]:
         """Stream completion tokens."""
         system, chat_messages = self._extract_system(messages)
 
@@ -162,7 +166,7 @@ class AnthropicProvider(BaseLLMProvider):
             "model": self._model,
             "messages": chat_messages,
             "temperature": temperature,
-            "max_tokens": self._max_tokens,
+            "max_tokens": max_tokens or self._max_tokens,
         }
         system_param = self._build_system_param(system)
         if system_param:
@@ -178,6 +182,7 @@ class AnthropicProvider(BaseLLMProvider):
         messages: list[dict],
         tools: list[dict],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Generate completion with tool calling support."""
         system, chat_messages = self._extract_system(messages)
@@ -191,7 +196,7 @@ class AnthropicProvider(BaseLLMProvider):
             "messages": chat_messages,
             "tools": converted_tools,
             "temperature": temperature,
-            "max_tokens": self._max_tokens,
+            "max_tokens": max_tokens or self._max_tokens,
         }
         system_param = self._build_system_param(system)
         if system_param:
@@ -230,6 +235,7 @@ class AnthropicProvider(BaseLLMProvider):
         messages: list[dict],
         response_model: type[T],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> T:
         """Generate structured output using tool use pattern."""
         system, chat_messages = self._extract_system(messages)
@@ -249,7 +255,7 @@ class AnthropicProvider(BaseLLMProvider):
             "tools": [tool],
             "tool_choice": {"type": "tool", "name": "respond"},
             "temperature": temperature,
-            "max_tokens": self._max_tokens,
+            "max_tokens": max_tokens or self._max_tokens,
         }
         system_param = self._build_system_param(system)
         if system_param:

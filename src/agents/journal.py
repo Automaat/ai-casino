@@ -340,7 +340,7 @@ class TradeJournalAgent:
 
         try:
             llm_response = await self.llm.astructured(
-                prompt, JournalLLMResponse, system=system_prompt, temperature=0.5
+                prompt, JournalLLMResponse, system=system_prompt, temperature=0.5, max_tokens=1024
             )
             return {
                 "winners": llm_response.winners,

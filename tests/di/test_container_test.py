@@ -101,8 +101,10 @@ async def test_custom_override(test_container):
     custom_llm = create_mock_llm_client()
     custom_llm.acomplete = AsyncMock(return_value="Custom response")
 
-    # Override with Factory
-    test_container.llm_client.override(providers.Factory(lambda: custom_llm))
+    # Override with Factory (per-agent LLM factories used for worker wiring)
+    custom_factory = providers.Factory(lambda: custom_llm)
+    test_container.llm_client.override(custom_factory)
+    test_container._news_llm.override(custom_factory)
 
     # Verify override works
     worker = test_container.news_worker()

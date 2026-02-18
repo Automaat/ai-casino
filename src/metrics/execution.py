@@ -25,6 +25,10 @@ _PRICING: dict[str, tuple[float, float]] = {
     "openai/gpt-4o": (2.5, 10.0),
     "openai/gpt-4o-mini": (0.15, 0.6),
     "openai/gpt-5": (10.0, 30.0),
+    # OpenRouter models (via openai provider)
+    "openai/google/gemini-2.5-flash": (0.30, 2.50),
+    "openai/google/gemini-2.5-flash-lite": (0.10, 0.40),
+    "openai/openrouter/free": (0.0, 0.0),
 }
 
 

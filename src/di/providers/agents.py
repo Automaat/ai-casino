@@ -307,8 +307,13 @@ def create_trading_coordinator(
     # Extract coordinator config
     coordinator_config = daemon_config.coordinator
 
-    # Apply model override if configured
+    # Apply model override: coordinator_config.model_override (legacy) > llm.model_overrides > default
     if coordinator_config.model_override:
+        from loguru import logger
+
+        logger.warning(
+            "coordinator.model_override is deprecated, use llm.model_overrides.coordinator instead"
+        )
         provider = daemon_config.llm.provider
         api_key = None
         if provider == "anthropic":

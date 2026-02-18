@@ -52,24 +52,30 @@ class BaseLLMProvider(ABC):
         return self._last_usage
 
     @abstractmethod
-    async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
+    async def acomplete(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Generate completion from messages.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Generated text response
         """
 
     @abstractmethod
-    def astream(self, messages: list[dict], temperature: float = 0.7) -> AsyncIterator[str]:
+    def astream(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> AsyncIterator[str]:
         """Stream completion tokens.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Yields:
             Individual tokens as they're generated
@@ -81,6 +87,7 @@ class BaseLLMProvider(ABC):
         messages: list[dict],
         tools: list[dict],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Generate completion with tool calling support.
 
@@ -88,6 +95,7 @@ class BaseLLMProvider(ABC):
             messages: List of message dicts with 'role' and 'content'
             tools: List of tool definitions in OpenAI format
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Tuple of (text_response, tool_calls). One will be None.
@@ -111,6 +119,7 @@ class BaseLLMProvider(ABC):
         messages: list[dict],
         response_model: type[T],
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> T:
         """Generate structured output validated against a Pydantic model.
 
@@ -118,6 +127,7 @@ class BaseLLMProvider(ABC):
             messages: List of message dicts with 'role' and 'content'
             response_model: Pydantic model class to validate response against
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Validated instance of response_model

@@ -109,7 +109,7 @@ class TradingSupervisor:
 
         try:
             decision = await self.llm.astructured(
-                prompt, AnalysisRoutingDecision, system=system, temperature=0.4
+                prompt, AnalysisRoutingDecision, system=system, temperature=0.4, max_tokens=512
             )
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, using default: {e}")
@@ -210,7 +210,9 @@ class TradingSupervisor:
         system = self._prompts.load("system")
 
         try:
-            weights = await self.llm.astructured(prompt, AnalysisWeights, system=system, temperature=0.4)
+            weights = await self.llm.astructured(
+                prompt, AnalysisWeights, system=system, temperature=0.4, max_tokens=512
+            )
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, uniform weights: {e}")
             weights = self._default_weights(completed)
@@ -263,7 +265,9 @@ class TradingSupervisor:
         system = self._prompts.load("system")
 
         try:
-            ranking = await self.llm.astructured(prompt, CandidateRanking, system=system, temperature=0.4)
+            ranking = await self.llm.astructured(
+                prompt, CandidateRanking, system=system, temperature=0.4, max_tokens=512
+            )
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, fallback: {e}")
             ranking = self._default_candidate_ranking(context)

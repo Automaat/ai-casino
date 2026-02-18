@@ -31,6 +31,7 @@ from src.models.providers import AnthropicProvider, BaseLLMProvider, OllamaProvi
 from src.models.providers.base import ToolCall
 
 if TYPE_CHECKING:
+    from src.models.llm_cache import LLMResponseCache
     from src.tools.models import ToolDefinition
 
 
@@ -44,6 +45,7 @@ class ToolCallingParams:
     system: str | None = None
     temperature: float = 0.7
     max_tool_calls: int = 5
+    max_tokens: int | None = None
     on_tool_call: Callable[[str, dict, str], None] | None = None
 
 
@@ -213,6 +215,7 @@ class LLMClient:
         api_key: str | None = None,
         openai_base_url: str | None = None,
         enable_prompt_caching: bool = False,
+        cache_ttl: int = 0,
     ) -> None:
         """Initialize LLM client.
 
@@ -223,6 +226,7 @@ class LLMClient:
             api_key: API key for provider (optional)
             openai_base_url: Custom base URL for OpenAI (optional)
             enable_prompt_caching: Enable provider-level prompt caching
+            cache_ttl: Response cache TTL in seconds (0=disabled)
         """
         self.provider = provider
         self.model = model
@@ -233,6 +237,13 @@ class LLMClient:
 
         self._provider: BaseLLMProvider = self._create_provider()
         self._metrics_collector: ExecutionMetricsCollector | None = None
+
+        self._cache: LLMResponseCache | None = None
+        if cache_ttl > 0:
+            from src.models.llm_cache import LLMResponseCache
+
+            self._cache = LLMResponseCache(ttl_seconds=cache_ttl)
+
         logger.info(f"Initialized LLM client: provider={self.provider}, model={self.model}")
 
     def set_metrics_collector(self, collector: ExecutionMetricsCollector | None) -> None:
@@ -268,36 +279,60 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
         return messages
 
-    def complete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
+    def complete(
+        self, prompt: str, system: str | None = None, temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Generate completion from prompt (sync wrapper).
 
         Args:
             prompt: User prompt
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Generated text response
         """
-        return asyncio.run(self.acomplete(prompt, system, temperature))
+        return asyncio.run(self.acomplete(prompt, system, temperature, max_tokens))
 
-    async def acomplete(self, prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
+    async def acomplete(
+        self, prompt: str, system: str | None = None, temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Generate completion from prompt asynchronously.
 
         Args:
             prompt: User prompt
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Generated text response
         """
+        # Check response cache
+        cache_key: str | None = None
+        if self._cache is not None:
+            from src.models.llm_cache import LLMResponseCache
+
+            cache_key = LLMResponseCache.make_key("acomplete", prompt, self.model, temperature)
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.debug("LLM cache hit for acomplete")
+                if self._metrics_collector:
+                    self._metrics_collector.record_llm_call(
+                        method="acomplete", latency_ms=0.0, usage=None, success=True
+                    )
+                return cast("str", cached)
+
         messages = self._build_messages(prompt, system)
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
         try:
             async with _get_semaphore():
-                return await self._provider.acomplete(messages, temperature)
+                result = await self._provider.acomplete(messages, temperature, max_tokens)
+            if self._cache is not None and cache_key is not None:
+                self._cache.set(cache_key, result)
+            return result
         except Exception as e:
             error_msg = str(e)
             raise
@@ -311,24 +346,30 @@ class LLMClient:
                     error=error_msg,
                 )
 
-    def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+    def chat(
+        self, messages: list[dict[str, str]], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Multi-turn chat completion (sync wrapper).
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Generated text response
         """
-        return asyncio.run(self.achat(messages, temperature))
+        return asyncio.run(self.achat(messages, temperature, max_tokens))
 
-    async def achat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+    async def achat(
+        self, messages: list[dict[str, str]], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> str:
         """Multi-turn chat completion asynchronously.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Generated text response
@@ -337,7 +378,7 @@ class LLMClient:
         error_msg = None
         try:
             async with _get_semaphore():
-                return await self._provider.acomplete(messages, temperature)
+                return await self._provider.acomplete(messages, temperature, max_tokens)
         except Exception as e:
             error_msg = str(e)
             raise
@@ -352,7 +393,11 @@ class LLMClient:
                 )
 
     async def astream(
-        self, prompt: str, system: str | None = None, temperature: float = 0.7
+        self,
+        prompt: str,
+        system: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
         """Stream completion tokens asynchronously.
 
@@ -360,13 +405,14 @@ class LLMClient:
             prompt: User prompt
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Yields:
             Individual tokens as they're generated
         """
         messages = self._build_messages(prompt, system)
         async with _get_semaphore():
-            async for token in self._provider.astream(messages, temperature):
+            async for token in self._provider.astream(messages, temperature, max_tokens):
                 yield token
 
     @property
@@ -393,6 +439,7 @@ class LLMClient:
         response_model: type[T],
         system: str | None = None,
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> T:
         """Generate structured output validated against Pydantic model (sync wrapper).
 
@@ -401,6 +448,7 @@ class LLMClient:
             response_model: Pydantic model class to validate response against
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Validated instance of response_model
@@ -408,7 +456,7 @@ class LLMClient:
         Raises:
             StructuredOutputError: If response cannot be parsed or validated
         """
-        return asyncio.run(self.astructured(prompt, response_model, system, temperature))
+        return asyncio.run(self.astructured(prompt, response_model, system, temperature, max_tokens))
 
     async def astructured(
         self,
@@ -416,6 +464,7 @@ class LLMClient:
         response_model: type[T],
         system: str | None = None,
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> T:
         """Generate structured output validated against Pydantic model (async).
 
@@ -424,6 +473,7 @@ class LLMClient:
             response_model: Pydantic model class to validate response against
             system: System prompt (optional)
             temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Override default max output tokens (None = provider default)
 
         Returns:
             Validated instance of response_model
@@ -431,12 +481,30 @@ class LLMClient:
         Raises:
             StructuredOutputError: If response cannot be parsed or validated
         """
+        # Check response cache
+        cache_key: str | None = None
+        if self._cache is not None:
+            from src.models.llm_cache import LLMResponseCache
+
+            cache_key = LLMResponseCache.make_key("astructured", prompt, self.model, temperature)
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.debug("LLM cache hit for astructured")
+                if self._metrics_collector:
+                    self._metrics_collector.record_llm_call(
+                        method="astructured", latency_ms=0.0, usage=None, success=True
+                    )
+                return cast("T", cached)
+
         messages = self._build_messages(prompt, system)
         start = time.perf_counter() if self._metrics_collector else None
         error_msg = None
         try:
             async with _get_semaphore():
-                return await self._provider.astructured(messages, response_model, temperature)
+                result = await self._provider.astructured(messages, response_model, temperature, max_tokens)
+            if self._cache is not None and cache_key is not None:
+                self._cache.set(cache_key, result)
+            return result
         except Exception as e:
             error_msg = str(e)
             raise
@@ -482,7 +550,7 @@ class LLMClient:
             try:
                 async with _get_semaphore():
                     text_response, tool_calls = await self._provider.acomplete_with_tools(
-                        messages, tools_dict, params.temperature
+                        messages, tools_dict, params.temperature, params.max_tokens
                     )
             except Exception as e:
                 error_msg = str(e)
@@ -541,7 +609,7 @@ class LLMClient:
 
         # Final completion without tools
         async with _get_semaphore():
-            return await self._provider.acomplete(messages, params.temperature)
+            return await self._provider.acomplete(messages, params.temperature, params.max_tokens)
 
     def _format_tool_call_message(self, tool_calls: list[ToolCall]) -> dict:
         """Format tool calls for assistant message."""

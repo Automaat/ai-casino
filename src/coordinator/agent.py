@@ -151,6 +151,7 @@ class TradingCoordinator:
                         system=system_prompt,
                         temperature=self._config.temperature,
                         max_tool_calls=self._config.max_tool_calls,
+                        max_tokens=2048,
                         on_tool_call=self._on_tool_call,
                     )
                 ),

@@ -89,7 +89,7 @@ class TrumpWorker:
 
         try:
             llm_response = await self.llm.astructured(
-                user_prompt, TrumpLLMResponse, system=system_prompt, temperature=0.4
+                user_prompt, TrumpLLMResponse, system=system_prompt, temperature=0.4, max_tokens=256
             )
             sentiment = llm_response.sentiment
             signal = Signal(llm_response.signal)

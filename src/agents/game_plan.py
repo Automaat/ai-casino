@@ -107,7 +107,7 @@ class GamePlanAgent:
 
         try:
             llm_response = await self.llm.astructured(
-                prompt, GamePlanLLMResponse, system=system, temperature=0.7
+                prompt, GamePlanLLMResponse, system=system, temperature=0.7, max_tokens=512
             )
             priority_symbols = llm_response.priority_symbols
             risk_stance = llm_response.risk_stance
