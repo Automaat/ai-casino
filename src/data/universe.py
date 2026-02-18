@@ -321,9 +321,6 @@ class StockUniverseFetcher:
         Returns:
             StockUniverse with filtered stocks (~500-1500 depending on filters)
         """
-        # Import here to avoid circular dependency
-        from src.daemon.config import LiquidityFilterConfig  # noqa: F401
-
         # Generate cache key from filter config hash
         filter_hash = hashlib.sha256(
             f"{filters.min_market_cap}_{filters.min_avg_volume}_{filters.price_range}".encode()

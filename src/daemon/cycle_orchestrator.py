@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import time as time_mod
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -18,7 +20,7 @@ from src.workflows.types import TradingWorkflowResult
 if TYPE_CHECKING:
     from src.coordinator.models import CoordinatorCycleResult
     from src.daemon.degradation import DegradationContext
-    from src.daemon.factory import DaemonComponents
+    from src.daemon.factory import DaemonComponents, DaemonFactory
     from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.task_runner import ScheduledTaskRunner
 
@@ -42,7 +44,7 @@ class DaemonCycleOrchestrator:
         self,
         components: DaemonComponents,
         task_runner: ScheduledTaskRunner,
-        runner: object,  # DaemonRunner (circular import; typed as Any on self for method access)
+        factory: DaemonFactory,
         profiler: CycleProfiler | None = None,
     ) -> None:
         """Initialize cycle orchestrator.
@@ -50,12 +52,12 @@ class DaemonCycleOrchestrator:
         Args:
             components: Daemon components
             task_runner: Task runner for scheduled tasks
-            runner: DaemonRunner for delegation to helper methods
+            factory: DaemonFactory for lazy component initialization
             profiler: Optional cycle profiler
         """
         self.components = components
         self.task_runner = task_runner
-        self.runner: Any = runner  # DaemonRunner; Any avoids circular import type errors
+        self.factory = factory
         self.profiler = profiler
         self._notification_helper = DaemonNotificationHelper()
         self._cycle_counter = 0
@@ -120,7 +122,7 @@ class DaemonCycleOrchestrator:
                 logger.opt(exception=True).warning(f"Execution tracker cleanup failed: {e}")
 
             # Phase 4: Evaluate degradation before analysis
-            degradation_context = self.runner._evaluate_degradation()
+            degradation_context = self._evaluate_degradation()
 
             # Check for halted state (returns early if halted)
             halted_result = await self._handle_degradation_state(degradation_context)
@@ -262,7 +264,7 @@ class DaemonCycleOrchestrator:
         await self._sync_coordinator_positions()
 
         # Run coordinator cycle
-        coordinator_result: CoordinatorCycleResult = await self.runner._run_coordinator_cycle(
+        coordinator_result: CoordinatorCycleResult = await self._run_coordinator_cycle_impl(
             watchlist, degradation_context, trading_session
         )
 
@@ -380,7 +382,7 @@ class DaemonCycleOrchestrator:
                 f"never={len(never_analyzed)}, stale={len(stale)})"
             )
 
-            results = await self.runner._analyze_watchlist(sweep_symbols, degradation_context)
+            results = await self._analyze_watchlist(sweep_symbols, degradation_context)
             return len(results)
 
         except Exception as e:
@@ -439,7 +441,7 @@ class DaemonCycleOrchestrator:
         )
 
         cycle_start_time = time_mod.time()
-        results = await self.runner._analyze_watchlist(watchlist, degradation_context)
+        results = await self._analyze_watchlist(watchlist, degradation_context)
         cycle_duration = time_mod.time() - cycle_start_time
 
         # Log results
@@ -585,6 +587,81 @@ class DaemonCycleOrchestrator:
         except Exception as e:
             logger.opt(exception=True).warning(f"Pattern detection failed: {e}")
             return 0
+
+    def _evaluate_degradation(self) -> DegradationContext:
+        """Load latest health report and evaluate degradation tier."""
+        from src.daemon.degradation import DegradationPolicy
+        from src.daemon.health import HealthReport
+
+        health_report = None
+        health_dir = Path(self.components.config.health.health_dir).expanduser()
+        if health_dir.exists():
+            report_files = sorted(health_dir.glob("health-*.json"), reverse=True)
+            if report_files:
+                try:
+                    with report_files[0].open() as f:
+                        health_report = HealthReport.model_validate(json.load(f))
+                except Exception as e:
+                    logger.opt(exception=True).warning(f"Failed to load health report: {e}")
+
+        policy = DegradationPolicy(self.components.config)
+        return policy.evaluate_degradation(health_report)
+
+    async def _run_coordinator_cycle_impl(
+        self,
+        watchlist: list[str],
+        degradation_context: DegradationContext,
+        trading_session: TradingSession,
+    ) -> CoordinatorCycleResult:
+        """Run coordinator-driven cycle.
+
+        Args:
+            watchlist: Symbols to analyze
+            degradation_context: Degradation context for cycle
+            trading_session: Trading session type (REGULAR or PRE_MARKET)
+
+        Returns:
+            CoordinatorCycleResult from coordinator
+        """
+        from src.daemon.degradation import AgentType, DegradationTier
+
+        coordinator = self.factory.init_coordinator(self.components)
+
+        degradation_dict = None
+        if degradation_context.tier != DegradationTier.NONE:
+            degradation_dict = {
+                "tier": degradation_context.tier.value,
+                "unavailable_services": degradation_context.unavailable_services,
+                "confidence_adjustment": degradation_context.confidence_adjustment,
+                "disabled_agents": [
+                    str(agent) for agent in AgentType if agent not in degradation_context.available_agents
+                ],
+            }
+
+        return await coordinator.run_cycle(watchlist, degradation_dict, trading_session)
+
+    async def _analyze_watchlist(
+        self,
+        watchlist: list[str],
+        degradation_context: DegradationContext | None = None,
+    ) -> list[TradingWorkflowResult]:
+        """Analyze all symbols in watchlist (delegates to analysis orchestrator)."""
+        target_allocations = None
+
+        context_builder = self.components.container.context_builder(
+            components=self.components,
+            container=self.components.container,
+        )
+        orchestrator = self.factory.init_analysis_orchestrator(self.components, context_builder)
+        result = await orchestrator.orchestrate(watchlist, target_allocations, degradation_context)
+
+        logger.info(
+            f"Orchestration complete: {result.successful}/{result.total_symbols} successful, "
+            f"{result.failed} failed, {result.position_actions} position actions, "
+            f"{result.duration_seconds:.2f}s"
+        )
+
+        return result.results
 
     async def _publish_event(self, event_type: str, data: dict[str, object]) -> None:
         """Publish event to event bus.
