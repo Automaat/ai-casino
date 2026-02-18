@@ -87,6 +87,8 @@ async def migrate_risk_audit() -> tuple[int, int, int]:
                 risk_percent=data["risk_percent"],
                 stop_loss_price=data["stop_loss_price"],
                 warnings=data.get("warnings", []),
+                take_profit_price=data.get("take_profit_price"),
+                reward_risk_ratio=data.get("reward_risk_ratio"),
                 portfolio_var_95=data.get("portfolio_var_95"),
                 portfolio_cvar_99=data.get("portfolio_cvar_99"),
                 portfolio_cdar_95=data.get("portfolio_cdar_95"),

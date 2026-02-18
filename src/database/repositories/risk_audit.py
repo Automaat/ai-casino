@@ -40,6 +40,12 @@ class RiskAuditRepository(BaseRepository[RiskAuditRecord]):
             risk_amount=Decimal(str(entity.risk_amount)),
             risk_percent=Decimal(str(entity.risk_percent)),
             stop_loss_price=Decimal(str(entity.stop_loss_price)),
+            take_profit_price=(
+                Decimal(str(entity.take_profit_price)) if entity.take_profit_price is not None else None
+            ),
+            reward_risk_ratio=(
+                Decimal(str(entity.reward_risk_ratio)) if entity.reward_risk_ratio is not None else None
+            ),
             warnings=entity.warnings,
             portfolio_var_95=Decimal(str(entity.portfolio_var_95)) if entity.portfolio_var_95 else None,
             portfolio_cvar_99=Decimal(str(entity.portfolio_cvar_99)) if entity.portfolio_cvar_99 else None,
@@ -135,6 +141,8 @@ class RiskAuditRepository(BaseRepository[RiskAuditRecord]):
             risk_amount=float(orm.risk_amount),
             risk_percent=float(orm.risk_percent),
             stop_loss_price=float(orm.stop_loss_price),
+            take_profit_price=float(orm.take_profit_price) if orm.take_profit_price is not None else None,
+            reward_risk_ratio=float(orm.reward_risk_ratio) if orm.reward_risk_ratio is not None else None,
             warnings=orm.warnings,
             portfolio_var_95=float(orm.portfolio_var_95) if orm.portfolio_var_95 else None,
             portfolio_cvar_99=float(orm.portfolio_cvar_99) if orm.portfolio_cvar_99 else None,

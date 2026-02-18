@@ -15,6 +15,7 @@ from src.agents.risk import (
     RiskManagementAgent,
     RiskValidation,
     StopLossCalculation,
+    TakeProfitCalculation,
     TrailingStopConfig,
 )
 from src.agents.risk.context import RiskContext
@@ -710,3 +711,75 @@ async def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data)
     assert "broker_available" in assessment.validation.constraints_met
     assert not assessment.validation.constraints_met["broker_available"]
     assert any("Broker API unavailable" in w for w in assessment.validation.warnings)
+
+
+@pytest.mark.asyncio
+async def test_assess_includes_take_profit(test_container, sample_ohlcv_data):
+    """BUY assessment populates take_profit and reward_risk_ratio."""
+    agent = RiskManagementAgent(test_container.llm_client())
+    account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
+
+    result = agent.assess(
+        symbol="AAPL",
+        action=Signal.BUY,
+        current_price=150.0,
+        account_info=account_info,
+        market_data=sample_ohlcv_data,
+        decision_confidence=0.8,
+    )
+
+    assert result.take_profit is not None
+    assert isinstance(result.take_profit, TakeProfitCalculation)
+    assert result.take_profit.take_profit_price > 150.0
+    assert result.reward_risk_ratio is not None
+    assert result.reward_risk_ratio >= 2.0
+
+
+@pytest.mark.asyncio
+async def test_validate_risk_rejects_low_rr(test_container, account_info):
+    """R:R below minimum rejects trade."""
+    from src.daemon.config.risk import PositionSizingConfig
+
+    config = PositionSizingConfig(min_reward_risk_ratio=3.0)
+    agent = RiskManagementAgent(test_container.llm_client(), position_sizing_config=config)
+
+    position_sizing = PositionSizeCalculation(
+        recommended_shares=100,
+        position_value=15000.0,
+        risk_amount=300.0,
+        risk_percent=0.3,
+        reasoning="Test",
+    )
+
+    low_rr_tp = TakeProfitCalculation(
+        take_profit_price=155.0,
+        take_profit_percent=3.33,
+        potential_profit_per_share=5.0,
+        reward_risk_ratio=1.5,
+        methodology="R:R-based (1.5:1)",
+    )
+
+    context = RiskContext()
+    validation = agent._validate_risk(
+        "AAPL", Signal.BUY, position_sizing, account_info, 0.8, context, take_profit=low_rr_tp
+    )
+
+    assert validation.approved is False
+    assert validation.constraints_met["reward_risk_ratio"] is False
+    assert any("Reward:risk ratio" in w for w in validation.warnings)
+
+
+@pytest.mark.asyncio
+async def test_hold_no_take_profit(risk_agent, account_info, sample_ohlcv_data):
+    """HOLD action has no take-profit."""
+    result = risk_agent.assess(
+        symbol="AAPL",
+        action=Signal.HOLD,
+        current_price=150.0,
+        account_info=account_info,
+        market_data=sample_ohlcv_data,
+        decision_confidence=0.7,
+    )
+
+    assert result.take_profit is None
+    assert result.reward_risk_ratio is None

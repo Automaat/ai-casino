@@ -441,6 +441,10 @@ daemon:
     # Example: 80% means max $80k invested on $100k account ($20k cash buffer)
     max_total_exposure_pct: 80.0
 
+    # Minimum reward:risk ratio for trade approval (1.0-10.0)
+    # Example: 2.0 = require $2 profit potential per $1 risked
+    min_reward_risk_ratio: 2.0
+
     # ===== BLENDING WEIGHTS (for "balanced" primary_goal) =====
 
     # Weight for portfolio optimization method (must sum to 1.0 with risk_based)
