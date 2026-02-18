@@ -141,6 +141,8 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         Returns:
             Dict mapping symbol to its most recent analysis timestamp
         """
+        if not symbols:
+            return {}
         stmt = (
             select(AnalysisRecordORM.symbol, func.max(AnalysisRecordORM.timestamp))
             .where(AnalysisRecordORM.symbol.in_(symbols))
