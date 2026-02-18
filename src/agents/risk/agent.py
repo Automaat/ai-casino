@@ -166,6 +166,7 @@ class RiskManagementAgent:
         backtest_validation: BacktestValidation | None = None,
         degradation_context: DegradationContext | None = None,
         broker_api_failed: bool = False,
+        re_entry_cooldown_active: bool = False,
     ) -> RiskAssessment:
         """Perform complete risk assessment.
 
@@ -182,6 +183,7 @@ class RiskManagementAgent:
             backtest_validation: Optional pre-trade backtest validation result
             degradation_context: Optional degradation context
             broker_api_failed: True if broker API failed during account fetch
+            re_entry_cooldown_active: True if symbol was recently closed (whipsaw prevention)
 
         Returns:
             RiskAssessment with sizing, stop-loss, validation
@@ -215,6 +217,7 @@ class RiskManagementAgent:
                 backtest_validation=backtest_validation,
                 broker_api_failed=broker_api_failed,
                 take_profit=take_profit,
+                re_entry_cooldown_active=re_entry_cooldown_active,
             )
 
             confidence = self._calculate_risk_confidence(validation, decision_confidence)
@@ -314,6 +317,7 @@ class RiskManagementAgent:
         backtest_validation: BacktestValidation | None = None,
         broker_api_failed: bool = False,
         take_profit: TakeProfitCalculation | None = None,
+        re_entry_cooldown_active: bool = False,
     ) -> RiskValidation:
         """Validate risk constraints and generate approval (populates context).
 
@@ -329,6 +333,7 @@ class RiskManagementAgent:
             backtest_validation: Optional pre-trade backtest validation result
             broker_api_failed: True if broker API failed during account fetch
             take_profit: Optional take-profit calculation for R:R validation
+            re_entry_cooldown_active: True if BUY blocked by re-entry cooldown
 
         Returns:
             RiskValidation with approval status
@@ -343,6 +348,10 @@ class RiskManagementAgent:
                 "Broker API unavailable - cannot verify account balance or positions. "
                 "Trade execution blocked to prevent incorrect sizing."
             )
+
+        if action == Signal.BUY and re_entry_cooldown_active:
+            constraints_met["re_entry_cooldown"] = False
+            warnings.append(f"Re-entry cooldown active for {symbol} — recently closed position")
 
         constraints_met["position_risk"] = position_sizing.risk_percent <= self.max_position_risk
         if not constraints_met["position_risk"]:
@@ -383,13 +392,7 @@ class RiskManagementAgent:
             )
 
         if take_profit:
-            rr_met = take_profit.reward_risk_ratio >= self._min_reward_risk_ratio
-            constraints_met["reward_risk_ratio"] = rr_met
-            if not rr_met:
-                warnings.append(
-                    f"Reward:risk ratio {take_profit.reward_risk_ratio:.2f} "
-                    f"below minimum {self._min_reward_risk_ratio:.1f}"
-                )
+            constraints_met["reward_risk_ratio"] = self._validate_reward_risk(take_profit, warnings)
 
         approved = all(constraints_met.values())
 
@@ -546,6 +549,24 @@ class RiskManagementAgent:
             cvar_limit_breached=cvar_breached,
             risk_status=risk_status,
         )
+
+    def _validate_reward_risk(self, take_profit: TakeProfitCalculation, warnings: list[str]) -> bool:
+        """Check reward:risk ratio meets minimum threshold.
+
+        Args:
+            take_profit: Take-profit calculation
+            warnings: Warning list to append to
+
+        Returns:
+            True if R:R meets threshold
+        """
+        met = take_profit.reward_risk_ratio >= self._min_reward_risk_ratio
+        if not met:
+            warnings.append(
+                f"Reward:risk ratio {take_profit.reward_risk_ratio:.2f} "
+                f"below minimum {self._min_reward_risk_ratio:.1f}"
+            )
+        return met
 
     def _calculate_risk_score(
         self,

@@ -26,6 +26,7 @@ class RiskAssessmentInput(BaseModel):
     backtest_validation: BacktestValidation | None
     degradation_context: DegradationContext | None
     broker_api_failed: bool
+    re_entry_cooldown_active: bool = False
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

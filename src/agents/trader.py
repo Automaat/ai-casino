@@ -84,6 +84,7 @@ class TraderAgent:
         game_plan_context: str | None = None,
         position_context: dict[str, object] | None = None,
         degradation_context: DegradationContext | None = None,
+        recent_trades_context: str | None = None,
     ) -> TradingDecision:
         """Make final trading decision based on all analyses.
 
@@ -105,6 +106,7 @@ class TraderAgent:
             game_plan_context: Formatted game plan context (optional)
             position_context: Position context (entry price, P&L, days held) (optional)
             degradation_context: Degradation context (optional)
+            recent_trades_context: Formatted recent trades feedback (optional)
 
         Returns:
             TradingDecision with action and reasoning
@@ -128,6 +130,7 @@ class TraderAgent:
         backtest_section = self._build_backtest_section(backtest_validation)
         game_plan_section = self._build_game_plan_section(game_plan_context)
         position_context_section = self._build_position_context_section(position_context)
+        recent_trades_section = recent_trades_context or ""
 
         prompt = self._prompts.load(
             "user_base",
@@ -160,6 +163,7 @@ class TraderAgent:
             peer_analysis_section=peer_analysis_section,
             backtest_section=backtest_section,
             game_plan_section=game_plan_section,
+            recent_trades_section=recent_trades_section,
             position_context_section=position_context_section,
         )
 
@@ -434,6 +438,12 @@ class TraderAgent:
         if not position_context or not position_context.get("has_position"):
             return ""
 
+        conviction_trend = ""
+        conviction_history = position_context.get("conviction_history")
+        if isinstance(conviction_history, list) and len(conviction_history) >= 2:
+            trend_vals = " → ".join(f"{v:.2f}" for v in conviction_history[-5:])
+            conviction_trend = f"\nConviction Trend (recent): {trend_vals}"
+
         return self._prompts.load(
             "section_position_context",
             entry_price=f"{position_context.get('entry_price', 0.0):.2f}",
@@ -442,6 +452,7 @@ class TraderAgent:
             unrealized_pnl_percent=f"{position_context.get('unrealized_pnl_percent', 0.0):+.2f}",
             current_qty=f"{position_context.get('current_qty', 0.0):.0f}",
             symbol=position_context.get("symbol", ""),
+            conviction_trend_section=conviction_trend,
         )
 
     def _extract_action(self, response: str, technical_signal: Signal) -> Signal:

@@ -185,6 +185,7 @@ async def run_instrumented_analysis(request: AnalysisRequest) -> TradingWorkflow
             peer_analysis=ctx.peer_analysis_context,
             game_plan=ctx.game_plan_context,
             position=ctx.position_context,
+            recent_trades=ctx.recent_trades_context,
         ),
         degradation_context=degradation_context,
     )
@@ -626,6 +627,7 @@ async def _make_decision_and_execute(
     # Stage 7: Assess risk
     start = time.perf_counter()
     target_weight = ctx.workflow.get_target_allocation(ctx.symbol)
+    cooldown_symbols = ctx.extra_context.re_entry_cooldown_symbols if ctx.extra_context else []
     risk_input = RiskAssessmentInput(
         symbol=ctx.symbol,
         market_data=prep_result.data_output.market_data,
@@ -637,6 +639,7 @@ async def _make_decision_and_execute(
         backtest_validation=prep_result.backtest_output.backtest_validation,
         degradation_context=context_bundle.degradation_context,
         broker_api_failed=prep_result.account_output.broker_api_failed,
+        re_entry_cooldown_active=ctx.symbol in cooldown_symbols,
     )
     risk_output = await risk.assess_risk(risk_input, ctx.workflow.risk_manager)
     _record_stage(ctx.collector, "risk_assessment", start)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, cast
 
 from loguru import logger
@@ -300,6 +300,7 @@ class AnalysisOrchestrator:
                     "unrealized_pnl_percent": unrealized_pnl_pct,
                     "days_held": pos.days_held,
                     "current_qty": pos.current_qty,
+                    "conviction_history": pos.conviction_history,
                 }
 
             async with semaphore:
@@ -480,6 +481,9 @@ class AnalysisOrchestrator:
                     f"Trending={sig.is_trending} | {platforms} | {sig.reason}"
                 )
 
+        recent_trades_ctx = await self._build_recent_trades_context(symbol)
+        cooldown_symbols = await self._get_re_entry_cooldown_symbols()
+
         return WorkflowExtraContext(
             sector_rotation_context=sector_ctx,
             earnings_context=earnings_ctx,
@@ -491,7 +495,78 @@ class AnalysisOrchestrator:
             options_flow_context=options_flow_ctx,
             portfolio_health_context=portfolio_health_ctx,
             social_sentiment_context=social_sentiment_ctx,
+            recent_trades_context=recent_trades_ctx,
+            re_entry_cooldown_symbols=cooldown_symbols,
         )
+
+    async def _build_recent_trades_context(self, symbol: str) -> str | None:
+        """Build recent trade feedback context for trader prompt.
+
+        Args:
+            symbol: Stock ticker
+
+        Returns:
+            Formatted recent trades string or None
+        """
+        container = self._components.container if self._components else None
+        if not container:
+            return None
+
+        try:
+            repo = container.trade_repository()
+            async with repo:
+                recent_trades = await repo.get_recent_closed_by_symbol(symbol, limit=5)
+                aggregate = await repo.get_aggregate_stats(days=30)
+
+            if not recent_trades and aggregate.get("total_trades", 0) == 0:
+                return None
+
+            lines: list[str] = []
+            for trade in recent_trades:
+                pnl_str = f"{trade.pnl_percent:+.1f}%" if trade.pnl_percent is not None else "N/A"
+                lines.append(f"  {trade.action.value} {trade.symbol} → {pnl_str} ({trade.strategy_name})")
+
+            summary = "\n".join(lines) if lines else "No recent closed trades for this symbol."
+            win_rate = aggregate.get("win_rate", 0.0)
+            avg_gain = aggregate.get("avg_gain", 0.0)
+
+            return (
+                f"## RECENT TRADE HISTORY\n\n{summary}\n\n"
+                f"Portfolio aggregate (30d, all symbols): Win Rate {win_rate:.0f}%, Avg Gain {avg_gain:.1f}%"
+            )
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to build recent trades context: {e}")
+            return None
+
+    async def _get_re_entry_cooldown_symbols(self) -> list[str]:
+        """Get symbols with active re-entry cooldown (recently closed).
+
+        Returns:
+            List of symbols in cooldown period
+        """
+        container = self._components.container if self._components else None
+        if not container:
+            return []
+
+        try:
+            from src.daemon.config import PositionManagementConfig
+
+            pos_config = self._components.config.position_management
+            if (
+                not isinstance(pos_config, PositionManagementConfig)
+                or not pos_config.whipsaw_prevention_enabled
+            ):
+                return []
+
+            cutoff = datetime.now(UTC) - timedelta(hours=pos_config.re_entry_cooldown_hours)
+            repo = container.trade_repository()
+            async with repo:
+                closed_trades = await repo.get_closed_since(cutoff)
+
+            return list({t.symbol for t in closed_trades})
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to check re-entry cooldowns: {e}")
+            return []
 
     async def _run_workflow_analysis(
         self,

@@ -100,6 +100,7 @@ async def make_decision(
             game_plan_context=input_data.context.game_plan,
             position_context=input_data.context.position,
             degradation_context=input_data.degradation_context,
+            recent_trades_context=input_data.context.recent_trades,
         ),
         collector,
     )

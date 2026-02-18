@@ -58,6 +58,16 @@ class PositionRecordRepository(BaseRepository[PositionRecord]):
             high_water_mark=Decimal(str(entity.high_water_mark))
             if entity.high_water_mark is not None
             else None,
+            current_conviction=Decimal(str(entity.current_conviction))
+            if entity.current_conviction is not None
+            else None,
+            last_analysis_timestamp=entity.last_analysis_timestamp,
+            conviction_history=entity.conviction_history,
+            initial_risk_per_share=Decimal(str(entity.initial_risk_per_share))
+            if entity.initial_risk_per_share is not None
+            else None,
+            r_multiple_targets_hit=entity.r_multiple_targets_hit,
+            pending_sell_signal_count=entity.pending_sell_signal_count,
             created_at=datetime.now(UTC),
         )
         self._session.add(orm)
@@ -93,6 +103,16 @@ class PositionRecordRepository(BaseRepository[PositionRecord]):
         orm.high_water_mark = (
             Decimal(str(entity.high_water_mark)) if entity.high_water_mark is not None else None
         )
+        orm.current_conviction = (
+            Decimal(str(entity.current_conviction)) if entity.current_conviction is not None else None
+        )
+        orm.last_analysis_timestamp = entity.last_analysis_timestamp
+        orm.conviction_history = entity.conviction_history
+        orm.initial_risk_per_share = (
+            Decimal(str(entity.initial_risk_per_share)) if entity.initial_risk_per_share is not None else None
+        )
+        orm.r_multiple_targets_hit = entity.r_multiple_targets_hit
+        orm.pending_sell_signal_count = entity.pending_sell_signal_count
 
         await self._session.commit()
         logger.info(f"Updated position record: {entity.symbol}")
@@ -182,6 +202,16 @@ class PositionRecordRepository(BaseRepository[PositionRecord]):
             trailing_stop_activated=orm.trailing_stop_activated,
             breakeven_activated=orm.breakeven_activated,
             high_water_mark=float(orm.high_water_mark) if orm.high_water_mark is not None else None,
+            current_conviction=float(orm.current_conviction) if orm.current_conviction is not None else None,
+            last_analysis_timestamp=orm.last_analysis_timestamp,
+            conviction_history=orm.conviction_history if isinstance(orm.conviction_history, list) else [],
+            initial_risk_per_share=float(orm.initial_risk_per_share)
+            if orm.initial_risk_per_share is not None
+            else None,
+            r_multiple_targets_hit=orm.r_multiple_targets_hit
+            if isinstance(orm.r_multiple_targets_hit, list)
+            else [],
+            pending_sell_signal_count=orm.pending_sell_signal_count,
         )
 
     def __repr__(self) -> str:
