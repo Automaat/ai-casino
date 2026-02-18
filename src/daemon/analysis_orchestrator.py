@@ -133,16 +133,7 @@ class AnalysisOrchestrator:
             return False
 
         try:
-            # Get active positions from state
-            active_positions_dict = await self.state.get_active_positions()
-
-            # Filter out None positions for type safety
-            state_positions = {}
-            for sym in active_positions_dict:
-                pos = await self.state.get_position(sym)
-                if pos is not None:
-                    state_positions[sym] = pos
-
+            state_positions = await self._fetch_all_positions()
             new_positions, updated_positions, closed_symbols = position_manager.sync_with_broker(
                 state_positions
             )
@@ -156,6 +147,15 @@ class AnalysisOrchestrator:
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to sync positions: {e}")
             return False
+
+    async def _fetch_all_positions(self) -> dict:
+        """Fetch all positions in a single query (avoids N+1).
+
+        Returns:
+            Dict mapping symbol to PositionRecord
+        """
+        all_positions = await self.state.get_all_positions()
+        return {pos.symbol: pos for pos in all_positions}
 
     def _prefetch_broker_positions(self) -> dict | None:
         """Prefetch broker positions for analysis context.
@@ -188,20 +188,19 @@ class AnalysisOrchestrator:
             return 0
 
         position_actions = 0
-        active_positions_dict = await self.state.get_active_positions()
+        active_positions = await self._fetch_all_positions()
         for result in results:
-            if result.symbol in active_positions_dict:
+            pos = active_positions.get(result.symbol)
+            if pos:
                 try:
-                    pos = await self.state.get_position(result.symbol)
-                    if pos:
-                        actions = position_manager.review_position(pos, result.risk.current_price, result)
-                        await self.state.update_position(pos)
-                        for action in actions:
-                            await self.state.record_position_action(action)
-                            position_actions += 1
-                            logger.info(
-                                f"Position action: {action.action_type} {action.symbol} - {action.reason}"
-                            )
+                    actions = position_manager.review_position(pos, result.risk.current_price, result)
+                    await self.state.update_position(pos)
+                    for action in actions:
+                        await self.state.record_position_action(action)
+                        position_actions += 1
+                        logger.info(
+                            f"Position action: {action.action_type} {action.symbol} - {action.reason}"
+                        )
                 except Exception as e:
                     logger.opt(exception=True).error(f"Failed to review position {result.symbol}: {e}")
 
@@ -269,41 +268,39 @@ class AnalysisOrchestrator:
         # Step 1: Sync positions with broker (if enabled) - already async
         position_sync_performed = await self._sync_positions_with_broker()
 
-        # Step 2: Prefetch broker positions once - offload to thread
+        # Step 2: Prefetch broker positions + active positions once (avoids N+1)
         broker_positions = await asyncio.to_thread(self._prefetch_broker_positions)
+        active_positions = await self._fetch_all_positions()
 
         # Step 3: Concurrent analysis with semaphore
         semaphore = asyncio.Semaphore(self.config.max_concurrent_analyses)
 
         async def analyze_with_limit(symbol: str) -> TradingWorkflowResult | None:
-            # Build position context if holding
+            # Build position context from prefetched data (no per-symbol queries)
             position_context = None
-            active_positions_dict = await self.state.get_active_positions()
-            if symbol in active_positions_dict:
-                pos = await self.state.get_position(symbol)
-                if pos:
-                    # Get current price from prefetched broker positions
-                    current_price = 0.0
-                    if broker_positions and symbol in broker_positions:
-                        broker_pos = broker_positions[symbol]
-                        qty = broker_pos.qty
-                        market_value = broker_pos.market_value
-                        if qty > 0:
-                            current_price = market_value / qty
+            pos = active_positions.get(symbol)
+            if pos:
+                current_price = 0.0
+                if broker_positions and symbol in broker_positions:
+                    broker_pos = broker_positions[symbol]
+                    qty = broker_pos.qty
+                    market_value = broker_pos.market_value
+                    if qty > 0:
+                        current_price = market_value / qty
 
-                    unrealized_pnl_pct = 0.0
-                    if current_price > 0 and pos.entry_price > 0:
-                        unrealized_pnl_pct = ((current_price - pos.entry_price) / pos.entry_price) * 100
+                unrealized_pnl_pct = 0.0
+                if current_price > 0 and pos.entry_price > 0:
+                    unrealized_pnl_pct = ((current_price - pos.entry_price) / pos.entry_price) * 100
 
-                    position_context = {
-                        "has_position": True,
-                        "symbol": symbol,
-                        "entry_price": pos.entry_price,
-                        "entry_confidence": pos.entry_confidence,
-                        "unrealized_pnl_percent": unrealized_pnl_pct,
-                        "days_held": pos.days_held,
-                        "current_qty": pos.current_qty,
-                    }
+                position_context = {
+                    "has_position": True,
+                    "symbol": symbol,
+                    "entry_price": pos.entry_price,
+                    "entry_confidence": pos.entry_confidence,
+                    "unrealized_pnl_percent": unrealized_pnl_pct,
+                    "days_held": pos.days_held,
+                    "current_qty": pos.current_qty,
+                }
 
             async with semaphore:
                 return await self._analyze_symbol_with_context(

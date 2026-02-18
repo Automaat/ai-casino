@@ -195,7 +195,6 @@ async def _execute_workers_with_gather(
         await asyncio.gather(*task_list, return_exceptions=True)
         raise
     finally:
-        # Log worker completion summary even on timeout for observability
         duration_ms = (time.perf_counter() - start_time) * 1000
         logger.info(
             f"Workers completed: {success_count}/{len(tasks)} successful, "
@@ -206,6 +205,13 @@ async def _execute_workers_with_gather(
         s, e = _handle_worker_result(worker_task, result, output, metrics_collector, warnings)
         success_count += s
         error_count += e
+
+    # Log final counts after processing all results
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"Workers final: {success_count}/{len(tasks)} successful, "
+        f"{error_count} errors, duration {duration_ms:.0f}ms"
+    )
 
     return output
 

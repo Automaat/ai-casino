@@ -135,7 +135,9 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
     mock_scraper.scrape_post_comments = AsyncMock(return_value=sample_comments)
 
     mock_extractor = Mock()
-    mock_extractor.extract_tickers = AsyncMock(return_value=sample_mentions)
+    mock_extractor.extract_tickers_batch = AsyncMock(
+        return_value={"post1": sample_mentions, "post2": sample_mentions}
+    )
 
     mock_session = AsyncMock()
     mock_post_repo = Mock()
@@ -166,13 +168,13 @@ async def test_execute_success(reddit_task, sample_posts, sample_comments, sampl
 
         await reddit_task.execute()
 
-        # Verify scraper methods called
+        # Verify scraper methods called (parallel subreddit listing)
         assert mock_scraper.start.called
         assert mock_scraper.scrape_subreddit_posts.call_count == 2  # 2 subreddits
         assert mock_scraper.close.called
 
-        # Verify extraction called
-        assert mock_extractor.extract_tickers.called
+        # Verify batch extraction called
+        assert mock_extractor.extract_tickers_batch.called
 
         # Verify DB inserts
         assert mock_post_repo.bulk_insert.called
@@ -192,12 +194,12 @@ async def test_execute_handles_subreddit_failure(reddit_task, sample_posts):
     mock_scraper.start = AsyncMock()
     mock_scraper.close = AsyncMock()
 
-    # First subreddit succeeds, second fails
+    # First subreddit succeeds, second fails (caught by _scrape_listing)
     mock_scraper.scrape_subreddit_posts = AsyncMock(side_effect=[sample_posts, Exception("Subreddit banned")])
     mock_scraper.scrape_post_comments = AsyncMock(return_value=[])
 
     mock_extractor = Mock()
-    mock_extractor.extract_tickers = AsyncMock(return_value=[])
+    mock_extractor.extract_tickers_batch = AsyncMock(return_value={})
 
     mock_session = AsyncMock()
     mock_post_repo = Mock()

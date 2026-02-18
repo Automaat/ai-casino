@@ -1,5 +1,7 @@
 """Scheduled task dispatcher for daemon."""
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
@@ -11,6 +13,9 @@ from src.daemon.scheduler import MarketScheduler
 if TYPE_CHECKING:
     from src.daemon.runner import DaemonRunner
     from src.daemon.task_service import DaemonTaskService
+
+# Tasks that run as background asyncio.Tasks (non-blocking)
+_BACKGROUND_TASKS = frozenset({"reddit_scraping"})
 
 
 @dataclass
@@ -95,6 +100,7 @@ class ScheduledTaskRunner:
         self.scheduler = scheduler
         self._runner = daemon_runner
         self._task_service: DaemonTaskService | None = None  # Wired later via set_task_service
+        self._background_tasks: dict[str, asyncio.Task[None]] = {}
         logger.info("ScheduledTaskRunner initialized")
 
     def __repr__(self) -> str:
@@ -116,6 +122,9 @@ class ScheduledTaskRunner:
             logger.debug("Task runner not yet wired, skipping scheduled tasks")
             return
 
+        # Prune completed background tasks
+        self._background_tasks = {name: t for name, t in self._background_tasks.items() if not t.done()}
+
         for task in self.TASKS:
             # Check if task is enabled (if it has an enabled check)
             if task.enabled_check and not self._is_task_enabled(task.enabled_check):
@@ -129,16 +138,25 @@ class ScheduledTaskRunner:
             logger.debug(f"Running scheduled task: {task.name}")
 
             # Map runner method names to task service method names
-            # Runner: _run_optimization -> Task Service: run_optimization
-            # Runner: _maybe_run_discovery -> Task Service: run_discovery
             service_method_name = task.runner_method.lstrip("_").replace("maybe_run_", "run_")
 
             # Check if task_service has this method (extracted tasks)
             if self._task_service and hasattr(self._task_service, service_method_name):
                 task_method = getattr(self._task_service, service_method_name)
             else:
-                # Runner method (not yet extracted)
                 task_method = getattr(self._runner, task.runner_method)
+
+            # Background tasks: fire-and-forget with overlap guard
+            if task.name in _BACKGROUND_TASKS and task.is_async:
+                if task.name in self._background_tasks:
+                    logger.debug(f"Background task {task.name} already running, skipping")
+                    continue
+                bg_task = asyncio.create_task(
+                    self._run_background_task(task.name, task_method),
+                    name=f"bg-{task.name}",
+                )
+                self._background_tasks[task.name] = bg_task
+                continue
 
             if task.is_async:
                 await task_method()
@@ -148,6 +166,21 @@ class ScheduledTaskRunner:
         # Special case: daily risk report (runs when market closed)
         if not self.scheduler.is_market_open() and self._task_service:
             await self._task_service.run_daily_risk_report()
+
+    @staticmethod
+    async def _run_background_task(name: str, method: Callable[[], Awaitable[None]]) -> None:
+        """Run a task in the background with error handling.
+
+        Args:
+            name: Task name for logging
+            method: Async callable to execute
+        """
+        try:
+            logger.info(f"Background task started: {name}")
+            await method()
+            logger.info(f"Background task completed: {name}")
+        except Exception as e:
+            logger.opt(exception=True).error(f"Background task {name} failed: {e}")
 
     def _is_task_enabled(self, config_path: str) -> bool:
         """Check if task enabled via config path.
