@@ -58,7 +58,7 @@ async def migrate() -> None:
                     score INTEGER NOT NULL,
                     upvote_ratio DECIMAL(5,4) NOT NULL,
                     num_comments INTEGER NOT NULL,
-                    url VARCHAR(500) NOT NULL,
+                    url TEXT NOT NULL,
                     created_utc TIMESTAMP WITH TIME ZONE NOT NULL,
                     fetched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
                 )

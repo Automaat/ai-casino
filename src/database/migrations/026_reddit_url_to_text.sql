@@ -1,0 +1,1 @@
+ALTER TABLE reddit_posts ALTER COLUMN url TYPE TEXT;
