@@ -1,5 +1,6 @@
 """In-memory TTL cache for LLM responses."""
 
+import asyncio
 import hashlib
 import time
 
@@ -24,8 +25,9 @@ class LLMResponseCache:
         self._ttl = ttl_seconds
         self._max_entries = max_entries
         self._store: dict[str, tuple[float, str | BaseModel]] = {}
+        self._lock = asyncio.Lock()
 
-    def get(self, key: str) -> str | BaseModel | None:
+    async def get(self, key: str) -> str | BaseModel | None:
         """Get cached value if present and not expired.
 
         Args:
@@ -34,25 +36,27 @@ class LLMResponseCache:
         Returns:
             Cached value or None if miss/expired
         """
-        entry = self._store.get(key)
-        if entry is None:
-            return None
-        timestamp, value = entry
-        if time.monotonic() - timestamp > self._ttl:
-            del self._store[key]
-            return None
-        return value
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            timestamp, value = entry
+            if time.monotonic() - timestamp > self._ttl:
+                del self._store[key]
+                return None
+            return value
 
-    def set(self, key: str, value: str | BaseModel) -> None:
+    async def set(self, key: str, value: str | BaseModel) -> None:
         """Store value in cache.
 
         Args:
             key: Cache key (from make_key)
             value: Value to cache
         """
-        if len(self._store) >= self._max_entries:
-            self._evict_oldest()
-        self._store[key] = (time.monotonic(), value)
+        async with self._lock:
+            if len(self._store) >= self._max_entries:
+                self._evict_oldest()
+            self._store[key] = (time.monotonic(), value)
 
     def _evict_oldest(self) -> None:
         """Evict oldest entry by timestamp."""
@@ -62,19 +66,30 @@ class LLMResponseCache:
         del self._store[oldest_key]
 
     @staticmethod
-    def make_key(method: str, prompt: str, model: str, temperature: float) -> str:
+    def make_key(
+        method: str,
+        prompt: str,
+        model: str,
+        temperature: float,
+        system: str | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         """Create deterministic cache key from call parameters.
 
         Args:
             method: LLM method name (acomplete, astructured)
-            prompt: Full prompt text
+            prompt: Full prompt text (user prompt)
             model: Model identifier
             temperature: Temperature setting
+            system: System prompt text, if any
+            max_tokens: Maximum number of tokens for the response, if any
 
         Returns:
             SHA-256 hex digest
         """
-        raw = f"{method}:{model}:{temperature}:{prompt}"
+        system_part = system or ""
+        max_tokens_part = "" if max_tokens is None else str(max_tokens)
+        raw = f"{method}:{model}:{temperature}:{max_tokens_part}:{system_part}:{prompt}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @property
@@ -82,7 +97,8 @@ class LLMResponseCache:
         """Current number of cached entries."""
         return len(self._store)
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all cached entries."""
-        self._store.clear()
+        async with self._lock:
+            self._store.clear()
         logger.debug("LLM response cache cleared")

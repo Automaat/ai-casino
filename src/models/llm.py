@@ -216,6 +216,7 @@ class LLMClient:
         openai_base_url: str | None = None,
         enable_prompt_caching: bool = False,
         cache_ttl: int = 0,
+        cache_max_entries: int = 500,
     ) -> None:
         """Initialize LLM client.
 
@@ -227,6 +228,7 @@ class LLMClient:
             openai_base_url: Custom base URL for OpenAI (optional)
             enable_prompt_caching: Enable provider-level prompt caching
             cache_ttl: Response cache TTL in seconds (0=disabled)
+            cache_max_entries: Max cached entries (evicts oldest on overflow)
         """
         self.provider = provider
         self.model = model
@@ -242,7 +244,7 @@ class LLMClient:
         if cache_ttl > 0:
             from src.models.llm_cache import LLMResponseCache
 
-            self._cache = LLMResponseCache(ttl_seconds=cache_ttl)
+            self._cache = LLMResponseCache(ttl_seconds=cache_ttl, max_entries=cache_max_entries)
 
         logger.info(f"Initialized LLM client: provider={self.provider}, model={self.model}")
 
@@ -314,8 +316,10 @@ class LLMClient:
         if self._cache is not None:
             from src.models.llm_cache import LLMResponseCache
 
-            cache_key = LLMResponseCache.make_key("acomplete", prompt, self.model, temperature)
-            cached = self._cache.get(cache_key)
+            cache_key = LLMResponseCache.make_key(
+                "acomplete", prompt, self.model, temperature, system, max_tokens
+            )
+            cached = await self._cache.get(cache_key)
             if cached is not None:
                 logger.debug("LLM cache hit for acomplete")
                 if self._metrics_collector:
@@ -331,7 +335,7 @@ class LLMClient:
             async with _get_semaphore():
                 result = await self._provider.acomplete(messages, temperature, max_tokens)
             if self._cache is not None and cache_key is not None:
-                self._cache.set(cache_key, result)
+                await self._cache.set(cache_key, result)
             return result
         except Exception as e:
             error_msg = str(e)
@@ -486,8 +490,10 @@ class LLMClient:
         if self._cache is not None:
             from src.models.llm_cache import LLMResponseCache
 
-            cache_key = LLMResponseCache.make_key("astructured", prompt, self.model, temperature)
-            cached = self._cache.get(cache_key)
+            cache_key = LLMResponseCache.make_key(
+                "astructured", prompt, self.model, temperature, system, max_tokens
+            )
+            cached = await self._cache.get(cache_key)
             if cached is not None:
                 logger.debug("LLM cache hit for astructured")
                 if self._metrics_collector:
@@ -503,7 +509,7 @@ class LLMClient:
             async with _get_semaphore():
                 result = await self._provider.astructured(messages, response_model, temperature, max_tokens)
             if self._cache is not None and cache_key is not None:
-                self._cache.set(cache_key, result)
+                await self._cache.set(cache_key, result)
             return result
         except Exception as e:
             error_msg = str(e)

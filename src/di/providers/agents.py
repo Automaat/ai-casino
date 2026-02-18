@@ -326,6 +326,7 @@ def create_trading_coordinator(
             model=coordinator_config.model_override,
             api_key=api_key,
             openai_base_url=daemon_config.api_keys.openai_api_base,
+            cache_ttl=daemon_config.llm.response_cache_ttl_seconds,
         )
     else:
         coordinator_llm = llm_client

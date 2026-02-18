@@ -64,6 +64,7 @@ def create_llm_client(
         openai_base_url=daemon_config.api_keys.openai_api_base,
         enable_prompt_caching=daemon_config.llm.enable_prompt_caching,
         cache_ttl=cache_ttl,
+        cache_max_entries=daemon_config.llm.response_cache_max_entries,
     )
 
     if metrics_collector is not None:
@@ -120,6 +121,7 @@ def create_llm_client_for_agent(
         openai_base_url=daemon_config.api_keys.openai_api_base,
         enable_prompt_caching=daemon_config.llm.enable_prompt_caching,
         cache_ttl=cache_ttl,
+        cache_max_entries=daemon_config.llm.response_cache_max_entries,
     )
 
     if metrics_collector is not None:
