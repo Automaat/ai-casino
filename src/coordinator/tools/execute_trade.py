@@ -1,21 +1,39 @@
 """Execute trade tool for coordinator."""
 
 import asyncio
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from loguru import logger
 
 from src.daemon.config.base import TradingMode
+from src.strategies.signal import Signal
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
     from src.coordinator.confirmation import TradeConfirmationHandler
     from src.daemon.config import DaemonConfig
+    from src.daemon.notifications import NotificationService
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
-    from src.data.broker import AlpacaBroker
+    from src.data.broker import AlpacaBroker, OrderStatus
+    from src.database.engine import DatabaseEngine
 
 MIN_RATIONALE_LENGTH: Final[int] = 10
+DEFAULT_STOP_LOSS_PCT: Final[float] = 0.05
+CONFIDENCE_LOW_RISK: Final[float] = 0.75
+CONFIDENCE_MEDIUM_RISK: Final[float] = 0.5
+
+
+@dataclass
+class ExecuteTradeServices:
+    """Optional services for ExecuteTradeTool."""
+
+    confirmation_handler: TradeConfirmationHandler | None = None
+    adaptive_threshold_manager: AdaptiveThresholdManager | None = None
+    database_engine: DatabaseEngine | None = None
+    notification_service: NotificationService | None = None
 
 
 class ExecuteTradeTool(BaseTool):
@@ -25,21 +43,22 @@ class ExecuteTradeTool(BaseTool):
         self,
         broker: AlpacaBroker,
         daemon_config: DaemonConfig,
-        confirmation_handler: TradeConfirmationHandler | None = None,
-        adaptive_threshold_manager: AdaptiveThresholdManager | None = None,
+        services: ExecuteTradeServices | None = None,
     ) -> None:
         """Initialize tool with broker and config.
 
         Args:
             broker: Alpaca broker instance
             daemon_config: Daemon configuration for trading mode
-            confirmation_handler: Optional confirmation handler for manual mode
-            adaptive_threshold_manager: Optional adaptive threshold manager
+            services: Optional services (confirmation, thresholds, DB, notifications)
         """
         self._broker = broker
         self._daemon_config = daemon_config
-        self._confirmation_handler = confirmation_handler
-        self._adaptive_threshold_manager = adaptive_threshold_manager
+        svc = services or ExecuteTradeServices()
+        self._confirmation_handler = svc.confirmation_handler
+        self._adaptive_threshold_manager = svc.adaptive_threshold_manager
+        self._database_engine = svc.database_engine
+        self._notification_service = svc.notification_service
 
     @property
     def name(self) -> str:
@@ -207,7 +226,14 @@ class ExecuteTradeTool(BaseTool):
 
         # Execute trade
         logger.info(f"Executing {action} order: {quantity} {symbol} (stop_loss={stop_loss_float})")
-        return await self._submit_order(symbol, action, quantity, stop_loss_float, rationale)
+        result, order_status = await self._submit_order(symbol, action, quantity, stop_loss_float, rationale)
+
+        # Post-trade side effects (persist + notify)
+        if order_status:
+            await self._persist_trade(order_status, confidence, stop_loss_float)
+            await self._notify_trade(order_status, confidence, rationale)
+
+        return result
 
     def _validate_inputs(self, quantity: int, action: str, rationale: str) -> str | None:
         """Validate trade inputs.
@@ -312,7 +338,7 @@ class ExecuteTradeTool(BaseTool):
         quantity: int,
         stop_loss_price: float | None,
         rationale: str,
-    ) -> str:
+    ) -> tuple[str, OrderStatus | None]:
         """Submit order to broker.
 
         Args:
@@ -323,10 +349,9 @@ class ExecuteTradeTool(BaseTool):
             rationale: Trading rationale
 
         Returns:
-            Formatted order status
+            Tuple of (formatted output, order_status or None on failure)
         """
         try:
-            # Submit order (offload to thread)
             order_status = await asyncio.to_thread(
                 self._broker.submit_order,
                 symbol=symbol,
@@ -335,7 +360,6 @@ class ExecuteTradeTool(BaseTool):
                 stop_loss_price=stop_loss_price,
             )
 
-            # Format output
             lines = [
                 "# Trade Executed",
                 "",
@@ -350,19 +374,122 @@ class ExecuteTradeTool(BaseTool):
             if stop_loss_price is not None:
                 lines.append(f"**Stop Loss:** ${stop_loss_price:.2f}")
 
-            lines.extend(
-                [
-                    "",
-                    "## Rationale",
-                    rationale,
-                ]
-            )
+            lines.extend(["", "## Rationale", rationale])
 
-            return "\n".join(lines)
+            return "\n".join(lines), order_status
 
         except Exception as e:
             logger.opt(exception=True).error(f"Trade execution failed: {e}")
-            return f"Failed to execute trade: {e}"
+            return f"Failed to execute trade: {e}", None
+
+    async def _persist_trade(
+        self,
+        order_status: OrderStatus,
+        confidence: float,
+        stop_loss_price: float | None,
+    ) -> None:
+        """Persist executed trade to database.
+
+        Args:
+            order_status: Broker order status
+            confidence: Decision confidence (0.0-1.0)
+            stop_loss_price: Stop loss price (or default ±5%)
+        """
+        if not self._database_engine:
+            return
+
+        try:
+            from src.database.repositories.trade import TradeRepository
+            from src.metrics.tracker import TradeRecord
+
+            entry_price = order_status.filled_avg_price or 0.0
+            effective_stop = stop_loss_price or self._default_stop_loss(entry_price, order_status.side)
+            is_paper = self._daemon_config.trading_mode == TradingMode.PAPER
+
+            trade = TradeRecord(
+                timestamp=datetime.now(UTC),
+                symbol=order_status.symbol,
+                action=Signal(order_status.side.upper()),
+                entry_price=entry_price,
+                exit_price=None,
+                shares=int(order_status.qty),
+                stop_loss_price=effective_stop,
+                confidence=confidence,
+                risk_level=self._derive_risk_level(confidence),
+                status="OPEN",
+                pnl=None,
+                pnl_percent=None,
+                strategy_name="coordinator",
+                broker_order_id=order_status.order_id,
+                is_paper_trade=is_paper,
+            )
+
+            async with self._database_engine.session() as session:
+                repo = TradeRepository(session)
+                await repo.create(trade)
+
+            logger.info(f"Persisted coordinator trade: {order_status.symbol} {order_status.side}")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to persist trade to DB: {e}")
+
+    async def _notify_trade(
+        self,
+        order_status: OrderStatus,
+        confidence: float,
+        rationale: str,
+    ) -> None:
+        """Send trade execution notification.
+
+        Args:
+            order_status: Broker order status
+            confidence: Decision confidence (0.0-1.0)
+            rationale: Trading rationale
+        """
+        if not self._notification_service:
+            return
+
+        try:
+            from src.daemon.config import NotificationTrigger
+            from src.daemon.notifications import NotificationMessage
+
+            side = order_status.side.upper()
+            symbol = order_status.symbol
+            price = order_status.filled_avg_price or 0.0
+
+            message = NotificationMessage(
+                trigger=NotificationTrigger.SIGNAL,
+                title=f"{side} {symbol} x{int(order_status.qty)}",
+                body=rationale,
+                metadata={
+                    "symbol": symbol,
+                    "signal": side,
+                    "confidence": confidence,
+                    "price": price,
+                    "order_id": order_status.order_id,
+                    "source": "coordinator",
+                },
+                timestamp=datetime.now(UTC),
+            )
+
+            await self._notification_service.notify(NotificationTrigger.SIGNAL, message)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Trade notification failed: {e}")
+
+    @staticmethod
+    def _derive_risk_level(confidence: float) -> str:
+        """Derive risk level from confidence per domain rules."""
+        if confidence >= CONFIDENCE_LOW_RISK:
+            return "LOW"
+        if confidence >= CONFIDENCE_MEDIUM_RISK:
+            return "MEDIUM"
+        return "HIGH"
+
+    @staticmethod
+    def _default_stop_loss(entry_price: float, side: str) -> float:
+        """Calculate default stop loss ±5% when LLM doesn't provide one."""
+        if side.upper() == "SELL":
+            return entry_price * (1 + DEFAULT_STOP_LOSS_PCT)
+        return entry_price * (1 - DEFAULT_STOP_LOSS_PCT)
 
     def __repr__(self) -> str:
         """String representation."""

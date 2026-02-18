@@ -44,7 +44,7 @@ def sample_config_coordinator_enabled(tmp_path: Path) -> DaemonConfig:
             "cycle_timeout_seconds": 600,
             "max_daily_trades": 10,
             "max_position_pct": 10.0,
-            "min_confidence_to_trade": 0.7,
+            "min_confidence_to_trade": 0.6,
         },
     }
     return DaemonConfig.model_validate(config_dict)

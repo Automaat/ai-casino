@@ -58,11 +58,13 @@ export interface PositionResponse {
 	breakeven_activated: boolean;
 	profit_targets: number[];
 	current_price: number;
+	broker_unrealized_pnl: number | null;
 }
 
 export interface PositionsResponse {
 	positions: PositionResponse[];
 	count: number;
+	account_equity: number | null;
 }
 
 export interface SnapshotRecord {

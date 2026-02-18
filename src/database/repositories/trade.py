@@ -54,6 +54,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
             pnl=Decimal(str(entity.pnl)) if entity.pnl else None,
             pnl_percent=Decimal(str(entity.pnl_percent)) if entity.pnl_percent else None,
             strategy_name=entity.strategy_name,
+            broker_order_id=entity.broker_order_id,
             is_paper_trade=entity.is_paper_trade,
             closed_at=entity.closed_at,
             created_at=datetime.now(UTC),
@@ -221,6 +222,7 @@ class TradeRepository(BaseRepository[TradeRecord]):
             pnl=float(orm.pnl) if orm.pnl else None,
             pnl_percent=float(orm.pnl_percent) if orm.pnl_percent else None,
             strategy_name=orm.strategy_name,
+            broker_order_id=orm.broker_order_id,
             is_paper_trade=orm.is_paper_trade,
             closed_at=orm.closed_at,
         )

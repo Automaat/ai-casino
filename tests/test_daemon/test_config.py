@@ -887,7 +887,7 @@ class TestCoordinatorConfig:
         assert config.cycle_timeout_seconds == 600
         assert config.max_daily_trades == 10
         assert config.max_position_pct == 10.0
-        assert config.min_confidence_to_trade == 0.7
+        assert config.min_confidence_to_trade == 0.6
 
     def test_custom(self):
         config = CoordinatorConfig(

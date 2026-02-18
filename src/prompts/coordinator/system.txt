@@ -83,8 +83,8 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 
 **Risk stance guidelines:**
 - AGGRESSIVE: Target 3-5 positions, 8-10% sizing, {min_confidence_to_trade:.0%}+ confidence
-- NEUTRAL: Target 2-3 positions, 5-7% sizing, 75%+ confidence
-- DEFENSIVE: Target 1-2 positions, 3-5% sizing, 80%+ confidence
+- NEUTRAL: Target 2-3 positions, 5-7% sizing, {min_confidence_to_trade:.0%}+ confidence
+- DEFENSIVE: Target 1-2 positions, 3-5% sizing, 75%+ confidence
 
 ## Self-Reflection Protocol
 

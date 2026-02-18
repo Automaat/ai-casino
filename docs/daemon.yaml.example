@@ -865,8 +865,8 @@ daemon:
 
     # Minimum signal confidence required to execute trade (0.0-1.0)
     # Lower confidence signals are flagged but not executed
-    # Example: 0.7 = only execute trades with ≥70% confidence
-    min_confidence_to_trade: 0.7
+    # Example: 0.6 = only execute trades with ≥60% confidence
+    min_confidence_to_trade: 0.6
 
     # Automated pattern detection (learning from outcomes)
     pattern_detection:
@@ -950,7 +950,7 @@ daemon:
     #   confirmation_mode: "auto"
     #   max_daily_trades: 10
     #   max_position_pct: 10.0
-    #   min_confidence_to_trade: 0.7
+    #   min_confidence_to_trade: 0.6
     #   temperature: 0.5
 
   api:

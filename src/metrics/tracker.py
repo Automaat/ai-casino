@@ -36,6 +36,7 @@ class TradeRecord(BaseModel):
     pnl: float | None
     pnl_percent: float | None
     strategy_name: str | None = None
+    broker_order_id: str | None = None
     is_paper_trade: bool = True
     closed_at: datetime | None = None
 

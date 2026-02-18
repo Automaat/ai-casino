@@ -76,6 +76,7 @@ async def get_broker_account_info_cached(
                 cache[cache_key] = {
                     "positions": account_info.positions,
                     "portfolio_value": account_info.portfolio_value,
+                    "balance": account_info.balance,
                 }
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to fetch broker account info: {e}")
