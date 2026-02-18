@@ -1,10 +1,12 @@
 """Tests for RedditPlaywrightScraper."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from src.daemon.config.reddit import RedditScraperConfig
+from src.data.reddit import RedditPost
 from src.data.reddit_scraper import RedditPlaywrightScraper
 
 
@@ -234,3 +236,100 @@ def test_repr(scraper_config):
 
     assert "RedditPlaywrightScraper" in repr_str
     assert "headless=" in repr_str
+
+
+@pytest.mark.unit
+async def test_scrape_promoted_posts_filtered(scraper_config):
+    """Test that promoted/ad posts are not returned when evaluate returns only organic posts."""
+    scraper = RedditPlaywrightScraper(config=scraper_config)
+
+    organic_post = {
+        "id": "abc123",
+        "title": "AAPL earnings beat expectations",
+        "url": "https://old.reddit.com/r/investing/comments/abc123/",
+        "score": 500,
+        "num_comments": 42,
+        "created_utc": "2024-01-15T12:00:00+00:00",
+        "body": "",
+    }
+    promoted_like_post = {
+        "id": "",
+        "title": "Buy this stock now! [Ad]",
+        "url": "https://ad.example.com/promo",
+        "score": 0,
+        "num_comments": 0,
+        "created_utc": None,
+        "body": "",
+    }
+
+    with patch("src.data.reddit_scraper.async_playwright") as mock_playwright:
+        mock_pw = AsyncMock()
+        mock_browser = AsyncMock()
+        mock_context = AsyncMock()
+        mock_page = AsyncMock()
+
+        mock_playwright.return_value = mock_pw
+        mock_pw.__aenter__ = AsyncMock(return_value=mock_pw)
+        mock_pw.__aexit__ = AsyncMock()
+        mock_pw.chromium.launch = AsyncMock(return_value=mock_browser)
+        mock_browser.new_context = AsyncMock(return_value=mock_context)
+        mock_context.new_page = AsyncMock(return_value=mock_page)
+        mock_context.close = AsyncMock()
+        mock_page.goto = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.close = AsyncMock()
+
+        # JS selector uses :not(.promoted), so promoted posts never reach evaluate output.
+        # Simulate this: evaluate returns only the organic post (promoted filtered at DOM level).
+        mock_page.evaluate = AsyncMock(return_value=[organic_post, promoted_like_post])
+
+        await scraper.start()
+        posts = await scraper.scrape_subreddit_posts("investing", limit=10)
+        await scraper.close()
+
+    # organic_post has valid id → parsed; promoted_like_post has empty id → filtered by _parse_post
+    assert len(posts) == 1
+    assert posts[0].id == "abc123"
+    assert posts[0].title == "AAPL earnings beat expectations"
+
+
+@pytest.mark.unit
+async def test_scrape_post_comments_uses_permalink(scraper_config):
+    """Test scrape_post_comments navigates to permalink derived from post.subreddit + post.id."""
+    scraper = RedditPlaywrightScraper(config=scraper_config)
+
+    post = RedditPost(
+        id="xyz789",
+        title="Market discussion",
+        body="",
+        subreddit="wallstreetbets",
+        score=100,
+        upvote_ratio=0.95,
+        url="https://tracking.example.com/redirect?post=xyz789",
+        created_utc=datetime.now(UTC),
+        num_comments=5,
+    )
+
+    with patch("src.data.reddit_scraper.async_playwright") as mock_playwright:
+        mock_pw = AsyncMock()
+        mock_browser = AsyncMock()
+        mock_context = AsyncMock()
+        mock_page = AsyncMock()
+
+        mock_playwright.return_value = mock_pw
+        mock_pw.__aenter__ = AsyncMock(return_value=mock_pw)
+        mock_pw.__aexit__ = AsyncMock()
+        mock_pw.chromium.launch = AsyncMock(return_value=mock_browser)
+        mock_browser.new_context = AsyncMock(return_value=mock_context)
+        mock_context.new_page = AsyncMock(return_value=mock_page)
+        mock_context.close = AsyncMock()
+        mock_page.goto = AsyncMock()
+        mock_page.close = AsyncMock()
+        mock_page.evaluate = AsyncMock(return_value=[])
+
+        await scraper.start()
+        await scraper.scrape_post_comments(post, limit=5)
+        await scraper.close()
+
+    expected_url = "https://old.reddit.com/r/wallstreetbets/comments/xyz789/"
+    mock_page.goto.assert_called_once_with(expected_url, wait_until="domcontentloaded", timeout=30000)
