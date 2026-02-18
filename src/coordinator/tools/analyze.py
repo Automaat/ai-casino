@@ -238,7 +238,7 @@ class AnalyzeSymbolTool(BaseTool):
                     f"Neutral: {result.sentiment.neutral_ratio:.0%}",
                 ]
                 if result.sentiment
-                else ["- Unavailable"]
+                else ["- Sentiment: Unavailable"]
             ),
             "",
             "## News Analysis",
@@ -249,7 +249,7 @@ class AnalyzeSymbolTool(BaseTool):
                     f"- Recommendation: {result.news.recommendation}",
                 ]
                 if result.news
-                else ["- Unavailable"]
+                else ["- News: Unavailable"]
             ),
             "",
             "## Decision Rationale",
