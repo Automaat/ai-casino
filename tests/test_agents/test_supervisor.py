@@ -368,7 +368,7 @@ async def test_plan_analyses_pre_market(test_container):
 
 
 def test_default_routing_no_news(test_container):
-    """Skip sentiment/news when news_count=0."""
+    """Sentiment/news optional (not skipped) when news_count=0 — workers handle empty input."""
     supervisor = test_container.supervisor()
     context = PlanningContext(
         symbol="AAPL",
@@ -386,9 +386,10 @@ def test_default_routing_no_news(test_container):
     )
     decision = supervisor.default_routing(context)
 
-    assert AnalysisType.SENTIMENT in decision.skip_analyses
-    assert AnalysisType.NEWS in decision.skip_analyses
-    assert "No news" in decision.skip_analyses[AnalysisType.SENTIMENT]
+    assert AnalysisType.SENTIMENT in decision.optional_analyses
+    assert AnalysisType.NEWS in decision.optional_analyses
+    assert AnalysisType.SENTIMENT not in decision.skip_analyses
+    assert AnalysisType.NEWS not in decision.skip_analyses
     assert AnalysisType.TECHNICAL in decision.required_analyses
 
 
@@ -461,10 +462,10 @@ def test_default_routing_combined_constraints(test_container):
     )
     decision = supervisor.default_routing(context)
 
-    # All major analyses skipped
+    # Technical skipped (insufficient data), sentiment/news optional (workers handle empty)
     assert AnalysisType.TECHNICAL in decision.skip_analyses
-    assert AnalysisType.SENTIMENT in decision.skip_analyses
-    assert AnalysisType.NEWS in decision.skip_analyses
+    assert AnalysisType.SENTIMENT in decision.optional_analyses
+    assert AnalysisType.NEWS in decision.optional_analyses
     assert AnalysisType.FUNDAMENTAL in decision.skip_analyses
     assert AnalysisType.BULLISH_RESEARCH in decision.skip_analyses
 

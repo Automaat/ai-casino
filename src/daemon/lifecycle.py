@@ -56,8 +56,7 @@ class DaemonLifecycle:
         # Set database engine on position manager (was None during init)
         if self.components.position_manager:
             try:
-                trade_repository = self.components.container.trade_repository()
-                self.components.position_manager.set_database(database_engine, trade_repository)
+                self.components.position_manager.set_database(database_engine)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to set position manager database: {e}")
 
@@ -84,15 +83,13 @@ class DaemonLifecycle:
                 self.components.broker,
                 self.components.config.position_management,
                 database_engine=None,
-                trade_repository=None,
             )
 
             # If persistence is enabled, inject database into position manager now
             if self.components.config.database.enable_persistence:
                 try:
                     database_engine = self.components.container.database_engine()
-                    trade_repository = self.components.container.trade_repository()
-                    self.components.position_manager.set_database(database_engine, trade_repository)
+                    self.components.position_manager.set_database(database_engine)
                 except Exception as e:
                     logger.opt(exception=True).warning(
                         f"Failed to set position manager database during broker initialization: {e}"

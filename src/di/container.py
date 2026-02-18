@@ -198,7 +198,7 @@ class AppContainer(containers.DeclarativeContainer):
     metrics_tracker = providers.Singleton(
         model_providers.create_metrics_tracker,
         daemon_config=daemon_config,
-        trade_repository=trade_repository,
+        database_engine=database_engine,
     )
 
     quantstats_reporter = providers.Singleton(

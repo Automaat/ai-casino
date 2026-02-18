@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from src.strategies.signal import Signal
 
 if TYPE_CHECKING:
-    from src.database.repositories.trade import TradeRepository
+    from src.database.engine import DatabaseEngine
     from src.workflows.types import TradingWorkflowResult
 
 
@@ -455,16 +455,16 @@ class MetricsTracker(BaseMetricsTracker):
 
 
 def create_metrics_tracker(
-    trade_repository: TradeRepository | None = None,
+    database_engine: DatabaseEngine | None = None,
     risk_free_rate: float = 0.02,
 ) -> BaseMetricsTracker:
     """Factory to create appropriate metrics tracker.
 
-    Returns DatabaseMetricsTracker if DATABASE_URL is set and repository provided,
+    Returns DatabaseMetricsTracker if DATABASE_URL is set and engine provided,
     otherwise returns JSONL-based MetricsTracker.
 
     Args:
-        trade_repository: Optional TradeRepository for database mode
+        database_engine: Optional DatabaseEngine for database mode
         risk_free_rate: Annual risk-free rate for Sharpe ratio
 
     Returns:
@@ -476,9 +476,9 @@ def create_metrics_tracker(
 
     database_url = os.getenv("DATABASE_URL")
 
-    if database_url and trade_repository:
+    if database_url and database_engine:
         logger.info("Using DatabaseMetricsTracker (DATABASE_URL detected)")
-        return cast("BaseMetricsTracker", DatabaseMetricsTracker(trade_repository, risk_free_rate))
+        return cast("BaseMetricsTracker", DatabaseMetricsTracker(database_engine, risk_free_rate))
 
     logger.info("Using MetricsTracker (JSONL mode)")
     return MetricsTracker(risk_free_rate)

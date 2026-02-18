@@ -107,6 +107,7 @@ class OpenAIProvider(BaseLLMProvider):
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
+            max_tokens=8192,
         )
         if response.usage:
             self._last_usage = LLMUsageStats(
@@ -123,6 +124,7 @@ class OpenAIProvider(BaseLLMProvider):
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
+            max_tokens=8192,
             stream=True,
         )
         async for chunk in stream:
@@ -142,6 +144,7 @@ class OpenAIProvider(BaseLLMProvider):
             messages=messages,
             tools=tools,
             temperature=self._effective_temperature(temperature),
+            max_tokens=8192,
         )
         if response.usage:
             self._last_usage = LLMUsageStats(
@@ -285,6 +288,7 @@ class OpenAIProvider(BaseLLMProvider):
             model=self._model,
             messages=messages,
             temperature=self._effective_temperature(temperature),
+            max_tokens=8192,
             response_format={
                 "type": "json_schema",
                 "json_schema": {

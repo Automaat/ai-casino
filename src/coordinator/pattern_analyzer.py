@@ -9,8 +9,7 @@ from src.coordinator.pattern_models import PatternInsight, PatternType
 
 if TYPE_CHECKING:
     from src.coordinator.memory import CoordinatorMemory
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.trade import TradeRepository
+    from src.database.engine import DatabaseEngine
 
 # Pattern detection thresholds
 HIGH_WIN_RATE_THRESHOLD: Final[float] = 0.6
@@ -22,21 +21,18 @@ class PatternAnalyzer:
 
     def __init__(
         self,
-        analysis_repo: AnalysisRecordRepository,
-        trade_repo: TradeRepository,
-        memory: CoordinatorMemory,
+        database_engine: DatabaseEngine,
+        memory: CoordinatorMemory | None = None,
         min_sample_size: int = 10,
     ) -> None:
         """Initialize pattern analyzer.
 
         Args:
-            analysis_repo: Analysis record repository
-            trade_repo: Trade repository
-            memory: Coordinator memory for saving insights
+            database_engine: Database engine for creating per-request sessions
+            memory: Coordinator memory for saving insights (set later if None)
             min_sample_size: Minimum observations for pattern confidence
         """
-        self._analysis_repo = analysis_repo
-        self._trade_repo = trade_repo
+        self._database_engine = database_engine
         self._memory = memory
         self._min_sample_size = min_sample_size
 
@@ -76,10 +72,14 @@ class PatternAnalyzer:
             List of performance pattern insights
         """
         try:
+            from src.database.repositories.trade import TradeRepository
+
             start_date = datetime.now(UTC) - timedelta(days=days)
 
             # Get closed trades since start_date (efficient SQL filtering)
-            trades = await self._trade_repo.get_closed_since(start_date)
+            async with self._database_engine.session() as session:
+                repo = TradeRepository(session)
+                trades = await repo.get_closed_since(start_date)
 
             if not trades:
                 return []

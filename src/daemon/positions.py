@@ -16,7 +16,6 @@ from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
     from src.database.engine import DatabaseEngine
-    from src.database.repositories.trade import TradeRepository
 
 
 def _make_task_cleanup_callback(task_set: set[asyncio.Task[Any]]) -> Callable[[asyncio.Task[object]], None]:
@@ -107,7 +106,6 @@ class PositionManager:
         broker: AlpacaBroker | None,
         config: PositionManagementConfig,
         database_engine: DatabaseEngine | None = None,
-        trade_repository: TradeRepository | None = None,
     ) -> None:
         """Initialize position manager.
 
@@ -115,12 +113,10 @@ class PositionManager:
             broker: Alpaca broker for order execution (None during init, set via set_broker())
             config: Position management configuration
             database_engine: Optional database engine for creating per-task sessions
-            trade_repository: Optional trade repository for loading entry metadata
         """
         self.broker = broker
         self.config = config
         self._database_engine = database_engine
-        self._trade_repository = trade_repository
         self._pending_tasks: set[asyncio.Task[Any]] = set()  # Track background tasks
         logger.info(f"PositionManager initialized: {config}")
 
@@ -136,21 +132,15 @@ class PositionManager:
             raise RuntimeError(msg)
         return self.broker
 
-    def set_database(
-        self,
-        database_engine: DatabaseEngine,
-        trade_repository: TradeRepository,
-    ) -> None:
-        """Set database engine and trade repository after initialization.
+    def set_database(self, database_engine: DatabaseEngine) -> None:
+        """Set database engine after initialization.
 
         Called during lifecycle startup to set database components after event loop is running.
 
         Args:
             database_engine: Database engine for creating per-task sessions
-            trade_repository: Trade repository for loading entry metadata
         """
         self._database_engine = database_engine
-        self._trade_repository = trade_repository
         logger.info("PositionManager database components set")
 
     def sync_with_broker(
@@ -232,12 +222,12 @@ class PositionManager:
         """Async helper to persist position with fresh session."""
         from src.database.repositories.position import PositionRecordRepository
 
-        session = self._database_engine.session()  # type: ignore[missing-attribute]
-        try:
+        if self._database_engine is None:
+            msg = "Database engine not initialized"
+            raise RuntimeError(msg)
+        async with self._database_engine.session() as session:
             repository = PositionRecordRepository(session)
-            await repository.create(position)  # type: ignore[bad-argument-type]
-        finally:
-            await session.close()
+            await repository.create(position)
 
     def _persist_position_update(self, position: PositionRecord) -> None:
         """Persist position update to database."""
@@ -254,12 +244,12 @@ class PositionManager:
         """Async helper to persist position update with fresh session."""
         from src.database.repositories.position import PositionRecordRepository
 
-        session = self._database_engine.session()  # type: ignore[missing-attribute]
-        try:
+        if self._database_engine is None:
+            msg = "Database engine not initialized"
+            raise RuntimeError(msg)
+        async with self._database_engine.session() as session:
             repository = PositionRecordRepository(session)
-            await repository.update(position)  # type: ignore[bad-argument-type]
-        finally:
-            await session.close()
+            await repository.update(position)
 
     def _persist_position_delete(self, symbol: str) -> None:
         """Delete position from database."""
@@ -276,12 +266,12 @@ class PositionManager:
         """Async helper to delete position with fresh session."""
         from src.database.repositories.position import PositionRecordRepository
 
-        session = self._database_engine.session()  # type: ignore[missing-attribute]
-        try:
+        if self._database_engine is None:
+            msg = "Database engine not initialized"
+            raise RuntimeError(msg)
+        async with self._database_engine.session() as session:
             repository = PositionRecordRepository(session)
             await repository.delete_by_symbol(symbol)
-        finally:
-            await session.close()
 
     def _create_position_from_broker(self, symbol: str, broker_pos: BrokerPosition) -> PositionRecord:
         """Create PositionRecord from broker position.
@@ -316,53 +306,58 @@ class PositionManager:
     def _load_entry_metadata(self, symbol: str) -> tuple[datetime, float, str]:
         """Load entry metadata from trades table.
 
+        Returns defaults when called from a running event loop (the normal case),
+        because asyncio.run() cannot be used inside an existing loop. Falls back
+        to asyncio.run() only when no event loop is active (e.g. sync test context).
+
         Args:
             symbol: Stock ticker
 
         Returns:
             Tuple of (entry_timestamp, entry_confidence, entry_signal)
         """
-        if not self._trade_repository:
-            logger.warning(f"No trade repository available, using defaults for {symbol}")
+        if not self._database_engine:
+            logger.warning(f"No database engine available, using defaults for {symbol}")
             return datetime.now(UTC), 0.75, "BUY"
 
         try:
-            # Check if event loop is running to avoid nesting
-            try:
-                asyncio.get_running_loop()
-                loop_running = True
-            except RuntimeError:
-                loop_running = False
-
-            if loop_running:
-                logger.warning(
-                    f"Async event loop already running, cannot synchronously load entry "
-                    f"metadata for {symbol}; using defaults "
-                    f"(timestamp=now(), confidence=0.75, signal=BUY)"
-                )
-                return datetime.now(UTC), 0.75, "BUY"
-
-            entry_trade = asyncio.run(self._trade_repository.get_entry_trade(symbol))
-
-            if entry_trade:
-                logger.info(
-                    f"Loaded entry metadata for {symbol}: "
-                    f"timestamp={entry_trade.timestamp}, "
-                    f"confidence={entry_trade.confidence:.2f}, "
-                    f"signal={entry_trade.action.value}"
-                )
-                return entry_trade.timestamp, entry_trade.confidence, entry_trade.action.value
-
-            logger.warning(
-                f"No entry trade found for {symbol} in trades table, using defaults "
-                f"(timestamp=now(), confidence=0.75, signal=BUY)"
-            )
+            asyncio.get_running_loop()
+            # Event loop running — cannot call asyncio.run(); use defaults
+            logger.debug(f"Event loop running, using defaults for entry metadata for {symbol}")
             return datetime.now(UTC), 0.75, "BUY"
+        except RuntimeError:
+            pass
+
+        try:
+            return asyncio.run(self._async_load_entry_metadata(symbol))
         except Exception as e:
             logger.opt(exception=True).error(
                 f"Failed to load entry metadata for {symbol}: {e}, using defaults"
             )
             return datetime.now(UTC), 0.75, "BUY"
+
+    async def _async_load_entry_metadata(self, symbol: str) -> tuple[datetime, float, str]:
+        """Async helper to load entry metadata with a fresh session."""
+        from src.database.repositories.trade import TradeRepository
+
+        if self._database_engine is None:
+            msg = "Database engine not initialized"
+            raise RuntimeError(msg)
+        async with self._database_engine.session() as session:
+            repo = TradeRepository(session)
+            entry_trade = await repo.get_entry_trade(symbol)
+
+        if entry_trade:
+            logger.info(
+                f"Loaded entry metadata for {symbol}: "
+                f"timestamp={entry_trade.timestamp}, "
+                f"confidence={entry_trade.confidence:.2f}, "
+                f"signal={entry_trade.action.value}"
+            )
+            return entry_trade.timestamp, entry_trade.confidence, entry_trade.action.value
+
+        logger.warning(f"No entry trade found for {symbol}, using defaults")
+        return datetime.now(UTC), 0.75, "BUY"
 
     def _calculate_profit_targets(self, entry_price: float) -> list[float]:
         """Calculate profit target prices.
@@ -448,12 +443,12 @@ class PositionManager:
         """Async helper to persist action with fresh session."""
         from src.database.repositories.position_action import PositionManagementActionRepository
 
-        session = self._database_engine.session()  # type: ignore[missing-attribute]
-        try:
+        if self._database_engine is None:
+            msg = "Database engine not initialized"
+            raise RuntimeError(msg)
+        async with self._database_engine.session() as session:
             repository = PositionManagementActionRepository(session)
-            await repository.create(action)  # type: ignore[bad-argument-type]
-        finally:
-            await session.close()
+            await repository.create(action)
 
     def review_position(
         self,

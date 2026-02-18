@@ -93,6 +93,17 @@ class TradingSupervisor:
             logger.opt(exception=True).warning(f"Structured output failed, using default: {e}")
             decision = self.default_routing(context)
 
+        # Ensure SENTIMENT/NEWS are never skipped - workers handle empty articles gracefully
+        for analysis_type in [AnalysisType.SENTIMENT, AnalysisType.NEWS]:
+            if analysis_type in decision.skip_analyses:
+                reason = decision.skip_analyses.pop(analysis_type)
+                logger.debug(f"Promoting {analysis_type.value} from skip to optional: {reason}")
+                if (
+                    analysis_type not in decision.optional_analyses
+                    and analysis_type not in decision.required_analyses
+                ):
+                    decision.optional_analyses.append(analysis_type)
+
         # Log routing summary
         required_types = (
             ", ".join([a.value for a in decision.required_analyses]) if decision.required_analyses else "none"
@@ -433,10 +444,9 @@ class TradingSupervisor:
         else:
             required.append(AnalysisType.TECHNICAL)
 
-        # Sentiment + News: skip if no articles
+        # Sentiment + News: optional if no articles (workers return defaults for empty input)
         if context.news_count == 0:
-            skip[AnalysisType.SENTIMENT] = "No news articles available"
-            skip[AnalysisType.NEWS] = "No news articles available"
+            optional.extend([AnalysisType.SENTIMENT, AnalysisType.NEWS])
         else:
             required.extend([AnalysisType.SENTIMENT, AnalysisType.NEWS])
 
