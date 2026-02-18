@@ -100,6 +100,8 @@ class RiskAuditORM(Base):
     risk_percent: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
 
     stop_loss_price: Mapped[Decimal] = mapped_column(DECIMAL(12, 4), nullable=False)
+    take_profit_price: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4))
+    reward_risk_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 2))
 
     warnings: Mapped[list[str]] = mapped_column(
         ARRAY(Text),

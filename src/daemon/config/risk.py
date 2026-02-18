@@ -40,6 +40,7 @@ class PositionSizingConfig(BaseModel):
     max_risk_per_trade_pct: float = Field(default=2.0, ge=0.1, le=10.0)
     max_single_position_pct: float = Field(default=20.0, ge=1.0, le=50.0)
     max_total_exposure_pct: float = Field(default=80.0, ge=10.0, le=100.0)
+    min_reward_risk_ratio: float = Field(default=2.0, ge=1.0, le=10.0)
 
     blend_weight_optimization: float = Field(default=0.5, ge=0.0, le=1.0)
     blend_weight_risk_based: float = Field(default=0.5, ge=0.0, le=1.0)

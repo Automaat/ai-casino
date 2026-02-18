@@ -87,6 +87,16 @@ class PortfolioRiskReport(BaseModel):
     risk_status: str
 
 
+class TakeProfitCalculation(BaseModel):
+    """Take-profit calculation result."""
+
+    take_profit_price: float
+    take_profit_percent: float
+    potential_profit_per_share: float
+    reward_risk_ratio: float
+    methodology: str
+
+
 class RiskAssessment(BaseModel):
     """Complete risk management assessment."""
 
@@ -98,6 +108,8 @@ class RiskAssessment(BaseModel):
     stop_loss: StopLossCalculation
     validation: RiskValidation
     confidence: float
+    take_profit: TakeProfitCalculation | None = None
+    reward_risk_ratio: float | None = None
     portfolio_var: PortfolioVaRResult | None = None
 
 
@@ -122,6 +134,9 @@ class RiskAuditRecord(BaseModel):
 
     stop_loss_price: float
     warnings: list[str] = Field(default_factory=list)
+
+    take_profit_price: float | None = None
+    reward_risk_ratio: float | None = None
 
     portfolio_var_95: float | None = None
     portfolio_cvar_99: float | None = None

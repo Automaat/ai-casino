@@ -200,6 +200,10 @@ def _print_risk(result: TradingWorkflowResult) -> None:
         risk_table.add_row("Risk %", f"{result.risk.position_sizing.risk_percent:.2f}%")
         risk_table.add_row("Stop-Loss", f"${result.risk.stop_loss.stop_loss_price:.2f}")
         risk_table.add_row("Stop Method", result.risk.stop_loss.methodology)
+        if result.risk.take_profit:
+            risk_table.add_row("Take-Profit", f"${result.risk.take_profit.take_profit_price:.2f}")
+        if result.risk.reward_risk_ratio is not None:
+            risk_table.add_row("Reward:Risk", f"{result.risk.reward_risk_ratio:.1f}:1")
 
     if result.risk.validation.warnings:
         risk_table.add_row("Warnings", str(len(result.risk.validation.warnings)))

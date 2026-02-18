@@ -24,9 +24,11 @@ from src.agents.risk.models import (
     RiskAuditRecord,
     RiskValidation,
     StopLossCalculation,
+    TakeProfitCalculation,
 )
 from src.agents.risk.position_sizer import PositionSizer
 from src.agents.risk.stop_loss_calculator import StopLossCalculator
+from src.agents.risk.take_profit_calculator import TakeProfitCalculator
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator
 from src.models.llm import LLMClient
@@ -44,6 +46,7 @@ class RiskManagementAgent:
     TRAILING_STOP_PERCENT = 3.0
     TRAILING_ACTIVATION_PERCENT = 5.0
     MIN_DECISION_CONFIDENCE = 0.6
+    MIN_REWARD_RISK_RATIO = 2.0
     RISK_LEVEL_LOW_THRESHOLD = 0.75
     RISK_LEVEL_MEDIUM_THRESHOLD = 0.5
     REJECTED_CONFIDENCE_PENALTY = 0.3
@@ -96,6 +99,11 @@ class RiskManagementAgent:
         self._var_calculator = portfolio_var_calculator
         self._var_config = portfolio_var_config or PortfolioVaRConfig()
         self._sizing_config = position_sizing_config
+        self._min_reward_risk_ratio = (
+            position_sizing_config.min_reward_risk_ratio
+            if position_sizing_config
+            else self.MIN_REWARD_RISK_RATIO
+        )
 
         # Create position sizer component with resolved config
         self._position_sizer = PositionSizer(
@@ -112,6 +120,11 @@ class RiskManagementAgent:
             default_stop_percent=self.DEFAULT_STOP_LOSS_PERCENT,
             trailing_stop_percent=self.TRAILING_STOP_PERCENT,
             trailing_activation_percent=self.TRAILING_ACTIVATION_PERCENT,
+        )
+
+        # Create take-profit calculator component
+        self._take_profit_calculator = TakeProfitCalculator(
+            min_reward_risk_ratio=self._min_reward_risk_ratio,
         )
 
         self.audit_log_path = Path("logs/risk_audit.jsonl")
@@ -188,6 +201,8 @@ class RiskManagementAgent:
 
             stop_loss.max_loss_amount = position_sizing.risk_amount
 
+            take_profit = self._take_profit_calculator.calculate(current_price, stop_loss, action)
+
             validation = self._validate_risk(
                 symbol,
                 action,
@@ -199,6 +214,7 @@ class RiskManagementAgent:
                 portfolio_value=portfolio_value,
                 backtest_validation=backtest_validation,
                 broker_api_failed=broker_api_failed,
+                take_profit=take_profit,
             )
 
             confidence = self._calculate_risk_confidence(validation, decision_confidence)
@@ -226,6 +242,8 @@ class RiskManagementAgent:
                 stop_loss=stop_loss,
                 validation=validation,
                 confidence=confidence,
+                take_profit=take_profit,
+                reward_risk_ratio=take_profit.reward_risk_ratio,
                 portfolio_var=context.latest_portfolio_var,
             )
 
@@ -295,6 +313,7 @@ class RiskManagementAgent:
         portfolio_value: float | None = None,
         backtest_validation: BacktestValidation | None = None,
         broker_api_failed: bool = False,
+        take_profit: TakeProfitCalculation | None = None,
     ) -> RiskValidation:
         """Validate risk constraints and generate approval (populates context).
 
@@ -309,6 +328,7 @@ class RiskManagementAgent:
             portfolio_value: Optional portfolio value for VaR check
             backtest_validation: Optional pre-trade backtest validation result
             broker_api_failed: True if broker API failed during account fetch
+            take_profit: Optional take-profit calculation for R:R validation
 
         Returns:
             RiskValidation with approval status
@@ -361,6 +381,15 @@ class RiskManagementAgent:
                 warnings,
                 context,
             )
+
+        if take_profit:
+            rr_met = take_profit.reward_risk_ratio >= self._min_reward_risk_ratio
+            constraints_met["reward_risk_ratio"] = rr_met
+            if not rr_met:
+                warnings.append(
+                    f"Reward:risk ratio {take_profit.reward_risk_ratio:.2f} "
+                    f"below minimum {self._min_reward_risk_ratio:.1f}"
+                )
 
         approved = all(constraints_met.values())
 
@@ -643,6 +672,10 @@ class RiskManagementAgent:
                 risk_amount=assessment.position_sizing.risk_amount,
                 risk_percent=assessment.position_sizing.risk_percent,
                 stop_loss_price=assessment.stop_loss.stop_loss_price,
+                take_profit_price=(
+                    assessment.take_profit.take_profit_price if assessment.take_profit else None
+                ),
+                reward_risk_ratio=assessment.reward_risk_ratio,
                 warnings=assessment.validation.warnings,
                 portfolio_var_95=assessment.portfolio_var.var_95 if assessment.portfolio_var else None,
                 portfolio_cvar_99=assessment.portfolio_var.cvar_99 if assessment.portfolio_var else None,
