@@ -298,6 +298,74 @@ class NewsTrendingEvent(BaseModel):
         )
 
 
+class EconomicImpact(StrEnum):
+    """Economic event impact level."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class EconomicRiskLevel(StrEnum):
+    """Risk level from economic calendar assessment."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class EconomicRecommendation(StrEnum):
+    """Trading recommendation based on economic risk."""
+
+    TRADE_NORMALLY = "trade_normally"
+    REDUCE_SIZE = "reduce_size"
+    AVOID_NEW_POSITIONS = "avoid_new_positions"
+
+
+class EconomicEvent(BaseModel):
+    """Single economic calendar entry."""
+
+    event_id: str  # f"{country}_{event}_{time}"
+    country: str
+    event: str
+    impact: EconomicImpact
+    scheduled_at: datetime
+    actual: str | None = None
+    estimate: str | None = None
+    prev: str | None = None
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"EconomicEvent(event={self.event}, impact={self.impact}, at={self.scheduled_at.date()})"
+
+
+class EconomicEventSignal(BaseModel):
+    """Risk assessment from economic calendar watcher."""
+
+    upcoming_events: list[EconomicEvent]
+    risk_level: EconomicRiskLevel
+    recommendation: EconomicRecommendation
+    reason: str
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    avoid_until: datetime | None = None
+
+    @property
+    def confidence_multiplier(self) -> float:
+        """Confidence multiplier based on risk level."""
+        return {
+            EconomicRiskLevel.HIGH: 0.6,
+            EconomicRiskLevel.MEDIUM: 0.85,
+            EconomicRiskLevel.LOW: 1.0,
+        }[self.risk_level]
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"EconomicEventSignal(risk={self.risk_level}, "
+            f"recommendation={self.recommendation}, events={len(self.upcoming_events)})"
+        )
+
+
 class TriageResult(BaseModel):
     """LLM triage result for an event."""
 

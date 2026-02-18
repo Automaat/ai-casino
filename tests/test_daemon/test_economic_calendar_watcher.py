@@ -1,0 +1,214 @@
+"""Unit tests for EconomicCalendarWatcher."""
+
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.daemon.events import (
+    EconomicImpact,
+    EconomicRecommendation,
+    EconomicRiskLevel,
+)
+from src.daemon.watchers.economic_calendar_watcher import (
+    EconomicCalendarWatcher,
+    EconomicCalendarWatcherConfig,
+)
+from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
+
+
+@pytest.fixture
+def mock_fetcher() -> MagicMock:
+    """Mock EconomicCalendarFetcher."""
+    return MagicMock(spec=EconomicCalendarFetcher)
+
+
+@pytest.fixture
+def config() -> EconomicCalendarWatcherConfig:
+    """Default watcher config."""
+    return EconomicCalendarWatcherConfig(
+        poll_interval_minutes=60,
+        lookahead_hours=24,
+        high_impact_avoid_hours=2.0,
+    )
+
+
+@pytest.fixture
+def watcher(mock_fetcher: MagicMock, config: EconomicCalendarWatcherConfig) -> EconomicCalendarWatcher:
+    """Create EconomicCalendarWatcher with mocked fetcher."""
+    return EconomicCalendarWatcher(fetcher=mock_fetcher, config=config)
+
+
+def _entry(event: str, impact: str, hours_from_now: float, country: str = "US") -> EconomicCalendarEntry:
+    """Helper to create EconomicCalendarEntry."""
+    return EconomicCalendarEntry(
+        country=country,
+        event=event,
+        impact=impact,
+        scheduled_at=datetime.now(UTC) + timedelta(hours=hours_from_now),
+    )
+
+
+@pytest.mark.unit
+def test_init(watcher: EconomicCalendarWatcher) -> None:
+    """current_signal is None on init."""
+    assert watcher.current_signal is None
+    assert watcher.running is False
+
+
+@pytest.mark.unit
+def test_classify_impact(watcher: EconomicCalendarWatcher) -> None:
+    """Impact classification handles numeric and string values."""
+    assert watcher._classify_impact("1") == EconomicImpact.HIGH
+    assert watcher._classify_impact("high") == EconomicImpact.HIGH
+    assert watcher._classify_impact("HIGH") == EconomicImpact.HIGH
+    assert watcher._classify_impact("2") == EconomicImpact.MEDIUM
+    assert watcher._classify_impact("medium") == EconomicImpact.MEDIUM
+    assert watcher._classify_impact("3") == EconomicImpact.LOW
+    assert watcher._classify_impact("low") == EconomicImpact.LOW
+    assert watcher._classify_impact("unknown") == EconomicImpact.LOW
+    assert watcher._classify_impact("") == EconomicImpact.LOW
+
+
+@pytest.mark.unit
+def test_filter_upcoming_excludes_past(watcher: EconomicCalendarWatcher) -> None:
+    """Past events are excluded from upcoming."""
+    entries = [
+        _entry("CPI", "high", -1),  # 1 hour ago
+        _entry("NFP", "high", 12),  # 12 hours ahead
+    ]
+    result = watcher._filter_upcoming(entries)
+    assert len(result) == 1
+    assert result[0].event == "NFP"
+
+
+@pytest.mark.unit
+def test_filter_upcoming_excludes_non_us(watcher: EconomicCalendarWatcher) -> None:
+    """Non-US events are excluded."""
+    entries = [
+        _entry("ECB Rate Decision", "high", 5, country="EU"),
+        _entry("CPI", "high", 5, country="US"),
+    ]
+    result = watcher._filter_upcoming(entries)
+    assert len(result) == 1
+    assert result[0].country == "US"
+
+
+@pytest.mark.unit
+def test_filter_upcoming_excludes_low_impact(watcher: EconomicCalendarWatcher) -> None:
+    """LOW impact events are excluded."""
+    entries = [
+        _entry("Minor Report", "low", 5),
+        _entry("CPI", "high", 5),
+    ]
+    result = watcher._filter_upcoming(entries)
+    assert len(result) == 1
+    assert result[0].event == "CPI"
+
+
+@pytest.mark.unit
+def test_compute_signal_avoid_imminent(watcher: EconomicCalendarWatcher) -> None:
+    """HIGH impact event within avoid_hours triggers AVOID_NEW_POSITIONS with HIGH risk."""
+    entries = [_entry("CPI", "high", 1.5)]  # 1.5h away, within 2h threshold
+    events = watcher._filter_upcoming(entries)
+    signal = watcher._compute_signal(events)
+
+    assert signal.risk_level == EconomicRiskLevel.HIGH
+    assert signal.recommendation == EconomicRecommendation.AVOID_NEW_POSITIONS
+    assert signal.avoid_until is not None
+
+
+@pytest.mark.unit
+def test_compute_signal_reduce_upcoming(watcher: EconomicCalendarWatcher) -> None:
+    """HIGH impact event within lookahead but beyond avoid_hours triggers REDUCE_SIZE."""
+    entries = [_entry("Nonfarm Payroll", "high", 12)]  # 12h away, beyond 2h threshold
+    events = watcher._filter_upcoming(entries)
+    signal = watcher._compute_signal(events)
+
+    assert signal.risk_level == EconomicRiskLevel.MEDIUM
+    assert signal.recommendation == EconomicRecommendation.REDUCE_SIZE
+
+
+@pytest.mark.unit
+def test_compute_signal_medium_imminent(watcher: EconomicCalendarWatcher) -> None:
+    """MEDIUM impact event within 4h triggers REDUCE_SIZE."""
+    entries = [_entry("GDP", "medium", 3)]  # 3h away, within 4h medium threshold
+    events = watcher._filter_upcoming(entries)
+    signal = watcher._compute_signal(events)
+
+    assert signal.risk_level == EconomicRiskLevel.MEDIUM
+    assert signal.recommendation == EconomicRecommendation.REDUCE_SIZE
+
+
+@pytest.mark.unit
+def test_compute_signal_low(watcher: EconomicCalendarWatcher) -> None:
+    """No events → TRADE_NORMALLY with LOW risk."""
+    signal = watcher._compute_signal([])
+
+    assert signal.risk_level == EconomicRiskLevel.LOW
+    assert signal.recommendation == EconomicRecommendation.TRADE_NORMALLY
+    assert signal.upcoming_events == []
+
+
+@pytest.mark.unit
+def test_compute_signal_medium_not_imminent(watcher: EconomicCalendarWatcher) -> None:
+    """MEDIUM impact event beyond 4h → TRADE_NORMALLY."""
+    entries = [_entry("GDP", "medium", 10)]  # 10h away, beyond 4h threshold
+    events = watcher._filter_upcoming(entries)
+    signal = watcher._compute_signal(events)
+
+    assert signal.risk_level == EconomicRiskLevel.LOW
+    assert signal.recommendation == EconomicRecommendation.TRADE_NORMALLY
+
+
+@pytest.mark.unit
+def test_confidence_multiplier() -> None:
+    """Confidence multiplier maps correctly per risk level."""
+    from src.daemon.events import EconomicEventSignal
+
+    def make_signal(risk: EconomicRiskLevel) -> EconomicEventSignal:
+        return EconomicEventSignal(
+            upcoming_events=[],
+            risk_level=risk,
+            recommendation=EconomicRecommendation.TRADE_NORMALLY,
+            reason="test",
+        )
+
+    assert make_signal(EconomicRiskLevel.LOW).confidence_multiplier == 1.0
+    assert make_signal(EconomicRiskLevel.MEDIUM).confidence_multiplier == 0.85
+    assert make_signal(EconomicRiskLevel.HIGH).confidence_multiplier == 0.6
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fetch_and_assess(watcher: EconomicCalendarWatcher, mock_fetcher: MagicMock) -> None:
+    """_fetch_and_assess calls fetcher via asyncio.to_thread and updates current_signal."""
+    mock_fetcher.fetch_economic_calendar.return_value = []
+
+    signal = await watcher._fetch_and_assess()
+
+    mock_fetcher.fetch_economic_calendar.assert_called_once()
+    assert signal is not None
+    assert watcher.current_signal is signal
+    assert signal.risk_level == EconomicRiskLevel.LOW
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_updates_signal(watcher: EconomicCalendarWatcher, mock_fetcher: MagicMock) -> None:
+    """run() executes one cycle and sets current_signal."""
+    import asyncio
+
+    mock_fetcher.fetch_economic_calendar.return_value = []
+
+    async def stop_after_first_cycle() -> None:
+        await asyncio.sleep(0.05)
+        watcher.running = False
+
+    await asyncio.gather(
+        watcher.run(),
+        stop_after_first_cycle(),
+    )
+
+    assert watcher.current_signal is not None
+    mock_fetcher.fetch_economic_calendar.assert_called()

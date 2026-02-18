@@ -12,6 +12,7 @@ from src.coordinator.models import AdaptiveThresholdConfig, PatternDetectionConf
 from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
     AnomalyWatcherConfig,
+    EconomicCalendarWatcherConfig,
     FilingsWatcherConfig,
     NewsSourcesConfig,
     NewsTrendingWatcherConfig,
@@ -78,6 +79,7 @@ __all__ = [
     "DatabaseConfig",
     "DiscoveryConfig",
     "EarningsCalendarConfig",
+    "EconomicCalendarWatcherConfig",
     "EventWatcherIntegrationConfig",
     "FilingsWatcherConfig",
     "FinBERTConfig",
@@ -160,6 +162,9 @@ class DaemonConfig(BaseModel):
     filings_watcher: FilingsWatcherConfig = Field(default_factory=FilingsWatcherConfig)
     anomaly_watcher: AnomalyWatcherConfig = Field(default_factory=AnomalyWatcherConfig)
     news_trending_watcher: NewsTrendingWatcherConfig = Field(default_factory=NewsTrendingWatcherConfig)
+    economic_calendar_watcher: EconomicCalendarWatcherConfig = Field(
+        default_factory=EconomicCalendarWatcherConfig
+    )
     event_integration: EventWatcherIntegrationConfig = Field(default_factory=EventWatcherIntegrationConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -218,6 +223,7 @@ class DaemonConfig(BaseModel):
             "filings_watcher": daemon_data.pop("filings_watcher", {}) or {},
             "anomaly_watcher": daemon_data.pop("anomaly_watcher", {}) or {},
             "news_trending_watcher": daemon_data.pop("news_trending_watcher", {}) or {},
+            "economic_calendar_watcher": daemon_data.pop("economic_calendar_watcher", {}) or {},
             "event_integration": daemon_data.pop("event_integration", {}) or {},
             "api": daemon_data.pop("api", {}) or {},
             "llm": daemon_data.pop("llm", {}) or {},
@@ -297,6 +303,7 @@ class DaemonConfig(BaseModel):
             filings_watcher=FilingsWatcherConfig(**sections["filings_watcher"]),
             anomaly_watcher=AnomalyWatcherConfig(**sections["anomaly_watcher"]),
             news_trending_watcher=NewsTrendingWatcherConfig(**sections["news_trending_watcher"]),
+            economic_calendar_watcher=EconomicCalendarWatcherConfig(**sections["economic_calendar_watcher"]),
             event_integration=EventWatcherIntegrationConfig(**sections["event_integration"]),
             api=ApiConfig(
                 **sections["api"], circuit_breaker=CircuitBreakerConfig(**sections["circuit_breaker"])

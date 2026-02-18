@@ -19,6 +19,13 @@ Owns Position: {owns_position}
 
 - High volatility: {is_high_volatility}
 
+## Economic Calendar Risk
+
+{economic_risk}
+
+(If economic_risk contains AVOID_NEW_POSITIONS: skip all analyses, return HOLD recommendation.
+ If REDUCE_SIZE: proceed but note reduced confidence in reasoning.)
+
 ## Resource Constraints
 
 - Fundamental API: {fundamental_api_status}

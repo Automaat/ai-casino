@@ -44,6 +44,7 @@ def minimal_daemon_components(mock_news_watcher):
     components.social_watcher = None
     components.trump_watcher = None
     components.news_trending_watcher = None
+    components.economic_calendar_watcher = None
     components.position_manager = None
     components.broker_manager = None
     components.broker = None
@@ -175,6 +176,7 @@ async def test_multiple_watchers_run_independently():
     components.social_watcher = social_watcher
     components.trump_watcher = None
     components.news_trending_watcher = None
+    components.economic_calendar_watcher = None
     components.position_manager = None
     components.broker_manager = None
     components.broker = None
@@ -232,6 +234,7 @@ async def test_shutdown_waits_then_cancels():
     components.social_watcher = None
     components.trump_watcher = None
     components.news_trending_watcher = None
+    components.economic_calendar_watcher = None
     components.position_manager = None
     components.broker_manager = None
     components.broker = None

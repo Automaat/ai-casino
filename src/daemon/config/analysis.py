@@ -116,3 +116,13 @@ class NewsTrendingWatcherConfig(BaseModel):
     max_results_per_query: int = Field(default=10, ge=5, le=20)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class EconomicCalendarWatcherConfig(BaseModel):
+    """Configuration for economic calendar watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=60, ge=30, le=240)
+    lookahead_hours: int = Field(default=24, ge=12, le=48)
+    high_impact_avoid_hours: float = Field(default=2.0, ge=1.0, le=4.0)
+    cache_ttl_minutes: int = Field(default=30, ge=10, le=120)

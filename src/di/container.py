@@ -427,6 +427,11 @@ class AppContainer(containers.DeclarativeContainer):
         container=providers.Self(),
     )
 
+    economic_calendar_watcher = providers.Singleton(
+        watcher_providers.create_economic_calendar_watcher,
+        daemon_config=daemon_config,
+    )
+
 
 def create_container(config_path: str | Path | None = None) -> AppContainer:
     """Create dependency injection container.
