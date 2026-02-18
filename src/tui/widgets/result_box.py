@@ -101,9 +101,11 @@ class ResultBox(Static):
 
         return table
 
-    def _build_sentiment_table(self) -> Table:
+    def _build_sentiment_table(self) -> Table | None:
         """Build sentiment table."""
         result = self._result
+        if not result.sentiment:
+            return None
 
         table = Table(title="Sentiment", expand=True, show_header=False, border_style="dim")
         table.add_column("Field", style="dim")
@@ -118,7 +120,7 @@ class ResultBox(Static):
     def _build_news_table(self) -> Table | None:
         """Build news themes table if themes exist."""
         result = self._result
-        if not result.news.key_themes:
+        if not result.news or not result.news.key_themes:
             return None
 
         table = Table(title="News Themes", expand=True, show_header=False, border_style="dim")
@@ -143,7 +145,9 @@ class ResultBox(Static):
 
             yield Static(self._build_snapshot_table())
             yield Static(self._build_technical_table())
-            yield Static(self._build_sentiment_table())
+            sentiment_table = self._build_sentiment_table()
+            if sentiment_table:
+                yield Static(sentiment_table)
 
             news_table = self._build_news_table()
             if news_table:
