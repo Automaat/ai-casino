@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Multi-stage build for CPU-optimized FinBERT service
 FROM python:3.14-slim AS builder
 

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Build stage - install build tools and compile dependencies
 FROM python:3.14.3-slim AS builder
 
