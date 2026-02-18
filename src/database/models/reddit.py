@@ -36,7 +36,7 @@ class RedditPostORM(Base):
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     upvote_ratio: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     num_comments: Mapped[int] = mapped_column(Integer, nullable=False)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
     created_utc: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),

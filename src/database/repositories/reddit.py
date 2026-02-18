@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from src.daemon.events import Sentiment
@@ -581,7 +581,7 @@ class RedditTickerSentimentRepository(BaseRepository[dict]):
             select(
                 RedditTickerMentionORM.symbol,
                 RedditTickerMentionORM.subreddit,
-                func.date_trunc("hour", RedditTickerMentionORM.created_utc).label("window_start"),
+                func.date_trunc(text("'hour'"), RedditTickerMentionORM.created_utc).label("window_start"),
                 func.count(RedditTickerMentionORM.id).label("mention_count"),
                 func.sum(case((RedditTickerMentionORM.sentiment == Sentiment.BULLISH, 1), else_=0)).label(
                     "bullish_count"
@@ -598,7 +598,7 @@ class RedditTickerSentimentRepository(BaseRepository[dict]):
             .group_by(
                 RedditTickerMentionORM.symbol,
                 RedditTickerMentionORM.subreddit,
-                func.date_trunc("hour", RedditTickerMentionORM.created_utc),
+                func.date_trunc(text("'hour'"), RedditTickerMentionORM.created_utc),
             )
         )
 
