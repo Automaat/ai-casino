@@ -18,11 +18,11 @@ class RedditScraperConfig(BaseModel):
     posts_per_subreddit: int = Field(default=50, ge=1, le=100)
     comments_per_post: int = Field(default=10, ge=1, le=50)
 
-    # Anti-detection delays (seconds)
-    delay_page_load_min: float = Field(default=2.0, ge=0.0)
-    delay_page_load_max: float = Field(default=8.0, ge=0.0)
-    delay_action_min: float = Field(default=0.5, ge=0.0)
-    delay_action_max: float = Field(default=2.0, ge=0.0)
+    # Anti-detection delays (seconds) — old.reddit.com has minimal anti-bot
+    delay_page_load_min: float = Field(default=1.0, ge=0.0)
+    delay_page_load_max: float = Field(default=3.0, ge=0.0)
+    delay_action_min: float = Field(default=0.3, ge=0.0)
+    delay_action_max: float = Field(default=1.0, ge=0.0)
 
     # Viewport randomization
     viewport_width_min: int = Field(default=1280, ge=800, le=3840)

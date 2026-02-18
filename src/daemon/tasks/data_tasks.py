@@ -367,55 +367,71 @@ class PeriodicRedditScrapingTask(TaskExecutor):
             all_posts: list = []
             all_top_posts: list = []
 
-            # Scrape listing pages sequentially (rate-limit friendly)
-            for subreddit in self.components.config.reddit_scraper.high_priority_subreddits:
+            # Scrape listing pages in parallel (independent subreddits)
+            async def _scrape_listing(subreddit: str) -> list:
                 try:
                     logger.info(f"Scraping r/{subreddit}")
                     posts = await scraper.scrape_subreddit_posts(
                         subreddit=subreddit,
                         limit=self.components.config.reddit_scraper.posts_per_subreddit,
                     )
-                    all_posts.extend(posts)
                     logger.info(f"Scraped {len(posts)} posts from r/{subreddit}")
-                    top_posts = sorted(posts, key=lambda p: p.score, reverse=True)[:10]
-                    all_top_posts.extend(top_posts)
+                    return posts
                 except Exception:
                     logger.opt(exception=True).warning(f"Failed to scrape r/{subreddit}")
-                    continue
+                    return []
 
-            # Scrape comments + extract tickers in parallel across all top posts
+            listing_results = await asyncio.gather(
+                *[
+                    _scrape_listing(sub)
+                    for sub in self.components.config.reddit_scraper.high_priority_subreddits
+                ],
+                return_exceptions=True,
+            )
+            for result in listing_results:
+                if isinstance(result, BaseException):
+                    logger.warning(f"Subreddit listing scrape failed: {result}")
+                    continue
+                all_posts.extend(result)
+                top_posts = sorted(result, key=lambda p: p.score, reverse=True)[:10]
+                all_top_posts.extend(top_posts)
+
+            # Phase 1: Scrape comments in parallel (no LLM yet)
             semaphore = asyncio.Semaphore(3)
 
-            async def _scrape_and_extract(post: RedditPost) -> tuple:
+            async def _scrape_comments(post: RedditPost) -> tuple:
                 async with semaphore:
                     comments = await scraper.scrape_post_comments(
                         post=post,
                         limit=cfg.comments_per_post,
                     )
-                mentions = []
-                if cfg.use_llm_extraction:
-                    logger.debug(f"Extracting tickers from post {post.id}")
-                    mentions = await extractor.extract_tickers(post=post, comments=comments)
-                    if mentions:
-                        logger.info(f"Extracted {len(mentions)} ticker mentions from post {post.id}")
-                return post, comments, mentions
+                return post, comments
 
             logger.debug(f"Scraping comments from {len(all_top_posts)} top posts in parallel")
             gather_results = await asyncio.gather(
-                *[_scrape_and_extract(p) for p in all_top_posts],
+                *[_scrape_comments(p) for p in all_top_posts],
                 return_exceptions=True,
             )
 
             all_comments: list = []
-            all_mentions: list = []
+            posts_with_comments: list[tuple] = []
             for result in gather_results:
                 if isinstance(result, BaseException):
-                    logger.warning(f"Failed to scrape/extract post: {result}")
+                    logger.warning(f"Failed to scrape post comments: {result}")
                     continue
-                post, comments, mentions = result
+                post, comments = result
                 all_comments.extend(comments)
-                if mentions:
-                    all_mentions.append((post, mentions))
+                posts_with_comments.append((post, comments))
+
+            # Phase 2: Batch LLM ticker extraction (5 posts per call)
+            all_mentions: list = []
+            if cfg.use_llm_extraction and posts_with_comments:
+                batch_results = await extractor.extract_tickers_batch(posts_with_comments, batch_size=5)
+                # Convert to (post, mentions) format for DB insertion
+                post_lookup = {post.id: post for post, _ in posts_with_comments}
+                for post_id, mentions in batch_results.items():
+                    if mentions and post_id in post_lookup:
+                        all_mentions.append((post_lookup[post_id], mentions))
 
             # Store to database
             async with get_session() as session:

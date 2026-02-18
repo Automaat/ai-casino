@@ -62,6 +62,7 @@ class DaemonCycleOrchestrator:
         self._notification_helper = DaemonNotificationHelper()
         self._cycle_counter = 0
         self._event_batch_evaluator: Any = None  # EventBatchEvaluator (Any to avoid circular import)
+        self._cached_health_report: Any = None  # HealthReport cached between cycles
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -80,14 +81,11 @@ class DaemonCycleOrchestrator:
         profiling_context = self.profiler.profile_cycle(cycle_num) if self.profiler else async_nullcontext()
 
         async with profiling_context as profile_metrics:
-            # Phase 1: Run scheduled tasks
+            # Phase 1: Run scheduled tasks (may produce new health report)
             await self.task_runner.run_scheduled_tasks()
 
-            # Phase 2: Run health check (via task service now)
-            # Already handled by task_runner if scheduled
-
-            # Phase 3: Run discovery (via task service now)
-            # Already handled by task_runner if scheduled
+            # Refresh health report cache after tasks (health check may have written new report)
+            self._refresh_health_report_cache()
 
             # Phase 3.5: Evaluate event-based discovery candidates
             if (
@@ -396,12 +394,8 @@ class DaemonCycleOrchestrator:
             return
 
         try:
-            active_positions_dict = await self.components.state.get_active_positions()
-            state_positions: dict[str, Any] = {}
-            for sym in active_positions_dict:
-                pos = await self.components.state.get_position(sym)
-                if pos is not None:
-                    state_positions[sym] = pos
+            all_positions = await self.components.state.get_all_positions()
+            state_positions: dict[str, Any] = {pos.symbol: pos for pos in all_positions}
 
             new_positions, updated_positions, closed_symbols = position_manager.sync_with_broker(
                 state_positions
@@ -589,23 +583,31 @@ class DaemonCycleOrchestrator:
             return 0
 
     def _evaluate_degradation(self) -> DegradationContext:
-        """Load latest health report and evaluate degradation tier."""
+        """Evaluate degradation using cached health report (refreshed by health task)."""
         from src.daemon.degradation import DegradationPolicy
-        from src.daemon.health import HealthReport
 
-        health_report = None
-        health_dir = Path(self.components.config.health.health_dir).expanduser()
-        if health_dir.exists():
-            report_files = sorted(health_dir.glob("health-*.json"), reverse=True)
-            if report_files:
-                try:
-                    with report_files[0].open() as f:
-                        health_report = HealthReport.model_validate(json.load(f))
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to load health report: {e}")
+        # Use cached report if available, otherwise load from disk once
+        if self._cached_health_report is None:
+            self._refresh_health_report_cache()
 
         policy = DegradationPolicy(self.components.config)
-        return policy.evaluate_degradation(health_report)
+        return policy.evaluate_degradation(self._cached_health_report)
+
+    def _refresh_health_report_cache(self) -> None:
+        """Refresh in-memory health report cache from disk."""
+        from src.daemon.health import HealthReport
+
+        health_dir = Path(self.components.config.health.health_dir).expanduser()
+        if not health_dir.exists():
+            return
+
+        report_files = sorted(health_dir.glob("health-*.json"), reverse=True)
+        if report_files:
+            try:
+                with report_files[0].open() as f:
+                    self._cached_health_report = HealthReport.model_validate(json.load(f))
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to load health report: {e}")
 
     async def _run_coordinator_cycle_impl(
         self,
