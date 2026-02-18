@@ -132,6 +132,25 @@ class AnalysisRecordRepository(BaseRepository[AnalysisRecord]):
         result = await self._session.execute(stmt)
         return [self._to_record(orm) for orm in result.scalars().all()]
 
+    async def get_last_analysis_timestamps(self, symbols: list[str]) -> dict[str, datetime]:
+        """Get last analysis timestamp per symbol.
+
+        Args:
+            symbols: List of ticker symbols to query
+
+        Returns:
+            Dict mapping symbol to its most recent analysis timestamp
+        """
+        if not symbols:
+            return {}
+        stmt = (
+            select(AnalysisRecordORM.symbol, func.max(AnalysisRecordORM.timestamp))
+            .where(AnalysisRecordORM.symbol.in_(symbols))
+            .group_by(AnalysisRecordORM.symbol)
+        )
+        result = await self._session.execute(stmt)
+        return {row[0]: row[1] for row in result.all()}
+
     async def get_signal_stats(self, symbol: str | None = None, days: int = 30) -> dict[str, int]:
         """Get signal distribution statistics.
 

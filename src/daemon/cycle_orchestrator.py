@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time as time_mod
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -277,6 +277,11 @@ class DaemonCycleOrchestrator:
         # Save metrics
         await self._save_coordinator_metrics(coordinator_result, patterns_detected)
 
+        # Sweep pass: analyze stale watchlist symbols not covered by coordinator
+        sweep_count = await self._run_sweep_pass(
+            coordinator_result.symbols_analyzed, watchlist, degradation_context
+        )
+
         # Log coordinator-specific results
         console.print(
             f"\n[bold cyan]Coordinator Cycle Results ({datetime.now(tz=UTC):%Y-%m-%d %H:%M})[/bold cyan]"
@@ -313,8 +318,76 @@ class DaemonCycleOrchestrator:
             analysis_performed=True,
             halted=False,
             degradation_tier=degradation_context.tier.value,
-            results_count=len(coordinator_result.symbols_analyzed),
+            results_count=len(coordinator_result.symbols_analyzed) + sweep_count,
         )
+
+    async def _run_sweep_pass(
+        self,
+        analyzed_symbols: list[str],
+        watchlist: list[str],
+        degradation_context: DegradationContext,
+    ) -> int:
+        """Analyze stale watchlist symbols not covered by coordinator cycle.
+
+        Args:
+            analyzed_symbols: Symbols already analyzed by coordinator this cycle
+            watchlist: Full watchlist
+            degradation_context: Degradation context
+
+        Returns:
+            Number of symbols analyzed in sweep
+        """
+        from src.daemon.degradation import DegradationTier
+
+        sweep_config = self.components.config.coordinator.sweep_pass
+        if not sweep_config.enabled:
+            return 0
+
+        if degradation_context.tier in (DegradationTier.MINIMAL, DegradationTier.HALTED):
+            return 0
+
+        try:
+            analyzed_set = set(analyzed_symbols)
+            candidates = [s for s in watchlist if s not in analyzed_set]
+            if not candidates:
+                return 0
+
+            # Query last analysis timestamps for candidates
+            engine = self.components.container.database_engine()
+            async with engine.session() as session:
+                from src.database.repositories.analysis import AnalysisRecordRepository
+
+                repo = AnalysisRecordRepository(session)
+                last_analyzed = await repo.get_last_analysis_timestamps(candidates)
+
+            stale_threshold = datetime.now(UTC) - timedelta(hours=sweep_config.stale_hours)
+
+            never_analyzed = [s for s in candidates if s not in last_analyzed]
+            stale = [
+                s
+                for s in candidates
+                if s in last_analyzed and last_analyzed[s].replace(tzinfo=UTC) < stale_threshold
+            ]
+
+            # Never-analyzed first, then oldest-first
+            stale_sorted = sorted(stale, key=lambda s: last_analyzed[s])
+            sweep_symbols = (never_analyzed + stale_sorted)[: sweep_config.max_symbols]
+
+            if not sweep_symbols:
+                return 0
+
+            logger.info(
+                f"Sweep pass: {len(sweep_symbols)} stale symbols "
+                f"(threshold: {sweep_config.stale_hours}h, "
+                f"never={len(never_analyzed)}, stale={len(stale)})"
+            )
+
+            results = await self._analyze_watchlist(sweep_symbols, degradation_context)
+            return len(results)
+
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Sweep pass failed: {e}")
+            return 0
 
     async def _sync_coordinator_positions(self) -> None:
         """Sync daemon state positions with broker (reconciliation)."""

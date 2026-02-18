@@ -68,3 +68,78 @@ async def test_delete_before(async_session, analysis_record: AnalysisRecord) -> 
     deleted_count = await repo.delete_before(cutoff)
 
     assert deleted_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_last_analysis_timestamps_empty(async_session) -> None:
+    """Test get_last_analysis_timestamps with empty input returns empty dict."""
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    result = await repo.get_last_analysis_timestamps([])
+
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_get_last_analysis_timestamps_single(async_session, analysis_record: AnalysisRecord) -> None:
+    """Test get_last_analysis_timestamps returns most recent timestamp per symbol."""
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    await repo.create(analysis_record)
+
+    result = await repo.get_last_analysis_timestamps(["AAPL"])
+
+    assert "AAPL" in result
+    assert isinstance(result["AAPL"], datetime)
+
+
+@pytest.mark.asyncio
+async def test_get_last_analysis_timestamps_multiple_records(
+    async_session, analysis_record: AnalysisRecord
+) -> None:
+    """Test get_last_analysis_timestamps returns latest when multiple records exist."""
+    from datetime import timedelta
+
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    older_record = AnalysisRecord(
+        symbol="AAPL",
+        timestamp=datetime.now(UTC) - timedelta(hours=2),
+        signal="SELL",
+        confidence=0.6,
+        executed_trade=False,
+        trading_session=analysis_record.trading_session,
+        is_paper_trade=True,
+        rsi=75.0,
+        macd_hist=-0.1,
+        reasoning=["Overbought"],
+    )
+    await repo.create(older_record)
+    await repo.create(analysis_record)
+
+    result = await repo.get_last_analysis_timestamps(["AAPL"])
+
+    assert "AAPL" in result
+    # SQLite returns naive datetimes; compare as naive UTC
+    returned_ts = result["AAPL"]
+    older_ts = older_record.timestamp.replace(tzinfo=None)
+    assert returned_ts >= older_ts
+
+
+@pytest.mark.asyncio
+async def test_get_last_analysis_timestamps_missing_symbol(
+    async_session, analysis_record: AnalysisRecord
+) -> None:
+    """Test get_last_analysis_timestamps omits symbols with no records."""
+    from src.database.repositories.analysis import AnalysisRecordRepository
+
+    repo = AnalysisRecordRepository(async_session)
+    await repo.create(analysis_record)
+
+    result = await repo.get_last_analysis_timestamps(["AAPL", "TSLA"])
+
+    assert "AAPL" in result
+    assert "TSLA" not in result
