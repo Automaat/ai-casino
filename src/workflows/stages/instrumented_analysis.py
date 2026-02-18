@@ -296,6 +296,8 @@ def _get_market_data_length(market_data: object) -> int:
     if market_data is None:
         return 0
     if isinstance(market_data, MultiTimeframeData):
+        if not market_data.timeframes:
+            return 0
         return min(len(df) for df in market_data.timeframes.values())
     if isinstance(market_data, Sized):
         return len(market_data)
@@ -336,7 +338,13 @@ async def _run_analyses_with_validation(
     config = ctx.workflow.analysis_orchestrator_config
 
     if not (config and config.enable_supervisor_routing):
-        msg = "Supervisor routing required but not configured"
+        msg = (
+            "Supervisor routing is required for analysis, but either "
+            "`workflow.analysis_orchestrator_config` is missing or "
+            "`analysis_orchestrator_config.enable_supervisor_routing` is False. "
+            "Configure `workflow.analysis_orchestrator_config` and set "
+            "`enable_supervisor_routing = True`; non-supervisor routing is no longer supported."
+        )
         raise RuntimeError(msg)
 
     # Supervisor-driven conditional execution
