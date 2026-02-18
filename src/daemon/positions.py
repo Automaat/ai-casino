@@ -306,8 +306,9 @@ class PositionManager:
     def _load_entry_metadata(self, symbol: str) -> tuple[datetime, float, str]:
         """Load entry metadata from trades table.
 
-        Uses defaults when called from running event loop (which is the normal case).
-        Entry metadata gets enriched asynchronously via _async_load_entry_metadata.
+        Returns defaults when called from a running event loop (the normal case),
+        because asyncio.run() cannot be used inside an existing loop. Falls back
+        to asyncio.run() only when no event loop is active (e.g. sync test context).
 
         Args:
             symbol: Stock ticker
@@ -321,8 +322,8 @@ class PositionManager:
 
         try:
             asyncio.get_running_loop()
-            # Event loop running — schedule async enrichment, return defaults now
-            logger.debug(f"Event loop running, using defaults for {symbol} (async enrichment scheduled)")
+            # Event loop running — cannot call asyncio.run(); use defaults
+            logger.debug(f"Event loop running, using defaults for entry metadata for {symbol}")
             return datetime.now(UTC), 0.75, "BUY"
         except RuntimeError:
             pass

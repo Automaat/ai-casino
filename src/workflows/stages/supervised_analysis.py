@@ -226,7 +226,7 @@ def _build_group1_coros(
 ) -> dict[AnalysisType, Coroutine[Any, Any, Any]]:
     """Build coroutines only for needed group-1 analysis types."""
     market_data = cast("pd.DataFrame | MultiTimeframeData", input_data.market_data)
-    news_articles = cast("list[NewsArticle]", input_data.news_articles)
+    news_articles = cast("list[NewsArticle]", input_data.news_articles or [])
     trump_posts = input_data.trump_posts or None
 
     coros: dict[AnalysisType, Coroutine[Any, Any, Any]] = {}
