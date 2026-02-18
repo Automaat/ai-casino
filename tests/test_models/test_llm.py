@@ -51,7 +51,9 @@ def test_llm_client_init_ollama(mock_ollama_provider):
 
     assert client.provider == "ollama"
     assert client.model == "qwen3:14b"
-    mock_ollama_provider[0].assert_called_once_with(model="qwen3:14b", base_url="http://localhost:11434")
+    mock_ollama_provider[0].assert_called_once_with(
+        model="qwen3:14b", base_url="http://localhost:11434", enable_caching=False
+    )
 
 
 def test_llm_client_init_anthropic(mock_anthropic_provider):
@@ -59,7 +61,9 @@ def test_llm_client_init_anthropic(mock_anthropic_provider):
 
     assert client.provider == "anthropic"
     assert client.model == "claude-sonnet-4-20250514"
-    mock_anthropic_provider[0].assert_called_once_with(model="claude-sonnet-4-20250514", api_key=None)
+    mock_anthropic_provider[0].assert_called_once_with(
+        model="claude-sonnet-4-20250514", api_key=None, enable_caching=False
+    )
 
 
 def test_llm_client_init_openai(mock_openai_provider):
@@ -67,7 +71,9 @@ def test_llm_client_init_openai(mock_openai_provider):
 
     assert client.provider == "openai"
     assert client.model == "gpt-4o"
-    mock_openai_provider[0].assert_called_once_with(model="gpt-4o", api_key=None, base_url=None)
+    mock_openai_provider[0].assert_called_once_with(
+        model="gpt-4o", api_key=None, base_url=None, enable_caching=False
+    )
 
 
 def test_llm_client_init_openai_custom_api_base(mock_openai_provider):
@@ -80,7 +86,10 @@ def test_llm_client_init_openai_custom_api_base(mock_openai_provider):
     assert client.provider == "openai"
     assert client.model == "hf:moonshotai/Kimi-K2.5"
     mock_openai_provider[0].assert_called_once_with(
-        model="hf:moonshotai/Kimi-K2.5", api_key=None, base_url="https://api.synthetic.new/openai/v1"
+        model="hf:moonshotai/Kimi-K2.5",
+        api_key=None,
+        base_url="https://api.synthetic.new/openai/v1",
+        enable_caching=False,
     )
 
 

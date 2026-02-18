@@ -38,6 +38,8 @@ class LLMUsageStats(BaseModel):
 
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cache_creation_input_tokens: int | None = None
+    cache_read_input_tokens: int | None = None
 
 
 class LLMCallMetric(BaseModel):
@@ -51,6 +53,8 @@ class LLMCallMetric(BaseModel):
     latency_ms: float
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cache_creation_input_tokens: int | None = None
+    cache_read_input_tokens: int | None = None
     estimated_cost_usd: float | None = None
     success: bool
     error: str | None = None
@@ -92,6 +96,8 @@ class WorkflowExecutionMetrics(BaseModel):
     pipeline_stages: list[PipelineStageMetric]
     total_input_tokens: int
     total_output_tokens: int
+    total_cache_creation_tokens: int = 0
+    total_cache_read_tokens: int = 0
     total_estimated_cost_usd: float
     provider: str
     model: str
@@ -157,7 +163,15 @@ class ExecutionMetricsCollector:
 
         input_tokens = usage.input_tokens if usage else None
         output_tokens = usage.output_tokens if usage else None
-        cost = self._estimate_cost(self._provider, self._model, input_tokens, output_tokens)
+        cache_creation = usage.cache_creation_input_tokens if usage else None
+        cache_read = usage.cache_read_input_tokens if usage else None
+        cost = self._estimate_cost(
+            self._provider,
+            self._model,
+            input_tokens,
+            output_tokens,
+            cache_tokens=(cache_read, cache_creation),
+        )
 
         self._llm_calls.append(
             LLMCallMetric(
@@ -169,6 +183,8 @@ class ExecutionMetricsCollector:
                 latency_ms=latency_ms,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                cache_creation_input_tokens=cache_creation,
+                cache_read_input_tokens=cache_read,
                 estimated_cost_usd=cost,
                 success=success,
                 error=error,
@@ -223,6 +239,12 @@ class ExecutionMetricsCollector:
         total_latency_ms = (time.perf_counter() - self._start_time) * 1000
         total_input = sum(c.input_tokens for c in self._llm_calls if c.input_tokens)
         total_output = sum(c.output_tokens for c in self._llm_calls if c.output_tokens)
+        total_cache_creation = sum(
+            c.cache_creation_input_tokens for c in self._llm_calls if c.cache_creation_input_tokens
+        )
+        total_cache_read = sum(
+            c.cache_read_input_tokens for c in self._llm_calls if c.cache_read_input_tokens
+        )
         total_cost = sum(c.estimated_cost_usd for c in self._llm_calls if c.estimated_cost_usd)
 
         return WorkflowExecutionMetrics(
@@ -236,6 +258,8 @@ class ExecutionMetricsCollector:
             pipeline_stages=self._pipeline_stages,
             total_input_tokens=total_input,
             total_output_tokens=total_output,
+            total_cache_creation_tokens=total_cache_creation,
+            total_cache_read_tokens=total_cache_read,
             total_estimated_cost_usd=total_cost,
             provider=self._provider,
             model=self._model,
@@ -247,14 +271,16 @@ class ExecutionMetricsCollector:
         model: str,
         input_tokens: int | None,
         output_tokens: int | None,
+        cache_tokens: tuple[int | None, int | None] = (None, None),
     ) -> float | None:
-        """Estimate USD cost for an LLM call.
+        """Estimate USD cost for an LLM call with cache-aware pricing.
 
         Args:
             provider: Provider name
             model: Model name
             input_tokens: Input token count
             output_tokens: Output token count
+            cache_tokens: (cache_read_tokens, cache_creation_tokens)
 
         Returns:
             Estimated cost in USD, or None if pricing unknown
@@ -267,8 +293,25 @@ class ExecutionMetricsCollector:
         if not pricing:
             return None
 
-        input_cost = ((input_tokens or 0) / 1_000_000) * pricing[0]
-        output_cost = ((output_tokens or 0) / 1_000_000) * pricing[1]
+        input_price, output_price = pricing
+        total_input = input_tokens or 0
+        cache_read = cache_tokens[0] or 0
+        cache_write = cache_tokens[1] or 0
+
+        # Determine cache multipliers by provider
+        if provider == "anthropic":
+            # Anthropic: cache reads 0.10x, cache writes 1.25x base input
+            read_mult, write_mult = 0.10, 1.25
+        else:
+            # OpenAI/OpenRouter: cached reads 0.50x, writes free (already in input)
+            read_mult, write_mult = 0.50, 1.0
+
+        # Regular input = total input minus cached portions
+        regular_input = max(0, total_input - cache_read - cache_write)
+        input_cost = (regular_input / 1_000_000) * input_price
+        input_cost += (cache_read / 1_000_000) * input_price * read_mult
+        input_cost += (cache_write / 1_000_000) * input_price * write_mult
+        output_cost = ((output_tokens or 0) / 1_000_000) * output_price
         return input_cost + output_cost
 
 

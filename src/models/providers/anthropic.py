@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from anthropic import AsyncAnthropic
+from anthropic.types import Message
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
@@ -40,17 +41,26 @@ def _convert_tools_to_anthropic(tools: list[dict]) -> list[dict]:
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic provider using official SDK."""
 
-    def __init__(self, model: str, api_key: str | None = None, max_tokens: int = 4096) -> None:
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        max_tokens: int = 4096,
+        enable_caching: bool = False,
+    ) -> None:
         """Initialize Anthropic provider.
 
         Args:
             model: Model name (e.g., "claude-sonnet-4-20250514")
             api_key: API key (defaults to ANTHROPIC_API_KEY env var)
             max_tokens: Maximum tokens in response (default: 4096)
+            enable_caching: Enable prompt caching via cache_control blocks
 
         Raises:
             ValueError: If API key is not provided and ANTHROPIC_API_KEY env var is empty
         """
+        super().__init__(enable_caching=enable_caching)
+
         if not api_key:
             msg = "Anthropic API key required in config (api_keys.anthropic_api_key)"
             raise ValueError(msg)
@@ -91,6 +101,38 @@ class AnthropicProvider(BaseLLMProvider):
 
         return system, remaining
 
+    def _build_system_param(self, system: str | None) -> list[dict] | str | None:
+        """Build system parameter with optional cache_control.
+
+        Args:
+            system: System prompt text
+
+        Returns:
+            System param with cache_control block when caching enabled, plain string otherwise
+        """
+        if not system:
+            return None
+        if not self._enable_caching:
+            return system
+        return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+
+    def _extract_usage(self, response: Message) -> LLMUsageStats:
+        """Extract usage stats including cache fields from response.
+
+        Args:
+            response: Anthropic API response
+
+        Returns:
+            LLMUsageStats with cache token counts
+        """
+        usage = response.usage
+        return LLMUsageStats(
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cache_creation_input_tokens=getattr(usage, "cache_creation_input_tokens", None),
+            cache_read_input_tokens=getattr(usage, "cache_read_input_tokens", None),
+        )
+
     @retry(max_attempts=3, delay=1.0)
     async def acomplete(self, messages: list[dict], temperature: float = 0.7) -> str:
         """Generate completion from messages."""
@@ -102,14 +144,12 @@ class AnthropicProvider(BaseLLMProvider):
             "temperature": temperature,
             "max_tokens": self._max_tokens,
         }
-        if system:
-            kwargs["system"] = system
+        system_param = self._build_system_param(system)
+        if system_param:
+            kwargs["system"] = system_param
 
         response = await self._client.messages.create(**kwargs)
-        self._last_usage = LLMUsageStats(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-        )
+        self._last_usage = self._extract_usage(response)
         content = response.content[0].text if response.content else ""
         logger.debug(f"Anthropic response length: {len(content)} chars")
         return content
@@ -124,8 +164,9 @@ class AnthropicProvider(BaseLLMProvider):
             "temperature": temperature,
             "max_tokens": self._max_tokens,
         }
-        if system:
-            kwargs["system"] = system
+        system_param = self._build_system_param(system)
+        if system_param:
+            kwargs["system"] = system_param
 
         async with self._client.messages.stream(**kwargs) as stream:
             async for text in stream.text_stream:
@@ -140,22 +181,24 @@ class AnthropicProvider(BaseLLMProvider):
     ) -> tuple[str | None, list[ToolCall] | None]:
         """Generate completion with tool calling support."""
         system, chat_messages = self._extract_system(messages)
+        converted_tools = _convert_tools_to_anthropic(tools)
+
+        if self._enable_caching and converted_tools:
+            converted_tools[-1]["cache_control"] = {"type": "ephemeral"}
 
         kwargs: dict = {
             "model": self._model,
             "messages": chat_messages,
-            "tools": _convert_tools_to_anthropic(tools),
+            "tools": converted_tools,
             "temperature": temperature,
             "max_tokens": self._max_tokens,
         }
-        if system:
-            kwargs["system"] = system
+        system_param = self._build_system_param(system)
+        if system_param:
+            kwargs["system"] = system_param
 
         response = await self._client.messages.create(**kwargs)
-        self._last_usage = LLMUsageStats(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-        )
+        self._last_usage = self._extract_usage(response)
 
         text_content = None
         tool_calls = []
@@ -192,11 +235,13 @@ class AnthropicProvider(BaseLLMProvider):
         system, chat_messages = self._extract_system(messages)
 
         schema = response_model.model_json_schema()
-        tool = {
+        tool: dict = {
             "name": "respond",
             "description": "Provide the structured response",
             "input_schema": schema,
         }
+        if self._enable_caching:
+            tool["cache_control"] = {"type": "ephemeral"}
 
         kwargs: dict = {
             "model": self._model,
@@ -206,14 +251,12 @@ class AnthropicProvider(BaseLLMProvider):
             "temperature": temperature,
             "max_tokens": self._max_tokens,
         }
-        if system:
-            kwargs["system"] = system
+        system_param = self._build_system_param(system)
+        if system_param:
+            kwargs["system"] = system_param
 
         response = await self._client.messages.create(**kwargs)
-        self._last_usage = LLMUsageStats(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-        )
+        self._last_usage = self._extract_usage(response)
 
         for block in response.content:
             if block.type == "tool_use" and block.name == "respond":

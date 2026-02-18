@@ -212,6 +212,7 @@ class LLMClient:
         base_url: str = "http://localhost:11434",
         api_key: str | None = None,
         openai_base_url: str | None = None,
+        enable_prompt_caching: bool = False,
     ) -> None:
         """Initialize LLM client.
 
@@ -221,12 +222,14 @@ class LLMClient:
             base_url: Base URL for Ollama
             api_key: API key for provider (optional)
             openai_base_url: Custom base URL for OpenAI (optional)
+            enable_prompt_caching: Enable provider-level prompt caching
         """
         self.provider = provider
         self.model = model
         self.base_url = base_url
         self._api_key = api_key
         self._openai_base_url = openai_base_url
+        self._enable_prompt_caching = enable_prompt_caching
 
         self._provider: BaseLLMProvider = self._create_provider()
         self._metrics_collector: ExecutionMetricsCollector | None = None
@@ -242,15 +245,17 @@ class LLMClient:
 
     def _create_provider(self) -> BaseLLMProvider:
         """Create provider instance based on configuration."""
+        caching = self._enable_prompt_caching
         if self.provider == "ollama":
-            return OllamaProvider(model=self.model, base_url=self.base_url)
+            return OllamaProvider(model=self.model, base_url=self.base_url, enable_caching=caching)
         if self.provider == "anthropic":
-            return AnthropicProvider(model=self.model, api_key=self._api_key)
+            return AnthropicProvider(model=self.model, api_key=self._api_key, enable_caching=caching)
         if self.provider == "openai":
             return OpenAIProvider(
                 model=self.model,
                 api_key=self._api_key,
                 base_url=self._openai_base_url,
+                enable_caching=caching,
             )
         msg = f"Unsupported provider: {self.provider}"
         raise ValueError(msg)

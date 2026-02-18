@@ -38,6 +38,14 @@ class BaseLLMProvider(ABC):
 
     _last_usage: LLMUsageStats | None = None
 
+    def __init__(self, *, enable_caching: bool = False) -> None:
+        """Initialize base provider.
+
+        Args:
+            enable_caching: Enable prompt caching where supported
+        """
+        self._enable_caching = enable_caching
+
     @property
     def last_usage(self) -> LLMUsageStats | None:
         """Get usage stats from the last API call."""

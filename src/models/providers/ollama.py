@@ -25,13 +25,20 @@ T = TypeVar("T", bound=BaseModel)
 class OllamaProvider(BaseLLMProvider):
     """Ollama provider using direct HTTP API."""
 
-    def __init__(self, model: str, base_url: str = "http://localhost:11434") -> None:
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://localhost:11434",
+        enable_caching: bool = False,
+    ) -> None:
         """Initialize Ollama provider.
 
         Args:
             model: Model name (e.g., "qwen3:14b")
             base_url: Ollama server URL
+            enable_caching: No effect for Ollama (local inference)
         """
+        super().__init__(enable_caching=enable_caching)
         self._model = model
         self._base_url = base_url.rstrip("/")
         self._client: httpx.Client | None = None
