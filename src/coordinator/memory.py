@@ -14,8 +14,7 @@ if TYPE_CHECKING:
     from src.daemon.state import DaemonState
     from src.daemon.state.models import SignalOutcome
     from src.data.broker import AlpacaBroker
-    from src.database.repositories.analysis import AnalysisRecordRepository
-    from src.database.repositories.signal_outcome import SignalOutcomeRepository
+    from src.database.engine import DatabaseEngine
 
 # Constants for memory limits
 _MAX_IN_MEMORY_RECORDS: Final[int] = 20
@@ -47,8 +46,7 @@ class CoordinatorMemory:
         self,
         memory_file: Path | None = None,
         daemon_state: DaemonState | None = None,
-        analysis_repo: AnalysisRecordRepository | None = None,
-        signal_outcome_repo: SignalOutcomeRepository | None = None,
+        database_engine: DatabaseEngine | None = None,
         broker: AlpacaBroker | None = None,
     ) -> None:
         """Initialize coordinator memory.
@@ -56,8 +54,7 @@ class CoordinatorMemory:
         Args:
             memory_file: Path to JSONL memory file (default: ~/.ai-casino/coordinator-memory.jsonl)
             daemon_state: Optional daemon state for today's data access
-            analysis_repo: Optional analysis repository for historical queries
-            signal_outcome_repo: Optional signal outcome repository for learning queries
+            database_engine: Optional database engine for per-request repo creation
             broker: Optional broker for portfolio data access
         """
         self._memory_file = memory_file or Path("~/.ai-casino/coordinator-memory.jsonl").expanduser()
@@ -65,8 +62,7 @@ class CoordinatorMemory:
 
         # Dependencies for multi-tier memory
         self._daemon_state = daemon_state
-        self._analysis_repo = analysis_repo
-        self._signal_outcome_repo = signal_outcome_repo
+        self._database_engine = database_engine
         self._broker = broker
 
         # Create file if it doesn't exist
@@ -306,8 +302,8 @@ class CoordinatorMemory:
         Returns:
             Formatted markdown analysis history
         """
-        if not self._analysis_repo:
-            # Fallback to in-memory if no repository
+        if not self._database_engine:
+            # Fallback to in-memory if no database
             if self._daemon_state:
                 all_analyses = await self._daemon_state.get_analyses(limit=1000)
                 records = [r for r in all_analyses if r.symbol.upper() == symbol.upper()]
@@ -344,13 +340,17 @@ class CoordinatorMemory:
             return f"No analysis history available for {symbol}"
 
         try:
-            # Query database for historical records
-            start_date = datetime.now(UTC) - timedelta(days=days)
-            records = await self._analysis_repo.get_by_date_range(
-                start=start_date,
-                end=datetime.now(UTC),
-                symbol=symbol,
-            )
+            from src.database.repositories.analysis import AnalysisRecordRepository
+
+            repo = AnalysisRecordRepository(self._database_engine.session())
+            repo.owns_session = True
+            async with repo:
+                start_date = datetime.now(UTC) - timedelta(days=days)
+                records = await repo.get_by_date_range(
+                    start=start_date,
+                    end=datetime.now(UTC),
+                    symbol=symbol,
+                )
 
             if not records:
                 return f"No analysis history found for {symbol} in last {days} days"
@@ -419,8 +419,8 @@ class CoordinatorMemory:
         if params is None:
             params = DecisionQueryParams()
 
-        if not self._signal_outcome_repo:
-            logger.warning("Signal outcome repository not available")
+        if not self._database_engine:
+            logger.warning("Database engine not available for decision queries")
             return []
 
         try:
@@ -452,24 +452,29 @@ class CoordinatorMemory:
         Returns:
             List of SignalOutcome instances
         """
-        if not self._signal_outcome_repo:
+        if not self._database_engine:
             return []
 
-        start_date = datetime.now(UTC) - timedelta(days=lookback_days)
+        from src.database.repositories.signal_outcome import SignalOutcomeRepository
 
-        if symbol:
-            outcomes = await self._signal_outcome_repo.get_by_symbol(
-                symbol=symbol,
-                limit=limit,
-                start_date=start_date,
-            )
-        else:
-            outcomes = await self._signal_outcome_repo.get_recent_outcomes(
-                window=lookback_days,
-                signal_type=signal,
-                min_confidence=min_confidence,
-            )
-            outcomes = outcomes[:limit]
+        repo = SignalOutcomeRepository(self._database_engine.session())
+        repo.owns_session = True
+        async with repo:
+            start_date = datetime.now(UTC) - timedelta(days=lookback_days)
+
+            if symbol:
+                outcomes = await repo.get_by_symbol(
+                    symbol=symbol,
+                    limit=limit,
+                    start_date=start_date,
+                )
+            else:
+                outcomes = await repo.get_recent_outcomes(
+                    window=lookback_days,
+                    signal_type=signal,
+                    min_confidence=min_confidence,
+                )
+                outcomes = outcomes[:limit]
 
         return outcomes
 
@@ -575,8 +580,8 @@ class CoordinatorMemory:
         """
         from src.coordinator.decision_models import SuccessRateStats
 
-        if not self._signal_outcome_repo:
-            logger.warning("Signal outcome repository not available")
+        if not self._database_engine:
+            logger.warning("Database engine not available for success rate")
             return SuccessRateStats(
                 total_decisions=0,
                 hit_count=0,
@@ -651,10 +656,8 @@ class CoordinatorMemory:
         deps = []
         if self._daemon_state:
             deps.append("daemon_state")
-        if self._analysis_repo:
-            deps.append("analysis_repo")
-        if self._signal_outcome_repo:
-            deps.append("signal_outcome_repo")
+        if self._database_engine:
+            deps.append("database_engine")
         if self._broker:
             deps.append("broker")
         deps_str = f", deps={','.join(deps)}" if deps else ""

@@ -111,17 +111,6 @@ class AnalysisOrchestrator:
             "DaemonContextBuilder | None", deprecated_kwargs.get("context_builder")
         )
 
-        # Extract signal_outcome_repo from components (not in deprecated_kwargs)
-        from contextlib import suppress
-
-        from src.database.repositories.signal_outcome import SignalOutcomeRepository
-
-        self._signal_outcome_repo: SignalOutcomeRepository | None = None
-        if hasattr(components, "container") and components.container:
-            with suppress(Exception):
-                # Repository creation may fail if database not enabled
-                self._signal_outcome_repo = components.container.signal_outcome_repository()
-
         self._economic_watcher = components.economic_calendar_watcher
 
         self._notification_helper = DaemonNotificationHelper()
@@ -553,13 +542,14 @@ class AnalysisOrchestrator:
             symbol: Stock ticker
             result: TradingWorkflowResult
         """
-        if self._signal_outcome_repo:
+        container = self._components.container if self._components else None
+        if container:
             await self._record_signal_to_postgres(symbol, result)
         elif self.historical_cache:
             self._record_signal_to_sqlite(symbol, result)
 
     async def _record_signal_to_postgres(self, symbol: str, result: TradingWorkflowResult) -> None:
-        """Record signal to PostgreSQL.
+        """Record signal to PostgreSQL with per-request repo.
 
         Args:
             symbol: Stock ticker
@@ -567,7 +557,8 @@ class AnalysisOrchestrator:
         """
         from src.database.repositories.signal_outcome import SignalRecordInput
 
-        if not self._signal_outcome_repo:
+        container = self._components.container if self._components else None
+        if not container:
             return
 
         try:
@@ -591,7 +582,9 @@ class AnalysisOrchestrator:
                     else None
                 ),
             )
-            await self._signal_outcome_repo.record_signal(input_data)
+            repo = container.signal_outcome_repository()
+            async with repo:
+                await repo.record_signal(input_data)
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to record signal outcome: {e}")
 

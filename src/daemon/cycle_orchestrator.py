@@ -419,7 +419,8 @@ class DaemonCycleOrchestrator:
             try:
                 if self.components.container:
                     repo = self.components.container.coordinator_metrics_repository()
-                    await repo.create(metrics)
+                    async with repo:
+                        await repo.create(metrics)
                     logger.debug(f"Saved coordinator metrics to PostgreSQL: cycle={self._cycle_counter}")
                     return
             except Exception as pg_error:

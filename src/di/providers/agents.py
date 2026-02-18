@@ -234,12 +234,9 @@ def create_adaptive_threshold_manager(
     if not daemon_config.coordinator.adaptive_thresholds.enabled:
         return None
 
-    # Get signal outcome repository
-    signal_outcome_repo = container.signal_outcome_repository()
-
     return AdaptiveThresholdManager(
         config=daemon_config.coordinator.adaptive_thresholds,
-        signal_outcome_repo=signal_outcome_repo,
+        database_engine=container.database_engine(),
     )
 
 
@@ -283,23 +280,21 @@ def create_trading_coordinator(
 
     # Get dependencies for enhanced memory
     broker = container.alpaca_broker()
-    analysis_repo = container.analysis_repository()
 
-    # Get signal outcome repository if database enabled
-    signal_outcome_repo = None
+    # Get database engine for per-request repo creation (avoids session leaks)
+    database_engine = None
     if daemon_config.database.enable_persistence:
         try:
-            signal_outcome_repo = container.signal_outcome_repository()
+            database_engine = container.database_engine()
         except Exception as e:
             from loguru import logger
 
-            logger.opt(exception=True).warning(f"Failed to create signal_outcome_repository for memory: {e}")
+            logger.opt(exception=True).warning(f"Failed to get database_engine for memory: {e}")
 
     # Create enhanced memory with multi-tier context
     memory = CoordinatorMemory(
         daemon_state=daemon_state,
-        analysis_repo=analysis_repo,
-        signal_outcome_repo=signal_outcome_repo,
+        database_engine=database_engine,
         broker=broker,
     )
 
