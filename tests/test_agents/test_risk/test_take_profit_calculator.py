@@ -1,5 +1,7 @@
 """Tests for take-profit calculator."""
 
+import math
+
 import pytest
 
 from src.agents.risk.models import StopLossCalculation, TakeProfitCalculation
@@ -73,7 +75,7 @@ class TestTakeProfitCalculator:
         result = calculator.calculate(150.0, zero_risk_sl, Signal.BUY)
 
         assert result.take_profit_price == 156.0  # 150 * 1.04
-        assert result.reward_risk_ratio == 0.0
+        assert math.isinf(result.reward_risk_ratio)
         assert "Fixed" in result.methodology
 
     def test_custom_ratio(self, stop_loss_buy: StopLossCalculation) -> None:

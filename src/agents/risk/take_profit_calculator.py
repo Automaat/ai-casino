@@ -39,6 +39,10 @@ class TakeProfitCalculator:
         Returns:
             TakeProfitCalculation with target price and R:R ratio
         """
+        if current_price <= 0:
+            msg = f"current_price must be positive, got {current_price}"
+            raise ValueError(msg)
+
         risk_per_share = stop_loss.risk_per_share
 
         if risk_per_share > 0:
@@ -48,6 +52,13 @@ class TakeProfitCalculator:
                 take_profit_price = current_price + profit_target
             else:
                 take_profit_price = current_price - profit_target
+                if take_profit_price <= 0.0:
+                    logger.warning(
+                        f"Calculated non-positive take-profit price ({take_profit_price:.4f}) "
+                        f"for SELL order; capping to 0.01. "
+                        f"(current_price={current_price:.4f}, profit_target={profit_target:.4f})"
+                    )
+                    take_profit_price = 0.01
 
             take_profit_price = round(take_profit_price, 2)
             potential_profit = abs(take_profit_price - current_price)
@@ -62,7 +73,8 @@ class TakeProfitCalculator:
                 take_profit_price = round(current_price * (1 - take_profit_percent / 100), 2)
 
             potential_profit = abs(take_profit_price - current_price)
-            reward_risk_ratio = 0.0
+            # Zero risk means unbounded R:R — use inf so R:R validation doesn't reject the trade.
+            reward_risk_ratio = float("inf")
             methodology = f"Fixed {take_profit_percent}%"
 
         logger.debug(
