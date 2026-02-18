@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.daemon.config import DaemonConfig
+from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
 from src.daemon.degradation import DegradationTier
 from src.daemon.health import HealthReport, ServiceCheckResult, ServiceStatus
 from src.daemon.runner import DaemonRunner
@@ -84,7 +85,7 @@ async def test_daemon_halts_on_alpha_vantage_down(daemon_config_with_health, tem
     # Mock to avoid overwriting fake report and analyzing
     with (
         patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
-        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(DaemonCycleOrchestrator, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
     ):
         sleep_time = await runner._run_cycle()
 
@@ -127,7 +128,7 @@ async def test_daemon_halts_on_llm_down(daemon_config_with_health, temp_health_d
 
     with (
         patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
-        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(DaemonCycleOrchestrator, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
     ):
         sleep_time = await runner._run_cycle()
 
@@ -175,7 +176,7 @@ async def test_daemon_continues_in_degraded_mode(daemon_config_with_health, temp
 
     with (
         patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
-        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(DaemonCycleOrchestrator, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
     ):
         mock_analyze.return_value = []
 
@@ -222,16 +223,15 @@ async def test_notification_sent_on_degradation(daemon_config_with_health, temp_
 
     runner = DaemonRunner(daemon_config_with_health)
 
-    # Mock notification service (both on components and runner property)
+    # Mock notification service on components
     # Cycle orchestrator checks components.notification_service
-    # _notify_degradation checks runner.notification_service
     mock_notification_service = AsyncMock()
     runner._components.notification_service = mock_notification_service
     runner.notification_service = mock_notification_service
 
     with (
         patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
-        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(DaemonCycleOrchestrator, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
     ):
         mock_analyze.return_value = []
 
@@ -278,7 +278,7 @@ async def test_no_degradation_when_all_healthy(daemon_config_with_health, temp_h
 
     with (
         patch.object(runner._task_runner, "run_scheduled_tasks", new_callable=AsyncMock),
-        patch.object(runner, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
+        patch.object(DaemonCycleOrchestrator, "_analyze_watchlist", new_callable=AsyncMock) as mock_analyze,
     ):
         mock_analyze.return_value = []
 

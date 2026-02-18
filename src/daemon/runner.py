@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,13 +17,11 @@ from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
     from src.coordinator.agent import TradingCoordinator
-    from src.coordinator.models import CoordinatorCycleResult
     from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
-    from src.strategies.session import TradingSession
     from src.workflows import TradingWorkflow
 
 console = Console()
@@ -116,40 +113,6 @@ class DaemonRunner:
 
         return self._factory.init_coordinator(self._components)
 
-    async def _run_coordinator_cycle(
-        self,
-        watchlist: list[str],
-        degradation_context: DegradationContext,
-        trading_session: TradingSession,
-    ) -> CoordinatorCycleResult:
-        """Run coordinator-driven cycle.
-
-        Args:
-            watchlist: Symbols to analyze
-            degradation_context: Degradation context for cycle
-            trading_session: Trading session type (REGULAR or PRE_MARKET)
-
-        Returns:
-            CoordinatorCycleResult from coordinator
-        """
-        from src.daemon.degradation import AgentType, DegradationTier
-
-        coordinator = self._init_coordinator()
-
-        # Convert DegradationContext to dict for coordinator API
-        degradation_dict = None
-        if degradation_context.tier != DegradationTier.NONE:
-            degradation_dict = {
-                "tier": degradation_context.tier.value,
-                "unavailable_services": degradation_context.unavailable_services,
-                "confidence_adjustment": degradation_context.confidence_adjustment,
-                "disabled_agents": [
-                    str(agent) for agent in AgentType if agent not in degradation_context.available_agents
-                ],
-            }
-
-        return await coordinator.run_cycle(watchlist, degradation_dict, trading_session)
-
     def _init_analysis_orchestrator(self) -> AnalysisOrchestrator:
         """Initialize analysis orchestrator (lazy)."""
         if self._components.analysis_orchestrator is None:
@@ -184,29 +147,6 @@ class DaemonRunner:
         """Get watchlist merged with broker positions and screening candidates."""
         return await self._broker_manager.get_merged_watchlist()
 
-    async def _analyze_watchlist(
-        self,
-        watchlist: list[str],
-        degradation_context: DegradationContext | None = None,
-    ) -> list[TradingWorkflowResult]:
-        """Analyze all symbols in watchlist (delegates to orchestrator)."""
-        # Build target allocations from last rebalancing (if recent)
-        # NOTE: Requires async state access after JSON elimination
-        # TODO: Implement using await self.state.get_active_target_allocations()
-        target_allocations = None
-
-        # Delegate to orchestrator
-        orchestrator = self._init_analysis_orchestrator()
-        result = await orchestrator.orchestrate(watchlist, target_allocations, degradation_context)
-
-        logger.info(
-            f"Orchestration complete: {result.successful}/{result.total_symbols} successful, "
-            f"{result.failed} failed, {result.position_actions} position actions, "
-            f"{result.duration_seconds:.2f}s"
-        )
-
-        return result.results
-
     async def _analyze_symbol(
         self,
         symbol: str,
@@ -235,26 +175,6 @@ class DaemonRunner:
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to publish {event_type} event: {e}")
 
-    def _evaluate_degradation(self) -> DegradationContext:
-        """Load latest health report and evaluate degradation tier."""
-        from src.daemon.degradation import DegradationPolicy
-        from src.daemon.health import HealthReport
-
-        # Load latest health report
-        health_report = None
-        health_dir = Path(self.config.health.health_dir).expanduser()
-        if health_dir.exists():
-            report_files = sorted(health_dir.glob("health-*.json"), reverse=True)
-            if report_files:
-                try:
-                    with report_files[0].open() as f:
-                        health_report = HealthReport.model_validate(json.load(f))
-                except Exception as e:
-                    logger.opt(exception=True).warning(f"Failed to load health report: {e}")
-
-        policy = DegradationPolicy(self.config)
-        return policy.evaluate_degradation(health_report)
-
     async def _run_cycle(self) -> int:
         """Run a single analysis cycle (delegates to cycle orchestrator).
 
@@ -273,7 +193,7 @@ class DaemonRunner:
         cycle_orchestrator = DaemonCycleOrchestrator(
             components=self._components,
             task_runner=self._task_runner,
-            runner=self,
+            factory=self._factory,
             profiler=profiler,
         )
 
@@ -306,7 +226,7 @@ class DaemonRunner:
         cycle_orchestrator = DaemonCycleOrchestrator(
             components=self._components,
             task_runner=self._task_runner,
-            runner=self,
+            factory=self._factory,
             profiler=profiler,
         )
 

@@ -9,7 +9,7 @@ from src.coordinator.models import CoordinatorCycleResult
 from src.daemon.config import DaemonConfig
 from src.daemon.cycle_orchestrator import CycleResult, DaemonCycleOrchestrator
 from src.daemon.degradation import DegradationContext, DegradationTier
-from src.daemon.runner import DaemonRunner
+from src.daemon.factory import DaemonFactory
 from src.strategies.session import TradingSession
 
 pytestmark = pytest.mark.skip(reason="Cycle orchestrator tests need rewrite for async state")
@@ -95,12 +95,12 @@ async def test_coordinator_routing_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test that cycle orchestrator routes to coordinator when enabled."""
-    runner = DaemonRunner(sample_config_coordinator_enabled)
+    factory = DaemonFactory(sample_config_coordinator_enabled)
+    components = factory.create_components()
 
     # Mock market hours check
-    monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
-    monkeypatch.setattr(runner._task_runner, "run_scheduled_tasks", AsyncMock())
-    monkeypatch.setattr(runner, "_evaluate_degradation", lambda: mock_degradation_context)
+    monkeypatch.setattr(components.scheduler, "is_market_open", lambda: True)
+    monkeypatch.setattr(components.task_runner, "run_scheduled_tasks", AsyncMock())
 
     # Mock coordinator cycle to return successful result
     mock_coordinator_result = CoordinatorCycleResult(
@@ -112,22 +112,23 @@ async def test_coordinator_routing_when_enabled(
         game_plan_generated=True,
     )
 
-    mock_run_coordinator_cycle = AsyncMock(return_value=mock_coordinator_result)
-    monkeypatch.setattr(runner, "_run_coordinator_cycle", mock_run_coordinator_cycle)
-
-    # Create orchestrator and run cycle
+    # Create orchestrator and mock its methods
     orchestrator = DaemonCycleOrchestrator(
-        components=runner._components,
-        task_runner=runner._task_runner,
-        runner=runner,
+        components=components,
+        task_runner=components.task_runner,
+        factory=factory,
         profiler=None,
     )
+
+    monkeypatch.setattr(orchestrator, "_evaluate_degradation", lambda: mock_degradation_context)
+    mock_run_coordinator = AsyncMock(return_value=mock_coordinator_result)
+    monkeypatch.setattr(orchestrator, "_run_coordinator_cycle_impl", mock_run_coordinator)
 
     result = await orchestrator.run_cycle()
 
     # Verify coordinator was called
-    mock_run_coordinator_cycle.assert_called_once()
-    call_args = mock_run_coordinator_cycle.call_args
+    mock_run_coordinator.assert_called_once()
+    call_args = mock_run_coordinator.call_args
     assert call_args[0][0] == ["TSLA", "MSFT"]  # watchlist
     assert call_args[0][1] == mock_degradation_context
     assert isinstance(call_args[0][2], TradingSession)
@@ -145,33 +146,35 @@ async def test_coordinator_routing_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test that cycle orchestrator uses legacy cycle when coordinator disabled."""
-    runner = DaemonRunner(sample_config_coordinator_disabled)
+    factory = DaemonFactory(sample_config_coordinator_disabled)
+    components = factory.create_components()
 
     # Mock market hours check
-    monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
-    monkeypatch.setattr(runner._task_runner, "run_scheduled_tasks", AsyncMock())
-    monkeypatch.setattr(runner, "_evaluate_degradation", lambda: mock_degradation_context)
+    monkeypatch.setattr(components.scheduler, "is_market_open", lambda: True)
+    monkeypatch.setattr(components.task_runner, "run_scheduled_tasks", AsyncMock())
+
+    # Create orchestrator and mock its methods
+    orchestrator = DaemonCycleOrchestrator(
+        components=components,
+        task_runner=components.task_runner,
+        factory=factory,
+        profiler=None,
+    )
+
+    monkeypatch.setattr(orchestrator, "_evaluate_degradation", lambda: mock_degradation_context)
 
     # Mock legacy cycle
     mock_analyze_watchlist = AsyncMock(return_value=[])
-    monkeypatch.setattr(runner, "_analyze_watchlist", mock_analyze_watchlist)
+    monkeypatch.setattr(orchestrator, "_analyze_watchlist", mock_analyze_watchlist)
 
     # Ensure coordinator is NOT called
-    mock_run_coordinator_cycle = AsyncMock()
-    monkeypatch.setattr(runner, "_run_coordinator_cycle", mock_run_coordinator_cycle)
-
-    # Create orchestrator and run cycle
-    orchestrator = DaemonCycleOrchestrator(
-        components=runner._components,
-        task_runner=runner._task_runner,
-        runner=runner,
-        profiler=None,
-    )
+    mock_run_coordinator = AsyncMock()
+    monkeypatch.setattr(orchestrator, "_run_coordinator_cycle_impl", mock_run_coordinator)
 
     result = await orchestrator.run_cycle()
 
     # Verify coordinator was NOT called
-    mock_run_coordinator_cycle.assert_not_called()
+    mock_run_coordinator.assert_not_called()
 
     # Verify legacy cycle was used
     mock_analyze_watchlist.assert_called_once()
@@ -187,33 +190,35 @@ async def test_coordinator_fallback_on_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test that coordinator failures fall back to legacy cycle."""
-    runner = DaemonRunner(sample_config_coordinator_enabled)
+    factory = DaemonFactory(sample_config_coordinator_enabled)
+    components = factory.create_components()
 
     # Mock market hours check
-    monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
-    monkeypatch.setattr(runner._task_runner, "run_scheduled_tasks", AsyncMock())
-    monkeypatch.setattr(runner, "_evaluate_degradation", lambda: mock_degradation_context)
+    monkeypatch.setattr(components.scheduler, "is_market_open", lambda: True)
+    monkeypatch.setattr(components.task_runner, "run_scheduled_tasks", AsyncMock())
+
+    # Create orchestrator and mock its methods
+    orchestrator = DaemonCycleOrchestrator(
+        components=components,
+        task_runner=components.task_runner,
+        factory=factory,
+        profiler=None,
+    )
+
+    monkeypatch.setattr(orchestrator, "_evaluate_degradation", lambda: mock_degradation_context)
 
     # Mock coordinator to raise exception
-    mock_run_coordinator_cycle = AsyncMock(side_effect=RuntimeError("Coordinator init failed"))
-    monkeypatch.setattr(runner, "_run_coordinator_cycle", mock_run_coordinator_cycle)
+    mock_run_coordinator = AsyncMock(side_effect=RuntimeError("Coordinator init failed"))
+    monkeypatch.setattr(orchestrator, "_run_coordinator_cycle_impl", mock_run_coordinator)
 
     # Mock legacy cycle
     mock_analyze_watchlist = AsyncMock(return_value=[])
-    monkeypatch.setattr(runner, "_analyze_watchlist", mock_analyze_watchlist)
-
-    # Create orchestrator and run cycle
-    orchestrator = DaemonCycleOrchestrator(
-        components=runner._components,
-        task_runner=runner._task_runner,
-        runner=runner,
-        profiler=None,
-    )
+    monkeypatch.setattr(orchestrator, "_analyze_watchlist", mock_analyze_watchlist)
 
     result = await orchestrator.run_cycle()
 
     # Verify coordinator was attempted
-    mock_run_coordinator_cycle.assert_called_once()
+    mock_run_coordinator.assert_called_once()
 
     # Verify fallback to legacy cycle occurred
     mock_analyze_watchlist.assert_called_once()
@@ -230,16 +235,12 @@ async def test_coordinator_fallback_on_various_exceptions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test that all exception types trigger fallback, not just ValueError."""
-    runner = DaemonRunner(sample_config_coordinator_enabled)
+    factory = DaemonFactory(sample_config_coordinator_enabled)
+    components = factory.create_components()
 
     # Mock market hours check
-    monkeypatch.setattr(runner.scheduler, "is_market_open", lambda: True)
-    monkeypatch.setattr(runner._task_runner, "run_scheduled_tasks", AsyncMock())
-    monkeypatch.setattr(runner, "_evaluate_degradation", lambda: mock_degradation_context)
-
-    # Mock legacy cycle
-    mock_analyze_watchlist = AsyncMock(return_value=[])
-    monkeypatch.setattr(runner, "_analyze_watchlist", mock_analyze_watchlist)
+    monkeypatch.setattr(components.scheduler, "is_market_open", lambda: True)
+    monkeypatch.setattr(components.task_runner, "run_scheduled_tasks", AsyncMock())
 
     # Test different exception types
     exception_types = [
@@ -250,20 +251,23 @@ async def test_coordinator_fallback_on_various_exceptions(
     ]
 
     for exc in exception_types:
-        # Reset mocks
-        mock_analyze_watchlist.reset_mock()
-
-        # Mock coordinator to raise specific exception
-        mock_run_coordinator_cycle = AsyncMock(side_effect=exc)
-        monkeypatch.setattr(runner, "_run_coordinator_cycle", mock_run_coordinator_cycle)
-
-        # Create orchestrator and run cycle
+        # Create orchestrator and mock its methods
         orchestrator = DaemonCycleOrchestrator(
-            components=runner._components,
-            task_runner=runner._task_runner,
-            runner=runner,
+            components=components,
+            task_runner=components.task_runner,
+            factory=factory,
             profiler=None,
         )
+
+        monkeypatch.setattr(orchestrator, "_evaluate_degradation", lambda: mock_degradation_context)
+
+        # Mock coordinator to raise specific exception
+        mock_run_coordinator = AsyncMock(side_effect=exc)
+        monkeypatch.setattr(orchestrator, "_run_coordinator_cycle_impl", mock_run_coordinator)
+
+        # Mock legacy cycle
+        mock_analyze_watchlist = AsyncMock(return_value=[])
+        monkeypatch.setattr(orchestrator, "_analyze_watchlist", mock_analyze_watchlist)
 
         result = await orchestrator.run_cycle()
 
