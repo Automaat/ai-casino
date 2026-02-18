@@ -567,7 +567,9 @@ async def test_backtest_validation_pass(test_container_full):
         confidence_penalty_multiplier=0.7,
     )
 
-    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(
+        test_container_full, use_meta_agent=False, pre_trade_backtest_config=config
+    )
 
     mock_backtest_result = VectorBTResult(
         sharpe_ratio=1.2,
@@ -606,7 +608,9 @@ async def test_backtest_validation_fail_sharpe(test_container_full):
         confidence_penalty_multiplier=0.7,
     )
 
-    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(
+        test_container_full, use_meta_agent=False, pre_trade_backtest_config=config
+    )
 
     mock_backtest_result = VectorBTResult(
         sharpe_ratio=0.2,
@@ -640,7 +644,9 @@ async def test_backtest_validation_disabled(test_container_full):
     """Test backtest validation disabled - no validation runs."""
     config = PreTradeBacktestingConfig(enabled=False)
 
-    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(
+        test_container_full, use_meta_agent=False, pre_trade_backtest_config=config
+    )
 
     result = await workflow.analyze("AAPL", period_days=90)
 
@@ -657,7 +663,9 @@ async def test_backtest_validation_error(test_container_full):
         max_drawdown_threshold=0.25,
     )
 
-    workflow = create_test_workflow(test_container_full, use_meta_agent=False, pre_trade_backtest_config=config)
+    workflow = create_test_workflow(
+        test_container_full, use_meta_agent=False, pre_trade_backtest_config=config
+    )
 
     with patch.object(workflow.vectorbt_runner, "run_backtest", side_effect=ValueError("Insufficient data")):
         result = await workflow.analyze("AAPL", period_days=90)
