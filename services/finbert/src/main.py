@@ -2,6 +2,7 @@
 
 import sys
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -16,21 +17,21 @@ settings = Settings()
 finbert_model: FinBERTInference | None = None
 start_time: float = time.time()
 
+_LOG_FORMAT = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | "
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+)
+
 # Configure loguru
 logger.remove()
-logger.add(
-    sys.stderr,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level=settings.log_level,
-)
+logger.add(sys.stderr, format=_LOG_FORMAT, level=settings.log_level)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     """Lifespan context manager for model loading/cleanup."""
-    global finbert_model
+    global finbert_model  # noqa: PLW0603
 
-    # Startup: Load model
     logger.info("Starting FinBERT service")
     try:
         finbert_model = FinBERTInference(device=settings.device)
@@ -41,7 +42,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: Cleanup
     logger.info("Shutting down FinBERT service")
     finbert_model = None
 
@@ -94,4 +94,4 @@ async def analyze_batch(request: BatchRequest) -> BatchResponse:
         )
     except Exception as e:
         logger.error(f"Inference failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Inference failed: {e}") from e

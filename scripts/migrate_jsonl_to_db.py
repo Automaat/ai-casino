@@ -17,6 +17,14 @@ from src.database.repositories.trade import TradeRepository
 from src.metrics.tracker import TradeRecord
 
 
+def _read_trade_lines(jsonl_path: Path) -> list[str] | None:
+    """Read lines from JSONL file, returning None if file missing."""
+    if not jsonl_path.exists():
+        return None
+    with jsonl_path.open() as f:
+        return f.readlines()
+
+
 async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> tuple[int, int, int]:
     """Migrate trades from JSONL file to database.
 
@@ -27,7 +35,8 @@ async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> tuple[i
     Returns:
         Tuple of (migrated count, skipped count, failed count)
     """
-    if not jsonl_path.exists():
+    lines = await asyncio.to_thread(_read_trade_lines, jsonl_path)
+    if lines is None:
         logger.warning(f"JSONL file not found: {jsonl_path}")
         return 0, 0, 0
 
@@ -41,42 +50,37 @@ async def migrate_trades(jsonl_path: Path, db_engine: DatabaseEngine) -> tuple[i
 
         existing_trades = await repo.get_all()
         existing_keys = {
-            (t.timestamp.isoformat(), t.symbol, t.action.value, float(t.entry_price))
-            for t in existing_trades
+            (t.timestamp.isoformat(), t.symbol, t.action.value, float(t.entry_price)) for t in existing_trades
         }
 
-        with jsonl_path.open() as f:
-            for line_num, line in enumerate(f, 1):
-                if not line.strip():
+        for line_num, line in enumerate(lines, 1):
+            if not line.strip():
+                continue
+
+            try:
+                data = json.loads(line)
+                trade = TradeRecord(**data)
+
+                trade_key = (
+                    trade.timestamp.isoformat(),
+                    trade.symbol,
+                    trade.action.value,
+                    float(trade.entry_price),
+                )
+
+                if trade_key in existing_keys:
+                    skipped += 1
+                    logger.debug(
+                        f"Skipped duplicate trade: {trade.symbol} {trade.action.value} at {trade.timestamp}"
+                    )
                     continue
 
-                try:
-                    data = json.loads(line)
-                    trade = TradeRecord(**data)
-
-                    trade_key = (
-                        trade.timestamp.isoformat(),
-                        trade.symbol,
-                        trade.action.value,
-                        float(trade.entry_price),
-                    )
-
-                    if trade_key in existing_keys:
-                        skipped += 1
-                        logger.debug(
-                            f"Skipped duplicate trade: {trade.symbol} {trade.action.value} "
-                            f"at {trade.timestamp}"
-                        )
-                        continue
-
-                    await repo.create(trade)
-                    migrated += 1
-                    logger.debug(f"Migrated trade: {trade.symbol} {trade.action.value}")
-                except Exception as e:
-                    logger.opt(exception=True).error(
-                        f"Failed to migrate trade at line {line_num}: {e}"
-                    )
-                    failed += 1
+                await repo.create(trade)
+                migrated += 1
+                logger.debug(f"Migrated trade: {trade.symbol} {trade.action.value}")
+            except Exception as e:
+                logger.opt(exception=True).error(f"Failed to migrate trade at line {line_num}: {e}")
+                failed += 1
 
     return migrated, skipped, failed
 
@@ -101,7 +105,7 @@ async def main() -> None:
 
         if migrated > 0:
             backup_path = jsonl_path.with_suffix(".jsonl.bak")
-            jsonl_path.rename(backup_path)
+            await asyncio.to_thread(jsonl_path.rename, backup_path)
             logger.info(f"Original file backed up to {backup_path}")
 
     finally:
