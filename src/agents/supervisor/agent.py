@@ -80,17 +80,7 @@ class TradingSupervisor:
             )
 
         # Format portfolio summary section
-        if context.portfolio_summary:
-            ps = context.portfolio_summary
-            portfolio_summary_section = (
-                f"- Positions: {ps.total_positions}\n"
-                f"- Exposure: {ps.total_exposure_percent:.1f}%\n"
-                f"- Portfolio P&L: {ps.portfolio_pnl_percent:+.2f}%\n"
-                f"- Biggest Winner: {ps.biggest_winner} ({ps.biggest_winner_pnl_percent:+.2f}%)\n"
-                f"- Biggest Loser: {ps.biggest_loser} ({ps.biggest_loser_pnl_percent:+.2f}%)"
-            )
-        else:
-            portfolio_summary_section = "No portfolio data"
+        portfolio_summary_section = self._format_portfolio_summary(context)
 
         # Format health constraints section
         health_constraints_section = context.portfolio_health_constraints or "None"
@@ -157,6 +147,34 @@ class TradingSupervisor:
         logger.debug(f"Routing reasoning: {decision.reasoning}")
 
         return decision
+
+    def _format_portfolio_summary(self, context: PlanningContext) -> str:
+        """Format portfolio summary section for the planning prompt.
+
+        Args:
+            context: Planning context with optional portfolio summary
+
+        Returns:
+            Formatted string for prompt injection
+        """
+        if not context.portfolio_summary:
+            return "No portfolio data"
+        ps = context.portfolio_summary
+        if not ps.total_positions:
+            return "No open positions"
+        winner_str = (
+            f"{ps.biggest_winner} ({ps.biggest_winner_pnl_percent:+.2f}%)" if ps.biggest_winner else "N/A"
+        )
+        loser_str = (
+            f"{ps.biggest_loser} ({ps.biggest_loser_pnl_percent:+.2f}%)" if ps.biggest_loser else "N/A"
+        )
+        return (
+            f"- Positions: {ps.total_positions}\n"
+            f"- Exposure: {ps.total_exposure_percent:.1f}%\n"
+            f"- Portfolio P&L: {ps.portfolio_pnl_percent:+.2f}%\n"
+            f"- Biggest Winner: {winner_str}\n"
+            f"- Biggest Loser: {loser_str}"
+        )
 
     @track_agent
     async def synthesize_results(

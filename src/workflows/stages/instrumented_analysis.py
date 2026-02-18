@@ -329,7 +329,7 @@ def _build_position_pnl_context(extra_context: WorkflowExtraContext | None) -> o
     return PositionPnLContext(
         entry_price=float(str(pos.get("entry_price", 0.0))),
         unrealized_pnl_percent=float(str(pos.get("unrealized_pnl_percent", 0.0))),
-        days_held=int(float(str(pos.get("days_held", 0)))),
+        days_held=int(str(pos.get("days_held", 0))),
         current_qty=float(str(pos.get("current_qty", 0.0))),
     )
 
@@ -372,8 +372,16 @@ def _build_portfolio_summary(
             biggest_loser_pnl = pnl_pct
             biggest_loser = symbol
 
+    num_positions = len(broker_positions)
+    # With only one position it would be both winner and loser — avoid misleading data
+    if num_positions <= 1:
+        biggest_winner = None
+        biggest_winner_pnl = 0.0
+        biggest_loser = None
+        biggest_loser_pnl = 0.0
+
     return PortfolioSummary(
-        total_positions=len(broker_positions),
+        total_positions=num_positions,
         total_exposure_percent=(total_exposure / portfolio_value) * 100,
         portfolio_pnl_percent=(total_unrealized_pnl / portfolio_value) * 100,
         biggest_winner=biggest_winner,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time as time_mod
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from loguru import logger
 from rich.console import Console
@@ -19,6 +19,18 @@ if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
     from src.metrics.correlation import CorrelationAuditResult
+
+
+class _PortfolioMetrics(TypedDict):
+    total_positions: int
+    total_exposure_percent: float
+    cash_percent: float
+    max_concentration_percent: float
+    max_concentration_symbol: str
+    total_pnl_percent: float
+    biggest_drawdown_percent: float
+    biggest_drawdown_symbol: str | None
+
 
 console = Console()
 
@@ -251,18 +263,20 @@ class PortfolioHealthCheckTask(TaskExecutor):
         health_status = self._determine_status(metrics, config)
 
         # Try LLM analysis, fallback to rule-based
-        recommendations, constraints = await self._analyze(metrics, health_status, positions, config)
+        recommendations, constraints = await self._analyze(
+            metrics, health_status, positions, config, portfolio_value
+        )
 
         self._record = PortfolioHealthRecord(
             timestamp=datetime.now(self.components.scheduler.timezone),
-            total_positions=int(str(metrics["total_positions"])),
+            total_positions=metrics["total_positions"],
             portfolio_value=portfolio_value,
-            cash_percent=float(str(metrics["cash_percent"])),
-            max_concentration_percent=float(str(metrics["max_concentration_percent"])),
-            max_concentration_symbol=str(metrics["max_concentration_symbol"]),
-            total_pnl_percent=float(str(metrics["total_pnl_percent"])),
-            biggest_drawdown_symbol=str(metrics.get("biggest_drawdown_symbol") or ""),
-            biggest_drawdown_percent=float(str(metrics["biggest_drawdown_percent"])),
+            cash_percent=metrics["cash_percent"],
+            max_concentration_percent=metrics["max_concentration_percent"],
+            max_concentration_symbol=metrics["max_concentration_symbol"],
+            total_pnl_percent=metrics["total_pnl_percent"],
+            biggest_drawdown_symbol=metrics["biggest_drawdown_symbol"],
+            biggest_drawdown_percent=metrics["biggest_drawdown_percent"],
             health_status=health_status,
             recommendations=recommendations,
             constraints=constraints,
@@ -282,7 +296,7 @@ class PortfolioHealthCheckTask(TaskExecutor):
         positions: dict,
         portfolio_value: float,
         cash: float,
-    ) -> dict[str, object]:
+    ) -> _PortfolioMetrics:
         """Compute portfolio health metrics.
 
         Args:
@@ -333,7 +347,7 @@ class PortfolioHealthCheckTask(TaskExecutor):
 
     def _determine_status(
         self,
-        metrics: dict[str, object],
+        metrics: _PortfolioMetrics,
         config: PortfolioHealthConfig,
     ) -> str:
         """Determine health status from metrics and config thresholds.
@@ -347,9 +361,9 @@ class PortfolioHealthCheckTask(TaskExecutor):
         """
         issues = 0
 
-        max_conc = float(str(metrics["max_concentration_percent"]))
-        cash_pct = float(str(metrics["cash_percent"]))
-        drawdown = abs(float(str(metrics["biggest_drawdown_percent"])))
+        max_conc = metrics["max_concentration_percent"]
+        cash_pct = metrics["cash_percent"]
+        drawdown = abs(metrics["biggest_drawdown_percent"])
 
         if max_conc > config.max_position_concentration * 100:
             issues += 1
@@ -366,10 +380,11 @@ class PortfolioHealthCheckTask(TaskExecutor):
 
     async def _analyze(
         self,
-        metrics: dict[str, object],
+        metrics: _PortfolioMetrics,
         health_status: str,
         positions: dict,
         config: PortfolioHealthConfig,
+        portfolio_value: float,
     ) -> tuple[list[str], list[str]]:
         """Analyze portfolio with LLM, fallback to rule-based.
 
@@ -378,22 +393,24 @@ class PortfolioHealthCheckTask(TaskExecutor):
             health_status: HEALTHY/WARNING/CRITICAL
             positions: Broker positions
             config: PortfolioHealthConfig
+            portfolio_value: Total portfolio value
 
         Returns:
             Tuple of (recommendations, constraints)
         """
         try:
-            return await self._analyze_with_llm(metrics, health_status, positions, config)
+            return await self._analyze_with_llm(metrics, health_status, positions, config, portfolio_value)
         except Exception as e:
             logger.opt(exception=True).warning(f"LLM analysis failed, using rules: {e}")
             return self._rule_based_analysis(metrics, health_status, config)
 
     async def _analyze_with_llm(
         self,
-        metrics: dict[str, object],
+        metrics: _PortfolioMetrics,
         health_status: str,
         positions: dict,
         config: PortfolioHealthConfig,
+        portfolio_value: float,
     ) -> tuple[list[str], list[str]]:
         """Use LLM for portfolio health analysis.
 
@@ -402,6 +419,7 @@ class PortfolioHealthCheckTask(TaskExecutor):
             health_status: HEALTHY/WARNING/CRITICAL
             positions: Broker positions
             config: PortfolioHealthConfig
+            portfolio_value: Total portfolio value
 
         Returns:
             Tuple of (recommendations, constraints)
@@ -425,7 +443,7 @@ class PortfolioHealthCheckTask(TaskExecutor):
         prompt = prompts.load(
             "analyze",
             total_positions=metrics["total_positions"],
-            portfolio_value=metrics.get("portfolio_value", 0.0),
+            portfolio_value=portfolio_value,
             cash_percent=metrics["cash_percent"],
             max_concentration_symbol=metrics["max_concentration_symbol"],
             max_concentration_percent=metrics["max_concentration_percent"],
@@ -447,7 +465,7 @@ class PortfolioHealthCheckTask(TaskExecutor):
 
     def _rule_based_analysis(
         self,
-        metrics: dict[str, object],
+        metrics: _PortfolioMetrics,
         health_status: str,
         config: PortfolioHealthConfig,
     ) -> tuple[list[str], list[str]]:
@@ -464,10 +482,10 @@ class PortfolioHealthCheckTask(TaskExecutor):
         recommendations: list[str] = []
         constraints: list[str] = []
 
-        max_conc = float(str(metrics["max_concentration_percent"]))
-        max_conc_sym = str(metrics["max_concentration_symbol"])
-        cash_pct = float(str(metrics["cash_percent"]))
-        drawdown = float(str(metrics["biggest_drawdown_percent"]))
+        max_conc = metrics["max_concentration_percent"]
+        max_conc_sym = metrics["max_concentration_symbol"]
+        cash_pct = metrics["cash_percent"]
+        drawdown = metrics["biggest_drawdown_percent"]
         drawdown_sym = metrics["biggest_drawdown_symbol"]
 
         if max_conc > config.max_position_concentration * 100:

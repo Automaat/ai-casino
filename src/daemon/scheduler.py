@@ -57,7 +57,7 @@ class MarketSchedulerConfig:
     enable_discovery_outcome: bool = True
     portfolio_health_time: str = "16:30"
     portfolio_health_days: list[str] | None = None
-    enable_portfolio_health: bool = False
+    enable_portfolio_health: bool = True
 
 
 class MarketScheduler:

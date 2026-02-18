@@ -2,6 +2,11 @@
 
 Usage:
     python -m src.database.migrations.add_portfolio_health_table
+
+Rollback (manual):
+    DROP INDEX IF EXISTS idx_portfolio_health_status;
+    DROP INDEX IF EXISTS idx_portfolio_health_timestamp;
+    DROP TABLE IF EXISTS portfolio_health_reports;
 """
 
 import asyncio
