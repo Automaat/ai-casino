@@ -17,6 +17,7 @@ from src.data.base_news_fetcher import BaseNewsFetcher
 if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState
     from src.daemon.watchers.economic_calendar_watcher import EconomicCalendarWatcher
+    from src.daemon.watchers.options_flow_watcher import OptionsFlowWatcher
     from src.di.container import AppContainer
 
 
@@ -243,4 +244,38 @@ def create_news_trending_watcher(
     )
 
     logger.info("News trending watcher created (discovery mode)")
+    return watcher
+
+
+def create_options_flow_watcher(
+    daemon_config: DaemonConfig,
+) -> OptionsFlowWatcher | None:
+    """Create options flow watcher if enabled.
+
+    Args:
+        daemon_config: Daemon configuration
+
+    Returns:
+        OptionsFlowWatcher instance if enabled, None otherwise
+    """
+    from src.daemon.watchers.options_flow_watcher import (
+        OptionsFlowWatcher,
+        OptionsFlowWatcherConfig,
+    )
+    from src.data.options_flow import OptionsFlowFetcher
+
+    config = daemon_config.options_flow_watcher
+    if not config.enabled:
+        logger.debug("OptionsFlowWatcher disabled in config")
+        return None
+
+    fetcher = OptionsFlowFetcher()
+    watcher_config = OptionsFlowWatcherConfig(
+        poll_interval_minutes=config.poll_interval_minutes,
+        volume_spike_threshold=config.volume_spike_threshold,
+        block_trade_threshold=config.block_trade_threshold,
+        symbols=list(daemon_config.watchlist),
+    )
+    watcher = OptionsFlowWatcher(fetcher=fetcher, config=watcher_config)
+    logger.info("OptionsFlowWatcher created")
     return watcher

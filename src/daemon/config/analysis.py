@@ -126,3 +126,12 @@ class EconomicCalendarWatcherConfig(BaseModel):
     lookahead_hours: int = Field(default=24, ge=12, le=48)
     high_impact_avoid_hours: float = Field(default=2.0, ge=1.0, le=4.0)
     cache_ttl_minutes: int = Field(default=30, ge=10, le=120)
+
+
+class OptionsFlowWatcherConfig(BaseModel):
+    """Configuration for options flow watcher."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=15, ge=5, le=60)
+    volume_spike_threshold: float = Field(default=2.0, ge=1.5, le=5.0)
+    block_trade_threshold: float = Field(default=100_000, ge=10_000, le=1_000_000)

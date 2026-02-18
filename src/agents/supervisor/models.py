@@ -71,6 +71,7 @@ class PlanningContext(BaseModel):
     market_data_rows: int = 0
     is_high_volatility: bool = False
     economic_risk: str | None = None  # e.g. "HIGH: Fed in 1.5h - avoid new positions"
+    options_flow: str | None = None  # e.g. "BULLISH | P/C=0.65 | Vol 2.3x | Score=0.72"
 
 
 class SynthesisContext(BaseModel):

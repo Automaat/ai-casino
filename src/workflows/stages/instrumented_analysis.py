@@ -377,6 +377,7 @@ async def _run_analyses_with_validation(
         market_data_rows=market_data_rows,
         is_high_volatility=is_high_volatility,
         economic_risk=ctx.extra_context.economic_calendar_context if ctx.extra_context else None,
+        options_flow=ctx.extra_context.options_flow_context if ctx.extra_context else None,
     )
 
     planning_fallback_used = False
