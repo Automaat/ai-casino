@@ -1,5 +1,6 @@
 """Database engine with auto-migration support."""
 
+import asyncio
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,6 +83,7 @@ class DatabaseEngine:
             expire_on_commit=False,
         )
         self._migrations_applied = False
+        self._migration_lock = asyncio.Lock()
         logger.info(f"DatabaseEngine initialized with {self._database_url.split('@')[-1]}")
 
     @property
@@ -95,9 +97,14 @@ class DatabaseEngine:
 
     async def run_migrations(self) -> None:
         """Apply pending SQL migrations from migrations directory."""
-        if self._migrations_applied:
-            return
+        async with self._migration_lock:
+            if self._migrations_applied:
+                return
+            await self._apply_migrations()
+            self._migrations_applied = True
 
+    async def _apply_migrations(self) -> None:
+        """Apply pending SQL migrations (must be called with _migration_lock held)."""
         migrations_dir = Path(__file__).parent / "migrations"
         if not migrations_dir.exists():
             logger.warning(f"Migrations directory not found: {migrations_dir}")
@@ -134,8 +141,6 @@ class DatabaseEngine:
                     {"version": version},
                 )
                 logger.info(f"Migration {version} applied successfully")
-
-        self._migrations_applied = True
 
     async def ensure_migrated(self) -> None:
         """Ensure migrations are applied (call on first use)."""

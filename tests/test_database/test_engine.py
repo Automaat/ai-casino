@@ -110,6 +110,33 @@ class TestDatabaseEngine:
 
         await engine.close()
 
+    @pytest.mark.unit
+    async def test_concurrent_ensure_migrated_runs_once(self, monkeypatch):
+        """Concurrent ensure_migrated() calls apply migrations exactly once."""
+        import asyncio
+
+        from sqlalchemy.pool import NullPool
+
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        url = "postgresql+asyncpg://localhost:5432/test"
+        engine = DatabaseEngine(database_url=url, poolclass=NullPool)
+
+        apply_count = 0
+
+        async def fake_apply():
+            nonlocal apply_count
+            apply_count += 1
+
+        engine._apply_migrations = fake_apply
+
+        # Run 10 concurrent calls
+        await asyncio.gather(*[engine.ensure_migrated() for _ in range(10)])
+
+        assert apply_count == 1
+        assert engine._migrations_applied is True
+
+        await engine.close()
+
     def test_get_pool_stats(self, monkeypatch):
         """Test pool statistics retrieval."""
         url = "postgresql+asyncpg://localhost:5432/test"

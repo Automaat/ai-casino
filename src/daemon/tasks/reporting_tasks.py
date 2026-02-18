@@ -248,6 +248,7 @@ class RiskReportTask(TaskExecutor):
                 "cvar_95": report.cvar_95,
                 "cvar_99": report.cvar_99,
                 "risk_status": report.risk_status,
+                "num_positions": report.num_positions,
             },
             timestamp=datetime.now(UTC),
         )
