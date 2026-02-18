@@ -206,18 +206,12 @@ def create_pattern_analyzer(
     if not daemon_config.coordinator.pattern_detection.enabled:
         return None
 
-    # Get repositories from container
-    analysis_repo = container.analysis_repository()
-    trade_repo = container.trade_repository()
-
-    # Memory will be injected at runtime (not available at container build time)
-    # Pass None here and set it later when coordinator is created
+    database_engine = container.database_engine()
     min_sample_size = daemon_config.coordinator.pattern_detection.min_sample_size
 
     return PatternAnalyzer(
-        analysis_repo=analysis_repo,
-        trade_repo=trade_repo,
-        memory=None,  # type: ignore[arg-type]  # Will be set by coordinator
+        database_engine=database_engine,
+        memory=None,
         min_sample_size=min_sample_size,
     )
 

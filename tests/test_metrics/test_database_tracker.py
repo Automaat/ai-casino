@@ -1,7 +1,7 @@
 """Tests for DatabaseMetricsTracker."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -58,9 +58,20 @@ def mock_trade_repo():
 
 
 @pytest.fixture
-def db_tracker(mock_trade_repo):
-    """DatabaseMetricsTracker with mocked repository."""
-    return DatabaseMetricsTracker(mock_trade_repo, risk_free_rate=0.02)
+def mock_database_engine():
+    """Mock database engine that returns async context manager sessions."""
+    mock_engine = MagicMock()
+    mock_session = AsyncMock()
+    mock_engine.session.return_value = mock_session
+    return mock_engine
+
+
+@pytest.fixture
+def db_tracker(mock_database_engine, mock_trade_repo):
+    """DatabaseMetricsTracker with mocked database engine and patched TradeRepository."""
+    with patch("src.database.repositories.trade.TradeRepository", return_value=mock_trade_repo):
+        tracker = DatabaseMetricsTracker(mock_database_engine, risk_free_rate=0.02)
+        yield tracker
 
 
 @pytest.fixture
@@ -160,17 +171,17 @@ def mock_workflow_result():
 class TestDatabaseMetricsTrackerInit:
     """Tests for DatabaseMetricsTracker initialization."""
 
-    def test_initialization(self, mock_trade_repo):
+    def test_initialization(self, mock_database_engine):
         """Test DatabaseMetricsTracker initialization."""
-        tracker = DatabaseMetricsTracker(mock_trade_repo, risk_free_rate=0.03)
+        tracker = DatabaseMetricsTracker(mock_database_engine, risk_free_rate=0.03)
 
         assert tracker.risk_free_rate == 0.03
-        assert tracker._repo == mock_trade_repo
+        assert tracker._database_engine == mock_database_engine
         assert tracker._trades_cache is None
 
-    def test_initialization_default_risk_rate(self, mock_trade_repo):
+    def test_initialization_default_risk_rate(self, mock_database_engine):
         """Test DatabaseMetricsTracker accepts risk-free rate parameter."""
-        tracker = DatabaseMetricsTracker(mock_trade_repo, risk_free_rate=0.02)
+        tracker = DatabaseMetricsTracker(mock_database_engine, risk_free_rate=0.02)
 
         assert tracker.risk_free_rate == 0.02
 

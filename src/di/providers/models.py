@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from src.data.news import NewsFetcher
     from src.data.universe import StockUniverseFetcher
     from src.data.websearch import WebSearchFetcher
-    from src.database.repositories.trade import TradeRepository
+    from src.database.engine import DatabaseEngine
     from src.di.container import AppContainer
     from src.metrics.execution import ExecutionMetricsCollector
     from src.metrics.portfolio_var import PortfolioVaRCalculator
@@ -186,16 +186,16 @@ def create_optuna_optimizer(n_trials: int = 100) -> OptunaOptimizer:
 
 def create_metrics_tracker(
     daemon_config: DaemonConfig,
-    trade_repository: TradeRepository | None,
+    database_engine: DatabaseEngine | None,
 ) -> BaseMetricsTracker:
     """Create appropriate metrics tracker with config.
 
-    Returns DatabaseMetricsTracker if repository provided and persistence enabled,
+    Returns DatabaseMetricsTracker if database engine provided and persistence enabled,
     otherwise returns JSONL-based MetricsTracker.
 
     Args:
         daemon_config: Daemon configuration
-        trade_repository: Optional trade repository for database mode
+        database_engine: Optional database engine for database mode
 
     Returns:
         Appropriate metrics tracker instance
@@ -205,10 +205,10 @@ def create_metrics_tracker(
     from src.metrics.db_tracker import DatabaseMetricsTracker
     from src.metrics.tracker import MetricsTracker
 
-    if daemon_config.database.enable_persistence and trade_repository:
+    if daemon_config.database.enable_persistence and database_engine:
         logger.info("Using DatabaseMetricsTracker")
         return DatabaseMetricsTracker(
-            trade_repository=trade_repository,
+            database_engine=database_engine,
             risk_free_rate=daemon_config.metrics.risk_free_rate,
         )
 
