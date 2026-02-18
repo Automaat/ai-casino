@@ -82,6 +82,7 @@ class TradingSupervisor:
             is_high_volatility=context.is_high_volatility,
             fundamental_api_status="rate limited" if context.fundamental_rate_limit else "available",
             time_budget_ms=context.time_budget_ms,
+            economic_risk=context.economic_risk or "None",
         )
         system = self._prompts.load("system")
 

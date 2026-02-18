@@ -34,6 +34,7 @@ class WorkflowExtraContext(BaseModel):
     peer_analysis_context: str | None = None
     game_plan_context: str | None = None
     position_context: dict[str, object] | None = None
+    economic_calendar_context: str | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

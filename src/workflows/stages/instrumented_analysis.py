@@ -93,11 +93,13 @@ class _ExecutionContext:
         symbol: str,
         trading_session: TradingSession,
         collector: ExecutionMetricsCollector | None,
+        extra_context: WorkflowExtraContext | None = None,
     ) -> None:
         self.workflow = workflow
         self.symbol = symbol
         self.trading_session = trading_session
         self.collector = collector
+        self.extra_context = extra_context
 
 
 class _ContextBundle:
@@ -172,7 +174,9 @@ async def run_instrumented_analysis(request: AnalysisRequest) -> TradingWorkflow
 
     enable_multi_timeframe = bool(ctx.enable_multi_timeframe)
 
-    exec_ctx = _ExecutionContext(request.workflow, request.symbol, request.trading_session, request.collector)
+    exec_ctx = _ExecutionContext(
+        request.workflow, request.symbol, request.trading_session, request.collector, ctx
+    )
     context_bundle = _ContextBundle(
         decision_context=DecisionContext(
             sector_rotation=ctx.sector_rotation_context,
@@ -372,6 +376,7 @@ async def _run_analyses_with_validation(
         time_budget_ms=config.worker_execution_timeout_ms,
         market_data_rows=market_data_rows,
         is_high_volatility=is_high_volatility,
+        economic_risk=ctx.extra_context.economic_calendar_context if ctx.extra_context else None,
     )
 
     planning_fallback_used = False

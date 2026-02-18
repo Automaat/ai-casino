@@ -70,6 +70,7 @@ class PlanningContext(BaseModel):
     time_budget_ms: int
     market_data_rows: int = 0
     is_high_volatility: bool = False
+    economic_risk: str | None = None  # e.g. "HIGH: Fed in 1.5h - avoid new positions"
 
 
 class SynthesisContext(BaseModel):

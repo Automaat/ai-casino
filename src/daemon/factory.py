@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
+    from src.daemon.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.daemon.watchers.news_trending_watcher import NewsTrendingWatcher
     from src.daemon.watchers.news_watcher import NewsWatcher
     from src.daemon.watchers.social_watcher import SocialWatcher
@@ -83,6 +84,7 @@ class DaemonComponents:
     social_watcher: SocialWatcher | None = None
     trump_watcher: TrumpWatcher | None = None
     news_trending_watcher: NewsTrendingWatcher | None = None
+    economic_calendar_watcher: EconomicCalendarWatcher | None = None
 
 
 class DaemonFactory:
@@ -199,6 +201,7 @@ class DaemonFactory:
             social_watcher,
             trump_watcher,
             news_trending_watcher,
+            economic_calendar_watcher,
         ) = self._create_event_watchers(historical_cache, state)
 
         # Phase 12.5: Supervisor (lazy-initialized via container)
@@ -237,6 +240,7 @@ class DaemonFactory:
             social_watcher=social_watcher,
             trump_watcher=trump_watcher,
             news_trending_watcher=news_trending_watcher,
+            economic_calendar_watcher=economic_calendar_watcher,
         )
 
         # Phase 14: Create task runner (needs components reference)
@@ -438,7 +442,13 @@ class DaemonFactory:
 
     def _create_event_watchers(
         self, historical_cache: HistoricalCache, state: DaemonState
-    ) -> tuple[NewsWatcher | None, SocialWatcher | None, TrumpWatcher | None, NewsTrendingWatcher | None]:
+    ) -> tuple[
+        NewsWatcher | None,
+        SocialWatcher | None,
+        TrumpWatcher | None,
+        NewsTrendingWatcher | None,
+        EconomicCalendarWatcher | None,
+    ]:
         """Create event watchers based on config.
 
         Args:
@@ -446,20 +456,30 @@ class DaemonFactory:
             state: Daemon state for WATCHLIST event persistence
 
         Returns:
-            Tuple of (news_watcher, social_watcher, trump_watcher, news_trending_watcher)
+            Tuple of (news_watcher, social_watcher, trump_watcher, news_trending_watcher,
+                      economic_calendar_watcher)
         """
         news_watcher = None
         social_watcher = None
         trump_watcher = None
         news_trending_watcher = None
+        economic_calendar_watcher = None
 
-        if not (
+        any_enabled = (
             self.config.news_watcher.enabled
             or self.config.social_watcher.enabled
             or self.config.trump_watcher.enabled
             or self.config.news_trending_watcher.enabled
-        ):
-            return news_watcher, social_watcher, trump_watcher, news_trending_watcher
+            or self.config.economic_calendar_watcher.enabled
+        )
+        if not any_enabled:
+            return (
+                news_watcher,
+                social_watcher,
+                trump_watcher,
+                news_trending_watcher,
+                economic_calendar_watcher,
+            )
 
         # Call provider functions directly to pass container (providers.Self() doesn't work reliably)
         from src.di.providers import watchers as watcher_providers
@@ -495,8 +515,19 @@ class DaemonFactory:
                 state,
             )
 
+        if self.config.economic_calendar_watcher.enabled:
+            economic_calendar_watcher = watcher_providers.create_economic_calendar_watcher(
+                self.config,
+            )
+
         logger.info("Event watchers initialized")
-        return news_watcher, social_watcher, trump_watcher, news_trending_watcher
+        return (
+            news_watcher,
+            social_watcher,
+            trump_watcher,
+            news_trending_watcher,
+            economic_calendar_watcher,
+        )
 
     def init_workflow(self, components: DaemonComponents) -> TradingWorkflow:
         """Initialize trading workflow (lazy).

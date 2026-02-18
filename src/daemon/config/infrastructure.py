@@ -113,6 +113,7 @@ class ApiKeysConfig(BaseModel):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     openai_api_base: str | None = None
+    fred_api_key: str | None = None  # FRED API (free: fred.stlouisfed.org)
 
 
 class FinBERTConfig(BaseModel):

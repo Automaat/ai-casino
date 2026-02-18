@@ -692,6 +692,20 @@ daemon:
     # Maximum search results per query (5-20)
     max_results_per_query: 10
 
+  economic_calendar_watcher:
+    # Macro event risk management (Fed, CPI, NFP, GDP)
+    # Uses FRED API (free: fred.stlouisfed.org) + hardcoded FOMC dates
+    # Injects risk signal into supervisor planning context
+    enabled: false
+    # How often to refresh economic calendar (30-240 minutes)
+    poll_interval_minutes: 60
+    # Event detection window (12-48 hours ahead)
+    lookahead_hours: 24
+    # Block new positions N hours before high-impact events (1.0-4.0)
+    high_impact_avoid_hours: 2.0
+    # FRED API cache TTL (10-120 minutes)
+    cache_ttl_minutes: 30
+
   event_integration:
     # Event watcher → discovery integration (Phase 3)
     # Routes event watchers through discovery engine instead of direct analysis
@@ -1164,3 +1178,6 @@ daemon:
     # anthropic_api_key: "YOUR_ANTHROPIC_KEY"  # Required if provider=anthropic
     # openai_api_key: "YOUR_OPENAI_KEY"       # Required if provider=openai
     # openai_api_base: "https://api.openai.com/v1"  # Custom endpoint (optional)
+
+    # Economic calendar (free from fred.stlouisfed.org)
+    # fred_api_key: ""  # Falls back to FRED_API_KEY env var

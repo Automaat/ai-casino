@@ -1,5 +1,7 @@
 """DI providers for event watchers."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -14,6 +16,7 @@ from src.data.base_news_fetcher import BaseNewsFetcher
 
 if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState
+    from src.daemon.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.di.container import AppContainer
 
 
@@ -153,6 +156,41 @@ def create_trump_watcher(
         cooldown_minutes=config.cooldown_minutes,
         max_concurrent_analyses=config.max_concurrent_analyses,
     )
+
+
+def create_economic_calendar_watcher(
+    daemon_config: DaemonConfig,
+) -> EconomicCalendarWatcher | None:
+    """Create economic calendar watcher if enabled.
+
+    Args:
+        daemon_config: Daemon configuration
+
+    Returns:
+        EconomicCalendarWatcher instance if enabled, None otherwise
+    """
+    from src.daemon.watchers.economic_calendar_watcher import (
+        EconomicCalendarWatcher,
+        EconomicCalendarWatcherConfig,
+    )
+    from src.data.economic_calendar import EconomicCalendarFetcher
+    from src.di.config import resolve_config_or_env
+
+    config = daemon_config.economic_calendar_watcher
+    if not config.enabled:
+        logger.debug("EconomicCalendarWatcher disabled in config")
+        return None
+
+    api_key = resolve_config_or_env(daemon_config.api_keys.fred_api_key, "FRED_API_KEY")
+    fetcher = EconomicCalendarFetcher(api_key=api_key, cache_ttl=config.cache_ttl_minutes * 60)
+    watcher_config = EconomicCalendarWatcherConfig(
+        poll_interval_minutes=config.poll_interval_minutes,
+        lookahead_hours=config.lookahead_hours,
+        high_impact_avoid_hours=config.high_impact_avoid_hours,
+    )
+    watcher = EconomicCalendarWatcher(fetcher=fetcher, config=watcher_config)
+    logger.info("EconomicCalendarWatcher created")
+    return watcher
 
 
 def create_news_trending_watcher(

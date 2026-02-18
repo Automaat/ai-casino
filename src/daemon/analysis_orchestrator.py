@@ -122,6 +122,8 @@ class AnalysisOrchestrator:
                 # Repository creation may fail if database not enabled
                 self._signal_outcome_repo = components.container.signal_outcome_repository()
 
+        self._economic_watcher = components.economic_calendar_watcher
+
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
 
@@ -447,6 +449,18 @@ class AnalysisOrchestrator:
                 symbol
             )
 
+        economic_ctx = None
+        if self._economic_watcher:
+            from src.daemon.events import EconomicRiskLevel
+
+            signal = self._economic_watcher.current_signal
+            if signal and signal.risk_level != EconomicRiskLevel.LOW:
+                economic_ctx = (
+                    f"ECONOMIC RISK: {signal.risk_level} | "
+                    f"{signal.recommendation} | {signal.reason} | "
+                    f"Events: {', '.join(e.event for e in signal.upcoming_events[:3])}"
+                )
+
         return WorkflowExtraContext(
             sector_rotation_context=sector_ctx,
             earnings_context=earnings_ctx,
@@ -454,6 +468,7 @@ class AnalysisOrchestrator:
             game_plan_context=game_plan_ctx,
             position_context=position_context,
             degradation_context=degradation_context,
+            economic_calendar_context=economic_ctx,
         )
 
     async def _run_workflow_analysis(
