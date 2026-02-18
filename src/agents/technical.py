@@ -13,6 +13,10 @@ class TechnicalAnalysis(BaseModel):
     signal: Signal
     rsi: float | None = None
     macd_hist: float | None = None
+    atr_14: float | None = None
+    adx: float | None = None
+    exhaustion_score: float | None = None
+    exhaustion_warnings: list[str] = []
     interpretation: str
     confidence: float
     ensemble_result: EnsembleResult | None = None

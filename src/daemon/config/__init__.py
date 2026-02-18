@@ -49,6 +49,7 @@ from src.daemon.config.reddit import RedditScraperConfig
 from src.daemon.config.reporting import HealthConfig, MetricsConfig, ReportingConfig, SignalTrackingConfig
 from src.daemon.config.risk import (
     MonteCarloConfig,
+    PositionCircuitBreakerConfig,
     PositionManagementConfig,
     PositionSizingConfig,
     PreTradeBacktestingConfig,
@@ -105,6 +106,7 @@ __all__ = [
     "PeerAnalysisConfig",
     "PortfolioHealthConfig",
     "PortfolioRebalancingConfig",
+    "PositionCircuitBreakerConfig",
     "PositionManagementConfig",
     "PositionSizingConfig",
     "PreMarketScreeningConfig",
@@ -262,6 +264,9 @@ class DaemonConfig(BaseModel):
         sections["pattern_detection"] = sections["coordinator"].pop("pattern_detection", {}) or {}
         sections["sweep_pass"] = sections["coordinator"].pop("sweep_pass", {}) or {}
         sections["finnhub_premium"] = sections["data_sources"].pop("finnhub_premium", {}) or {}
+        sections["position_circuit_breaker"] = (
+            sections["position_management"].pop("circuit_breaker", {}) or {}
+        )
 
         return sections
 
@@ -304,7 +309,10 @@ class DaemonConfig(BaseModel):
             pre_trade_backtesting=PreTradeBacktestingConfig(**sections["pre_trade_backtesting"]),
             game_plan=GamePlanConfig(**sections["game_plan"]),
             position_sizing=PositionSizingConfig(**sections["position_sizing"]),
-            position_management=PositionManagementConfig(**sections["position_management"]),
+            position_management=PositionManagementConfig(
+                **sections["position_management"],
+                circuit_breaker=PositionCircuitBreakerConfig(**sections["position_circuit_breaker"]),
+            ),
             monte_carlo=MonteCarloConfig(**sections["monte_carlo"]),
             pre_market=PreMarketScreeningConfig(**sections["pre_market"]),
             notifications=NotificationsConfig(

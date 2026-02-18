@@ -523,6 +523,12 @@ daemon:
     # Minimum dollar gap between stop price and current price (0.01-1.0, default: 0.10)
     # Prevents Alpaca rejection due to stop price too close to market price
     min_stop_gap_dollars: 0.10
+    # ATR-based dynamic trailing stop (replaces fixed % when enabled)
+    # Uses N * ATR(14) distance from HWM, ratchets tighter as profit grows
+    use_atr_trailing_stop: false
+    atr_trailing_multiplier: 2.5  # default N for 0-1R profit
+    atr_ratchet_1r: 2.0           # multiplier at 1-2R profit
+    atr_ratchet_2r: 1.5           # multiplier at 2R+ profit
     # Partial profit taking
     partial_profit_enabled: true
     profit_target_1_percent: 5.0
@@ -539,6 +545,31 @@ daemon:
     conviction_scaling_enabled: true
     conviction_decrease_threshold: 0.15
     conviction_scale_out_percent: 0.5
+    # Conviction decay — degrades conviction between analysis cycles
+    # Cumulative erosion triggers exit when below threshold
+    conviction_decay_enabled: false
+    conviction_decay_rate: 0.95         # per day multiplier
+    conviction_exit_threshold: 0.35     # sell all if decayed below this
+    conviction_history_length: 10       # track last N values
+    # R-multiple profit targets (replaces fixed % targets when enabled)
+    # Uses risk_per_share from stop-loss calculation as R unit
+    use_r_multiple_targets: false
+    r_target_1_sell_pct: 0.25       # sell 25% at 1R
+    r_target_2_sell_pct: 0.25       # sell 25% at 2R
+    r_high_conviction_delay: 1      # delay targets by N R-levels for high conviction
+    high_conviction_threshold: 0.8
+    # Whipsaw prevention — suppress false exits in choppy markets
+    whipsaw_prevention_enabled: false
+    adx_exit_filter_threshold: 20.0  # suppress soft exits when ADX below this (low trend)
+    sell_confirmation_cycles: 2      # require N consecutive sell signals before executing
+    re_entry_cooldown_hours: 24      # block BUY after closing position for N hours
+    # Hard circuit breakers — non-overridable drawdown limits (priority 0)
+    circuit_breaker:
+      enabled: false
+      position_max_drawdown_pct: 8.0    # sell 100% if single position drops this much
+      portfolio_daily_loss_limit_pct: 2.0
+      portfolio_peak_drawdown_pct: 5.0
+      portfolio_peak_size_reduction: 0.5
 
   news_watcher:
     # Breaking news watcher (trigger re-analysis on major news)

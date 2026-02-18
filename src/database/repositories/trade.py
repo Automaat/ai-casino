@@ -227,6 +227,52 @@ class TradeRepository(BaseRepository[TradeRecord]):
             closed_at=orm.closed_at,
         )
 
+    async def get_recent_closed_by_symbol(self, symbol: str, limit: int = 5) -> list[TradeRecord]:
+        """Get recent closed trades for a symbol.
+
+        Args:
+            symbol: Stock ticker symbol
+            limit: Max trades to return
+
+        Returns:
+            List of closed TradeRecords for symbol
+        """
+        result = await self._session.execute(
+            select(TradeORM)
+            .where(TradeORM.symbol == symbol, TradeORM.status == "CLOSED")
+            .order_by(TradeORM.timestamp.desc())
+            .limit(limit)
+        )
+        return [self._to_record(orm) for orm in result.scalars().all()]
+
+    async def get_aggregate_stats(self, days: int = 30) -> dict[str, float]:
+        """Get aggregate trading stats for recent period.
+
+        Args:
+            days: Lookback period in days
+
+        Returns:
+            Dict with win_rate, avg_gain, total_trades
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        result = await self._session.execute(
+            select(TradeORM).where(TradeORM.status == "CLOSED", TradeORM.closed_at >= cutoff)
+        )
+        trades = result.scalars().all()
+
+        if not trades:
+            return {"win_rate": 0.0, "avg_gain": 0.0, "total_trades": 0.0}
+
+        winners = sum(1 for t in trades if t.pnl and t.pnl > 0)
+        pnl_pcts = [float(t.pnl_percent) for t in trades if t.pnl_percent is not None]
+        avg_gain = sum(pnl_pcts) / len(pnl_pcts) if pnl_pcts else 0.0
+
+        return {
+            "win_rate": (winners / len(trades)) * 100,
+            "avg_gain": avg_gain,
+            "total_trades": float(len(trades)),
+        }
+
     def __repr__(self) -> str:
         """Return string representation."""
         return "TradeRepository()"

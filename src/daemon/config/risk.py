@@ -74,6 +74,16 @@ class PositionSizingConfig(BaseModel):
         return self
 
 
+class PositionCircuitBreakerConfig(BaseModel):
+    """Non-overridable drawdown limits for position management."""
+
+    enabled: bool = False
+    position_max_drawdown_pct: float = Field(default=8.0, ge=1.0, le=50.0)
+    portfolio_daily_loss_limit_pct: float = Field(default=2.0, ge=0.5, le=10.0)
+    portfolio_peak_drawdown_pct: float = Field(default=5.0, ge=1.0, le=20.0)
+    portfolio_peak_size_reduction: float = Field(default=0.5, ge=0.1, le=1.0)
+
+
 class PositionManagementConfig(BaseModel):
     """Configuration for position management."""
 
@@ -81,6 +91,10 @@ class PositionManagementConfig(BaseModel):
     trailing_stop_enabled: bool = True
     trailing_stop_percent: float = Field(default=3.0, ge=0.5, le=10.0)
     min_stop_gap_dollars: float = Field(default=0.10, ge=0.01, le=1.0)
+    use_atr_trailing_stop: bool = False
+    atr_trailing_multiplier: float = Field(default=2.5, ge=1.0, le=5.0)
+    atr_ratchet_1r: float = Field(default=2.0, ge=0.5, le=4.0)
+    atr_ratchet_2r: float = Field(default=1.5, ge=0.5, le=3.0)
     partial_profit_enabled: bool = True
     profit_target_1_percent: float = Field(default=5.0, ge=1.0, le=20.0)
     profit_target_1_sell_pct: float = Field(default=0.5, ge=0.1, le=1.0)
@@ -93,6 +107,20 @@ class PositionManagementConfig(BaseModel):
     conviction_scaling_enabled: bool = True
     conviction_decrease_threshold: float = Field(default=0.15, ge=0.05, le=0.5)
     conviction_scale_out_percent: float = Field(default=0.5, ge=0.1, le=1.0)
+    conviction_decay_enabled: bool = False
+    conviction_decay_rate: float = Field(default=0.95, ge=0.5, le=1.0)
+    conviction_exit_threshold: float = Field(default=0.35, ge=0.1, le=0.8)
+    conviction_history_length: int = Field(default=10, ge=3, le=50)
+    use_r_multiple_targets: bool = False
+    r_target_1_sell_pct: float = Field(default=0.25, ge=0.1, le=1.0)
+    r_target_2_sell_pct: float = Field(default=0.25, ge=0.1, le=1.0)
+    r_high_conviction_delay: int = Field(default=1, ge=0, le=3)
+    high_conviction_threshold: float = Field(default=0.8, ge=0.5, le=1.0)
+    whipsaw_prevention_enabled: bool = False
+    adx_exit_filter_threshold: float = Field(default=20.0, ge=5.0, le=50.0)
+    sell_confirmation_cycles: int = Field(default=2, ge=1, le=5)
+    re_entry_cooldown_hours: int = Field(default=24, ge=1, le=168)
+    circuit_breaker: PositionCircuitBreakerConfig = Field(default_factory=PositionCircuitBreakerConfig)
 
 
 class MonteCarloConfig(BaseModel):

@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
+from src.workflows.types import WorkflowExtraContext
 
 if TYPE_CHECKING:
     from src.coordinator.agent import TradingCoordinator
@@ -142,6 +144,31 @@ class AnalyzeSymbolTool(BaseTool):
             logger.opt(exception=True).error(f"Analysis failed for {symbol}: {e}")
             return f"Analysis failed for {symbol}: {e}"
 
+    async def _get_cooldown_symbols(self) -> list[str]:
+        """Fetch symbols under re-entry cooldown from trade history.
+
+        Returns:
+            List of recently closed symbols in cooldown period
+        """
+        try:
+            from src.daemon.config import PositionManagementConfig
+
+            daemon_config = self._container.daemon_config()
+            pos_config = daemon_config.position_management
+            if not isinstance(pos_config, PositionManagementConfig):
+                return []
+            if not pos_config.whipsaw_prevention_enabled:
+                return []
+
+            cutoff = datetime.now(UTC) - timedelta(hours=pos_config.re_entry_cooldown_hours)
+            repo = self._container.trade_repository()
+            async with repo:
+                closed_trades = await repo.get_closed_since(cutoff)
+            return list({t.symbol for t in closed_trades})
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to fetch cooldown symbols: {e}")
+            return []
+
     async def _run_analysis(
         self,
         symbol: str,
@@ -168,8 +195,15 @@ class AnalyzeSymbolTool(BaseTool):
             if pos_ctx:
                 position_ctx = pos_ctx.model_dump()
 
+        # Build extra context with cooldown symbols
+        cooldown_symbols = await self._get_cooldown_symbols()
+        extra_context = WorkflowExtraContext(
+            position_context=position_ctx,
+            re_entry_cooldown_symbols=cooldown_symbols,
+        )
+
         # Run analysis
-        result = await workflow.analyze(symbol, period_days, position_context=position_ctx)
+        result = await workflow.analyze(symbol, period_days, extra_context=extra_context)
 
         # Store structured result in coordinator for reflection tool access
         if self._coordinator:

@@ -53,6 +53,7 @@ async def assess_risk(
             backtest_validation=input_data.backtest_validation,
             degradation_context=input_data.degradation_context,
             broker_api_failed=input_data.broker_api_failed,
+            re_entry_cooldown_active=input_data.re_entry_cooldown_active,
         )
 
     risk_assessment = await asyncio.to_thread(_sync_assess_risk)

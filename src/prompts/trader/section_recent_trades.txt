@@ -1,0 +1,5 @@
+## RECENT TRADE HISTORY
+
+{recent_trades_summary}
+
+Aggregate (30d): Win Rate {win_rate}%, Avg Gain {avg_gain}%

@@ -38,6 +38,8 @@ class WorkflowExtraContext(BaseModel):
     options_flow_context: str | None = None
     portfolio_health_context: str | None = None
     social_sentiment_context: str | None = None
+    recent_trades_context: str | None = None
+    re_entry_cooldown_symbols: list[str] = []
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

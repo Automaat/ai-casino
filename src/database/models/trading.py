@@ -106,6 +106,12 @@ class PositionRecordORM(Base):
     trailing_stop_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     breakeven_activated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     high_water_mark: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
+    current_conviction: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 4), nullable=True)
+    last_analysis_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    conviction_history: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    initial_risk_per_share: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 4), nullable=True)
+    r_multiple_targets_hit: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    pending_sell_signal_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,

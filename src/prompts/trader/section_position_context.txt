@@ -14,3 +14,4 @@ When making your decision, compare current analysis conviction vs entry convicti
 - If conditions DETERIORATED fundamentally: Recommend SELL to close entire position
 
 Consider: Are the original reasons for entry still valid? Has anything fundamentally changed?
+{conviction_trend_section}

@@ -14,7 +14,7 @@ from src.prompts import PromptLoader
 from src.strategies.confluence import ConfluenceCalculator
 from src.strategies.ensemble import EnsembleResult, EnsembleStrategy
 from src.strategies.mean_reversion import MeanReversionIndicators, MeanReversionStrategy
-from src.strategies.momentum import MomentumIndicators, MomentumStrategy
+from src.strategies.momentum import ExhaustionSignals, MomentumIndicators, MomentumStrategy
 from src.strategies.signal import Signal
 from src.strategies.timeframe import MultiTimeframeAnalysis, MultiTimeframeData, Timeframe, TimeframeResult
 from src.strategies.trend_following import TrendFollowingIndicators, TrendFollowingStrategy
@@ -28,6 +28,21 @@ class TechnicalLLMResponse(BaseModel):
     confidence_keywords: list[str] = Field(
         description="Confidence keywords: 'high confidence', 'strong signal', 'weak', 'uncertain', etc."
     )
+
+
+_DECLINING_BARS_WARNING_THRESHOLD = 3
+
+
+def _build_exhaustion_warnings(exhaust: ExhaustionSignals) -> list[str]:
+    """Build human-readable exhaustion warning strings."""
+    warnings: list[str] = []
+    if exhaust.rsi_bearish_divergence:
+        warnings.append("RSI bearish divergence detected")
+    if exhaust.macd_hist_declining_bars >= _DECLINING_BARS_WARNING_THRESHOLD:
+        warnings.append(f"MACD histogram declining {exhaust.macd_hist_declining_bars} bars")
+    if exhaust.adx_turning_down:
+        warnings.append("ADX turning down (trend weakening)")
+    return warnings
 
 
 StrategyType = MomentumStrategy | MeanReversionStrategy | TrendFollowingStrategy | EnsembleStrategy
@@ -116,15 +131,23 @@ class TechnicalWorker:
             confidence_keywords = []
 
         # Extract indicator values and calculate confidence
-        rsi, macd_hist, ensemble_result = self._extract_indicator_values(indicators)
+        rsi, macd_hist, atr_14, exhaust_score, exhaust_warnings, ensemble_result = (
+            self._extract_indicator_values(indicators)
+        )
         confidence = self._calculate_confidence_with_keywords(interpretation, indicators, confidence_keywords)
 
         logger.info(f"Technical analysis complete: {signal.value} (confidence={confidence:.2f})")
+
+        adx_val = indicators.adx if isinstance(indicators, MomentumIndicators) else None
 
         return TechnicalAnalysis(
             signal=signal,
             rsi=rsi,
             macd_hist=macd_hist,
+            atr_14=atr_14,
+            adx=adx_val,
+            exhaustion_score=exhaust_score,
+            exhaustion_warnings=exhaust_warnings,
             interpretation=interpretation,
             confidence=confidence,
             ensemble_result=ensemble_result,
@@ -176,7 +199,7 @@ class TechnicalWorker:
                 )
                 confidence_keywords = []
 
-            rsi, macd_hist, _ = self._extract_indicator_values(indicators)
+            rsi, macd_hist, _atr, _exhaust, _exhaust_w, _ = self._extract_indicator_values(indicators)
             confidence = self._calculate_confidence_with_keywords(
                 interpretation, indicators, confidence_keywords
             )
@@ -327,26 +350,43 @@ class TechnicalWorker:
 
     def _extract_indicator_values(
         self, indicators: IndicatorsType
-    ) -> tuple[float | None, float | None, EnsembleResult | None]:
-        """Extract RSI, MACD, and ensemble result from indicators.
+    ) -> tuple[float | None, float | None, float | None, float | None, list[str], EnsembleResult | None]:
+        """Extract RSI, MACD, ATR, exhaustion, and ensemble result from indicators.
 
         Args:
             indicators: Strategy indicators
 
         Returns:
-            Tuple of (rsi, macd_hist, ensemble_result)
+            Tuple of (rsi, macd_hist, atr_14, exhaustion_score, exhaustion_warnings, ensemble_result)
         """
         if isinstance(indicators, EnsembleResult):
-            rsi, macd_hist = None, None
+            rsi, macd_hist, atr_14, exhaust_score = None, None, None, None
+            exhaust_warnings: list[str] = []
             for sr in indicators.strategy_results:
                 if sr.name == "momentum" and isinstance(sr.indicators, MomentumIndicators):
                     rsi = sr.indicators.rsi
                     macd_hist = sr.indicators.macd_hist
+                    atr_14 = sr.indicators.atr_14
+                    if sr.indicators.exhaustion:
+                        exhaust_score = sr.indicators.exhaustion.exhaustion_score
+                        exhaust_warnings = _build_exhaustion_warnings(sr.indicators.exhaustion)
                     break
-            return rsi, macd_hist, indicators
+            return rsi, macd_hist, atr_14, exhaust_score, exhaust_warnings, indicators
         if isinstance(indicators, MomentumIndicators):
-            return indicators.rsi, indicators.macd_hist, None
-        return None, None, None
+            exhaust_score_val = None
+            exhaust_warn: list[str] = []
+            if indicators.exhaustion:
+                exhaust_score_val = indicators.exhaustion.exhaustion_score
+                exhaust_warn = _build_exhaustion_warnings(indicators.exhaustion)
+            return (
+                indicators.rsi,
+                indicators.macd_hist,
+                indicators.atr_14,
+                exhaust_score_val,
+                exhaust_warn,
+                None,
+            )
+        return None, None, None, None, [], None
 
     def _calculate_confidence_with_keywords(
         self, interpretation: str, indicators: IndicatorsType, keywords: list[str]

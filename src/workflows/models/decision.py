@@ -26,6 +26,7 @@ class DecisionContext(BaseModel):
     peer_analysis: str | None = None
     game_plan: str | None = None
     position: dict[str, object] | None = None
+    recent_trades: str | None = None
 
 
 class DecisionInput(BaseModel):
