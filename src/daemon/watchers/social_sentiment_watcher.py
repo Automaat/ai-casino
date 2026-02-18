@@ -12,7 +12,7 @@ from src.daemon.events import (
     SocialSentimentDirection,
     SocialSentimentSignal,
 )
-from src.data.apewisdom import ApeWisdomFetcher
+from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
 
 
 @dataclass
@@ -118,15 +118,21 @@ class SocialSentimentWatcher:
         Returns:
             Significance score 0.0-1.0
         """
-        # Buzz spike component: delta% normalized (50% = 0.33, 150%+ = 1.0)
-        spike_score = min(1.0, max(0.0, mention_delta_pct / 150.0)) if mention_delta_pct > 0 else buzz_score
+        # Buzz spike component: gate by buzz_spike_threshold, then normalize delta%
+        if mention_delta_pct >= self._config.buzz_spike_threshold * 100:
+            spike_score = min(1.0, max(0.0, mention_delta_pct / 150.0))
+        elif mention_delta_pct > 0:
+            spike_score = min(1.0, max(0.0, mention_delta_pct / 150.0)) * 0.5
+        else:
+            spike_score = buzz_score
 
         # Sentiment strength: 0.5 deviation = 1.0
         strength_score = min(1.0, sentiment_strength / 0.5)
 
-        # Trending rank component: rank 1 = 1.0, rank 20 = ~0.05, not trending = 0.0
+        # Trending rank component: rank 1 = 1.0, rank at threshold ~= 0.0, not trending = 0.0
         if trending_rank is not None and trending_rank > 0:
-            rank_score = max(0.0, 1.0 - (trending_rank - 1) / 20.0)
+            threshold = max(1, self._config.trending_rank_threshold)
+            rank_score = max(0.0, 1.0 - (trending_rank - 1) / float(threshold))
         else:
             rank_score = 0.0
 
@@ -163,11 +169,16 @@ class SocialSentimentWatcher:
             return f"{direction} social sentiment, minimal activity"
         return f"{direction} social: {'; '.join(parts)}"
 
-    async def _fetch_and_assess_symbol(self, symbol: str) -> None:
+    async def _fetch_and_assess_symbol(
+        self,
+        symbol: str,
+        ape_map: dict[str, ApeWisdomTicker],
+    ) -> None:
         """Fetch and assess social sentiment for a single symbol.
 
         Args:
             symbol: Stock ticker
+            ape_map: Pre-fetched ApeWisdom ticker map (symbol -> ApeWisdomTicker)
         """
         symbol_upper = symbol.upper()
         platforms: list[PlatformSentiment] = []
@@ -177,8 +188,8 @@ class SocialSentimentWatcher:
         mention_delta_pct = 0.0
         trending_rank: int | None = None
 
-        # ApeWisdom data (sync, wrapped in thread)
-        ape_ticker = await asyncio.to_thread(self._fetcher.get_ticker, symbol_upper)
+        # ApeWisdom data from pre-fetched map (avoids concurrent HTTP races)
+        ape_ticker = ape_map.get(symbol_upper)
         if ape_ticker:
             apewisdom_mentions = ape_ticker.mentions
             trending_rank = ape_ticker.rank
@@ -261,32 +272,32 @@ class SocialSentimentWatcher:
             from src.database.models.reddit import RedditTickerSentimentORM
 
             async with get_session() as session:
-                from sqlalchemy import func, select
-
-                query = (
-                    select(
-                        func.sum(RedditTickerSentimentORM.mention_count).label("total_mentions"),
-                        func.avg(RedditTickerSentimentORM.avg_sentiment).label("avg_sentiment"),
-                        func.sum(RedditTickerSentimentORM.bullish_count).label("total_bullish"),
-                        func.sum(RedditTickerSentimentORM.bearish_count).label("total_bearish"),
-                    )
-                    .where(RedditTickerSentimentORM.symbol == symbol)
-                    .order_by(RedditTickerSentimentORM.window_start.desc())
-                    .limit(1)
-                )
-
-                # Get latest window per symbol (across subreddits)
                 from datetime import UTC, datetime, timedelta
 
+                from sqlalchemy import func, select
+
                 cutoff = datetime.now(UTC) - timedelta(hours=6)
+
+                # Find the latest window_start for this symbol within cutoff
+                latest_window_subq = (
+                    select(func.max(RedditTickerSentimentORM.window_start))
+                    .where(
+                        RedditTickerSentimentORM.symbol == symbol,
+                        RedditTickerSentimentORM.window_start >= cutoff,
+                    )
+                    .scalar_subquery()
+                )
+
+                # Aggregate across subreddits for that single latest window
                 query = select(
                     func.sum(RedditTickerSentimentORM.mention_count).label("total_mentions"),
                     func.avg(RedditTickerSentimentORM.avg_sentiment).label("avg_sentiment"),
                     func.sum(RedditTickerSentimentORM.bullish_count).label("total_bullish"),
                     func.sum(RedditTickerSentimentORM.bearish_count).label("total_bearish"),
+                    func.sum(RedditTickerSentimentORM.neutral_count).label("total_neutral"),
                 ).where(
                     RedditTickerSentimentORM.symbol == symbol,
-                    RedditTickerSentimentORM.window_start >= cutoff,
+                    RedditTickerSentimentORM.window_start == latest_window_subq,
                 )
 
                 result = await session.execute(query)
@@ -299,7 +310,8 @@ class SocialSentimentWatcher:
                 avg_sentiment = float(row.avg_sentiment)
                 bullish = int(row.total_bullish or 0)
                 bearish = int(row.total_bearish or 0)
-                total = bullish + bearish
+                neutral = int(row.total_neutral or 0)
+                total = bullish + bearish + neutral
                 raw_score = ((bullish - bearish) / total) if total > 0 else 0.0
 
                 return {
@@ -318,12 +330,16 @@ class SocialSentimentWatcher:
         if not symbols:
             return
 
+        # Fetch trending list once to avoid concurrent cache races in ApeWisdomFetcher
+        trending = await asyncio.to_thread(self._fetcher.fetch_trending)
+        ape_map = {t.ticker.upper(): t for t in trending}
+
         sem = asyncio.Semaphore(3)
 
         async def _limited(sym: str) -> None:
             async with sem:
                 try:
-                    await self._fetch_and_assess_symbol(sym)
+                    await self._fetch_and_assess_symbol(sym, ape_map)
                 except Exception as e:
                     logger.opt(exception=True).warning(f"Social sentiment assessment failed for {sym}: {e}")
 

@@ -68,12 +68,8 @@ class TestSocialSentimentWatcher:
         self, watcher: SocialSentimentWatcher, mock_fetcher: MagicMock
     ) -> None:
         """Verify signal generated from ApeWisdom data alone (no Reddit DB)."""
-        mock_fetcher.get_ticker.return_value = _make_ape_ticker(
-            "GME",
-            rank=3,
-            mentions=500,
-            mentions_24h_ago=200,
-        )
+        ape_ticker = _make_ape_ticker("GME", rank=3, mentions=500, mentions_24h_ago=200)
+        ape_map = {"GME": ape_ticker}
 
         patch_reddit = patch.object(
             watcher,
@@ -82,7 +78,7 @@ class TestSocialSentimentWatcher:
             return_value=None,
         )
         with patch_reddit:
-            await watcher._fetch_and_assess_symbol("GME")
+            await watcher._fetch_and_assess_symbol("GME", ape_map)
 
         signal = watcher.get_signal("GME")
         assert signal is not None
@@ -95,8 +91,6 @@ class TestSocialSentimentWatcher:
     @pytest.mark.asyncio
     async def test_reddit_only_signal(self, watcher: SocialSentimentWatcher, mock_fetcher: MagicMock) -> None:
         """Verify signal generated from Reddit DB alone (no ApeWisdom)."""
-        mock_fetcher.get_ticker.return_value = None
-
         reddit_data = {
             "mention_count": 50,
             "avg_sentiment": 0.75,
@@ -109,7 +103,7 @@ class TestSocialSentimentWatcher:
             return_value=reddit_data,
         )
         with patch_reddit:
-            await watcher._fetch_and_assess_symbol("AAPL")
+            await watcher._fetch_and_assess_symbol("AAPL", {})
 
         signal = watcher.get_signal("AAPL")
         assert signal is not None
@@ -124,12 +118,8 @@ class TestSocialSentimentWatcher:
         self, watcher: SocialSentimentWatcher, mock_fetcher: MagicMock
     ) -> None:
         """Verify signal merges both Reddit and ApeWisdom data."""
-        mock_fetcher.get_ticker.return_value = _make_ape_ticker(
-            "TSLA",
-            rank=10,
-            mentions=300,
-            mentions_24h_ago=200,
-        )
+        ape_ticker = _make_ape_ticker("TSLA", rank=10, mentions=300, mentions_24h_ago=200)
+        ape_map = {"TSLA": ape_ticker}
         reddit_data = {
             "mention_count": 80,
             "avg_sentiment": 0.65,
@@ -142,7 +132,7 @@ class TestSocialSentimentWatcher:
             return_value=reddit_data,
         )
         with patch_reddit:
-            await watcher._fetch_and_assess_symbol("TSLA")
+            await watcher._fetch_and_assess_symbol("TSLA", ape_map)
 
         signal = watcher.get_signal("TSLA")
         assert signal is not None
@@ -154,10 +144,8 @@ class TestSocialSentimentWatcher:
         self, watcher: SocialSentimentWatcher, mock_fetcher: MagicMock
     ) -> None:
         """Verify no signal when neither platform has data."""
-        mock_fetcher.get_ticker.return_value = None
-
         with patch.object(watcher, "_query_reddit_sentiment", new_callable=AsyncMock, return_value=None):
-            await watcher._fetch_and_assess_symbol("UNKNOWN")
+            await watcher._fetch_and_assess_symbol("UNKNOWN", {})
 
         assert watcher.get_signal("UNKNOWN") is None
 
@@ -209,7 +197,11 @@ class TestSocialSentimentWatcher:
         self, watcher: SocialSentimentWatcher, mock_fetcher: MagicMock
     ) -> None:
         """Verify all configured symbols are assessed."""
-        mock_fetcher.get_ticker.return_value = _make_ape_ticker("ANY", rank=1, mentions=1000)
+        mock_fetcher.fetch_trending.return_value = [
+            _make_ape_ticker("AAPL", rank=1, mentions=1000),
+            _make_ape_ticker("GME", rank=2, mentions=800),
+            _make_ape_ticker("TSLA", rank=3, mentions=600),
+        ]
 
         with patch.object(watcher, "_query_reddit_sentiment", new_callable=AsyncMock, return_value=None):
             await watcher._fetch_and_assess_all()
