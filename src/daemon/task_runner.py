@@ -48,6 +48,13 @@ class ScheduledTaskRunner:
         ScheduledTask("peer_analysis", "is_peer_analysis_time", "_run_peer_analysis", is_async=True),
         ScheduledTask("correlation_audit", "is_correlation_audit_time", "_run_correlation_audit"),
         ScheduledTask(
+            "portfolio_health",
+            "is_portfolio_health_time",
+            "_run_portfolio_health",
+            "portfolio_health.enabled",
+            is_async=True,
+        ),
+        ScheduledTask(
             "monte_carlo",
             "is_monte_carlo_time",
             "_run_monte_carlo_stress_testing",

@@ -39,6 +39,7 @@ from src.daemon.config.portfolio import (
     CorrelationAuditConfig,
     GamePlanConfig,
     PeerAnalysisConfig,
+    PortfolioHealthConfig,
     PortfolioRebalancingConfig,
 )
 from src.daemon.config.pre_market import PreMarketScreeningConfig
@@ -101,6 +102,7 @@ __all__ = [
     "OptionsFlowWatcherConfig",
     "PaperTradingConfig",
     "PeerAnalysisConfig",
+    "PortfolioHealthConfig",
     "PortfolioRebalancingConfig",
     "PositionManagementConfig",
     "PositionSizingConfig",
@@ -145,6 +147,7 @@ class DaemonConfig(BaseModel):
     earnings_calendar: EarningsCalendarConfig = Field(default_factory=EarningsCalendarConfig)
     peer_analysis: PeerAnalysisConfig = Field(default_factory=PeerAnalysisConfig)
     correlation_audit: CorrelationAuditConfig = Field(default_factory=CorrelationAuditConfig)
+    portfolio_health: PortfolioHealthConfig = Field(default_factory=PortfolioHealthConfig)
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     risk_limits: RiskLimitsConfig = Field(default_factory=RiskLimitsConfig)
     rebalancing: PortfolioRebalancingConfig = Field(default_factory=PortfolioRebalancingConfig)
@@ -207,6 +210,7 @@ class DaemonConfig(BaseModel):
             "earnings_calendar": daemon_data.pop("earnings_calendar", {}) or {},
             "peer_analysis": daemon_data.pop("peer_analysis", {}) or {},
             "correlation_audit": daemon_data.pop("correlation_audit", {}) or {},
+            "portfolio_health": daemon_data.pop("portfolio_health", {}) or {},
             "reporting": daemon_data.pop("reporting", {}) or {},
             "risk_limits": daemon_data.pop("risk_limits", {}) or {},
             "rebalancing": daemon_data.pop("rebalancing", {}) or {},
@@ -284,6 +288,7 @@ class DaemonConfig(BaseModel):
             earnings_calendar=EarningsCalendarConfig(**sections["earnings_calendar"]),
             peer_analysis=PeerAnalysisConfig(**sections["peer_analysis"]),
             correlation_audit=CorrelationAuditConfig(**sections["correlation_audit"]),
+            portfolio_health=PortfolioHealthConfig(**sections["portfolio_health"]),
             reporting=ReportingConfig(**sections["reporting"]),
             risk_limits=RiskLimitsConfig(**sections["risk_limits"]),
             rebalancing=PortfolioRebalancingConfig(**sections["rebalancing"]),

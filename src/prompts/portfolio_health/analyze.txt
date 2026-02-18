@@ -1,0 +1,29 @@
+## Portfolio Health Analysis
+
+### Metrics
+- Total Positions: {total_positions}
+- Portfolio Value: ${portfolio_value:,.2f}
+- Cash Percent: {cash_percent:.1f}%
+- Max Concentration: {max_concentration_symbol} at {max_concentration_percent:.1f}%
+- Total Unrealized P&L: {total_pnl_percent:+.2f}%
+- Biggest Drawdown: {biggest_drawdown_symbol} at {biggest_drawdown_percent:+.2f}%
+
+### Thresholds
+- Max Position Concentration: {max_position_concentration:.0%}
+- Min Cash Percent: {min_cash_percent:.0%}
+- Drawdown Alert: {drawdown_alert_threshold:.0%}
+
+### Health Status: {health_status}
+
+### Position Details
+{position_details}
+
+## Instructions
+
+Analyze the portfolio health and provide:
+
+1. **recommendations**: 2-5 specific, actionable items (e.g. "Trim AAPL position by 5% to reduce concentration", "Add cash buffer before next earnings season")
+2. **constraints**: Trading constraints to enforce until next health check. Format: "action:target" where action is block_buy/reduce/force_review and target is a symbol or sector. Only include if thresholds are breached.
+3. **reasoning**: Brief summary of overall portfolio health assessment
+
+Focus on risk management, not alpha generation.

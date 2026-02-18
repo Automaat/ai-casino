@@ -71,6 +71,24 @@ class CorrelationAuditConfig(BaseModel):
         return self
 
 
+class PortfolioHealthConfig(BaseModel):
+    """Configuration for portfolio health check."""
+
+    enabled: bool = True
+    run_time: str = "16:30"
+    run_days: list[str] = Field(default_factory=lambda: ["mon", "wed", "fri"])
+    max_position_concentration: float = Field(default=0.25, ge=0.05, le=0.50)
+    min_cash_percent: float = Field(default=0.05, ge=0.0, le=0.50)
+    drawdown_alert_threshold: float = Field(default=0.10, ge=0.01, le=0.50)
+
+    @model_validator(mode="after")
+    def validate_run_time(self) -> PortfolioHealthConfig:
+        """Validate run_time is in HH:MM format."""
+        if self.enabled:
+            validate_time_format(self.run_time, "run_time")
+        return self
+
+
 class GamePlanConfig(BaseModel):
     """Configuration for game plan generation."""
 

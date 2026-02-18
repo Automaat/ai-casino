@@ -308,6 +308,81 @@ def _get_market_data_length(market_data: object) -> int:
     return 0
 
 
+def _build_position_pnl_context(extra_context: WorkflowExtraContext | None) -> object | None:
+    """Build PositionPnLContext from extra context position data.
+
+    Args:
+        extra_context: Workflow extra context
+
+    Returns:
+        PositionPnLContext or None
+    """
+    from src.agents.supervisor.models import PositionPnLContext
+
+    if not extra_context or not extra_context.position_context:
+        return None
+
+    pos = extra_context.position_context
+    if not pos.get("has_position"):
+        return None
+
+    return PositionPnLContext(
+        entry_price=float(str(pos.get("entry_price", 0.0))),
+        unrealized_pnl_percent=float(str(pos.get("unrealized_pnl_percent", 0.0))),
+        days_held=int(float(str(pos.get("days_held", 0)))),
+        current_qty=float(str(pos.get("current_qty", 0.0))),
+    )
+
+
+def _build_portfolio_summary(
+    broker_positions: dict[str, BrokerPosition] | None,
+    portfolio_value: float | None,
+) -> object | None:
+    """Build PortfolioSummary from broker positions.
+
+    Args:
+        broker_positions: Dict of symbol -> BrokerPosition
+        portfolio_value: Total portfolio value
+
+    Returns:
+        PortfolioSummary or None
+    """
+    from src.agents.supervisor.models import PortfolioSummary
+
+    if not broker_positions or not portfolio_value or portfolio_value <= 0:
+        return None
+
+    total_exposure = 0.0
+    total_unrealized_pnl = 0.0
+    biggest_winner: str | None = None
+    biggest_winner_pnl = -float("inf")
+    biggest_loser: str | None = None
+    biggest_loser_pnl = float("inf")
+
+    for symbol, pos in broker_positions.items():
+        total_exposure += pos.market_value
+        total_unrealized_pnl += pos.unrealized_pnl
+
+        cost_basis = pos.avg_entry_price * pos.qty
+        pnl_pct = (pos.unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0.0
+        if pnl_pct > biggest_winner_pnl:
+            biggest_winner_pnl = pnl_pct
+            biggest_winner = symbol
+        if pnl_pct < biggest_loser_pnl:
+            biggest_loser_pnl = pnl_pct
+            biggest_loser = symbol
+
+    return PortfolioSummary(
+        total_positions=len(broker_positions),
+        total_exposure_percent=(total_exposure / portfolio_value) * 100,
+        portfolio_pnl_percent=(total_unrealized_pnl / portfolio_value) * 100,
+        biggest_winner=biggest_winner,
+        biggest_winner_pnl_percent=biggest_winner_pnl if biggest_winner else 0.0,
+        biggest_loser=biggest_loser,
+        biggest_loser_pnl_percent=biggest_loser_pnl if biggest_loser else 0.0,
+    )
+
+
 async def _run_analyses_with_validation(
     ctx: _ExecutionContext,
     prep_result: _PreparationResult,
@@ -378,6 +453,14 @@ async def _run_analyses_with_validation(
         is_high_volatility=is_high_volatility,
         economic_risk=ctx.extra_context.economic_calendar_context if ctx.extra_context else None,
         options_flow=ctx.extra_context.options_flow_context if ctx.extra_context else None,
+        position_pnl=_build_position_pnl_context(ctx.extra_context),
+        portfolio_summary=_build_portfolio_summary(
+            prep_result.account_output.broker_positions,
+            prep_result.account_output.portfolio_value,
+        ),
+        portfolio_health_constraints=(
+            ctx.extra_context.portfolio_health_context if ctx.extra_context else None
+        ),
     )
 
     planning_fallback_used = False

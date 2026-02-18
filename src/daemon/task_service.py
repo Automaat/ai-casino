@@ -330,6 +330,12 @@ class DaemonTaskService:
 
         await CorrelationAuditTask(self.components, self.container).run()
 
+    async def run_portfolio_health(self) -> None:
+        """Run portfolio health check."""
+        from src.daemon.tasks.portfolio_tasks import PortfolioHealthCheckTask
+
+        await PortfolioHealthCheckTask(self.components, self.container).run()
+
     async def run_tearsheet_generation(self) -> None:
         """Generate performance tearsheet from analysis history."""
         if not self.components.tearsheet_generator:
