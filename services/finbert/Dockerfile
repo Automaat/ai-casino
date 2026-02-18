@@ -2,24 +2,27 @@
 FROM python:3.14-slim AS builder
 
 # Install build dependencies
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    cmake \
-    && rm -rf /var/lib/apt/lists/*
+    cmake
 
 # Install Python dependencies
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --user -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user -r /tmp/requirements.txt
 
 # Runtime stage
 FROM python:3.14-slim
 
 # Install curl for healthcheck
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends curl
 
 # Copy installed packages from builder
 COPY --from=builder /root/.local /root/.local
