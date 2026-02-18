@@ -75,6 +75,10 @@ class LLMConfig(BaseModel):
     provider: str = "ollama"
     model: str = "qwen3:14b"
     max_concurrent: int = Field(default=5, ge=1, le=20)
+    enable_prompt_caching: bool = Field(
+        default=True,
+        description="Enable prompt caching (Anthropic: explicit, OpenAI/OpenRouter: metrics only)",
+    )
     ollama_base_url: str = "http://localhost:11434"
 
 

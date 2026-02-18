@@ -94,6 +94,20 @@ BullishResearchAnalysis = ResearchAnalysis
 BearishResearchAnalysis = ResearchAnalysis
 
 
+def _parse_numeric_range(text: str) -> float | None:
+    """Parse a numeric value or range midpoint (e.g. "20-30" → 25.0)."""
+    try:
+        # Check for range: hyphen with digits on both sides (not a negative number)
+        if "-" in text:
+            parts = text.split("-", 1)
+            lo, hi = parts[0].strip(), parts[1].strip()
+            if lo and hi:
+                return (float(lo) + float(hi)) / 2
+        return float(text)
+    except ValueError:
+        return None
+
+
 class ResearchLLMResponse(BaseModel):
     """Unified LLM response for thesis research."""
 
@@ -113,11 +127,21 @@ class ResearchLLMResponse(BaseModel):
 
     @field_validator("target_upside", "target_downside", mode="before")
     @classmethod
-    def convert_na_to_none(cls, v: object) -> float | None:
-        """Convert 'N/A' strings to None for optional target fields."""
-        if isinstance(v, str) and v.strip().upper() in ("N/A", "NA", "NULL", "NONE"):
+    def parse_target_value(cls, v: object) -> float | None:
+        """Parse target percentage from various LLM output formats.
+
+        Handles: "N/A", "20%", "20-30%" (takes midpoint), "~15", plain numbers.
+        """
+        if v is None:
             return None
-        return v
+        if isinstance(v, (int, float)):
+            return float(v)
+        if not isinstance(v, str):
+            return None
+        cleaned = v.strip().rstrip("%").strip("~").strip()
+        if cleaned.upper() in ("N/A", "NA", "NULL", "NONE", ""):
+            return None
+        return _parse_numeric_range(cleaned)
 
 
 class ConfidenceCalculator(ABC):

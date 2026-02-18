@@ -19,17 +19,26 @@ T = TypeVar("T", bound=BaseModel)
 class OpenAIProvider(BaseLLMProvider):
     """OpenAI provider using official SDK."""
 
-    def __init__(self, model: str, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        enable_caching: bool = False,
+    ) -> None:
         """Initialize OpenAI provider.
 
         Args:
             model: Model name (e.g., "gpt-4o")
             api_key: API key (defaults to OPENAI_API_KEY env var)
             base_url: Custom base URL (defaults to OPENAI_API_BASE env var)
+            enable_caching: Enable cache metrics extraction from responses
 
         Raises:
             ValueError: If API key is not provided and OPENAI_API_KEY env var is empty
         """
+        super().__init__(enable_caching=enable_caching)
+
         if not api_key:
             msg = "OpenAI API key required in config (api_keys.openai_api_key)"
             raise ValueError(msg)
@@ -48,6 +57,25 @@ class OpenAIProvider(BaseLLMProvider):
             logger.debug(f"GPT-5 requires temperature=1, ignoring requested {temperature}")
             return 1.0
         return temperature
+
+    def _extract_usage(self, usage: object) -> LLMUsageStats:
+        """Extract usage stats with cache metrics from OpenAI/OpenRouter response.
+
+        Args:
+            usage: OpenAI usage object from response
+
+        Returns:
+            LLMUsageStats with cache_read_input_tokens from prompt_tokens_details
+        """
+        cached = None
+        details = getattr(usage, "prompt_tokens_details", None)
+        if details:
+            cached = getattr(details, "cached_tokens", None)
+        return LLMUsageStats(
+            input_tokens=getattr(usage, "prompt_tokens", None),
+            output_tokens=getattr(usage, "completion_tokens", None),
+            cache_read_input_tokens=cached,
+        )
 
     def _repair_json(self, json_str: str) -> str:
         """Attempt to repair common JSON errors from unreliable LLMs.
@@ -110,10 +138,7 @@ class OpenAIProvider(BaseLLMProvider):
             max_tokens=8192,
         )
         if response.usage:
-            self._last_usage = LLMUsageStats(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-            )
+            self._last_usage = self._extract_usage(response.usage)
         content = response.choices[0].message.content or ""
         logger.debug(f"OpenAI response length: {len(content)} chars")
         return content
@@ -147,10 +172,7 @@ class OpenAIProvider(BaseLLMProvider):
             max_tokens=8192,
         )
         if response.usage:
-            self._last_usage = LLMUsageStats(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-            )
+            self._last_usage = self._extract_usage(response.usage)
         message = response.choices[0].message
 
         if message.tool_calls:
@@ -299,10 +321,7 @@ class OpenAIProvider(BaseLLMProvider):
             },
         )
         if response.usage:
-            self._last_usage = LLMUsageStats(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-            )
+            self._last_usage = self._extract_usage(response.usage)
         content = response.choices[0].message.content or ""
         logger.debug(f"OpenAI structured response: {len(content)} chars")
 

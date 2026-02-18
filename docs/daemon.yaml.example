@@ -1057,6 +1057,12 @@ daemon:
     # Higher = faster analysis but more resource intensive
     max_concurrent: 5
 
+    # Enable prompt caching where supported
+    # Anthropic: explicit cache_control (reads 90% cheaper, writes 25% premium)
+    # OpenAI/OpenRouter: automatic (surfaces cache metrics)
+    # Ollama: no effect
+    enable_prompt_caching: true
+
     # TOOL_EXECUTION_MAX_CONCURRENT: Max concurrent tool executions (default: 5, range: 1-10)
     #   Controls backpressure for LLM tool calls, separate from LLM_MAX_CONCURRENT
     #   Set via environment variable, not in config file

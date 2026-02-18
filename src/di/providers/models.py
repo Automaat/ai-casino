@@ -61,6 +61,7 @@ def create_llm_client(
         base_url=daemon_config.llm.ollama_base_url or "http://localhost:11434",
         api_key=api_key,
         openai_base_url=daemon_config.api_keys.openai_api_base,
+        enable_prompt_caching=daemon_config.llm.enable_prompt_caching,
     )
 
     if metrics_collector is not None:

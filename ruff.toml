@@ -147,6 +147,12 @@ ignore = [
 "src/daemon/event_watcher.py" = [
     "PLR0913", # many args OK for comprehensive watcher config
 ]
+"src/models/llm.py" = [
+    "PLR0913", # many args OK for provider-specific connection params
+]
+"src/metrics/execution.py" = [
+    "PLR0913", # many args OK for cost estimation with cache params
+]
 "src/discovery/engine.py" = [
     "C901",    # complexity OK for multi-source discovery orchestration
     "PLR0912", # many branches OK for source evaluation
