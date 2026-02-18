@@ -2,7 +2,7 @@
 
 Multi-agent stock trading system: technical analysis, sentiment (FinBERT), news (LLM) → trading decisions (BUY/SELL/HOLD).
 
-**Stack:** Python 3.12, LangGraph, pandas-ta, transformers (FinBERT), yfinance, Anthropic/OpenAI SDKs
+**Stack:** Python 3.12, pandas-ta, transformers (FinBERT), yfinance, Anthropic/OpenAI SDKs
 **Status:** MVP complete (44% - 11/25 features)
 
 ---
@@ -11,11 +11,14 @@ Multi-agent stock trading system: technical analysis, sentiment (FinBERT), news 
 
 ```
 src/
-├── agents/          # TechnicalAnalyst, SentimentAnalyst, NewsAnalyst, TraderAgent
+├── coordinator/     # PRIMARY: TradingCoordinator (LLM tool-calling loop), tools/, memory
+├── agents/          # TraderAgent, TradingSupervisor, GamePlanAgent, RiskManagementAgent, MetaAgent, CriticAgent, TradeJournalAgent, EventTriageAgent
+├── workers/         # Stateless LLM execution units: technical, sentiment, news, fundamental, comparative, web_research, social, trump, thesis_research
+├── workflows/       # Per-symbol pipeline (called via analyze_symbol tool): stages/, orchestrator
 ├── data/            # market.py (Alpha Vantage + yfinance), news.py (Marketaux)
 ├── models/          # llm.py (facade), providers/ (Anthropic/OpenAI/Ollama), sentiment.py (FinBERT)
 ├── strategies/      # momentum.py (RSI + MACD)
-├── workflows/       # trading.py (sequential: data → technical → sentiment → news → decision)
+├── daemon/          # Runner, cycle orchestrator, task runner, scheduled tasks, API
 └── main.py
 tests/               # Mirror of src/, conftest.py has shared fixtures
 ```
@@ -152,9 +155,27 @@ Dev: Ollama qwen3:14b | Prod: Claude sonnet-4 | Alt: OpenAI gpt-4o
 
 Structured output with `{Agent}LLMResponse` models + fallback to `acomplete`. All prompts in `src/prompts/{agent}/` via `PromptLoader` — never hardcode.
 
-### Workflow: Sequential Pipeline
+### Workflow: Coordinator Mode (Primary)
 
-`fetch data → technical → sentiment → news → decision` → `TradingWorkflowResult`
+Coordinator mode is the **primary and preferred mode**. All new features must be added here.
+
+`TradingCoordinator` runs an LLM-driven agentic loop — the LLM autonomously decides which tools to call, in what order, for which symbols:
+
+```
+TradingCoordinator.run_cycle()
+  └─ llm.acomplete_with_tools(prompt, tools, max_tool_calls=N)
+       └─ LLM autonomously calls tools:
+            generate_game_plan → market_overview → screen_stocks
+            → analyze_symbol (triggers full supervisor+workers pipeline)
+            → execute_trade → save_observation → reflect_on_decision
+```
+
+**Adding new capabilities to coordinator:**
+- New tool → implement in `src/coordinator/tools/` or `src/tools/`
+- Register in `build_coordinator_registry()` (`src/coordinator/tools/__init__.py`)
+- New agent → wire as tool or inject into existing tool
+
+**Legacy pipeline** (`fetch data → technical → sentiment → news → decision`) still exists and is called by `analyze_symbol` tool internally. Do not add new features there — integrate at coordinator level instead.
 
 ---
 
