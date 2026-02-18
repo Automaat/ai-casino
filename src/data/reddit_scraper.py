@@ -105,6 +105,7 @@ class RedditPlaywrightScraper:
         self._context_pool: asyncio.Queue[BrowserContext] = asyncio.Queue()
         self._pool_size = 3
         self._pool_initialized = False
+        self._pool_init_lock = asyncio.Lock()
         self._pool_nav_counts: dict[int, int] = {}
         self._ua_rotate_interval = 15
 
@@ -185,7 +186,9 @@ class RedditPlaywrightScraper:
     async def _acquire_context(self) -> BrowserContext:
         """Acquire a context from pool, rotating user-agent if stale."""
         if not self._pool_initialized:
-            await self._init_context_pool()
+            async with self._pool_init_lock:
+                if not self._pool_initialized:
+                    await self._init_context_pool()
 
         ctx = await self._context_pool.get()
         nav_count = self._pool_nav_counts.get(id(ctx), 0)

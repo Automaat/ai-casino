@@ -186,7 +186,11 @@ async def _execute_workers_with_gather(
         gather_coro = asyncio.gather(*task_list, return_exceptions=True)
         results = await asyncio.wait_for(gather_coro, timeout=timeout_ms / 1000)
     except TimeoutError:
-        logger.warning(f"Worker execution timed out after {timeout_ms}ms, cancelling tasks")
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.warning(
+            f"Worker execution timed out after {timeout_ms}ms, cancelling tasks "
+            f"(duration {duration_ms:.0f}ms)"
+        )
         if metrics_collector:
             metrics_collector.record_timeout()
         for worker_task in tasks:
@@ -194,22 +198,15 @@ async def _execute_workers_with_gather(
                 worker_task.task.cancel()
         await asyncio.gather(*task_list, return_exceptions=True)
         raise
-    finally:
-        duration_ms = (time.perf_counter() - start_time) * 1000
-        logger.info(
-            f"Workers completed: {success_count}/{len(tasks)} successful, "
-            f"{error_count} errors, duration {duration_ms:.0f}ms"
-        )
 
     for worker_task, result in zip(tasks, results, strict=True):
         s, e = _handle_worker_result(worker_task, result, output, metrics_collector, warnings)
         success_count += s
         error_count += e
 
-    # Log final counts after processing all results
     duration_ms = (time.perf_counter() - start_time) * 1000
     logger.info(
-        f"Workers final: {success_count}/{len(tasks)} successful, "
+        f"Workers completed: {success_count}/{len(tasks)} successful, "
         f"{error_count} errors, duration {duration_ms:.0f}ms"
     )
 

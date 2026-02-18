@@ -182,6 +182,26 @@ class ScheduledTaskRunner:
         except Exception as e:
             logger.opt(exception=True).error(f"Background task {name} failed: {e}")
 
+    async def stop_background_tasks(self, wait_seconds: float = 30.0) -> None:
+        """Cancel and await all running background tasks.
+
+        Args:
+            wait_seconds: Max seconds to wait before cancelling
+        """
+        active = {name: t for name, t in self._background_tasks.items() if not t.done()}
+        if not active:
+            return
+
+        logger.info(f"Waiting for {len(active)} background task(s) to complete: {list(active)}")
+        _done, pending = await asyncio.wait(list(active.values()), timeout=wait_seconds)
+        if pending:
+            logger.warning(f"{len(pending)} background task(s) did not finish in time, cancelling")
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        self._background_tasks.clear()
+
     def _is_task_enabled(self, config_path: str) -> bool:
         """Check if task enabled via config path.
 

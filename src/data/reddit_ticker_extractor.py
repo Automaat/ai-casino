@@ -374,7 +374,7 @@ Extract tickers:"""
                     response_model=BatchTickerExtractionResponse,
                     temperature=self.config.extraction_temperature,
                 ),
-                timeout=self.config.extraction_timeout_s * 2,
+                timeout=self.config.extraction_timeout_s * len(batch),
             )
         except TimeoutError:
             post_ids = [p.id for p, _ in batch]
