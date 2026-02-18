@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Development Dockerfile for Svelte frontend with HMR
 FROM node:24-alpine
 
@@ -8,7 +9,8 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 # Copy source code (will be overridden by volume mounts)
 COPY . .
