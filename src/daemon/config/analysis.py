@@ -135,3 +135,12 @@ class OptionsFlowWatcherConfig(BaseModel):
     poll_interval_minutes: int = Field(default=15, ge=5, le=60)
     volume_spike_threshold: float = Field(default=2.0, ge=1.5, le=5.0)
     block_trade_threshold: float = Field(default=100_000, ge=10_000, le=1_000_000)
+
+
+class SocialSentimentWatcherConfig(BaseModel):
+    """Configuration for social sentiment watcher (Reddit + ApeWisdom)."""
+
+    enabled: bool = False
+    poll_interval_minutes: int = Field(default=30, ge=10, le=120)
+    trending_rank_threshold: int = Field(default=20, ge=5, le=100)
+    buzz_spike_threshold: float = Field(default=1.5, ge=1.1, le=5.0)

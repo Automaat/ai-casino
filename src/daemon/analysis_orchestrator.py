@@ -113,6 +113,7 @@ class AnalysisOrchestrator:
 
         self._economic_watcher = components.economic_calendar_watcher
         self._options_flow_watcher = components.options_flow_watcher
+        self._social_sentiment_watcher = components.social_sentiment_watcher
 
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")
@@ -462,6 +463,17 @@ class AnalysisOrchestrator:
                     f"Blocks={len(sig.block_trades)} | {sig.reason}"
                 )
 
+        social_sentiment_ctx = None
+        if self._social_sentiment_watcher:
+            sig = self._social_sentiment_watcher.get_signal(symbol)
+            if sig and sig.significance_score >= 0.3:
+                platforms = ", ".join(f"{p.platform}({p.mention_count})" for p in sig.platform_breakdown)
+                social_sentiment_ctx = (
+                    f"SOCIAL: {sig.direction} | Buzz={sig.buzz_score:.2f} | "
+                    f"Score={sig.significance_score:.2f} | "
+                    f"Trending={sig.is_trending} | {platforms} | {sig.reason}"
+                )
+
         return WorkflowExtraContext(
             sector_rotation_context=sector_ctx,
             earnings_context=earnings_ctx,
@@ -471,6 +483,7 @@ class AnalysisOrchestrator:
             degradation_context=degradation_context,
             economic_calendar_context=economic_ctx,
             options_flow_context=options_flow_ctx,
+            social_sentiment_context=social_sentiment_ctx,
         )
 
     async def _run_workflow_analysis(
