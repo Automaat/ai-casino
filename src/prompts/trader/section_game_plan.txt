@@ -2,8 +2,8 @@
 {game_plan_details}
 
 ⚠️ The game plan reflects the coordinator's pre-market conviction. If the game plan has a directional bias (Long/Short) for this symbol, treat it as a strong signal:
-- **Long Bias** → favor BUY, boost confidence +10-15% if technicals don't contradict
-- **Short Bias** → favor SELL, boost confidence +10-15% if technicals don't contradict
+- **Long Bias** → favor BUY when technicals don't contradict, treating this as a strong directional preference
+- **Short Bias** → favor SELL when technicals don't contradict, treating this as a strong directional preference
 - Only override game plan bias if multiple analysis pillars actively conflict with it
 - Missing sentiment/news data is NOT a reason to downgrade — absence of bearish signal ≠ bearish signal
 
