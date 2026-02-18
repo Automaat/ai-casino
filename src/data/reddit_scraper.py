@@ -50,7 +50,7 @@ USER_AGENTS = [
 ]
 
 _JS_EXTRACT_POSTS = """
-() => Array.from(document.querySelectorAll('div.thing.link[data-fullname]')).map(el => ({
+() => Array.from(document.querySelectorAll('div.thing.link[data-fullname]:not(.promoted)')).map(el => ({
     id: (el.dataset.fullname || '').replace('t3_', ''),
     title: el.querySelector('a.title')?.textContent?.trim() || '',
     url: (() => {
@@ -360,7 +360,8 @@ class RedditPlaywrightScraper:
         try:
             logger.debug(f"Scraping comments for post {post.id} (limit={limit})")
 
-            await page.goto(post.url, wait_until="domcontentloaded", timeout=30000)
+            comment_url = f"https://old.reddit.com/r/{post.subreddit}/comments/{post.id}/"
+            await page.goto(comment_url, wait_until="domcontentloaded", timeout=30000)
             await self._random_delay(self.config.delay_page_load_min, self.config.delay_page_load_max)
 
             raw_comments: list[dict] = await page.evaluate(_JS_EXTRACT_COMMENTS, limit)
