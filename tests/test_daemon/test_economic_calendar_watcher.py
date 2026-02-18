@@ -162,24 +162,6 @@ def test_compute_signal_medium_not_imminent(watcher: EconomicCalendarWatcher) ->
 
 
 @pytest.mark.unit
-def test_confidence_multiplier() -> None:
-    """Confidence multiplier maps correctly per risk level."""
-    from src.daemon.events import EconomicEventSignal
-
-    def make_signal(risk: EconomicRiskLevel) -> EconomicEventSignal:
-        return EconomicEventSignal(
-            upcoming_events=[],
-            risk_level=risk,
-            recommendation=EconomicRecommendation.TRADE_NORMALLY,
-            reason="test",
-        )
-
-    assert make_signal(EconomicRiskLevel.LOW).confidence_multiplier == 1.0
-    assert make_signal(EconomicRiskLevel.MEDIUM).confidence_multiplier == 0.85
-    assert make_signal(EconomicRiskLevel.HIGH).confidence_multiplier == 0.6
-
-
-@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fetch_and_assess(watcher: EconomicCalendarWatcher, mock_fetcher: MagicMock) -> None:
     """_fetch_and_assess calls fetcher via asyncio.to_thread and updates current_signal."""

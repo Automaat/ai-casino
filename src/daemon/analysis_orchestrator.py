@@ -122,7 +122,7 @@ class AnalysisOrchestrator:
                 # Repository creation may fail if database not enabled
                 self._signal_outcome_repo = components.container.signal_outcome_repository()
 
-        self._economic_watcher = getattr(components, "economic_calendar_watcher", None)
+        self._economic_watcher = components.economic_calendar_watcher
 
         self._notification_helper = DaemonNotificationHelper()
         logger.info("AnalysisOrchestrator initialized")

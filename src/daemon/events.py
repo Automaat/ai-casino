@@ -349,15 +349,6 @@ class EconomicEventSignal(BaseModel):
     computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     avoid_until: datetime | None = None
 
-    @property
-    def confidence_multiplier(self) -> float:
-        """Confidence multiplier based on risk level."""
-        return {
-            EconomicRiskLevel.HIGH: 0.6,
-            EconomicRiskLevel.MEDIUM: 0.85,
-            EconomicRiskLevel.LOW: 1.0,
-        }[self.risk_level]
-
     def __repr__(self) -> str:
         """String representation."""
         return (

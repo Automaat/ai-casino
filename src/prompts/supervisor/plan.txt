@@ -23,8 +23,14 @@ Owns Position: {owns_position}
 
 {economic_risk}
 
-(If economic_risk contains AVOID_NEW_POSITIONS: skip all analyses, return HOLD recommendation.
- If REDUCE_SIZE: proceed but note reduced confidence in reasoning.)
+**SAFETY-CRITICAL ECONOMIC RISK OVERRIDE**
+- If the `economic_risk` string contains `AVOID_NEW_POSITIONS`, you MUST:
+  - Treat the overall decision as **HOLD** due to economic risk.
+  - Set `required_analyses` to an empty list.
+  - Set `optional_analyses` to an empty list.
+  - Put **every** AnalysisType into `skip_analyses` with reason `"Economic risk AVOID_NEW_POSITIONS: trading frozen, HOLD recommendation"`.
+  - Set `reasoning` to explicitly state that the HOLD decision is caused by the `AVOID_NEW_POSITIONS` economic risk override.
+- If the `economic_risk` string contains `REDUCE_SIZE`, proceed with normal routing but add to `reasoning` that confidence is reduced due to economic calendar risk and position sizing should be reduced.
 
 ## Resource Constraints
 

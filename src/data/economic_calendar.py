@@ -192,6 +192,13 @@ class EconomicCalendarFetcher:
         from_dt = datetime.fromisoformat(from_date).replace(tzinfo=UTC)
         to_dt = datetime.fromisoformat(to_date).replace(tzinfo=UTC) + timedelta(days=1)
 
+        if datetime.now(UTC).year > 2026:
+            logger.warning(
+                "FOMC_DATES_2026 is stale - current year exceeds 2026. "
+                "Update FOMC_DATES_2026 in economic_calendar.py with dates from "
+                "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+            )
+
         for fomc_dt in FOMC_DATES_2026:
             if from_dt <= fomc_dt <= to_dt:
                 entries.append(

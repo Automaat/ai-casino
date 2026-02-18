@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import ClassVar
 
 from loguru import logger
 
@@ -30,22 +29,6 @@ class EconomicCalendarWatcherConfig:
 
 class EconomicCalendarWatcher:
     """Background service that polls FRED economic calendar and computes risk signals."""
-
-    HIGH_IMPACT_EVENTS: ClassVar[frozenset[str]] = frozenset(
-        {
-            "fed",
-            "fomc",
-            "federal reserve",
-            "interest rate decision",
-            "cpi",
-            "pce",
-            "nonfarm payroll",
-            "nfp",
-            "unemployment",
-            "gdp",
-            "inflation",
-        }
-    )
 
     def __init__(
         self,
