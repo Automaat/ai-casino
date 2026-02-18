@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
+from src.agents.supervisor.models import TradeApprovalContext
 from src.metrics.execution import ExecutionMetricsCollector
 from src.strategies.session import TradingSession
 from src.strategies.signal import Signal
@@ -538,6 +539,52 @@ async def _run_analyses_with_validation(
     return _AnalysisResult(analysis_output, validation_output, routing_decision)
 
 
+def _build_approval_context(
+    symbol: str,
+    decision_output: DecisionOutput,
+    risk_output: RiskAssessmentOutput,
+    analysis_result: _AnalysisResult,
+) -> TradeApprovalContext:
+    """Build TradeApprovalContext from workflow outputs."""
+    ao = analysis_result.analysis_output
+    ra = risk_output.risk_assessment
+    td = decision_output.final_decision
+    tech = ao.technical_analysis
+    sent = ao.sentiment_analysis
+    news = ao.news_analysis
+    bull = ao.bullish_research
+    bear = ao.bearish_research
+
+    return TradeApprovalContext(
+        symbol=symbol,
+        action=td.action,
+        confidence=td.confidence,
+        risk_level=ra.validation.risk_level,
+        risk_score=ra.validation.risk_score,
+        current_price=ra.current_price,
+        recommended_shares=ra.position_sizing.recommended_shares,
+        position_value=ra.position_sizing.position_value,
+        stop_loss_price=ra.stop_loss.stop_loss_price,
+        reward_risk_ratio=ra.reward_risk_ratio,
+        decision_reasoning=td.reasoning,
+        risk_warnings=ra.validation.warnings,
+        technical_summary=(
+            f"{tech.signal.value} | "
+            f"RSI={tech.rsi if tech.rsi is not None else 'N/A'} | "
+            f"MACD={tech.macd_hist if tech.macd_hist is not None else 'N/A'} | "
+            f"{tech.interpretation}"
+            if tech
+            else None
+        ),
+        sentiment_summary=(
+            f"{sent.overall_sentiment} (score={sent.sentiment_score:.2f}) | {sent.summary}" if sent else None
+        ),
+        news_summary=(f"{news.recommendation} | {news.impact_assessment}" if news else None),
+        bullish_summary=(f"{bull.thesis} | " + "; ".join(bull.key_points[:2]) if bull else None),
+        bearish_summary=(f"{bear.thesis} | " + "; ".join(bear.key_points[:2]) if bear else None),
+    )
+
+
 async def _make_decision_and_execute(
     ctx: _ExecutionContext,
     prep_result: _PreparationResult,
@@ -619,6 +666,27 @@ async def _make_decision_and_execute(
         and risk_output.risk_assessment.validation.approved
         and decision_output.final_decision.action != Signal.HOLD
     ):
+        # Supervisor approval gate
+        supervisor = getattr(ctx.workflow, "supervisor", None)
+        if supervisor is not None:
+            start = time.perf_counter()
+            approval_ctx = _build_approval_context(ctx.symbol, decision_output, risk_output, analysis_result)
+            approval = await supervisor.approve_trade(approval_ctx, symbol=ctx.symbol)
+            _record_stage(ctx.collector, "supervisor_approval", start)
+            if not approval.approved:
+                logger.info(
+                    f"Supervisor rejected {ctx.symbol} trade: {approval.reasoning} "
+                    f"concerns={approval.key_concerns}"
+                )
+                if ctx.workflow.notification_service and ctx.trading_session == TradingSession.REGULAR:
+                    await execution.notify_trade_execution(
+                        ctx.symbol,
+                        decision_output.final_decision,
+                        risk_output.risk_assessment,
+                        ctx.workflow.notification_service,
+                    )
+                return _ExecutionResult(decision_output, risk_output, None)
+
         execution_input = TradeExecutionInput(
             symbol=ctx.symbol,
             final_decision=decision_output.final_decision,

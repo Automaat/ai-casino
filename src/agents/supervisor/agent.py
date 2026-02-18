@@ -14,6 +14,8 @@ from src.agents.supervisor.models import (
     CandidateRanking,
     PlanningContext,
     SynthesisContext,
+    TradeApprovalContext,
+    TradeApprovalDecision,
 )
 from src.execution_tracking import track_agent
 from src.models.llm import LLMClient
@@ -602,6 +604,66 @@ class TradingSupervisor:
                 lines.append(f"{analysis_type.value.upper()}: {summary}")
 
         return "\n".join(lines)
+
+    @track_agent
+    async def approve_trade(
+        self, context: TradeApprovalContext, *, symbol: str | None = None
+    ) -> TradeApprovalDecision:
+        """Final gate: review full research and approve or reject trade.
+
+        Args:
+            context: Trade approval context with all research summaries
+            symbol: Trading symbol for execution tracking; defaults to context.symbol
+
+        Returns:
+            TradeApprovalDecision with approved flag and reasoning
+        """
+        if symbol is None:
+            symbol = context.symbol
+        prompt = self._prompts.load(
+            "approve_trade",
+            symbol=symbol,
+            action=context.action.value,
+            confidence=context.confidence,
+            risk_level=context.risk_level,
+            risk_score=context.risk_score,
+            current_price=context.current_price,
+            recommended_shares=context.recommended_shares,
+            position_value=context.position_value,
+            stop_loss_price=context.stop_loss_price,
+            reward_risk_ratio=context.reward_risk_ratio or "N/A",
+            decision_reasoning="\n".join(f"- {r}" for r in context.decision_reasoning),
+            technical_summary=context.technical_summary or "N/A",
+            sentiment_summary=context.sentiment_summary or "N/A",
+            news_summary=context.news_summary or "N/A",
+            bullish_summary=context.bullish_summary or "N/A",
+            bearish_summary=context.bearish_summary or "N/A",
+            risk_warnings="\n".join(f"- {w}" for w in context.risk_warnings) or "None",
+        )
+        system = self._prompts.load("system")
+        try:
+            decision = await self.llm.astructured(
+                prompt, TradeApprovalDecision, system=system, temperature=0.3
+            )
+        except StructuredOutputError as e:
+            logger.opt(exception=True).warning(f"Structured output failed, using fallback: {e}")
+            decision = self._default_approval(context)
+        logger.info(
+            f"Supervisor trade approval for {symbol}: "
+            f"{'APPROVED' if decision.approved else 'REJECTED'} - {decision.reasoning}"
+        )
+        return decision
+
+    def _default_approval(self, context: TradeApprovalContext) -> TradeApprovalDecision:
+        """Fallback approval: approve if confidence >= 0.7 and risk LOW/MEDIUM."""
+        approved = context.confidence >= 0.7 and context.risk_level in ("LOW", "MEDIUM")
+        return TradeApprovalDecision(
+            approved=approved,
+            reasoning=f"Fallback heuristic: confidence={context.confidence:.2f}, risk={context.risk_level}",
+            key_concerns=(
+                [] if approved else ["LLM unavailable, heuristic rejected low-confidence/high-risk trade"]
+            ),
+        )
 
     async def coordinate(
         self,
