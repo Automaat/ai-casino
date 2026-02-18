@@ -569,7 +569,10 @@ def _build_approval_context(
         decision_reasoning=td.reasoning,
         risk_warnings=ra.validation.warnings,
         technical_summary=(
-            f"{tech.signal.value} | RSI={tech.rsi} | MACD={tech.macd_hist} | {tech.interpretation}"
+            f"{tech.signal.value} | "
+            f"RSI={tech.rsi if tech.rsi is not None else 'N/A'} | "
+            f"MACD={tech.macd_hist if tech.macd_hist is not None else 'N/A'} | "
+            f"{tech.interpretation}"
             if tech
             else None
         ),
@@ -666,13 +669,22 @@ async def _make_decision_and_execute(
         # Supervisor approval gate
         supervisor = getattr(ctx.workflow, "supervisor", None)
         if supervisor is not None:
+            start = time.perf_counter()
             approval_ctx = _build_approval_context(ctx.symbol, decision_output, risk_output, analysis_result)
             approval = await supervisor.approve_trade(approval_ctx, symbol=ctx.symbol)
+            _record_stage(ctx.collector, "supervisor_approval", start)
             if not approval.approved:
                 logger.info(
                     f"Supervisor rejected {ctx.symbol} trade: {approval.reasoning} "
                     f"concerns={approval.key_concerns}"
                 )
+                if ctx.workflow.notification_service and ctx.trading_session == TradingSession.REGULAR:
+                    await execution.notify_trade_execution(
+                        ctx.symbol,
+                        decision_output.final_decision,
+                        risk_output.risk_assessment,
+                        ctx.workflow.notification_service,
+                    )
                 return _ExecutionResult(decision_output, risk_output, None)
 
         execution_input = TradeExecutionInput(

@@ -8,9 +8,11 @@ from src.agents.supervisor import (
     PlanningContext,
     SynthesisContext,
 )
+from src.agents.supervisor.models import TradeApprovalContext, TradeApprovalDecision
 from src.models.providers.base import StructuredOutputError
 from src.strategies.regime import MarketRegime, RegimeAnalysis, RegimeIndicators
 from src.strategies.session import TradingSession
+from src.strategies.signal import Signal
 
 
 def test_supervisor_init(test_container):
@@ -471,3 +473,103 @@ def test_default_routing_combined_constraints(test_container):
 
     # Still should have reasoning
     assert "fallback" in decision.reasoning.lower()
+
+
+def _make_approval_context(
+    *,
+    confidence: float = 0.8,
+    risk_level: str = "LOW",
+    action: Signal = Signal.BUY,
+) -> TradeApprovalContext:
+    return TradeApprovalContext(
+        symbol="AAPL",
+        action=action,
+        confidence=confidence,
+        risk_level=risk_level,
+        risk_score=0.3,
+        current_price=150.0,
+        recommended_shares=10,
+        position_value=1500.0,
+        stop_loss_price=145.0,
+        reward_risk_ratio=2.5,
+        decision_reasoning=["Strong momentum", "Positive news"],
+        risk_warnings=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_approve_trade_high_confidence_low_risk(test_container):
+    """Approve trade with high confidence and low risk."""
+    supervisor = test_container.supervisor()
+    ctx = _make_approval_context(confidence=0.85, risk_level="LOW")
+
+    decision = await supervisor.approve_trade(ctx, symbol="AAPL")
+
+    assert isinstance(decision, TradeApprovalDecision)
+    assert decision.approved is True
+    assert decision.reasoning
+
+
+@pytest.mark.asyncio
+async def test_approve_trade_high_confidence_medium_risk(test_container):
+    """Approve trade with high confidence and medium risk."""
+    supervisor = test_container.supervisor()
+    ctx = _make_approval_context(confidence=0.75, risk_level="MEDIUM")
+
+    decision = await supervisor.approve_trade(ctx, symbol="AAPL")
+
+    assert isinstance(decision, TradeApprovalDecision)
+    assert decision.approved is True
+
+
+@pytest.mark.asyncio
+async def test_approve_trade_low_confidence_rejected(test_container):
+    """Reject trade with low confidence."""
+    supervisor = test_container.supervisor()
+    ctx = _make_approval_context(confidence=0.5, risk_level="LOW")
+
+    decision = await supervisor.approve_trade(ctx, symbol="AAPL")
+
+    assert isinstance(decision, TradeApprovalDecision)
+    assert decision.approved is False
+    assert len(decision.key_concerns) > 0
+
+
+@pytest.mark.asyncio
+async def test_approve_trade_high_risk_rejected(test_container):
+    """Reject trade with high risk level."""
+    supervisor = test_container.supervisor()
+    ctx = _make_approval_context(confidence=0.9, risk_level="HIGH")
+
+    decision = await supervisor.approve_trade(ctx, symbol="AAPL")
+
+    assert isinstance(decision, TradeApprovalDecision)
+    assert decision.approved is False
+    assert len(decision.key_concerns) > 0
+
+
+@pytest.mark.asyncio
+async def test_approve_trade_llm_fallback(test_container):
+    """Fall back to heuristic when LLM fails."""
+    supervisor = test_container.supervisor()
+    supervisor.llm.astructured.side_effect = StructuredOutputError("JSON parse error")
+    ctx = _make_approval_context(confidence=0.8, risk_level="LOW")
+
+    decision = await supervisor.approve_trade(ctx, symbol="AAPL")
+
+    assert isinstance(decision, TradeApprovalDecision)
+    assert decision.approved is True
+    assert "fallback" in decision.reasoning.lower()
+
+
+@pytest.mark.asyncio
+async def test_approve_trade_fallback_logs_rejection(test_container):
+    """Fallback heuristic rejects low-confidence/high-risk when LLM fails."""
+    supervisor = test_container.supervisor()
+    supervisor.llm.astructured.side_effect = StructuredOutputError("JSON parse error")
+    ctx = _make_approval_context(confidence=0.4, risk_level="HIGH")
+
+    decision = await supervisor.approve_trade(ctx, symbol="AAPL")
+
+    assert decision.approved is False
+    assert len(decision.key_concerns) > 0
