@@ -357,6 +357,52 @@ class EconomicEventSignal(BaseModel):
         )
 
 
+class SocialSentimentDirection(StrEnum):
+    """Social sentiment direction."""
+
+    BULLISH = "BULLISH"
+    BEARISH = "BEARISH"
+    NEUTRAL = "NEUTRAL"
+
+
+class PlatformSentiment(BaseModel):
+    """Sentiment data from a single platform."""
+
+    platform: str
+    mention_count: int
+    sentiment_score: float = Field(ge=-1.0, le=1.0)
+    mention_delta_pct: float
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"PlatformSentiment({self.platform} "
+            f"mentions={self.mention_count} score={self.sentiment_score:.2f})"
+        )
+
+
+class SocialSentimentSignal(BaseModel):
+    """Aggregated social sentiment signal for a symbol."""
+
+    symbol: str
+    direction: SocialSentimentDirection
+    confidence: float = Field(ge=0.0, le=1.0)
+    buzz_score: float = Field(ge=0.0, le=1.0)
+    platform_breakdown: list[PlatformSentiment] = Field(default_factory=list)
+    is_trending: bool
+    significance_score: float = Field(ge=0.0, le=1.0)
+    reason: str
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"SocialSentimentSignal({self.symbol} "
+            f"dir={self.direction} buzz={self.buzz_score:.2f} "
+            f"score={self.significance_score:.2f})"
+        )
+
+
 class OptionsFlowDirection(StrEnum):
     """Net premium direction from options flow."""
 

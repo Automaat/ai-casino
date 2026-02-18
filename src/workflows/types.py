@@ -37,6 +37,7 @@ class WorkflowExtraContext(BaseModel):
     economic_calendar_context: str | None = None
     options_flow_context: str | None = None
     portfolio_health_context: str | None = None
+    social_sentiment_context: str | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

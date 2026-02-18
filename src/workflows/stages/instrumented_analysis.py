@@ -461,6 +461,7 @@ async def _run_analyses_with_validation(
         portfolio_health_constraints=(
             ctx.extra_context.portfolio_health_context if ctx.extra_context else None
         ),
+        social_sentiment=ctx.extra_context.social_sentiment_context if ctx.extra_context else None,
     )
 
     planning_fallback_used = False

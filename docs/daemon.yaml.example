@@ -720,6 +720,19 @@ daemon:
     # FRED API cache TTL (10-120 minutes)
     cache_ttl_minutes: 30
 
+  social_sentiment_watcher:
+    # Social sentiment aggregation (Reddit DB + ApeWisdom WSB trending)
+    # Computes per-symbol buzz score, sentiment direction, trending status
+    # Injects social signal into supervisor planning context
+    # No API key needed (ApeWisdom is free, Reddit data from DB)
+    enabled: false
+    # How often to poll (10-120 minutes)
+    poll_interval_minutes: 30
+    # ApeWisdom rank threshold for "trending" (5-100)
+    trending_rank_threshold: 20
+    # Buzz spike detection threshold (1.1-5.0x)
+    buzz_spike_threshold: 1.5
+
   options_flow_watcher:
     # Options flow analysis (institutional positioning via yfinance)
     # Detects unusual volume, high-premium contracts, put/call ratio

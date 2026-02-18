@@ -18,6 +18,7 @@ from src.daemon.config.analysis import (
     NewsTrendingWatcherConfig,
     NewsWatcherConfig,
     OptionsFlowWatcherConfig,
+    SocialSentimentWatcherConfig,
     SocialWatcherConfig,
     TrumpWatcherConfig,
 )
@@ -116,6 +117,7 @@ __all__ = [
     "ScheduleConfig",
     "SectorRotationConfig",
     "SignalTrackingConfig",
+    "SocialSentimentWatcherConfig",
     "SocialWatcherConfig",
     "StateConfig",
     "TelegramNotificationConfig",
@@ -171,6 +173,9 @@ class DaemonConfig(BaseModel):
         default_factory=EconomicCalendarWatcherConfig
     )
     options_flow_watcher: OptionsFlowWatcherConfig = Field(default_factory=OptionsFlowWatcherConfig)
+    social_sentiment_watcher: SocialSentimentWatcherConfig = Field(
+        default_factory=SocialSentimentWatcherConfig
+    )
     event_integration: EventWatcherIntegrationConfig = Field(default_factory=EventWatcherIntegrationConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -232,6 +237,7 @@ class DaemonConfig(BaseModel):
             "news_trending_watcher": daemon_data.pop("news_trending_watcher", {}) or {},
             "economic_calendar_watcher": daemon_data.pop("economic_calendar_watcher", {}) or {},
             "options_flow_watcher": daemon_data.pop("options_flow_watcher", {}) or {},
+            "social_sentiment_watcher": daemon_data.pop("social_sentiment_watcher", {}) or {},
             "event_integration": daemon_data.pop("event_integration", {}) or {},
             "api": daemon_data.pop("api", {}) or {},
             "llm": daemon_data.pop("llm", {}) or {},
@@ -314,6 +320,7 @@ class DaemonConfig(BaseModel):
             news_trending_watcher=NewsTrendingWatcherConfig(**sections["news_trending_watcher"]),
             economic_calendar_watcher=EconomicCalendarWatcherConfig(**sections["economic_calendar_watcher"]),
             options_flow_watcher=OptionsFlowWatcherConfig(**sections["options_flow_watcher"]),
+            social_sentiment_watcher=SocialSentimentWatcherConfig(**sections["social_sentiment_watcher"]),
             event_integration=EventWatcherIntegrationConfig(**sections["event_integration"]),
             api=ApiConfig(
                 **sections["api"], circuit_breaker=CircuitBreakerConfig(**sections["circuit_breaker"])

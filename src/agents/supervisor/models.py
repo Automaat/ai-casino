@@ -96,6 +96,7 @@ class PlanningContext(BaseModel):
     position_pnl: PositionPnLContext | None = None
     portfolio_summary: PortfolioSummary | None = None
     portfolio_health_constraints: str | None = None
+    social_sentiment: str | None = None  # e.g. "BULLISH | Buzz=0.72 | Trending #5"
 
 
 class SynthesisContext(BaseModel):
