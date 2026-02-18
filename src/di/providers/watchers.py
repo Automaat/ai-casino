@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState
     from src.daemon.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.daemon.watchers.options_flow_watcher import OptionsFlowWatcher
+    from src.daemon.watchers.social_sentiment_watcher import SocialSentimentWatcher
     from src.di.container import AppContainer
 
 
@@ -278,4 +279,38 @@ def create_options_flow_watcher(
     )
     watcher = OptionsFlowWatcher(fetcher=fetcher, config=watcher_config)
     logger.info("OptionsFlowWatcher created")
+    return watcher
+
+
+def create_social_sentiment_watcher(
+    daemon_config: DaemonConfig,
+) -> SocialSentimentWatcher | None:
+    """Create social sentiment watcher if enabled.
+
+    Args:
+        daemon_config: Daemon configuration
+
+    Returns:
+        SocialSentimentWatcher instance if enabled, None otherwise
+    """
+    from src.daemon.watchers.social_sentiment_watcher import (
+        SocialSentimentWatcher,
+        SocialSentimentWatcherConfig,
+    )
+    from src.data.apewisdom import ApeWisdomFetcher
+
+    config = daemon_config.social_sentiment_watcher
+    if not config.enabled:
+        logger.debug("SocialSentimentWatcher disabled in config")
+        return None
+
+    fetcher = ApeWisdomFetcher()
+    watcher_config = SocialSentimentWatcherConfig(
+        poll_interval_minutes=config.poll_interval_minutes,
+        trending_rank_threshold=config.trending_rank_threshold,
+        buzz_spike_threshold=config.buzz_spike_threshold,
+        symbols=list(daemon_config.watchlist),
+    )
+    watcher = SocialSentimentWatcher(apewisdom_fetcher=fetcher, config=watcher_config)
+    logger.info("SocialSentimentWatcher created")
     return watcher
