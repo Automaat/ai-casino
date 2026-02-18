@@ -3,8 +3,6 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import AccountInfo, RiskAssessment
@@ -33,7 +31,6 @@ def create_test_workflow(
     metrics_tracker=None,
     notification_service=None,
     snapshot_on_trade=False,
-    analysis_pattern="sequential",
 ):
     """Helper to create TradingWorkflow with new config/components pattern."""
     config = WorkflowConfig(
@@ -42,7 +39,6 @@ def create_test_workflow(
         trump_mode=trump_mode,
         snapshot_on_trade=snapshot_on_trade,
         pre_trade_backtest_config=pre_trade_backtest_config,
-        analysis_pattern=analysis_pattern,
     )
 
     components = WorkflowComponents(
@@ -67,11 +63,6 @@ def test_trading_workflow_init(test_container):
 
     assert workflow.market_fetcher is not None
     assert workflow.news_fetcher is not None
-    assert workflow.sentiment_analyst is not None
-    assert workflow.news_analyst is not None
-    assert workflow.fundamental_analyst is not None
-    assert workflow.bullish_researcher is not None
-    assert workflow.bearish_researcher is not None
     assert workflow.trader is not None
     assert workflow.risk_manager is not None
 
@@ -82,7 +73,7 @@ def test_trading_workflow_init_ensemble(test_container):
 
     assert workflow.use_ensemble is True
     assert isinstance(workflow._default_strategy, EnsembleStrategy)
-    assert repr(workflow) == "TradingWorkflow(agents=9, mode=ensemble)"
+    assert repr(workflow) == "TradingWorkflow(mode=ensemble)"
 
 
 def test_trading_workflow_init_meta_agent(test_container):
@@ -92,7 +83,7 @@ def test_trading_workflow_init_meta_agent(test_container):
 
     assert workflow.use_meta_agent is True
     assert workflow.meta_agent is not None
-    assert repr(workflow) == "TradingWorkflow(agents=9, mode=meta-agent)"
+    assert repr(workflow) == "TradingWorkflow(mode=meta-agent)"
 
 
 async def test_trading_workflow_analyze(test_container_full):
@@ -147,36 +138,6 @@ async def test_fetch_data(test_container_full, sample_news_articles):
     assert state["market_data"] is not None
     assert state["news_articles"] is not None
     assert len(state["news_articles"]) > 0
-
-
-async def test_run_technical_analysis(test_container, sample_ohlcv_data):
-    """Test technical analysis component."""
-    from src.strategies.momentum import MomentumStrategy
-
-    technical_analyst = test_container.technical_analyst()(MomentumStrategy())
-    result = await technical_analyst.analyze("AAPL", sample_ohlcv_data)
-
-    assert result is not None
-    assert isinstance(result, TechnicalAnalysis)
-
-
-async def test_run_sentiment_analysis(test_container, sample_news_articles, mocker):
-    """Test sentiment analysis component."""
-
-    # Mock run_in_executor to avoid ProcessPoolExecutor pickling issues
-    async def mock_executor(executor, fn, *args):
-        # Return mock sentiment scores for the 3 articles
-        return [{"positive": 0.7, "neutral": 0.2, "negative": 0.1} for _ in range(3)]
-
-    mocker.patch("asyncio.get_running_loop").return_value.run_in_executor = AsyncMock(
-        side_effect=mock_executor
-    )
-
-    workflow = test_container.workflow_momentum(container=test_container)
-    result = await workflow.sentiment_analyst.analyze("AAPL", sample_news_articles)
-
-    assert result is not None
-    assert isinstance(result, SentimentAnalysis)
 
 
 async def test_make_decision(test_container, sample_bullish_research, sample_bearish_research):
@@ -263,7 +224,7 @@ async def test_make_decision(test_container, sample_bullish_research, sample_bea
 def test_repr(test_container):
     """Test workflow string representation."""
     workflow = test_container.workflow_momentum(container=test_container)
-    assert repr(workflow) == "TradingWorkflow(agents=9, mode=momentum)"
+    assert repr(workflow) == "TradingWorkflow(mode=momentum)"
 
 
 async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
@@ -543,20 +504,6 @@ async def test_workflow_continues_when_fundamental_rate_limited(test_container_f
     assert any("rate limit" in w.lower() for w in result.warnings)
 
 
-async def test_workflow_raises_when_fundamental_fails_non_rate_limit(test_container_full):
-    """Test sequential workflow re-raises non-rate-limit errors from fundamental analysis."""
-    # Override fundamental fetcher to raise non-rate-limit error
-    mock_fundamental_fetcher = MagicMock()
-    mock_fundamental_fetcher.fetch_overview.side_effect = Exception("Invalid API key")
-    test_container_full.fundamental_fetcher.override(mock_fundamental_fetcher)
-
-    # Sequential mode: fundamental is a required stage that propagates errors
-    workflow = create_test_workflow(test_container_full, analysis_pattern="sequential")
-
-    with pytest.raises(Exception, match="Invalid API key"):
-        await workflow.analyze("AAPL", period_days=90)
-
-
 async def test_backtest_validation_pass(test_container_full):
     """Test backtest validation passes with good metrics - confidence unchanged."""
     config = PreTradeBacktestingConfig(
@@ -587,7 +534,9 @@ async def test_backtest_validation_pass(test_container_full):
         end_date=datetime.now(UTC),
     )
 
-    with patch.object(workflow.vectorbt_runner, "run_backtest", return_value=mock_backtest_result):
+    with patch(
+        "src.backtesting.vectorbt_runner.VectorBTRunner.run_backtest", return_value=mock_backtest_result
+    ):
         result = await workflow.analyze("AAPL", period_days=90)
 
     assert result.backtest_validation is not None
@@ -628,7 +577,9 @@ async def test_backtest_validation_fail_sharpe(test_container_full):
         end_date=datetime.now(UTC),
     )
 
-    with patch.object(workflow.vectorbt_runner, "run_backtest", return_value=mock_backtest_result):
+    with patch(
+        "src.backtesting.vectorbt_runner.VectorBTRunner.run_backtest", return_value=mock_backtest_result
+    ):
         result = await workflow.analyze("AAPL", period_days=90)
 
     assert result.backtest_validation is not None
@@ -667,7 +618,10 @@ async def test_backtest_validation_error(test_container_full):
         test_container_full, use_meta_agent=False, pre_trade_backtest_config=config
     )
 
-    with patch.object(workflow.vectorbt_runner, "run_backtest", side_effect=ValueError("Insufficient data")):
+    with patch(
+        "src.backtesting.vectorbt_runner.VectorBTRunner.run_backtest",
+        side_effect=ValueError("Insufficient data"),
+    ):
         result = await workflow.analyze("AAPL", period_days=90)
 
     assert result.backtest_validation is None
@@ -692,7 +646,7 @@ async def test_broker_api_failure_blocks_trade(test_container_full):
         owns_position=False,
         position_qty=None,
     )
-    with patch.object(workflow.trader, "decide", return_value=mock_decision):
+    with patch("src.agents.trader.TraderAgent.decide", new_callable=AsyncMock, return_value=mock_decision):
         result = await workflow.analyze("AAPL")
 
     assert not result.risk.validation.approved
@@ -737,7 +691,7 @@ async def test_order_submission_failure_handled(test_container_full):
         owns_position=False,
         position_qty=None,
     )
-    with patch.object(workflow.trader, "decide", return_value=mock_decision):
+    with patch("src.agents.trader.TraderAgent.decide", new_callable=AsyncMock, return_value=mock_decision):
         result = await workflow.analyze("AAPL")
 
     # Risk assessment should approve (broker was available for account info)
@@ -804,8 +758,8 @@ async def test_risk_rejection_notification_suppressed_pre_market(test_container_
     )
 
     with (
-        patch.object(workflow.trader, "decide", return_value=mock_decision),
-        patch.object(workflow.risk_manager, "assess", return_value=mock_risk),
+        patch("src.agents.trader.TraderAgent.decide", new_callable=AsyncMock, return_value=mock_decision),
+        patch("src.agents.risk.RiskManagementAgent.assess", return_value=mock_risk),
     ):
         result = await workflow.analyze("AAPL", trading_session=TradingSession.PRE_MARKET)
 
@@ -875,8 +829,8 @@ async def test_risk_rejection_notification_sent_regular_hours(test_container_ful
     )
 
     with (
-        patch.object(workflow.trader, "decide", return_value=mock_decision),
-        patch.object(workflow.risk_manager, "assess", return_value=mock_risk),
+        patch("src.agents.trader.TraderAgent.decide", new_callable=AsyncMock, return_value=mock_decision),
+        patch("src.agents.risk.RiskManagementAgent.assess", return_value=mock_risk),
     ):
         result = await workflow.analyze("AAPL", trading_session=TradingSession.REGULAR)
 

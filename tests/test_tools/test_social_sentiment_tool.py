@@ -52,13 +52,13 @@ class TestGetSocialSentimentTool:
         """Test successful execution."""
         from dependency_injector import providers
 
-        from src.agents.social import SocialSentimentAnalyst
+        from src.workers.social import SocialSentimentWorker
 
         tool = GetSocialSentimentTool(container=test_container_full)
 
-        mock_analyst = MagicMock(spec=SocialSentimentAnalyst)
+        mock_analyst = MagicMock(spec=SocialSentimentWorker)
         mock_analyst.analyze = AsyncMock(return_value=mock_analysis)
-        test_container_full.social_sentiment_analyst.override(providers.Factory(lambda: mock_analyst))
+        test_container_full.social_sentiment_worker.override(providers.Factory(lambda: mock_analyst))
 
         result = tool.execute(symbol="AAPL")
 
@@ -73,13 +73,13 @@ class TestGetSocialSentimentTool:
         """Test that symbol is uppercased."""
         from dependency_injector import providers
 
-        from src.agents.social import SocialSentimentAnalyst
+        from src.workers.social import SocialSentimentWorker
 
         tool = GetSocialSentimentTool(container=test_container_full)
 
-        mock_analyst = MagicMock(spec=SocialSentimentAnalyst)
+        mock_analyst = MagicMock(spec=SocialSentimentWorker)
         mock_analyst.analyze = AsyncMock(return_value=mock_analysis)
-        test_container_full.social_sentiment_analyst.override(providers.Factory(lambda: mock_analyst))
+        test_container_full.social_sentiment_worker.override(providers.Factory(lambda: mock_analyst))
 
         tool.execute(symbol="aapl")
 
@@ -89,13 +89,13 @@ class TestGetSocialSentimentTool:
         """Test error handling on failure."""
         from dependency_injector import providers
 
-        from src.agents.social import SocialSentimentAnalyst
+        from src.workers.social import SocialSentimentWorker
 
         tool = GetSocialSentimentTool(container=test_container_full)
 
-        mock_analyst = MagicMock(spec=SocialSentimentAnalyst)
+        mock_analyst = MagicMock(spec=SocialSentimentWorker)
         mock_analyst.analyze = AsyncMock(side_effect=Exception("API error"))
-        test_container_full.social_sentiment_analyst.override(providers.Factory(lambda: mock_analyst))
+        test_container_full.social_sentiment_worker.override(providers.Factory(lambda: mock_analyst))
 
         result = tool.execute(symbol="INVALID")
 

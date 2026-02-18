@@ -85,19 +85,16 @@ class TrumpAnalysisTool(BaseTool):
         logger.info(f"Analyzing Trump posts from last {days} days")
 
         try:
-            from src.agents.trump import TrumpAnalyst
-
             fetcher = self._container.truth_social_fetcher()
             post_data = fetcher.fetch_recent(hours=hours)
 
             if not post_data.posts:
                 return f"No Trump posts found in the last {days} days."
 
-            llm = self._container.llm_client()
-            analyst = TrumpAnalyst(llm)
+            worker = self._container.trump_worker()
 
             # Run async analysis (handles existing event loop)
-            coro = cast("Coroutine[Any, Any, TrumpAnalysis]", analyst.analyze(post_data.posts))
+            coro = cast("Coroutine[Any, Any, TrumpAnalysis]", worker.analyze(post_data.posts))
             analysis = _run_async(coro)
 
             return self._format_analysis(analysis, days)

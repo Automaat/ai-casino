@@ -1,47 +1,20 @@
-"""Unified thesis researcher agent supporting both bullish and bearish analysis."""
+"""Thesis research analysis models."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from src.agents.base_researcher import BaseResearcher, ResearchDirection
-from src.agents.comparative import ComparativeAnalysis
-from src.agents.fundamental import FundamentalAnalysis
-from src.agents.news import NewsAnalysis
-from src.agents.sentiment import SentimentAnalysis
-from src.agents.technical import TechnicalAnalysis
-from src.agents.trump import TrumpAnalysis
-from src.execution_tracking import track_agent
-from src.models.llm import LLMClient
+from src.agents.base_researcher import ResearchDirection
 from src.strategies.signal import Signal
 
-
-class ResearchLLMResponse(BaseModel):
-    """Unified LLM response for thesis research."""
-
-    thesis: str = Field(description="Investment thesis (3-4 sentences)")
-    key_strengths: list[str] = Field(
-        default_factory=list, description="Top 3-5 bullish signals (bullish only)"
-    )
-    key_weaknesses: list[str] = Field(
-        default_factory=list, description="Top 3-5 bearish signals (bearish only)"
-    )
-    target_upside: float | None = Field(
-        default=None, description="Expected upside percentage or null (bullish only)"
-    )
-    target_downside: float | None = Field(
-        default=None, description="Expected downside percentage or null (bearish only)"
-    )
-
-    @field_validator("target_upside", "target_downside", mode="before")
-    @classmethod
-    def convert_na_to_none(cls, v: object) -> float | None:
-        """Convert 'N/A' strings to None for optional target fields."""
-        if isinstance(v, str) and v.strip().upper() in ("N/A", "NA", "NULL", "NONE"):
-            return None
-        return v
+if TYPE_CHECKING:
+    from src.agents.fundamental import FundamentalAnalysis
+    from src.agents.news import NewsAnalysis
+    from src.agents.sentiment import SentimentAnalysis
+    from src.agents.technical import TechnicalAnalysis
 
 
 class ResearchAnalysis(BaseModel):
@@ -121,6 +94,32 @@ BullishResearchAnalysis = ResearchAnalysis
 BearishResearchAnalysis = ResearchAnalysis
 
 
+class ResearchLLMResponse(BaseModel):
+    """Unified LLM response for thesis research."""
+
+    thesis: str = Field(description="Investment thesis (3-4 sentences)")
+    key_strengths: list[str] = Field(
+        default_factory=list, description="Top 3-5 bullish signals (bullish only)"
+    )
+    key_weaknesses: list[str] = Field(
+        default_factory=list, description="Top 3-5 bearish signals (bearish only)"
+    )
+    target_upside: float | None = Field(
+        default=None, description="Expected upside percentage or null (bullish only)"
+    )
+    target_downside: float | None = Field(
+        default=None, description="Expected downside percentage or null (bearish only)"
+    )
+
+    @field_validator("target_upside", "target_downside", mode="before")
+    @classmethod
+    def convert_na_to_none(cls, v: object) -> float | None:
+        """Convert 'N/A' strings to None for optional target fields."""
+        if isinstance(v, str) and v.strip().upper() in ("N/A", "NA", "NULL", "NONE"):
+            return None
+        return v
+
+
 class ConfidenceCalculator(ABC):
     """Abstract base for direction-specific confidence calculation."""
 
@@ -129,20 +128,10 @@ class ConfidenceCalculator(ABC):
         self,
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
-        news: NewsAnalysis,
+        _news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
     ) -> float:
-        """Calculate confidence score.
-
-        Args:
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result
-            fundamental: Fundamental analysis result
-
-        Returns:
-            Confidence score (0.0-1.0)
-        """
+        """Calculate confidence score."""
         ...
 
 
@@ -153,46 +142,30 @@ class BullishConfidenceCalculator(ConfidenceCalculator):
         self,
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
-        news: NewsAnalysis,  # noqa: ARG002
+        _news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
     ) -> float:
-        """Calculate confidence in bull case.
+        """Calculate confidence in bull case."""
+        confidence = 0.5
 
-        Args:
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result (unused, for API consistency)
-            fundamental: Fundamental analysis result
-
-        Returns:
-            Confidence score (0.0-1.0)
-        """
-        confidence = 0.5  # Base confidence
-
-        # Technical boost/penalty
         if technical.signal == Signal.BUY:
             confidence += 0.15
         elif technical.signal == Signal.SELL:
             confidence -= 0.2
 
-        # Sentiment boost/penalty
         if sentiment.sentiment_score > 0.3:
             confidence += 0.1
         elif sentiment.sentiment_score < -0.3:
             confidence -= 0.15
 
-        # Fundamental boost/penalty (skip if unavailable)
         if fundamental:
             if fundamental.valuation in ["UNDERVALUED", "FAIRLY_VALUED"]:
                 confidence += 0.1
             elif fundamental.valuation == "OVERVALUED":
                 confidence -= 0.1
-
-            # Growth boost
-            if fundamental.revenue_growth_yoy and fundamental.revenue_growth_yoy > 0.1:  # >10% growth
+            if fundamental.revenue_growth_yoy and fundamental.revenue_growth_yoy > 0.1:
                 confidence += 0.05
 
-        # Clamp to [0.0, 1.0]
         return max(0.0, min(1.0, confidence))
 
 
@@ -203,126 +176,28 @@ class BearishConfidenceCalculator(ConfidenceCalculator):
         self,
         technical: TechnicalAnalysis,
         sentiment: SentimentAnalysis,
-        news: NewsAnalysis,  # noqa: ARG002
+        _news: NewsAnalysis,
         fundamental: FundamentalAnalysis | None,
     ) -> float:
-        """Calculate confidence in bear case.
+        """Calculate confidence in bear case."""
+        confidence = 0.5
 
-        Args:
-            technical: Technical analysis result
-            sentiment: Sentiment analysis result
-            news: News analysis result (unused, for API consistency)
-            fundamental: Fundamental analysis result
-
-        Returns:
-            Confidence score (0.0-1.0)
-        """
-        confidence = 0.5  # Base confidence
-
-        # Technical boost/penalty (INVERTED from bullish)
         if technical.signal == Signal.SELL:
             confidence += 0.15
         elif technical.signal == Signal.BUY:
             confidence -= 0.2
 
-        # Sentiment boost/penalty (INVERTED from bullish)
         if sentiment.sentiment_score < -0.3:
             confidence += 0.1
         elif sentiment.sentiment_score > 0.3:
             confidence -= 0.15
 
-        # Fundamental boost/penalty (INVERTED from bullish, skip if unavailable)
         if fundamental:
             if fundamental.valuation == "OVERVALUED":
                 confidence += 0.1
             elif fundamental.valuation == "UNDERVALUED":
                 confidence -= 0.1
-
-            # High debt boost (bearish signal)
             if fundamental.debt_to_equity and fundamental.debt_to_equity > 2.0:
                 confidence += 0.05
 
-        # Clamp to [0.0, 1.0]
         return max(0.0, min(1.0, confidence))
-
-
-class ThesisResearcher(BaseResearcher[ResearchAnalysis]):
-    """Unified thesis researcher supporting both bullish and bearish analysis."""
-
-    def __init__(self, llm_client: LLMClient, direction: ResearchDirection) -> None:
-        """Initialize thesis researcher.
-
-        Args:
-            llm_client: LLM client for generating thesis
-            direction: Research direction (BULLISH or BEARISH)
-        """
-        prompt_dir = "bullish_researcher" if direction == ResearchDirection.BULLISH else "bearish_researcher"
-        super().__init__(llm_client, direction, prompt_dir)
-        self._confidence_calculator = self._create_confidence_calculator()
-
-    def _create_confidence_calculator(self) -> ConfidenceCalculator:
-        """Create direction-specific confidence calculator."""
-        if self.direction == ResearchDirection.BULLISH:
-            return BullishConfidenceCalculator()
-        return BearishConfidenceCalculator()
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return f"ThesisResearcher(direction={self.direction.value})"
-
-    @property
-    def llm_response_model(self) -> type[BaseModel]:
-        """LLM response model type."""
-        return ResearchLLMResponse
-
-    @track_agent  # pyrefly: ignore[bad-override]  # Decorator changes Awaitable->Coroutine signature
-    async def analyze(
-        self,
-        symbol: str,
-        technical: TechnicalAnalysis,
-        sentiment: SentimentAnalysis,
-        news: NewsAnalysis,
-        fundamental: FundamentalAnalysis | None,
-        comparative: ComparativeAnalysis | None = None,
-        trump_analysis: TrumpAnalysis | None = None,
-    ) -> ResearchAnalysis:
-        """Construct thesis from all analyses.
-
-        Returns:
-            ResearchAnalysis with thesis, key points, target, confidence
-        """
-        return await super().analyze(
-            symbol, technical, sentiment, news, fundamental, comparative, trump_analysis
-        )
-
-    def _build_analysis(
-        self, thesis: str, key_points: list[str], target: float | None, confidence: float
-    ) -> ResearchAnalysis:
-        """Build unified analysis result.
-
-        Args:
-            thesis: Thesis text
-            key_points: Key strengths or weaknesses
-            target: Target upside or downside percentage
-            confidence: Confidence score
-
-        Returns:
-            ResearchAnalysis instance
-        """
-        return ResearchAnalysis(
-            direction=self.direction,
-            thesis=thesis,
-            key_points=key_points,
-            target=target,
-            confidence=confidence,
-        )
-
-    def _calculate_confidence(
-        self,
-        technical: TechnicalAnalysis,
-        sentiment: SentimentAnalysis,
-        news: NewsAnalysis,
-        fundamental: FundamentalAnalysis | None,
-    ) -> float:
-        """Calculate confidence using direction-specific strategy."""
-        return self._confidence_calculator.calculate(technical, sentiment, news, fundamental)

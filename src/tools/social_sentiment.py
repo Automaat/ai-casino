@@ -89,8 +89,8 @@ class GetSocialSentimentTool(BaseTool):
         Returns:
             Formatted analysis summary
         """
-        analyst = self._container.social_sentiment_analyst()
-        result = await analyst.analyze(symbol)
+        worker = self._container.social_sentiment_worker()
+        result = await worker.analyze(symbol)
 
         return self._format_result(symbol, result)
 

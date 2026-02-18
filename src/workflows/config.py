@@ -1,7 +1,7 @@
 """Workflow configuration and components."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -34,13 +34,6 @@ class WorkflowConfig(BaseModel):
     use_ensemble: bool = Field(default=False, description="Use ensemble strategy")
     use_meta_agent: bool = Field(default=True, description="Use meta-agent for strategy selection")
     trump_mode: bool = Field(default=False, description="Enable Trump social media analysis")
-    analysis_pattern: Literal["sequential", "supervisor"] = Field(
-        default="supervisor",
-        description=(
-            "Workflow pattern: sequential (agents, 8-stage pipeline) "
-            "or supervisor (workers, adaptive orchestration)"
-        ),
-    )
     snapshot_on_trade: bool | None = Field(
         default=None, description="Capture portfolio snapshot after trades"
     )
