@@ -32,6 +32,9 @@ class MarketEventQueue:
             triage: Triage result from EventTriageAgent
             ttl_hours: Hours until the event expires (default 4)
         """
+        if ttl_hours <= 0:
+            msg = f"ttl_hours must be positive, got {ttl_hours}"
+            raise ValueError(msg)
         now = datetime.now(UTC)
         event_model = cast("BaseModel", event)
         payload = {
@@ -62,6 +65,9 @@ class MarketEventQueue:
         Returns:
             List of QueuedMarketEvent (payload includes raw event + triage dicts)
         """
+        if max_items < 1:
+            msg = f"max_items must be at least 1, got {max_items}"
+            raise ValueError(msg)
         async with self._db.session() as session:
             repo = MarketEventQueueRepository(session)
             return await repo.dequeue(max_items)

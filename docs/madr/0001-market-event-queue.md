@@ -28,7 +28,7 @@ to the full cycle interval before the coordinator can act on them.
 
 ## Decision Outcome
 
-Chosen: **PostgreSQL-backed FIFO queue** in `src/queue/` package.
+Chosen: **PostgreSQL-backed FIFO queue** in `src/event_queue/` package.
 
 Payload stored as JSONB — event-specific fields are not modeled in schema, deserialized in code
 based on `event_type`. `event_id` unique constraint provides idempotent enqueue. `consumed_at`

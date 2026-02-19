@@ -35,7 +35,7 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
         stmt = text(
             "INSERT INTO market_event_queue "
             "(id, event_id, event_type, payload, enqueued_at, expires_at, consumed_at) "
-            "VALUES (:id, :event_id, :event_type, :payload::jsonb, "
+            "VALUES (:id, :event_id, :event_type, CAST(:payload AS JSONB), "
             ":enqueued_at, :expires_at, :consumed_at) "
             "ON CONFLICT (event_id) DO NOTHING"
         ).bindparams(
@@ -78,7 +78,9 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
         await self._session.commit()
 
         rows_result = await self._session.execute(
-            select(MarketEventQueueORM).where(MarketEventQueueORM.event_id.in_(event_ids))
+            select(MarketEventQueueORM)
+            .where(MarketEventQueueORM.event_id.in_(event_ids))
+            .order_by(MarketEventQueueORM.enqueued_at.asc())
         )
         rows = rows_result.scalars().all()
         return [
