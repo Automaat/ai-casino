@@ -11,3 +11,4 @@
 3. Use `analyze_symbol` to validate the signal with full technical + sentiment pipeline
 4. If market is closed, save observations — do NOT execute trades
 5. Gaps and volume spikes early in session are higher-signal than late-day moves
+6. Check if anomaly symbol aligns with game plan priorities

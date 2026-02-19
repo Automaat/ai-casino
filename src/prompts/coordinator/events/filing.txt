@@ -11,3 +11,4 @@
 3. Cross-reference with current positions — filing may change thesis
 4. If market is closed, save observations — do NOT execute trades
 5. Prioritize 8-K filings and large insider transactions
+6. Check if filing changes thesis for game plan priority symbols

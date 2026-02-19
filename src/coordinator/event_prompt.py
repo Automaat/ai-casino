@@ -54,6 +54,8 @@ class EventCyclePromptBuilder:
             f"min confidence {config.min_confidence_to_trade:.0%}"
         )
 
+        game_plan_section = f"**Today's Game Plan:**\n{context.game_plan}" if context.game_plan else ""
+
         header = self._prompts.load(
             "event_header",
             date=datetime.now(UTC).strftime("%Y-%m-%d"),
@@ -62,6 +64,7 @@ class EventCyclePromptBuilder:
             symbols=", ".join(sorted(symbols)) if symbols else "None extracted",
             positions_summary=context.positions_summary,
             risk_limits=risk_limits,
+            game_plan_section=game_plan_section,
             event_count=len(events),
         )
 

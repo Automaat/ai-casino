@@ -62,6 +62,7 @@ def mock_memory():
             "- **Total Exposure**: $0.00 (0.0%)"
         )
     )
+    mock.query_decisions = AsyncMock(return_value=[])
     return mock
 
 
@@ -435,6 +436,64 @@ async def test_build_cycle_prompt_includes_date_and_session(coordinator):
     prompt = await coordinator._build_cycle_prompt(["AAPL", "TSLA"], TradingSession.PRE_MARKET)
     assert "PRE_MARKET" in prompt
     assert datetime.now(UTC).strftime("%Y-%m-%d") in prompt
+
+
+@pytest.mark.asyncio
+async def test_get_recent_outcomes_summary_empty(coordinator, mock_memory):
+    """Test outcomes summary with no decisions."""
+    mock_memory.query_decisions.return_value = []
+    result = await coordinator._get_recent_outcomes_summary()
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_get_recent_outcomes_summary_with_decisions(coordinator, mock_memory):
+    """Test outcomes summary with decisions."""
+    from src.coordinator.decision_models import DecisionQueryResult
+
+    mock_memory.query_decisions.return_value = [
+        DecisionQueryResult(
+            symbol="AAPL",
+            timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+            signal="BUY",
+            confidence=0.8,
+            price_at_signal=150.0,
+            price_at_outcome=160.0,
+            return_pct=6.7,
+            hit_miss="HIT",
+            regime="bullish",
+            strategy_used="momentum",
+            trading_session="REGULAR",
+        ),
+        DecisionQueryResult(
+            symbol="TSLA",
+            timestamp=datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC),
+            signal="BUY",
+            confidence=0.7,
+            price_at_signal=200.0,
+            price_at_outcome=190.0,
+            return_pct=-5.0,
+            hit_miss="MISS",
+            regime="bullish",
+            strategy_used="momentum",
+            trading_session="REGULAR",
+        ),
+    ]
+
+    result = await coordinator._get_recent_outcomes_summary()
+
+    assert "Recent Trade Outcomes" in result
+    assert "1/2 (50%)" in result
+    assert "AAPL BUY 80% → HIT (+6.7%)" in result
+    assert "TSLA BUY 70% → MISS (-5.0%)" in result
+
+
+@pytest.mark.asyncio
+async def test_get_recent_outcomes_summary_error(coordinator, mock_memory):
+    """Test outcomes summary gracefully handles errors."""
+    mock_memory.query_decisions.side_effect = RuntimeError("DB error")
+    result = await coordinator._get_recent_outcomes_summary()
+    assert result == ""
 
 
 def test_repr(coordinator):

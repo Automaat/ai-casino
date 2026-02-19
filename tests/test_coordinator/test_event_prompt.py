@@ -164,14 +164,26 @@ class TestEventCyclePromptBuilder:
         assert game_plan in prompt
         assert "Pre-Market Signal Event" in prompt
 
-    def test_non_signal_event_game_plan_ignored(
+    def test_game_plan_in_header_for_all_events(
+        self, builder: EventCyclePromptBuilder, config: CoordinatorConfig
+    ) -> None:
+        events = [_make_event(event_type="news")]
+        game_plan = "Priority: AAPL | Risk: NEUTRAL | Sector: Tech"
+        prompt = builder.build(
+            events=events,
+            context=_ctx(market_open=True, game_plan=game_plan),
+            config=config,
+        )
+        assert game_plan in prompt
+        assert "Today's Game Plan" in prompt
+
+    def test_empty_game_plan_omitted_from_header(
         self, builder: EventCyclePromptBuilder, config: CoordinatorConfig
     ) -> None:
         events = [_make_event(event_type="news")]
         prompt = builder.build(
             events=events,
-            context=_ctx(market_open=True, game_plan="some game plan text"),
+            context=_ctx(market_open=True, game_plan=""),
             config=config,
         )
-        # game_plan passed but news.txt doesn't use it — no error, extra kwarg silently ignored
-        assert len(prompt) > 100
+        assert "Today's Game Plan" not in prompt

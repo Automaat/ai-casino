@@ -5,9 +5,6 @@
 **Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
 **Reasoning:** {reasoning}
 
-**Today's Game Plan:**
-{game_plan}
-
 **Instructions:**
 1. This signal was generated during pre-market and deferred for regular session execution
 2. Check the game plan above — does this symbol align with today's priority symbols and risk stance?

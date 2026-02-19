@@ -11,3 +11,4 @@
 3. Use `analyze_symbol` only if volume spike is confirmed by price action
 4. If market is closed, save observations — do NOT execute trades
 5. Be skeptical of meme-driven momentum without fundamental backing
+6. Check if social buzz aligns with game plan priorities
