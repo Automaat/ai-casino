@@ -1,11 +1,52 @@
-"""Notification channel implementations."""
+"""Telegram notification channel."""
 
 import httpx
 from loguru import logger
 
-from src.daemon.config import TelegramNotificationConfig
-from src.daemon.notifications import NotificationChannel, NotificationMessage
+from src.daemon.config.notifications import TelegramNotificationConfig
 from src.models.providers.retry import retry
+from src.notifications.base import NotificationChannel
+from src.notifications.models import NotificationMessage, NotificationSeverity
+
+SEVERITY_EMOJI = {
+    NotificationSeverity.CRITICAL: "🚨",
+    NotificationSeverity.ERROR: "❌",
+    NotificationSeverity.WARNING: "⚠️",
+    NotificationSeverity.INFO: "\U0001f4ac",
+}
+
+
+def _escape(text: str) -> str:
+    """Escape markdown special characters for Telegram Markdown (legacy) mode.
+
+    Args:
+        text: Raw text
+
+    Returns:
+        Escaped text safe for Telegram Markdown
+    """
+    special_chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", "!"]
+    for char in special_chars:
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def _format(msg: NotificationMessage) -> str:
+    """Format notification for Telegram Markdown.
+
+    Args:
+        msg: Notification message
+
+    Returns:
+        Formatted markdown string
+    """
+    emoji = SEVERITY_EMOJI[msg.severity]
+    lines = [f"{emoji} *{_escape(msg.title)}*", "", _escape(msg.body)]
+    if msg.metadata:
+        lines.append("")
+        for k, v in msg.metadata.items():
+            lines.append(f"• *{_escape(str(k))}:* {_escape(str(v))}")
+    return "\n".join(lines)
 
 
 class TelegramChannel(NotificationChannel):
@@ -39,9 +80,7 @@ class TelegramChannel(NotificationChannel):
         Returns:
             True if sent successfully, False otherwise
         """
-        from src.daemon.notification_formatter import NotificationFormatter
-
-        formatted = NotificationFormatter.format_for_telegram(message)
+        formatted = _format(message)
 
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(

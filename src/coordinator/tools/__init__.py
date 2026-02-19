@@ -22,7 +22,7 @@ def _create_confirmation_handler(daemon_config: DaemonConfig) -> TradeConfirmati
         return None
 
     from src.coordinator.confirmation import TradeConfirmationHandler
-    from src.daemon.notification_channels import TelegramChannel
+    from src.notifications.channels.telegram import TelegramChannel
 
     telegram_channel = TelegramChannel(daemon_config.notifications.telegram)
     if telegram_channel.is_configured():

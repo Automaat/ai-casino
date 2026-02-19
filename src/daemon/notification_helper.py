@@ -32,14 +32,13 @@ class DaemonNotificationHelper:
             degradation_context: Degradation context
             components: Daemon components
         """
-        from src.daemon.config import NotificationTrigger
         from src.daemon.degradation import DegradationTier
-        from src.daemon.notifications import NotificationMessage
+        from src.notifications.models import NotificationMessage, NotificationSeverity
 
-        # Determine title and body
         if degradation_context.tier == DegradationTier.HALTED:
             title = "Trading System HALTED"
             body = degradation_context.halt_reason or "Critical services unavailable"
+            severity = NotificationSeverity.CRITICAL
         else:
             title = f"Trading System {degradation_context.tier.value}"
             services = (
@@ -48,21 +47,22 @@ class DaemonNotificationHelper:
                 else "Unknown"
             )
             body = f"APIs down: {services}"
+            severity = NotificationSeverity.ERROR
 
         message = NotificationMessage(
-            trigger=NotificationTrigger.HEALTH_FAILURE,
             title=title,
             body=body,
+            severity=severity,
             metadata={
                 "tier": degradation_context.tier.value,
-                "unavailable_services": degradation_context.unavailable_services,
+                "services": ", ".join(degradation_context.unavailable_services or []),
                 "confidence_adjustment": degradation_context.confidence_adjustment,
             },
             timestamp=datetime.now(UTC),
         )
 
         if components.notification_service:
-            await components.notification_service.notify(NotificationTrigger.HEALTH_FAILURE, message)
+            await components.notification_service.notify(message)
 
         # Publish DEGRADATION event
         if components.event_bus:
@@ -102,13 +102,12 @@ class DaemonNotificationHelper:
         if result.decision.confidence < components.config.notifications.min_confidence:
             return
 
-        from src.daemon.config import NotificationTrigger
-        from src.daemon.notifications import NotificationMessage
+        from src.notifications.models import NotificationMessage, NotificationSeverity
 
         message = NotificationMessage(
-            trigger=NotificationTrigger.SIGNAL,
             title=f"{result.decision.action.value} Signal: {result.symbol}",
             body=" | ".join(result.decision.reasoning),
+            severity=NotificationSeverity.WARNING,
             metadata={
                 "symbol": result.symbol,
                 "signal": result.decision.action.value,
@@ -117,13 +116,12 @@ class DaemonNotificationHelper:
                 "risk_level": result.risk.validation.risk_level,
                 "rsi": result.technical.rsi if result.technical.rsi is not None else "N/A",
                 "macd": result.technical.macd_hist if result.technical.macd_hist is not None else "N/A",
-                "reasoning": " | ".join(result.decision.reasoning),
                 "session": result.trading_session.value,
             },
             timestamp=datetime.now(UTC),
         )
 
-        await components.notification_service.notify(NotificationTrigger.SIGNAL, message)
+        await components.notification_service.notify(message)
 
     async def notify_var_breach(
         self,
@@ -136,23 +134,21 @@ class DaemonNotificationHelper:
             report: Portfolio risk report
             components: Daemon components
         """
-        from src.daemon.config import NotificationTrigger
-        from src.daemon.notifications import NotificationMessage
+        from src.notifications.models import NotificationMessage, NotificationSeverity
 
         message = NotificationMessage(
-            trigger=NotificationTrigger.PORTFOLIO_VAR_BREACH,
             title="Portfolio VaR Limit Breached",
             body=f"VaR95: {report.var_95:.1%} | CVaR99: {report.cvar_99:.1%}",
+            severity=NotificationSeverity.ERROR,
             metadata={
-                "symbol": "PORTFOLIO",
                 "var_95": report.var_95,
                 "cvar_99": report.cvar_99,
                 "var_breached": report.var_limit_breached,
                 "cvar_breached": report.cvar_limit_breached,
-                "num_positions": report.num_positions,
+                "positions": report.num_positions,
             },
             timestamp=datetime.now(UTC),
         )
 
         if components.notification_service:
-            await components.notification_service.notify(NotificationTrigger.PORTFOLIO_VAR_BREACH, message)
+            await components.notification_service.notify(message)

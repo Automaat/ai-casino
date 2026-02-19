@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 from src.agents.risk import PortfolioVaRConfig
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
-from src.daemon.notifications import NotificationService
 from src.data.broker import AlpacaBroker
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketDataFetcher
@@ -23,6 +22,7 @@ from src.metrics.portfolio_var import PortfolioVaRCalculator
 from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
+from src.notifications.service import NotificationService
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
 from src.workflows.config import WorkflowComponents, WorkflowConfig

@@ -231,25 +231,23 @@ class RiskReportTask(TaskExecutor):
         Args:
             report: Risk report with VaR metrics
         """
-        from src.daemon.config import NotificationTrigger
-        from src.daemon.notifications import NotificationMessage
+        from src.notifications.models import NotificationMessage, NotificationSeverity
 
         if not self.components.notification_service:
             return
 
         message = NotificationMessage(
-            trigger=NotificationTrigger.PORTFOLIO_VAR_BREACH,
             title="Risk Limit Breach",
             body=f"VaR95={report.var_95:.2%}, CVaR95={report.cvar_95:.2%}",
+            severity=NotificationSeverity.ERROR,
             metadata={
-                "symbol": "PORTFOLIO",
                 "var_95": report.var_95,
                 "var_99": report.var_99,
                 "cvar_95": report.cvar_95,
                 "cvar_99": report.cvar_99,
                 "risk_status": report.risk_status,
-                "num_positions": report.num_positions,
+                "positions": report.num_positions,
             },
             timestamp=datetime.now(UTC),
         )
-        await self.components.notification_service.notify(NotificationTrigger.PORTFOLIO_VAR_BREACH, message)
+        await self.components.notification_service.notify(message)

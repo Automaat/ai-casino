@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.daemon.notifications import NotificationService
     from src.data.broker import AlpacaBroker
     from src.data.market import MarketDataFetcher
     from src.database.repositories.execution_metric import ExecutionMetricRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
+    from src.notifications.service import NotificationService
 
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.trader import TradingDecision
@@ -240,28 +240,27 @@ async def notify_trade_execution(
         risk_assessment: Risk assessment
         notification_service: Optional notification service
     """
-    from src.daemon.config import NotificationTrigger
-    from src.daemon.notifications import NotificationMessage
+    from src.notifications.models import NotificationMessage, NotificationSeverity
 
     if not notification_service:
         return
 
     if not risk_assessment or not final_decision:
-        return  # Nothing to notify if missing data
+        return
 
     message = NotificationMessage(
-        trigger=NotificationTrigger.RISK_REJECTION,
         title=f"Trade Blocked: {symbol}",
         body=risk_assessment.validation.reasoning,
+        severity=NotificationSeverity.WARNING,
         metadata={
             "symbol": symbol,
             "signal": final_decision.action.value,
             "price": risk_assessment.current_price,
             "confidence": final_decision.confidence,
-            "rejection_reason": risk_assessment.validation.reasoning,
+            "reason": risk_assessment.validation.reasoning,
             "risk_score": risk_assessment.validation.risk_score,
         },
         timestamp=datetime.now(UTC),
     )
 
-    await notification_service.notify(NotificationTrigger.RISK_REJECTION, message)
+    await notification_service.notify(message)

@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from loguru import logger
 from pydantic import ValidationError
 
-from src.daemon.config import NotificationTrigger
-from src.daemon.notifications import NotificationMessage, NotificationService
+from src.notifications.models import NotificationMessage, NotificationSeverity
+from src.notifications.service import NotificationService
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
@@ -120,19 +120,19 @@ class NotificationTool(BaseTool):
             symbol = "N/A"
             workflow_stage = "unknown"
 
-        metadata = {
-            "symbol": symbol,
+        metadata: dict[str, str | int | float | bool] = {
+            "symbol": str(symbol),
             "priority": priority,
             "agent_type": "coordinator",
-            "workflow_stage": workflow_stage,
+            "workflow_stage": str(workflow_stage),
         }
 
         # Build notification message
         try:
             notification = NotificationMessage(
-                trigger=NotificationTrigger.AGENT_ALERT,
                 title=title,
                 body=message,
+                severity=NotificationSeverity.from_priority(priority),
                 metadata=metadata,
                 timestamp=datetime.now(UTC),
             )
@@ -142,7 +142,7 @@ class NotificationTool(BaseTool):
 
         # Send notification (gracefully handle failures)
         try:
-            await self._service.notify(NotificationTrigger.AGENT_ALERT, notification)
+            await self._service.notify(notification)
             logger.info(f"Agent notification sent: {title}")
             return f"Notification sent successfully: {title}"
         except Exception as e:

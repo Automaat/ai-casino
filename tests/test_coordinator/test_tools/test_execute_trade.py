@@ -191,9 +191,9 @@ async def test_aexecute_sends_notification(tool_full, notification_service, brok
     notification_service.notify.assert_called_once()
 
     call_args = notification_service.notify.call_args
-    message = call_args[1]["message"] if "message" in call_args[1] else call_args[0][1]
+    message = call_args[0][0]
     assert message.title == "BUY AAPL x10"
-    assert message.metadata["source"] == "coordinator"
+    assert message.metadata["action"] == "BUY"
 
 
 @pytest.mark.asyncio

@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.daemon.notification_channels import TelegramChannel
-from src.daemon.notifications import NotificationMessage
+from src.notifications.channels.telegram import TelegramChannel
+from src.notifications.models import NotificationMessage, NotificationSeverity
 
 
 class TradeConfirmationRequest(BaseModel):
@@ -117,8 +117,6 @@ class TradeConfirmationHandler:
         Returns:
             Notification message for Telegram
         """
-        from src.daemon.config import NotificationTrigger
-
         stop_loss_text = f"${request.stop_loss_price:.2f}" if request.stop_loss_price else "None"
         text = (
             f"🚨 **TRADE APPROVAL REQUIRED** 🚨\n\n"
@@ -131,17 +129,13 @@ class TradeConfirmationHandler:
             f"`/approve {request.symbol}` or `/reject {request.symbol}`"
         )
         return NotificationMessage(
-            trigger=NotificationTrigger.SIGNAL,
             title="Trade Approval",
             body=text,
+            severity=NotificationSeverity.CRITICAL,
             metadata={
                 "symbol": request.symbol,
-                "signal": request.action,
-                "price": None,
-                "confidence": None,
-                "rsi": None,
-                "macd": None,
-                "reasoning": request.rationale,
+                "action": request.action,
+                "quantity": request.quantity,
             },
             timestamp=datetime.now(UTC),
         )

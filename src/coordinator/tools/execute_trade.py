@@ -15,10 +15,10 @@ from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolPa
 if TYPE_CHECKING:
     from src.coordinator.confirmation import TradeConfirmationHandler
     from src.daemon.config import DaemonConfig
-    from src.daemon.notifications import NotificationService
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker, OrderStatus
     from src.database.engine import DatabaseEngine
+    from src.notifications.service import NotificationService
 
 MIN_RATIONALE_LENGTH: Final[int] = 10
 DEFAULT_STOP_LOSS_PCT: Final[float] = 0.05
@@ -449,30 +449,27 @@ class ExecuteTradeTool(BaseTool):
             return
 
         try:
-            from src.daemon.config import NotificationTrigger
-            from src.daemon.notifications import NotificationMessage
+            from src.notifications.models import NotificationMessage, NotificationSeverity
 
             side = order_status.side.upper()
             symbol = order_status.symbol
             price = order_status.filled_avg_price or 0.0
 
             message = NotificationMessage(
-                trigger=NotificationTrigger.SIGNAL,
                 title=f"{side} {symbol} x{int(order_status.qty)}",
                 body=rationale,
+                severity=NotificationSeverity.WARNING,
                 metadata={
                     "symbol": symbol,
-                    "signal": side,
-                    "confidence": confidence,
+                    "action": side,
+                    "quantity": int(order_status.qty),
                     "price": price,
-                    "risk_level": self._derive_risk_level(confidence),
-                    "order_id": order_status.order_id,
-                    "source": "coordinator",
+                    "confidence": confidence,
                 },
                 timestamp=datetime.now(UTC),
             )
 
-            await self._notification_service.notify(NotificationTrigger.SIGNAL, message)
+            await self._notification_service.notify(message)
         except Exception as e:
             logger.opt(exception=True).warning(f"Trade notification failed: {e}")
 

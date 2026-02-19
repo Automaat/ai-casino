@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.confirmation import TradeConfirmationHandler
     from src.coordinator.pattern_analyzer import PatternAnalyzer
-    from src.daemon.notification_channels import TelegramChannel
     from src.daemon.state import DaemonState
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.database.repositories.risk_audit import RiskAuditRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
+    from src.notifications.channels.telegram import TelegramChannel
     from src.strategies.regime import MarketRegimeDetector
 
 
