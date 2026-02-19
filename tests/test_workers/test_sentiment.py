@@ -143,3 +143,30 @@ def test_sentiment_worker_repr(test_container):
 
     assert "SentimentWorker" in repr_str
     assert "FinBERT" in repr_str
+
+
+async def test_sentiment_worker_remote_device_path(sample_news_articles):
+    """Test remote device routes via asyncio.to_thread, not ProcessPoolExecutor."""
+    from unittest.mock import MagicMock, patch
+
+    from src.models.sentiment import SentimentScore
+    from src.workers.sentiment import SentimentWorker
+
+    mock_finbert = MagicMock()
+    mock_finbert.device = "remote"
+    mock_finbert.analyze_batch.return_value = [
+        SentimentScore(positive=0.7, negative=0.1, neutral=0.2),
+        SentimentScore(positive=0.6, negative=0.2, neutral=0.2),
+        SentimentScore(positive=0.8, negative=0.05, neutral=0.15),
+    ]
+
+    worker = SentimentWorker(finbert=mock_finbert)
+
+    with patch("src.workers.sentiment.get_finbert_executor") as mock_executor:
+        result = await worker.analyze("AAPL", sample_news_articles)
+        mock_executor.assert_not_called()
+
+    assert isinstance(result, SentimentAnalysis)
+    assert result.article_count == len(sample_news_articles)
+    assert result.overall_sentiment in ["positive", "negative", "neutral"]
+    mock_finbert.analyze_batch.assert_called_once()
