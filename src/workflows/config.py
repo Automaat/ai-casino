@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from src.cache.historical import HistoricalCache
     from src.daemon.config import AnalysisOrchestratorConfig, PositionSizingConfig, RiskValidationConfig
     from src.daemon.event_bus import EventBus
-    from src.daemon.notifications import NotificationService
     from src.data.broker import AlpacaBroker
     from src.data.fundamental import FundamentalDataFetcher
     from src.data.market import MarketDataFetcher
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from src.metrics.tracker import BaseMetricsTracker
     from src.models.llm import LLMClient
     from src.models.sentiment import FinBERTSentiment
+    from src.notifications.service import NotificationService
     from src.optimization.param_store import OptimizedParamStore
     from src.validators.risk import RiskValidator
 

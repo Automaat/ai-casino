@@ -144,37 +144,36 @@ class DaemonTaskService:
         self._last_readiness_check = now
 
         try:
-            from src.daemon.config import NotificationTrigger
-            from src.daemon.notifications import NotificationMessage
             from src.daemon.paper_trading_validator import PaperTradingValidator
+            from src.notifications.models import NotificationMessage, NotificationSeverity
+
+            if self.components.metrics_tracker is None:
+                return
 
             validator = PaperTradingValidator(
                 config=self.components.config.paper_trading,
                 state=self.components.state,
-                metrics_tracker=self.components.metrics_tracker,  # type: ignore[arg-type]
+                metrics_tracker=self.components.metrics_tracker,
             )
             report = await validator.assess_readiness()
 
             if report.ready_for_live and not self._notified_paper_ready:
                 message = NotificationMessage(
-                    trigger=NotificationTrigger.PAPER_TRADING_READY,
                     title="Paper Trading Ready for Live",
                     body=(
                         f"Duration: {report.paper_trading_duration_days} days | "
                         f"Trades: {report.total_paper_trades}"
                     ),
+                    severity=NotificationSeverity.INFO,
                     metadata={
-                        "symbol": "SYSTEM",
                         "duration_days": report.paper_trading_duration_days,
-                        "total_trades": report.total_paper_trades,
+                        "trades": report.total_paper_trades,
                         "sharpe": report.metrics.sharpe_ratio,
                         "max_dd": report.metrics.max_drawdown_percent,
                     },
                     timestamp=datetime.now(UTC),
                 )
-                await self.components.notification_service.notify(
-                    NotificationTrigger.PAPER_TRADING_READY, message
-                )
+                await self.components.notification_service.notify(message)
                 self._notified_paper_ready = True
                 logger.info("Sent paper trading readiness notification")
         except Exception as e:

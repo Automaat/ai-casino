@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.daemon.config import NotificationTrigger
-from src.daemon.notifications import NotificationMessage, NotificationService
+from src.notifications.models import NotificationMessage, NotificationSeverity
+from src.notifications.service import NotificationService
 from src.tools.notification import NotificationTool
 
 
@@ -66,13 +66,13 @@ async def test_notification_tool_execute_success(
     assert "sent successfully" in result.lower()
     mock_notification_service.notify.assert_called_once()
 
-    # Verify notify was called with correct trigger and message structure
+    # Verify notify was called with message as single positional arg
     call_args = mock_notification_service.notify.call_args
-    assert call_args[0][0] == NotificationTrigger.AGENT_ALERT
-    notification_msg = call_args[0][1]
+    notification_msg = call_args[0][0]
     assert isinstance(notification_msg, NotificationMessage)
     assert notification_msg.title == "Test Alert"
     assert notification_msg.body == "Critical market event detected"
+    assert notification_msg.severity == NotificationSeverity.ERROR
     assert notification_msg.metadata["symbol"] == "AAPL"
     assert notification_msg.metadata["priority"] == "HIGH"
     assert notification_msg.metadata["workflow_stage"] == "analysis"
@@ -83,7 +83,6 @@ async def test_notification_tool_execute_failure(
     notification_tool: NotificationTool, mock_notification_service: NotificationService
 ) -> None:
     """Test graceful error handling on service failure."""
-    # Make notify raise exception
     mock_notification_service.notify.side_effect = Exception("Network error")
 
     result = await notification_tool.aexecute(
@@ -91,7 +90,6 @@ async def test_notification_tool_execute_failure(
         message="Test message",
     )
 
-    # Should return success-ish message (don't crash agent)
     assert "queued" in result.lower() or "unavailable" in result.lower()
     mock_notification_service.notify.assert_called_once()
 
@@ -131,9 +129,14 @@ async def test_notification_tool_priority_levels(
     notification_tool: NotificationTool, mock_notification_service: NotificationService
 ) -> None:
     """Test all priority levels (LOW/MEDIUM/HIGH/CRITICAL)."""
-    priorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    priority_to_severity = {
+        "LOW": NotificationSeverity.INFO,
+        "MEDIUM": NotificationSeverity.WARNING,
+        "HIGH": NotificationSeverity.ERROR,
+        "CRITICAL": NotificationSeverity.CRITICAL,
+    }
 
-    for priority in priorities:
+    for priority, expected_severity in priority_to_severity.items():
         mock_notification_service.notify.reset_mock()
 
         result = await notification_tool.aexecute(
@@ -144,7 +147,8 @@ async def test_notification_tool_priority_levels(
 
         assert "sent successfully" in result.lower()
         call_args = mock_notification_service.notify.call_args
-        notification_msg = call_args[0][1]
+        notification_msg = call_args[0][0]
+        assert notification_msg.severity == expected_severity
         assert notification_msg.metadata["priority"] == priority
 
 
@@ -176,9 +180,8 @@ async def test_notification_tool_metadata_capture(
     assert "sent successfully" in result.lower()
 
     call_args = mock_notification_service.notify.call_args
-    notification_msg = call_args[0][1]
+    notification_msg = call_args[0][0]
 
-    # Verify all metadata fields
     assert notification_msg.metadata["symbol"] == "TSLA"
     assert notification_msg.metadata["priority"] == "MEDIUM"
     assert notification_msg.metadata["agent_type"] == "coordinator"
@@ -198,7 +201,8 @@ async def test_notification_tool_default_priority(
     assert "sent successfully" in result.lower()
 
     call_args = mock_notification_service.notify.call_args
-    notification_msg = call_args[0][1]
+    notification_msg = call_args[0][0]
+    assert notification_msg.severity == NotificationSeverity.WARNING
     assert notification_msg.metadata["priority"] == "MEDIUM"
 
 
@@ -215,9 +219,8 @@ async def test_notification_tool_missing_context(
     assert "sent successfully" in result.lower()
 
     call_args = mock_notification_service.notify.call_args
-    notification_msg = call_args[0][1]
+    notification_msg = call_args[0][0]
 
-    # Should have defaults
     assert notification_msg.metadata["symbol"] == "N/A"
     assert notification_msg.metadata["workflow_stage"] == "unknown"
 
@@ -264,7 +267,6 @@ async def test_notification_tool_workflow_stage_fallback(
     notification_tool: NotificationTool, mock_notification_service: NotificationService
 ) -> None:
     """Test workflow_stage preferred over legacy stage key."""
-    # Test with workflow_stage key
     result = await notification_tool.aexecute(
         title="Test",
         message="Test message",
@@ -273,7 +275,7 @@ async def test_notification_tool_workflow_stage_fallback(
 
     assert "sent successfully" in result.lower()
     call_args = mock_notification_service.notify.call_args
-    notification_msg = call_args[0][1]
+    notification_msg = call_args[0][0]
     assert notification_msg.metadata["workflow_stage"] == "execution"
 
     # Test with only stage key (legacy)
@@ -286,5 +288,5 @@ async def test_notification_tool_workflow_stage_fallback(
 
     assert "sent successfully" in result.lower()
     call_args = mock_notification_service.notify.call_args
-    notification_msg = call_args[0][1]
+    notification_msg = call_args[0][0]
     assert notification_msg.metadata["workflow_stage"] == "analysis"

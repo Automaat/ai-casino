@@ -23,7 +23,7 @@ from src.daemon.config.analysis import (
     SocialWatcherConfig,
     TrumpWatcherConfig,
 )
-from src.daemon.config.base import NotificationTrigger, TradingMode
+from src.daemon.config.base import TradingMode
 from src.daemon.config.events import EventWatcherIntegrationConfig
 from src.daemon.config.infrastructure import (
     ApiConfig,
@@ -99,7 +99,6 @@ __all__ = [
     "MonteCarloConfig",
     "NewsTrendingWatcherConfig",
     "NewsWatcherConfig",
-    "NotificationTrigger",
     "NotificationsConfig",
     "OptimizationConfig",
     "OptionsFlowWatcherConfig",

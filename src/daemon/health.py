@@ -15,9 +15,9 @@ from pydantic import BaseModel
 
 from src.circuit_breaker import CircuitBreakerState
 from src.daemon.config import DaemonConfig
-from src.daemon.notifications import NotificationService
 from src.daemon.state import DaemonState
 from src.di.container import AppContainer
+from src.notifications.service import NotificationService
 
 if TYPE_CHECKING:
     from src.circuit_breaker import CircuitBreakerRegistry
@@ -587,8 +587,7 @@ class HealthChecker:
         Args:
             failed: List of failed service checks
         """
-        from src.daemon.config import NotificationTrigger
-        from src.daemon.notifications import NotificationMessage
+        from src.notifications.models import NotificationMessage, NotificationSeverity
 
         if not self.notification_service:
             return
@@ -596,18 +595,16 @@ class HealthChecker:
         services = ", ".join([f.service for f in failed])
 
         message = NotificationMessage(
-            trigger=NotificationTrigger.HEALTH_FAILURE,
             title="API Health Check Failed",
             body=f"Services down: {services}",
+            severity=NotificationSeverity.ERROR,
             metadata={
-                "symbol": "SYSTEM",
-                "failed_services": [f.service for f in failed],
-                "error_messages": [f.message for f in failed],
+                "services": services,
             },
             timestamp=datetime.now(UTC),
         )
 
-        await self.notification_service.notify(NotificationTrigger.HEALTH_FAILURE, message)
+        await self.notification_service.notify(message)
 
     def __repr__(self) -> str:
         """Return string representation."""

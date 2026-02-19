@@ -86,11 +86,11 @@ class AnalysisOrchestrator:
         from src.cache.historical import HistoricalCache
         from src.daemon.context_builder import DaemonContextBuilder
         from src.daemon.event_bus import EventBus
-        from src.daemon.notifications import NotificationService
         from src.daemon.positions import PositionManager
         from src.daemon.scheduler import MarketScheduler
         from src.daemon.state import DaemonState
         from src.data.broker import AlpacaBroker
+        from src.notifications.service import NotificationService
         from src.workflows import TradingWorkflow
 
         self.workflow: TradingWorkflow = cast("TradingWorkflow", workflow)
