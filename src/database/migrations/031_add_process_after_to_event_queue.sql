@@ -1,0 +1,2 @@
+ALTER TABLE market_event_queue
+    ADD COLUMN IF NOT EXISTS process_after TIMESTAMP WITH TIME ZONE;

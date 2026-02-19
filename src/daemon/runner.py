@@ -261,14 +261,16 @@ class DaemonRunner:
             return None
 
         try:
+            from src.daemon.market_service import MarketService
             from src.event_queue.consumer import EventQueueConsumer
 
             queue = self._container.market_event_queue()
             coordinator = self._init_coordinator()
+            market_service = MarketService(self.scheduler)
             consumer = EventQueueConsumer(
                 queue=queue,
                 coordinator=coordinator,
-                scheduler=self.scheduler,
+                market_service=market_service,
                 config=self.config.coordinator,
             )
             self._components.event_queue_consumer = consumer
