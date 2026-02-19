@@ -185,18 +185,15 @@ async def _fetch_all_data(
             logger.opt(exception=True).warning(f"Failed to fetch Trump posts: {e}")
             return None
 
-    async with asyncio.TaskGroup() as tg:
-        market_task = tg.create_task(fetch_market())
-        news_task = tg.create_task(fetch_news_safe())
-        trump_task = (
-            tg.create_task(fetch_trump_safe()) if config.trump_mode and config.trump_fetcher else None
+    if config.trump_mode and config.trump_fetcher:
+        market_result, news_result, trump_data = await asyncio.gather(
+            fetch_market(), fetch_news_safe(), fetch_trump_safe()
         )
+    else:
+        market_result, news_result = await asyncio.gather(fetch_market(), fetch_news_safe())
+        trump_data = None
 
-    news_result = news_task.result()
-    # fetch_news_safe always returns list, no validation needed
-    trump_data = trump_task.result() if trump_task else None
-
-    return market_task.result(), news_result, trump_data
+    return market_result, news_result, trump_data
 
 
 def _process_fetch_results(

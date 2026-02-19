@@ -409,6 +409,8 @@ class AnalysisOrchestrator:
 
             return result
         except Exception as e:
+            if isinstance(e, ValueError) and "No data returned" in str(e):
+                self._components.broker_manager.config.remove_watchlist_symbol(symbol)
             error_msg = f"Failed to analyze {symbol}: {e}"
             logger.opt(exception=True).error(error_msg)
             await self.state.record_error(error_msg)
