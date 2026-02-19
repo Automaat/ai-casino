@@ -127,8 +127,10 @@ class AnalyzeStockTool(BaseTool):
             "",
             "## Technical Analysis",
             f"- Signal: {result.technical.signal.value}",
-            f"- RSI: {result.technical.rsi:.1f}",
-            f"- MACD Histogram: {result.technical.macd_hist:.4f}",
+            f"- RSI: {result.technical.rsi:.1f}" if result.technical.rsi is not None else "- RSI: N/A",
+            f"- MACD Histogram: {result.technical.macd_hist:.4f}"
+            if result.technical.macd_hist is not None
+            else "- MACD Histogram: N/A",
             f"- Interpretation: {result.technical.interpretation}",
             "",
             "## Sentiment Analysis",
