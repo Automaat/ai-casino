@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select, text, update
 
@@ -126,6 +126,76 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
         )
         await self._session.commit()
         return len(result.fetchall())
+
+    async def list_events(self, limit: int = 100, status: str = "all") -> list[MarketEventQueueORM]:
+        """List events ordered by enqueued_at DESC.
+
+        Args:
+            limit: Max rows to return
+            status: "all" | "pending" | "consumed" | "expired"
+        """
+        now = datetime.now(UTC)
+        stmt = select(MarketEventQueueORM).order_by(MarketEventQueueORM.enqueued_at.desc()).limit(limit)
+        if status == "pending":
+            stmt = stmt.where(MarketEventQueueORM.consumed_at.is_(None)).where(
+                MarketEventQueueORM.expires_at > now
+            )
+        elif status == "consumed":
+            stmt = stmt.where(MarketEventQueueORM.consumed_at.isnot(None))
+        elif status == "expired":
+            stmt = stmt.where(MarketEventQueueORM.consumed_at.is_(None)).where(
+                MarketEventQueueORM.expires_at <= now
+            )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_counts(self) -> dict:
+        """Return queue count statistics with one DB query per metric."""
+        now = datetime.now(UTC)
+        since_24h = now - timedelta(hours=24)
+
+        pending_result = await self._session.execute(
+            select(func.count())
+            .select_from(MarketEventQueueORM)
+            .where(MarketEventQueueORM.consumed_at.is_(None))
+            .where(MarketEventQueueORM.expires_at > now)
+        )
+        pending = pending_result.scalar_one()
+
+        stale_result = await self._session.execute(
+            select(func.count())
+            .select_from(MarketEventQueueORM)
+            .where(MarketEventQueueORM.consumed_at.is_(None))
+            .where(MarketEventQueueORM.expires_at <= now)
+        )
+        stale = stale_result.scalar_one()
+
+        consumed_24h_result = await self._session.execute(
+            select(func.count())
+            .select_from(MarketEventQueueORM)
+            .where(MarketEventQueueORM.consumed_at.isnot(None))
+            .where(MarketEventQueueORM.consumed_at >= since_24h)
+        )
+        consumed_24h = consumed_24h_result.scalar_one()
+
+        total_result = await self._session.execute(select(func.count()).select_from(MarketEventQueueORM))
+        total = total_result.scalar_one()
+
+        by_type_result = await self._session.execute(
+            select(MarketEventQueueORM.event_type, func.count().label("cnt"))
+            .where(MarketEventQueueORM.consumed_at.is_(None))
+            .where(MarketEventQueueORM.expires_at > now)
+            .group_by(MarketEventQueueORM.event_type)
+        )
+        by_type = {row.event_type: row.cnt for row in by_type_result}
+
+        return {
+            "pending": pending,
+            "stale": stale,
+            "consumed_24h": consumed_24h,
+            "total": total,
+            "by_type": by_type,
+        }
 
     def __repr__(self) -> str:
         """Return string representation."""

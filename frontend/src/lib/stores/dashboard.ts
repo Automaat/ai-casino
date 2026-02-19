@@ -404,6 +404,46 @@ function createExecutionMetricDetailStore() {
 	return { subscribe, fetch };
 }
 
+// Queue stats store (5s auto-refresh)
+function createQueueStatsStore() {
+	return readable<T.QueueStatsResponse | null>(null, (set) => {
+		if (!browser) return;
+
+		async function fetch() {
+			try {
+				const data = await api.getQueueStats();
+				set(data);
+			} catch (error) {
+				console.error('Failed to fetch queue stats:', error);
+				set(null);
+			}
+		}
+
+		fetch();
+		const interval = setInterval(fetch, REFRESH_INTERVAL);
+		return () => clearInterval(interval);
+	});
+}
+
+// Queue events store (manual fetch with status filter)
+function createQueueEventsStore() {
+	const { subscribe, set } = writable<T.QueueEventsResponse | null>(null);
+
+	async function fetch(status?: string, limit?: number) {
+		try {
+			const data = await api.getQueueEvents({ limit, status });
+			set(data);
+			return data;
+		} catch (error) {
+			console.error('Failed to fetch queue events:', error);
+			set(null);
+			return null;
+		}
+	}
+
+	return { subscribe, fetch };
+}
+
 // Export stores
 export const health = createHealthStore();
 export const stateSummary = createStateSummaryStore();
@@ -423,6 +463,8 @@ export const marketEvents = createMarketEventsStore();
 export const degradationHistory = createDegradationHistoryStore();
 export const executionMetrics = createExecutionMetricsStore();
 export const executionMetricDetail = createExecutionMetricDetailStore();
+export const queueStats = createQueueStatsStore();
+export const queueEvents = createQueueEventsStore();
 
 // Derived stores
 export const isDaemonRunning = derived(health, ($health) => $health?.daemon_running ?? false);

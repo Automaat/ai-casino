@@ -361,6 +361,22 @@ export const api = {
 		query.set('start_date', startDate);
 		query.set('end_date', endDate);
 		return fetchAPI<T.ExecutionRateListResponse>(`/api/signal-analytics/execution-rate?${query}`);
+	},
+
+	// Queue Observability
+	async getQueueStats(): Promise<T.QueueStatsResponse> {
+		return fetchAPI<T.QueueStatsResponse>('/queue/stats');
+	},
+
+	async getQueueEvents(params?: {
+		limit?: number;
+		status?: string;
+	}): Promise<T.QueueEventsResponse> {
+		const query = new URLSearchParams();
+		if (params?.limit) query.set('limit', params.limit.toString());
+		if (params?.status) query.set('status', params.status);
+		const queryString = query.toString();
+		return fetchAPI<T.QueueEventsResponse>(`/queue/events${queryString ? `?${queryString}` : ''}`);
 	}
 };
 

@@ -16,6 +16,7 @@
 		{ id: 'risk', label: 'Risk', href: '/risk' },
 		{ id: 'validation', label: 'Validation', href: '/validation' },
 		{ id: 'events', label: 'Events', href: '/events' },
+		{ id: 'queue', label: 'Queue', href: '/queue' },
 		{ id: 'workflow', label: 'Workflow', href: '/workflow' },
 		{ id: 'execution', label: 'Execution', href: '/execution' },
 		{ id: 'supervisor', label: 'Supervisor', href: '/supervisor' },
@@ -37,6 +38,7 @@
 		: currentPath.startsWith('/risk') ? 'risk'
 		: currentPath.startsWith('/validation') ? 'validation'
 		: currentPath.startsWith('/events') ? 'events'
+		: currentPath.startsWith('/queue') ? 'queue'
 		: currentPath.startsWith('/workflow') ? 'workflow'
 		: currentPath.startsWith('/execution') ? 'execution'
 		: currentPath.startsWith('/supervisor') ? 'supervisor'

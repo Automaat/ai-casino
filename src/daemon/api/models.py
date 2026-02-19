@@ -747,6 +747,47 @@ class ExecutionRateListResponse(BaseModel):
     count: int = Field(description="Number of confidence buckets")
 
 
+class QueueTypeBreakdown(BaseModel):
+    """Pending event count for one event type."""
+
+    event_type: str
+    count: int
+
+
+class QueueStatsResponse(BaseModel):
+    """Queue statistics endpoint response."""
+
+    pending_count: int
+    stale_count: int
+    consumed_count_24h: int
+    total_in_db: int
+    by_type: list[QueueTypeBreakdown]
+
+
+class QueueEventItem(BaseModel):
+    """Single queue event for observability API."""
+
+    event_id: str
+    event_type: str
+    status: str
+    enqueued_at: datetime
+    expires_at: datetime
+    consumed_at: datetime | None
+    symbols: list[str]
+    urgency: str
+    sentiment: str
+    confidence: float
+    reasoning: str
+    ttl_remaining_seconds: float | None
+
+
+class QueueEventsResponse(BaseModel):
+    """Queue events endpoint response."""
+
+    events: list[QueueEventItem]
+    returned_count: int
+
+
 __all__ = [
     "AccuracyByTypeListResponse",
     "AccuracyByTypeResponse",
@@ -789,6 +830,10 @@ __all__ = [
     "PositionResponse",
     "PositionTimelineResponse",
     "PositionsResponse",
+    "QueueEventItem",
+    "QueueEventsResponse",
+    "QueueStatsResponse",
+    "QueueTypeBreakdown",
     "RebalanceAllocation",
     "RebalanceCalculation",
     "RebalanceHistoryEntry",
