@@ -56,11 +56,18 @@ class SentimentWorker:
 
         texts = [f"{article.title}. {article.description}" for article in articles]
 
-        loop = asyncio.get_running_loop()
-        # Use ProcessPoolExecutor for true parallelism (avoids GIL)
         device = getattr(self.finbert, "device", "cpu")
-        executor = get_finbert_executor()
-        score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
+        if device == "remote":
+            # Remote client: use async HTTP path directly (subprocess can't reach remote service)
+            scores_raw = await asyncio.to_thread(self.finbert.analyze_batch, texts)
+            score_dicts = [
+                {"positive": s.positive, "negative": s.negative, "neutral": s.neutral} for s in scores_raw
+            ]
+        else:
+            loop = asyncio.get_running_loop()
+            # Local model: use ProcessPoolExecutor for true parallelism (avoids GIL)
+            executor = get_finbert_executor()
+            score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
 
         # Import here to avoid circular import at module level
         from src.models.sentiment import SentimentScore
