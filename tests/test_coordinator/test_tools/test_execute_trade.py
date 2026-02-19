@@ -12,6 +12,8 @@ from src.coordinator.tools.execute_trade import (
 )
 from src.daemon.config.base import TradingMode
 from src.data.broker import OrderStatus
+from src.metrics.tracker import TradeRecord
+from src.strategies.signal import Signal
 
 
 def _make_daemon_config(trading_mode=TradingMode.PAPER):
@@ -41,6 +43,10 @@ def _make_db_engine():
     session = AsyncMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
+    # Return None from scalar_one_or_none so duplicate check finds no existing position
+    execute_result = Mock()
+    execute_result.scalar_one_or_none = Mock(return_value=None)
+    session.execute = AsyncMock(return_value=execute_result)
     engine.session = Mock(return_value=session)
     return engine
 
@@ -113,11 +119,16 @@ async def test_aexecute_no_db_still_works(tool, broker):
 
 
 @pytest.mark.asyncio
-async def test_persist_trade_failure_does_not_block(tool_with_db, database_engine, broker):
-    session = database_engine.session()
-    session.__aenter__ = AsyncMock(side_effect=RuntimeError("DB down"))
+async def test_persist_trade_failure_does_not_block(tool_with_db, broker):
+    """DB error during trade persistence should not block the trade (non-critical path)."""
+    with patch("src.database.repositories.trade.TradeRepository") as mock_repo_cls:
+        mock_repo = AsyncMock()
+        mock_repo.get_entry_trade = AsyncMock(return_value=None)
+        mock_repo.create = AsyncMock(side_effect=RuntimeError("DB down"))
+        mock_repo_cls.return_value = mock_repo
 
-    result = await tool_with_db.aexecute(**_TRADE_KWARGS)
+        result = await tool_with_db.aexecute(**_TRADE_KWARGS)
+
     assert "Trade Executed" in result
 
 
@@ -215,3 +226,73 @@ async def test_notification_failure_does_not_block(broker, daemon_config, databa
 async def test_no_notification_without_service(tool_with_db, broker):
     result = await tool_with_db.aexecute(**_TRADE_KWARGS)
     assert "Trade Executed" in result
+
+
+def _make_open_buy_trade(symbol: str = "AAPL") -> TradeRecord:
+    return TradeRecord(
+        timestamp=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
+        symbol=symbol,
+        action=Signal.BUY,
+        entry_price=150.0,
+        exit_price=None,
+        shares=10,
+        stop_loss_price=142.5,
+        confidence=0.8,
+        risk_level="LOW",
+        status="OPEN",
+        pnl=None,
+        pnl_percent=None,
+        strategy_name="coordinator",
+    )
+
+
+@pytest.mark.asyncio
+async def test_duplicate_buy_blocked_when_open_position_exists(broker, daemon_config, database_engine):
+    """Duplicate BUY guard: existing open position should skip order and not call submit_order."""
+    existing_trade = _make_open_buy_trade("AAPL")
+
+    with patch("src.database.repositories.trade.TradeRepository") as mock_repo_cls:
+        mock_repo = AsyncMock()
+        mock_repo.get_entry_trade = AsyncMock(return_value=existing_trade)
+        mock_repo_cls.return_value = mock_repo
+
+        tool = ExecuteTradeTool(
+            broker, daemon_config, ExecuteTradeServices(database_engine=database_engine)
+        )
+        result = await tool.aexecute(**_TRADE_KWARGS)
+
+    assert "Skipped" in result
+    assert "AAPL" in result
+    broker.submit_order.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_buy_allowed_when_no_open_position(broker, daemon_config, database_engine):
+    """Duplicate BUY guard: no existing position should allow order through."""
+    with patch("src.database.repositories.trade.TradeRepository") as mock_repo_cls:
+        mock_repo = AsyncMock()
+        mock_repo.get_entry_trade = AsyncMock(return_value=None)
+        mock_repo_cls.return_value = mock_repo
+
+        tool = ExecuteTradeTool(
+            broker, daemon_config, ExecuteTradeServices(database_engine=database_engine)
+        )
+        result = await tool.aexecute(**_TRADE_KWARGS)
+
+    assert "Trade Executed" in result
+    broker.submit_order.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_check_fails_closed_on_db_error(broker, daemon_config, database_engine):
+    """DB error during duplicate check should block BUY (fail closed), not allow it."""
+    session = database_engine.session()
+    session.__aenter__ = AsyncMock(side_effect=RuntimeError("DB connection lost"))
+
+    tool = ExecuteTradeTool(
+        broker, daemon_config, ExecuteTradeServices(database_engine=database_engine)
+    )
+    result = await tool.aexecute(**_TRADE_KWARGS)
+
+    assert "Skipped" in result
+    broker.submit_order.assert_not_called()

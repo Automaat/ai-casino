@@ -72,7 +72,9 @@ class ComparativeWorker:
                 )
             except StructuredOutputError as e:
                 logger.opt(exception=True).warning(f"Structured output failed, falling back: {e}")
-                interpretation = await self.llm.acomplete(user_prompt, system=system, temperature=0.5)
+                interpretation = await self.llm.acomplete(
+                    user_prompt, system=system, temperature=0.5, max_tokens=1024
+                )
                 confidence = self._calculate_confidence(data, metrics)
 
             logger.info(f"Comparative analysis complete: {valuation.value}, confidence={confidence:.2f}")

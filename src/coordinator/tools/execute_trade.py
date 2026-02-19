@@ -267,6 +267,10 @@ class ExecuteTradeTool(BaseTool):
                 )
         except Exception as e:
             logger.opt(exception=True).warning(f"Duplicate position check failed for {symbol}: {e}")
+            return (
+                f"Skipped: could not verify existing position for {symbol} due to an internal error. "
+                f"Trade not executed to avoid potential duplicate BUY."
+            )
 
         return None
 
