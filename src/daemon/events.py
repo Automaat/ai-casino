@@ -450,6 +450,31 @@ class OptionsFlowSignal(BaseModel):
         )
 
 
+class NewsWatchlistEvent(BaseModel):
+    """News article event triaged as WATCHLIST (lighter coordinator treatment)."""
+
+    event_id: str = Field(description="Article URL")
+    event_type: Literal["news_watchlist"] = "news_watchlist"
+    timestamp: datetime
+    source: str = Field(description="marketaux or duckduckgo")
+    article: NewsArticle
+
+    def to_prompt_text(self) -> str:
+        """Format watchlist news event for triage."""
+        return (
+            f"NEWS ARTICLE (WATCHLIST):\n"
+            f"Source: {self.article.source}\n"
+            f"Title: {self.article.title}\n"
+            f"Published: {self.article.published_at}\n"
+            f"Description: {self.article.description}\n"
+            f"URL: {self.article.url}"
+        )
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"NewsWatchlistEvent(source={self.source}, title={self.article.title[:50]}...)"
+
+
 class SignalEvent(BaseModel):
     """Pre-market signal queued for regular session processing."""
 
@@ -501,7 +526,7 @@ class TriageResult(BaseModel):
 class EventSignal(BaseModel):
     """Signal emitted after triage + analysis."""
 
-    event: NewsEvent | SocialEvent | TrumpEvent | FilingEvent | AnomalyEvent | NewsTrendingEvent = Field(
+    event: NewsEvent | NewsWatchlistEvent | SocialEvent | TrumpEvent | FilingEvent | AnomalyEvent | NewsTrendingEvent = Field(
         discriminator="event_type"
     )
     triage: TriageResult

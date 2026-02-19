@@ -39,7 +39,7 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
             ":enqueued_at, :expires_at, :consumed_at, :process_after) "
             "ON CONFLICT (event_id) DO NOTHING"
         ).bindparams(
-            id=str(record.id),
+            id=record.id,
             event_id=record.event_id,
             event_type=record.event_type,
             payload=json.dumps(record.payload),

@@ -1,0 +1,13 @@
+### News Watchlist Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Note the sentiment direction and why this article was flagged as watchlist
+2. Save an observation using `save_observation` — do NOT call `analyze_symbol`
+3. Do NOT execute any trades for watchlist events
+4. Add the symbol to your mental watchlist for the next scheduled cycle
+5. Only escalate to full analysis if additional confirming signals appear
