@@ -71,6 +71,32 @@ class TestOpenAIProviderStructured:
         assert "Validation failed" in str(exc_info.value)
         assert exc_info.value.raw_response is not None
 
+    async def test_astructured_raises_on_length_truncation(self, mock_openai_client):
+        """Test StructuredOutputError raised with helpful message when finish_reason=length."""
+        from src.models.providers.openai import OpenAIProvider
+
+        truncated_content = '{"answer": "truncated'
+        mock_message = MagicMock()
+        mock_message.content = truncated_content
+        mock_choice = MagicMock()
+        mock_choice.finish_reason = "length"
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.usage = None
+        mock_openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        provider = OpenAIProvider(model="gpt-4o", api_key="test-key", max_tokens=512)
+        with pytest.raises(StructuredOutputError) as exc_info:
+            await provider.astructured(
+                [{"role": "user", "content": "test"}], SampleResponseModel, temperature=0.5
+            )
+
+        error_msg = str(exc_info.value)
+        assert "truncated" in error_msg.lower()
+        assert "512" in error_msg
+        assert exc_info.value.raw_response == truncated_content
+
     def test_supports_structured_output(self, mock_openai_client):
         """Test OpenAI provider supports structured output."""
         _ = mock_openai_client  # Fixture needed for mock to work

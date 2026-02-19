@@ -75,7 +75,18 @@ class GetNewsTool(BaseTool):
 
         try:
             fetcher = self._container.news_fetcher()
-            articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
+            else:
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        lambda: asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
+                    )
+                    articles = future.result()
             return self._format_articles(symbol.upper(), articles)
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to fetch news for {symbol}: {e}")
