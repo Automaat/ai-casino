@@ -1,6 +1,7 @@
 """Prompt builder for event-driven coordinator cycles."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from src.coordinator.models import CoordinatorConfig
@@ -9,6 +10,16 @@ from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
 
 _EVENT_TYPE_TEMPLATES = frozenset({"news", "social", "filing", "trump", "anomaly", "news_trending", "signal"})
+
+
+@dataclass
+class EventCycleContext:
+    """Runtime context for building an event cycle prompt."""
+
+    positions_summary: str
+    session: TradingSession
+    market_open: bool
+    game_plan: str = field(default="")
 
 
 class EventCyclePromptBuilder:
@@ -21,19 +32,15 @@ class EventCyclePromptBuilder:
     def build(
         self,
         events: Sequence[QueuedMarketEvent],
-        positions_summary: str,
-        session: TradingSession,
+        context: EventCycleContext,
         config: CoordinatorConfig,
-        market_open: bool,
     ) -> str:
         """Build the full event cycle prompt.
 
         Args:
             events: Dequeued market events
-            positions_summary: Formatted positions string
-            session: Current trading session
+            context: Runtime context (positions, session, market_open, game_plan)
             config: Coordinator config for risk limits
-            market_open: Whether market is currently open
 
         Returns:
             Rendered prompt string
@@ -48,22 +55,23 @@ class EventCyclePromptBuilder:
         header = self._prompts.load(
             "event_header",
             date=datetime.now(UTC).strftime("%Y-%m-%d"),
-            session=session.value,
-            market_open="Yes" if market_open else "No — analysis only, skip trade execution",
+            session=context.session.value,
+            market_open="Yes" if context.market_open else "No — analysis only, skip trade execution",
             symbols=", ".join(sorted(symbols)) if symbols else "None extracted",
-            positions_summary=positions_summary,
+            positions_summary=context.positions_summary,
             risk_limits=risk_limits,
             event_count=len(events),
         )
 
-        event_sections = [self._format_single_event(ev) for ev in events]
+        event_sections = [self._format_single_event(ev, game_plan=context.game_plan) for ev in events]
         return header + "\n".join(event_sections)
 
-    def _format_single_event(self, event: QueuedMarketEvent) -> str:
+    def _format_single_event(self, event: QueuedMarketEvent, game_plan: str = "") -> str:
         """Render one event using its type-specific template.
 
         Args:
             event: Single queued event with payload containing event + triage data
+            game_plan: Today's game plan (passed as extra kwarg; only signal.txt uses it)
 
         Returns:
             Rendered event section
@@ -81,6 +89,7 @@ class EventCyclePromptBuilder:
             sentiment=triage.get("sentiment", "NEUTRAL"),
             confidence=triage.get("confidence", 0.0),
             reasoning=triage.get("reasoning", "No reasoning provided"),
+            game_plan=game_plan,
         )
 
     def __repr__(self) -> str:

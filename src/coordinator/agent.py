@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from src.coordinator.event_prompt import EventCyclePromptBuilder, extract_symbols
+from src.coordinator.event_prompt import EventCycleContext, EventCyclePromptBuilder, extract_symbols
 from src.coordinator.memory import CoordinatorMemory
 from src.coordinator.models import EVENT_CYCLE_TYPE, CoordinatorConfig, CoordinatorCycleResult
 from src.models.llm import LLMClient
@@ -249,13 +249,18 @@ class TradingCoordinator:
             )
 
             positions_summary = await self._get_positions_summary()
+            has_signal_event = any(ev.event_type == "signal" for ev in events)
+            game_plan = await self._memory.get_today_game_plan(max_tokens=500) if has_signal_event else ""
             prompt_builder = EventCyclePromptBuilder()
             user_prompt = prompt_builder.build(
                 events=events,
-                positions_summary=positions_summary,
-                session=trading_session,
+                context=EventCycleContext(
+                    positions_summary=positions_summary,
+                    session=trading_session,
+                    market_open=market_open,
+                    game_plan=game_plan,
+                ),
                 config=self._config,
-                market_open=market_open,
             )
 
             tool_definitions = self._tools.get_definitions()
