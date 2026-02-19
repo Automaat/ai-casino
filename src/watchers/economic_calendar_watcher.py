@@ -16,6 +16,7 @@ from src.daemon.events import (
     EconomicRiskLevel,
 )
 from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
+from src.watchers.base import PeriodicWatcher
 
 
 @dataclass
@@ -27,7 +28,7 @@ class EconomicCalendarWatcherConfig:
     high_impact_avoid_hours: float = 2.0
 
 
-class EconomicCalendarWatcher:
+class EconomicCalendarWatcher(PeriodicWatcher):
     """Background service that polls FRED economic calendar and computes risk signals."""
 
     def __init__(
@@ -41,10 +42,15 @@ class EconomicCalendarWatcher:
             fetcher: FRED economic calendar fetcher
             config: Watcher configuration
         """
+        super().__init__(poll_interval=config.poll_interval_minutes * 60)
         self._fetcher = fetcher
         self._config = config
         self._current_signal: EconomicEventSignal | None = None
-        self.running: bool = False
+
+    @property
+    def name(self) -> str:
+        """Watcher display name."""
+        return "EconomicCalendarWatcher"
 
     @property
     def current_signal(self) -> EconomicEventSignal | None:
@@ -172,12 +178,8 @@ class EconomicCalendarWatcher:
             reason="Events present but not imminent enough to restrict trading",
         )
 
-    async def _fetch_and_assess(self) -> EconomicEventSignal:
-        """Fetch calendar and compute signal.
-
-        Returns:
-            EconomicEventSignal from current assessment
-        """
+    async def _tick(self) -> None:
+        """Fetch calendar and compute signal."""
         now = datetime.now(UTC)
         from_date = now.strftime("%Y-%m-%d")
         to_date = (now + timedelta(hours=self._config.lookahead_hours + 24)).strftime("%Y-%m-%d")
@@ -191,29 +193,6 @@ class EconomicCalendarWatcher:
             f"Economic calendar assessed: risk={signal.risk_level}, "
             f"events={len(events)}, recommendation={signal.recommendation}"
         )
-        return signal
-
-    async def run(self) -> None:
-        """Poll loop - runs until self.running is set to False."""
-        self.running = True
-        logger.info(
-            f"EconomicCalendarWatcher started (poll={self._config.poll_interval_minutes}m, "
-            f"lookahead={self._config.lookahead_hours}h)"
-        )
-
-        while self.running:
-            try:
-                await self._fetch_and_assess()
-            except Exception as e:
-                logger.opt(exception=True).error(f"EconomicCalendarWatcher cycle failed: {e}")
-
-            # Sleep in 1s intervals so lifecycle can stop us quickly
-            remaining: float = self._config.poll_interval_minutes * 60
-            while remaining > 0 and self.running:
-                await asyncio.sleep(min(1.0, remaining))
-                remaining -= 1.0
-
-        logger.info("EconomicCalendarWatcher stopped")
 
     def __repr__(self) -> str:
         """String representation."""

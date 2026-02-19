@@ -68,9 +68,6 @@ def daemon(
 @app.command(name="trump-daemon")
 def trump_daemon(
     poll_interval: Annotated[int, typer.Option("--interval", "-i", help="Poll interval in seconds")] = 60,
-    max_analyses: Annotated[
-        int, typer.Option("--max-analyses", "-m", help="Max stocks to analyze per signal")
-    ] = 5,
 ) -> None:
     """Run Trump social media watcher daemon.
 
@@ -79,7 +76,7 @@ def trump_daemon(
     """
     from src.cli.daemon import trump_daemon as trump_daemon_impl
 
-    return trump_daemon_impl(poll_interval, max_analyses)
+    return trump_daemon_impl(poll_interval)
 
 
 @app.command(name="events-daemon")

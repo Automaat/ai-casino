@@ -1,6 +1,6 @@
 """Anomaly watcher for market data anomalies (volume spikes, price moves, gaps).
 
-Polls Alpha Vantage intraday data every 15 minutes, uses round-robin rotation through watchlist,
+Polls Alpha Vantage intraday data, uses round-robin rotation through watchlist,
 maintains volume baselines and previous close cache, detects multiple anomaly types per symbol.
 """
 
@@ -8,17 +8,14 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import cast
 
 from loguru import logger
 
-from src.cache.historical import HistoricalCache
-from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
-
-if TYPE_CHECKING:
-    from src.di.container import AppContainer
+from src.watchers.base import PeriodicWatcher
+from src.watchers.pipeline import EventTriagePipeline
 
 
 @dataclass
@@ -26,103 +23,36 @@ class AnomalyWatcherConfig:
     """Configuration for AnomalyWatcher."""
 
     poll_interval: int = 900
-    relevance_threshold: float = 0.7
-    cooldown_minutes: int = 15
     volume_spike_multiplier: float = 2.0
     price_move_threshold_pct: float = 5.0
     gap_threshold_pct: float = 3.0
     watchlist: list[str] = field(default_factory=list)
     max_symbols_per_cycle: int = 5
-    max_concurrent_analyses: int = 2
 
 
-class AnomalyWatcher(EventWatcher):
+class AnomalyWatcher(PeriodicWatcher):
     """Watcher for market data anomalies.
 
     Monitors watchlist for volume spikes, large intraday moves, and gaps.
     Uses round-robin rotation to check full watchlist over multiple polls.
     """
 
-    def __init__(  # noqa: PLR0913,D417 - Backward compat, prefer AnomalyWatcherConfig
+    def __init__(
         self,
-        historical_cache: HistoricalCache,
+        pipeline: EventTriagePipeline,
         market_fetcher: MarketDataFetcher,
         config: AnomalyWatcherConfig | None = None,
-        container: AppContainer | None = None,
-        poll_interval: int | None = None,
-        relevance_threshold: float | None = None,
-        cooldown_minutes: int | None = None,
-        volume_spike_multiplier: float | None = None,
-        price_move_threshold_pct: float | None = None,
-        gap_threshold_pct: float | None = None,
-        watchlist: list[str] | None = None,
-        max_symbols_per_cycle: int | None = None,
-        max_concurrent_analyses: int | None = None,
     ) -> None:
         """Initialize anomaly watcher.
 
         Args:
-            historical_cache: Shared cache for market data
+            pipeline: Event triage pipeline for routing events
             market_fetcher: Market data fetcher for Alpha Vantage
-            config: Configuration (uses defaults if not provided)
-            container: Optional DI container (auto-created if not provided)
-            **Individual params for backward compatibility (prefer config object)
+            config: Watcher configuration
         """
-        # Backward compat: construct config from individual params if provided
-        if config is None and (
-            poll_interval is not None
-            or relevance_threshold is not None
-            or cooldown_minutes is not None
-            or volume_spike_multiplier is not None
-            or price_move_threshold_pct is not None
-            or gap_threshold_pct is not None
-            or watchlist is not None
-            or max_symbols_per_cycle is not None
-            or max_concurrent_analyses is not None
-        ):
-            defaults = AnomalyWatcherConfig()
-            config = AnomalyWatcherConfig(
-                poll_interval=poll_interval if poll_interval is not None else defaults.poll_interval,
-                relevance_threshold=(
-                    relevance_threshold if relevance_threshold is not None else defaults.relevance_threshold
-                ),
-                cooldown_minutes=(
-                    cooldown_minutes if cooldown_minutes is not None else defaults.cooldown_minutes
-                ),
-                volume_spike_multiplier=(
-                    volume_spike_multiplier
-                    if volume_spike_multiplier is not None
-                    else defaults.volume_spike_multiplier
-                ),
-                price_move_threshold_pct=(
-                    price_move_threshold_pct
-                    if price_move_threshold_pct is not None
-                    else defaults.price_move_threshold_pct
-                ),
-                gap_threshold_pct=(
-                    gap_threshold_pct if gap_threshold_pct is not None else defaults.gap_threshold_pct
-                ),
-                watchlist=watchlist if watchlist is not None else defaults.watchlist,
-                max_symbols_per_cycle=(
-                    max_symbols_per_cycle
-                    if max_symbols_per_cycle is not None
-                    else defaults.max_symbols_per_cycle
-                ),
-                max_concurrent_analyses=(
-                    max_concurrent_analyses
-                    if max_concurrent_analyses is not None
-                    else defaults.max_concurrent_analyses
-                ),
-            )
-
         cfg = config or AnomalyWatcherConfig()
-        base_config = EventWatcherConfig(
-            poll_interval=cfg.poll_interval,
-            relevance_threshold=cfg.relevance_threshold,
-            cooldown_minutes=cfg.cooldown_minutes,
-            max_concurrent_analyses=cfg.max_concurrent_analyses,
-        )
-        super().__init__(base_config, historical_cache, container=container)
+        super().__init__(poll_interval=cfg.poll_interval)
+        self._pipeline = pipeline
         self._market_fetcher = market_fetcher
         self.volume_spike_multiplier = cfg.volume_spike_multiplier
         self.price_move_threshold_pct = cfg.price_move_threshold_pct
@@ -130,8 +60,7 @@ class AnomalyWatcher(EventWatcher):
         self.watchlist = cfg.watchlist
         self.max_symbols_per_cycle = cfg.max_symbols_per_cycle
 
-        # State tracking
-        self._volume_baselines: OrderedDict[str, float] = OrderedDict()  # LRU cache
+        self._volume_baselines: OrderedDict[str, float] = OrderedDict()
         self._previous_close_cache: dict[str, float] = {}
         self._last_cache_refresh_date: datetime | None = None
         self._rotation_offset = 0
@@ -142,9 +71,16 @@ class AnomalyWatcher(EventWatcher):
             f"max_per_cycle={cfg.max_symbols_per_cycle}, watchlist={len(self.watchlist)} symbols)"
         )
 
-    def _init_components(self) -> None:
-        """Lazy initialization of parent components."""
-        super()._init_components()
+    @property
+    def name(self) -> str:
+        """Watcher display name."""
+        return "AnomalyWatcher"
+
+    async def _tick(self) -> None:
+        """Fetch and process anomaly events."""
+        events = await self._fetch_events()
+        if events:
+            await self._pipeline.process(events)
 
     def _get_next_symbols(self) -> list[str]:
         """Get next batch of symbols using round-robin rotation.
@@ -162,7 +98,6 @@ class AnomalyWatcher(EventWatcher):
         if end <= len(self.watchlist):
             symbols = self.watchlist[start:end]
         else:
-            # Wrap around
             symbols = self.watchlist[start:] + self.watchlist[: end - len(self.watchlist)]
 
         self._rotation_offset = end % len(self.watchlist)
@@ -181,7 +116,6 @@ class AnomalyWatcher(EventWatcher):
 
         self._volume_baselines[symbol] = avg_volume
 
-        # LRU eviction at 300 symbols
         if len(self._volume_baselines) > 300:
             oldest = next(iter(self._volume_baselines))
             del self._volume_baselines[oldest]
@@ -198,7 +132,6 @@ class AnomalyWatcher(EventWatcher):
 
         last_refresh_date = self._last_cache_refresh_date.date()
 
-        # Clear cache if date changed (new day)
         if today > last_refresh_date:
             logger.info("New trading day detected, clearing previous close cache")
             self._previous_close_cache.clear()
@@ -210,7 +143,6 @@ class AnomalyWatcher(EventWatcher):
             msg = "Market fetcher not initialized"
             raise RuntimeError(msg)
         if symbol not in self._volume_baselines:
-            # Establish baseline from daily data
             try:
                 daily = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol, 30)
                 if not daily.data.empty:
@@ -263,7 +195,6 @@ class AnomalyWatcher(EventWatcher):
             msg = "Market fetcher not initialized"
             raise RuntimeError(msg)
         if symbol not in self._previous_close_cache:
-            # Fetch prev close from daily data
             try:
                 daily = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol, 2)
                 if len(daily.data) >= 2:
@@ -305,7 +236,6 @@ class AnomalyWatcher(EventWatcher):
         if self._market_fetcher is None:
             msg = "Market fetcher not initialized"
             raise RuntimeError(msg)
-        # Fetch intraday data
         try:
             intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
         except Exception as e:
@@ -316,7 +246,6 @@ class AnomalyWatcher(EventWatcher):
             logger.debug(f"No intraday data for {symbol}")
             return None
 
-        # Aggregate current trading day bars
         latest_ts = intraday.data.index[-1]
         current_date = latest_ts.date()
         index = intraday.data.index
@@ -329,14 +258,12 @@ class AnomalyWatcher(EventWatcher):
         if day_bars.empty:
             day_bars = intraday.data.iloc[[-1]]
 
-        # Extract day-level aggregated metrics
         open_price = float(day_bars["Open"].iloc[0])
         current_price = float(day_bars["Close"].iloc[-1])
         high = float(day_bars["High"].max())
         low = float(day_bars["Low"].min())
         current_volume = float(day_bars["Volume"].sum())
 
-        # Run anomaly detections
         anomaly_types = []
         volume_spike_data = await self._detect_volume_spike(symbol, current_volume)
         if volume_spike_data:
@@ -350,7 +277,6 @@ class AnomalyWatcher(EventWatcher):
         if gap_data:
             anomaly_types.append("gap")
 
-        # Create event if anomalies detected
         if anomaly_types:
             event_id = f"{symbol}-{datetime.now(UTC).isoformat()}"
             logger.info(f"Anomaly detected: {symbol} ({'+'.join(anomaly_types)})")
@@ -370,7 +296,6 @@ class AnomalyWatcher(EventWatcher):
 
     async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch anomaly events (volume spikes, price moves, gaps)."""
-        self._init_components()
         if self._market_fetcher is None:
             msg = "Market fetcher not initialized"
             raise RuntimeError(msg)
@@ -383,8 +308,6 @@ class AnomalyWatcher(EventWatcher):
         symbols_to_check = self._get_next_symbols()
         if not symbols_to_check:
             return []
-
-        from typing import cast
 
         events: list[BaseEvent] = []
         for symbol in symbols_to_check:
@@ -399,7 +322,7 @@ class AnomalyWatcher(EventWatcher):
         return events
 
     def __repr__(self) -> str:
-        """String representation."""
+        """Return string representation."""
         return (
             f"AnomalyWatcher(poll_interval={self.poll_interval}s, "
             f"watchlist={len(self.watchlist)} symbols, "

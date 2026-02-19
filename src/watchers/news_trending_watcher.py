@@ -1,7 +1,7 @@
 """News trending watcher - continuous discovery via trending news.
 
 Polls web search for trending stock news, tracks mention frequency,
-detects spikes, and routes candidates to discovery engine.
+detects spikes, and routes candidates through EventTriagePipeline.
 """
 
 import asyncio
@@ -13,14 +13,12 @@ from typing import TYPE_CHECKING, cast
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, NewsTrendingEvent
+from src.watchers.base import PeriodicWatcher
+from src.watchers.pipeline import EventTriagePipeline
 
 if TYPE_CHECKING:
-    from src.cache.historical import HistoricalCache
-    from src.daemon.state.facade import DaemonState
     from src.data.websearch import WebSearchFetcher
-    from src.di.container import AppContainer
 
 
 class NewsTrendingWatcherConfig(BaseModel):
@@ -41,34 +39,24 @@ class NewsTrendingWatcherConfig(BaseModel):
     max_results_per_query: int = Field(default=10, ge=5, le=20)
 
 
-class NewsTrendingWatcher(EventWatcher):
+class NewsTrendingWatcher(PeriodicWatcher):
     """Monitor trending stocks in financial news (continuous discovery)."""
 
     def __init__(
         self,
+        pipeline: EventTriagePipeline,
         websearch_fetcher: WebSearchFetcher,
-        historical_cache: HistoricalCache,
         config: NewsTrendingWatcherConfig,
-        container: AppContainer | None = None,
-        state: DaemonState | None = None,
     ) -> None:
         """Initialize news trending watcher.
 
         Args:
+            pipeline: Event triage pipeline for routing events
             websearch_fetcher: Web search fetcher for news queries
-            historical_cache: Shared cache for data persistence
             config: Watcher configuration
-            container: Optional DI container
-            state: DaemonState for discovery routing
         """
-        base_config = EventWatcherConfig(
-            poll_interval=config.poll_interval,
-            relevance_threshold=config.relevance_threshold,
-            cooldown_minutes=0,
-            max_concurrent_analyses=0,
-        )
-        super().__init__(base_config, historical_cache, container=container, discovery_mode=True, state=state)
-
+        super().__init__(poll_interval=config.poll_interval)
+        self._pipeline = pipeline
         self.websearch_fetcher = websearch_fetcher
         self.trending_window_minutes = config.trending_window_minutes
         self.min_mention_threshold = config.min_mention_threshold
@@ -76,13 +64,9 @@ class NewsTrendingWatcher(EventWatcher):
         self.search_queries = config.search_queries
         self.max_results_per_query = config.max_results_per_query
 
-        # Mention tracking (symbol -> list of timestamps)
         self._mention_history: dict[str, list[datetime]] = defaultdict(list)
-
-        # Baseline tracking (symbol -> average mentions/hour)
         self._baselines: dict[str, float] = {}
 
-        # Excluded words (from reddit.py pattern)
         self._excluded_words = frozenset(
             {
                 "I",
@@ -137,6 +121,17 @@ class NewsTrendingWatcher(EventWatcher):
             f"min_mentions={self.min_mention_threshold}"
         )
 
+    @property
+    def name(self) -> str:
+        """Watcher display name."""
+        return "NewsTrendingWatcher"
+
+    async def _tick(self) -> None:
+        """Fetch and process trending news events."""
+        events = await self._fetch_events()
+        if events:
+            await self._pipeline.process(events)
+
     async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch trending stock mentions from news search.
 
@@ -145,10 +140,8 @@ class NewsTrendingWatcher(EventWatcher):
         """
         logger.debug("Fetching trending news mentions")
 
-        # Track mentions per symbol in this cycle
         cycle_mentions: dict[str, list[str]] = defaultdict(list)
 
-        # Search all queries
         for query in self.search_queries:
             try:
                 response = await asyncio.to_thread(
@@ -166,27 +159,22 @@ class NewsTrendingWatcher(EventWatcher):
                 logger.opt(exception=True).warning(f"News search failed for '{query}': {e}")
                 continue
 
-        # Update mention history (rolling window)
         now = datetime.now(UTC)
         cutoff = now - timedelta(minutes=self.trending_window_minutes)
 
         for symbol, articles in cycle_mentions.items():
-            # Add new mentions (one timestamp per article)
             for _ in articles:
                 self._mention_history[symbol].append(now)
 
-            # Prune old mentions (outside window)
             self._mention_history[symbol] = [ts for ts in self._mention_history[symbol] if ts >= cutoff]
 
-        # Prune symbols with no recent mentions
         for symbol in list(self._mention_history.keys()):
             if symbol not in cycle_mentions:
                 self._mention_history[symbol] = [ts for ts in self._mention_history[symbol] if ts >= cutoff]
                 if not self._mention_history[symbol]:
                     del self._mention_history[symbol]
 
-        # Detect trending symbols (above threshold)
-        events: list[BaseEvent] = []
+        trending_events: list[NewsTrendingEvent] = []
 
         for symbol, mention_times in self._mention_history.items():
             mention_count = len(mention_times)
@@ -194,14 +182,11 @@ class NewsTrendingWatcher(EventWatcher):
             if mention_count < self.min_mention_threshold:
                 continue
 
-            # Calculate baseline (exponential moving average)
             baseline = self._baselines.get(symbol, 1.0)
             spike_ratio = mention_count / baseline
 
-            # Update baseline (slower decay for stability)
             self._baselines[symbol] = 0.9 * baseline + 0.1 * mention_count
 
-            # Create event
             event = NewsTrendingEvent(
                 event_id=f"newstrending_{symbol}_{now.isoformat()}",
                 symbol=symbol,
@@ -212,14 +197,13 @@ class NewsTrendingWatcher(EventWatcher):
                 timestamp=now,
                 trending_window=self.trending_window_minutes,
             )
-            events.append(cast("BaseEvent", event))
+            trending_events.append(event)
 
-        symbol_list = [cast("NewsTrendingEvent", e).symbol for e in events[:5]]
-        logger.info(f"Detected {len(events)} trending symbols: {symbol_list}")
+        symbol_list = [e.symbol for e in trending_events[:5]]
+        logger.info(f"Detected {len(trending_events)} trending symbols: {symbol_list}")
 
-        # Limit to max_candidates_per_cycle (sort by spike ratio)
-        events.sort(key=lambda e: e.spike_ratio, reverse=True)
-        return events[: self.max_candidates_per_cycle]
+        trending_events.sort(key=lambda e: e.spike_ratio, reverse=True)
+        return cast("list[BaseEvent]", trending_events[: self.max_candidates_per_cycle])
 
     def _extract_tickers(self, text: str) -> set[str]:
         """Extract stock tickers from text using regex.
@@ -239,3 +223,10 @@ class NewsTrendingWatcher(EventWatcher):
                 tickers.add(ticker)
 
         return tickers
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"NewsTrendingWatcher(poll_interval={self.poll_interval}s, "
+            f"trending_window={self.trending_window_minutes}min)"
+        )
