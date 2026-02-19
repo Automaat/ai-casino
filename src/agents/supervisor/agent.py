@@ -268,7 +268,7 @@ class TradingSupervisor:
 
         try:
             ranking = await self.llm.astructured(
-                prompt, CandidateRanking, system=system, temperature=0.4, max_tokens=512
+                prompt, CandidateRanking, system=system, temperature=0.4, max_tokens=8192
             )
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, fallback: {e}")

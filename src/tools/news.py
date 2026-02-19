@@ -60,7 +60,7 @@ class GetNewsTool(BaseTool):
         )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Fetch news for a stock.
+        """Fetch news for a stock (sync, CLI-only context).
 
         Args:
             **kwargs: Tool arguments (symbol: str, limit: int = 5)
@@ -75,24 +75,29 @@ class GetNewsTool(BaseTool):
 
         try:
             fetcher = self._container.news_fetcher()
+            articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
+            return self._format_articles(symbol.upper(), articles)
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to fetch news for {symbol}: {e}")
+            return f"Failed to fetch news for {symbol}: {e}"
 
-            # Handle calling async from sync - detect if event loop is running
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                # No event loop running, safe to use asyncio.run()
-                articles = asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
-            else:
-                # Event loop already running, run in separate thread with new loop
-                import concurrent.futures
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Fetch news for a stock asynchronously (daemon/coordinator context).
 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    # Pass lambda to avoid coroutine starting prematurely
-                    future = executor.submit(
-                        lambda: asyncio.run(fetcher.afetch_company_news(symbol.upper(), limit=limit))
-                    )
-                    articles = future.result()
+        Args:
+            **kwargs: Tool arguments (symbol: str, limit: int = 5)
 
+        Returns:
+            Formatted news summary
+        """
+        symbol = str(kwargs["symbol"])
+        limit = int(kwargs.get("limit", 5))
+
+        logger.info(f"Fetching news for {symbol} (limit={limit})")
+
+        try:
+            fetcher = self._container.news_fetcher()
+            articles = await fetcher.afetch_company_news(symbol.upper(), limit=limit)
             return self._format_articles(symbol.upper(), articles)
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to fetch news for {symbol}: {e}")
