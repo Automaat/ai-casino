@@ -6,7 +6,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from src.agents.supervisor.models import AnalysisRoutingDecision, AnalysisWeights
