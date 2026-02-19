@@ -1,0 +1,13 @@
+### News Trending Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Evaluate why the symbol is trending — look for a clear catalyst
+2. Use `analyze_symbol` if spike ratio is high and sentiment is directional
+3. Check if trending correlates with price movement or is news-only noise
+4. If market is closed, save observations — do NOT execute trades
+5. High mention counts without price confirmation may indicate noise

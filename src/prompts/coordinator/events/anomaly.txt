@@ -1,0 +1,13 @@
+### Market Anomaly Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Confirm anomaly with technical analysis — volume spikes need price confirmation
+2. Check for concurrent news catalysts explaining the anomaly
+3. Use `analyze_symbol` to validate the signal with full technical + sentiment pipeline
+4. If market is closed, save observations — do NOT execute trades
+5. Gaps and volume spikes early in session are higher-signal than late-day moves

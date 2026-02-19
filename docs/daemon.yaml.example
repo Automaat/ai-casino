@@ -930,6 +930,15 @@ daemon:
     # Example: 0.6 = only execute trades with ≥60% confidence
     min_confidence_to_trade: 0.6
 
+    # Event-driven cycles — polls market event queue and spawns coordinator runs
+    # Requires event watchers + event queue infrastructure (PostgreSQL)
+    # Max events to dequeue per poll (1-20)
+    event_max_dequeue: 5
+    # Max tool calls per event-driven cycle (5-50)
+    event_max_tool_calls: 15
+    # Seconds between queue polls (5-300)
+    event_poll_interval_seconds: 15
+
     # Automated pattern detection (learning from outcomes)
     pattern_detection:
       # Enable pattern detection

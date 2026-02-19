@@ -1,0 +1,13 @@
+### News Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Assess the catalyst's potential impact on affected symbols
+2. Use `analyze_symbol` if urgency is IMMEDIATE and confidence ≥ 0.6
+3. Cross-reference with existing positions and recent analysis history
+4. If market is closed, save observations for next open — do NOT execute trades
+5. Focus on whether this news changes the fundamental thesis for any position

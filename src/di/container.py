@@ -42,6 +42,12 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
     )
 
+    # Market event queue singleton
+    market_event_queue = providers.Singleton(
+        database_providers.create_market_event_queue,
+        database_engine=database_engine,
+    )
+
     # Repository factories - create repos with fresh sessions per call
     analysis_repository = providers.Factory(
         database_providers.create_analysis_repository,

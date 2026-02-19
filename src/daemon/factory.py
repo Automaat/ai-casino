@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from src.daemon.watchers.social_watcher import SocialWatcher
     from src.daemon.watchers.trump_watcher import TrumpWatcher
     from src.di.container import AppContainer
+    from src.event_queue.consumer import EventQueueConsumer
 
 
 @dataclass
@@ -89,6 +90,7 @@ class DaemonComponents:
     economic_calendar_watcher: EconomicCalendarWatcher | None = None
     options_flow_watcher: OptionsFlowWatcher | None = None
     social_sentiment_watcher: SocialSentimentWatcher | None = None
+    event_queue_consumer: EventQueueConsumer | None = None
 
 
 class DaemonFactory:

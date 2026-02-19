@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
     from src.database.repositories.signal_outcome import SignalOutcomeRepository
     from src.database.repositories.trade import TradeRepository
+    from src.event_queue.service import MarketEventQueue
 
 
 def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
@@ -83,6 +84,20 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
 
     logger.info("DatabaseEngine initialized and migrations applied")
     return engine
+
+
+def create_market_event_queue(database_engine: DatabaseEngine) -> MarketEventQueue:
+    """Create MarketEventQueue singleton.
+
+    Args:
+        database_engine: Database engine singleton
+
+    Returns:
+        MarketEventQueue instance
+    """
+    from src.event_queue.service import MarketEventQueue
+
+    return MarketEventQueue(database_engine)
 
 
 def create_analysis_repository(database_engine: DatabaseEngine) -> AnalysisRecordRepository:
