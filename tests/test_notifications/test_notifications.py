@@ -1,7 +1,7 @@
 """Tests for notifications package."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -179,12 +179,17 @@ class TestTelegramChannel:
             timestamp=datetime.now(UTC),
         )
 
-        with patch("src.notifications.channels.telegram.httpx.AsyncClient") as mock_client:
+        with patch("src.notifications.channels.telegram.httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"ok": True, "result": {"message_id": 123}}
-            mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
+
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_class.return_value = mock_client
 
             success = await channel.send(message)
             assert success is True
@@ -203,12 +208,17 @@ class TestTelegramChannel:
             timestamp=datetime.now(UTC),
         )
 
-        with patch("src.notifications.channels.telegram.httpx.AsyncClient") as mock_client:
+        with patch("src.notifications.channels.telegram.httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"ok": False, "description": "Bad Request"}
-            mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
+
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_class.return_value = mock_client
 
             success = await channel.send(message)
             assert success is False
