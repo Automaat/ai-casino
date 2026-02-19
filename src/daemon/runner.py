@@ -127,6 +127,7 @@ class DaemonRunner:
                 self._components,
                 context_builder=context_builder,
             )
+            orchestrator.market_event_queue = self._container.market_event_queue()
             self._analysis_orchestrator = orchestrator
             return orchestrator
         return self._components.analysis_orchestrator

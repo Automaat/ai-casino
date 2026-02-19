@@ -4,6 +4,7 @@ This module defines unified event schemas for all event types (news, social, fil
 and triage results from the LLM-powered EventTriageAgent.
 """
 
+import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -446,6 +447,33 @@ class OptionsFlowSignal(BaseModel):
             f"P/C={self.put_call_ratio:.2f} "
             f"dir={self.net_premium_direction} "
             f"score={self.significance_score:.2f})"
+        )
+
+
+class SignalEvent(BaseModel):
+    """Pre-market signal queued for regular session processing."""
+
+    event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    event_type: Literal["signal"] = "signal"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: str = "analysis_orchestrator"
+    symbol: str
+    signal: str  # "BUY" | "SELL"
+    confidence: float
+    session: str  # TradingSession.value
+    reasoning: str
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"SignalEvent(symbol={self.symbol!r}, signal={self.signal!r}, confidence={self.confidence:.2f})"
+        )
+
+    def to_prompt_text(self) -> str:
+        """Format for LLM triage prompt."""
+        return (
+            f"[SIGNAL] {self.signal} {self.symbol} (confidence={self.confidence:.0%}, "
+            f"session={self.session}): {self.reasoning}"
         )
 
 

@@ -1,0 +1,17 @@
+### Pre-Market Signal Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Today's Game Plan:**
+{game_plan}
+
+**Instructions:**
+1. This signal was generated during pre-market and deferred for regular session execution
+2. Check the game plan above — does this symbol align with today's priority symbols and risk stance?
+3. Re-evaluate the original signal: use `analyze_symbol` to get current technical + sentiment data
+4. If the thesis holds and the symbol fits the game plan, execute the trade
+5. If conditions changed significantly or the symbol conflicts with the game plan, save an observation explaining why you're skipping
+6. Do NOT blindly execute — confirm the signal still makes sense at current market open prices

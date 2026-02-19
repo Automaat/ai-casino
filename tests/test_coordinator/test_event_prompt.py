@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.coordinator.event_prompt import EventCyclePromptBuilder, extract_symbols
+from src.coordinator.event_prompt import EventCycleContext, EventCyclePromptBuilder, extract_symbols
 from src.coordinator.models import CoordinatorConfig
 from src.event_queue.models import QueuedMarketEvent
 from src.strategies.session import TradingSession
@@ -55,6 +55,21 @@ def builder() -> EventCyclePromptBuilder:
     return EventCyclePromptBuilder()
 
 
+def _ctx(
+    positions_summary: str = "",
+    session: TradingSession = TradingSession.REGULAR,
+    market_open: bool = True,
+    game_plan: str = "",
+) -> EventCycleContext:
+    """Build EventCycleContext with defaults."""
+    return EventCycleContext(
+        positions_summary=positions_summary,
+        session=session,
+        market_open=market_open,
+        game_plan=game_plan,
+    )
+
+
 class TestExtractSymbols:
     """Tests for extract_symbols."""
 
@@ -92,10 +107,8 @@ class TestEventCyclePromptBuilder:
         events = [_make_event(symbols=["AAPL"])]
         prompt = builder.build(
             events=events,
-            positions_summary="No open positions",
-            session=TradingSession.REGULAR,
+            context=_ctx(positions_summary="No open positions", market_open=True),
             config=config,
-            market_open=True,
         )
         assert "Event-Driven Cycle" in prompt
         assert "AAPL" in prompt
@@ -104,13 +117,7 @@ class TestEventCyclePromptBuilder:
 
     def test_market_closed_flag(self, builder: EventCyclePromptBuilder, config: CoordinatorConfig) -> None:
         events = [_make_event()]
-        prompt = builder.build(
-            events=events,
-            positions_summary="",
-            session=TradingSession.REGULAR,
-            config=config,
-            market_open=False,
-        )
+        prompt = builder.build(events=events, context=_ctx(market_open=False), config=config)
         assert "skip trade execution" in prompt
 
     def test_multiple_event_types(self, builder: EventCyclePromptBuilder, config: CoordinatorConfig) -> None:
@@ -118,13 +125,7 @@ class TestEventCyclePromptBuilder:
             _make_event(event_id="e1", event_type="news", symbols=["AAPL"]),
             _make_event(event_id="e2", event_type="anomaly", symbols=["TSLA"]),
         ]
-        prompt = builder.build(
-            events=events,
-            positions_summary="",
-            session=TradingSession.REGULAR,
-            config=config,
-            market_open=True,
-        )
+        prompt = builder.build(events=events, context=_ctx(market_open=True), config=config)
         assert "News Event" in prompt
         assert "Market Anomaly Event" in prompt
         assert "2 event(s)" in prompt
@@ -133,25 +134,12 @@ class TestEventCyclePromptBuilder:
         self, builder: EventCyclePromptBuilder, config: CoordinatorConfig
     ) -> None:
         events = [_make_event(event_type="unknown_type")]
-        prompt = builder.build(
-            events=events,
-            positions_summary="",
-            session=TradingSession.REGULAR,
-            config=config,
-            market_open=True,
-        )
-        # Falls back to news template
+        prompt = builder.build(events=events, context=_ctx(market_open=True), config=config)
         assert "News Event" in prompt
 
     def test_risk_limits_in_header(self, builder: EventCyclePromptBuilder, config: CoordinatorConfig) -> None:
         events = [_make_event()]
-        prompt = builder.build(
-            events=events,
-            positions_summary="",
-            session=TradingSession.REGULAR,
-            config=config,
-            market_open=True,
-        )
+        prompt = builder.build(events=events, context=_ctx(market_open=True), config=config)
         assert "10.0%" in prompt
         assert "60%" in prompt
 
@@ -160,11 +148,30 @@ class TestEventCyclePromptBuilder:
     ) -> None:
         for event_type in ["news", "social", "filing", "trump", "anomaly", "news_trending"]:
             events = [_make_event(event_type=event_type)]
-            prompt = builder.build(
-                events=events,
-                positions_summary="",
-                session=TradingSession.REGULAR,
-                config=config,
-                market_open=True,
-            )
+            prompt = builder.build(events=events, context=_ctx(market_open=True), config=config)
             assert len(prompt) > 100
+
+    def test_signal_event_includes_game_plan(
+        self, builder: EventCyclePromptBuilder, config: CoordinatorConfig
+    ) -> None:
+        events = [_make_event(event_type="signal", symbol="AAPL")]
+        game_plan = "Priority: AAPL, MSFT | Risk: LOW | Sector: Tech"
+        prompt = builder.build(
+            events=events,
+            context=_ctx(market_open=True, game_plan=game_plan),
+            config=config,
+        )
+        assert game_plan in prompt
+        assert "Pre-Market Signal Event" in prompt
+
+    def test_non_signal_event_game_plan_ignored(
+        self, builder: EventCyclePromptBuilder, config: CoordinatorConfig
+    ) -> None:
+        events = [_make_event(event_type="news")]
+        prompt = builder.build(
+            events=events,
+            context=_ctx(market_open=True, game_plan="some game plan text"),
+            config=config,
+        )
+        # game_plan passed but news.txt doesn't use it — no error, extra kwarg silently ignored
+        assert len(prompt) > 100
