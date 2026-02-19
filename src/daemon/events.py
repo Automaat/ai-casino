@@ -464,7 +464,7 @@ class NewsWatchlistEvent(BaseModel):
     article: NewsArticle
 
     def to_prompt_text(self) -> str:
-        """Format watchlist news event for triage."""
+        """Format watchlist news event for display."""
         return (
             f"NEWS ARTICLE (WATCHLIST):\n"
             f"Source: {self.article.source}\n"
