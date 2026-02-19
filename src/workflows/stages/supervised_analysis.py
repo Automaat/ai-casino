@@ -566,7 +566,6 @@ async def _publish_metrics_event(
                     "routing_decision_ms": metrics_collector.routing_decision_ms,
                     "group1_execution_ms": metrics_collector.group1_execution_ms,
                     "research_execution_ms": metrics_collector.research_execution_ms,
-                    "parallel_efficiency_percent": metrics_collector.parallel_efficiency_percent,
                     "timeout_triggered": metrics_collector.timeout_triggered,
                 },
             )

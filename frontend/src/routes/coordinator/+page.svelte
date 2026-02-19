@@ -21,7 +21,6 @@
 
 	// Computed metrics
 	const avgRoutingTime = $derived(summaryData ? summaryData.avg_routing_ms.toFixed(1) : '0.0');
-	const efficiency = $derived(summaryData ? summaryData.avg_efficiency_percent.toFixed(1) : '0');
 	const totalCost = $derived(recentData.length > 0
 		? recentData.reduce((sum, m) => sum + m.total_cost_usd, 0).toFixed(4)
 		: '0.00');
@@ -160,9 +159,8 @@
 	</div>
 
 	<!-- Stats Cards -->
-	<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 		<MetricCard title="Avg Routing Time" value={`${avgRoutingTime}ms`} icon="⚡" />
-		<MetricCard title="Efficiency" value={`${efficiency}%`} icon="🎯" />
 		<MetricCard title="Total Cost (24h)" value={`$${totalCost}`} icon="💰" />
 		<MetricCard title="Avg Workers" value={avgWorkers} icon="👥" />
 	</div>

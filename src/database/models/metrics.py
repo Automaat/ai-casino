@@ -57,8 +57,6 @@ class SupervisorMetricsORM(Base):
     confidence_adjustment: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     synthesis_reasoning: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Efficiency
-    parallel_efficiency_percent: Mapped[Decimal] = mapped_column(DECIMAL(5, 2), nullable=False)
     timeout_triggered: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     __table_args__ = (
