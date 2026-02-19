@@ -992,6 +992,63 @@ daemon:
         path.unlink()
 
 
+class TestRemoveWatchlistSymbol:
+    def test_removes_symbol_from_memory(self):
+        config = DaemonConfig(watchlist=["AAPL", "TSLA", "GOOGL"])
+        config.remove_watchlist_symbol("TSLA")
+        assert "TSLA" not in config.watchlist
+        assert config.watchlist == ["AAPL", "GOOGL"]
+
+    def test_no_op_when_symbol_absent(self):
+        config = DaemonConfig(watchlist=["AAPL", "TSLA"])
+        config.remove_watchlist_symbol("NVDA")
+        assert config.watchlist == ["AAPL", "TSLA"]
+
+    def test_no_config_path_skips_persistence(self):
+        config = DaemonConfig(watchlist=["AAPL", "TSLA"])
+        assert config._config_path is None
+        config.remove_watchlist_symbol("TSLA")
+        assert "TSLA" not in config.watchlist
+
+    def test_persists_removal_to_yaml(self):
+        yaml_content = """
+daemon:
+  watchlist: ["AAPL", "TSLA", "GOOGL"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            path = Path(f.name)
+
+        import yaml
+
+        config = DaemonConfig.from_yaml(path)
+        config.remove_watchlist_symbol("TSLA")
+
+        with path.open() as f:
+            data = yaml.safe_load(f)
+
+        assert "TSLA" not in data["daemon"]["watchlist"]
+        assert "AAPL" in data["daemon"]["watchlist"]
+        assert "GOOGL" in data["daemon"]["watchlist"]
+
+        path.unlink()
+
+    def test_persists_removal_empty_file(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("")
+            f.flush()
+            path = Path(f.name)
+
+        config = DaemonConfig(watchlist=["AAPL"])
+        config._config_path = path
+        config.remove_watchlist_symbol("AAPL")
+
+        assert "AAPL" not in config.watchlist
+
+        path.unlink()
+
+
 class TestDatabaseConfig:
     def test_database_config_pool_params(self):
         """Test database pool configuration parameters."""

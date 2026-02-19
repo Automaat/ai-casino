@@ -375,11 +375,13 @@ class DaemonConfig(BaseModel):
             return
         try:
             with self._config_path.open("r") as f:
-                data = yaml.safe_load(f)
-            watchlist: list[str] = data.get("daemon", {}).get("watchlist", [])
+                data = yaml.safe_load(f) or {}
+            daemon_config = data.get("daemon") or {}
+            watchlist: list[str] = daemon_config.get("watchlist", []) or []
             if symbol in watchlist:
                 watchlist.remove(symbol)
-                data.setdefault("daemon", {})["watchlist"] = watchlist
+                daemon_config["watchlist"] = watchlist
+                data["daemon"] = daemon_config
             with self._config_path.open("w") as f:
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
             logger.info(f"Persisted watchlist removal of {symbol} to {self._config_path}")
