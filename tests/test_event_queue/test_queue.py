@@ -167,6 +167,51 @@ class TestMarketEventQueueService:
 
 
 @pytest.mark.unit
+class TestProcessAfterEnqueue:
+    """enqueue stores process_after correctly."""
+
+    @pytest.mark.asyncio
+    async def test_enqueue_stores_process_after(self, mock_db_engine):
+        """process_after is propagated to the ORM record."""
+        engine, _ = mock_db_engine
+        captured: list[MarketEventQueueORM] = []
+        future = datetime.now(UTC) + timedelta(hours=1)
+
+        async def capture_enqueue(_self, record: MarketEventQueueORM) -> None:
+            captured.append(record)
+
+        with patch.object(MarketEventQueueRepository, "enqueue", new=capture_enqueue):
+            svc = MarketEventQueue(engine)
+            event = MagicMock(event_id="e_pa", event_type="news")
+            event.model_dump.return_value = {}
+            triage = MagicMock()
+            triage.model_dump.return_value = {}
+            await svc.enqueue(event, triage, process_after=future)
+
+        assert len(captured) == 1
+        assert captured[0].process_after == future
+
+    @pytest.mark.asyncio
+    async def test_enqueue_none_process_after_stored(self, mock_db_engine):
+        """process_after=None is stored as None (immediately eligible)."""
+        engine, _ = mock_db_engine
+        captured: list[MarketEventQueueORM] = []
+
+        async def capture_enqueue(_self, record: MarketEventQueueORM) -> None:
+            captured.append(record)
+
+        with patch.object(MarketEventQueueRepository, "enqueue", new=capture_enqueue):
+            svc = MarketEventQueue(engine)
+            event = MagicMock(event_id="e_none", event_type="news")
+            event.model_dump.return_value = {}
+            triage = MagicMock()
+            triage.model_dump.return_value = {}
+            await svc.enqueue(event, triage, process_after=None)
+
+        assert captured[0].process_after is None
+
+
+@pytest.mark.unit
 class TestMarketEventQueueRepository:
     """Repository SQL behavior tests."""
 
@@ -316,3 +361,52 @@ class TestMarketEventQueueRepository:
         assert len(executed_stmts) == 3
         update_sql = str(executed_stmts[1].compile(dialect=sqlite_dialect.dialect()))
         assert "consumed_at" in update_sql.lower()
+
+    @pytest.mark.asyncio
+    async def test_dequeue_subquery_filters_process_after(self):
+        """dequeue subquery includes process_after <= now filter."""
+        from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+        ids_result = MagicMock()
+        ids_result.fetchall.return_value = []
+
+        executed_stmts: list = []
+
+        async def capture_execute(stmt, *args, **kwargs):
+            executed_stmts.append(stmt)
+            return ids_result
+
+        session = AsyncMock()
+        session.execute = capture_execute
+        session.commit = AsyncMock()
+
+        repo = MarketEventQueueRepository(session)
+        await repo.dequeue(max_items=1)
+
+        assert len(executed_stmts) == 1
+        sql = str(executed_stmts[0].compile(dialect=sqlite_dialect.dialect()))
+        assert "process_after" in sql.lower()
+
+    @pytest.mark.asyncio
+    async def test_count_pending_filters_process_after(self):
+        """count_pending query includes process_after filter."""
+        from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+        result_mock = MagicMock()
+        result_mock.scalar_one.return_value = 2
+
+        executed_stmts: list = []
+
+        async def capture_execute(stmt, *args, **kwargs):
+            executed_stmts.append(stmt)
+            return result_mock
+
+        session = AsyncMock()
+        session.execute = capture_execute
+
+        repo = MarketEventQueueRepository(session)
+        await repo.count_pending()
+
+        assert len(executed_stmts) == 1
+        sql = str(executed_stmts[0].compile(dialect=sqlite_dialect.dialect()))
+        assert "process_after" in sql.lower()

@@ -32,8 +32,11 @@ class MarketService:
     def next_regular_open(self) -> datetime:
         """Return tz-aware ET datetime of the next regular session open (09:30).
 
-        If currently in regular session, returns today's open (already passed).
-        Otherwise advances to next trading day (skips weekends).
+        Always returns a future open time: if 09:30 has already passed today,
+        advances to the next calendar day, then skips weekends.
+
+        Note: Does not account for market holidays (Christmas, Thanksgiving, etc.).
+        Callers should treat the result as an approximation on holiday-adjacent days.
         """
         tz = self._scheduler.timezone
         now = datetime.now(tz)
