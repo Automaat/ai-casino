@@ -614,22 +614,25 @@ class AnalysisOrchestrator:
         Args:
             result: TradingWorkflowResult
         """
-        from src.strategies.session import TradingSession
-
         if self.notification_service and self._components:
             await self._notification_helper.maybe_notify_signal(result, self._components)
         if (
             self.market_event_queue is not None
-            and result.trading_session == TradingSession.PRE_MARKET
             and result.decision.action in (Signal.BUY, Signal.SELL)
             and result.decision.confidence >= _QUEUE_MIN_CONFIDENCE
         ):
             await self._emit_signal_event(result)
 
     async def _emit_signal_event(self, result: TradingWorkflowResult) -> None:
-        """Enqueue SignalEvent for processing at next regular session open."""
+        """Enqueue SignalEvent for coordinator processing."""
         try:
-            process_after = self.scheduler.next_regular_open()
+            from src.strategies.session import TradingSession
+
+            process_after = (
+                self.scheduler.next_regular_open()
+                if result.trading_session == TradingSession.PRE_MARKET
+                else datetime.now(UTC)
+            )
             event_id = f"{result.symbol}_{result.decision.action.value}_{process_after.date().isoformat()}"
             signal_event = SignalEvent(
                 event_id=event_id,
