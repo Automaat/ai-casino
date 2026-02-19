@@ -83,7 +83,7 @@ class DatabaseEngine:
             expire_on_commit=False,
         )
         self._migrations_applied = False
-        self._migration_lock: asyncio.Lock | None = None
+        self._migration_lock = asyncio.Lock()
         logger.info(f"DatabaseEngine initialized with {self._database_url.split('@')[-1]}")
 
     @property
@@ -97,8 +97,6 @@ class DatabaseEngine:
 
     async def run_migrations(self) -> None:
         """Apply pending SQL migrations from migrations directory."""
-        if self._migration_lock is None:
-            self._migration_lock = asyncio.Lock()
         async with self._migration_lock:
             if self._migrations_applied:
                 return
