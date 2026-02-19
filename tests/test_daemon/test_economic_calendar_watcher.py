@@ -10,11 +10,11 @@ from src.daemon.events import (
     EconomicRecommendation,
     EconomicRiskLevel,
 )
-from src.daemon.watchers.economic_calendar_watcher import (
+from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
+from src.watchers.economic_calendar_watcher import (
     EconomicCalendarWatcher,
     EconomicCalendarWatcherConfig,
 )
-from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
 
 
 @pytest.fixture
@@ -164,15 +164,14 @@ def test_compute_signal_medium_not_imminent(watcher: EconomicCalendarWatcher) ->
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fetch_and_assess(watcher: EconomicCalendarWatcher, mock_fetcher: MagicMock) -> None:
-    """_fetch_and_assess calls fetcher via asyncio.to_thread and updates current_signal."""
+    """_tick calls fetcher via asyncio.to_thread and updates current_signal."""
     mock_fetcher.fetch_economic_calendar.return_value = []
 
-    signal = await watcher._fetch_and_assess()
+    await watcher._tick()
 
     mock_fetcher.fetch_economic_calendar.assert_called_once()
-    assert signal is not None
-    assert watcher.current_signal is signal
-    assert signal.risk_level == EconomicRiskLevel.LOW
+    assert watcher.current_signal is not None
+    assert watcher.current_signal.risk_level == EconomicRiskLevel.LOW
 
 
 @pytest.mark.unit

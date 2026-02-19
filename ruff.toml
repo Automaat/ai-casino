@@ -147,8 +147,11 @@ ignore = [
     "C901",    # complexity OK for orchestration logic
     "PLR0912", # many branches OK for state machine
 ]
-"src/daemon/event_watcher.py" = [
-    "PLR0913", # many args OK for comprehensive watcher config
+"src/watchers/*.py" = [
+    "PLR2004", # magic values OK for time calculations and thresholds
+    "C901",    # complexity OK for event fetch/triage logic
+    "PLR0912", # many branches OK for signal assessment
+    "PLR0913", # many args OK for watcher constructors
 ]
 "src/models/llm.py" = [
     "PLR0913", # many args OK for provider-specific connection params

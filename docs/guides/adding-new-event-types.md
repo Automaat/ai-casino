@@ -97,9 +97,10 @@ When adding a new event type that needs additional runtime context in its prompt
 Events enter the queue from two paths:
 
 **a) Watcher-based** (polls external source, triages via `EventTriageAgent`):
-- Subclass `BaseEventWatcher` in `src/daemon/watchers/`
-- Override `_fetch_events()` to return `list[BaseEvent]`
-- The base class handles triage + enqueue automatically
+- Subclass `PeriodicWatcher` in `src/watchers/`
+- Inject `EventTriagePipeline` via constructor
+- Override `_tick()` to call `_fetch_events()` then `await self._pipeline.process(events)`
+- See `src/watchers/news_watcher.py` as a reference implementation
 
 **b) Orchestrator-based** (generated from analysis results, e.g. `SignalEvent`):
 - Construct `TriageResult` manually (skip LLM triage)
@@ -109,7 +110,7 @@ Events enter the queue from two paths:
 ### 5. Wire watcher into `DaemonRunner` / `DaemonComponents` (watcher path only)
 
 1. Add to `DaemonComponents` dataclass (`src/daemon/factory.py`)
-2. Create provider in `src/di/providers/`
+2. Create provider in `src/di/providers/watchers.py` (use `_build_pipeline()` helper)
 3. Register singleton in `src/di/container.py`
 4. Start/stop in `DaemonLifecycle` (`src/daemon/lifecycle.py`)
 

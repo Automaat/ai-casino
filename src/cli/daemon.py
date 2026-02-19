@@ -14,12 +14,15 @@ from rich.console import Console
 
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
-from src.daemon.event_watcher import EventWatcher
 from src.daemon.runner import DaemonRunner
-from src.daemon.watchers import AnomalyWatcher, NewsWatcher, SocialWatcher, TrumpWatcher
-from src.daemon.watchers.trump_watcher import TrumpWatcherConfig
 from src.di.container import create_container
 from src.utils.logging import sanitize_log_record
+from src.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
+from src.watchers.base import Watcher
+from src.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
+from src.watchers.pipeline import EventTriagePipeline
+from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
+from src.watchers.trump_watcher import TrumpWatcher, TrumpWatcherConfig
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
@@ -78,9 +81,6 @@ def daemon(
 
 def trump_daemon(
     poll_interval: Annotated[int, typer.Option("--interval", "-i", help="Poll interval in minutes")] = 5,
-    max_analyses: Annotated[
-        int, typer.Option("--max-analyses", "-m", help="Max stocks to analyze per signal")
-    ] = 2,
 ) -> None:
     """Run Trump social media watcher daemon.
 
@@ -101,13 +101,11 @@ def trump_daemon(
     try:
         container = create_container()
         historical_cache = container.historical_cache()
+        triage_agent = container.event_triage_agent()
 
-        config = TrumpWatcherConfig(
-            poll_interval=poll_interval * 60,
-            max_concurrent_analyses=max_analyses,
-        )
-
-        watcher = TrumpWatcher(historical_cache=historical_cache, config=config, container=container)
+        pipeline = EventTriagePipeline(triage_agent=triage_agent, queue=None, state=None)
+        watcher_config = TrumpWatcherConfig(poll_interval=poll_interval * 60)
+        watcher = TrumpWatcher(pipeline=pipeline, historical_cache=historical_cache, config=watcher_config)
         asyncio.run(watcher.run())
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Trump watcher interrupted[/bold yellow]")
@@ -129,7 +127,7 @@ def _load_daemon_config(config: Path | None) -> DaemonConfig:
 
 def _init_event_watchers(
     daemon_config: DaemonConfig, historical_cache: HistoricalCache, container: AppContainer
-) -> list[EventWatcher]:
+) -> list[Watcher]:
     """Initialize enabled event watchers.
 
     Args:
@@ -137,55 +135,43 @@ def _init_event_watchers(
         historical_cache: Shared historical data cache
         container: DI container for resolving dependencies
     """
-    watchers: list[EventWatcher] = []
+    watchers: list[Watcher] = []
+
+    triage_agent = container.event_triage_agent()
+    pipeline = EventTriagePipeline(triage_agent=triage_agent, queue=None, state=None)
 
     if daemon_config.news_watcher.enabled:
-        watchers.append(
-            NewsWatcher(
-                historical_cache=historical_cache,
-                poll_interval=daemon_config.news_watcher.poll_interval_minutes * 60,
-                relevance_threshold=daemon_config.news_watcher.relevance_threshold,
-                cooldown_minutes=daemon_config.news_watcher.cooldown_minutes,
-                breaking_threshold_minutes=daemon_config.news_watcher.breaking_threshold_minutes,
-                max_concurrent_analyses=daemon_config.news_watcher.max_concurrent_analyses,
-                container=container,
-            )
+        news_cfg = NewsWatcherConfig(
+            poll_interval=daemon_config.news_watcher.poll_interval_minutes * 60,
+            breaking_threshold_minutes=daemon_config.news_watcher.breaking_threshold_minutes,
         )
+        watchers.append(NewsWatcher(pipeline=pipeline, historical_cache=historical_cache, config=news_cfg))
         console.print("[green]✓[/green] NewsWatcher enabled")
 
     if daemon_config.social_watcher.enabled:
+        social_cfg = SocialWatcherConfig(
+            poll_interval=daemon_config.social_watcher.poll_interval_minutes * 60,
+            volume_spike_threshold=daemon_config.social_watcher.volume_spike_threshold,
+            viral_score_threshold=daemon_config.social_watcher.viral_score_threshold,
+            viral_upvote_ratio=daemon_config.social_watcher.viral_upvote_ratio,
+            subreddits=daemon_config.social_watcher.subreddits,
+        )
         watchers.append(
-            SocialWatcher(
-                historical_cache=historical_cache,
-                poll_interval=daemon_config.social_watcher.poll_interval_minutes * 60,
-                relevance_threshold=daemon_config.social_watcher.relevance_threshold,
-                cooldown_minutes=daemon_config.social_watcher.cooldown_minutes,
-                volume_spike_threshold=daemon_config.social_watcher.volume_spike_threshold,
-                viral_score_threshold=daemon_config.social_watcher.viral_score_threshold,
-                viral_upvote_ratio=daemon_config.social_watcher.viral_upvote_ratio,
-                subreddits=daemon_config.social_watcher.subreddits,
-                max_concurrent_analyses=daemon_config.social_watcher.max_concurrent_analyses,
-                container=container,
-            )
+            SocialWatcher(pipeline=pipeline, historical_cache=historical_cache, config=social_cfg)
         )
         console.print("[green]✓[/green] SocialWatcher enabled")
 
     if daemon_config.anomaly_watcher.enabled:
+        anomaly_cfg = AnomalyWatcherConfig(
+            poll_interval=daemon_config.anomaly_watcher.poll_interval_minutes * 60,
+            volume_spike_multiplier=daemon_config.anomaly_watcher.volume_spike_multiplier,
+            price_move_threshold_pct=daemon_config.anomaly_watcher.price_move_threshold_pct,
+            gap_threshold_pct=daemon_config.anomaly_watcher.gap_threshold_pct,
+            watchlist=list(daemon_config.watchlist),
+            max_symbols_per_cycle=daemon_config.anomaly_watcher.max_symbols_per_cycle,
+        )
         watchers.append(
-            AnomalyWatcher(
-                historical_cache=historical_cache,
-                market_fetcher=container.market_fetcher(),
-                poll_interval=daemon_config.anomaly_watcher.poll_interval_minutes * 60,
-                relevance_threshold=daemon_config.anomaly_watcher.relevance_threshold,
-                cooldown_minutes=daemon_config.anomaly_watcher.cooldown_minutes,
-                volume_spike_multiplier=daemon_config.anomaly_watcher.volume_spike_multiplier,
-                price_move_threshold_pct=daemon_config.anomaly_watcher.price_move_threshold_pct,
-                gap_threshold_pct=daemon_config.anomaly_watcher.gap_threshold_pct,
-                watchlist=daemon_config.watchlist,
-                max_symbols_per_cycle=daemon_config.anomaly_watcher.max_symbols_per_cycle,
-                max_concurrent_analyses=daemon_config.anomaly_watcher.max_concurrent_analyses,
-                container=container,
-            )
+            AnomalyWatcher(pipeline=pipeline, market_fetcher=container.market_fetcher(), config=anomaly_cfg)
         )
         console.print("[green]✓[/green] AnomalyWatcher enabled")
 
@@ -227,7 +213,7 @@ def _validate_watchers_config(daemon_config: DaemonConfig) -> None:
         raise typer.Exit(1)
 
 
-async def _run_watchers(watchers: list[EventWatcher]) -> None:
+async def _run_watchers(watchers: list[Watcher]) -> None:
     """Run all watchers with graceful shutdown.
 
     Args:
@@ -238,7 +224,7 @@ async def _run_watchers(watchers: list[EventWatcher]) -> None:
     def shutdown_handler(sig: int, _frame: object) -> None:
         logger.info(f"Received signal {sig}, shutting down watchers...")
         for w in watchers:
-            w.running = False
+            w.stop()
 
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)

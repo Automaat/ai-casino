@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from src.cache.historical import HistoricalCache
-from src.daemon.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
 from src.data.reddit import RedditPost, TickerMention
 from src.database.connection import get_db_engine
 from src.database.models.reddit import (
@@ -18,6 +17,7 @@ from src.database.repositories.reddit import (
     RedditPostRepository,
     RedditTickerMentionRepository,
 )
+from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
 
 
 @pytest.fixture
@@ -74,7 +74,15 @@ def watcher_config():
 @pytest.fixture
 async def social_watcher(historical_cache, watcher_config):
     """Create SocialWatcher instance."""
-    return SocialWatcher(historical_cache=historical_cache, config=watcher_config)
+    from unittest.mock import Mock
+
+    from src.watchers.pipeline import EventTriagePipeline
+
+    return SocialWatcher(
+        pipeline=Mock(spec=EventTriagePipeline),
+        historical_cache=historical_cache,
+        config=watcher_config,
+    )
 
 
 async def insert_test_post(

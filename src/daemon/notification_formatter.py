@@ -113,7 +113,7 @@ class NotificationFormatter:
         reasoning = NotificationFormatter._escape_markdown(str(reasoning_obj))
         return (
             f"{signal_emoji} *{m['signal']} {m['symbol']}* at ${m['price']:.2f}{session_tag}\n\n"
-            f"*Confidence:* {m['confidence']:.1%} | *Risk:* {m['risk_level']}\n"
+            f"*Confidence:* {m['confidence']:.1%} | *Risk:* {m.get('risk_level', 'N/A')}\n"
             f"*RSI:* {rsi_value} | *MACD:* {macd_value}\n\n"
             f"_{reasoning}_"
         )

@@ -10,6 +10,7 @@ from loguru import logger
 
 from src.daemon.events import BlockTrade, OptionsFlowDirection, OptionsFlowSignal
 from src.data.options_flow import OptionContract, OptionsChainSnapshot, OptionsFlowFetcher
+from src.watchers.base import PeriodicWatcher
 
 
 @dataclass
@@ -22,7 +23,7 @@ class OptionsFlowWatcherConfig:
     symbols: list[str] | None = None
 
 
-class OptionsFlowWatcher:
+class OptionsFlowWatcher(PeriodicWatcher):
     """Background service that polls yfinance options chains and computes flow signals."""
 
     def __init__(
@@ -36,11 +37,16 @@ class OptionsFlowWatcher:
             fetcher: Options chain data fetcher
             config: Watcher configuration
         """
+        super().__init__(poll_interval=config.poll_interval_minutes * 60)
         self._fetcher = fetcher
         self._config = config
         self._signals: dict[str, OptionsFlowSignal] = {}
         self._volume_history: dict[str, list[int]] = defaultdict(list)
-        self.running: bool = False
+
+    @property
+    def name(self) -> str:
+        """Watcher display name."""
+        return "OptionsFlowWatcher"
 
     def get_signal(self, symbol: str) -> OptionsFlowSignal | None:
         """Return current flow signal for a symbol (sync, no await).
@@ -255,7 +261,7 @@ class OptionsFlowWatcher:
         )
         self._signals[symbol] = signal
 
-    async def _fetch_and_assess_all(self) -> None:
+    async def _tick(self) -> None:
         """Fetch and assess all configured symbols with concurrency limit."""
         symbols = self._config.symbols or []
         if not symbols:
@@ -274,28 +280,6 @@ class OptionsFlowWatcher:
 
         active = [s for s in self._signals.values() if s.has_unusual_activity]
         logger.info(f"Options flow assessed: {len(symbols)} symbols, {len(active)} with unusual activity")
-
-    async def run(self) -> None:
-        """Poll loop - runs until self.running is set to False."""
-        self.running = True
-        logger.info(
-            f"OptionsFlowWatcher started "
-            f"(poll={self._config.poll_interval_minutes}m, "
-            f"symbols={len(self._config.symbols or [])})"
-        )
-
-        while self.running:
-            try:
-                await self._fetch_and_assess_all()
-            except Exception as e:
-                logger.opt(exception=True).error(f"OptionsFlowWatcher cycle failed: {e}")
-
-            remaining: float = self._config.poll_interval_minutes * 60
-            while remaining > 0 and self.running:
-                await asyncio.sleep(min(1.0, remaining))
-                remaining -= 1.0
-
-        logger.info("OptionsFlowWatcher stopped")
 
     def __repr__(self) -> str:
         """String representation."""

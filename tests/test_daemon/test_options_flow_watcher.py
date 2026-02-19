@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.daemon.events import OptionsFlowDirection
-from src.daemon.watchers.options_flow_watcher import (
+from src.data.options_flow import OptionContract, OptionsChainSnapshot, OptionsFlowFetcher
+from src.watchers.options_flow_watcher import (
     OptionsFlowWatcher,
     OptionsFlowWatcherConfig,
 )
-from src.data.options_flow import OptionContract, OptionsChainSnapshot, OptionsFlowFetcher
 
 
 def _contract(
@@ -291,7 +291,7 @@ async def test_fetch_and_assess_all(watcher: OptionsFlowWatcher, mock_fetcher: M
 
     mock_fetcher.fetch_options_chain.side_effect = side_effect
 
-    await watcher._fetch_and_assess_all()
+    await watcher._tick()
 
     assert watcher.get_signal("AAPL") is not None
     assert watcher.get_signal("TSLA") is not None

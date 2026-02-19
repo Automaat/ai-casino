@@ -13,6 +13,7 @@ from src.daemon.events import (
     SocialSentimentSignal,
 )
 from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
+from src.watchers.base import PeriodicWatcher
 
 
 @dataclass
@@ -25,7 +26,7 @@ class SocialSentimentWatcherConfig:
     symbols: list[str] | None = None
 
 
-class SocialSentimentWatcher:
+class SocialSentimentWatcher(PeriodicWatcher):
     """Background service that polls Reddit DB + ApeWisdom and computes social signals."""
 
     def __init__(
@@ -39,10 +40,15 @@ class SocialSentimentWatcher:
             apewisdom_fetcher: ApeWisdom trending data fetcher
             config: Watcher configuration
         """
+        super().__init__(poll_interval=config.poll_interval_minutes * 60)
         self._fetcher = apewisdom_fetcher
         self._config = config
         self._signals: dict[str, SocialSentimentSignal] = {}
-        self.running: bool = False
+
+    @property
+    def name(self) -> str:
+        """Watcher display name."""
+        return "SocialSentimentWatcher"
 
     def get_signal(self, symbol: str) -> SocialSentimentSignal | None:
         """Return current social sentiment signal for a symbol (sync).
@@ -324,7 +330,7 @@ class SocialSentimentWatcher:
             logger.opt(exception=True).warning(f"Reddit sentiment DB query failed: {e}")
             return None
 
-    async def _fetch_and_assess_all(self) -> None:
+    async def _tick(self) -> None:
         """Fetch and assess all configured symbols with concurrency limit."""
         symbols = self._config.symbols or []
         if not symbols:
@@ -347,28 +353,6 @@ class SocialSentimentWatcher:
 
         active = [s for s in self._signals.values() if s.significance_score >= 0.3]
         logger.info(f"Social sentiment assessed: {len(symbols)} symbols, {len(active)} with notable activity")
-
-    async def run(self) -> None:
-        """Poll loop — runs until self.running is set to False."""
-        self.running = True
-        logger.info(
-            f"SocialSentimentWatcher started "
-            f"(poll={self._config.poll_interval_minutes}m, "
-            f"symbols={len(self._config.symbols or [])})"
-        )
-
-        while self.running:
-            try:
-                await self._fetch_and_assess_all()
-            except Exception as e:
-                logger.opt(exception=True).error(f"SocialSentimentWatcher cycle failed: {e}")
-
-            remaining: float = self._config.poll_interval_minutes * 60
-            while remaining > 0 and self.running:
-                await asyncio.sleep(min(1.0, remaining))
-                remaining -= 1.0
-
-        logger.info("SocialSentimentWatcher stopped")
 
     def __repr__(self) -> str:
         """String representation."""

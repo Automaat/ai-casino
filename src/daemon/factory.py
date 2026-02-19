@@ -36,15 +36,15 @@ if TYPE_CHECKING:
     from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
-    from src.daemon.watchers.economic_calendar_watcher import EconomicCalendarWatcher
-    from src.daemon.watchers.news_trending_watcher import NewsTrendingWatcher
-    from src.daemon.watchers.news_watcher import NewsWatcher
-    from src.daemon.watchers.options_flow_watcher import OptionsFlowWatcher
-    from src.daemon.watchers.social_sentiment_watcher import SocialSentimentWatcher
-    from src.daemon.watchers.social_watcher import SocialWatcher
-    from src.daemon.watchers.trump_watcher import TrumpWatcher
     from src.di.container import AppContainer
     from src.event_queue.consumer import EventQueueConsumer
+    from src.watchers.economic_calendar_watcher import EconomicCalendarWatcher
+    from src.watchers.news_trending_watcher import NewsTrendingWatcher
+    from src.watchers.news_watcher import NewsWatcher
+    from src.watchers.options_flow_watcher import OptionsFlowWatcher
+    from src.watchers.social_sentiment_watcher import SocialSentimentWatcher
+    from src.watchers.social_watcher import SocialWatcher
+    from src.watchers.trump_watcher import TrumpWatcher
 
 
 @dataclass
@@ -530,7 +530,6 @@ class DaemonFactory:
 
         if self.config.news_trending_watcher.enabled:
             news_trending_watcher = watcher_providers.create_news_trending_watcher(
-                historical_cache,
                 self.config,
                 self._container,
                 state,

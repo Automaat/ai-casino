@@ -1,24 +1,22 @@
 """News watcher for breaking financial news events.
 
-Polls Marketaux API every 5 minutes, filters by breaking keywords and recency,
-deduplicates via URL tracking, and triggers LLM triage + analysis for relevant events.
+Polls configured sources, filters by breaking keywords and recency,
+deduplicates via URL tracking, and routes events through EventTriagePipeline.
 """
 
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import ClassVar, cast
 
 from loguru import logger
 
 from src.cache.historical import HistoricalCache
-from src.daemon.event_watcher import EventWatcher, EventWatcherConfig
 from src.daemon.events import BaseEvent, NewsEvent
 from src.data.base_news_fetcher import BaseNewsFetcher
 from src.data.news import NewsFetcher
-
-if TYPE_CHECKING:
-    from src.di.container import AppContainer
+from src.watchers.base import PeriodicWatcher
+from src.watchers.pipeline import EventTriagePipeline
 
 
 @dataclass
@@ -26,21 +24,16 @@ class NewsWatcherConfig:
     """Configuration for NewsWatcher."""
 
     poll_interval: int = 300
-    relevance_threshold: float = 0.7
-    cooldown_minutes: int = 15
     breaking_threshold_minutes: int = 15
-    max_concurrent_analyses: int = 2
-    period_days: int = 60
 
 
-class NewsWatcher(EventWatcher):
+class NewsWatcher(PeriodicWatcher):
     """Watcher for financial news events.
 
-    Monitors Marketaux for breaking news using keyword detection and recency filtering.
+    Monitors news sources for breaking news using keyword detection and recency filtering.
     Maintains rolling window of seen URLs to prevent re-processing.
     """
 
-    # Source weights for deduplication (higher = prefer this source)
     SOURCE_WEIGHTS: ClassVar[dict[str, float]] = {
         "marketaux": 1.0,
         "finnhub": 0.9,
@@ -48,7 +41,6 @@ class NewsWatcher(EventWatcher):
         "duckduckgo": 0.5,
     }
 
-    # Breaking news keywords (case-insensitive)
     BREAKING_KEYWORDS: ClassVar[frozenset[str]] = frozenset(
         {
             "breaking",
@@ -81,63 +73,45 @@ class NewsWatcher(EventWatcher):
 
     def __init__(
         self,
+        pipeline: EventTriagePipeline,
         historical_cache: HistoricalCache,
         fetchers: list[BaseNewsFetcher] | None = None,
         config: NewsWatcherConfig | None = None,
-        container: AppContainer | None = None,
-        **kwargs: int | float,
     ) -> None:
         """Initialize news watcher.
 
         Args:
-            historical_cache: Shared cache for news data
-            fetchers: List of news fetchers (uses Marketaux fallback if not provided)
-            config: Configuration (uses defaults if not provided)
-            container: Optional DI container (auto-created if not provided)
-            **kwargs: Backward compat params (poll_interval, relevance_threshold, etc.)
+            pipeline: Event triage pipeline for routing events
+            historical_cache: Cache for fallback NewsFetcher initialization
+            fetchers: News data sources (uses Marketaux fallback if not provided)
+            config: Watcher configuration
         """
-        # Backward compat: construct config from kwargs if provided
-        if config is None and kwargs:
-            defaults = NewsWatcherConfig()
-            config = NewsWatcherConfig(
-                poll_interval=int(kwargs.get("poll_interval", defaults.poll_interval)),
-                relevance_threshold=float(kwargs.get("relevance_threshold", defaults.relevance_threshold)),
-                cooldown_minutes=int(kwargs.get("cooldown_minutes", defaults.cooldown_minutes)),
-                breaking_threshold_minutes=int(
-                    kwargs.get("breaking_threshold_minutes", defaults.breaking_threshold_minutes)
-                ),
-                max_concurrent_analyses=int(
-                    kwargs.get("max_concurrent_analyses", defaults.max_concurrent_analyses)
-                ),
-                period_days=int(kwargs.get("period_days", defaults.period_days)),
-            )
-
         cfg = config or NewsWatcherConfig()
-        base_config = EventWatcherConfig(
-            poll_interval=cfg.poll_interval,
-            relevance_threshold=cfg.relevance_threshold,
-            cooldown_minutes=cfg.cooldown_minutes,
-            max_concurrent_analyses=cfg.max_concurrent_analyses,
-            period_days=cfg.period_days,
-        )
-        super().__init__(base_config, historical_cache, container=container)
+        super().__init__(poll_interval=cfg.poll_interval)
+        self._pipeline = pipeline
+        self._historical_cache = historical_cache
         self.breaking_threshold_minutes = cfg.breaking_threshold_minutes
         self._fetchers = fetchers or []
         self._weights = self.SOURCE_WEIGHTS
         self._news_fetcher: NewsFetcher | None = None
-        self._seen_urls: dict[str, str] = {}  # url -> source
+        self._seen_urls: dict[str, str] = {}
 
         source_count = len(self._fetchers) if self._fetchers else "fallback"
         logger.info(
             f"NewsWatcher initialized (breaking_threshold={cfg.breaking_threshold_minutes}m, "
-            f"threshold={cfg.relevance_threshold}, sources={source_count})"
+            f"sources={source_count})"
         )
 
-    def _init_components(self) -> None:
-        """Lazy initialization including news fetcher."""
-        super()._init_components()
-        if self._news_fetcher is None:
-            self._news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
+    @property
+    def name(self) -> str:
+        """Watcher display name."""
+        return "NewsWatcher"
+
+    async def _tick(self) -> None:
+        """Fetch and process news events."""
+        events = await self._fetch_events()
+        if events:
+            await self._pipeline.process(events)
 
     async def _fetch_events(self) -> list[BaseEvent]:
         """Fetch breaking news from all configured sources.
@@ -145,9 +119,6 @@ class NewsWatcher(EventWatcher):
         Returns:
             List of NewsEvent objects for breaking news
         """
-        self._init_components()
-
-        # Parallel fetch from all sources
         if self._fetchers:
             tasks = [fetcher.afetch_market_news(limit=50) for fetcher in self._fetchers]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -159,20 +130,14 @@ class NewsWatcher(EventWatcher):
                 if isinstance(result, BaseException):
                     logger.warning(f"{fetcher.get_source_name()} fetch failed: {result}")
                     continue
-                # result is list[NewsArticle] at this point
                 all_articles.extend((art, fetcher.get_source_name()) for art in result)
         else:
-            # Fallback: lazy-init single Marketaux fetcher (backward compat)
             if self._news_fetcher is None:
-                msg = "No fetchers configured and fallback failed"
-                raise RuntimeError(msg)
+                self._news_fetcher = NewsFetcher(historical_cache=self._historical_cache)
             articles = await self._news_fetcher.afetch_market_news(50)
             all_articles = [(art, "marketaux") for art in articles]
 
-        # Deduplicate by URL (keep highest weight)
         deduplicated = self._deduplicate_by_url(all_articles)
-
-        # Filter breaking news (existing logic)
         return self._filter_breaking(deduplicated)
 
     def _deduplicate_by_url(
@@ -228,16 +193,13 @@ class NewsWatcher(EventWatcher):
             if not isinstance(article, NewsArticle):
                 continue
 
-            # Deduplication
             if article.url in self._seen_urls:
                 continue
 
-            # Recency check
             age_minutes = (now - article.published_at).total_seconds() / 60
             if age_minutes > self.breaking_threshold_minutes:
                 continue
 
-            # Keyword check
             title_lower = article.title.lower()
             description_lower = article.description.lower()
             combined_text = f"{title_lower} {description_lower}"
@@ -261,7 +223,7 @@ class NewsWatcher(EventWatcher):
         return breaking
 
     def __repr__(self) -> str:
-        """String representation."""
+        """Return string representation."""
         return (
             f"NewsWatcher(poll_interval={self.poll_interval}s, "
             f"breaking_threshold={self.breaking_threshold_minutes}m)"

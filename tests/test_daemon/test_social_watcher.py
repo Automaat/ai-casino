@@ -7,8 +7,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.cache.historical import HistoricalCache
-from src.daemon.watchers.social_watcher import SocialWatcher
 from src.data.reddit import RedditPost, TrendingTicker
+from src.watchers.pipeline import EventTriagePipeline
+from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
 
 
 @pytest.fixture(autouse=True)
@@ -32,18 +33,24 @@ def mock_reddit_fetcher():
 
 
 @pytest.fixture
-def social_watcher(historical_cache, mock_reddit_fetcher):
+def mock_pipeline():
+    """Mock EventTriagePipeline."""
+    return Mock(spec=EventTriagePipeline)
+
+
+@pytest.fixture
+def social_watcher(historical_cache, mock_reddit_fetcher, mock_pipeline):
     """Create SocialWatcher with mock fetcher."""
     watcher = SocialWatcher(
+        pipeline=mock_pipeline,
         historical_cache=historical_cache,
-        poll_interval=900,
-        relevance_threshold=0.7,
-        cooldown_minutes=15,
-        volume_spike_threshold=0.5,
-        viral_score_threshold=1000,
-        viral_upvote_ratio=0.8,
-        subreddits=["wallstreetbets", "stocks"],
-        max_concurrent_analyses=2,
+        config=SocialWatcherConfig(
+            poll_interval=900,
+            volume_spike_threshold=0.5,
+            viral_score_threshold=1000,
+            viral_upvote_ratio=0.8,
+            subreddits=["wallstreetbets", "stocks"],
+        ),
     )
     watcher._reddit_fetcher = mock_reddit_fetcher
     return watcher
@@ -74,25 +81,22 @@ def create_reddit_post(
 def test_initialization(historical_cache):
     """Test SocialWatcher initialization."""
     watcher = SocialWatcher(
+        pipeline=Mock(spec=EventTriagePipeline),
         historical_cache=historical_cache,
-        poll_interval=600,
-        relevance_threshold=0.8,
-        cooldown_minutes=20,
-        volume_spike_threshold=0.6,
-        viral_score_threshold=1500,
-        viral_upvote_ratio=0.85,
-        subreddits=["wallstreetbets"],
-        max_concurrent_analyses=3,
+        config=SocialWatcherConfig(
+            poll_interval=600,
+            volume_spike_threshold=0.6,
+            viral_score_threshold=1500,
+            viral_upvote_ratio=0.85,
+            subreddits=["wallstreetbets"],
+        ),
     )
 
     assert watcher.poll_interval == 600
-    assert watcher.relevance_threshold == 0.8
-    assert watcher.cooldown_minutes == 20
     assert watcher.volume_spike_threshold == 0.6
     assert watcher.viral_score_threshold == 1500
     assert watcher.viral_upvote_ratio == 0.85
     assert watcher.subreddits == ["wallstreetbets"]
-    assert watcher.max_concurrent_analyses == 3
     assert len(watcher._seen_post_ids) == 0
     assert len(watcher._previous_mention_counts) == 0
 

@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.daemon.events import SocialSentimentDirection, SocialSentimentSignal
-from src.daemon.watchers.social_sentiment_watcher import (
+from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
+from src.watchers.social_sentiment_watcher import (
     SocialSentimentWatcher,
     SocialSentimentWatcherConfig,
 )
-from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
 
 
 @pytest.fixture
@@ -198,7 +198,7 @@ class TestSocialSentimentWatcher:
         ]
 
         with patch.object(watcher, "_query_reddit_sentiment", new_callable=AsyncMock, return_value=None):
-            await watcher._fetch_and_assess_all()
+            await watcher._tick()
 
         # All 3 symbols should have signals
         assert watcher.get_signal("AAPL") is not None

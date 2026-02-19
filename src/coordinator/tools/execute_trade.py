@@ -465,6 +465,7 @@ class ExecuteTradeTool(BaseTool):
                     "signal": side,
                     "confidence": confidence,
                     "price": price,
+                    "risk_level": self._derive_risk_level(confidence),
                     "order_id": order_status.order_id,
                     "source": "coordinator",
                 },

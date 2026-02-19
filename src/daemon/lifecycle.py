@@ -315,19 +315,19 @@ class DaemonLifecycle:
 
             # Signal watchers to stop
             if self.components.news_watcher:
-                self.components.news_watcher.running = False
+                self.components.news_watcher.stop()
             if self.components.social_watcher:
-                self.components.social_watcher.running = False
+                self.components.social_watcher.stop()
             if self.components.trump_watcher:
-                self.components.trump_watcher.running = False
+                self.components.trump_watcher.stop()
             if self.components.news_trending_watcher:
-                self.components.news_trending_watcher.running = False
+                self.components.news_trending_watcher.stop()
             if self.components.economic_calendar_watcher:
-                self.components.economic_calendar_watcher.running = False
+                self.components.economic_calendar_watcher.stop()
             if self.components.options_flow_watcher:
-                self.components.options_flow_watcher.running = False
+                self.components.options_flow_watcher.stop()
             if self.components.social_sentiment_watcher:
-                self.components.social_sentiment_watcher.running = False
+                self.components.social_sentiment_watcher.stop()
 
             # Wait for tasks to complete (up to 5 seconds)
             _done, pending = await asyncio.wait(self._watcher_tasks, timeout=5.0)
