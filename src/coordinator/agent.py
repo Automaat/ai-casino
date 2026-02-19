@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.coordinator.event_prompt import EventCycleContext, EventCyclePromptBuilder, extract_symbols
-from src.coordinator.memory import CoordinatorMemory
+from src.coordinator.memory import CoordinatorMemory, DecisionQueryParams
 from src.coordinator.models import EVENT_CYCLE_TYPE, CoordinatorConfig, CoordinatorCycleResult
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
@@ -249,8 +249,7 @@ class TradingCoordinator:
             )
 
             positions_summary = await self._get_positions_summary()
-            has_signal_event = any(ev.event_type == "signal" for ev in events)
-            game_plan = await self._memory.get_today_game_plan(max_tokens=500) if has_signal_event else ""
+            game_plan = await self._memory.get_today_game_plan(max_tokens=500)
             prompt_builder = EventCyclePromptBuilder()
             user_prompt = prompt_builder.build(
                 events=events,
@@ -387,6 +386,7 @@ class TradingCoordinator:
             Formatted cycle prompt
         """
         positions_summary = await self._get_positions_summary()
+        recent_outcomes_section = await self._get_recent_outcomes_summary()
         current_date = datetime.now(UTC).strftime("%Y-%m-%d")
         session_name = trading_session.value
 
@@ -395,6 +395,7 @@ class TradingCoordinator:
             watchlist=", ".join(watchlist),
             last_summary=self._last_cycle_summary,
             positions_summary=positions_summary,
+            recent_outcomes_section=recent_outcomes_section,
             date=current_date,
             session=session_name,
             min_confidence_to_trade=self._config.min_confidence_to_trade,
@@ -565,6 +566,39 @@ class TradingCoordinator:
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to get positions summary: {e}")
             return "Positions data unavailable"
+
+    async def _get_recent_outcomes_summary(self, lookback_days: int = 7, limit: int = 10) -> str:
+        """Get recent trade outcomes for cycle prompt context.
+
+        Args:
+            lookback_days: Days to look back for outcomes
+            limit: Maximum number of outcomes to include
+
+        Returns:
+            Formatted outcomes summary or empty string
+        """
+        try:
+            decisions = await self._memory.query_decisions(
+                DecisionQueryParams(lookback_days=lookback_days, limit=limit)
+            )
+            if not decisions:
+                return ""
+
+            lines = ["## Recent Trade Outcomes (Last 7 Days)\n"]
+            hits = sum(1 for d in decisions if d.hit_miss == "HIT")
+            misses = sum(1 for d in decisions if d.hit_miss == "MISS")
+            total_decided = hits + misses
+            rate = f"{hits}/{total_decided} ({hits / total_decided:.0%})" if total_decided else "N/A"
+            lines.append(f"**Success Rate:** {rate}\n")
+
+            for d in decisions:
+                ret = f"{d.return_pct:+.1f}%" if d.return_pct is not None else "pending"
+                lines.append(f"- {d.symbol} {d.signal} {d.confidence:.0%} → {d.hit_miss} ({ret})")
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get recent outcomes: {e}")
+            return ""
 
     def _format_risk_limits(self) -> str:
         """Format risk limits from config as markdown.

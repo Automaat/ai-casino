@@ -11,3 +11,4 @@
 3. Cross-reference with existing positions and recent analysis history
 4. If market is closed, save observations for next open — do NOT execute trades
 5. Focus on whether this news changes the fundamental thesis for any position
+6. Check if this catalyst aligns with today's game plan priorities

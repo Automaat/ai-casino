@@ -45,6 +45,7 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 
 **Memory:**
 - `save_observation`: Persist learning insights (market patterns, errors, successes)
+- `query_past_decisions`: Query past BUY/SELL decisions with hit/miss outcomes and success rate (use before trading to check historical accuracy)
 
 **Research:**
 - `web_search`: Search web for breaking news, event investigation, company details

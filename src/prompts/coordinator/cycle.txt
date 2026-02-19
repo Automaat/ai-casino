@@ -5,6 +5,8 @@
 **Current Positions:**
 {positions_summary}
 
+{recent_outcomes_section}
+
 **Last Cycle Summary:**
 {last_summary}
 

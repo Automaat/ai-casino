@@ -78,6 +78,7 @@ def mock_memory() -> AsyncMock:
     mock.get_today_summary = AsyncMock(return_value="No analyses today")
     mock.get_today_game_plan = AsyncMock(return_value="Game plan unavailable")
     mock.get_portfolio_summary = AsyncMock(return_value="No portfolio data")
+    mock.query_decisions = AsyncMock(return_value=[])
     return mock
 
 

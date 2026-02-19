@@ -7,6 +7,8 @@
 **Current Positions:**
 {positions_summary}
 
+{game_plan_section}
+
 {risk_limits}
 
 ---

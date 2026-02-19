@@ -11,3 +11,4 @@
 3. Check if trending correlates with price movement or is news-only noise
 4. If market is closed, save observations — do NOT execute trades
 5. High mention counts without price confirmation may indicate noise
+6. Check if trending symbol aligns with game plan priorities

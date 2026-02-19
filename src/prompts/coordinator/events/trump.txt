@@ -11,3 +11,4 @@
 3. Use `analyze_symbol` if a specific stock or sector is clearly targeted
 4. If market is closed, save observations — do NOT execute trades
 5. Trump posts can move markets rapidly — act quickly if during market hours
+6. Check if affected sectors align with game plan sector focus
