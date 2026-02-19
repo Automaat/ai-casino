@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, or_, select, text, update
 
 from src.database.repositories.base import BaseRepository
 from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent
@@ -34,9 +34,9 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
         """
         stmt = text(
             "INSERT INTO market_event_queue "
-            "(id, event_id, event_type, payload, enqueued_at, expires_at, consumed_at) "
+            "(id, event_id, event_type, payload, enqueued_at, expires_at, consumed_at, process_after) "
             "VALUES (:id, :event_id, :event_type, CAST(:payload AS JSONB), "
-            ":enqueued_at, :expires_at, :consumed_at) "
+            ":enqueued_at, :expires_at, :consumed_at, :process_after) "
             "ON CONFLICT (event_id) DO NOTHING"
         ).bindparams(
             id=str(record.id),
@@ -46,6 +46,7 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
             enqueued_at=record.enqueued_at,
             expires_at=record.expires_at,
             consumed_at=record.consumed_at,
+            process_after=record.process_after,
         )
         await self._session.execute(stmt)
         await self._session.commit()
@@ -60,6 +61,12 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
             select(MarketEventQueueORM.event_id)
             .where(MarketEventQueueORM.consumed_at.is_(None))
             .where(MarketEventQueueORM.expires_at > now)
+            .where(
+                or_(
+                    MarketEventQueueORM.process_after.is_(None),
+                    MarketEventQueueORM.process_after <= now,
+                )
+            )
             .order_by(MarketEventQueueORM.enqueued_at.asc())
             .limit(max_items)
             .with_for_update(skip_locked=True)
@@ -89,18 +96,25 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
                 event_type=row.event_type,
                 payload=row.payload,
                 enqueued_at=row.enqueued_at,
+                process_after=row.process_after,
             )
             for row in rows
         ]
 
     async def count_pending(self) -> int:
-        """Return count of pending non-expired events."""
+        """Return count of pending non-expired events ready to process."""
         now = datetime.now(UTC)
         result = await self._session.execute(
             select(func.count())
             .select_from(MarketEventQueueORM)
             .where(MarketEventQueueORM.consumed_at.is_(None))
             .where(MarketEventQueueORM.expires_at > now)
+            .where(
+                or_(
+                    MarketEventQueueORM.process_after.is_(None),
+                    MarketEventQueueORM.process_after <= now,
+                )
+            )
         )
         return result.scalar_one()
 

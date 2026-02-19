@@ -38,13 +38,20 @@ class MarketEventQueue:
         """
         self._db = database_engine
 
-    async def enqueue(self, event: BaseEvent, triage: TriageResult, ttl_hours: int = 4) -> None:
+    async def enqueue(
+        self,
+        event: BaseEvent,
+        triage: TriageResult,
+        ttl_hours: int = 4,
+        process_after: datetime | None = None,
+    ) -> None:
         """Enqueue an event with its triage result. Idempotent via ON CONFLICT DO NOTHING.
 
         Args:
             event: Market event implementing BaseEvent protocol
             triage: Triage result from EventTriageAgent
             ttl_hours: Hours until the event expires (default 4)
+            process_after: Earliest datetime to dequeue (None = immediately eligible)
         """
         if ttl_hours <= 0:
             msg = f"ttl_hours must be positive, got {ttl_hours}"
@@ -63,12 +70,16 @@ class MarketEventQueue:
             enqueued_at=now,
             expires_at=now + timedelta(hours=ttl_hours),
             consumed_at=None,
+            process_after=process_after,
         )
         async with self._db.session() as session:
             repo = MarketEventQueueRepository(session)
             await repo.enqueue(record)
 
-        logger.debug(f"Enqueued event event_id={event.event_id!r} type={event.event_type!r}")
+        logger.debug(
+            f"Enqueued event event_id={event.event_id!r} type={event.event_type!r}"
+            + (f" process_after={process_after.isoformat()}" if process_after else "")
+        )
 
     async def dequeue(self, max_items: int = 1) -> list[QueuedMarketEvent]:
         """Atomically dequeue up to max_items pending events (FIFO).

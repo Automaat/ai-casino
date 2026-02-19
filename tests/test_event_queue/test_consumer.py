@@ -60,10 +60,11 @@ def mock_coordinator() -> AsyncMock:
 
 
 @pytest.fixture
-def mock_scheduler() -> Mock:
-    """Create mock MarketScheduler."""
+def mock_market_service() -> Mock:
+    """Create mock MarketService."""
     mock = Mock()
-    mock.is_market_open = Mock(return_value=True)
+    mock.is_open = Mock(return_value=True)
+    mock.current_session = Mock(return_value=None)
     return mock
 
 
@@ -82,14 +83,14 @@ def config() -> CoordinatorConfig:
 def consumer(
     mock_queue: AsyncMock,
     mock_coordinator: AsyncMock,
-    mock_scheduler: Mock,
+    mock_market_service: Mock,
     config: CoordinatorConfig,
 ) -> EventQueueConsumer:
     """Create EventQueueConsumer."""
     return EventQueueConsumer(
         queue=mock_queue,
         coordinator=mock_coordinator,
-        scheduler=mock_scheduler,
+        market_service=mock_market_service,
         config=config,
     )
 
@@ -190,10 +191,10 @@ class TestEventQueueConsumer:
         consumer: EventQueueConsumer,
         mock_queue: AsyncMock,
         mock_coordinator: AsyncMock,
-        mock_scheduler: Mock,
+        mock_market_service: Mock,
     ) -> None:
         """Market open flag is passed to coordinator."""
-        mock_scheduler.is_market_open.return_value = False
+        mock_market_service.is_open.return_value = False
         mock_queue.dequeue.return_value = [_make_event(symbols=["AAPL"])]
         await consumer._poll_once()
 
