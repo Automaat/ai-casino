@@ -4,6 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+EVENT_CYCLE_TYPE = "event_driven"
+SCHEDULED_CYCLE_TYPE = "scheduled"
+
 
 class PatternDetectionConfig(BaseModel):
     """Pattern detection configuration."""
@@ -79,6 +82,11 @@ class CoordinatorConfig(BaseModel):
     min_confidence_to_trade: float = Field(
         default=0.6, ge=0.0, le=1.0, description="Minimum signal confidence required to execute trade"
     )
+    event_max_dequeue: int = Field(default=5, ge=1, le=20, description="Max events dequeued per poll")
+    event_max_tool_calls: int = Field(default=15, ge=5, le=50, description="Max tool calls per event cycle")
+    event_poll_interval_seconds: int = Field(
+        default=15, ge=5, le=300, description="Seconds between queue polls"
+    )
     pattern_detection: PatternDetectionConfig = Field(default_factory=PatternDetectionConfig)
     adaptive_thresholds: AdaptiveThresholdConfig = Field(default_factory=AdaptiveThresholdConfig)
     sweep_pass: SweepPassConfig = Field(default_factory=SweepPassConfig)
@@ -101,6 +109,10 @@ class CoordinatorCycleResult(BaseModel):
     tool_calls_made: int = Field(default=0, ge=0, description="Total tool calls made by coordinator")
     game_plan_generated: bool = Field(default=False, description="Whether a game plan was generated")
     cycle_duration_seconds: float = Field(default=0.0, ge=0.0, description="Cycle duration in seconds")
+    cycle_type: Literal["scheduled", "event_driven"] = Field(
+        default=SCHEDULED_CYCLE_TYPE, description="Whether cycle was scheduled or event-driven"
+    )
+    event_ids: list[str] = Field(default_factory=list, description="Event IDs consumed in this cycle")
 
     def __repr__(self) -> str:
         """Return string representation."""

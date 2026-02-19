@@ -1,0 +1,13 @@
+### Trump Social Media Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Identify sectors/symbols directly mentioned or implied by the post
+2. Assess policy implications (tariffs, regulation, industry support/criticism)
+3. Use `analyze_symbol` if a specific stock or sector is clearly targeted
+4. If market is closed, save observations — do NOT execute trades
+5. Trump posts can move markets rapidly — act quickly if during market hours

@@ -1,0 +1,15 @@
+## Event-Driven Cycle - {date} ({session})
+
+**Market Open:** {market_open}
+
+**Affected Symbols:** {symbols}
+
+**Current Positions:**
+{positions_summary}
+
+{risk_limits}
+
+---
+
+**{event_count} event(s) dequeued for analysis:**
+

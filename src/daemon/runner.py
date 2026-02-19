@@ -90,6 +90,9 @@ class DaemonRunner:
         # Notification helper
         self._notification_helper = DaemonNotificationHelper()
 
+        # Event queue consumer task
+        self._consumer_task: asyncio.Task | None = None
+
         # Backward compatibility
         self._target_allocations_to_apply: dict[str, float] | None = None
 
@@ -230,6 +233,9 @@ class DaemonRunner:
             profiler=profiler,
         )
 
+        # Spawn event queue consumer if coordinator enabled
+        self._consumer_task = self._maybe_start_event_consumer()
+
         while lifecycle.running:
             try:
                 result = await cycle_orchestrator.run_cycle()
@@ -243,8 +249,46 @@ class DaemonRunner:
                 await self.state.record_error(str(e))
                 await asyncio.sleep(60)
 
+        # Shutdown consumer task
+        await self._stop_event_consumer()
+
         # Shutdown
         await lifecycle.shutdown()
+
+    def _maybe_start_event_consumer(self) -> asyncio.Task | None:
+        """Start event queue consumer task if coordinator is enabled."""
+        if not self.config.coordinator.enabled:
+            return None
+
+        try:
+            from src.event_queue.consumer import EventQueueConsumer
+
+            queue = self._container.market_event_queue()
+            coordinator = self._init_coordinator()
+            consumer = EventQueueConsumer(
+                queue=queue,
+                coordinator=coordinator,
+                scheduler=self.scheduler,
+                config=self.config.coordinator,
+            )
+            self._components.event_queue_consumer = consumer
+            task = asyncio.create_task(consumer.run(), name="event-queue-consumer")
+            logger.info(f"Event queue consumer started: {consumer}")
+            return task
+        except Exception:
+            logger.opt(exception=True).warning("Failed to start event queue consumer")
+            return None
+
+    async def _stop_event_consumer(self) -> None:
+        """Cancel and await the event consumer task."""
+        import contextlib
+
+        if not self._consumer_task:
+            return
+        self._consumer_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._consumer_task
+        logger.info("Event queue consumer stopped")
 
     @classmethod
     def from_config_file(cls, path: Path) -> DaemonRunner:

@@ -6,17 +6,21 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from src.coordinator.event_prompt import EventCyclePromptBuilder, extract_symbols
 from src.coordinator.memory import CoordinatorMemory
-from src.coordinator.models import CoordinatorConfig, CoordinatorCycleResult
+from src.coordinator.models import EVENT_CYCLE_TYPE, CoordinatorConfig, CoordinatorCycleResult
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
 from src.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.agents.critic import CriticAgent
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker
+    from src.event_queue.models import QueuedMarketEvent
     from src.workflows.types import TradingWorkflowResult
 
 
@@ -197,6 +201,119 @@ class TradingCoordinator:
                 tool_calls_made=self._tool_calls_count,
                 game_plan_generated=self._game_plan_generated,
                 cycle_duration_seconds=time.time() - cycle_start,
+            )
+
+    async def run_event_cycle(
+        self,
+        events: Sequence[QueuedMarketEvent],
+        degradation_context: dict | None = None,
+        trading_session: TradingSession = TradingSession.REGULAR,
+        market_open: bool = True,
+    ) -> CoordinatorCycleResult:
+        """Run event-driven coordinator cycle for dequeued market events.
+
+        Args:
+            events: Dequeued market events to process
+            degradation_context: Optional degradation warnings
+            trading_session: Trading session type
+            market_open: Whether market is currently open
+
+        Returns:
+            CoordinatorCycleResult with event-specific metrics
+        """
+        import time
+
+        # Reset tracking variables (same pattern as run_cycle)
+        self._tool_calls_count = 0
+        self._symbols_analyzed = set()
+        self._trades_proposed = 0
+        self._trades_executed = 0
+        self._game_plan_generated = False
+        self._reflection_counters.clear()
+        self._last_analysis_results.clear()
+        self._game_plan_context = None
+
+        cycle_start = time.time()
+        event_ids = [ev.event_id for ev in events]
+        affected_symbols = sorted(extract_symbols(events))
+
+        logger.info(
+            f"Starting event cycle: {len(events)} events, symbols={affected_symbols}, ids={event_ids}"
+        )
+
+        try:
+            # Build prompts with narrowed watchlist
+            watchlist = affected_symbols or []
+            system_prompt = await self._build_system_prompt(watchlist, degradation_context)
+
+            positions_summary = await self._get_positions_summary()
+            prompt_builder = EventCyclePromptBuilder()
+            user_prompt = prompt_builder.build(
+                events=events,
+                positions_summary=positions_summary,
+                session=trading_session,
+                config=self._config,
+                market_open=market_open,
+            )
+
+            tool_definitions = self._tools.get_definitions()
+
+            from src.models.llm import ToolCallingParams
+
+            final_response = await asyncio.wait_for(
+                self._llm.acomplete_with_tools(
+                    ToolCallingParams(
+                        prompt=user_prompt,
+                        tools=tool_definitions,
+                        tool_executor=self._tool_executor,
+                        system=system_prompt,
+                        temperature=self._config.temperature,
+                        max_tool_calls=self._config.event_max_tool_calls,
+                        max_tokens=2048,
+                        on_tool_call=self._on_tool_call,
+                    )
+                ),
+                timeout=self._config.cycle_timeout_seconds,
+            )
+
+            logger.info(
+                f"Event cycle complete: {self._tool_calls_count} tools, "
+                f"{len(self._symbols_analyzed)} symbols, {self._trades_executed} trades"
+            )
+
+            result = await self._parse_cycle_result(final_response)
+            result.cycle_duration_seconds = time.time() - cycle_start
+            result.cycle_type = EVENT_CYCLE_TYPE
+            result.event_ids = event_ids
+            return result
+
+        except TimeoutError:
+            logger.opt(exception=True).error(
+                f"Event cycle timeout after {self._config.cycle_timeout_seconds}s"
+            )
+            return CoordinatorCycleResult(
+                summary=f"Event cycle timeout after {self._config.cycle_timeout_seconds}s",
+                symbols_analyzed=list(self._symbols_analyzed),
+                trades_proposed=self._trades_proposed,
+                trades_executed=self._trades_executed,
+                tool_calls_made=self._tool_calls_count,
+                game_plan_generated=self._game_plan_generated,
+                cycle_duration_seconds=time.time() - cycle_start,
+                cycle_type=EVENT_CYCLE_TYPE,
+                event_ids=event_ids,
+            )
+        except Exception as e:
+            logger.opt(exception=True).error(f"Event cycle failed: {e}")
+            return CoordinatorCycleResult(
+                summary=f"Error: {e!s}",
+                symbols_analyzed=list(self._symbols_analyzed),
+                trades_proposed=self._trades_proposed,
+                trades_executed=self._trades_executed,
+                tool_calls_made=self._tool_calls_count,
+                game_plan_generated=self._game_plan_generated,
+                cycle_duration_seconds=time.time() - cycle_start,
+                cycle_type=EVENT_CYCLE_TYPE,
+                event_ids=event_ids,
             )
 
     async def _build_system_prompt(self, watchlist: list[str], degradation_context: dict | None) -> str:

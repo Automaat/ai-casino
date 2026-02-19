@@ -1,0 +1,13 @@
+### SEC Filing Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Assess filing type significance (8-K material events, 13D activist positions, insider Form 4)
+2. Use `analyze_symbol` for material filings with clear trading implications
+3. Cross-reference with current positions — filing may change thesis
+4. If market is closed, save observations — do NOT execute trades
+5. Prioritize 8-K filings and large insider transactions

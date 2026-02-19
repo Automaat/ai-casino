@@ -1,0 +1,13 @@
+### Social Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Evaluate hype vs substance — social volume spikes often precede reversals
+2. Check if the social buzz aligns with technical and fundamental signals
+3. Use `analyze_symbol` only if volume spike is confirmed by price action
+4. If market is closed, save observations — do NOT execute trades
+5. Be skeptical of meme-driven momentum without fundamental backing
