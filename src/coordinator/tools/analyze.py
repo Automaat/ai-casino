@@ -186,7 +186,7 @@ class AnalyzeSymbolTool(BaseTool):
             Formatted analysis summary
         """
         # Create workflow from container
-        workflow = self._container.workflow_momentum(container=self._container)
+        workflow = self._container.workflow_meta(container=self._container)
 
         # Get position context if requested
         position_ctx = None

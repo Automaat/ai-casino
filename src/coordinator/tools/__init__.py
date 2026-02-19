@@ -55,7 +55,7 @@ def build_coordinator_registry(
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
 
-    Includes 7 coordinator-specific tools + 2 reused tools from src/tools.
+    Includes coordinator-specific tools as well as reused tools from src/tools.
 
     Args:
         container: DI container for dependency resolution
@@ -78,8 +78,13 @@ def build_coordinator_registry(
     from src.coordinator.tools.observation import SaveObservationTool
     from src.coordinator.tools.portfolio import PortfolioStatusTool
     from src.tools import GetMarketDataTool, ScreenStocksTool
+    from src.tools.news import GetNewsTool
     from src.tools.notification import NotificationTool
     from src.tools.registry import ToolRegistry
+    from src.tools.risk_metrics import GetRiskMetricsTool
+    from src.tools.social_sentiment import GetSocialSentimentTool
+    from src.tools.trump_analysis import TrumpAnalysisTool
+    from src.tools.websearch import WebSearchTool
 
     registry = ToolRegistry()
     registry.register(GetMarketDataTool(container=container))
@@ -106,6 +111,11 @@ def build_coordinator_registry(
         )
     )
     registry.register(NotificationTool(notification_service))
+    registry.register(WebSearchTool(container.websearch_fetcher()))
+    registry.register(GetNewsTool(container=container))
+    registry.register(GetRiskMetricsTool(container=container))
+    registry.register(GetSocialSentimentTool(container=container))
+    registry.register(TrumpAnalysisTool(container=container))
 
     if memory is None:
         memory = CoordinatorMemory()

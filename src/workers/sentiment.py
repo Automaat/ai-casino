@@ -7,7 +7,7 @@ from loguru import logger
 
 from src.agents.sentiment import SentimentAnalysis
 from src.data.news import NewsArticle
-from src.models.sentiment import _analyze_batch_worker, get_finbert_executor
+from src.models.sentiment import FinBERTProtocol, _analyze_batch_worker, get_finbert_executor
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
@@ -20,13 +20,13 @@ class SentimentWorker:
     POSITIVE_THRESHOLD = 0.2
     NEGATIVE_THRESHOLD = -0.2
 
-    def __init__(self, finbert: object) -> None:
+    def __init__(self, finbert: FinBERTProtocol) -> None:
         """Initialize sentiment worker.
 
         Args:
             finbert: FinBERT sentiment analyzer (local or remote, provides analyze_batch method)
         """
-        self.finbert = finbert
+        self.finbert: FinBERTProtocol = finbert
         logger.info("Initialized SentimentWorker (POC)")
 
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
@@ -56,11 +56,18 @@ class SentimentWorker:
 
         texts = [f"{article.title}. {article.description}" for article in articles]
 
-        loop = asyncio.get_running_loop()
-        # Use ProcessPoolExecutor for true parallelism (avoids GIL)
         device = getattr(self.finbert, "device", "cpu")
-        executor = get_finbert_executor()
-        score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
+        if device == "remote":
+            # Remote client: use async HTTP path directly (subprocess can't reach remote service)
+            scores_raw = await asyncio.to_thread(self.finbert.analyze_batch, texts)
+            score_dicts = [
+                {"positive": s.positive, "negative": s.negative, "neutral": s.neutral} for s in scores_raw
+            ]
+        else:
+            loop = asyncio.get_running_loop()
+            # Local model: use ProcessPoolExecutor for true parallelism (avoids GIL)
+            executor = get_finbert_executor()
+            score_dicts = await loop.run_in_executor(executor, _analyze_batch_worker, texts, device)
 
         # Import here to avoid circular import at module level
         from src.models.sentiment import SentimentScore
