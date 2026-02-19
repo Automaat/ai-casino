@@ -552,7 +552,7 @@ class TraderAgent:
                     value = float(parts[1].strip().split()[0])
                     if 0.0 <= value <= 1.0:
                         return value
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 continue
         return None
 

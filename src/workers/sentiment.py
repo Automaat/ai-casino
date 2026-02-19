@@ -26,7 +26,7 @@ class SentimentWorker:
         Args:
             finbert: FinBERT sentiment analyzer (local or remote, provides analyze_batch method)
         """
-        self.finbert = finbert
+        self.finbert: FinBERTProtocol = finbert
         logger.info("Initialized SentimentWorker (POC)")
 
     async def analyze(self, symbol: str, articles: list[NewsArticle]) -> SentimentAnalysis:
