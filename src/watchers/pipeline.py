@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from src.agents.event_triage import EventTriageAgent
-from src.daemon.events import BaseEvent, TriageResult, Urgency
+from src.daemon.events import BaseEvent, NewsEvent, NewsWatchlistEvent, TriageResult, Urgency
 from src.event_queue.service import MarketEventQueue
 
 if TYPE_CHECKING:
@@ -57,16 +57,40 @@ class EventTriagePipeline:
                 await self._enqueue(event, triage)
             elif triage.urgency == Urgency.WATCHLIST:
                 await self._add_watchlist_candidates(event, triage)
+                if isinstance(event, NewsEvent):
+                    await self._enqueue_watchlist(
+                        NewsWatchlistEvent(
+                            event_id=event.event_id,
+                            timestamp=event.timestamp,
+                            source=event.source,
+                            article=event.article,
+                        ),
+                        triage,
+                    )
+                else:
+                    await self._enqueue_watchlist(event, triage)
 
     async def _enqueue(self, event: BaseEvent, triage: TriageResult) -> None:
         """Enqueue IMMEDIATE event to MarketEventQueue."""
         if self._queue is None:
             logger.debug(f"Queue unavailable, dropping IMMEDIATE event {event.event_id}")
             return
+        logger.info(f"Publishing event {event.event_type} (IMMEDIATE, symbols={triage.symbols})")
         try:
             await self._queue.enqueue(event, triage, ttl_hours=self._immediate_ttl_hours)
         except Exception as e:
             logger.opt(exception=True).error(f"Failed to enqueue event {event.event_id}: {e}")
+
+    async def _enqueue_watchlist(self, event: BaseEvent, triage: TriageResult) -> None:
+        """Enqueue WATCHLIST event to MarketEventQueue with watchlist TTL."""
+        if self._queue is None:
+            logger.debug(f"Queue unavailable, dropping WATCHLIST event {event.event_id}")
+            return
+        logger.info(f"Publishing event {event.event_type} (WATCHLIST, symbols={triage.symbols})")
+        try:
+            await self._queue.enqueue(event, triage, ttl_hours=self._watchlist_ttl_hours)
+        except Exception as e:
+            logger.opt(exception=True).error(f"Failed to enqueue watchlist event {event.event_id}: {e}")
 
     async def _triage_events(self, events: list[BaseEvent]) -> list[TriageResult | BaseException]:
         """Triage events with LLM in parallel."""

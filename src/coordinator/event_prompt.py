@@ -9,7 +9,9 @@ from src.event_queue.models import QueuedMarketEvent
 from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
 
-_EVENT_TYPE_TEMPLATES = frozenset({"news", "social", "filing", "trump", "anomaly", "news_trending", "signal"})
+_EVENT_TYPE_TEMPLATES = frozenset(
+    {"news", "news_watchlist", "social", "filing", "trump", "anomaly", "news_trending", "signal"}
+)
 
 
 @dataclass
