@@ -60,7 +60,11 @@ class EventQueueConsumer:
             except Exception:
                 logger.opt(exception=True).error("EventQueueConsumer iteration failed")
 
-            await asyncio.sleep(self._config.event_poll_interval_seconds)
+            try:
+                await asyncio.sleep(self._config.event_poll_interval_seconds)
+            except asyncio.CancelledError:
+                logger.info("EventQueueConsumer shutting down")
+                raise
 
     async def _poll_once(self) -> None:
         """Single poll iteration: dequeue, group, run cycles."""
@@ -97,8 +101,9 @@ class EventQueueConsumer:
         """Determine current trading session."""
         from src.strategies.session import TradingSession
 
-        if hasattr(self._scheduler, "get_current_session"):
-            return self._scheduler.get_current_session()
+        session = self._scheduler.get_trading_session()
+        if session is not None:
+            return session
         return TradingSession.REGULAR
 
     def _maybe_purge(self) -> None:
@@ -107,7 +112,8 @@ class EventQueueConsumer:
         purge_frequency = 20
         if self._purge_counter >= purge_frequency:
             self._purge_counter = 0
-            self._purge_task = asyncio.create_task(self._safe_purge())
+            if self._purge_task is None or self._purge_task.done():
+                self._purge_task = asyncio.create_task(self._safe_purge())
 
     async def _safe_purge(self) -> None:
         """Purge expired events with error handling."""
@@ -149,15 +155,24 @@ def _group_by_symbol_overlap(events: list[QueuedMarketEvent]) -> list[list[Queue
             groups.append((set(), [event]))
             continue
 
-        merged = False
-        for group_symbols, group_events in groups:
+        overlapping_indices: list[int] = []
+        for idx, (group_symbols, _group_events) in enumerate(groups):
             if group_symbols & event_symbols:
-                group_symbols.update(event_symbols)
-                group_events.append(event)
-                merged = True
-                break
+                overlapping_indices.append(idx)
 
-        if not merged:
+        if not overlapping_indices:
             groups.append((event_symbols.copy(), [event]))
+            continue
+
+        target_idx = overlapping_indices[0]
+        target_symbols, target_events = groups[target_idx]
+        target_symbols.update(event_symbols)
+        target_events.append(event)
+
+        for idx in reversed(overlapping_indices[1:]):
+            merge_symbols, merge_events = groups[idx]
+            target_symbols.update(merge_symbols)
+            target_events.extend(merge_events)
+            del groups[idx]
 
     return [group_events for _, group_events in groups]

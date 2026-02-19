@@ -244,7 +244,9 @@ class TradingCoordinator:
         try:
             # Build prompts with narrowed watchlist
             watchlist = affected_symbols or []
-            system_prompt = await self._build_system_prompt(watchlist, degradation_context)
+            system_prompt = await self._build_system_prompt(
+                watchlist, degradation_context, max_tool_calls=self._config.event_max_tool_calls
+            )
 
             positions_summary = await self._get_positions_summary()
             prompt_builder = EventCyclePromptBuilder()
@@ -316,12 +318,18 @@ class TradingCoordinator:
                 event_ids=event_ids,
             )
 
-    async def _build_system_prompt(self, watchlist: list[str], degradation_context: dict | None) -> str:
+    async def _build_system_prompt(
+        self,
+        watchlist: list[str],
+        degradation_context: dict | None,
+        max_tool_calls: int | None = None,
+    ) -> str:
         """Build system prompt with context sections.
 
         Args:
             watchlist: List of symbols to consider
             degradation_context: Optional degradation warnings
+            max_tool_calls: Override max tool calls shown in prompt
 
         Returns:
             Formatted system prompt
@@ -349,7 +357,7 @@ class TradingCoordinator:
             min_confidence_to_trade=self._config.min_confidence_to_trade,
             max_position_pct=self._config.max_position_pct,
             max_daily_trades=self._config.max_daily_trades,
-            max_tool_calls=self._config.max_tool_calls,
+            max_tool_calls=max_tool_calls if max_tool_calls is not None else self._config.max_tool_calls,
             trading_mode=trading_mode,
             watchlist=", ".join(watchlist),
             memory_section=memory_section,
