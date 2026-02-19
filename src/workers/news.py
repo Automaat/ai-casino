@@ -63,7 +63,7 @@ class NewsWorker:
         confidence = 0.6
         try:
             llm_response = await self.llm.astructured(
-                prompt, NewsLLMResponse, system=system_prompt, temperature=0.4, max_tokens=512
+                prompt, NewsLLMResponse, system=system_prompt, temperature=0.4, max_tokens=1024
             )
             key_themes = llm_response.key_themes
             impact = llm_response.impact_assessment
