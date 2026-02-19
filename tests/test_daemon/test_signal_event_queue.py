@@ -168,7 +168,7 @@ class TestOrchestratorSignalEmission:
         assert call_args[1]["process_after"] is not None
 
     @pytest.mark.asyncio
-    async def test_regular_session_does_not_emit(self, mock_components: DaemonComponents) -> None:
+    async def test_regular_session_emits_immediately(self, mock_components: DaemonComponents) -> None:
         config = AnalysisOrchestratorConfig()
         orchestrator = AnalysisOrchestrator(config=config, components=mock_components)
         queue = AsyncMock()
@@ -178,7 +178,38 @@ class TestOrchestratorSignalEmission:
         handle = orchestrator._handle_notifications
         await handle(result)
 
-        queue.enqueue.assert_not_called()
+        queue.enqueue.assert_called_once()
+        call_args = queue.enqueue.call_args
+        signal_event = call_args[0][0]
+        assert isinstance(signal_event, SignalEvent)
+        assert signal_event.signal == "BUY"
+        # Regular session: process_after should be now (not deferred to next open)
+        mock_components.scheduler.next_regular_open.assert_not_called()
+        process_after = call_args[1]["process_after"]
+        now_utc = datetime.now(tz=ZoneInfo("UTC"))
+        assert abs((process_after - now_utc).total_seconds()) < 2
+
+    @pytest.mark.asyncio
+    async def test_after_hours_session_emits_immediately(self, mock_components: DaemonComponents) -> None:
+        config = AnalysisOrchestratorConfig()
+        orchestrator = AnalysisOrchestrator(config=config, components=mock_components)
+        queue = AsyncMock()
+        orchestrator.market_event_queue = queue
+
+        result = self._make_result(Signal.BUY, 0.8, TradingSession.AFTER_HOURS)
+        handle = orchestrator._handle_notifications
+        await handle(result)
+
+        queue.enqueue.assert_called_once()
+        call_args = queue.enqueue.call_args
+        signal_event = call_args[0][0]
+        assert isinstance(signal_event, SignalEvent)
+        assert signal_event.signal == "BUY"
+        # After-hours session: process_after should be now (not deferred to next open)
+        mock_components.scheduler.next_regular_open.assert_not_called()
+        process_after = call_args[1]["process_after"]
+        now_utc = datetime.now(tz=ZoneInfo("UTC"))
+        assert abs((process_after - now_utc).total_seconds()) < 2
 
     @pytest.mark.asyncio
     async def test_low_confidence_does_not_emit(self, mock_components: DaemonComponents) -> None:
