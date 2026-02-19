@@ -7,7 +7,7 @@ from loguru import logger
 
 from src.agents.sentiment import SentimentAnalysis
 from src.data.news import NewsArticle
-from src.models.sentiment import _analyze_batch_worker, get_finbert_executor
+from src.models.sentiment import FinBERTProtocol, _analyze_batch_worker, get_finbert_executor
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ class SentimentWorker:
     POSITIVE_THRESHOLD = 0.2
     NEGATIVE_THRESHOLD = -0.2
 
-    def __init__(self, finbert: object) -> None:
+    def __init__(self, finbert: FinBERTProtocol) -> None:
         """Initialize sentiment worker.
 
         Args:

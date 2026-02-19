@@ -5,12 +5,12 @@ import asyncio
 import httpx
 from loguru import logger
 
-from src.models.sentiment import SentimentScore
+from src.models.sentiment import FinBERTProtocol, SentimentScore
 
 __all__ = ["FinBERTClient", "SentimentScore"]
 
 
-class FinBERTClient:
+class FinBERTClient(FinBERTProtocol):
     """HTTP client for FinBERT microservice (backward-compatible interface)."""
 
     def __init__(self, base_url: str, timeout: float = 60.0) -> None:

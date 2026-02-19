@@ -7,7 +7,7 @@ import atexit
 import os
 import threading
 from concurrent.futures import ProcessPoolExecutor
-from typing import Protocol
+from typing import Protocol, cast
 
 import torch
 from loguru import logger
@@ -26,21 +26,6 @@ FINBERT_SERVICE_URL = os.getenv("FINBERT_SERVICE_URL", "http://localhost:8485")
 FINBERT_WORKERS = os.getenv("FINBERT_WORKERS")
 MAX_WORKERS = 32
 DEFAULT_WORKERS = 4
-
-
-# Process pool executor holder for parallel FinBERT inference (avoids GIL)
-class _ExecutorHolder:
-    """Holder for process pool executor (allows recreation after shutdown)."""
-
-    executor: ProcessPoolExecutor | None = None
-    lock = threading.Lock()
-
-
-class _FinBERTHolder:
-    """Singleton holder for FinBERT instance (local or remote)."""
-
-    instance: FinBERTSentiment | object | None = None
-    lock = threading.Lock()
 
 
 class SentimentScore(BaseModel):
@@ -73,7 +58,22 @@ class FinBERTProtocol(Protocol):
         ...
 
 
-class FinBERTSentiment:
+# Process pool executor holder for parallel FinBERT inference (avoids GIL)
+class _ExecutorHolder:
+    """Holder for process pool executor (allows recreation after shutdown)."""
+
+    executor: ProcessPoolExecutor | None = None
+    lock = threading.Lock()
+
+
+class _FinBERTHolder:
+    """Singleton holder for FinBERT instance (local or remote)."""
+
+    instance: FinBERTProtocol | None = None
+    lock = threading.Lock()
+
+
+class FinBERTSentiment(FinBERTProtocol):
     """FinBERT sentiment analyzer for financial text."""
 
     MODEL_NAME = "ProsusAI/finbert"
@@ -195,7 +195,7 @@ def _analyze_batch_worker(texts: list[str], device: str | None = None) -> list[d
     return [{"positive": s.positive, "negative": s.negative, "neutral": s.neutral} for s in scores]
 
 
-def get_finbert_sentiment(device: str | None = None) -> object:
+def get_finbert_sentiment(device: str | None = None) -> FinBERTProtocol:
     """Get or create singleton FinBERT sentiment analyzer (local or remote based on FINBERT_MODE).
 
     Lazy-loads model on first call. Subsequent calls return cached instance.
@@ -214,8 +214,7 @@ def get_finbert_sentiment(device: str | None = None) -> object:
             if _FinBERTHolder.instance is None:
                 from src.models.sentiment_client import FinBERTClient
 
-                client = FinBERTClient(base_url=FINBERT_SERVICE_URL)
-                _FinBERTHolder.instance = client
+                _FinBERTHolder.instance = cast("FinBERTProtocol", FinBERTClient(base_url=FINBERT_SERVICE_URL))
                 logger.info(f"FinBERT remote client initialized (url={FINBERT_SERVICE_URL})")
             instance = _FinBERTHolder.instance
             if instance is None:
