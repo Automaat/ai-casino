@@ -256,9 +256,7 @@ async def test_duplicate_buy_blocked_when_open_position_exists(broker, daemon_co
         mock_repo.get_entry_trade = AsyncMock(return_value=existing_trade)
         mock_repo_cls.return_value = mock_repo
 
-        tool = ExecuteTradeTool(
-            broker, daemon_config, ExecuteTradeServices(database_engine=database_engine)
-        )
+        tool = ExecuteTradeTool(broker, daemon_config, ExecuteTradeServices(database_engine=database_engine))
         result = await tool.aexecute(**_TRADE_KWARGS)
 
     assert "Skipped" in result
@@ -274,9 +272,7 @@ async def test_duplicate_buy_allowed_when_no_open_position(broker, daemon_config
         mock_repo.get_entry_trade = AsyncMock(return_value=None)
         mock_repo_cls.return_value = mock_repo
 
-        tool = ExecuteTradeTool(
-            broker, daemon_config, ExecuteTradeServices(database_engine=database_engine)
-        )
+        tool = ExecuteTradeTool(broker, daemon_config, ExecuteTradeServices(database_engine=database_engine))
         result = await tool.aexecute(**_TRADE_KWARGS)
 
     assert "Trade Executed" in result
@@ -289,9 +285,7 @@ async def test_duplicate_check_fails_closed_on_db_error(broker, daemon_config, d
     session = database_engine.session()
     session.__aenter__ = AsyncMock(side_effect=RuntimeError("DB connection lost"))
 
-    tool = ExecuteTradeTool(
-        broker, daemon_config, ExecuteTradeServices(database_engine=database_engine)
-    )
+    tool = ExecuteTradeTool(broker, daemon_config, ExecuteTradeServices(database_engine=database_engine))
     result = await tool.aexecute(**_TRADE_KWARGS)
 
     assert "Skipped" in result
