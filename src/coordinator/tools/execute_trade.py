@@ -215,6 +215,10 @@ class ExecuteTradeTool(BaseTool):
         if threshold_error := await self._check_adaptive_threshold(action, confidence):
             return threshold_error
 
+        # Guard against duplicate BUY when open position already exists in DB
+        if action == "BUY" and (duplicate_error := await self._check_duplicate_position(symbol)):
+            return duplicate_error
+
         # Convert stop loss to float if provided
         stop_loss_float = float(stop_loss_price) if stop_loss_price is not None else None
 
@@ -234,6 +238,41 @@ class ExecuteTradeTool(BaseTool):
             await self._notify_trade(order_status, confidence, rationale)
 
         return result
+
+    async def _check_duplicate_position(self, symbol: str) -> str | None:
+        """Reject BUY if an open position already exists in DB.
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            Error message if duplicate, None if safe to proceed
+        """
+        if not self._database_engine:
+            return None
+
+        try:
+            from src.database.repositories.trade import TradeRepository
+
+            async with self._database_engine.session() as session:
+                repo = TradeRepository(session)
+                existing = await repo.get_entry_trade(symbol)
+
+            if existing:
+                logger.info(f"Blocked duplicate BUY {symbol}: open position since {existing.timestamp}")
+                return (
+                    f"Skipped: already hold open BUY position in {symbol} "
+                    f"({existing.shares} shares since {existing.timestamp.strftime('%Y-%m-%d %H:%M')}). "
+                    f"SELL first before buying again."
+                )
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Duplicate position check failed for {symbol}: {e}")
+            return (
+                f"Skipped: could not verify existing position for {symbol} due to an internal error. "
+                f"Trade not executed to avoid potential duplicate BUY."
+            )
+
+        return None
 
     def _validate_inputs(self, quantity: int, action: str, rationale: str) -> str | None:
         """Validate trade inputs.

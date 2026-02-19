@@ -70,7 +70,9 @@ class NewsWorker:
             recommendation = llm_response.recommendation
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, falling back to text parsing: {e}")
-            response = await self.llm.acomplete(prompt, system=system_prompt, temperature=0.4)
+            response = await self.llm.acomplete(
+                prompt, system=system_prompt, temperature=0.4, max_tokens=1024
+            )
             key_themes = self._extract_themes(response)
             impact = self._extract_section(response, "impact")
             recommendation = self._extract_section(response, "recommendation")
