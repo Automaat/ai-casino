@@ -46,6 +46,13 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 **Memory:**
 - `save_observation`: Persist learning insights (market patterns, errors, successes)
 
+**Research:**
+- `web_search`: Search web for breaking news, event investigation, company details
+- `get_news`: Fetch recent news articles for a specific stock
+- `get_risk_metrics`: Calculate VaR, CVaR, drawdown, and volatility for a symbol
+- `get_social_sentiment`: Analyze Reddit/Finnhub social sentiment and WSB activity
+- `analyze_trump_posts`: Detect market-moving signals from Trump's Truth Social posts
+
 ## Workflow Strategy
 
 **Typical cycle sequence:**
