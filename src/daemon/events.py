@@ -37,9 +37,13 @@ class BaseEvent(Protocol):
     """Protocol for all event types."""
 
     event_id: str
-    event_type: str
     timestamp: datetime
     source: str
+
+    @property
+    def event_type(self) -> str:
+        """Event type discriminator."""
+        ...
 
     def to_prompt_text(self) -> str:
         """Format event for LLM triage prompt."""
@@ -526,9 +530,15 @@ class TriageResult(BaseModel):
 class EventSignal(BaseModel):
     """Signal emitted after triage + analysis."""
 
-    event: NewsEvent | NewsWatchlistEvent | SocialEvent | TrumpEvent | FilingEvent | AnomalyEvent | NewsTrendingEvent = Field(
-        discriminator="event_type"
-    )
+    event: (
+        NewsEvent
+        | NewsWatchlistEvent
+        | SocialEvent
+        | TrumpEvent
+        | FilingEvent
+        | AnomalyEvent
+        | NewsTrendingEvent
+    ) = Field(discriminator="event_type")
     triage: TriageResult
     analyses: dict[str, TradingWorkflowResult] = Field(description="Symbol -> analysis result")
     signal_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
