@@ -11,6 +11,30 @@ from src.database.models.base import Base
 from src.database.types import JSONB, UUID
 
 
+class QueueEventObservability(BaseModel):
+    """Enriched queue event for observability API responses."""
+
+    event_id: str
+    event_type: str
+    enqueued_at: datetime
+    expires_at: datetime
+    consumed_at: datetime | None
+    status: str  # "pending" | "consumed" | "expired"
+    symbols: list[str]
+    urgency: str
+    sentiment: str
+    confidence: float
+    reasoning: str
+    ttl_remaining_seconds: float | None
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return (
+            f"QueueEventObservability(event_id={self.event_id!r}, "
+            f"event_type={self.event_type!r}, status={self.status!r})"
+        )
+
+
 class QueuedMarketEvent(BaseModel):
     """Domain model for a pending market event in the queue."""
 

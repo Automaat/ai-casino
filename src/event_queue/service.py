@@ -9,8 +9,22 @@ from pydantic import BaseModel
 
 from src.daemon.events import BaseEvent, TriageResult
 from src.database.engine import DatabaseEngine
-from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent
+from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent, QueueEventObservability
 from src.event_queue.repository import MarketEventQueueRepository
+
+
+class QueueStats(BaseModel):
+    """Queue statistics snapshot."""
+
+    pending_count: int
+    stale_count: int
+    consumed_count_24h: int
+    total_in_db: int
+    by_type: dict[str, int]
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"QueueStats(pending={self.pending_count}, total={self.total_in_db})"
 
 
 class MarketEventQueue:
@@ -85,6 +99,59 @@ class MarketEventQueue:
             deleted = await repo.purge_expired()
         logger.debug(f"Purged {deleted} expired queue events")
         return deleted
+
+    async def list_events(self, limit: int = 100, status: str = "all") -> list[QueueEventObservability]:
+        """List queue events with enriched observability fields.
+
+        Args:
+            limit: Max rows to return
+            status: "all" | "pending" | "consumed" | "expired"
+        """
+        now = datetime.now(UTC)
+        async with self._db.session() as session:
+            repo = MarketEventQueueRepository(session)
+            rows = await repo.list_events(limit=limit, status=status)
+
+        result = []
+        for row in rows:
+            triage: dict = row.payload.get("triage", {})
+            if row.consumed_at is not None:
+                row_status = "consumed"
+            elif row.expires_at <= now:
+                row_status = "expired"
+            else:
+                row_status = "pending"
+            ttl_remaining = (row.expires_at - now).total_seconds() if row_status == "pending" else None
+            result.append(
+                QueueEventObservability(
+                    event_id=row.event_id,
+                    event_type=row.event_type,
+                    enqueued_at=row.enqueued_at,
+                    expires_at=row.expires_at,
+                    consumed_at=row.consumed_at,
+                    status=row_status,
+                    symbols=triage.get("symbols", []),
+                    urgency=triage.get("urgency", "IGNORE"),
+                    sentiment=triage.get("sentiment", "NEUTRAL"),
+                    confidence=triage.get("confidence", 0.0),
+                    reasoning=triage.get("reasoning", ""),
+                    ttl_remaining_seconds=ttl_remaining,
+                )
+            )
+        return result
+
+    async def stats(self) -> QueueStats:
+        """Return current queue statistics."""
+        async with self._db.session() as session:
+            repo = MarketEventQueueRepository(session)
+            counts = await repo.get_counts()
+        return QueueStats(
+            pending_count=counts["pending"],
+            stale_count=counts["stale"],
+            consumed_count_24h=counts["consumed_24h"],
+            total_in_db=counts["total"],
+            by_type=counts["by_type"],
+        )
 
     def __repr__(self) -> str:
         """Return string representation."""

@@ -714,3 +714,37 @@ export interface ExecutionRateListResponse {
 	data: ExecutionRateResponse[];
 	count: number;
 }
+
+// Queue Observability
+export interface QueueTypeBreakdown {
+	event_type: string;
+	count: number;
+}
+
+export interface QueueStatsResponse {
+	pending_count: number;
+	stale_count: number;
+	consumed_count_24h: number;
+	total_in_db: number;
+	by_type: QueueTypeBreakdown[];
+}
+
+export interface QueueEventItem {
+	event_id: string;
+	event_type: string;
+	status: string;
+	enqueued_at: string;
+	expires_at: string;
+	consumed_at: string | null;
+	symbols: string[];
+	urgency: string;
+	sentiment: string;
+	confidence: number;
+	reasoning: string;
+	ttl_remaining_seconds: number | null;
+}
+
+export interface QueueEventsResponse {
+	events: QueueEventItem[];
+	returned_count: number;
+}
