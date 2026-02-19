@@ -241,3 +241,7 @@ docker exec ai-casino-postgres psql -U ai_casino -d ai_casino -c "SELECT COUNT(*
 
 - Plan: ./implem-plan.md | Research: ./agentic-stock-trading-system-research.md
 - Config: pyproject.toml, ruff.toml | CI: .github/workflows/ci.yml
+
+## Guides
+
+- [Adding new event types](./docs/guides/adding-new-event-types.md) — event model → prompt template → watcher/emitter → DI wiring

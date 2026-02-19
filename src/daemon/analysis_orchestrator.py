@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from loguru import logger
 from pydantic import BaseModel
@@ -14,9 +14,14 @@ from src.agents.sentiment import SentimentAnalysis
 from src.cache.historical import SignalOutcomeInput
 from src.daemon.config import AnalysisOrchestratorConfig
 from src.daemon.event_bus import DashboardEvent, EventType
+from src.daemon.events import Sentiment, SignalEvent, TriageResult, Urgency
 from src.daemon.notification_helper import DaemonNotificationHelper
 from src.daemon.state.managers.trading import AnalysisRecordInput
+from src.event_queue.service import MarketEventQueue
+from src.strategies.signal import Signal
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
+
+_QUEUE_MIN_CONFIDENCE: Final = 0.5
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
@@ -116,6 +121,7 @@ class AnalysisOrchestrator:
         self._social_sentiment_watcher = components.social_sentiment_watcher
 
         self._notification_helper = DaemonNotificationHelper()
+        self.market_event_queue: MarketEventQueue | None = None  # wired by runner
         logger.info("AnalysisOrchestrator initialized")
 
     def __repr__(self) -> str:
@@ -608,8 +614,55 @@ class AnalysisOrchestrator:
         Args:
             result: TradingWorkflowResult
         """
+        from src.strategies.session import TradingSession
+
         if self.notification_service and self._components:
             await self._notification_helper.maybe_notify_signal(result, self._components)
+        if (
+            self.market_event_queue is not None
+            and result.trading_session == TradingSession.PRE_MARKET
+            and result.decision.action in (Signal.BUY, Signal.SELL)
+            and result.decision.confidence >= _QUEUE_MIN_CONFIDENCE
+        ):
+            await self._emit_signal_event(result)
+
+    async def _emit_signal_event(self, result: TradingWorkflowResult) -> None:
+        """Enqueue SignalEvent for processing at next regular session open."""
+        try:
+            signal_event = SignalEvent(
+                symbol=result.symbol,
+                signal=result.decision.action.value,
+                confidence=result.decision.confidence,
+                session=result.trading_session.value,
+                reasoning=" ".join(result.decision.reasoning),
+            )
+            sentiment = Sentiment.BULLISH if result.decision.action == Signal.BUY else Sentiment.BEARISH
+            triage = TriageResult(
+                event_id=signal_event.event_id,
+                event_type=signal_event.event_type,
+                relevance=result.decision.confidence,
+                symbols=[result.symbol],
+                urgency=Urgency.IMMEDIATE,
+                sentiment=sentiment,
+                confidence=result.decision.confidence,
+                reasoning=" ".join(result.decision.reasoning),
+            )
+            process_after = self.scheduler.next_regular_open()
+            seconds_until = (process_after - datetime.now(UTC)).total_seconds()
+            ttl_hours = max(8, int(seconds_until / 3600) + 2)
+            queue = self.market_event_queue
+            if queue is None:
+                return
+            from src.daemon.events import BaseEvent
+
+            await queue.enqueue(
+                cast("BaseEvent", signal_event), triage, ttl_hours=ttl_hours, process_after=process_after
+            )
+            logger.info(
+                "Queued %s for %s, process_after=%s", signal_event.signal, result.symbol, process_after
+            )
+        except Exception:
+            logger.opt(exception=True).warning("Failed to enqueue signal event for %s", result.symbol)
 
     async def _record_analysis_result(self, symbol: str, result: TradingWorkflowResult) -> None:
         """Record analysis result to daemon state.

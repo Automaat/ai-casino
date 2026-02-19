@@ -1,0 +1,13 @@
+### Pre-Market Signal Event
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. This signal was generated during pre-market and deferred for regular session execution
+2. Re-evaluate the original signal: use `analyze_symbol` to get current technical + sentiment data
+3. If the thesis holds and market is open, execute the trade
+4. If conditions changed significantly, save an observation explaining why you're skipping
+5. Do NOT blindly execute — confirm the signal still makes sense at current market open prices

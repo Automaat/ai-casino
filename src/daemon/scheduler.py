@@ -960,6 +960,23 @@ class MarketScheduler:
         # This ensures task runs frequently enough to check its own schedule
         return True
 
+    def next_regular_open(self) -> datetime:
+        """Return datetime of next regular session open (9:30 AM ET on next weekday)."""
+        now = datetime.now(self.timezone)
+        candidate = now.replace(hour=self.start_hour, minute=self.start_minute, second=0, microsecond=0)
+        # If we haven't passed today's open yet and it's a weekday, use today
+        if now < candidate and now.weekday() < 5:
+            return candidate
+        # Otherwise advance to next weekday
+        days_ahead = 1
+        while True:
+            next_day = now + timedelta(days=days_ahead)
+            if next_day.weekday() < 5:
+                return next_day.replace(
+                    hour=self.start_hour, minute=self.start_minute, second=0, microsecond=0
+                )
+            days_ahead += 1
+
     def __repr__(self) -> str:
         """Return string representation."""
         return (

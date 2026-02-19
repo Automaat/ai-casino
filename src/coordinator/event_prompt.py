@@ -8,7 +8,7 @@ from src.event_queue.models import QueuedMarketEvent
 from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
 
-_EVENT_TYPE_TEMPLATES = frozenset({"news", "social", "filing", "trump", "anomaly", "news_trending"})
+_EVENT_TYPE_TEMPLATES = frozenset({"news", "social", "filing", "trump", "anomaly", "news_trending", "signal"})
 
 
 class EventCyclePromptBuilder:
@@ -142,4 +142,17 @@ def _format_event_details(event_data: dict) -> str:
     if anomaly_types := event_data.get("anomaly_types"):
         lines.append(f"Anomaly types: {', '.join(anomaly_types)}")
 
+    _append_signal_fields(event_data, lines)
     return "\n".join(lines)
+
+
+def _append_signal_fields(event_data: dict, lines: list[str]) -> None:
+    """Append signal-specific fields to lines list."""
+    if signal_action := event_data.get("signal"):
+        lines.append(f"Signal: {signal_action}")
+    if confidence := event_data.get("confidence"):
+        lines.append(f"Confidence: {confidence:.0%}")
+    if session := event_data.get("session"):
+        lines.append(f"Session: {session}")
+    if reasoning := event_data.get("reasoning"):
+        lines.append(f"Reasoning: {reasoning}")
