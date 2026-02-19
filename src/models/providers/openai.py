@@ -334,7 +334,8 @@ class OpenAIProvider(BaseLLMProvider):
         choice = response.choices[0]
         if choice.finish_reason == "length":
             content = choice.message.content or ""
-            msg = f"Response truncated by max_tokens limit ({max_tokens or self._max_tokens}): {len(content)} chars"
+            limit = max_tokens or self._max_tokens
+            msg = f"Response truncated by max_tokens limit ({limit}): {len(content)} chars"
             raise StructuredOutputError(msg, raw_response=content)
         content = choice.message.content or ""
         logger.debug(f"OpenAI structured response: {len(content)} chars")
