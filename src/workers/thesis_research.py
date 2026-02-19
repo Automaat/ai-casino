@@ -84,7 +84,7 @@ class ThesisResearchWorker:
         # Try structured output with fallback
         try:
             llm_response = await self.llm.astructured(
-                prompt, ResearchLLMResponse, system=system, temperature=0.5, max_tokens=512
+                prompt, ResearchLLMResponse, system=system, temperature=0.5, max_tokens=2048
             )
             thesis = llm_response.thesis
             key_points = (
