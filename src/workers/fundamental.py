@@ -101,7 +101,7 @@ class FundamentalWorker:
         # Get LLM interpretation with structured output and fallback
         try:
             llm_response = await self.llm.astructured(
-                prompt, FundamentalLLMResponse, system=system, temperature=0.5, max_tokens=512
+                prompt, FundamentalLLMResponse, system=system, temperature=0.5, max_tokens=1024
             )
             interpretation = llm_response.interpretation
             confidence = self._calculate_confidence_from_keywords(metrics, llm_response.confidence_keywords)
@@ -332,7 +332,7 @@ class FundamentalWorker:
 
         try:
             return float(value)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
 
     def get_tool_definition(self) -> ToolDefinition:
