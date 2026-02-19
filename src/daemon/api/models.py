@@ -406,7 +406,6 @@ class SupervisorMetricResponse(BaseModel):
     synthesis_fallback_used: bool
     confidence_adjustment: float
     synthesis_reasoning: str
-    parallel_efficiency_percent: float
     timeout_triggered: bool
 
 
@@ -438,7 +437,6 @@ class WorkerPerformanceResponse(BaseModel):
 class SupervisorSummaryResponse(BaseModel):
     """Supervisor metrics summary."""
 
-    avg_efficiency_percent: float
     avg_routing_ms: float
     avg_group1_ms: float
     avg_research_ms: float

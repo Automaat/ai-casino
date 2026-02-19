@@ -546,7 +546,7 @@
 			<div class="space-y-2">
 				<h4 class="font-medium text-sm">Validation Criteria:</h4>
 				{#each validation.criteria as criterion}
-					<div class="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded">
+					<div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded">
 						<div class="flex items-center gap-2">
 							<span class="text-xl">
 								{#if criterion.passed}

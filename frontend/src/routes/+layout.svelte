@@ -9,19 +9,19 @@
 	const tabs = [
 		{ id: 'overview', label: 'Overview', href: '/' },
 		{ id: 'portfolio', label: 'Portfolio', href: '/portfolio' },
-		{ id: 'rebalancing', label: 'Rebalancing', href: '/rebalancing' },
 		{ id: 'journal', label: 'Journal', href: '/journal' },
-		{ id: 'signals', label: 'Signals', href: '/signals' },
 		{ id: 'discovery', label: 'Discovery', href: '/discovery' },
+		{ id: 'supervisor', label: 'Coordinator', href: '/coordinator' },
+		{ id: 'worker-analytics', label: 'Workers', href: '/analytics/workers' },
+		{ id: 'rebalancing', label: 'Rebalancing', href: '/rebalancing' },
+		{ id: 'signals', label: 'Signals', href: '/signals' },
 		{ id: 'risk', label: 'Risk', href: '/risk' },
 		{ id: 'validation', label: 'Validation', href: '/validation' },
 		{ id: 'events', label: 'Events', href: '/events' },
 		{ id: 'queue', label: 'Queue', href: '/queue' },
 		{ id: 'workflow', label: 'Workflow', href: '/workflow' },
 		{ id: 'execution', label: 'Execution', href: '/execution' },
-		{ id: 'supervisor', label: 'Supervisor', href: '/supervisor' },
 		{ id: 'cost-analytics', label: 'Costs', href: '/analytics/cost' },
-		{ id: 'worker-analytics', label: 'Workers', href: '/analytics/workers' },
 		{ id: 'signal-analytics', label: 'Signal Accuracy', href: '/analytics/signals' },
 		{ id: 'health', label: 'Health', href: '/health' },
 		{ id: 'config', label: 'Config', href: '/config' }
@@ -41,7 +41,7 @@
 		: currentPath.startsWith('/queue') ? 'queue'
 		: currentPath.startsWith('/workflow') ? 'workflow'
 		: currentPath.startsWith('/execution') ? 'execution'
-		: currentPath.startsWith('/supervisor') ? 'supervisor'
+		: currentPath.startsWith('/coordinator') ? 'supervisor'
 		: currentPath.startsWith('/analytics/cost') ? 'cost-analytics'
 		: currentPath.startsWith('/analytics/workers') ? 'worker-analytics'
 		: currentPath.startsWith('/analytics/signals') ? 'signal-analytics'

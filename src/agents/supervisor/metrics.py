@@ -53,15 +53,13 @@ class SupervisorCycleMetrics(BaseModel):
     confidence_adjustment: float
     synthesis_reasoning: str
 
-    # Efficiency
-    parallel_efficiency_percent: float = Field(ge=0, le=100)
     timeout_triggered: bool
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
             f"SupervisorCycleMetrics(workflow_id={self.workflow_id}, symbol={self.symbol}, "
-            f"workers={self.total_workers}, efficiency={self.parallel_efficiency_percent:.1f}%)"
+            f"workers={self.total_workers})"
         )
 
 
@@ -115,9 +113,6 @@ class SupervisorMetricsCollector:
         # Synthesis
         self.confidence_adjustment: float = 1.0
         self.synthesis_reasoning: str = ""
-
-        # Efficiency
-        self.parallel_efficiency_percent: float = 0.0
 
     def record_planning_start(self) -> None:
         """Record start of planning phase."""
@@ -246,30 +241,6 @@ class SupervisorMetricsCollector:
         self.total_llm_calls += llm_calls
         self.total_cost_usd += cost_usd
 
-    def calculate_efficiency(self) -> None:
-        """Calculate parallel execution efficiency.
-
-        Efficiency = (sum of worker times / actual wall time) / max_workers * 100
-        """
-        if not self.worker_timings:
-            self.parallel_efficiency_percent = 0.0
-            return
-
-        sum_worker_times = sum(self.worker_timings.values())
-        actual_parallel_time = self.group1_execution_ms + self.research_execution_ms
-
-        if actual_parallel_time <= 0:
-            self.parallel_efficiency_percent = 0.0
-            return
-
-        max_workers = len(self.worker_timings)
-        if max_workers == 0:
-            self.parallel_efficiency_percent = 0.0
-            return
-
-        efficiency = (sum_worker_times / actual_parallel_time) / max_workers * 100
-        self.parallel_efficiency_percent = min(100.0, max(0.0, efficiency))
-
     def calculate_overhead(self) -> None:
         """Calculate total supervisor overhead."""
         self.total_supervisor_overhead_ms = (
@@ -293,7 +264,6 @@ class SupervisorMetricsCollector:
         if not isinstance(repository, SupervisorMetricsRepository):
             return None
 
-        self.calculate_efficiency()
         self.calculate_overhead()
 
         metrics = SupervisorCycleMetrics(
@@ -321,7 +291,6 @@ class SupervisorMetricsCollector:
             synthesis_fallback_used=self.synthesis_fallback_used,
             confidence_adjustment=self.confidence_adjustment,
             synthesis_reasoning=self.synthesis_reasoning,
-            parallel_efficiency_percent=self.parallel_efficiency_percent,
             timeout_triggered=self.timeout_triggered,
         )
 

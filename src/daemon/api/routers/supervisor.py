@@ -66,7 +66,6 @@ def to_supervisor_metric_response(metric: SupervisorCycleMetrics) -> SupervisorM
         synthesis_fallback_used=metric.synthesis_fallback_used,
         confidence_adjustment=metric.confidence_adjustment,
         synthesis_reasoning=metric.synthesis_reasoning,
-        parallel_efficiency_percent=metric.parallel_efficiency_percent,
         timeout_triggered=metric.timeout_triggered,
     )
 
@@ -115,7 +114,6 @@ async def get_summary(hours: int = 24, symbol: str | None = None) -> SupervisorS
             stats = await repo.get_efficiency_stats(symbol=symbol, days=hours // 24 or 1)
 
             return SupervisorSummaryResponse(
-                avg_efficiency_percent=stats["avg_efficiency_percent"],
                 avg_routing_ms=stats["avg_routing_ms"],
                 avg_group1_ms=stats["avg_group1_ms"],
                 avg_research_ms=stats["avg_research_ms"],

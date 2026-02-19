@@ -449,7 +449,6 @@ export interface SupervisorMetricRecord {
 	synthesis_fallback_used: boolean;
 	confidence_adjustment: number;
 	synthesis_reasoning: string;
-	parallel_efficiency_percent: number;
 	timeout_triggered: boolean;
 }
 
@@ -459,7 +458,6 @@ export interface SupervisorMetricsRecent {
 }
 
 export interface SupervisorMetricsSummary {
-	avg_efficiency_percent: number;
 	avg_routing_ms: number;
 	avg_group1_ms: number;
 	avg_research_ms: number;

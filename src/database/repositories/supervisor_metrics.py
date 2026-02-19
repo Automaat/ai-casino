@@ -51,7 +51,6 @@ class SupervisorMetricsRepository(BaseRepository[SupervisorCycleMetrics]):
             synthesis_fallback_used=entity.synthesis_fallback_used,
             confidence_adjustment=Decimal(str(entity.confidence_adjustment)),
             synthesis_reasoning=entity.synthesis_reasoning,
-            parallel_efficiency_percent=Decimal(str(entity.parallel_efficiency_percent)),
             timeout_triggered=entity.timeout_triggered,
         )
         self._session.add(orm)
@@ -169,7 +168,6 @@ class SupervisorMetricsRepository(BaseRepository[SupervisorCycleMetrics]):
         """
         cutoff = datetime.now(UTC) - timedelta(days=days)
         query = select(
-            func.avg(SupervisorMetricsORM.parallel_efficiency_percent).label("avg_efficiency"),
             func.avg(SupervisorMetricsORM.routing_decision_ms).label("avg_routing_ms"),
             func.avg(SupervisorMetricsORM.group1_execution_ms).label("avg_group1_ms"),
             func.avg(SupervisorMetricsORM.research_execution_ms).label("avg_research_ms"),
@@ -186,7 +184,6 @@ class SupervisorMetricsRepository(BaseRepository[SupervisorCycleMetrics]):
 
         if not row:
             return {
-                "avg_efficiency_percent": 0.0,
                 "avg_routing_ms": 0.0,
                 "avg_group1_ms": 0.0,
                 "avg_research_ms": 0.0,
@@ -199,7 +196,6 @@ class SupervisorMetricsRepository(BaseRepository[SupervisorCycleMetrics]):
         timeout_rate = (float(row.timeout_count or 0) / total_count * 100) if total_count > 0 else 0.0
 
         return {
-            "avg_efficiency_percent": float(row.avg_efficiency or 0),
             "avg_routing_ms": float(row.avg_routing_ms or 0),
             "avg_group1_ms": float(row.avg_group1_ms or 0),
             "avg_research_ms": float(row.avg_research_ms or 0),
@@ -268,7 +264,6 @@ class SupervisorMetricsRepository(BaseRepository[SupervisorCycleMetrics]):
             synthesis_fallback_used=orm.synthesis_fallback_used,
             confidence_adjustment=float(orm.confidence_adjustment),
             synthesis_reasoning=orm.synthesis_reasoning,
-            parallel_efficiency_percent=float(orm.parallel_efficiency_percent),
             timeout_triggered=orm.timeout_triggered,
         )
 
