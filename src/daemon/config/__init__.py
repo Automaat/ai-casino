@@ -3,7 +3,8 @@
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from loguru import logger
+from pydantic import BaseModel, Field, PrivateAttr
 
 # Re-export all config classes (backward compatibility)
 from src.circuit_breaker.models import CircuitBreakerConfig
@@ -132,6 +133,8 @@ __all__ = [
 
 class DaemonConfig(BaseModel):
     """Configuration for the trading daemon."""
+
+    _config_path: Path | None = PrivateAttr(default=None)
 
     watchlist: list[str] = Field(default_factory=lambda: ["AAPL", "TSLA", "GOOGL", "MSFT"])
     interval_minutes: int = 30
@@ -286,7 +289,7 @@ class DaemonConfig(BaseModel):
         daemon_data = data.get("daemon", {})
         sections = cls._extract_config_sections(daemon_data)
 
-        return cls(
+        config = cls(
             **daemon_data,
             paper_trading=PaperTradingConfig(**sections["paper_trading"]),
             schedule=ScheduleConfig(**sections["schedule"]),
@@ -355,6 +358,33 @@ class DaemonConfig(BaseModel):
             risk_validation=RiskValidationConfig(**sections["risk_validation"]),
             workflow=WorkflowConfigDaemon(**sections["workflow"]),
         )
+        config._config_path = path
+        return config
+
+    def remove_watchlist_symbol(self, symbol: str) -> None:
+        """Remove symbol from watchlist in-memory and persist to config file.
+
+        Args:
+            symbol: Ticker to remove
+        """
+        if symbol not in self.watchlist:
+            return
+        self.watchlist.remove(symbol)
+        logger.warning(f"Removed {symbol} from watchlist (no market data available)")
+        if self._config_path is None:
+            return
+        try:
+            with self._config_path.open("r") as f:
+                data = yaml.safe_load(f)
+            watchlist: list[str] = data.get("daemon", {}).get("watchlist", [])
+            if symbol in watchlist:
+                watchlist.remove(symbol)
+                data.setdefault("daemon", {})["watchlist"] = watchlist
+            with self._config_path.open("w") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            logger.info(f"Persisted watchlist removal of {symbol} to {self._config_path}")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to persist watchlist removal of {symbol}: {e}")
 
     def __repr__(self) -> str:
         """Return string representation."""
