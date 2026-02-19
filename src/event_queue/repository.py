@@ -136,7 +136,7 @@ class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):
         return list(result.scalars().all())
 
     async def get_counts(self) -> dict:
-        """Return queue count statistics in a single DB round-trip per metric."""
+        """Return queue count statistics with one DB query per metric."""
         now = datetime.now(UTC)
         since_24h = now - timedelta(hours=24)
 

@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent
+from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent, QueueEventObservability
 from src.event_queue.repository import MarketEventQueueRepository
-from src.event_queue.service import MarketEventQueue
+from src.event_queue.service import MarketEventQueue, QueueStats
 
 
 def _make_orm_record(
@@ -165,6 +165,103 @@ class TestMarketEventQueueService:
         svc = MarketEventQueue(engine)
         assert "MarketEventQueue" in repr(svc)
 
+    @pytest.mark.asyncio
+    async def test_list_events_delegates_and_transforms_pending(self, mock_db_engine):
+        """list_events transforms ORM rows into QueueEventObservability with correct status."""
+        engine, _ = mock_db_engine
+        now = datetime.now(UTC)
+        row = _make_orm_record("e1", now, hours_until_expiry=4)
+        row.payload = {
+            "event": {},
+            "triage": {
+                "symbols": ["AAPL"],
+                "urgency": "HIGH",
+                "sentiment": "BULLISH",
+                "confidence": 0.9,
+                "reasoning": "test",
+            },
+        }
+
+        async def fake_list_events(_self, limit: int = 100, status: str = "all") -> list[MarketEventQueueORM]:
+            return [row]
+
+        with patch.object(MarketEventQueueRepository, "list_events", new=fake_list_events):
+            svc = MarketEventQueue(engine)
+            result = await svc.list_events(limit=10, status="all")
+
+        assert len(result) == 1
+        obs = result[0]
+        assert isinstance(obs, QueueEventObservability)
+        assert obs.event_id == "e1"
+        assert obs.status == "pending"
+        assert obs.symbols == ["AAPL"]
+        assert obs.urgency == "HIGH"
+        assert obs.confidence == 0.9
+        assert obs.ttl_remaining_seconds is not None
+        assert obs.ttl_remaining_seconds > 0
+
+    @pytest.mark.asyncio
+    async def test_list_events_transforms_consumed(self, mock_db_engine):
+        """list_events sets status='consumed' for rows with consumed_at set."""
+        engine, _ = mock_db_engine
+        now = datetime.now(UTC)
+        row = _make_orm_record("e2", now - timedelta(hours=1), consumed_at=now - timedelta(minutes=30))
+        row.payload = {"event": {}, "triage": {}}
+
+        async def fake_list_events(_self, limit: int = 100, status: str = "all") -> list[MarketEventQueueORM]:
+            return [row]
+
+        with patch.object(MarketEventQueueRepository, "list_events", new=fake_list_events):
+            svc = MarketEventQueue(engine)
+            result = await svc.list_events()
+
+        assert result[0].status == "consumed"
+        assert result[0].ttl_remaining_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_list_events_transforms_expired(self, mock_db_engine):
+        """list_events sets status='expired' for rows with past expires_at and no consumed_at."""
+        engine, _ = mock_db_engine
+        now = datetime.now(UTC)
+        row = _make_orm_record("e3", now - timedelta(hours=6), hours_until_expiry=-1)
+        row.payload = {"event": {}, "triage": {}}
+
+        async def fake_list_events(_self, limit: int = 100, status: str = "all") -> list[MarketEventQueueORM]:
+            return [row]
+
+        with patch.object(MarketEventQueueRepository, "list_events", new=fake_list_events):
+            svc = MarketEventQueue(engine)
+            result = await svc.list_events()
+
+        assert result[0].status == "expired"
+        assert result[0].ttl_remaining_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_stats_delegates_and_maps_fields(self, mock_db_engine):
+        """stats() delegates to repo.get_counts() and maps all fields to QueueStats."""
+        engine, _ = mock_db_engine
+        fake_counts = {
+            "pending": 3,
+            "stale": 1,
+            "consumed_24h": 7,
+            "total": 15,
+            "by_type": {"news": 2, "price_alert": 1},
+        }
+
+        async def fake_get_counts(_self) -> dict:
+            return fake_counts
+
+        with patch.object(MarketEventQueueRepository, "get_counts", new=fake_get_counts):
+            svc = MarketEventQueue(engine)
+            result = await svc.stats()
+
+        assert isinstance(result, QueueStats)
+        assert result.pending_count == 3
+        assert result.stale_count == 1
+        assert result.consumed_count_24h == 7
+        assert result.total_in_db == 15
+        assert result.by_type == {"news": 2, "price_alert": 1}
+
 
 @pytest.mark.unit
 class TestMarketEventQueueRepository:
@@ -316,3 +413,90 @@ class TestMarketEventQueueRepository:
         assert len(executed_stmts) == 3
         update_sql = str(executed_stmts[1].compile(dialect=sqlite_dialect.dialect()))
         assert "consumed_at" in update_sql.lower()
+
+    @pytest.mark.asyncio
+    async def test_list_events_returns_all_by_default(self):
+        """list_events with status='all' executes query without status filter."""
+        from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+        now = datetime.now(UTC)
+        row = _make_orm_record("e1", now)
+        result_mock = MagicMock()
+        result_mock.scalars.return_value.all.return_value = [row]
+
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=result_mock)
+
+        repo = MarketEventQueueRepository(session)
+        result = await repo.list_events(limit=50, status="all")
+
+        assert result == [row]
+        session.execute.assert_called_once()
+        compiled = str(session.execute.call_args[0][0].compile(dialect=sqlite_dialect.dialect()))
+        assert "market_event_queue" in compiled.lower()
+
+    @pytest.mark.asyncio
+    async def test_list_events_pending_filters_consumed_and_expired(self):
+        """list_events with status='pending' excludes consumed and expired rows."""
+        from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+        result_mock = MagicMock()
+        result_mock.scalars.return_value.all.return_value = []
+
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=result_mock)
+
+        repo = MarketEventQueueRepository(session)
+        await repo.list_events(status="pending")
+
+        compiled = str(session.execute.call_args[0][0].compile(dialect=sqlite_dialect.dialect()))
+        assert "consumed_at" in compiled.lower()
+        assert "expires_at" in compiled.lower()
+
+    @pytest.mark.asyncio
+    async def test_list_events_consumed_filters_by_consumed_at(self):
+        """list_events with status='consumed' filters rows where consumed_at IS NOT NULL."""
+        from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+        result_mock = MagicMock()
+        result_mock.scalars.return_value.all.return_value = []
+
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=result_mock)
+
+        repo = MarketEventQueueRepository(session)
+        await repo.list_events(status="consumed")
+
+        compiled = str(session.execute.call_args[0][0].compile(dialect=sqlite_dialect.dialect()))
+        assert "consumed_at" in compiled.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_counts_returns_expected_keys(self):
+        """get_counts returns dict with all required keys."""
+        call_count = 0
+
+        async def mock_execute(stmt, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 4:
+                mock_result = MagicMock()
+                mock_result.scalar_one.return_value = call_count
+                return mock_result
+            # 5th call: by_type group_by query
+            mock_result = MagicMock()
+            mock_result.__iter__ = MagicMock(return_value=iter([]))
+            return mock_result
+
+        session = AsyncMock()
+        session.execute = mock_execute
+
+        repo = MarketEventQueueRepository(session)
+        counts = await repo.get_counts()
+
+        assert "pending" in counts
+        assert "stale" in counts
+        assert "consumed_24h" in counts
+        assert "total" in counts
+        assert "by_type" in counts
+        assert isinstance(counts["by_type"], dict)
+        assert call_count == 5

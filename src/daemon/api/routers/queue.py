@@ -1,10 +1,13 @@
 """Queue observability endpoints."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from src.daemon.api.models import QueueEventItem, QueueEventsResponse, QueueStatsResponse, QueueTypeBreakdown
 from src.daemon.api.routers.shared import get_components
 from src.event_queue.service import MarketEventQueue
+
+_VALID_STATUSES = {"all", "pending", "consumed", "expired"}
+_MAX_LIMIT = 1000
 
 router = APIRouter(tags=["queue"])
 
@@ -27,6 +30,12 @@ async def get_queue_stats(request: Request) -> QueueStatsResponse:
 @router.get("/queue/events", response_model=QueueEventsResponse)
 async def get_queue_events(request: Request, limit: int = 100, status: str = "all") -> QueueEventsResponse:
     """List queue events filtered by status (all/pending/consumed/expired)."""
+    if status not in _VALID_STATUSES:
+        raise HTTPException(
+            status_code=400, detail=f"status must be one of: {', '.join(sorted(_VALID_STATUSES))}"
+        )
+    if limit < 1 or limit > _MAX_LIMIT:
+        raise HTTPException(status_code=400, detail=f"limit must be between 1 and {_MAX_LIMIT}")
     components = get_components(request)
     queue: MarketEventQueue = components.container.market_event_queue()
     events = await queue.list_events(limit=limit, status=status)
