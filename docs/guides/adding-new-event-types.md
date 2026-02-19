@@ -73,7 +73,24 @@ _append_my_event_fields(event_data, lines)
 
 Required template variables (always present): `event_details`, `urgency`, `sentiment`, `confidence`, `reasoning`.
 
+One extra variable is always passed but only used when explicitly referenced: `game_plan` (today's game plan text, populated only when at least one event in the batch is a `signal` type). Add `{game_plan}` to your template if the event type benefits from cross-referencing the day's trading plan.
+
 If `event_type` is not in `_EVENT_TYPE_TEMPLATES`, the prompt builder falls back to `news.txt`.
+
+### 3a. Pass runtime context via `EventCycleContext`
+
+`EventCyclePromptBuilder.build()` accepts an `EventCycleContext` dataclass instead of individual positional args:
+
+```python
+@dataclass
+class EventCycleContext:
+    positions_summary: str
+    session: TradingSession
+    market_open: bool
+    game_plan: str = ""  # populated by run_event_cycle for signal events
+```
+
+When adding a new event type that needs additional runtime context in its prompt (beyond the five standard triage variables), extend `EventCycleContext` with a new field and populate it in `TradingCoordinator.run_event_cycle()` — the same pattern used for `game_plan`.
 
 ### 4. Implement the watcher / emitter
 
