@@ -961,11 +961,15 @@ class MarketScheduler:
         return True
 
     def next_regular_open(self) -> datetime:
-        """Return datetime of next regular session open (9:30 AM ET on next weekday)."""
+        """Return datetime of next regular session open using configured start time and timezone.
+
+        Returns the next occurrence of the regular session open time (self.start_hour/self.start_minute)
+        on a weekday (Mon-Fri) in the configured timezone.
+        """
         now = datetime.now(self.timezone)
         candidate = now.replace(hour=self.start_hour, minute=self.start_minute, second=0, microsecond=0)
-        # If we haven't passed today's open yet and it's a weekday, use today
-        if now < candidate and now.weekday() < 5:
+        # If we haven't passed today's open yet (or are exactly at open) and it's a weekday, use today
+        if now <= candidate and now.weekday() < 5:
             return candidate
         # Otherwise advance to next weekday
         days_ahead = 1

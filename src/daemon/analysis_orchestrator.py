@@ -629,7 +629,10 @@ class AnalysisOrchestrator:
     async def _emit_signal_event(self, result: TradingWorkflowResult) -> None:
         """Enqueue SignalEvent for processing at next regular session open."""
         try:
+            process_after = self.scheduler.next_regular_open()
+            event_id = f"{result.symbol}_{result.decision.action.value}_{process_after.date().isoformat()}"
             signal_event = SignalEvent(
+                event_id=event_id,
                 symbol=result.symbol,
                 signal=result.decision.action.value,
                 confidence=result.decision.confidence,
@@ -647,7 +650,7 @@ class AnalysisOrchestrator:
                 confidence=result.decision.confidence,
                 reasoning=" ".join(result.decision.reasoning),
             )
-            process_after = self.scheduler.next_regular_open()
+
             seconds_until = (process_after - datetime.now(UTC)).total_seconds()
             ttl_hours = max(8, int(seconds_until / 3600) + 2)
             queue = self.market_event_queue
@@ -659,10 +662,10 @@ class AnalysisOrchestrator:
                 cast("BaseEvent", signal_event), triage, ttl_hours=ttl_hours, process_after=process_after
             )
             logger.info(
-                "Queued %s for %s, process_after=%s", signal_event.signal, result.symbol, process_after
+                "Queued {} for {}, process_after={}", signal_event.signal, result.symbol, process_after
             )
         except Exception:
-            logger.opt(exception=True).warning("Failed to enqueue signal event for %s", result.symbol)
+            logger.opt(exception=True).warning("Failed to enqueue signal event for {}", result.symbol)
 
     async def _record_analysis_result(self, symbol: str, result: TradingWorkflowResult) -> None:
         """Record analysis result to daemon state.
