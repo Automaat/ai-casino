@@ -10,7 +10,7 @@ from src.event_queue.models import QueuedMarketEvent
 if TYPE_CHECKING:
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.models import CoordinatorConfig
-    from src.daemon.scheduler import MarketScheduler
+    from src.daemon.market_service import MarketService
     from src.event_queue.service import MarketEventQueue
     from src.strategies.session import TradingSession
 
@@ -22,7 +22,7 @@ class EventQueueConsumer:
         self,
         queue: MarketEventQueue,
         coordinator: TradingCoordinator,
-        scheduler: MarketScheduler,
+        market_service: MarketService,
         config: CoordinatorConfig,
     ) -> None:
         """Initialize consumer.
@@ -30,12 +30,12 @@ class EventQueueConsumer:
         Args:
             queue: Event queue to poll
             coordinator: Coordinator for running event cycles
-            scheduler: Market scheduler for session/hours checks
+            market_service: Market state service for session/hours checks
             config: Coordinator config with polling parameters
         """
         self._queue = queue
         self._coordinator = coordinator
-        self._scheduler = scheduler
+        self._market_service = market_service
         self._config = config
         self._purge_counter = 0
         self._purge_task: asyncio.Task | None = None
@@ -77,7 +77,7 @@ class EventQueueConsumer:
         logger.info(f"Polled {len(events)} events: {[f'{e.event_type}:{e.event_id}' for e in events]}")
 
         groups = _group_by_symbol_overlap(events)
-        market_open = self._scheduler.is_market_open()
+        market_open = self._market_service.is_open()
         session = self._get_trading_session()
 
         for group in groups:
@@ -101,7 +101,7 @@ class EventQueueConsumer:
         """Determine current trading session."""
         from src.strategies.session import TradingSession
 
-        session = self._scheduler.get_trading_session()
+        session = self._market_service.current_session()
         if session is not None:
             return session
         return TradingSession.REGULAR
@@ -128,7 +128,8 @@ class EventQueueConsumer:
         """Return string representation."""
         return (
             f"EventQueueConsumer(poll={self._config.event_poll_interval_seconds}s, "
-            f"max_dequeue={self._config.event_max_dequeue})"
+            f"max_dequeue={self._config.event_max_dequeue}, "
+            f"market={self._market_service!r})"
         )
 
 

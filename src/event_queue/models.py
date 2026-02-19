@@ -18,6 +18,7 @@ class QueuedMarketEvent(BaseModel):
     event_type: str
     payload: dict
     enqueued_at: datetime
+    process_after: datetime | None = None
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -36,6 +37,7 @@ class MarketEventQueueORM(Base):
     enqueued_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    process_after: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     __table_args__ = (
         Index(
