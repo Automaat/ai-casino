@@ -55,7 +55,7 @@ def build_coordinator_registry(
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
 
-    Includes 7 coordinator-specific tools + 7 reused tools from src/tools.
+    Includes coordinator-specific tools as well as reused tools from src/tools.
 
     Args:
         container: DI container for dependency resolution
