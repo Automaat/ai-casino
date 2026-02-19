@@ -78,7 +78,7 @@ requires-dist = [
     { name = "aiosqlite", marker = "extra == 'dev'", specifier = "==0.22.1" },
     { name = "alpaca-py", specifier = "==0.43.2" },
     { name = "alpha-vantage", specifier = "==3.0.0" },
-    { name = "anthropic", specifier = "==0.82.0" },
+    { name = "anthropic", specifier = "==0.83.0" },
     { name = "asyncpg", specifier = "==0.31.0" },
     { name = "backtesting", specifier = "==0.6.5" },
     { name = "bokeh", specifier = ">=3.8,<3.9" },
@@ -271,7 +271,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.82.0"
+version = "0.83.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -283,9 +283,9 @@ dependencies = [
     { name = "sniffio", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "typing-extensions", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/94/3766b5414d9e35687d518943a5b2ffb2696cd5c53248eec13fa1e8a5c73d/anthropic-0.82.0.tar.gz", hash = "sha256:e217340ba40cb9e24c88aacccc365334a6c3f46778855eca5000a6aa83d73dde", size = 533270, upload-time = "2026-02-18T20:25:16.844Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/e5/02cd2919ec327b24234abb73082e6ab84c451182cc3cc60681af700f4c63/anthropic-0.83.0.tar.gz", hash = "sha256:a8732c68b41869266c3034541a31a29d8be0f8cd0a714f9edce3128b351eceb4", size = 534058, upload-time = "2026-02-19T19:26:38.904Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/49/b570250e36471effbc146d22ffb111e775f11ff2d8b503b32526f25a8f23/anthropic-0.82.0-py3-none-any.whl", hash = "sha256:2525828b6798635a7a691c4c62d49bd10bbd288ab83fa4ba55851264dfa5377d", size = 456304, upload-time = "2026-02-18T20:25:18.788Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/75/b9d58e4e2a4b1fc3e75ffbab978f999baf8b7c4ba9f96e60edb918ba386b/anthropic-0.83.0-py3-none-any.whl", hash = "sha256:f069ef508c73b8f9152e8850830d92bd5ef185645dbacf234bb213344a274810", size = 456991, upload-time = "2026-02-19T19:26:40.114Z" },
 ]
 
 [[package]]
