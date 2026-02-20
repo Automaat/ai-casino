@@ -31,9 +31,13 @@ class TaskRunner:
     async def run(self) -> None:
         """Run autonomous task loop. Checks every 60s."""
         logger.info(f"TaskRunner started: {list(self._tasks)}")
-        while True:
-            await self._check_and_run()
-            await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
+        try:
+            while True:
+                await self._check_and_run()
+                await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("TaskRunner cancelled, shutting down task loop")
+            raise
 
     async def _check_and_run(self) -> list[TaskResult]:
         """Check all tasks and run those that are due.

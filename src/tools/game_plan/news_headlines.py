@@ -48,18 +48,17 @@ class FetchNewsHeadlinesTool(BaseTool):
             ),
         )
 
-    def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Sync wrapper — delegates to aexecute via asyncio.run.
+    def execute(self, **_kwargs: str | int | float | bool) -> str:
+        """Not supported — tool is async-only.
 
-        Args:
-            **kwargs: Tool arguments
-
-        Returns:
-            Formatted news headlines
+        Raises:
+            RuntimeError: Always — use aexecute() instead
         """
-        import asyncio
-
-        return asyncio.run(self.aexecute(**kwargs))
+        msg = (
+            "FetchNewsHeadlinesTool.execute() cannot be called from a running "
+            "event loop. Use 'aexecute' instead."
+        )
+        raise RuntimeError(msg)
 
     async def aexecute(self, **kwargs: str | int | float | bool) -> str:
         """Fetch news headlines asynchronously.

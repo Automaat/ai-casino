@@ -27,7 +27,6 @@ class MyTask(Task):
             days=WEEKDAYS,                      # or custom [DayOfWeek.MON, ...]
             enabled=self._config.enabled,
             dedup=DedupStrategy.DAILY,          # DAILY | INTERVAL | NONE
-            window_minutes=5,                   # trigger window
         )
 
     async def execute(self) -> TaskResult:
@@ -50,7 +49,6 @@ class MyTask(Task):
 - `time`: `"HH:MM"` in daemon timezone
 - `days`: `WEEKDAYS` or custom list of `DayOfWeek`
 - `dedup`: `DAILY` (skip if ran today), `INTERVAL` (skip if ran within N min), `NONE` (always run)
-- `window_minutes`: how long after scheduled time the task can still trigger (default 5)
 
 ### 3. Wire in `DaemonRunner._build_v1_task_runner()`
 
@@ -93,6 +91,6 @@ Remove the `ScheduledTask(...)` entry from `ScheduledTaskRunner.TASKS` in `src/d
 | `src/v1/tasks/interface.py` | `Task` ABC |
 | `src/v1/tasks/models.py` | `TaskSchedule`, `TaskResult`, `DayOfWeek`, `DedupStrategy` |
 | `src/v1/tasks/runner.py` | `TaskRunner` — evaluates schedules, runs due tasks |
-| `src/v1/tasks/scheduling.py` | `in_schedule_window()`, `should_skip()` helpers |
+| `src/v1/tasks/scheduling.py` | `is_due()` schedule evaluation helper |
 | `src/v1/tasks/implementations/` | Task implementations |
 | `src/daemon/runner.py` | `_build_v1_task_runner()` — DI wiring |

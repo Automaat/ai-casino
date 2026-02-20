@@ -38,9 +38,9 @@ Adding a new task requires touching 4+ files: scheduler method, TASKS entry, tas
 
 ### 3. `TaskSchedule` model with `DedupStrategy`
 
-**Decision:** Schedule is a Pydantic model with `time`, `days`, `dedup` strategy, and configurable `window_minutes` (default 5, vs current 1-min resolution).
+**Decision:** Schedule is a Pydantic model with `time`, `days`, and `dedup` strategy. Tasks are considered due once their scheduled time is in the past, removing the need for a separate trigger window.
 
-**Rationale:** Configurable window prevents missed triggers. `DedupStrategy` (DAILY, INTERVAL, NONE) replaces ad-hoc dedup checks scattered across task implementations.
+**Rationale:** The simplified "past scheduled time" check ensures tasks cannot be missed while keeping scheduling logic straightforward. `DedupStrategy` (DAILY, INTERVAL, NONE) replaces ad-hoc dedup checks scattered across task implementations.
 
 ### 4. Task implementations in `src/v1/tasks/implementations/`
 
