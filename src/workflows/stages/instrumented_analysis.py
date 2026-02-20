@@ -696,7 +696,9 @@ async def _make_decision_and_execute(
             risk_assessment=risk_output.risk_assessment,
             trading_session=ctx.trading_session,
         )
-        execution_output = await execution.execute_trade(execution_input, ctx.workflow.broker)
+        execution_output = await execution.execute_trade(
+            execution_input, broker=ctx.workflow.broker, trading_service=ctx.workflow.trading_service
+        )
 
     return _ExecutionResult(decision_output, risk_output, execution_output)
 

@@ -302,10 +302,7 @@ def create_trading_coordinator(
     )
 
     # Build temp tool registry without coordinator (for initial creation)
-    # Note: adaptive_threshold_manager created after registry, pass None initially
-    tool_registry_temp = build_coordinator_registry(
-        container, memory, coordinator=None, adaptive_threshold_manager=None
-    )
+    tool_registry_temp = build_coordinator_registry(container, memory, coordinator=None)
 
     # Extract coordinator config
     coordinator_config = daemon_config.coordinator
@@ -359,10 +356,8 @@ def create_trading_coordinator(
     )
 
     # Rebuild registry with coordinator reference for reflection tool
-    # Pass critic_agent and adaptive_threshold_manager to avoid creating duplicate instances
-    tool_registry = build_coordinator_registry(
-        container, memory, coordinator, critic_agent, adaptive_threshold_manager
-    )
+    # Pass critic_agent to avoid creating duplicate instance
+    tool_registry = build_coordinator_registry(container, memory, coordinator, critic_agent)
     coordinator._tools = tool_registry  # noqa: SLF001
 
     return coordinator

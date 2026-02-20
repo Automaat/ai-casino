@@ -55,6 +55,7 @@ class TradingWorkflow:
         self.analysis_orchestrator_config = components.analysis_orchestrator_config
         self.web_search_fetcher = components.web_search_fetcher
         self.event_bus = components.event_bus
+        self.trading_service = components.trading_service
         self._original_components = components  # Store for supervisor mode
 
         # Initialize components
@@ -272,6 +273,7 @@ class TradingWorkflow:
             risk_validation_config=self.risk_validation_config,
             risk_validator=self.risk_validator,
             analysis_orchestrator_config=self.analysis_orchestrator_config,
+            trading_service=self.trading_service,
         )
 
         # Build config from self
@@ -446,9 +448,10 @@ class TradingWorkflow:
         )
         execution_output = await execution.execute_trade(
             execution_input,
-            self.broker,
-            self.market_fetcher,
-            self.execution_metric_repository,
+            broker=self.broker,
+            trading_service=self.trading_service,
+            market_fetcher=self.market_fetcher,
+            execution_metric_repository=self.execution_metric_repository,
         )
 
         return {**state, "order_status": execution_output.order_status}
