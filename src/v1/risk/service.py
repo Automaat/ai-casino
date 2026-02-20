@@ -12,7 +12,6 @@ from src.v1.risk.models import RiskDecision
 
 if TYPE_CHECKING:
     from src.agents.risk.agent import RiskManagementAgent
-    from src.daemon.config import DaemonConfig
     from src.data.market import MarketDataFetcher
     from src.v1.trades.brokers import Broker
 
@@ -25,7 +24,6 @@ class RiskService:
         risk_agent: RiskManagementAgent,
         broker: Broker,
         market_fetcher: MarketDataFetcher,
-        daemon_config: DaemonConfig,
     ) -> None:
         """Initialize risk service.
 
@@ -33,12 +31,10 @@ class RiskService:
             risk_agent: Risk management agent for calculations
             broker: Broker for fresh account data
             market_fetcher: Market data fetcher for OHLCV
-            daemon_config: Daemon configuration
         """
         self._risk_agent = risk_agent
         self._broker = broker
         self._market_fetcher = market_fetcher
-        self._daemon_config = daemon_config
 
     async def assess_trade(
         self,

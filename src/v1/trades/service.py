@@ -220,6 +220,12 @@ class TradingService:
 
             entry_price = order_status.filled_avg_price or 0.0
             effective_stop = request.stop_loss_price or 0.0
+            if effective_stop == 0.0:
+                logger.warning(
+                    "Persisting trade with zero stop loss price "
+                    f"(symbol={order_status.symbol}, order_id={order_status.order_id}, "
+                    f"request_stop_loss={request.stop_loss_price}, entry_price={entry_price})"
+                )
             is_paper = self._daemon_config.trading_mode == TradingMode.PAPER
 
             trade = TradeRecord(
@@ -325,8 +331,14 @@ class TradingService:
             )
             request.quantity = risk_decision.recommended_shares
 
-        if request.stop_loss_price is None and risk_decision.stop_loss_price > 0:
-            request.stop_loss_price = risk_decision.stop_loss_price
+        if request.stop_loss_price is None:
+            if risk_decision.stop_loss_price > 0:
+                request.stop_loss_price = risk_decision.stop_loss_price
+            else:
+                logger.warning(
+                    f"Approved trade for {request.symbol} is proceeding without a stop loss "
+                    f"from RiskService (stop_loss_price={risk_decision.stop_loss_price!r})"
+                )
 
     @staticmethod
     def _rejected_result(request: TradeRequest, rejection: TradeRejection) -> TradeResult:

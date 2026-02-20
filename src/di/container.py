@@ -330,7 +330,6 @@ class AppContainer(containers.DeclarativeContainer):
         risk_agent=risk_management_agent,
         broker=alpaca_broker,
         market_fetcher=market_fetcher,
-        daemon_config=daemon_config,
     )
 
     # Coordinator agent - Factory pattern to support runtime daemon_state override
