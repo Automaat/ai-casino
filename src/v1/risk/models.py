@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RiskLevel(StrEnum):
@@ -25,6 +25,17 @@ class RiskDecision(BaseModel):
     risk_percent: float = Field(ge=0, le=100)
     warnings: list[str] = Field(default_factory=list)
     reasoning: str
+
+    @model_validator(mode="after")
+    def validate_approved_stop_loss(self) -> RiskDecision:
+        """Ensure stop_loss_price is positive when approved with shares to trade."""
+        if self.approved and self.recommended_shares > 0 and self.stop_loss_price <= 0:
+            msg = (
+                f"stop_loss_price must be > 0 when approved with recommended_shares > 0, "
+                f"got stop_loss_price={self.stop_loss_price}"
+            )
+            raise ValueError(msg)
+        return self
 
     def __repr__(self) -> str:
         """String representation."""
