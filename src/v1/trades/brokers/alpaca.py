@@ -139,6 +139,9 @@ class AlpacaBroker:
     ) -> OrderStatus:
         """Submit market order with optional stop loss.
 
+        For SELL orders, automatically cancels any conflicting pending SELL orders
+        for the symbol before submitting to prevent "insufficient qty available" errors.
+
         Args:
             symbol: Stock ticker symbol
             qty: Number of shares to trade
@@ -231,8 +234,9 @@ class AlpacaBroker:
                 filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
             )
         except Exception as e:
-            logger.opt(exception=True).error(f"Failed to get order status: {e}")
-            raise
+            msg = f"Failed to get order status: {e}"
+            logger.opt(exception=True).error(msg)
+            raise BrokerAPIError(msg) from e
 
     def submit_stop_order(self, symbol: str, qty: int, stop_price: float) -> OrderStatus:
         """Submit stop order to protect existing long position.
@@ -352,8 +356,9 @@ class AlpacaBroker:
             self.client.cancel_order_by_id(order_id=order_id)
             logger.info(f"Cancelled order: {order_id}")
         except Exception as e:
-            logger.opt(exception=True).error(f"Failed to cancel order: {e}")
-            raise
+            msg = f"Failed to cancel order {order_id}: {e}"
+            logger.opt(exception=True).error(msg)
+            raise BrokerAPIError(msg) from e
 
     def is_market_open(self) -> bool:
         """Check if market is currently open.
