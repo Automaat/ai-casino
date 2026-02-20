@@ -39,7 +39,6 @@ class TestBuildCoordinatorRegistry:
         registry = build_coordinator_registry(mock_container)
 
         tool_names = registry.tool_names
-        assert "generate_game_plan" in tool_names
         assert "market_overview" in tool_names
         assert "analyze_symbol" in tool_names
         assert "portfolio_status" in tool_names

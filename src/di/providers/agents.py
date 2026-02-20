@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from src.daemon.config import DaemonConfig
 from src.data.market import MarketDataFetcher
+from src.data.news import NewsFetcher
 from src.models.llm import LLMClient
 
 if TYPE_CHECKING:
@@ -72,19 +73,21 @@ def create_event_triage_agent(llm_client: LLMClient) -> EventTriageAgent:
 def create_game_plan_agent(
     llm_client: LLMClient,
     market_fetcher: MarketDataFetcher,
+    news_fetcher: NewsFetcher,
 ) -> GamePlanAgent:
-    """Create GamePlanAgent with LLM client and market fetcher.
+    """Create GamePlanAgent with LLM client, market, and news fetchers.
 
     Args:
         llm_client: LLM client for game plan generation
         market_fetcher: Market data fetcher
+        news_fetcher: News fetcher for headlines
 
     Returns:
         Configured GamePlanAgent
     """
     from src.agents.game_plan import GamePlanAgent
 
-    return GamePlanAgent(llm_client, market_fetcher)
+    return GamePlanAgent(llm_client, market_fetcher, news_fetcher)
 
 
 def create_trade_journal_agent(

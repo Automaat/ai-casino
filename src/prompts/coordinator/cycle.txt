@@ -15,7 +15,7 @@
 **Cycle Objectives:**
 
 1. **Market Assessment:** Run `market_overview` to gauge overnight action and pre-market sentiment
-2. **Game Plan:** Generate or review daily game plan for strategic guidance
+2. **Strategic Guidance:** Review today's game plan (in system context) for priorities and risk stance
 3. **Opportunity Discovery:** Screen for high-conviction setups meeting technical + sentiment criteria
 4. **Deep Analysis:** Analyze 2-3 top candidates via `analyze_symbol` (selective use - expensive)
 5. **Trade Execution:** Execute trades meeting confidence ({min_confidence_to_trade:.0%}) and risk thresholds

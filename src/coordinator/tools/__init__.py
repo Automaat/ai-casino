@@ -72,7 +72,6 @@ def build_coordinator_registry(
     from src.coordinator.tools.analyze import AnalyzeSymbolTool
     from src.coordinator.tools.decision_history import QueryPastDecisionsTool
     from src.coordinator.tools.execute_trade import ExecuteTradeServices, ExecuteTradeTool
-    from src.coordinator.tools.generate_game_plan import GenerateGamePlanTool
     from src.coordinator.tools.history import AnalysisHistoryTool
     from src.coordinator.tools.market_overview import MarketOverviewTool
     from src.coordinator.tools.observation import SaveObservationTool
@@ -94,7 +93,6 @@ def build_coordinator_registry(
     daemon_config = container.daemon_config()
     notification_service = container.notification_service()
 
-    registry.register(GenerateGamePlanTool(container.game_plan_agent()))
     registry.register(MarketOverviewTool(container.market_fetcher()))
     registry.register(AnalyzeSymbolTool(container, coordinator))
     registry.register(PortfolioStatusTool(broker))

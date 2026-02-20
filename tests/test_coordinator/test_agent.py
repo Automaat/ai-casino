@@ -128,19 +128,16 @@ async def test_run_cycle_tracks_tool_calls(coordinator, mock_llm):
             callback("analyze_symbol", {"symbol": "AAPL"}, "Analysis result")
             # Simulate execute_trade call
             callback("execute_trade", {"symbol": "AAPL", "action": "BUY"}, "Trade executed successfully")
-            # Simulate generate_game_plan call
-            callback("generate_game_plan", {}, "Game plan generated")
         return "Cycle complete"
 
     mock_llm.acomplete_with_tools.side_effect = tool_call_side_effect
 
     result = await coordinator.run_cycle(watchlist=["AAPL"])
 
-    assert result.tool_calls_made == 3
+    assert result.tool_calls_made == 2
     assert "AAPL" in result.symbols_analyzed
     assert result.trades_proposed == 1
     assert result.trades_executed == 1
-    assert result.game_plan_generated is True
 
 
 @pytest.mark.asyncio
@@ -228,13 +225,6 @@ def test_on_tool_call_tracks_trades(coordinator):
 
     assert coordinator._trades_proposed == 2
     assert coordinator._trades_executed == 1
-
-
-def test_on_tool_call_tracks_game_plan(coordinator):
-    """Test game plan tracking in callback."""
-    coordinator._on_tool_call("generate_game_plan", {}, "Game plan generated")
-
-    assert coordinator._game_plan_generated is True
 
 
 @pytest.mark.asyncio

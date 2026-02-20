@@ -23,7 +23,7 @@ class GamePlanTask(TaskExecutor):
         return "Game Plan Generation"
 
     async def execute(self) -> None:
-        """Execute game plan generation logic."""
+        """Execute game plan generation logic (legacy — use v1 GamePlanTask instead)."""
         # Get or init game plan agent
         if self.components.game_plan_agent is None:
             agent = self.container.game_plan_agent()
@@ -32,19 +32,8 @@ class GamePlanTask(TaskExecutor):
 
         watchlist = await self.components.broker_manager.get_merged_watchlist()
 
-        # Build contexts via context builder
-        context_builder = self.container.context_builder(
-            components=self.components,
-            container=self.container,
-        )
-        sector_context, _, _, _ = context_builder.build_analysis_contexts(watchlist[0] if watchlist else "")
-        earnings_context = context_builder.build_earnings_context_for_watchlist(watchlist)
-
         plan = await agent.generate(
             watchlist,
-            futures_symbols=self.components.config.game_plan.futures_symbols,
-            sector_context=sector_context,
-            earnings_context=earnings_context,
             timezone=self.components.scheduler.timezone,
         )
 

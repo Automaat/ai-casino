@@ -302,6 +302,7 @@ class AppContainer(containers.DeclarativeContainer):
         agent_providers.create_game_plan_agent,
         llm_client=_game_plan_llm,
         market_fetcher=market_fetcher,
+        news_fetcher=news_fetcher,
     )
 
     trade_journal_agent = providers.Factory(
