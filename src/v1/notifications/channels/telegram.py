@@ -5,8 +5,8 @@ from loguru import logger
 
 from src.daemon.config.notifications import TelegramNotificationConfig
 from src.models.providers.retry import retry
-from src.notifications.base import NotificationChannel
-from src.notifications.models import NotificationMessage, NotificationSeverity
+from src.v1.notifications.base import NotificationChannel
+from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
 SEVERITY_EMOJI = {
     NotificationSeverity.CRITICAL: "🚨",

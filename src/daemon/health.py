@@ -17,7 +17,7 @@ from src.circuit_breaker import CircuitBreakerState
 from src.daemon.config import DaemonConfig
 from src.daemon.state import DaemonState
 from src.di.container import AppContainer
-from src.notifications.service import NotificationService
+from src.v1.notifications.service import NotificationService
 
 if TYPE_CHECKING:
     from src.circuit_breaker import CircuitBreakerRegistry
@@ -587,7 +587,7 @@ class HealthChecker:
         Args:
             failed: List of failed service checks
         """
-        from src.notifications.models import NotificationMessage, NotificationSeverity
+        from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
         if not self.notification_service:
             return

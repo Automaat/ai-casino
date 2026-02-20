@@ -15,7 +15,7 @@ from src.data.reddit import RedditFetcher
 from src.data.truth_social import TruthSocialFetcher
 from src.data.universe import StockUniverseFetcher
 from src.data.websearch import WebSearchFetcher
-from src.notifications.service import NotificationService
+from src.v1.notifications.service import NotificationService
 
 
 def create_historical_cache() -> HistoricalCache:

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from src.data.market import MarketDataFetcher
     from src.database.repositories.execution_metric import ExecutionMetricRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
-    from src.notifications.service import NotificationService
+    from src.v1.notifications.service import NotificationService
 
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.trader import TradingDecision
@@ -240,7 +240,7 @@ async def notify_trade_execution(
         risk_assessment: Risk assessment
         notification_service: Optional notification service
     """
-    from src.notifications.models import NotificationMessage, NotificationSeverity
+    from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
     if not notification_service:
         return

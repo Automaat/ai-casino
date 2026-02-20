@@ -231,7 +231,7 @@ class RiskReportTask(TaskExecutor):
         Args:
             report: Risk report with VaR metrics
         """
-        from src.notifications.models import NotificationMessage, NotificationSeverity
+        from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
         if not self.components.notification_service:
             return

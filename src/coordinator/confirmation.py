@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.notifications.channels.telegram import TelegramChannel
-from src.notifications.models import NotificationMessage, NotificationSeverity
+from src.v1.notifications.channels.telegram import TelegramChannel
+from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
 
 class TradeConfirmationRequest(BaseModel):

@@ -90,7 +90,7 @@ class AnalysisOrchestrator:
         from src.daemon.scheduler import MarketScheduler
         from src.daemon.state import DaemonState
         from src.data.broker import AlpacaBroker
-        from src.notifications.service import NotificationService
+        from src.v1.notifications.service import NotificationService
         from src.workflows import TradingWorkflow
 
         self.workflow: TradingWorkflow = cast("TradingWorkflow", workflow)

@@ -145,7 +145,7 @@ class DaemonTaskService:
 
         try:
             from src.daemon.paper_trading_validator import PaperTradingValidator
-            from src.notifications.models import NotificationMessage, NotificationSeverity
+            from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
             if self.components.metrics_tracker is None:
                 return

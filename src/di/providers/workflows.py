@@ -22,7 +22,7 @@ from src.metrics.portfolio_var import PortfolioVaRCalculator
 from src.metrics.tracker import BaseMetricsTracker
 from src.models.llm import LLMClient
 from src.models.sentiment import FinBERTSentiment
-from src.notifications.service import NotificationService
+from src.v1.notifications.service import NotificationService
 from src.optimization.param_store import OptimizedParamStore
 from src.workflows import TradingWorkflow
 from src.workflows.config import WorkflowComponents, WorkflowConfig

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from src.database.repositories.risk_audit import RiskAuditRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
-    from src.notifications.channels.telegram import TelegramChannel
+    from src.v1.notifications.channels.telegram import TelegramChannel
     from src.strategies.regime import MarketRegimeDetector
 
 

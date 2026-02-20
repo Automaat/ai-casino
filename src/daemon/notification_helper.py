@@ -33,7 +33,7 @@ class DaemonNotificationHelper:
             components: Daemon components
         """
         from src.daemon.degradation import DegradationTier
-        from src.notifications.models import NotificationMessage, NotificationSeverity
+        from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
         if degradation_context.tier == DegradationTier.HALTED:
             title = "Trading System HALTED"
@@ -102,7 +102,7 @@ class DaemonNotificationHelper:
         if result.decision.confidence < components.config.notifications.min_confidence:
             return
 
-        from src.notifications.models import NotificationMessage, NotificationSeverity
+        from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
         message = NotificationMessage(
             title=f"{result.decision.action.value} Signal: {result.symbol}",
@@ -134,7 +134,7 @@ class DaemonNotificationHelper:
             report: Portfolio risk report
             components: Daemon components
         """
-        from src.notifications.models import NotificationMessage, NotificationSeverity
+        from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
         message = NotificationMessage(
             title="Portfolio VaR Limit Breached",

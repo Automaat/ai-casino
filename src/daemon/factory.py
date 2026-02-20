@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.di.container import AppContainer
     from src.event_queue.consumer import EventQueueConsumer
-    from src.notifications.service import NotificationService
+    from src.v1.notifications.service import NotificationService
     from src.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.watchers.news_trending_watcher import NewsTrendingWatcher
     from src.watchers.news_watcher import NewsWatcher
@@ -179,7 +179,7 @@ class DaemonFactory:
         # Phase 9: Notifications (if enabled)
         notification_service = None
         if self.config.notifications.enabled:
-            from src.notifications.service import NotificationService
+            from src.v1.notifications.service import NotificationService
 
             notification_service = NotificationService(self.config.notifications)
             logger.info("Notification service enabled")
