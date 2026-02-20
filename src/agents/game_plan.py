@@ -1,8 +1,6 @@
 """Game plan agent for next-day trading strategy."""
 
-import json
 from datetime import UTC, date, datetime, tzinfo
-from pathlib import Path
 from typing import Literal
 
 from loguru import logger
@@ -182,27 +180,6 @@ class GamePlanAgent:
         except Exception as e:
             logger.opt(exception=True).error(f"Game plan tool failed: {name} - {e}")
             return f"Error: {e!s}"
-
-    def persist(self, plan: GamePlan, plan_dir: str) -> Path:
-        """Persist game plan to JSON.
-
-        Args:
-            plan: GamePlan to save
-            plan_dir: Directory for plans
-
-        Returns:
-            Path to saved file
-        """
-        path = Path(plan_dir).expanduser()
-        path.mkdir(parents=True, exist_ok=True)
-
-        file_path = path / f"{plan.date}.json"
-
-        with file_path.open("w") as f:
-            json.dump(plan.model_dump(mode="json"), f, indent=2, default=str)
-
-        logger.info(f"Persisted game plan to {file_path}")
-        return file_path
 
     def __repr__(self) -> str:
         """String representation."""

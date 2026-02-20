@@ -94,7 +94,6 @@ class GamePlanConfig(BaseModel):
 
     enabled: bool = False
     generation_time: str = "04:00"
-    plan_dir: str = "~/.ai-casino/game-plans"
     futures_symbols: list[str] = Field(default_factory=lambda: ["ES=F", "NQ=F"])
     lookback_hours: int = 16
 

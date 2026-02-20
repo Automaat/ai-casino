@@ -37,8 +37,6 @@ class GamePlanTask(TaskExecutor):
             timezone=self.components.scheduler.timezone,
         )
 
-        plan_path = agent.persist(plan, self.components.config.game_plan.plan_dir)
-
         from src.daemon.state.models import GamePlanRecord
 
         await self.components.state.record_game_plan(
@@ -59,7 +57,6 @@ class GamePlanTask(TaskExecutor):
         console.print(f"  Risk Stance: {plan.risk_stance}")
         console.print(f"  Priority: {', '.join(plan.priority_symbols)}")
         console.print(f"  Sectors: {', '.join(plan.sector_focus)}")
-        console.print(f"  Saved: {plan_path}")
 
     async def get_last_run(self) -> datetime | None:
         """Get last game plan timestamp."""

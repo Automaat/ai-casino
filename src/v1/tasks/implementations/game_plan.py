@@ -74,8 +74,6 @@ class GamePlanTask(Task):
             timezone=self._scheduler.timezone,
         )
 
-        plan_path = self._agent.persist(plan, self._config.plan_dir)
-
         await self._state.record_game_plan(
             GamePlanRecord(
                 timestamp=plan.generated_at,
@@ -91,7 +89,7 @@ class GamePlanTask(Task):
         )
 
         duration = time.monotonic() - start
-        msg = f"{len(plan.priority_symbols)} priority symbols, stance={plan.risk_stance}, saved={plan_path}"
+        msg = f"{len(plan.priority_symbols)} priority symbols, stance={plan.risk_stance}"
         logger.info(f"Game plan complete: {msg}")
 
         return TaskResult(

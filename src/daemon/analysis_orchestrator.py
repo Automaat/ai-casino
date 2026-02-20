@@ -442,7 +442,7 @@ class AnalysisOrchestrator:
         sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = None, None, None, None
         context_builder = self._context_builder
         if context_builder:
-            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = context_builder.build_analysis_contexts(
+            sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx = await context_builder.build_analysis_contexts(
                 symbol
             )
 
