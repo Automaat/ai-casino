@@ -59,30 +59,11 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
         f"recycle={pool_config.pool_recycle}s"
     )
 
-    # Run migrations on startup
-    import asyncio
+    # Migrations are deferred to lifecycle.startup() via ensure_migrated()
+    # to avoid running asyncio.run() here which would bind asyncpg pool
+    # connections to a temporary event loop, causing "Future attached to
+    # a different loop" errors in the main daemon event loop.
 
-    try:
-        asyncio.get_running_loop()
-        # If already in event loop, schedule migration
-
-        def _log_migration_result(t: asyncio.Task) -> None:
-            # Avoid calling t.exception() on cancelled tasks (raises CancelledError)
-            if t.cancelled():
-                logger.warning("DB migration task was cancelled before completion")
-                return
-            exc = t.exception()
-            if exc:
-                # Log full traceback for easier debugging
-                logger.opt(exception=exc).error("DB migration failed")
-
-        task = asyncio.create_task(engine.ensure_migrated())
-        task.add_done_callback(_log_migration_result)
-    except RuntimeError:
-        # No event loop yet, run in new loop
-        asyncio.run(engine.ensure_migrated())
-
-    logger.info("DatabaseEngine initialized and migrations applied")
     return engine
 
 
