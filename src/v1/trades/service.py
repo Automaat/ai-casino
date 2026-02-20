@@ -253,8 +253,9 @@ class TradingService:
             symbol = order_status.symbol
             price = order_status.filled_avg_price or 0.0
 
+            emoji = "💰" if side == "BUY" else "🔴"
             message = NotificationMessage(
-                title=f"{side} {symbol} x{int(order_status.qty)}",
+                title=f"{emoji} {side} {symbol} x{int(order_status.qty)}",
                 body=request.rationale,
                 severity=NotificationSeverity.WARNING,
                 metadata={
