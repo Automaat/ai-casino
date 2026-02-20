@@ -104,8 +104,9 @@ class DaemonNotificationHelper:
 
         from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
+        signal_emoji = "✅" if result.decision.action.value == "BUY" else "🔴"
         message = NotificationMessage(
-            title=f"{result.decision.action.value} Signal: {result.symbol}",
+            title=f"{signal_emoji} {result.decision.action.value} Signal: {result.symbol}",
             body=" | ".join(result.decision.reasoning),
             severity=NotificationSeverity.WARNING,
             metadata={
