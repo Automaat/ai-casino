@@ -58,19 +58,15 @@ async def test_game_plan_agent_generate(test_container, mock_market_fetcher):
     assert 0.0 <= plan.confidence <= 1.0
 
 
-async def test_game_plan_agent_structured_output_fallback(test_container, mock_market_fetcher):
-    """Test fallback when structured output fails."""
+async def test_game_plan_agent_structured_output_error_propagates(test_container, mock_market_fetcher):
+    """Test that structured output errors propagate (no fallback)."""
     agent = test_container.game_plan_agent()
     agent.market_fetcher = mock_market_fetcher
     agent.llm.acomplete_with_tools = AsyncMock(return_value="Market research context")
     agent.llm.astructured = AsyncMock(side_effect=StructuredOutputError("Schema mismatch"))
-    agent.llm.acomplete = AsyncMock(return_value="Market neutral, focus on tech")
 
-    plan = await agent.generate(["AAPL", "TSLA"])
-
-    assert isinstance(plan, GamePlan)
-    assert plan.risk_stance == "NEUTRAL"
-    assert plan.confidence == 0.5
+    with pytest.raises(StructuredOutputError):
+        await agent.generate(["AAPL", "TSLA"])
 
 
 def test_game_plan_persist(test_container, sample_game_plan, tmp_path):
