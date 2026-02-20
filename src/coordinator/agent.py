@@ -71,13 +71,11 @@ class TradingCoordinator:
         self._symbols_analyzed: set[str] = set()
         self._trades_proposed = 0
         self._trades_executed = 0
-        self._game_plan_generated = False
         self._cycle_counter = 0
 
         # Reflection tracking (reset per cycle)
         self._reflection_counters: dict[str, int] = {}
         self._last_analysis_results: dict[str, TradingWorkflowResult] = {}
-        self._game_plan_context: str | None = None
 
         logger.info("Initialized TradingCoordinator")
 
@@ -113,12 +111,10 @@ class TradingCoordinator:
         self._symbols_analyzed = set()
         self._trades_proposed = 0
         self._trades_executed = 0
-        self._game_plan_generated = False
 
         # Reset reflection tracking
         self._reflection_counters.clear()
         self._last_analysis_results.clear()
-        self._game_plan_context = None
 
         # Track cycle duration
         cycle_start = time.time()
@@ -188,7 +184,6 @@ class TradingCoordinator:
                 trades_proposed=self._trades_proposed,
                 trades_executed=self._trades_executed,
                 tool_calls_made=self._tool_calls_count,
-                game_plan_generated=self._game_plan_generated,
                 cycle_duration_seconds=time.time() - cycle_start,
             )
         except Exception as e:
@@ -199,7 +194,6 @@ class TradingCoordinator:
                 trades_proposed=self._trades_proposed,
                 trades_executed=self._trades_executed,
                 tool_calls_made=self._tool_calls_count,
-                game_plan_generated=self._game_plan_generated,
                 cycle_duration_seconds=time.time() - cycle_start,
             )
 
@@ -228,10 +222,8 @@ class TradingCoordinator:
         self._symbols_analyzed = set()
         self._trades_proposed = 0
         self._trades_executed = 0
-        self._game_plan_generated = False
         self._reflection_counters.clear()
         self._last_analysis_results.clear()
-        self._game_plan_context = None
 
         cycle_start = time.time()
         event_ids = [ev.event_id for ev in events]
@@ -303,7 +295,6 @@ class TradingCoordinator:
                 trades_proposed=self._trades_proposed,
                 trades_executed=self._trades_executed,
                 tool_calls_made=self._tool_calls_count,
-                game_plan_generated=self._game_plan_generated,
                 cycle_duration_seconds=time.time() - cycle_start,
                 cycle_type=EVENT_CYCLE_TYPE,
                 event_ids=event_ids,
@@ -316,7 +307,6 @@ class TradingCoordinator:
                 trades_proposed=self._trades_proposed,
                 trades_executed=self._trades_executed,
                 tool_calls_made=self._tool_calls_count,
-                game_plan_generated=self._game_plan_generated,
                 cycle_duration_seconds=time.time() - cycle_start,
                 cycle_type=EVENT_CYCLE_TYPE,
                 event_ids=event_ids,
@@ -452,11 +442,6 @@ class TradingCoordinator:
             if "successfully" in result.lower() or "executed" in result.lower():
                 self._trades_executed += 1
 
-        # Track game plan generation
-        if name == "generate_game_plan":
-            self._game_plan_generated = True
-            self._game_plan_context = result
-
         logger.debug(f"Tool callback: {name} (total calls: {self._tool_calls_count})")
 
     async def _parse_cycle_result(self, final_response: str) -> CoordinatorCycleResult:
@@ -482,7 +467,6 @@ class TradingCoordinator:
             trades_proposed=self._trades_proposed,
             trades_executed=self._trades_executed,
             tool_calls_made=self._tool_calls_count,
-            game_plan_generated=self._game_plan_generated,
         )
 
     def _format_memory(self, observations: list) -> str:

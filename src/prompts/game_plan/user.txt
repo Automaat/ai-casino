@@ -1,17 +1,6 @@
 Generate a game plan for {date}.
 
-## Overnight Futures
-{futures_context}
-
-## Pre-Market Movers
-{premarket_movers}
-
 ## Watchlist
 {watchlist_symbols}
-{sector_context_section}{earnings_context_section}
-Provide:
-1. Priority Symbols: 3-5 symbols with best setup today
-2. Risk Stance: AGGRESSIVE/DEFENSIVE/NEUTRAL based on overnight action
-3. Sector Focus: 1-3 sectors with tailwinds
-4. Key Levels: Important price levels (support/resistance) for priorities
-5. Reasoning: Strategic rationale (2-3 sentences, why these priorities?)
+
+Gather market context using your tools, then provide your analysis and recommendations.

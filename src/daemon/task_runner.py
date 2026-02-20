@@ -34,7 +34,6 @@ class ScheduledTaskRunner:
 
     # Task registry (explicit, not dynamic)
     TASKS: ClassVar[list[ScheduledTask]] = [
-        ScheduledTask("game_plan", "is_game_plan_time", "_run_game_plan", is_async=True),
         ScheduledTask("prefetch", "is_prefetch_time", "_run_prefetch", "prefetch.enabled", is_async=True),
         ScheduledTask(
             "pre_market_refresh",

@@ -153,9 +153,6 @@ class ReflectOnDecisionTool(BaseTool):
         # Get recent outcomes from memory
         recent_outcomes = self._get_recent_outcomes(symbol)
 
-        # Get game plan context
-        game_plan = self._coordinator._game_plan_context  # noqa: SLF001
-
         return DecisionEvaluationRequest(
             symbol=symbol,
             decision=result.decision,
@@ -164,7 +161,7 @@ class ReflectOnDecisionTool(BaseTool):
             news=result.news,
             fundamental=result.fundamental,
             risk=result.risk,
-            game_plan_context=game_plan,
+            game_plan_context=None,
             portfolio_constraints=constraints,
             recent_outcomes=recent_outcomes,
         )

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
+    from src.v1.tasks.runner import TaskRunner
     from src.workflows import TradingWorkflow
 
 console = Console()
@@ -93,10 +94,44 @@ class DaemonRunner:
         # Event queue consumer task
         self._consumer_task: asyncio.Task | None = None
 
+        # v1 task runner
+        self._v1_task_runner = self._build_v1_task_runner()
+
         # Backward compatibility
         self._target_allocations_to_apply: dict[str, float] | None = None
 
         logger.info(f"DaemonRunner initialized with {config}")
+
+    def _build_v1_task_runner(self) -> TaskRunner:
+        """Build v1 TaskRunner with registered tasks.
+
+        Returns:
+            TaskRunner instance
+        """
+        from zoneinfo import ZoneInfo
+
+        from src.v1.tasks.implementations.game_plan import GamePlanTask
+        from src.v1.tasks.interface import Task
+        from src.v1.tasks.runner import TaskRunner
+
+        tasks: list[Task] = []
+
+        # Game plan task
+        game_plan_config = self.config.game_plan
+        if game_plan_config.enabled:
+            agent = self._container.game_plan_agent()
+            tasks.append(
+                GamePlanTask(
+                    agent=agent,
+                    state=self.state,
+                    broker_manager=self._broker_manager,
+                    config=game_plan_config,
+                    scheduler=self.scheduler,
+                )
+            )
+
+        tz = ZoneInfo(self.config.schedule.timezone)
+        return TaskRunner(tasks, tz)
 
     def _init_game_plan_agent(self) -> GamePlanAgent:
         """Initialize game plan agent (lazy)."""
@@ -237,6 +272,9 @@ class DaemonRunner:
         # Spawn event queue consumer if coordinator enabled
         self._consumer_task = self._maybe_start_event_consumer()
 
+        # Spawn v1 task runner as independent background task
+        v1_task = asyncio.create_task(self._v1_task_runner.run(), name="v1-task-runner")
+
         while lifecycle.running:
             try:
                 result = await cycle_orchestrator.run_cycle()
@@ -249,6 +287,14 @@ class DaemonRunner:
                 logger.exception(f"Error in daemon loop: {e}")
                 await self.state.record_error(str(e))
                 await asyncio.sleep(60)
+
+        # Shutdown v1 task runner
+        import contextlib
+
+        v1_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await v1_task
+        logger.info("v1 task runner stopped")
 
         # Shutdown consumer task
         await self._stop_event_consumer()

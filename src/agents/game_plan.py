@@ -9,9 +9,17 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.data.market import MarketDataFetcher
-from src.models.llm import LLMClient
+from src.data.news import NewsFetcher
+from src.models.llm import LLMClient, ToolCallingParams
 from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
+from src.tools.game_plan import (
+    FetchMarketContextTool,
+    FetchNewsHeadlinesTool,
+    FetchPremarketMoversTool,
+    FetchSectorPerformanceTool,
+)
+from src.tools.registry import ToolRegistry
 
 
 class KeyLevel(BaseModel):
@@ -47,35 +55,53 @@ class GamePlan(BaseModel):
 
 
 class GamePlanAgent:
-    """Agent for generating daily trading game plans."""
+    """Agentic game plan generator with tool-calling research phase."""
 
-    def __init__(self, llm_client: LLMClient, market_fetcher: MarketDataFetcher) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        market_fetcher: MarketDataFetcher,
+        news_fetcher: NewsFetcher,
+    ) -> None:
         """Initialize game plan agent.
 
         Args:
             llm_client: LLM client for analysis
             market_fetcher: Market data fetcher for futures
+            news_fetcher: News fetcher for headlines
         """
         self.llm = llm_client
         self.market_fetcher = market_fetcher
+        self._news_fetcher = news_fetcher
         self._prompts = PromptLoader("game_plan")
-        logger.info("Initialized GamePlanAgent")
+        self._tool_registry = self._build_tool_registry()
+        logger.info("Initialized GamePlanAgent (agentic)")
+
+    def _build_tool_registry(self) -> ToolRegistry:
+        """Build tool registry for research phase.
+
+        Returns:
+            ToolRegistry with game plan tools
+        """
+        registry = ToolRegistry()
+        registry.register(FetchMarketContextTool(self.market_fetcher))
+        registry.register(FetchPremarketMoversTool())
+        registry.register(FetchSectorPerformanceTool())
+        registry.register(FetchNewsHeadlinesTool(self._news_fetcher))
+        return registry
 
     async def generate(
         self,
         watchlist: list[str],
-        futures_symbols: list[str] | None = None,
-        sector_context: str | None = None,
-        earnings_context: str | None = None,
         timezone: tzinfo = UTC,
     ) -> GamePlan:
-        """Generate daily game plan.
+        """Generate daily game plan via two-phase agentic approach.
+
+        Phase 1: LLM calls tools to gather market context (futures, movers, sectors, news).
+        Phase 2: Structured extraction from gathered context into GamePlan.
 
         Args:
             watchlist: Stock watchlist
-            futures_symbols: Futures to track (defaults to ES=F, NQ=F)
-            sector_context: Optional sector rotation context
-            earnings_context: Optional earnings calendar context
             timezone: Timezone for date calculation (defaults to UTC)
 
         Returns:
@@ -85,166 +111,93 @@ class GamePlanAgent:
             watchlist = ["SPY", "QQQ", "AAPL"]
             logger.warning("Empty watchlist, using defaults")
 
-        futures_symbols = futures_symbols or ["ES=F", "NQ=F"]
+        current_date = datetime.now(timezone).date().isoformat()
 
-        futures_context = self._fetch_futures_context(futures_symbols)
-        premarket_movers = self._fetch_premarket_movers(watchlist)
-        overnight_summary = self._format_overnight_summary(futures_context, premarket_movers)
-
-        sector_section = f"\n## Sector Context\n{sector_context}\n" if sector_context else ""
-        earnings_section = f"\n## Earnings Context\n{earnings_context}\n" if earnings_context else ""
-
-        prompt = self._prompts.load(
-            "user",
-            date=datetime.now(timezone).date().isoformat(),
-            futures_context=self._format_futures(futures_context),
-            premarket_movers=premarket_movers,
-            watchlist_symbols=", ".join(watchlist),
-            sector_context_section=sector_section,
-            earnings_context_section=earnings_section,
-        )
+        # Phase 1: Agentic research — LLM decides which tools to call
         system = self._prompts.load("system")
+        user_prompt = self._prompts.load("user", date=current_date, watchlist_symbols=", ".join(watchlist))
+        tool_defs = self._tool_registry.get_definitions()
+
+        research_context = await self.llm.acomplete_with_tools(
+            ToolCallingParams(
+                prompt=user_prompt,
+                tools=tool_defs,
+                tool_executor=self._tool_executor,
+                system=system,
+                temperature=0.5,
+                max_tool_calls=8,
+                max_tokens=2048,
+            )
+        )
+
+        logger.info(f"Phase 1 complete: gathered research context ({len(research_context)} chars)")
+
+        # Phase 2: Structured extraction
+        extract_prompt = self._prompts.load(
+            "extract",
+            date=current_date,
+            watchlist_symbols=", ".join(watchlist),
+            research_context=research_context,
+        )
 
         try:
             llm_response = await self.llm.astructured(
-                prompt, GamePlanLLMResponse, system=system, temperature=0.7, max_tokens=512
+                extract_prompt, GamePlanLLMResponse, system=system, temperature=0.3, max_tokens=512
             )
-            priority_symbols = llm_response.priority_symbols
-            risk_stance = llm_response.risk_stance
-            sector_focus = llm_response.sector_focus
-            key_levels: dict[str, float] = {}
-            seen_symbols: set[str] = set()
-            for kl in llm_response.key_levels:
-                if kl.symbol in seen_symbols:
-                    logger.warning(
-                        "Duplicate key level symbol from LLM response: {symbol}. "
-                        "Keeping last provided price {price}.",
-                        symbol=kl.symbol,
-                        price=kl.price,
-                    )
-                seen_symbols.add(kl.symbol)
-                key_levels[kl.symbol] = kl.price
-            reasoning = llm_response.reasoning
-            confidence = llm_response.confidence
         except StructuredOutputError as e:
             logger.opt(exception=True).warning(f"Structured output failed, falling back: {e}")
-            text_response = await self.llm.acomplete(prompt, system=system, temperature=0.7)
-            priority_symbols = []
-            risk_stance = "NEUTRAL"
-            sector_focus = []
-            key_levels = {}
-            reasoning = text_response
-            confidence = 0.5
+            text_response = await self.llm.acomplete(extract_prompt, system=system, temperature=0.3)
+            return GamePlan(
+                date=datetime.now(timezone).date(),
+                priority_symbols=[],
+                risk_stance="NEUTRAL",
+                sector_focus=[],
+                key_levels={},
+                overnight_summary=research_context[:200],
+                reasoning=text_response,
+                confidence=0.5,
+                generated_at=datetime.now(UTC),
+            )
+
+        key_levels: dict[str, float] = {}
+        seen_symbols: set[str] = set()
+        for kl in llm_response.key_levels:
+            if kl.symbol in seen_symbols:
+                logger.warning(
+                    "Duplicate key level symbol: {symbol}. Keeping last price {price}.",
+                    symbol=kl.symbol,
+                    price=kl.price,
+                )
+            seen_symbols.add(kl.symbol)
+            key_levels[kl.symbol] = kl.price
 
         return GamePlan(
             date=datetime.now(timezone).date(),
-            priority_symbols=priority_symbols,
-            risk_stance=risk_stance,
-            sector_focus=sector_focus,
+            priority_symbols=llm_response.priority_symbols,
+            risk_stance=llm_response.risk_stance,
+            sector_focus=llm_response.sector_focus,
             key_levels=key_levels,
-            overnight_summary=overnight_summary,
-            reasoning=reasoning,
-            confidence=confidence,
+            overnight_summary=research_context[:300],
+            reasoning=llm_response.reasoning,
+            confidence=llm_response.confidence,
             generated_at=datetime.now(UTC),
         )
 
-    def _fetch_futures_context(self, symbols: list[str]) -> dict[str, float]:
-        """Fetch overnight futures % change.
+    async def _tool_executor(self, name: str, args: dict) -> str:
+        """Execute tool by name.
 
         Args:
-            symbols: Futures symbols
+            name: Tool name
+            args: Tool arguments
 
         Returns:
-            Dict mapping symbol to % change (empty if unavailable)
+            Tool result string
         """
         try:
-            return self.market_fetcher.fetch_overnight_futures(symbols)
+            return await self._tool_registry.aexecute(name, args)
         except Exception as e:
-            logger.opt(exception=True).warning(f"Unexpected error fetching futures: {e}")
-            return {}
-
-    def _fetch_premarket_movers(self, watchlist: list[str]) -> str:
-        """Get top 3 pre-market gainers/losers.
-
-        Args:
-            watchlist: Symbols to check
-
-        Returns:
-            Formatted string of movers
-        """
-        try:
-            import yfinance as yf
-
-            # Limit to first 15 symbols to prevent slow/flaky yfinance loops (#270)
-            limited_watchlist = watchlist[:15]
-            movers = []
-            for symbol in limited_watchlist:
-                try:
-                    ticker = yf.Ticker(symbol)
-                    data = ticker.history(period="2d")
-                    if data.empty or len(data) < 2:
-                        continue
-
-                    prev_close = data["Close"].iloc[-2]
-                    current = data["Close"].iloc[-1]
-                    pct_change = ((current - prev_close) / prev_close) * 100
-                    movers.append((symbol, pct_change))
-                except Exception as e:
-                    logger.debug(f"Failed to fetch pre-market for {symbol}: {e}")
-                    continue
-
-            if not movers:
-                return "No pre-market data available"
-
-            movers.sort(key=lambda x: abs(x[1]), reverse=True)
-            top_movers = movers[:3]
-
-            gainers = [f"{s} +{p:.1f}%" for s, p in top_movers if p > 0]
-            losers = [f"{s} {p:.1f}%" for s, p in top_movers if p < 0]
-
-            result = []
-            if gainers:
-                result.append(f"Gainers: {', '.join(gainers)}")
-            if losers:
-                result.append(f"Losers: {', '.join(losers)}")
-
-            return " | ".join(result) if result else "Flat pre-market"
-
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Pre-market movers failed: {e}")
-            return "Pre-market data unavailable"
-
-    def _format_futures(self, futures: dict[str, float]) -> str:
-        """Format futures data for prompt.
-
-        Args:
-            futures: Symbol to % change mapping
-
-        Returns:
-            Formatted string
-        """
-        if not futures:
-            return "Futures data unavailable"
-
-        lines = []
-        for symbol, change in futures.items():
-            direction = "up" if change > 0 else "down"
-            lines.append(f"- {symbol}: {change:+.2f}% ({direction})")
-
-        return "\n".join(lines)
-
-    def _format_overnight_summary(self, futures: dict[str, float], movers: str) -> str:
-        """Format overnight summary.
-
-        Args:
-            futures: Futures data
-            movers: Pre-market movers string
-
-        Returns:
-            Summary string
-        """
-        futures_str = self._format_futures(futures)
-        return f"Futures: {futures_str} | Pre-market: {movers}"
+            logger.opt(exception=True).error(f"Game plan tool failed: {name} - {e}")
+            return f"Error: {e!s}"
 
     def persist(self, plan: GamePlan, plan_dir: str) -> Path:
         """Persist game plan to JSON.
