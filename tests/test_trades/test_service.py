@@ -117,6 +117,33 @@ class TestHappyPath:
         assert result.executed is True
         mock_repo.create.assert_called_once()
         service_full._notification_service.notify.assert_called_once()
+        notification_msg = service_full._notification_service.notify.call_args[0][0]
+        assert notification_msg.title == "💰 BUY AAPL x10"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_sell_notification_title(self, broker: Mock, daemon_config: Mock) -> None:
+        broker.submit_order = Mock(return_value=_make_order_status(side="sell"))
+        notification_service = AsyncMock()
+        service = TradingService(
+            broker=broker,
+            daemon_config=daemon_config,
+            notification_service=notification_service,
+        )
+        sell_request = TradeRequest(
+            symbol="AAPL",
+            action=TradeAction.SELL,
+            quantity=10,
+            confidence=0.8,
+            rationale="Taking profits",
+        )
+
+        result = await service.execute(sell_request)
+
+        assert result.executed is True
+        notification_service.notify.assert_called_once()
+        notification_msg = notification_service.notify.call_args[0][0]
+        assert notification_msg.title == "🔴 SELL AAPL x10"
 
 
 class TestThresholdRejection:

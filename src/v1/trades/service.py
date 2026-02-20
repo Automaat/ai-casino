@@ -253,7 +253,13 @@ class TradingService:
             symbol = order_status.symbol
             price = order_status.filled_avg_price or 0.0
 
-            emoji = "💰" if side == "BUY" else "🔴"
+            if side == "BUY":
+                emoji = "💰"
+            elif side == "SELL":
+                emoji = "🔴"
+            else:
+                emoji = "⚪"
+                logger.warning(f"Unknown order side for notification: {order_status.side!r}")
             message = NotificationMessage(
                 title=f"{emoji} {side} {symbol} x{int(order_status.qty)}",
                 body=request.rationale,
