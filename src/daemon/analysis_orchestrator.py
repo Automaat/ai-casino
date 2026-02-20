@@ -17,8 +17,8 @@ from src.daemon.event_bus import DashboardEvent, EventType
 from src.daemon.events import Sentiment, SignalEvent, TriageResult, Urgency
 from src.daemon.notification_helper import DaemonNotificationHelper
 from src.daemon.state.managers.trading import AnalysisRecordInput
-from src.event_queue.service import MarketEventQueue
 from src.strategies.signal import Signal
+from src.v1.event_queue.service import MarketEventQueue
 from src.workflows.types import TradingWorkflowResult, WorkflowExtraContext
 
 _QUEUE_MIN_CONFIDENCE: Final = 0.5

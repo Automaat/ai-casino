@@ -56,7 +56,7 @@ from src.database.models.trading import (
     PositionRecordORM,
     TradeORM,
 )
-from src.event_queue.models import MarketEventQueueORM
+from src.v1.event_queue.models import MarketEventQueueORM
 
 __all__ = [
     "ActiveDiscoveryCandidateORM",

@@ -9,8 +9,8 @@ from pydantic import BaseModel
 
 from src.daemon.events import BaseEvent, TriageResult
 from src.database.engine import DatabaseEngine
-from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent, QueueEventObservability
-from src.event_queue.repository import MarketEventQueueRepository
+from src.v1.event_queue.models import MarketEventQueueORM, QueuedMarketEvent, QueueEventObservability
+from src.v1.event_queue.repository import MarketEventQueueRepository
 
 
 class QueueStats(BaseModel):

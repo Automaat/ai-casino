@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from src.daemon.api.models import QueueEventItem, QueueEventsResponse, QueueStatsResponse, QueueTypeBreakdown
 from src.daemon.api.routers.shared import get_components
-from src.event_queue.service import MarketEventQueue
+from src.v1.event_queue.service import MarketEventQueue
 
 _VALID_STATUSES = {"all", "pending", "consumed", "expired"}
 _MAX_LIMIT = 1000

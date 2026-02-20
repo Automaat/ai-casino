@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.di.container import AppContainer
-    from src.event_queue.consumer import EventQueueConsumer
+    from src.v1.event_queue.consumer import EventQueueConsumer
     from src.v1.notifications.service import NotificationService
     from src.v1.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.v1.watchers.news_trending_watcher import NewsTrendingWatcher
