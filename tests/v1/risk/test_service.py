@@ -111,15 +111,10 @@ def market_fetcher() -> MagicMock:
 
 
 @pytest.fixture
-def daemon_config() -> Mock:
-    return Mock()
-
-
-@pytest.fixture
 def service(
-    risk_agent: MagicMock, broker: MagicMock, market_fetcher: MagicMock, daemon_config: Mock
+    risk_agent: MagicMock, broker: MagicMock, market_fetcher: MagicMock
 ) -> RiskService:
-    return RiskService(risk_agent, broker, market_fetcher, daemon_config)
+    return RiskService(risk_agent, broker, market_fetcher)
 
 
 class TestAssessTrade:
@@ -171,11 +166,11 @@ class TestAssessTrade:
     @pytest.mark.asyncio
     @pytest.mark.unit
     async def test_market_data_failure(
-        self, risk_agent: MagicMock, broker: MagicMock, daemon_config: Mock
+        self, risk_agent: MagicMock, broker: MagicMock
     ) -> None:
         market_fetcher = MagicMock()
         market_fetcher.fetch_daily.side_effect = Exception("API error")
-        svc = RiskService(risk_agent, broker, market_fetcher, daemon_config)
+        svc = RiskService(risk_agent, broker, market_fetcher)
 
         decision = await svc.assess_trade("AAPL", Signal.BUY, 0.85)
 
