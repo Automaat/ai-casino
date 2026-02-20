@@ -6,6 +6,7 @@ with different configurations (meta, momentum, trump, full).
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +31,7 @@ from src.workflows.config import WorkflowComponents, WorkflowConfig
 if TYPE_CHECKING:
     from src.daemon.event_bus import EventBus
     from src.di.container import AppContainer
+    from src.v1.trades.service import TradingService
     from src.validators.risk import RiskValidator
 
 
@@ -80,6 +82,26 @@ def _create_risk_validator(daemon_config: DaemonConfig) -> RiskValidator:
     return RiskValidator(daemon_config.risk_validation)
 
 
+def _create_trading_service(params: WorkflowFactoryParams) -> TradingService | None:
+    """Create TradingService if broker available."""
+    if not params.broker:
+        return None
+
+    from src.v1.trades.service import TradingService
+
+    database_engine = None
+    if params.daemon_config.database.enable_persistence:
+        with contextlib.suppress(Exception):
+            database_engine = params.container.database_engine()
+
+    return TradingService(
+        broker=params.broker,
+        daemon_config=params.daemon_config,
+        database_engine=database_engine,
+        notification_service=params.notification_service,
+    )
+
+
 def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
     """Create TradingWorkflow with meta-agent enabled."""
     portfolio_var_config = _extract_portfolio_var_config(params.daemon_config)
@@ -119,6 +141,7 @@ def create_workflow_meta(params: WorkflowFactoryParams) -> TradingWorkflow:
         analysis_orchestrator_config=analysis_orchestrator_config,
         web_search_fetcher=params.web_search_fetcher,
         event_bus=params.event_bus,
+        trading_service=_create_trading_service(params),
     )
 
     return TradingWorkflow(config, components)
@@ -163,6 +186,7 @@ def create_workflow_momentum(params: WorkflowFactoryParams) -> TradingWorkflow:
         analysis_orchestrator_config=analysis_orchestrator_config,
         web_search_fetcher=params.web_search_fetcher,
         event_bus=params.event_bus,
+        trading_service=_create_trading_service(params),
     )
 
     return TradingWorkflow(config, components)
@@ -207,6 +231,7 @@ def create_workflow_trump(params: WorkflowFactoryParams) -> TradingWorkflow:
         analysis_orchestrator_config=analysis_orchestrator_config,
         web_search_fetcher=params.web_search_fetcher,
         event_bus=params.event_bus,
+        trading_service=_create_trading_service(params),
     )
 
     return TradingWorkflow(config, components)

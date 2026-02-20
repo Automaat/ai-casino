@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from src.database.repositories.execution_metric import ExecutionMetricRepository
     from src.database.repositories.snapshot import PortfolioSnapshotRepository
     from src.v1.notifications.service import NotificationService
+    from src.v1.trades.service import TradingService
 
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.trader import TradingDecision
@@ -103,22 +104,24 @@ async def _track_execution_metric(
 async def execute_trade(
     input_data: TradeExecutionInput,
     broker: AlpacaBroker | None,
+    trading_service: TradingService | None = None,
     market_fetcher: MarketDataFetcher | None = None,
     execution_metric_repository: ExecutionMetricRepository | None = None,
 ) -> TradeExecutionOutput:
-    """Execute trade via broker (async, thread-offloaded).
+    """Execute trade via TradingService (preferred) or direct broker fallback.
 
     Args:
         input_data: Trade execution input with decision and risk assessment
         broker: Optional Alpaca broker for trade execution
+        trading_service: Optional TradingService for unified execution
         market_fetcher: Optional market data fetcher for current price
         execution_metric_repository: Optional repository for metrics persistence
 
     Returns:
         TradeExecutionOutput with order status
     """
-    if not broker:
-        msg = "Cannot execute trade without broker"
+    if not broker and not trading_service:
+        msg = "Cannot execute trade without broker or trading_service"
         raise ValueError(msg)
 
     action = input_data.final_decision.action
@@ -136,14 +139,101 @@ async def execute_trade(
     if not input_data.risk_assessment.validation.approved:
         return TradeExecutionOutput(order_status=None, warnings=warnings)
 
-    # Capture requested price BEFORE order submission (for slippage tracking)
-    requested_price = await _capture_requested_price(
-        input_data.symbol,
-        market_fetcher,
-        execution_metric_repository,
+    # Use TradingService if available
+    if trading_service:
+        return await _execute_via_service(
+            input_data, trading_service, market_fetcher, execution_metric_repository
+        )
+
+    # Fallback: direct broker submission
+    return await _execute_via_broker(
+        input_data, broker, warnings, market_fetcher, execution_metric_repository
     )
 
-    # Capture broker for use in nested function (type narrowing)
+
+async def _execute_via_service(
+    input_data: TradeExecutionInput,
+    trading_service: TradingService,
+    market_fetcher: MarketDataFetcher | None,
+    execution_metric_repository: ExecutionMetricRepository | None,
+) -> TradeExecutionOutput:
+    """Execute trade through TradingService."""
+    from src.v1.trades.models import MIN_RATIONALE_LENGTH, TradeAction, TradeRequest
+
+    stop_loss_price = (
+        input_data.risk_assessment.stop_loss.stop_loss_price if input_data.risk_assessment.stop_loss else None
+    )
+    qty = (
+        int(input_data.risk_assessment.position_sizing.recommended_shares)
+        if input_data.risk_assessment.position_sizing
+        else 0
+    )
+    rationale = (
+        " ".join(input_data.final_decision.reasoning) if input_data.final_decision.reasoning else "workflow"
+    )
+
+    # Capture requested price BEFORE order submission (for slippage tracking)
+    requested_price = await _capture_requested_price(
+        input_data.symbol, market_fetcher, execution_metric_repository
+    )
+
+    request = TradeRequest(
+        symbol=input_data.symbol,
+        action=TradeAction(input_data.final_decision.action.value.upper()),
+        quantity=max(qty, 1),
+        confidence=input_data.final_decision.confidence,
+        rationale=rationale if len(rationale) >= MIN_RATIONALE_LENGTH else f"Workflow trade: {rationale}",
+        stop_loss_price=stop_loss_price,
+        strategy_name="workflow",
+    )
+
+    result = await trading_service.execute(request)
+
+    # Convert TradeResult back to OrderStatus for workflow compatibility
+    order: OrderStatus | None = None
+    warnings: list[str] = []
+
+    if result.executed and result.order_id:
+        order = OrderStatus(
+            order_id=result.order_id,
+            symbol=result.symbol,
+            qty=float(result.quantity),
+            filled_qty=float(result.quantity),
+            side=result.action.value.lower(),
+            status=result.status,
+            submitted_at=result.submitted_at or datetime.now(UTC),
+            filled_at=result.submitted_at,
+            filled_avg_price=result.filled_avg_price,
+        )
+
+        # Track slippage metrics
+        if execution_metric_repository and requested_price:
+            await _track_execution_metric(order, requested_price, execution_metric_repository)
+    elif result.rejection:
+        warnings.append(result.rejection.message)
+
+    return TradeExecutionOutput(order_status=order, warnings=warnings)
+
+
+async def _execute_via_broker(
+    input_data: TradeExecutionInput,
+    broker: AlpacaBroker | None,
+    warnings: list[str],
+    market_fetcher: MarketDataFetcher | None,
+    execution_metric_repository: ExecutionMetricRepository | None,
+) -> TradeExecutionOutput:
+    """Execute trade directly via broker (legacy path)."""
+    if not broker:
+        msg = "Cannot execute trade without broker"
+        raise ValueError(msg)
+
+    action = input_data.final_decision.action
+
+    # Capture requested price BEFORE order submission (for slippage tracking)
+    requested_price = await _capture_requested_price(
+        input_data.symbol, market_fetcher, execution_metric_repository
+    )
+
     broker_client = broker
 
     def _sync_submit_order() -> OrderStatus | None:
@@ -186,7 +276,7 @@ async def execute_trade(
 
     order = await asyncio.to_thread(_sync_submit_order)
 
-    # Track execution metrics in postgres if repository available and order filled
+    # Track execution metrics
     if execution_metric_repository and order and requested_price:
         await _track_execution_metric(order, requested_price, execution_metric_repository)
 

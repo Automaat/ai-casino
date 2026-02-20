@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from src.models.sentiment import FinBERTSentiment
     from src.optimization.param_store import OptimizedParamStore
     from src.v1.notifications.service import NotificationService
+    from src.v1.trades.service import TradingService
     from src.validators.risk import RiskValidator
 
 
@@ -78,6 +79,7 @@ class WorkflowComponents:
     analysis_orchestrator_config: AnalysisOrchestratorConfig | None = None
     web_search_fetcher: object | None = None  # WebSearchFetcher (avoid circular import)
     event_bus: EventBus | None = None
+    trading_service: TradingService | None = None
 
     def __repr__(self) -> str:
         """String representation."""
@@ -97,6 +99,7 @@ class WorkflowComponents:
                 self.risk_validator is not None,
                 self.analysis_orchestrator_config is not None,
                 self.event_bus is not None,
+                self.trading_service is not None,
             ]
         )
         return f"WorkflowComponents(required=6, optional={optional_count})"

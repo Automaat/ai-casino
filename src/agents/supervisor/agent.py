@@ -764,6 +764,7 @@ class SupervisorWorkflow:
         )
         self.event_bus = components.event_bus
         self.web_search_fetcher = components.web_search_fetcher
+        self.trading_service = components.trading_service
 
     def _init_config(self, components: WorkflowComponents, config: WorkflowConfig) -> None:
         """Initialize configuration attributes."""

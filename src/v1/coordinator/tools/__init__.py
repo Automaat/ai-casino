@@ -7,7 +7,6 @@ from loguru import logger
 if TYPE_CHECKING:
     from src.agents.critic import CriticAgent
     from src.daemon.config import DaemonConfig
-    from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.database.engine import DatabaseEngine
     from src.di.container import AppContainer
     from src.tools.registry import ToolRegistry
@@ -51,18 +50,14 @@ def build_coordinator_registry(
     memory: CoordinatorMemory | None = None,
     coordinator: TradingCoordinator | None = None,
     critic_agent: CriticAgent | None = None,
-    adaptive_threshold_manager: AdaptiveThresholdManager | None = None,
 ) -> ToolRegistry:
     """Create coordinator tool registry with all tools.
-
-    Includes coordinator-specific tools as well as reused tools from src/tools.
 
     Args:
         container: DI container for dependency resolution
         memory: Optional shared memory (creates new if None)
         coordinator: Optional coordinator for reflection tool
         critic_agent: Optional critic agent to reuse (avoids duplicate instances)
-        adaptive_threshold_manager: Optional adaptive threshold manager for execute tool
 
     Returns:
         ToolRegistry with all coordinator tools registered
@@ -79,11 +74,12 @@ def build_coordinator_registry(
     from src.v1.coordinator.memory import CoordinatorMemory
     from src.v1.coordinator.tools.analyze import AnalyzeSymbolTool
     from src.v1.coordinator.tools.decision_history import QueryPastDecisionsTool
-    from src.v1.coordinator.tools.execute_trade import ExecuteTradeServices, ExecuteTradeTool
+    from src.v1.coordinator.tools.execute_trade import ExecuteTradeTool
     from src.v1.coordinator.tools.history import AnalysisHistoryTool
     from src.v1.coordinator.tools.market_overview import MarketOverviewTool
     from src.v1.coordinator.tools.observation import SaveObservationTool
     from src.v1.coordinator.tools.portfolio import PortfolioStatusTool
+    from src.v1.trades.service import TradingService
 
     registry = ToolRegistry()
     registry.register(GetMarketDataTool(container=container))
@@ -96,18 +92,16 @@ def build_coordinator_registry(
     registry.register(MarketOverviewTool(container.market_fetcher()))
     registry.register(AnalyzeSymbolTool(container, coordinator))
     registry.register(PortfolioStatusTool(broker))
-    registry.register(
-        ExecuteTradeTool(
-            broker,
-            daemon_config,
-            ExecuteTradeServices(
-                confirmation_handler=_create_confirmation_handler(daemon_config),
-                adaptive_threshold_manager=adaptive_threshold_manager,
-                database_engine=_resolve_database_engine(daemon_config, container),
-                notification_service=notification_service,
-            ),
-        )
+
+    trading_service = TradingService(
+        broker=broker,
+        daemon_config=daemon_config,
+        database_engine=_resolve_database_engine(daemon_config, container),
+        notification_service=notification_service,
+        confirmation_handler=_create_confirmation_handler(daemon_config),
     )
+    registry.register(ExecuteTradeTool(trading_service, daemon_config))
+
     registry.register(NotificationTool(notification_service))
     registry.register(WebSearchTool(container.websearch_fetcher()))
     registry.register(GetNewsTool(container=container))
