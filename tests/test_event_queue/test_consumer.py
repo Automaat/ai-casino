@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.coordinator.models import CoordinatorConfig, CoordinatorCycleResult
+from src.v1.coordinator.models import CoordinatorConfig, CoordinatorCycleResult
 from src.v1.event_queue.consumer import EventQueueConsumer, _group_by_symbol_overlap
 from src.v1.event_queue.models import QueuedMarketEvent
 

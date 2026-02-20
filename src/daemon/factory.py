@@ -27,7 +27,6 @@ from src.workflows import TradingWorkflow
 if TYPE_CHECKING:
     from src.agents.game_plan import GamePlanAgent
     from src.agents.supervisor.agent import TradingSupervisor
-    from src.coordinator.agent import TradingCoordinator
     from src.daemon.context_builder import DaemonContextBuilder
     from src.daemon.event_bus import EventBus
     from src.daemon.optimization import DaemonOptimizer
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from src.daemon.rebalancing import DaemonRebalancer
     from src.daemon.tearsheet import DaemonTearsheetGenerator
     from src.di.container import AppContainer
+    from src.v1.coordinator.agent import TradingCoordinator
     from src.v1.event_queue.consumer import EventQueueConsumer
     from src.v1.notifications.service import NotificationService
     from src.v1.watchers.economic_calendar_watcher import EconomicCalendarWatcher

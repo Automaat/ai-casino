@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.coordinator.metrics import CoordinatorCycleMetrics
 from src.database.repositories.coordinator_metrics import CoordinatorMetricsRepository
+from src.v1.coordinator.metrics import CoordinatorCycleMetrics
 
 
 @pytest.mark.asyncio

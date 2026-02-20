@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.coordinator.decision_models import DecisionQueryResult
-from src.coordinator.memory import CoordinatorMemory, DecisionQueryParams
 from src.daemon.state.models import SignalOutcome
+from src.v1.coordinator.decision_models import DecisionQueryResult
+from src.v1.coordinator.memory import CoordinatorMemory, DecisionQueryParams
 
 
 @pytest.fixture

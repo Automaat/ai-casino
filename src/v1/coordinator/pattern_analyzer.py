@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, Final
 
 from loguru import logger
 
-from src.coordinator.pattern_models import PatternInsight, PatternType
+from src.v1.coordinator.pattern_models import PatternInsight, PatternType
 
 if TYPE_CHECKING:
-    from src.coordinator.memory import CoordinatorMemory
     from src.database.engine import DatabaseEngine
+    from src.v1.coordinator.memory import CoordinatorMemory
 
 # Pattern detection thresholds
 HIGH_WIN_RATE_THRESHOLD: Final[float] = 0.6

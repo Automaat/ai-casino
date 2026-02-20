@@ -8,8 +8,6 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 # Re-export all config classes (backward compatibility)
 from src.circuit_breaker.models import CircuitBreakerConfig
-from src.coordinator import CoordinatorConfig
-from src.coordinator.models import AdaptiveThresholdConfig, PatternDetectionConfig, SweepPassConfig
 from src.daemon.config.analysis import (
     AnalysisOrchestratorConfig,
     AnomalyWatcherConfig,
@@ -71,6 +69,8 @@ from src.daemon.config.trading import (
     StateConfig,
 )
 from src.daemon.config.workflow import WorkflowConfigDaemon
+from src.v1.coordinator import CoordinatorConfig
+from src.v1.coordinator.models import AdaptiveThresholdConfig, PatternDetectionConfig, SweepPassConfig
 
 __all__ = [
     "AnalysisOrchestratorConfig",

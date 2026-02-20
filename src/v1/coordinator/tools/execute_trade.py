@@ -13,11 +13,11 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
-    from src.coordinator.confirmation import TradeConfirmationHandler
     from src.daemon.config import DaemonConfig
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker, OrderStatus
     from src.database.engine import DatabaseEngine
+    from src.v1.coordinator.confirmation import TradeConfirmationHandler
     from src.v1.notifications.service import NotificationService
 
 MIN_RATIONALE_LENGTH: Final[int] = 10

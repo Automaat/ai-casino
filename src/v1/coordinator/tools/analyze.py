@@ -13,8 +13,8 @@ from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolPa
 from src.workflows.types import WorkflowExtraContext
 
 if TYPE_CHECKING:
-    from src.coordinator.agent import TradingCoordinator
     from src.di.container import AppContainer
+    from src.v1.coordinator.agent import TradingCoordinator
     from src.workflows.types import TradingWorkflowResult
 
 

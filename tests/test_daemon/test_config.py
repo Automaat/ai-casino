@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from src.coordinator.models import CoordinatorConfig
 from src.daemon.config import (
     DaemonConfig,
     EarningsCalendarConfig,
@@ -21,6 +20,7 @@ from src.daemon.config import (
     StateConfig,
     TradingMode,
 )
+from src.v1.coordinator.models import CoordinatorConfig
 
 
 class TestDaemonConfig:

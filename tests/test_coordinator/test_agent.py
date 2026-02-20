@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.coordinator.agent import TradingCoordinator
-from src.coordinator.memory import ObservationRecord
-from src.coordinator.models import CoordinatorConfig, CoordinatorCycleResult
+from src.v1.coordinator.agent import TradingCoordinator
+from src.v1.coordinator.memory import ObservationRecord
+from src.v1.coordinator.models import CoordinatorConfig, CoordinatorCycleResult
 
 
 @pytest.fixture
@@ -439,7 +439,7 @@ async def test_get_recent_outcomes_summary_empty(coordinator, mock_memory):
 @pytest.mark.asyncio
 async def test_get_recent_outcomes_summary_with_decisions(coordinator, mock_memory):
     """Test outcomes summary with decisions."""
-    from src.coordinator.decision_models import DecisionQueryResult
+    from src.v1.coordinator.decision_models import DecisionQueryResult
 
     mock_memory.query_decisions.return_value = [
         DecisionQueryResult(

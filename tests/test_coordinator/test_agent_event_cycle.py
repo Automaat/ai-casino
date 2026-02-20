@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.coordinator.agent import TradingCoordinator
-from src.coordinator.models import CoordinatorConfig
 from src.strategies.session import TradingSession
+from src.v1.coordinator.agent import TradingCoordinator
+from src.v1.coordinator.models import CoordinatorConfig
 from src.v1.event_queue.models import QueuedMarketEvent
 
 

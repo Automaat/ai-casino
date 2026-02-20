@@ -349,8 +349,8 @@ def create_coordinator_tool_registry(
     Returns:
         ToolRegistry with all coordinator tools registered
     """
-    from src.coordinator.memory import CoordinatorMemory
-    from src.coordinator.tools import build_coordinator_registry
+    from src.v1.coordinator.memory import CoordinatorMemory
+    from src.v1.coordinator.tools import build_coordinator_registry
 
     # Create memory with daemon_state if provided
     memory = None

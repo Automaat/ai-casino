@@ -7,9 +7,9 @@ from decimal import Decimal
 from loguru import logger
 from sqlalchemy import select
 
-from src.coordinator.metrics import CoordinatorCycleMetrics
 from src.database.models import CoordinatorMetricsORM
 from src.database.repositories.base import BaseRepository
+from src.v1.coordinator.metrics import CoordinatorCycleMetrics
 
 
 class CoordinatorMetricsRepository(BaseRepository[CoordinatorCycleMetrics]):
