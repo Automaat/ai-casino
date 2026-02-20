@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from src.database.repositories.risk_audit import RiskAuditRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
-    from src.v1.notifications.channels.telegram import TelegramChannel
     from src.strategies.regime import MarketRegimeDetector
+    from src.v1.notifications.channels.telegram import TelegramChannel
 
 
 def create_critic_agent(llm_client: LLMClient) -> CriticAgent:

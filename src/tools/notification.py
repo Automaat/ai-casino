@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 from loguru import logger
 from pydantic import ValidationError
 
-from src.v1.notifications.models import NotificationMessage, NotificationSeverity
-from src.v1.notifications.service import NotificationService
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
+from src.v1.notifications.models import NotificationMessage, NotificationSeverity
+from src.v1.notifications.service import NotificationService
 
 # Validation constants
 MAX_TITLE_LENGTH = 100
