@@ -21,15 +21,15 @@ Problems:
 
 ## Decisions
 
-### 1. Extract `src/watchers/` package
+### 1. Extract `src/v1/watchers/` package
 
-**Decision:** Move all 8 watcher files from `src/daemon/watchers/` to `src/watchers/`. Delete `src/daemon/watchers/` and `src/daemon/event_watcher.py`.
+**Decision:** Move all 8 watcher files from `src/daemon/watchers/` to `src/v1/watchers/`. Delete `src/daemon/watchers/` and `src/daemon/event_watcher.py`.
 
-**Rationale:** Watchers are not daemon-internal concerns — they are reusable components that poll external sources. A dedicated package gives them a stable import path and makes the dependency direction explicit (`watchers` → `daemon/events`, `watchers` → `event_queue`; `daemon` → `watchers`).
+**Rationale:** Watchers are not daemon-internal concerns — they are reusable components that poll external sources. A dedicated package gives them a stable import path and makes the dependency direction explicit (`v1/watchers` → `daemon/events`, `v1/watchers` → `event_queue`; `daemon` → `v1/watchers`).
 
 ### 2. Replace `EventWatcher` inheritance with `EventTriagePipeline` composition
 
-**Decision:** Introduce `Watcher` ABC + `PeriodicWatcher` base in `src/watchers/base.py`. Extract triage + enqueue logic into `EventTriagePipeline` service in `src/watchers/pipeline.py`. Inject pipeline via constructor.
+**Decision:** Introduce `Watcher` ABC + `PeriodicWatcher` base in `src/v1/watchers/base.py`. Extract triage + enqueue logic into `EventTriagePipeline` service in `src/v1/watchers/pipeline.py`. Inject pipeline via constructor.
 
 **Alternatives considered:**
 - Keep `EventWatcher` base, move it to `src/watchers/` — rejected: mixing loop + triage in one class remains an SRP violation
@@ -51,7 +51,7 @@ Problems:
 
 ## Consequences
 
-- All watcher imports change from `src.daemon.watchers.*` to `src.watchers.*`
+- All watcher imports change from `src.daemon.watchers.*` to `src.v1.watchers.*`
 - Event-driven watchers (5): inject `EventTriagePipeline` via constructor; IMMEDIATE events now enqueue instead of triggering `TradingWorkflow` directly
 - Standalone watchers (3): remove own `run()` loop; inherit from `PeriodicWatcher`; rename `_fetch_and_assess[_all]()` → `_tick()`
 - `EventQueueConsumer` must be running for IMMEDIATE events to be processed (it is, in the production daemon)
