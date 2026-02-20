@@ -31,8 +31,7 @@ class FetchMarketContextTool(BaseTool):
             function=ToolFunction(
                 name=self.name,
                 description=(
-                    "Fetch overnight futures performance (ES=F, NQ=F, etc.) "
-                    "to gauge market direction."
+                    "Fetch overnight futures performance (ES=F, NQ=F, etc.) to gauge market direction."
                 ),
                 parameters=ToolParametersSchema(
                     properties={
