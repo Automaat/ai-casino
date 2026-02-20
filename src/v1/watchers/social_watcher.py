@@ -8,7 +8,7 @@ Detects two types of events:
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import Final, cast
 
 from loguru import logger
 
@@ -17,8 +17,11 @@ from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher, RedditPost, TrendingTicker
 from src.database.connection import get_session
 from src.database.repositories.reddit import RedditPostRepository, RedditTickerMentionRepository
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
+
+_MAX_MENTION_TRACKING: Final[int] = 300
+_VIRAL_POST_MAX_AGE_SECONDS: Final[int] = 3600
 
 
 @dataclass
@@ -89,7 +92,8 @@ class SocialWatcher(PeriodicWatcher):
             symbol: Stock ticker symbol
             count: Current mention count
         """
-        if symbol not in self._previous_mention_counts and len(self._previous_mention_counts) >= 300:
+        at_capacity = len(self._previous_mention_counts) >= _MAX_MENTION_TRACKING
+        if symbol not in self._previous_mention_counts and at_capacity:
             oldest = self._mention_count_order[0]
             self._previous_mention_counts.pop(oldest, None)
             logger.debug(f"Evicted {oldest} from mention count tracking (LRU limit reached)")
@@ -138,7 +142,7 @@ class SocialWatcher(PeriodicWatcher):
     def _check_viral_post(self, post: RedditPost, symbol: str, now: datetime) -> SocialEvent | None:
         """Check if single post is viral and return event if detected."""
         age_seconds = (now - post.created_utc).total_seconds()
-        if age_seconds > 3600:
+        if age_seconds > _VIRAL_POST_MAX_AGE_SECONDS:
             return None
         if post.score < self.viral_score_threshold:
             return None
@@ -164,58 +168,57 @@ class SocialWatcher(PeriodicWatcher):
             viral_post=post,
         )
 
-    async def _fetch_events(self) -> list[BaseEvent]:
-        """Fetch social events from Reddit (volume spikes + viral posts).
+    async def _fetch_events_from_db(self, now: datetime) -> list[BaseEvent] | None:
+        """Fetch social events from DB.
 
-        Tries DB-based approach first, falls back to API-based.
+        Returns:
+            List of events if DB has data, None if no data found
+        """
+        async with get_session() as session:
+            post_repo = RedditPostRepository(session)
+            mention_repo = RedditTickerMentionRepository(session)
+
+            poll_window = self.poll_interval // 60
+            viral_window = 60
+
+            mention_counts = await mention_repo.get_mentions_in_window(window_minutes=poll_window)
+            recent_posts = await post_repo.get_posts_in_window(
+                window_minutes=viral_window, subreddits=self.subreddits
+            )
+            post_symbols_map = await mention_repo.get_post_symbols_map(window_minutes=viral_window)
+
+            if not (mention_counts or recent_posts):
+                return None
+
+            events: list[BaseEvent] = []
+            for symbol, current_count in mention_counts:
+                volume_event = self._check_volume_spike(symbol, current_count, now)
+                if volume_event:
+                    events.append(cast("BaseEvent", volume_event))
+                self._update_mention_baseline(symbol, current_count)
+
+            for post in recent_posts:
+                symbols = post_symbols_map.get(post.id, [])
+                if not symbols:
+                    continue
+                for symbol in symbols:
+                    viral_event = self._check_viral_post(post, symbol, now)
+                    if viral_event:
+                        events.append(cast("BaseEvent", viral_event))
+                        break
+
+            logger.debug(
+                f"Fetched {len(events)} events from DB "
+                f"(posts={len(recent_posts)}, viral_window={viral_window}min)"
+            )
+            return events
+
+    async def _fetch_events_from_api(self, now: datetime) -> list[BaseEvent]:
+        """Fetch social events from Reddit API (fallback).
 
         Returns:
             List of SocialEvent objects for detected signals
         """
-        events: list[BaseEvent] = []
-        now = datetime.now(UTC)
-
-        try:
-            async with get_session() as session:
-                post_repo = RedditPostRepository(session)
-                mention_repo = RedditTickerMentionRepository(session)
-
-                poll_window = self.poll_interval // 60
-                viral_window = 60
-
-                mention_counts = await mention_repo.get_mentions_in_window(window_minutes=poll_window)
-                recent_posts = await post_repo.get_posts_in_window(
-                    window_minutes=viral_window, subreddits=self.subreddits
-                )
-                post_symbols_map = await mention_repo.get_post_symbols_map(window_minutes=viral_window)
-
-                if mention_counts or recent_posts:
-                    for symbol, current_count in mention_counts:
-                        volume_event = self._check_volume_spike(symbol, current_count, now)
-                        if volume_event:
-                            events.append(cast("BaseEvent", volume_event))
-                        self._update_mention_baseline(symbol, current_count)
-
-                    for post in recent_posts:
-                        symbols = post_symbols_map.get(post.id, [])
-                        if not symbols:
-                            continue
-
-                        for symbol in symbols:
-                            viral_event = self._check_viral_post(post, symbol, now)
-                            if viral_event:
-                                events.append(cast("BaseEvent", viral_event))
-                                break
-
-                    logger.debug(
-                        f"Fetched {len(events)} events from DB "
-                        f"(posts={len(recent_posts)}, viral_window={viral_window}min)"
-                    )
-                    return events
-
-        except Exception as e:
-            logger.debug(f"DB fetch failed ({e}), falling back to API-based approach")
-
         if self._reddit_fetcher is None:
             self._reddit_fetcher = RedditFetcher(historical_cache=self._historical_cache)
 
@@ -223,6 +226,7 @@ class SocialWatcher(PeriodicWatcher):
             subreddits=self.subreddits, limit=100, min_mentions=1
         )
 
+        events: list[BaseEvent] = []
         for ticker in trending:
             symbol = ticker.symbol
             current_count = ticker.mention_count
@@ -238,6 +242,25 @@ class SocialWatcher(PeriodicWatcher):
 
         logger.debug(f"Fetched {len(events)} events from API (trending={len(trending)})")
         return events
+
+    async def _fetch_events(self) -> list[BaseEvent]:
+        """Fetch social events from Reddit (volume spikes + viral posts).
+
+        Tries DB-based approach first, falls back to API-based.
+
+        Returns:
+            List of SocialEvent objects for detected signals
+        """
+        now = datetime.now(UTC)
+
+        try:
+            events = await self._fetch_events_from_db(now)
+            if events is not None:
+                return events
+        except Exception as e:
+            logger.debug(f"DB fetch failed ({e}), falling back to API-based approach")
+
+        return await self._fetch_events_from_api(now)
 
     def __repr__(self) -> str:
         """Return string representation."""

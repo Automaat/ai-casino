@@ -9,19 +9,19 @@ from loguru import logger
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.data.base_news_fetcher import BaseNewsFetcher
-from src.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
-from src.watchers.news_trending_watcher import NewsTrendingWatcher, NewsTrendingWatcherConfig
-from src.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
-from src.watchers.pipeline import EventTriagePipeline
-from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
-from src.watchers.trump_watcher import TrumpWatcher, TrumpWatcherConfig
+from src.v1.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
+from src.v1.watchers.news_trending_watcher import NewsTrendingWatcher, NewsTrendingWatcherConfig
+from src.v1.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
+from src.v1.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
+from src.v1.watchers.trump_watcher import TrumpWatcher, TrumpWatcherConfig
 
 if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState
     from src.di.container import AppContainer
-    from src.watchers.economic_calendar_watcher import EconomicCalendarWatcher
-    from src.watchers.options_flow_watcher import OptionsFlowWatcher
-    from src.watchers.social_sentiment_watcher import SocialSentimentWatcher
+    from src.v1.watchers.economic_calendar_watcher import EconomicCalendarWatcher
+    from src.v1.watchers.options_flow_watcher import OptionsFlowWatcher
+    from src.v1.watchers.social_sentiment_watcher import SocialSentimentWatcher
 
 
 def _build_pipeline(
@@ -269,7 +269,7 @@ def create_economic_calendar_watcher(
     """
     from src.data.economic_calendar import EconomicCalendarFetcher
     from src.di.config import resolve_config_or_env
-    from src.watchers.economic_calendar_watcher import (
+    from src.v1.watchers.economic_calendar_watcher import (
         EconomicCalendarWatcher,
         EconomicCalendarWatcherConfig,
     )
@@ -350,7 +350,7 @@ def create_options_flow_watcher(
         OptionsFlowWatcher instance if enabled, None otherwise
     """
     from src.data.options_flow import OptionsFlowFetcher
-    from src.watchers.options_flow_watcher import (
+    from src.v1.watchers.options_flow_watcher import (
         OptionsFlowWatcher,
         OptionsFlowWatcherConfig,
     )
@@ -384,7 +384,7 @@ def create_social_sentiment_watcher(
         SocialSentimentWatcher instance if enabled, None otherwise
     """
     from src.data.apewisdom import ApeWisdomFetcher
-    from src.watchers.social_sentiment_watcher import (
+    from src.v1.watchers.social_sentiment_watcher import (
         SocialSentimentWatcher,
         SocialSentimentWatcherConfig,
     )

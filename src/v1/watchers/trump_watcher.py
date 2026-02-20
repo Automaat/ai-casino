@@ -14,8 +14,8 @@ from loguru import logger
 from src.cache.historical import HistoricalCache
 from src.daemon.events import BaseEvent, TrumpEvent
 from src.data.truth_social import TruthSocialFetcher
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 
 @dataclass

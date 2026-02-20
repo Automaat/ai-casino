@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from typing import Final
 
 from loguru import logger
 
@@ -13,7 +14,11 @@ from src.daemon.events import (
     SocialSentimentSignal,
 )
 from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
-from src.watchers.base import PeriodicWatcher
+from src.v1.watchers.base import PeriodicWatcher
+
+_BULLISH_SENTIMENT_THRESHOLD: Final[float] = 0.6
+_BEARISH_SENTIMENT_THRESHOLD: Final[float] = 0.4
+_MIN_SIGNIFICANCE_LOG: Final[float] = 0.3
 
 
 @dataclass
@@ -74,9 +79,9 @@ class SocialSentimentWatcher(PeriodicWatcher):
         """
         if reddit_sentiment is None:
             return SocialSentimentDirection.NEUTRAL
-        if reddit_sentiment > 0.6:
+        if reddit_sentiment > _BULLISH_SENTIMENT_THRESHOLD:
             return SocialSentimentDirection.BULLISH
-        if reddit_sentiment < 0.4:
+        if reddit_sentiment < _BEARISH_SENTIMENT_THRESHOLD:
             return SocialSentimentDirection.BEARISH
         return SocialSentimentDirection.NEUTRAL
 
@@ -351,7 +356,7 @@ class SocialSentimentWatcher(PeriodicWatcher):
 
         await asyncio.gather(*[_limited(s) for s in symbols])
 
-        active = [s for s in self._signals.values() if s.significance_score >= 0.3]
+        active = [s for s in self._signals.values() if s.significance_score >= _MIN_SIGNIFICANCE_LOG]
         logger.info(f"Social sentiment assessed: {len(symbols)} symbols, {len(active)} with notable activity")
 
     def __repr__(self) -> str:

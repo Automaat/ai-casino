@@ -8,14 +8,17 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import Final, cast
 
 from loguru import logger
 
 from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
+
+_MAX_VOLUME_BASELINES: Final[int] = 300
+_MIN_DAILY_BARS: Final[int] = 2
 
 
 @dataclass
@@ -116,7 +119,7 @@ class AnomalyWatcher(PeriodicWatcher):
 
         self._volume_baselines[symbol] = avg_volume
 
-        if len(self._volume_baselines) > 300:
+        if len(self._volume_baselines) > _MAX_VOLUME_BASELINES:
             oldest = next(iter(self._volume_baselines))
             del self._volume_baselines[oldest]
             logger.debug(f"LRU eviction: removed {oldest} baseline")
@@ -197,7 +200,7 @@ class AnomalyWatcher(PeriodicWatcher):
         if symbol not in self._previous_close_cache:
             try:
                 daily = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol, 2)
-                if len(daily.data) >= 2:
+                if len(daily.data) >= _MIN_DAILY_BARS:
                     prev_close = float(daily.data["Close"].iloc[-2])
                     self._previous_close_cache[symbol] = prev_close
                     logger.debug(f"Cached prev close for {symbol}: ${prev_close:.2f}")

@@ -6,9 +6,9 @@ import pytest
 
 from src.daemon.config import DaemonConfig, NewsWatcherConfig, SocialWatcherConfig
 from src.di.providers.watchers import create_news_watcher, create_social_watcher
-from src.watchers.news_watcher import NewsWatcher
-from src.watchers.pipeline import EventTriagePipeline
-from src.watchers.social_watcher import SocialWatcher
+from src.v1.watchers.news_watcher import NewsWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.social_watcher import SocialWatcher
 
 
 @pytest.fixture

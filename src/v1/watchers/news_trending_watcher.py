@@ -14,8 +14,8 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.daemon.events import BaseEvent, NewsTrendingEvent
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 if TYPE_CHECKING:
     from src.data.websearch import WebSearchFetcher
@@ -132,14 +132,12 @@ class NewsTrendingWatcher(PeriodicWatcher):
         if events:
             await self._pipeline.process(events)
 
-    async def _fetch_events(self) -> list[BaseEvent]:
-        """Fetch trending stock mentions from news search.
+    async def _collect_cycle_mentions(self) -> dict[str, list[str]]:
+        """Query all search queries and collect symbol mentions for this cycle.
 
         Returns:
-            List of NewsTrendingEvent for symbols exceeding threshold
+            Dict mapping symbol to list of article titles mentioning it
         """
-        logger.debug("Fetching trending news mentions")
-
         cycle_mentions: dict[str, list[str]] = defaultdict(list)
 
         for query in self.search_queries:
@@ -159,13 +157,20 @@ class NewsTrendingWatcher(PeriodicWatcher):
                 logger.opt(exception=True).warning(f"News search failed for '{query}': {e}")
                 continue
 
-        now = datetime.now(UTC)
+        return cycle_mentions
+
+    def _update_mention_history(self, cycle_mentions: dict[str, list[str]], now: datetime) -> None:
+        """Update rolling mention history with current cycle data and prune stale entries.
+
+        Args:
+            cycle_mentions: Mentions collected this cycle
+            now: Current timestamp
+        """
         cutoff = now - timedelta(minutes=self.trending_window_minutes)
 
         for symbol, articles in cycle_mentions.items():
             for _ in articles:
                 self._mention_history[symbol].append(now)
-
             self._mention_history[symbol] = [ts for ts in self._mention_history[symbol] if ts >= cutoff]
 
         for symbol in list(self._mention_history.keys()):
@@ -173,6 +178,18 @@ class NewsTrendingWatcher(PeriodicWatcher):
                 self._mention_history[symbol] = [ts for ts in self._mention_history[symbol] if ts >= cutoff]
                 if not self._mention_history[symbol]:
                     del self._mention_history[symbol]
+
+    async def _fetch_events(self) -> list[BaseEvent]:
+        """Fetch trending stock mentions from news search.
+
+        Returns:
+            List of NewsTrendingEvent for symbols exceeding threshold
+        """
+        logger.debug("Fetching trending news mentions")
+
+        cycle_mentions = await self._collect_cycle_mentions()
+        now = datetime.now(UTC)
+        self._update_mention_history(cycle_mentions, now)
 
         trending_events: list[NewsTrendingEvent] = []
 

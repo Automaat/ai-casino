@@ -5,12 +5,20 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Final
 
 from loguru import logger
 
 from src.daemon.events import BlockTrade, OptionsFlowDirection, OptionsFlowSignal
 from src.data.options_flow import OptionContract, OptionsChainSnapshot, OptionsFlowFetcher
-from src.watchers.base import PeriodicWatcher
+from src.v1.watchers.base import PeriodicWatcher
+
+_VOLUME_HISTORY_WINDOW: Final[int] = 6
+_MIN_HISTORY_ENTRIES: Final[int] = 2
+_BULLISH_CALL_RATIO: Final[float] = 0.6
+_BEARISH_CALL_RATIO: Final[float] = 0.4
+_PCR_ELEVATED_PUTS: Final[float] = 1.5
+_PCR_HEAVY_CALLS: Final[float] = 0.5
 
 
 @dataclass
@@ -131,11 +139,11 @@ class OptionsFlowWatcher(PeriodicWatcher):
         history.append(total_volume)
 
         # Keep rolling window of 6 (current + 5 history)
-        if len(history) > 6:
-            self._volume_history[symbol] = history[-6:]
+        if len(history) > _VOLUME_HISTORY_WINDOW:
+            self._volume_history[symbol] = history[-_VOLUME_HISTORY_WINDOW:]
             history = self._volume_history[symbol]
 
-        if len(history) < 2:
+        if len(history) < _MIN_HISTORY_ENTRIES:
             return 1.0
 
         # Average of previous sessions (exclude current)
@@ -161,9 +169,9 @@ class OptionsFlowWatcher(PeriodicWatcher):
             return OptionsFlowDirection.NEUTRAL
 
         ratio = call_premium / total
-        if ratio > 0.6:
+        if ratio > _BULLISH_CALL_RATIO:
             return OptionsFlowDirection.BULLISH
-        if ratio < 0.4:
+        if ratio < _BEARISH_CALL_RATIO:
             return OptionsFlowDirection.BEARISH
         return OptionsFlowDirection.NEUTRAL
 
@@ -221,9 +229,9 @@ class OptionsFlowWatcher(PeriodicWatcher):
         if blocks:
             total_premium = sum(b.premium for b in blocks)
             parts.append(f"{len(blocks)} large trades (${total_premium:,.0f})")
-        if pcr > 1.5:
+        if pcr > _PCR_ELEVATED_PUTS:
             parts.append(f"Elevated puts P/C={pcr:.2f}")
-        elif pcr < 0.5:
+        elif pcr < _PCR_HEAVY_CALLS:
             parts.append(f"Heavy calls P/C={pcr:.2f}")
 
         if not parts:

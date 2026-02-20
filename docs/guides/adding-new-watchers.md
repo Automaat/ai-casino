@@ -1,6 +1,6 @@
 # Adding New Watchers
 
-Watchers live in `src/watchers/`. Two kinds:
+Watchers live in `src/v1/watchers/`. Two kinds:
 
 - **Event-driven** — poll external sources (news, social, options), triage via LLM, emit to `MarketEventQueue`
 - **Signal-provider** — compute a signal (sentiment, flow direction) consumed by other components
@@ -9,7 +9,7 @@ Watchers live in `src/watchers/`. Two kinds:
 
 ## Checklist
 
-### 1. Implement the watcher class — `src/watchers/<name>_watcher.py`
+### 1. Implement the watcher class — `src/v1/watchers/<name>_watcher.py`
 
 **Event-driven watcher** (emits to queue):
 
@@ -125,10 +125,10 @@ my_watcher = providers.Singleton(
 - `DaemonFactory._create_components()`: create and assign `components.my_watcher`
 - `DaemonLifecycle._start_watchers()` / `_stop_watchers()`: call `watcher.run()` / `watcher.stop()`
 
-### 6. Export from `src/watchers/__init__.py`
+### 6. Export from `src/v1/watchers/__init__.py`
 
 ```python
-from src.watchers.my_watcher import MyWatcher, MyWatcherConfig
+from src.v1.watchers.my_watcher import MyWatcher, MyWatcherConfig
 __all__ = [..., "MyWatcher", "MyWatcherConfig"]
 ```
 
@@ -142,9 +142,9 @@ See [adding-new-event-types.md](./adding-new-event-types.md) for the event model
 
 | File | Purpose |
 |---|---|
-| `src/watchers/base.py` | `Watcher` ABC + `PeriodicWatcher` (1s-granularity sleep loop) |
-| `src/watchers/pipeline.py` | `EventTriagePipeline` — triage + enqueue to `MarketEventQueue` |
-| `src/watchers/__init__.py` | Public API exports |
+| `src/v1/watchers/base.py` | `Watcher` ABC + `PeriodicWatcher` (1s-granularity sleep loop) |
+| `src/v1/watchers/pipeline.py` | `EventTriagePipeline` — triage + enqueue to `MarketEventQueue` |
+| `src/v1/watchers/__init__.py` | Public API exports |
 | `src/di/providers/watchers.py` | Factory functions; `_build_pipeline()` helper |
 | `src/daemon/factory.py` | `DaemonComponents` dataclass + `DaemonFactory` |
 | `src/daemon/lifecycle.py` | Watcher start/stop orchestration |

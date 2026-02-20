@@ -11,7 +11,7 @@ from src.daemon.events import (
     EconomicRiskLevel,
 )
 from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
-from src.watchers.economic_calendar_watcher import (
+from src.v1.watchers.economic_calendar_watcher import (
     EconomicCalendarWatcher,
     EconomicCalendarWatcherConfig,
 )

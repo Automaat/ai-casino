@@ -17,12 +17,12 @@ from src.daemon.config import DaemonConfig
 from src.daemon.runner import DaemonRunner
 from src.di.container import create_container
 from src.utils.logging import sanitize_log_record
-from src.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
-from src.watchers.base import Watcher
-from src.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
-from src.watchers.pipeline import EventTriagePipeline
-from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
-from src.watchers.trump_watcher import TrumpWatcher, TrumpWatcherConfig
+from src.v1.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
+from src.v1.watchers.base import Watcher
+from src.v1.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
+from src.v1.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
+from src.v1.watchers.trump_watcher import TrumpWatcher, TrumpWatcherConfig
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer

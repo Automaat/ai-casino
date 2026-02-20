@@ -17,7 +17,7 @@ from src.database.repositories.reddit import (
     RedditPostRepository,
     RedditTickerMentionRepository,
 )
-from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
+from src.v1.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ async def social_watcher(historical_cache, watcher_config):
     """Create SocialWatcher instance."""
     from unittest.mock import Mock
 
-    from src.watchers.pipeline import EventTriagePipeline
+    from src.v1.watchers.pipeline import EventTriagePipeline
 
     return SocialWatcher(
         pipeline=Mock(spec=EventTriagePipeline),

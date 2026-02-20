@@ -97,10 +97,10 @@ When adding a new event type that needs additional runtime context in its prompt
 Events enter the queue from two paths:
 
 **a) Watcher-based** (polls external source, triages via `EventTriageAgent`):
-- Subclass `PeriodicWatcher` in `src/watchers/`
+- Subclass `PeriodicWatcher` in `src/v1/watchers/`
 - Inject `EventTriagePipeline` via constructor
 - Override `_tick()` to call `_fetch_events()` then `await self._pipeline.process(events)`
-- See `src/watchers/news_watcher.py` as a reference implementation
+- See `src/v1/watchers/news_watcher.py` as a reference implementation
 
 **b) Orchestrator-based** (generated from analysis results, e.g. `SignalEvent`):
 - Construct `TriageResult` manually (skip LLM triage)
