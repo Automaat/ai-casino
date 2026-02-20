@@ -14,8 +14,8 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.daemon.events import BaseEvent, NewsTrendingEvent
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 if TYPE_CHECKING:
     from src.data.websearch import WebSearchFetcher

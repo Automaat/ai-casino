@@ -17,8 +17,8 @@ from src.daemon.events import BaseEvent, SocialEvent
 from src.data.reddit import RedditFetcher, RedditPost, TrendingTicker
 from src.database.connection import get_session
 from src.database.repositories.reddit import RedditPostRepository, RedditTickerMentionRepository
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 
 @dataclass

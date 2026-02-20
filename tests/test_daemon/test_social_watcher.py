@@ -8,8 +8,8 @@ import pytest
 
 from src.cache.historical import HistoricalCache
 from src.data.reddit import RedditPost, TrendingTicker
-from src.watchers.pipeline import EventTriagePipeline
-from src.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
+from src.v1.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.social_watcher import SocialWatcher, SocialWatcherConfig
 
 
 @pytest.fixture(autouse=True)

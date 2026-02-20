@@ -8,8 +8,8 @@ import pytest
 
 from src.daemon.events import AnomalyEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketData
-from src.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.anomaly_watcher import AnomalyWatcher, AnomalyWatcherConfig
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 
 @pytest.fixture

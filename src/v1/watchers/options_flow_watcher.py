@@ -10,7 +10,7 @@ from loguru import logger
 
 from src.daemon.events import BlockTrade, OptionsFlowDirection, OptionsFlowSignal
 from src.data.options_flow import OptionContract, OptionsChainSnapshot, OptionsFlowFetcher
-from src.watchers.base import PeriodicWatcher
+from src.v1.watchers.base import PeriodicWatcher
 
 
 @dataclass

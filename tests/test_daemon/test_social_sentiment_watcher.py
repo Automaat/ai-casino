@@ -9,7 +9,7 @@ import pytest
 
 from src.daemon.events import SocialSentimentDirection, SocialSentimentSignal
 from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
-from src.watchers.social_sentiment_watcher import (
+from src.v1.watchers.social_sentiment_watcher import (
     SocialSentimentWatcher,
     SocialSentimentWatcherConfig,
 )

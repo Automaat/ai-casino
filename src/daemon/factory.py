@@ -38,13 +38,13 @@ if TYPE_CHECKING:
     from src.di.container import AppContainer
     from src.event_queue.consumer import EventQueueConsumer
     from src.v1.notifications.service import NotificationService
-    from src.watchers.economic_calendar_watcher import EconomicCalendarWatcher
-    from src.watchers.news_trending_watcher import NewsTrendingWatcher
-    from src.watchers.news_watcher import NewsWatcher
-    from src.watchers.options_flow_watcher import OptionsFlowWatcher
-    from src.watchers.social_sentiment_watcher import SocialSentimentWatcher
-    from src.watchers.social_watcher import SocialWatcher
-    from src.watchers.trump_watcher import TrumpWatcher
+    from src.v1.watchers.economic_calendar_watcher import EconomicCalendarWatcher
+    from src.v1.watchers.news_trending_watcher import NewsTrendingWatcher
+    from src.v1.watchers.news_watcher import NewsWatcher
+    from src.v1.watchers.options_flow_watcher import OptionsFlowWatcher
+    from src.v1.watchers.social_sentiment_watcher import SocialSentimentWatcher
+    from src.v1.watchers.social_watcher import SocialWatcher
+    from src.v1.watchers.trump_watcher import TrumpWatcher
 
 
 @dataclass

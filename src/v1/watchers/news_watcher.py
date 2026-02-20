@@ -15,8 +15,8 @@ from src.cache.historical import HistoricalCache
 from src.daemon.events import BaseEvent, NewsEvent
 from src.data.base_news_fetcher import BaseNewsFetcher
 from src.data.news import NewsFetcher
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 
 @dataclass

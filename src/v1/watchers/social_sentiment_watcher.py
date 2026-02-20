@@ -13,7 +13,7 @@ from src.daemon.events import (
     SocialSentimentSignal,
 )
 from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
-from src.watchers.base import PeriodicWatcher
+from src.v1.watchers.base import PeriodicWatcher
 
 
 @dataclass

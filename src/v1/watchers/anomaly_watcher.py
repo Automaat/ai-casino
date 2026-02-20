@@ -14,8 +14,8 @@ from loguru import logger
 
 from src.daemon.events import AnomalyEvent, BaseEvent, Gap, PriceMove, VolumeSpike
 from src.data.market import MarketDataFetcher
-from src.watchers.base import PeriodicWatcher
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.base import PeriodicWatcher
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 
 @dataclass

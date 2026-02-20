@@ -7,8 +7,8 @@ import pytest
 
 from src.cache.historical import HistoricalCache
 from src.data.news import NewsArticle
-from src.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
-from src.watchers.pipeline import EventTriagePipeline
+from src.v1.watchers.news_watcher import NewsWatcher, NewsWatcherConfig
+from src.v1.watchers.pipeline import EventTriagePipeline
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ import pytest
 
 from src.daemon.events import OptionsFlowDirection
 from src.data.options_flow import OptionContract, OptionsChainSnapshot, OptionsFlowFetcher
-from src.watchers.options_flow_watcher import (
+from src.v1.watchers.options_flow_watcher import (
     OptionsFlowWatcher,
     OptionsFlowWatcherConfig,
 )
