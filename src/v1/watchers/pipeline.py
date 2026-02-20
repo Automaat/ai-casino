@@ -54,9 +54,25 @@ class EventTriagePipeline:
                 logger.error(f"Triage failed: {triage}")
                 continue
             if triage.urgency == Urgency.IMMEDIATE:
+                on_watchlist = await self._get_watchlist_symbols(triage.symbols)
+                if on_watchlist:
+                    logger.info(
+                        f"Urgency escalation {on_watchlist}: WATCHLIST→IMMEDIATE for event {event.event_id}"
+                    )
                 await self._enqueue(event, triage)
             elif triage.urgency == Urgency.WATCHLIST:
-                await self._add_watchlist_candidates(event, triage)
+                on_watchlist = await self._get_watchlist_symbols(triage.symbols)
+                new_symbols = [s for s in triage.symbols if s not in on_watchlist]
+                if not new_symbols:
+                    logger.debug(
+                        f"Skipping WATCHLIST event {event.event_id}: "
+                        f"all symbols {triage.symbols} already on watchlist"
+                    )
+                    continue
+                filtered_triage = (
+                    triage.model_copy(update={"symbols": new_symbols}) if on_watchlist else triage
+                )
+                await self._add_watchlist_candidates(event, filtered_triage)
                 if isinstance(event, NewsEvent):
                     await self._enqueue_watchlist(
                         NewsWatchlistEvent(
@@ -65,10 +81,10 @@ class EventTriagePipeline:
                             source=event.source,
                             article=event.article,
                         ),
-                        triage,
+                        filtered_triage,
                     )
                 else:
-                    await self._enqueue_watchlist(event, triage)
+                    await self._enqueue_watchlist(event, filtered_triage)
 
     async def _enqueue(self, event: BaseEvent, triage: TriageResult) -> None:
         """Enqueue IMMEDIATE event to MarketEventQueue."""
@@ -104,6 +120,17 @@ class EventTriagePipeline:
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(safe_triage(e)) for e in events]
         return [t.result() for t in tasks]
+
+    async def _get_watchlist_symbols(self, symbols: list[str]) -> set[str]:
+        """Return subset of symbols already in active discovery candidates."""
+        if not self._state or not symbols:
+            return set()
+        try:
+            active = await self._state.discovery.get_active_discovery_symbols()
+            return {s for s in symbols if s in active}
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to check watchlist symbols: {e}")
+            return set()
 
     async def _add_watchlist_candidates(self, event: BaseEvent, triage: TriageResult) -> None:
         """Add WATCHLIST event to discovery candidates."""
