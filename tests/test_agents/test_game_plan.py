@@ -69,15 +69,6 @@ async def test_game_plan_agent_structured_output_error_propagates(test_container
         await agent.generate(["AAPL", "TSLA"])
 
 
-def test_game_plan_persist(test_container, sample_game_plan, tmp_path):
-    """Test game plan persistence."""
-    agent = test_container.game_plan_agent()
-    plan_path = agent.persist(sample_game_plan, str(tmp_path))
-
-    assert plan_path.exists()
-    assert plan_path.name == f"{sample_game_plan.date}.json"
-
-
 async def test_empty_watchlist_uses_defaults(test_container, mock_market_fetcher):
     """Test empty watchlist uses defaults."""
     agent = test_container.game_plan_agent()

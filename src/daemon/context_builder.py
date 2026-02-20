@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-
-from src.agents.game_plan import GamePlan
 
 if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
@@ -38,7 +34,7 @@ class DaemonContextBuilder:
         """Return string representation."""
         return "DaemonContextBuilder()"
 
-    def build_analysis_contexts(
+    async def build_analysis_contexts(
         self,
         symbol: str,
     ) -> tuple[str | None, str | None, str | None, str | None]:
@@ -53,7 +49,7 @@ class DaemonContextBuilder:
         sector_ctx = self._build_sector_context()
         earnings_ctx = self._build_earnings_context(symbol)
         peer_ctx = self._build_peer_context(symbol)
-        game_plan_ctx = self._load_game_plan_context()
+        game_plan_ctx = await self._load_game_plan_context()
         return sector_ctx, earnings_ctx, peer_ctx, game_plan_ctx
 
     def build_earnings_context_for_watchlist(self, watchlist: list[str]) -> str | None:
@@ -110,31 +106,27 @@ class DaemonContextBuilder:
         # TODO: Implement using await self.components.state.get_sector_rotation_history()
         return None
 
-    def _load_game_plan_context(self) -> str | None:
-        """Load today's game plan and format as context string.
+    async def _load_game_plan_context(self) -> str | None:
+        """Load today's game plan from DB and format as context string.
 
         Returns:
             Formatted game plan context or None
         """
-        plan_dir = Path(self.components.config.game_plan.plan_dir).expanduser()
-        today = datetime.now(self.components.scheduler.timezone).date()
-        plan_file = plan_dir / f"{today}.json"
-
-        if not plan_file.exists():
-            return None
-
         try:
-            with plan_file.open() as f:
-                data = json.load(f)
-                plan = GamePlan.model_validate(data)
-
-            key_levels_str = ", ".join(f"{sym}: ${lvl:.2f}" for sym, lvl in plan.key_levels.items())
+            today = datetime.now(self.components.scheduler.timezone).date()
+            records = await self.components.state.get_game_plan_history(limit=1)
+            if not records:
+                return None
+            record = records[0]
+            if record.timestamp.date() != today:
+                return None
+            key_levels_str = ", ".join(f"{sym}: ${lvl:.2f}" for sym, lvl in record.key_levels.items())
             return (
-                f"Risk Stance: {plan.risk_stance}\n"
-                f"Priority Symbols: {', '.join(plan.priority_symbols)}\n"
-                f"Sector Focus: {', '.join(plan.sector_focus)}\n"
+                f"Risk Stance: {record.risk_stance}\n"
+                f"Priority Symbols: {', '.join(record.priority_symbols)}\n"
+                f"Sector Focus: {', '.join(record.sector_focus)}\n"
                 f"Key Levels: {key_levels_str}\n"
-                f"Reasoning: {plan.reasoning}"
+                f"Reasoning: {record.reasoning}"
             )
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to load game plan context: {e}")

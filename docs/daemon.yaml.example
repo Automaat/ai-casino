@@ -373,8 +373,6 @@ daemon:
     enabled: false
     # Time to generate plan (HH:MM, 04:00-09:30 pre-market window)
     generation_time: "04:00"
-    # Output directory for game plans
-    plan_dir: "~/.ai-casino/game-plans"
     # Futures symbols to analyze for market sentiment
     futures_symbols: ["ES=F", "NQ=F"]
     # Hours of overnight news to analyze
