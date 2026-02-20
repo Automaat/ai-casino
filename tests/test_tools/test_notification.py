@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.notifications.models import NotificationMessage, NotificationSeverity
-from src.notifications.service import NotificationService
 from src.tools.notification import NotificationTool
+from src.v1.notifications.models import NotificationMessage, NotificationSeverity
+from src.v1.notifications.service import NotificationService
 
 
 @pytest.fixture

@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.daemon.config.notifications import NotificationsConfig, TelegramNotificationConfig
-from src.notifications.models import NotificationMessage, NotificationSeverity
-from src.notifications.service import NotificationService
+from src.v1.notifications.models import NotificationMessage, NotificationSeverity
+from src.v1.notifications.service import NotificationService
 
 
 @pytest.mark.unit
@@ -150,7 +150,7 @@ class TestTelegramChannel:
 
     def test_is_configured_with_credentials(self) -> None:
         """Channel configured when bot_token and chat_id present."""
-        from src.notifications.channels.telegram import TelegramChannel
+        from src.v1.notifications.channels.telegram import TelegramChannel
 
         config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")
         channel = TelegramChannel(config)
@@ -158,7 +158,7 @@ class TestTelegramChannel:
 
     def test_is_configured_missing_credentials(self) -> None:
         """Channel not configured when credentials missing."""
-        from src.notifications.channels.telegram import TelegramChannel
+        from src.v1.notifications.channels.telegram import TelegramChannel
 
         config = TelegramNotificationConfig(bot_token=None, chat_id=None)
         channel = TelegramChannel(config)
@@ -166,7 +166,7 @@ class TestTelegramChannel:
 
     async def test_send_success(self) -> None:
         """Telegram send succeeds with valid response."""
-        from src.notifications.channels.telegram import TelegramChannel
+        from src.v1.notifications.channels.telegram import TelegramChannel
 
         config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")
         channel = TelegramChannel(config)
@@ -179,7 +179,7 @@ class TestTelegramChannel:
             timestamp=datetime.now(UTC),
         )
 
-        with patch("src.notifications.channels.telegram.httpx.AsyncClient") as mock_client_class:
+        with patch("src.v1.notifications.channels.telegram.httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
             mock_response.status_code = 200
@@ -196,7 +196,7 @@ class TestTelegramChannel:
 
     async def test_send_failure_api_error(self) -> None:
         """Telegram send returns False on API error."""
-        from src.notifications.channels.telegram import TelegramChannel
+        from src.v1.notifications.channels.telegram import TelegramChannel
 
         config = TelegramNotificationConfig(bot_token="test_token", chat_id="test_chat")
         channel = TelegramChannel(config)
@@ -208,7 +208,7 @@ class TestTelegramChannel:
             timestamp=datetime.now(UTC),
         )
 
-        with patch("src.notifications.channels.telegram.httpx.AsyncClient") as mock_client_class:
+        with patch("src.v1.notifications.channels.telegram.httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
             mock_response.status_code = 200
@@ -230,7 +230,7 @@ class TestTelegramFormatter:
 
     def test_format_includes_severity_emoji(self) -> None:
         """Formatted message contains correct severity emoji."""
-        from src.notifications.channels.telegram import _format
+        from src.v1.notifications.channels.telegram import _format
 
         msg = NotificationMessage(
             title="Alert",
@@ -245,7 +245,7 @@ class TestTelegramFormatter:
 
     def test_format_warning_emoji(self) -> None:
         """WARNING severity uses warning emoji."""
-        from src.notifications.channels.telegram import _format
+        from src.v1.notifications.channels.telegram import _format
 
         msg = NotificationMessage(
             title="Signal",
@@ -259,7 +259,7 @@ class TestTelegramFormatter:
 
     def test_format_metadata_as_bullet_list(self) -> None:
         """Metadata rendered as bullet key-value list."""
-        from src.notifications.channels.telegram import _format
+        from src.v1.notifications.channels.telegram import _format
 
         msg = NotificationMessage(
             title="Test",
@@ -274,7 +274,7 @@ class TestTelegramFormatter:
 
     def test_format_escapes_special_chars(self) -> None:
         """Special markdown chars escaped in title and body."""
-        from src.notifications.channels.telegram import _format
+        from src.v1.notifications.channels.telegram import _format
 
         msg = NotificationMessage(
             title="Alert_with_underscores",
@@ -288,7 +288,7 @@ class TestTelegramFormatter:
 
     def test_format_error_emoji(self) -> None:
         """ERROR severity uses error emoji."""
-        from src.notifications.channels.telegram import _format
+        from src.v1.notifications.channels.telegram import _format
 
         msg = NotificationMessage(
             title="Error",
@@ -302,7 +302,7 @@ class TestTelegramFormatter:
 
     def test_format_info_emoji(self) -> None:
         """INFO severity uses info emoji."""
-        from src.notifications.channels.telegram import _format
+        from src.v1.notifications.channels.telegram import _format
 
         msg = NotificationMessage(
             title="Info",

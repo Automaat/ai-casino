@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker, OrderStatus
     from src.database.engine import DatabaseEngine
-    from src.notifications.service import NotificationService
+    from src.v1.notifications.service import NotificationService
 
 MIN_RATIONALE_LENGTH: Final[int] = 10
 DEFAULT_STOP_LOSS_PCT: Final[float] = 0.05
@@ -488,7 +488,7 @@ class ExecuteTradeTool(BaseTool):
             return
 
         try:
-            from src.notifications.models import NotificationMessage, NotificationSeverity
+            from src.v1.notifications.models import NotificationMessage, NotificationSeverity
 
             side = order_status.side.upper()
             symbol = order_status.symbol

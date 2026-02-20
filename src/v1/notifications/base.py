@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from src.notifications.models import NotificationMessage
+from src.v1.notifications.models import NotificationMessage
 
 
 class NotificationChannel(ABC):

@@ -5,8 +5,8 @@ import asyncio
 from loguru import logger
 
 from src.daemon.config.notifications import NotificationsConfig
-from src.notifications.base import NotificationChannel
-from src.notifications.models import NotificationMessage
+from src.v1.notifications.base import NotificationChannel
+from src.v1.notifications.models import NotificationMessage
 
 
 class NotificationService:
@@ -26,7 +26,7 @@ class NotificationService:
         """Initialize configured notification channels."""
         if not self.config.enabled:
             return
-        from src.notifications.channels.telegram import TelegramChannel
+        from src.v1.notifications.channels.telegram import TelegramChannel
 
         if "telegram" in self.config.channels:
             channel = TelegramChannel(self.config.telegram)
