@@ -11,7 +11,6 @@ from src.strategies.signal import Signal
 from src.v1.trades.models import (
     CONFIDENCE_LOW_RISK,
     CONFIDENCE_MEDIUM_RISK,
-    DEFAULT_STOP_LOSS_PCT,
     TradeAction,
     TradeRejection,
     TradeRejectionReason,
@@ -24,6 +23,8 @@ if TYPE_CHECKING:
     from src.database.engine import DatabaseEngine
     from src.v1.coordinator.confirmation import TradeConfirmationHandler
     from src.v1.notifications.service import NotificationService
+    from src.v1.risk.models import RiskDecision
+    from src.v1.risk.service import RiskService
     from src.v1.trades.brokers import Broker, OrderStatus
 
 
@@ -37,6 +38,7 @@ class TradingService:
         database_engine: DatabaseEngine | None = None,
         notification_service: NotificationService | None = None,
         confirmation_handler: TradeConfirmationHandler | None = None,
+        risk_service: RiskService | None = None,
     ) -> None:
         """Initialize trading service.
 
@@ -46,12 +48,14 @@ class TradingService:
             database_engine: Optional database engine for persistence
             notification_service: Optional notification service
             confirmation_handler: Optional trade confirmation handler
+            risk_service: Optional risk service for trade validation
         """
         self._broker = broker
         self._daemon_config = daemon_config
         self._database_engine = database_engine
         self._notification_service = notification_service
         self._confirmation_handler = confirmation_handler
+        self._risk_service = risk_service
 
     async def execute(self, request: TradeRequest) -> TradeResult:
         """Execute a trade through validation, submission, persistence, and notification.
@@ -68,6 +72,11 @@ class TradingService:
 
         if request.action == TradeAction.BUY and (rejection := await self._check_duplicate(request.symbol)):
             return self._rejected_result(request, rejection)
+
+        if self._risk_service:
+            risk_result = await self._check_risk(request)
+            if risk_result is not None:
+                return risk_result
 
         if rejection := await self._handle_confirmation(request):
             return self._rejected_result(request, rejection)
@@ -210,9 +219,7 @@ class TradingService:
             from src.metrics.tracker import TradeRecord
 
             entry_price = order_status.filled_avg_price or 0.0
-            effective_stop = request.stop_loss_price or self._default_stop_loss(
-                entry_price, order_status.side
-            )
+            effective_stop = request.stop_loss_price or 0.0
             is_paper = self._daemon_config.trading_mode == TradingMode.PAPER
 
             trade = TradeRecord(
@@ -278,6 +285,49 @@ class TradingService:
         except Exception as e:
             logger.opt(exception=True).warning(f"Trade notification failed: {e}")
 
+    async def _check_risk(self, request: TradeRequest) -> TradeResult | None:
+        """Run risk assessment and apply limits. Returns rejected result or None to proceed."""
+        if self._risk_service is None:
+            return None
+        try:
+            risk_decision = await self._risk_service.assess_trade(
+                symbol=request.symbol,
+                action=Signal(request.action.value),
+                confidence=request.confidence,
+            )
+        except Exception as e:
+            logger.opt(exception=True).error(f"Risk assessment failed for {request.symbol}: {e}")
+            return self._rejected_result(
+                request,
+                TradeRejection(
+                    reason=TradeRejectionReason.RISK_REJECTED,
+                    message=f"Risk assessment error: {e}",
+                ),
+            )
+
+        if not risk_decision.approved:
+            return self._rejected_result(
+                request,
+                TradeRejection(
+                    reason=TradeRejectionReason.RISK_REJECTED,
+                    message=risk_decision.reasoning,
+                ),
+            )
+
+        self._apply_risk_limits(request, risk_decision)
+        return None
+
+    def _apply_risk_limits(self, request: TradeRequest, risk_decision: RiskDecision) -> None:
+        """Cap quantity and set stop loss from risk decision (mutates request)."""
+        if request.quantity > risk_decision.recommended_shares > 0:
+            logger.warning(
+                f"Risk cap: {request.symbol} quantity {request.quantity} → {risk_decision.recommended_shares}"
+            )
+            request.quantity = risk_decision.recommended_shares
+
+        if request.stop_loss_price is None and risk_decision.stop_loss_price > 0:
+            request.stop_loss_price = risk_decision.stop_loss_price
+
     @staticmethod
     def _rejected_result(request: TradeRequest, rejection: TradeRejection) -> TradeResult:
         """Build a rejected TradeResult."""
@@ -298,13 +348,6 @@ class TradingService:
         if confidence >= CONFIDENCE_MEDIUM_RISK:
             return "MEDIUM"
         return "HIGH"
-
-    @staticmethod
-    def _default_stop_loss(entry_price: float, side: str) -> float:
-        """Calculate default stop loss +/-5% when not provided."""
-        if side.upper() == "SELL":
-            return entry_price * (1 + DEFAULT_STOP_LOSS_PCT)
-        return entry_price * (1 - DEFAULT_STOP_LOSS_PCT)
 
     def __repr__(self) -> str:
         """String representation."""

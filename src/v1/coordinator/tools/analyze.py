@@ -292,6 +292,35 @@ class AnalyzeSymbolTool(BaseTool):
             "\n".join(f"- {r}" for r in result.decision.reasoning),
         ]
 
+        # Risk Assessment section
+        risk = result.risk
+        approved_str = "YES" if risk.validation.approved else "REJECTED"
+        lines.extend(
+            [
+                "",
+                "## Risk Assessment",
+                f"- **Approved:** {approved_str}",
+                f"- **Risk Level:** {risk.validation.risk_level}",
+                f"- **Recommended Shares:** {risk.position_sizing.recommended_shares}",
+                f"- **Position Value:** ${risk.position_sizing.position_value:,.2f}",
+                f"- **Risk per Trade:** {risk.position_sizing.risk_percent:.2f}%"
+                f" (${risk.position_sizing.risk_amount:,.2f})",
+                f"- **Stop Loss:** ${risk.stop_loss.stop_loss_price:.2f}"
+                f" ({risk.stop_loss.stop_loss_percent:.1f}% | {risk.stop_loss.methodology})",
+            ]
+        )
+
+        if risk.take_profit:
+            rr = risk.reward_risk_ratio or risk.take_profit.reward_risk_ratio
+            lines.append(f"- **Take Profit:** ${risk.take_profit.take_profit_price:.2f} (R:R {rr:.1f}:1)")
+
+        if risk.validation.warnings:
+            lines.extend(["", "### Risk Warnings", *[f"- {w}" for w in risk.validation.warnings]])
+
+        if not risk.validation.approved:
+            failed = [k for k, v in risk.validation.constraints_met.items() if not v]
+            lines.append(f"\n**RISK REJECTED** — Constraints failed: {', '.join(failed)}")
+
         if result.warnings:
             lines.extend(["", "## Warnings", *[f"- {w}" for w in result.warnings]])
 

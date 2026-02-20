@@ -321,17 +321,3 @@ class TestRiskLevel:
         assert TradingService._derive_risk_level(0.50) == "MEDIUM"
         assert TradingService._derive_risk_level(0.49) == "HIGH"
         assert TradingService._derive_risk_level(0.10) == "HIGH"
-
-
-class TestDefaultStopLoss:
-    """Tests for default stop loss calculation."""
-
-    @pytest.mark.unit
-    def test_buy_stop_loss(self) -> None:
-        result = TradingService._default_stop_loss(100.0, "buy")
-        assert result == pytest.approx(95.0)
-
-    @pytest.mark.unit
-    def test_sell_stop_loss(self) -> None:
-        result = TradingService._default_stop_loss(100.0, "sell")
-        assert result == pytest.approx(105.0)

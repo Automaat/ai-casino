@@ -830,12 +830,13 @@ class SupervisorWorkflow:
             self.trump_worker = self._container.trump_worker()
         else:
             self.trump_worker = None  # pyrefly: ignore[bad-assignment]
+        from src.daemon.config.risk import PositionSizingConfig
+
         self.trader = self._container.trader_agent()
         self.risk_manager = RiskManagementAgent(
-            components.llm_client,
+            position_sizing_config=components.position_sizing_config or PositionSizingConfig(),
             portfolio_var_calculator=components.portfolio_var_calculator,
             portfolio_var_config=components.portfolio_var_config,
-            position_sizing_config=components.position_sizing_config,
         )
 
     def get_default_strategy(self) -> EnsembleStrategy | MomentumStrategy:

@@ -1,5 +1,7 @@
 """Risk Management Agent."""
 
+from __future__ import annotations
+
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,7 +11,7 @@ import pandas as pd
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.daemon.config import PositionSizingConfig
+    from src.daemon.config.risk import PositionSizingConfig
     from src.daemon.degradation import DegradationContext
     from src.database.repositories.risk_audit import RiskAuditRepository
     from src.workflows.types import BacktestValidation
@@ -31,22 +33,17 @@ from src.agents.risk.stop_loss_calculator import StopLossCalculator
 from src.agents.risk.take_profit_calculator import TakeProfitCalculator
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator
-from src.models.llm import LLMClient
 from src.strategies.signal import Signal
 
 
 class RiskManagementAgent:
     """Agent for position sizing, stop-loss, and risk validation."""
 
-    MAX_POSITION_RISK_PERCENT = 2.0
-    MAX_TOTAL_EXPOSURE_PERCENT = 80.0
-    MAX_SINGLE_POSITION_PERCENT = 20.0
     DEFAULT_STOP_LOSS_PERCENT = 2.0
     ATR_MULTIPLIER = 2.0
     TRAILING_STOP_PERCENT = 3.0
     TRAILING_ACTIVATION_PERCENT = 5.0
     MIN_DECISION_CONFIDENCE = 0.6
-    MIN_REWARD_RISK_RATIO = 2.0
     RISK_LEVEL_LOW_THRESHOLD = 0.75
     RISK_LEVEL_MEDIUM_THRESHOLD = 0.5
     REJECTED_CONFIDENCE_PENALTY = 0.3
@@ -55,55 +52,30 @@ class RiskManagementAgent:
 
     def __init__(
         self,
-        llm_client: LLMClient,
-        max_position_risk: float | None = None,
-        max_exposure: float | None = None,
-        max_single_position: float | None = None,
+        position_sizing_config: PositionSizingConfig,
         enable_trailing_stop: bool = True,
         portfolio_var_calculator: PortfolioVaRCalculator | None = None,
         portfolio_var_config: PortfolioVaRConfig | None = None,
-        position_sizing_config: PositionSizingConfig | None = None,
         audit_repository: RiskAuditRepository | None = None,
     ) -> None:
         """Initialize risk management agent.
 
         Args:
-            llm_client: LLM client for risk interpretation
-            max_position_risk: Override max risk per trade (%)
-            max_exposure: Override max total exposure (%)
-            max_single_position: Override max single position size (%)
+            position_sizing_config: Position sizing configuration (thresholds source of truth)
             enable_trailing_stop: Enable trailing stop-loss
             portfolio_var_calculator: Optional VaR calculator for portfolio-level limits
             portfolio_var_config: Optional VaR limit configuration
-            position_sizing_config: Optional position sizing config (takes priority over individual params)
             audit_repository: Optional repository for database audit logging
         """
-        self.llm = llm_client
         self._audit_repository = audit_repository
-        self.max_position_risk = (
-            position_sizing_config.max_risk_per_trade_pct
-            if position_sizing_config
-            else (max_position_risk or self.MAX_POSITION_RISK_PERCENT)
-        )
-        self.max_exposure = (
-            position_sizing_config.max_total_exposure_pct
-            if position_sizing_config
-            else (max_exposure or self.MAX_TOTAL_EXPOSURE_PERCENT)
-        )
-        self.max_single_position = (
-            position_sizing_config.max_single_position_pct
-            if position_sizing_config
-            else (max_single_position or self.MAX_SINGLE_POSITION_PERCENT)
-        )
+        self.max_position_risk = position_sizing_config.max_risk_per_trade_pct
+        self.max_exposure = position_sizing_config.max_total_exposure_pct
+        self.max_single_position = position_sizing_config.max_single_position_pct
         self.enable_trailing_stop = enable_trailing_stop
         self._var_calculator = portfolio_var_calculator
         self._var_config = portfolio_var_config or PortfolioVaRConfig()
         self._sizing_config = position_sizing_config
-        self._min_reward_risk_ratio = (
-            position_sizing_config.min_reward_risk_ratio
-            if position_sizing_config
-            else self.MIN_REWARD_RISK_RATIO
-        )
+        self._min_reward_risk_ratio = position_sizing_config.min_reward_risk_ratio
 
         # Create position sizer component with resolved config
         self._position_sizer = PositionSizer(
@@ -148,7 +120,7 @@ class RiskManagementAgent:
         return self._var_config
 
     @property
-    def position_sizing_config(self) -> PositionSizingConfig | None:
+    def position_sizing_config(self) -> PositionSizingConfig:
         """Public accessor for position sizing config."""
         return self._sizing_config
 

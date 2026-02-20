@@ -7,7 +7,6 @@ from typing import Final
 from pydantic import BaseModel, Field
 
 MIN_RATIONALE_LENGTH: Final[int] = 10
-DEFAULT_STOP_LOSS_PCT: Final[float] = 0.05
 CONFIDENCE_LOW_RISK: Final[float] = 0.75
 CONFIDENCE_MEDIUM_RISK: Final[float] = 0.5
 
@@ -27,6 +26,7 @@ class TradeRejectionReason(StrEnum):
     DUPLICATE_POSITION = "duplicate_position"
     CONFIRMATION_REJECTED = "confirmation_rejected"
     BROKER_ERROR = "broker_error"
+    RISK_REJECTED = "risk_rejected"
 
 
 class TradeRequest(BaseModel):
@@ -69,6 +69,8 @@ class TradeResult(BaseModel):
     submitted_at: datetime | None = None
     stop_loss_price: float | None = None
     rejection: TradeRejection | None = None
+    requested_quantity: int | None = None
+    risk_capped: bool = False
 
     def __repr__(self) -> str:
         """String representation."""

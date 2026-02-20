@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from src.daemon.config import DaemonConfig
+from src.daemon.config import DaemonConfig, PositionSizingConfig
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.models.llm import LLMClient
@@ -126,7 +126,6 @@ def create_meta_agent(llm_client: LLMClient, regime_detector: MarketRegimeDetect
 
 
 def create_risk_management_agent(
-    llm_client: LLMClient,
     daemon_config: DaemonConfig,
     portfolio_var_calculator: PortfolioVaRCalculator | None = None,
     audit_repository: RiskAuditRepository | None = None,
@@ -136,7 +135,6 @@ def create_risk_management_agent(
     Extracts position_sizing and portfolio_var configs from daemon_config.
 
     Args:
-        llm_client: LLM client for risk analysis
         daemon_config: Daemon configuration
         portfolio_var_calculator: Optional PortfolioVaRCalculator
         audit_repository: Optional repository for database audit logging
@@ -146,7 +144,7 @@ def create_risk_management_agent(
     """
     from src.agents.risk import PortfolioVaRConfig, RiskManagementAgent
 
-    position_sizing_config = getattr(daemon_config, "position_sizing", None)
+    position_sizing_config = getattr(daemon_config, "position_sizing", None) or PositionSizingConfig()
     portfolio_var_config = None
     risk_limits = getattr(daemon_config, "risk_limits", None)
     if risk_limits is not None:
@@ -158,10 +156,9 @@ def create_risk_management_agent(
                 portfolio_var_config = PortfolioVaRConfig(**risk_limits)
 
     return RiskManagementAgent(
-        llm_client,
+        position_sizing_config=position_sizing_config,
         portfolio_var_calculator=portfolio_var_calculator,
         portfolio_var_config=portfolio_var_config,
-        position_sizing_config=position_sizing_config,
         audit_repository=audit_repository,
     )
 
