@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 from src.data.market import MarketDataFetcher
 from src.data.news import NewsFetcher
 from src.models.llm import LLMClient, ToolCallingParams
-from src.models.providers.base import StructuredOutputError
 from src.prompts import PromptLoader
 from src.tools.game_plan import (
     FetchMarketContextTool,
@@ -140,24 +139,9 @@ class GamePlanAgent:
             research_context=research_context,
         )
 
-        try:
-            llm_response = await self.llm.astructured(
-                extract_prompt, GamePlanLLMResponse, system=system, temperature=0.3, max_tokens=512
-            )
-        except StructuredOutputError as e:
-            logger.opt(exception=True).warning(f"Structured output failed, falling back: {e}")
-            text_response = await self.llm.acomplete(extract_prompt, system=system, temperature=0.3)
-            return GamePlan(
-                date=datetime.now(timezone).date(),
-                priority_symbols=[],
-                risk_stance="NEUTRAL",
-                sector_focus=[],
-                key_levels={},
-                overnight_summary=research_context[:200],
-                reasoning=text_response,
-                confidence=0.5,
-                generated_at=datetime.now(UTC),
-            )
+        llm_response = await self.llm.astructured(
+            extract_prompt, GamePlanLLMResponse, system=system, temperature=0.3, max_tokens=512
+        )
 
         key_levels: dict[str, float] = {}
         seen_symbols: set[str] = set()
