@@ -10,11 +10,11 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from src.coordinator.decision_models import DecisionQueryResult
     from src.daemon.state import DaemonState
     from src.daemon.state.models import SignalOutcome
     from src.data.broker import AlpacaBroker
     from src.database.engine import DatabaseEngine
+    from src.v1.coordinator.decision_models import DecisionQueryResult
 
 # Constants for memory limits
 _MAX_IN_MEMORY_RECORDS: Final[int] = 20
@@ -488,7 +488,7 @@ class CoordinatorMemory:
         Returns:
             DecisionQueryResult instance
         """
-        from src.coordinator.decision_models import DecisionQueryResult
+        from src.v1.coordinator.decision_models import DecisionQueryResult
 
         price_at_outcome = self._get_price_at_horizon(outcome, horizon)
         return_pct = self._calculate_return_pct(outcome.price_at_signal, price_at_outcome)
@@ -578,7 +578,7 @@ class CoordinatorMemory:
         Returns:
             SuccessRateStats instance
         """
-        from src.coordinator.decision_models import SuccessRateStats
+        from src.v1.coordinator.decision_models import SuccessRateStats
 
         if not self._database_engine:
             logger.warning("Database engine not available for success rate")

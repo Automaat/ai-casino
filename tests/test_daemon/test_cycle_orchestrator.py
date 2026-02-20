@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.coordinator.models import CoordinatorCycleResult
 from src.daemon.config import DaemonConfig
 from src.daemon.cycle_orchestrator import CycleResult, DaemonCycleOrchestrator
 from src.daemon.degradation import DegradationContext, DegradationTier
 from src.daemon.factory import DaemonFactory
 from src.strategies.session import TradingSession
+from src.v1.coordinator.models import CoordinatorCycleResult
 
 pytestmark = pytest.mark.skip(reason="Cycle orchestrator tests need rewrite for async state")
 

@@ -8,7 +8,7 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
-    from src.coordinator.memory import CoordinatorMemory
+    from src.v1.coordinator.memory import CoordinatorMemory
 
 MIN_OBSERVATION_LENGTH: Final[int] = 10
 

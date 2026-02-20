@@ -18,11 +18,11 @@ from src.strategies.session import TradingSession
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
-    from src.coordinator.models import CoordinatorCycleResult
     from src.daemon.degradation import DegradationContext
     from src.daemon.factory import DaemonComponents, DaemonFactory
     from src.daemon.profiling.profiler import CycleProfiler
     from src.daemon.task_runner import ScheduledTaskRunner
+    from src.v1.coordinator.models import CoordinatorCycleResult
 
 console = Console()
 
@@ -503,7 +503,7 @@ class DaemonCycleOrchestrator:
         try:
             from pathlib import Path
 
-            from src.coordinator.metrics import CoordinatorCycleMetrics, save_metrics_jsonl
+            from src.v1.coordinator.metrics import CoordinatorCycleMetrics, save_metrics_jsonl
 
             # Create metrics record
             metrics = CoordinatorCycleMetrics(
@@ -556,7 +556,7 @@ class DaemonCycleOrchestrator:
             return 0
 
         try:
-            from src.coordinator.pattern_analyzer import PatternAnalyzer
+            from src.v1.coordinator.pattern_analyzer import PatternAnalyzer
 
             # Create pattern analyzer with coordinator's memory
             pattern_analyzer = PatternAnalyzer(

@@ -4,9 +4,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from src.coordinator.models import CoordinatorConfig
 from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
+from src.v1.coordinator.models import CoordinatorConfig
 from src.v1.event_queue.models import QueuedMarketEvent
 
 _EVENT_TYPE_TEMPLATES = frozenset(

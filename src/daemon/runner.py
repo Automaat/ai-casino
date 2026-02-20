@@ -16,12 +16,12 @@ from src.daemon.notification_helper import DaemonNotificationHelper
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
-    from src.coordinator.agent import TradingCoordinator
     from src.daemon.analysis_orchestrator import AnalysisOrchestrator
     from src.daemon.degradation import DegradationContext
     from src.daemon.event_bus import EventBus
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
+    from src.v1.coordinator.agent import TradingCoordinator
     from src.v1.tasks.runner import TaskRunner
     from src.workflows import TradingWorkflow
 

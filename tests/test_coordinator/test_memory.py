@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from src.coordinator.memory import CoordinatorMemory
 from src.daemon.state.models import AnalysisRecord, GamePlanRecord
 from src.strategies.session import TradingSession
+from src.v1.coordinator.memory import CoordinatorMemory
 
 pytestmark = pytest.mark.skip(reason="Coordinator memory tests need rewrite for async state")
 

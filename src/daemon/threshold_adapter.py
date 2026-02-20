@@ -7,9 +7,9 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from src.coordinator.models import AdaptiveThresholdConfig
     from src.daemon.state.models import SignalOutcome
     from src.database.engine import DatabaseEngine
+    from src.v1.coordinator.models import AdaptiveThresholdConfig
 
 
 class AdaptiveThresholds(BaseModel):

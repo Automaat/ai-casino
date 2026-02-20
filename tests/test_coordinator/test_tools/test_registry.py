@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.coordinator.tools import build_coordinator_registry
+from src.v1.coordinator.tools import build_coordinator_registry
 
 
 @pytest.fixture

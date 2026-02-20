@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from src.coordinator.event_prompt import EventCycleContext, EventCyclePromptBuilder, extract_symbols
-from src.coordinator.memory import CoordinatorMemory, DecisionQueryParams
-from src.coordinator.models import EVENT_CYCLE_TYPE, CoordinatorConfig, CoordinatorCycleResult
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
 from src.tools.registry import ToolRegistry
+from src.v1.coordinator.event_prompt import EventCycleContext, EventCyclePromptBuilder, extract_symbols
+from src.v1.coordinator.memory import CoordinatorMemory, DecisionQueryParams
+from src.v1.coordinator.models import EVENT_CYCLE_TYPE, CoordinatorConfig, CoordinatorCycleResult
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

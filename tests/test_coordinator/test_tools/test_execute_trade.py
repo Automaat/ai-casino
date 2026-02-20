@@ -5,15 +5,15 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.coordinator.tools.execute_trade import (
-    DEFAULT_STOP_LOSS_PCT,
-    ExecuteTradeServices,
-    ExecuteTradeTool,
-)
 from src.daemon.config.base import TradingMode
 from src.data.broker import OrderStatus
 from src.metrics.tracker import TradeRecord
 from src.strategies.signal import Signal
+from src.v1.coordinator.tools.execute_trade import (
+    DEFAULT_STOP_LOSS_PCT,
+    ExecuteTradeServices,
+    ExecuteTradeTool,
+)
 
 
 def _make_daemon_config(trading_mode=TradingMode.PAPER):

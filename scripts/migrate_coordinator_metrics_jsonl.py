@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
 
-from src.coordinator.metrics import CoordinatorCycleMetrics
+from src.v1.coordinator.metrics import CoordinatorCycleMetrics
 from src.di.container import create_container
 
 

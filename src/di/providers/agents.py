@@ -16,15 +16,15 @@ if TYPE_CHECKING:
     from src.agents.risk import RiskManagementAgent
     from src.agents.supervisor import TradingSupervisor
     from src.agents.trader import TraderAgent
-    from src.coordinator.agent import TradingCoordinator
-    from src.coordinator.confirmation import TradeConfirmationHandler
-    from src.coordinator.pattern_analyzer import PatternAnalyzer
     from src.daemon.state import DaemonState
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.database.repositories.risk_audit import RiskAuditRepository
     from src.di.container import AppContainer
     from src.metrics.portfolio_var import PortfolioVaRCalculator
     from src.strategies.regime import MarketRegimeDetector
+    from src.v1.coordinator.agent import TradingCoordinator
+    from src.v1.coordinator.confirmation import TradeConfirmationHandler
+    from src.v1.coordinator.pattern_analyzer import PatternAnalyzer
     from src.v1.notifications.channels.telegram import TelegramChannel
 
 
@@ -182,7 +182,7 @@ def create_confirmation_handler(
     if not telegram_channel or not telegram_channel.is_configured():
         return None
 
-    from src.coordinator.confirmation import TradeConfirmationHandler
+    from src.v1.coordinator.confirmation import TradeConfirmationHandler
 
     timeout = daemon_config.coordinator.approval_timeout_seconds
     return TradeConfirmationHandler(
@@ -204,7 +204,7 @@ def create_pattern_analyzer(
     Returns:
         PatternAnalyzer if pattern detection enabled, None otherwise
     """
-    from src.coordinator.pattern_analyzer import PatternAnalyzer
+    from src.v1.coordinator.pattern_analyzer import PatternAnalyzer
 
     if not daemon_config.coordinator.pattern_detection.enabled:
         return None
@@ -277,9 +277,9 @@ def create_trading_coordinator(
     Returns:
         Configured TradingCoordinator
     """
-    from src.coordinator.agent import TradingCoordinator
-    from src.coordinator.memory import CoordinatorMemory
-    from src.coordinator.tools import build_coordinator_registry
+    from src.v1.coordinator.agent import TradingCoordinator
+    from src.v1.coordinator.memory import CoordinatorMemory
+    from src.v1.coordinator.tools import build_coordinator_registry
 
     # Get dependencies for enhanced memory
     broker = container.alpaca_broker()

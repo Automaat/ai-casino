@@ -9,7 +9,7 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
 
 if TYPE_CHECKING:
-    from src.coordinator.agent import TradingCoordinator
+    from src.v1.coordinator.agent import TradingCoordinator
     from src.workflows.types import TradingWorkflowResult
 
 # Max reflections per symbol per cycle

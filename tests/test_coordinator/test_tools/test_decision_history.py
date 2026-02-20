@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.coordinator.decision_models import DecisionQueryResult
-from src.coordinator.tools.decision_history import QueryPastDecisionsTool
+from src.v1.coordinator.decision_models import DecisionQueryResult
+from src.v1.coordinator.tools.decision_history import QueryPastDecisionsTool
 
 
 @pytest.fixture

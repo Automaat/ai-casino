@@ -8,10 +8,10 @@ from loguru import logger
 from src.v1.event_queue.models import QueuedMarketEvent
 
 if TYPE_CHECKING:
-    from src.coordinator.agent import TradingCoordinator
-    from src.coordinator.models import CoordinatorConfig
     from src.daemon.market_service import MarketService
     from src.strategies.session import TradingSession
+    from src.v1.coordinator.agent import TradingCoordinator
+    from src.v1.coordinator.models import CoordinatorConfig
     from src.v1.event_queue.service import MarketEventQueue
 
 
@@ -145,7 +145,7 @@ def _group_by_symbol_overlap(events: list[QueuedMarketEvent]) -> list[list[Queue
     Returns:
         List of event groups
     """
-    from src.coordinator.event_prompt import extract_symbols
+    from src.v1.coordinator.event_prompt import extract_symbols
 
     groups: list[tuple[set[str], list[QueuedMarketEvent]]] = []
 

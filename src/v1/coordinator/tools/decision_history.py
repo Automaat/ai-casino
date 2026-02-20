@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Final, cast
 
 from loguru import logger
 
-from src.coordinator.memory import DecisionQueryParams
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
+from src.v1.coordinator.memory import DecisionQueryParams
 
 if TYPE_CHECKING:
-    from src.coordinator.memory import CoordinatorMemory
+    from src.v1.coordinator.memory import CoordinatorMemory
 
 # Constants
 _MAX_DISPLAYED_DECISIONS: Final[int] = 30

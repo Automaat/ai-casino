@@ -6,14 +6,14 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from src.agents.critic import CriticAgent
-    from src.coordinator.agent import TradingCoordinator
-    from src.coordinator.confirmation import TradeConfirmationHandler
-    from src.coordinator.memory import CoordinatorMemory
     from src.daemon.config import DaemonConfig
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.database.engine import DatabaseEngine
     from src.di.container import AppContainer
     from src.tools.registry import ToolRegistry
+    from src.v1.coordinator.agent import TradingCoordinator
+    from src.v1.coordinator.confirmation import TradeConfirmationHandler
+    from src.v1.coordinator.memory import CoordinatorMemory
 
 
 def _create_confirmation_handler(daemon_config: DaemonConfig) -> TradeConfirmationHandler | None:
@@ -21,7 +21,7 @@ def _create_confirmation_handler(daemon_config: DaemonConfig) -> TradeConfirmati
     if daemon_config.coordinator.confirmation_mode != "manual":
         return None
 
-    from src.coordinator.confirmation import TradeConfirmationHandler
+    from src.v1.coordinator.confirmation import TradeConfirmationHandler
     from src.v1.notifications.channels.telegram import TelegramChannel
 
     telegram_channel = TelegramChannel(daemon_config.notifications.telegram)
@@ -68,14 +68,6 @@ def build_coordinator_registry(
         ToolRegistry with all coordinator tools registered
     """
     # Lazy imports to avoid circular dependencies
-    from src.coordinator.memory import CoordinatorMemory
-    from src.coordinator.tools.analyze import AnalyzeSymbolTool
-    from src.coordinator.tools.decision_history import QueryPastDecisionsTool
-    from src.coordinator.tools.execute_trade import ExecuteTradeServices, ExecuteTradeTool
-    from src.coordinator.tools.history import AnalysisHistoryTool
-    from src.coordinator.tools.market_overview import MarketOverviewTool
-    from src.coordinator.tools.observation import SaveObservationTool
-    from src.coordinator.tools.portfolio import PortfolioStatusTool
     from src.tools import GetMarketDataTool, ScreenStocksTool
     from src.tools.news import GetNewsTool
     from src.tools.notification import NotificationTool
@@ -84,6 +76,14 @@ def build_coordinator_registry(
     from src.tools.social_sentiment import GetSocialSentimentTool
     from src.tools.trump_analysis import TrumpAnalysisTool
     from src.tools.websearch import WebSearchTool
+    from src.v1.coordinator.memory import CoordinatorMemory
+    from src.v1.coordinator.tools.analyze import AnalyzeSymbolTool
+    from src.v1.coordinator.tools.decision_history import QueryPastDecisionsTool
+    from src.v1.coordinator.tools.execute_trade import ExecuteTradeServices, ExecuteTradeTool
+    from src.v1.coordinator.tools.history import AnalysisHistoryTool
+    from src.v1.coordinator.tools.market_overview import MarketOverviewTool
+    from src.v1.coordinator.tools.observation import SaveObservationTool
+    from src.v1.coordinator.tools.portfolio import PortfolioStatusTool
 
     registry = ToolRegistry()
     registry.register(GetMarketDataTool(container=container))
@@ -123,7 +123,7 @@ def build_coordinator_registry(
     registry.register(SaveObservationTool(memory))
 
     if coordinator:
-        from src.coordinator.tools.reflect import ReflectOnDecisionTool
+        from src.v1.coordinator.tools.reflect import ReflectOnDecisionTool
 
         if critic_agent is None:
             critic_agent = container.critic_agent()
