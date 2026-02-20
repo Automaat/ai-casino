@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Final
 
 from loguru import logger
 
@@ -17,6 +18,8 @@ from src.daemon.events import (
 )
 from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
 from src.v1.watchers.base import PeriodicWatcher
+
+_MEDIUM_IMPACT_HOURS_THRESHOLD: Final[float] = 4.0
 
 
 @dataclass
@@ -163,7 +166,7 @@ class EconomicCalendarWatcher(PeriodicWatcher):
         # MEDIUM impact event within 4h → REDUCE_SIZE
         for event in medium_impact:
             hours_away = (event.scheduled_at - now).total_seconds() / 3600
-            if hours_away <= 4.0:
+            if hours_away <= _MEDIUM_IMPACT_HOURS_THRESHOLD:
                 return EconomicEventSignal(
                     upcoming_events=events,
                     risk_level=EconomicRiskLevel.MEDIUM,
