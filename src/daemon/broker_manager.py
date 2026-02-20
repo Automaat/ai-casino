@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.cache.historical import HistoricalCache
 from src.daemon.config import DaemonConfig
 from src.daemon.state import DaemonState
-from src.data.broker import AlpacaBroker
+from src.v1.trades.brokers import AlpacaBroker, Broker
 
 
 class BrokerManager:
@@ -30,7 +30,7 @@ class BrokerManager:
         self.config = config
         self.state = state
         self._historical_cache = historical_cache
-        self.broker: AlpacaBroker | None = None
+        self.broker: Broker | None = None
         logger.info("BrokerManager initialized (broker not yet configured)")
 
     def __repr__(self) -> str:

@@ -12,7 +12,7 @@ from src.daemon.config import PositionManagementConfig
 from src.daemon.positions.checks import PositionCheckRunner
 from src.daemon.positions.models import PositionManagementAction, PositionRecord
 from src.daemon.positions.persistence import PositionPersistenceManager
-from src.data.broker import AlpacaBroker, BrokerPosition
+from src.v1.trades.brokers import Broker, BrokerPosition
 from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ class PositionManager:
 
     def __init__(
         self,
-        broker: AlpacaBroker | None,
+        broker: Broker | None,
         config: PositionManagementConfig,
         database_engine: DatabaseEngine | None = None,
     ) -> None:
@@ -41,12 +41,12 @@ class PositionManager:
         self._checks = PositionCheckRunner(config)
         logger.info(f"PositionManager initialized: {config}")
 
-    def set_broker(self, broker: AlpacaBroker) -> None:
+    def set_broker(self, broker: Broker) -> None:
         """Set broker after initialization (deferred to avoid event loop issues)."""
         self.broker = broker
         logger.debug("PositionManager broker updated")
 
-    def _ensure_broker(self) -> AlpacaBroker:
+    def _ensure_broker(self) -> Broker:
         """Ensure broker is initialized, raise if not."""
         if self.broker is None:
             msg = "Broker not initialized - call set_broker() first"

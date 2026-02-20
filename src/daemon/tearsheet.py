@@ -9,11 +9,11 @@ from loguru import logger
 from pandas import DatetimeIndex
 
 from src.daemon.state import AnalysisRecord
-from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.metrics.quantstats_reporter import QuantStatsReporter
 from src.metrics.tracker import TearSheet, TradeRecord
 from src.strategies.signal import Signal
+from src.v1.trades.brokers import Broker
 
 
 class DaemonTearsheetGenerator:
@@ -22,7 +22,7 @@ class DaemonTearsheetGenerator:
     def __init__(
         self,
         risk_free_rate: float,
-        broker: AlpacaBroker | None = None,
+        broker: Broker | None = None,
         market_fetcher: MarketDataFetcher | None = None,
     ) -> None:
         """Initialize tearsheet generator.
@@ -37,7 +37,7 @@ class DaemonTearsheetGenerator:
         self.reporter = QuantStatsReporter(risk_free_rate)
         logger.info("Initialized DaemonTearsheetGenerator")
 
-    def set_broker(self, broker: AlpacaBroker) -> None:
+    def set_broker(self, broker: Broker) -> None:
         """Set broker after initialization (deferred to avoid event loop issues)."""
         self.broker = broker
         logger.debug("DaemonTearsheetGenerator broker updated")
@@ -102,7 +102,7 @@ class DaemonTearsheetGenerator:
     def _fetch_broker_trades(self) -> list[TradeRecord]:
         """Fetch closed trades from Alpaca broker.
 
-        The current AlpacaBroker implementation does not expose closed trades.
+        The current Broker implementation does not expose closed trades.
         Returns empty list; tearsheets rely on simulation instead.
 
         Returns:

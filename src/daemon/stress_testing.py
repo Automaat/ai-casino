@@ -7,9 +7,9 @@ from loguru import logger
 
 from src.daemon.config import MonteCarloConfig
 from src.daemon.state import MonteCarloRecord
-from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.metrics.monte_carlo import MonteCarloSimulator, SimulationConfig, SimulationMethod
+from src.v1.trades.brokers import Broker
 
 
 class DaemonStressTester:
@@ -17,7 +17,7 @@ class DaemonStressTester:
 
     def __init__(
         self,
-        broker_client: AlpacaBroker,
+        broker_client: Broker,
         market_fetcher: MarketDataFetcher,
         config: MonteCarloConfig,
     ) -> None:

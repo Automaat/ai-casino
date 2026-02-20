@@ -6,13 +6,13 @@ from unittest.mock import Mock, patch
 import pytest
 from alpaca.trading.enums import OrderClass
 
-from src.data.broker import AlpacaBroker, BrokerAccountInfo, BrokerPosition, OrderStatus
+from src.v1.trades.brokers import AlpacaBroker, BrokerAccountInfo, BrokerPosition, OrderStatus
 
 
 @pytest.fixture
 def mock_trading_client():
     """Mock Alpaca TradingClient."""
-    with patch("src.data.broker.TradingClient") as mock_client:
+    with patch("src.v1.trades.brokers.alpaca.TradingClient") as mock_client:
         yield mock_client
 
 
@@ -459,7 +459,7 @@ def test_submit_order_with_stop_loss_rounds_below_dollar(mock_trading_client, mo
 
 def test_submit_order_validates_stop_loss_price(mock_trading_client, monkeypatch):
     """Test order with invalid stop_loss_price raises error."""
-    from src.data.broker import BrokerAPIError
+    from src.v1.trades.brokers import BrokerAPIError
 
     monkeypatch.setenv("ALPACA_API_KEY", "test-key")
     monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")

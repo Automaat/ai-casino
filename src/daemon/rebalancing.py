@@ -3,8 +3,8 @@
 from loguru import logger
 from pydantic import BaseModel
 
-from src.data.broker import AlpacaBroker
 from src.optimization.portfolio import OptimizedPortfolio, PortfolioOptimizer, PortfolioRebalance
+from src.v1.trades.brokers import Broker
 
 
 class RebalancingResult(BaseModel):
@@ -22,7 +22,7 @@ class DaemonRebalancer:
     def __init__(
         self,
         optimizer: PortfolioOptimizer,
-        broker: AlpacaBroker | None,
+        broker: Broker | None,
         rebalance_threshold: float,
     ) -> None:
         """Initialize daemon rebalancer.
@@ -40,7 +40,7 @@ class DaemonRebalancer:
             f"auto_execute={'yes' if broker else 'no'})"
         )
 
-    def set_broker(self, broker: AlpacaBroker) -> None:
+    def set_broker(self, broker: Broker) -> None:
         """Set broker after initialization (deferred to avoid event loop issues)."""
         self.broker = broker
         self.optimizer.set_broker(broker)
