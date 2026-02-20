@@ -11,7 +11,12 @@ Multi-agent stock trading system: technical analysis, sentiment (FinBERT), news 
 
 ```
 src/
-├── coordinator/     # PRIMARY: TradingCoordinator (LLM tool-calling loop), tools/, memory
+├── v1/
+│   ├── coordinator/ # PRIMARY: TradingCoordinator (LLM tool-calling loop), tools/, memory
+│   ├── event_queue/ # Event queue consumer and models
+│   ├── notifications/ # Notification service and channels
+│   ├── tasks/       # Scheduled task runner
+│   └── watchers/    # Market event watchers (news, social, trump, etc.)
 ├── agents/          # TraderAgent, TradingSupervisor, GamePlanAgent, RiskManagementAgent, MetaAgent, CriticAgent, TradeJournalAgent, EventTriageAgent
 ├── workers/         # Stateless LLM execution units: technical, sentiment, news, fundamental, comparative, web_research, social, trump, thesis_research
 ├── workflows/       # Per-symbol pipeline (called via analyze_symbol tool): stages/, orchestrator
@@ -171,8 +176,8 @@ TradingCoordinator.run_cycle()
 ```
 
 **Adding new capabilities to coordinator:**
-- New tool → implement in `src/coordinator/tools/` or `src/tools/`
-- Register in `build_coordinator_registry()` (`src/coordinator/tools/__init__.py`)
+- New tool → implement in `src/v1/coordinator/tools/` or `src/tools/`
+- Register in `build_coordinator_registry()` (`src/v1/coordinator/tools/__init__.py`)
 - New agent → wire as tool or inject into existing tool
 
 **Legacy pipeline** (`fetch data → technical → sentiment → news → decision`) still exists and is called by `analyze_symbol` tool internally. Do not add new features there — integrate at coordinator level instead.
