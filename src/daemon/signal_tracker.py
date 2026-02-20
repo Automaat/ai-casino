@@ -6,9 +6,9 @@ from loguru import logger
 from pandas.tseries.offsets import BDay
 
 from src.cache.historical import HistoricalCache
-from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.metrics.models import SignalUpdateRecord
+from src.v1.trades.brokers import Broker
 
 
 class SignalOutcomeTracker:
@@ -18,7 +18,7 @@ class SignalOutcomeTracker:
         self,
         historical_cache: HistoricalCache,
         market_fetcher: MarketDataFetcher,
-        broker: AlpacaBroker | None = None,
+        broker: Broker | None = None,
     ) -> None:
         """Initialize signal outcome tracker.
 

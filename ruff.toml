@@ -167,6 +167,9 @@ ignore = [
     "PLR0912", # many branches OK for source evaluation
     "PLR0915", # many statements OK for discovery pipeline
 ]
+"src/v1/trades/brokers/alpaca.py" = [
+    "TRY301",  # raise in try OK for data validation
+]
 "src/daemon/api/**/*.py" = [
     "B008",    # Depends() in argument defaults is standard FastAPI pattern
 ]

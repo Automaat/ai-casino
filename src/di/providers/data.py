@@ -4,7 +4,6 @@ from src.cache.historical import HistoricalCache
 from src.circuit_breaker import CircuitBreakerRegistry
 from src.daemon.config import DaemonConfig
 from src.data.base_news_fetcher import BaseNewsFetcher
-from src.data.broker import AlpacaBroker
 from src.data.comparative import ComparativeDataFetcher
 from src.data.earnings import EarningsCalendarFetcher
 from src.data.finnhub import FinnhubFetcher
@@ -16,6 +15,7 @@ from src.data.truth_social import TruthSocialFetcher
 from src.data.universe import StockUniverseFetcher
 from src.data.websearch import WebSearchFetcher
 from src.v1.notifications.service import NotificationService
+from src.v1.trades.brokers import AlpacaBroker
 
 
 def create_historical_cache() -> HistoricalCache:

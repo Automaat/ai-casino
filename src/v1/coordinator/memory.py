@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from src.daemon.state import DaemonState
     from src.daemon.state.models import SignalOutcome
-    from src.data.broker import AlpacaBroker
     from src.database.engine import DatabaseEngine
     from src.v1.coordinator.decision_models import DecisionQueryResult
+    from src.v1.trades.brokers import Broker
 
 # Constants for memory limits
 _MAX_IN_MEMORY_RECORDS: Final[int] = 20
@@ -47,7 +47,7 @@ class CoordinatorMemory:
         memory_file: Path | None = None,
         daemon_state: DaemonState | None = None,
         database_engine: DatabaseEngine | None = None,
-        broker: AlpacaBroker | None = None,
+        broker: Broker | None = None,
     ) -> None:
         """Initialize coordinator memory.
 

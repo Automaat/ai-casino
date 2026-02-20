@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from src.daemon.broker_manager import BrokerManager
     from src.daemon.config import DaemonConfig
     from src.daemon.state import DaemonState
-    from src.data.broker import AlpacaBroker
     from src.discovery.models import DiscoveryCandidate
+    from src.v1.trades.brokers import Broker
 
 
 class EventBatchEvaluator:
@@ -26,7 +26,7 @@ class EventBatchEvaluator:
         state: DaemonState,
         config: DaemonConfig,
         broker_manager: BrokerManager,
-        broker: AlpacaBroker | None = None,
+        broker: Broker | None = None,
     ) -> None:
         """Initialize batch evaluator.
 

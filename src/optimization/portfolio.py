@@ -13,7 +13,7 @@ from scipy.optimize import minimize
 from src.data.market import MarketDataFetcher
 
 if TYPE_CHECKING:
-    from src.data.broker import AlpacaBroker
+    from src.v1.trades.brokers import Broker
 
 # Constants
 MIN_WEIGHT_THRESHOLD = 0.001  # Minimum weight to include in portfolio (0.1%)
@@ -71,7 +71,7 @@ class PortfolioOptimizer:
     def __init__(
         self,
         market_fetcher: MarketDataFetcher,
-        broker: AlpacaBroker | None = None,
+        broker: Broker | None = None,
         period_days: int = 365,
     ) -> None:
         """Initialize portfolio optimizer.
@@ -88,7 +88,7 @@ class PortfolioOptimizer:
             f"Initialized PortfolioOptimizer (period={period_days} days, broker={'yes' if broker else 'no'})"
         )
 
-    def set_broker(self, broker: AlpacaBroker) -> None:
+    def set_broker(self, broker: Broker) -> None:
         """Set broker after initialization (deferred to avoid event loop issues)."""
         self.broker = broker
         logger.debug("PortfolioOptimizer broker updated")

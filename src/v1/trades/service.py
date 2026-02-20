@@ -21,10 +21,10 @@ from src.v1.trades.models import (
 
 if TYPE_CHECKING:
     from src.daemon.config import DaemonConfig
-    from src.data.broker import AlpacaBroker, OrderStatus
     from src.database.engine import DatabaseEngine
     from src.v1.coordinator.confirmation import TradeConfirmationHandler
     from src.v1.notifications.service import NotificationService
+    from src.v1.trades.brokers import Broker, OrderStatus
 
 
 class TradingService:
@@ -32,7 +32,7 @@ class TradingService:
 
     def __init__(
         self,
-        broker: AlpacaBroker,
+        broker: Broker,
         daemon_config: DaemonConfig,
         database_engine: DatabaseEngine | None = None,
         notification_service: NotificationService | None = None,
@@ -41,7 +41,7 @@ class TradingService:
         """Initialize trading service.
 
         Args:
-            broker: Alpaca broker instance
+            broker: Broker instance
             daemon_config: Daemon configuration
             database_engine: Optional database engine for persistence
             notification_service: Optional notification service

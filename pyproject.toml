@@ -126,6 +126,7 @@ project-excludes = [
     "services/**",
     "src/agents/thesis_researcher.py",  # Decorator wrapper changes Awaitable->Coroutine signature
     "src/daemon/positions.py",  # Pyrefly module path resolution bug with BaseRepository[T] generics
+    "src/v1/trades/brokers/alpaca.py",  # Alpaca SDK returns dict|Order union; pyrefly can't infer attrs
 ]
 
 [tool.uv]

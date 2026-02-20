@@ -8,17 +8,17 @@ from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParametersSchema
 
 if TYPE_CHECKING:
-    from src.data.broker import AlpacaBroker
+    from src.v1.trades.brokers import Broker
 
 
 class PortfolioStatusTool(BaseTool):
     """Tool to get current portfolio status."""
 
-    def __init__(self, broker: AlpacaBroker) -> None:
+    def __init__(self, broker: Broker) -> None:
         """Initialize tool with broker.
 
         Args:
-            broker: Alpaca broker instance
+            broker: Broker instance
         """
         self._broker = broker
 

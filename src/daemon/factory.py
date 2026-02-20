@@ -18,7 +18,6 @@ from src.daemon.prefetch import DataPrefetcher
 from src.daemon.scheduler import MarketScheduler
 from src.daemon.state import DaemonState
 from src.daemon.task_runner import ScheduledTaskRunner
-from src.data.broker import AlpacaBroker
 from src.data.market import MarketDataFetcher
 from src.metrics.tracker import BaseMetricsTracker, create_metrics_tracker
 from src.optimization.param_store import OptimizedParamStore
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
     from src.v1.coordinator.agent import TradingCoordinator
     from src.v1.event_queue.consumer import EventQueueConsumer
     from src.v1.notifications.service import NotificationService
+    from src.v1.trades.brokers import Broker
     from src.v1.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.v1.watchers.news_trending_watcher import NewsTrendingWatcher
     from src.v1.watchers.news_watcher import NewsWatcher
@@ -59,7 +59,7 @@ class DaemonComponents:
     task_runner: ScheduledTaskRunner
     container: AppContainer
     historical_cache: HistoricalCache
-    broker: AlpacaBroker | None
+    broker: Broker | None
 
     # Runtime state
     running: bool = False
@@ -371,7 +371,7 @@ class DaemonFactory:
         logger.warning("--force-live flag used, skipping validation")
         return None
 
-    def _create_rebalancer(self, broker: AlpacaBroker | None) -> DaemonRebalancer:
+    def _create_rebalancer(self, broker: Broker | None) -> DaemonRebalancer:
         """Create portfolio rebalancer.
 
         Args:
@@ -395,7 +395,7 @@ class DaemonFactory:
             rebalance_threshold=self.config.rebalancing.rebalance_threshold,
         )
 
-    def _create_position_manager(self, broker: AlpacaBroker | None) -> PositionManager:
+    def _create_position_manager(self, broker: Broker | None) -> PositionManager:
         """Create position manager.
 
         Args:
