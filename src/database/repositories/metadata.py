@@ -57,12 +57,14 @@ class MetadataRepository(BaseRepository[dict]):
         value = value_dict["data"]
 
         # Parse datetime strings back to datetime objects
-        if isinstance(value, str) and value.endswith("Z"):
+        if isinstance(value, str):
             try:
-                # Replace Z with UTC timezone - fromisoformat handles +00:00
-                return datetime.fromisoformat(value.removesuffix("Z")).replace(tzinfo=UTC)
+                dt = datetime.fromisoformat(value.removesuffix("Z"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                return dt
             except ValueError:
-                return value
+                pass
 
         return value
 
