@@ -6,8 +6,8 @@ import pytest
 
 from src.coordinator.event_prompt import EventCycleContext, EventCyclePromptBuilder, extract_symbols
 from src.coordinator.models import CoordinatorConfig
-from src.event_queue.models import QueuedMarketEvent
 from src.strategies.session import TradingSession
+from src.v1.event_queue.models import QueuedMarketEvent
 
 
 def _make_event(

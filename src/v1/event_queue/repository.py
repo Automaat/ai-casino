@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, or_, select, text, update
 
 from src.database.repositories.base import BaseRepository
-from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent
+from src.v1.event_queue.models import MarketEventQueueORM, QueuedMarketEvent
 
 
 class MarketEventQueueRepository(BaseRepository[MarketEventQueueORM]):

@@ -5,9 +5,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from src.coordinator.models import CoordinatorConfig
-from src.event_queue.models import QueuedMarketEvent
 from src.prompts import PromptLoader
 from src.strategies.session import TradingSession
+from src.v1.event_queue.models import QueuedMarketEvent
 
 _EVENT_TYPE_TEMPLATES = frozenset(
     {"news", "news_watchlist", "social", "filing", "trump", "anomaly", "news_trending", "signal"}

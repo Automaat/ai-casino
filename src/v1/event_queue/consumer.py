@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from src.event_queue.models import QueuedMarketEvent
+from src.v1.event_queue.models import QueuedMarketEvent
 
 if TYPE_CHECKING:
     from src.coordinator.agent import TradingCoordinator
     from src.coordinator.models import CoordinatorConfig
     from src.daemon.market_service import MarketService
-    from src.event_queue.service import MarketEventQueue
     from src.strategies.session import TradingSession
+    from src.v1.event_queue.service import MarketEventQueue
 
 
 class EventQueueConsumer:

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from src.agents.critic import CriticAgent
     from src.daemon.threshold_adapter import AdaptiveThresholdManager
     from src.data.broker import AlpacaBroker
-    from src.event_queue.models import QueuedMarketEvent
+    from src.v1.event_queue.models import QueuedMarketEvent
     from src.workflows.types import TradingWorkflowResult
 
 

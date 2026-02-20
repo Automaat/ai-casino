@@ -10,7 +10,7 @@ from loguru import logger
 
 from src.agents.event_triage import EventTriageAgent
 from src.daemon.events import BaseEvent, NewsEvent, NewsWatchlistEvent, TriageResult, Urgency
-from src.event_queue.service import MarketEventQueue
+from src.v1.event_queue.service import MarketEventQueue
 
 if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState

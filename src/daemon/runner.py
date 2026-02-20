@@ -309,7 +309,7 @@ class DaemonRunner:
 
         try:
             from src.daemon.market_service import MarketService
-            from src.event_queue.consumer import EventQueueConsumer
+            from src.v1.event_queue.consumer import EventQueueConsumer
 
             queue = self._container.market_event_queue()
             coordinator = self._init_coordinator()

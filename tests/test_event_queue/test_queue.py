@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.event_queue.models import MarketEventQueueORM, QueuedMarketEvent, QueueEventObservability
-from src.event_queue.repository import MarketEventQueueRepository
-from src.event_queue.service import MarketEventQueue, QueueStats
+from src.v1.event_queue.models import MarketEventQueueORM, QueuedMarketEvent, QueueEventObservability
+from src.v1.event_queue.repository import MarketEventQueueRepository
+from src.v1.event_queue.service import MarketEventQueue, QueueStats
 
 
 def _make_orm_record(
