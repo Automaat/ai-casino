@@ -11,6 +11,7 @@ from src.di.providers import daemon as daemon_providers
 from src.di.providers import data as data_providers
 from src.di.providers import database as database_providers
 from src.di.providers import models as model_providers
+from src.di.providers import risk as risk_providers
 from src.di.providers import watchers as watcher_providers
 from src.di.providers import workers as worker_providers
 from src.di.providers import workflows as workflow_providers
@@ -319,10 +320,16 @@ class AppContainer(containers.DeclarativeContainer):
 
     risk_management_agent = providers.Factory(
         agent_providers.create_risk_management_agent,
-        llm_client=llm_client,
         daemon_config=daemon_config,
         portfolio_var_calculator=portfolio_var_calculator,
         audit_repository=None,
+    )
+
+    risk_service = providers.Singleton(
+        risk_providers.create_risk_service,
+        risk_agent=risk_management_agent,
+        broker=alpaca_broker,
+        market_fetcher=market_fetcher,
     )
 
     # Coordinator agent - Factory pattern to support runtime daemon_state override

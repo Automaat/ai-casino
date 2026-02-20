@@ -43,10 +43,9 @@ class ExecuteTradeTool(BaseTool):
             function=ToolFunction(
                 name=self.name,
                 description=(
-                    "Execute a market order (BUY or SELL) with optional stop loss. "
-                    "Requires confidence (0.0-1.0) for threshold validation and rationale for "
-                    "trade decision. In LIVE mode, requires user confirmation. In PAPER mode, "
-                    "executes automatically."
+                    "Execute a market order (BUY or SELL). Risk management automatically validates "
+                    "position sizing, stop loss, and portfolio constraints. Quantity will be capped "
+                    "to risk-approved limits. Use recommended_shares from analyze_symbol output."
                 ),
                 parameters=ToolParametersSchema(
                     properties={
@@ -103,10 +102,11 @@ class ExecuteTradeTool(BaseTool):
             Order status with details or rejection message
         """
         try:
+            original_qty = int(kwargs["quantity"])
             request = TradeRequest(
                 symbol=str(kwargs["symbol"]).upper(),
                 action=TradeAction(str(kwargs["action"]).upper()),
-                quantity=int(kwargs["quantity"]),
+                quantity=original_qty,
                 confidence=float(kwargs["confidence"]),
                 rationale=str(kwargs["rationale"]),
                 stop_loss_price=float(kwargs["stop_loss_price"])
@@ -117,6 +117,12 @@ class ExecuteTradeTool(BaseTool):
             return f"Error: Invalid trade parameters: {e}"
 
         result = await self._trading_service.execute(request)
+
+        # Track risk capping: quantity may have been reduced by risk limits
+        if result.executed and result.quantity < original_qty:
+            result.requested_quantity = original_qty
+            result.risk_capped = True
+
         return self._format_result(result, request.rationale)
 
     @staticmethod
@@ -143,6 +149,12 @@ class ExecuteTradeTool(BaseTool):
 
         if result.stop_loss_price is not None:
             lines.append(f"**Stop Loss:** ${result.stop_loss_price:.2f}")
+
+        if result.risk_capped and result.requested_quantity is not None:
+            lines.append(
+                f"\n**Note:** Quantity capped from {result.requested_quantity} "
+                f"to {result.quantity} by risk limits"
+            )
 
         lines.extend(["", "## Rationale", rationale])
 

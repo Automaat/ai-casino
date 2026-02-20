@@ -85,6 +85,11 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 **Min Confidence to Trade:** {min_confidence_to_trade:.0%} (conviction threshold)
 **Confirmation Mode:** {trading_mode}
 
+**Risk Enforcement (automatic):**
+- analyze_symbol shows full risk assessment: approval, recommended shares, stop loss, take profit
+- execute_trade re-validates risk and caps quantity to risk-approved limits
+- Use recommended_shares from analysis as your quantity
+
 **Risk stance guidelines:**
 - AGGRESSIVE: Target 3-5 positions, 8-10% sizing, {min_confidence_to_trade:.0%}+ confidence
 - NEUTRAL: Target 2-3 positions, 5-7% sizing, {min_confidence_to_trade:.0%}+ confidence

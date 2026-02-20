@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
 
-from src.v1.coordinator.metrics import CoordinatorCycleMetrics
 from src.di.container import create_container
+from src.v1.coordinator.metrics import CoordinatorCycleMetrics
 
 
 async def migrate_coordinator_metrics() -> tuple[int, int, int]:

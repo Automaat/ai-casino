@@ -323,15 +323,89 @@ class TestRiskLevel:
         assert TradingService._derive_risk_level(0.10) == "HIGH"
 
 
-class TestDefaultStopLoss:
-    """Tests for default stop loss calculation."""
+def _make_risk_decision(
+    approved: bool = True,
+    recommended_shares: int = 10,
+    stop_loss_price: float = 140.0,
+    risk_level: str = "LOW",
+) -> Mock:
+    decision = Mock()
+    decision.approved = approved
+    decision.recommended_shares = recommended_shares
+    decision.stop_loss_price = stop_loss_price
+    decision.risk_level = risk_level
+    decision.reasoning = "Test risk decision"
+    return decision
 
-    @pytest.mark.unit
-    def test_buy_stop_loss(self) -> None:
-        result = TradingService._default_stop_loss(100.0, "buy")
-        assert result == pytest.approx(95.0)
 
+class TestRiskIntegration:
+    """Tests for risk service integration in TradingService."""
+
+    @pytest.mark.asyncio
     @pytest.mark.unit
-    def test_sell_stop_loss(self) -> None:
-        result = TradingService._default_stop_loss(100.0, "sell")
-        assert result == pytest.approx(105.0)
+    async def test_risk_rejection_blocks_trade(self, broker: Mock, daemon_config: Mock) -> None:
+        risk_service = AsyncMock()
+        risk_service.assess_trade = AsyncMock(return_value=_make_risk_decision(approved=False))
+        service = TradingService(broker=broker, daemon_config=daemon_config, risk_service=risk_service)
+
+        result = await service.execute(_REQUEST)
+
+        assert result.executed is False
+        assert result.rejection is not None
+        assert result.rejection.reason == TradeRejectionReason.RISK_REJECTED
+        broker.submit_order.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_risk_caps_quantity(self, broker: Mock, daemon_config: Mock) -> None:
+        broker.submit_order = Mock(return_value=_make_order_status(qty=5))
+        risk_service = AsyncMock()
+        risk_service.assess_trade = AsyncMock(return_value=_make_risk_decision(recommended_shares=5))
+        request = TradeRequest(
+            symbol="AAPL",
+            action=TradeAction.BUY,
+            quantity=20,
+            confidence=0.8,
+            rationale="Strong momentum breakout detected",
+        )
+        service = TradingService(broker=broker, daemon_config=daemon_config, risk_service=risk_service)
+
+        result = await service.execute(request)
+
+        assert result.executed is True
+        call_kwargs = broker.submit_order.call_args.kwargs
+        assert call_kwargs["qty"] == 5
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_risk_sets_stop_loss_when_not_provided(self, broker: Mock, daemon_config: Mock) -> None:
+        risk_service = AsyncMock()
+        risk_service.assess_trade = AsyncMock(return_value=_make_risk_decision(stop_loss_price=142.50))
+        request = TradeRequest(
+            symbol="AAPL",
+            action=TradeAction.BUY,
+            quantity=10,
+            confidence=0.8,
+            rationale="Strong momentum breakout detected",
+        )
+        service = TradingService(broker=broker, daemon_config=daemon_config, risk_service=risk_service)
+
+        result = await service.execute(request)
+
+        assert result.executed is True
+        assert result.stop_loss_price == 142.50
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_risk_service_exception_blocks_trade(self, broker: Mock, daemon_config: Mock) -> None:
+        risk_service = AsyncMock()
+        risk_service.assess_trade = AsyncMock(side_effect=RuntimeError("Risk API down"))
+        service = TradingService(broker=broker, daemon_config=daemon_config, risk_service=risk_service)
+
+        result = await service.execute(_REQUEST)
+
+        assert result.executed is False
+        assert result.rejection is not None
+        assert result.rejection.reason == TradeRejectionReason.RISK_REJECTED
+        assert "Risk assessment error" in result.rejection.message
+        broker.submit_order.assert_not_called()

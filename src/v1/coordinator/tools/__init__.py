@@ -93,12 +93,14 @@ def build_coordinator_registry(
     registry.register(AnalyzeSymbolTool(container, coordinator))
     registry.register(PortfolioStatusTool(broker))
 
+    risk_service = container.risk_service()
     trading_service = TradingService(
         broker=broker,
         daemon_config=daemon_config,
         database_engine=_resolve_database_engine(daemon_config, container),
         notification_service=notification_service,
         confirmation_handler=_create_confirmation_handler(daemon_config),
+        risk_service=risk_service,
     )
     registry.register(ExecuteTradeTool(trading_service, daemon_config))
 

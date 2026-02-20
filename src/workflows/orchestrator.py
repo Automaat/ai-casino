@@ -98,13 +98,13 @@ class TradingWorkflow:
     def _initialize_agents(self, components: WorkflowComponents) -> None:
         """Initialize trading and risk agents."""
         from src.agents.risk import RiskManagementAgent
+        from src.daemon.config.risk import PositionSizingConfig
 
         self.trader = self._container.trader_agent()
         self.risk_manager = RiskManagementAgent(
-            components.llm_client,
+            position_sizing_config=components.position_sizing_config or PositionSizingConfig(),
             portfolio_var_calculator=components.portfolio_var_calculator,
             portfolio_var_config=components.portfolio_var_config,
-            position_sizing_config=components.position_sizing_config,
         )
 
     def _initialize_risk_validation(self, components: WorkflowComponents) -> None:

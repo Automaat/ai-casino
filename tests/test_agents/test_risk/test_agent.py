@@ -20,6 +20,7 @@ from src.agents.risk import (
 )
 from src.agents.risk.context import RiskContext
 from src.agents.technical import TechnicalAnalysis
+from src.daemon.config.risk import PositionSizingConfig
 from src.data.broker import BrokerPosition
 from src.metrics.portfolio_var import PortfolioVaRCalculator, PortfolioVaRResult
 from src.strategies.signal import Signal
@@ -53,13 +54,15 @@ def test_risk_agent_init(test_container):
     assert agent.enable_trailing_stop is True
 
 
-def test_risk_agent_custom_limits(test_container):
+def test_risk_agent_custom_limits():
     """Test custom risk limits."""
+    config = PositionSizingConfig(
+        max_risk_per_trade_pct=3.0,
+        max_total_exposure_pct=90.0,
+        max_single_position_pct=25.0,
+    )
     agent = RiskManagementAgent(
-        test_container.llm_client(),
-        max_position_risk=3.0,
-        max_exposure=90.0,
-        max_single_position=25.0,
+        position_sizing_config=config,
         enable_trailing_stop=False,
     )
 
@@ -114,9 +117,9 @@ def test_calculate_stop_loss_sell_action(risk_agent, sample_ohlcv_data):
     assert stop_loss.trailing_stop is None
 
 
-def test_calculate_stop_loss_no_trailing(test_container, sample_ohlcv_data):
+def test_calculate_stop_loss_no_trailing(sample_ohlcv_data):
     """Test stop-loss without trailing stop."""
-    agent = RiskManagementAgent(test_container.llm_client(), enable_trailing_stop=False)
+    agent = RiskManagementAgent(PositionSizingConfig(), enable_trailing_stop=False)
     stop_loss = agent._calculate_stop_loss(150.0, sample_ohlcv_data, Signal.BUY)
 
     assert stop_loss.trailing_stop is None
@@ -455,10 +458,10 @@ def _make_position(symbol: str, market_value: float) -> BrokerPosition:
 
 
 class TestPortfolioVaRValidation:
-    def test_within_limits(self, test_container):
+    def test_within_limits(self):
         var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -478,10 +481,10 @@ class TestPortfolioVaRValidation:
         assert result is True
         assert len(warnings) == 0
 
-    def test_breach(self, test_container):
+    def test_breach(self):
         var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
         )
@@ -502,9 +505,9 @@ class TestPortfolioVaRValidation:
         assert any("VaR95" in w for w in warnings)
         assert any("CVaR99" in w for w in warnings)
 
-    def test_disabled(self, test_container):
+    def test_disabled(self):
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_config=PortfolioVaRConfig(enabled=False),
         )
 
@@ -522,7 +525,7 @@ class TestPortfolioVaRValidation:
 
         assert result is True
 
-    def test_insufficient_data(self, test_container):
+    def test_insufficient_data(self):
         insufficient_result = PortfolioVaRResult(
             var_95=0.0,
             var_99=0.0,
@@ -536,7 +539,7 @@ class TestPortfolioVaRValidation:
             sufficient_data=False,
         )
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_calculator=_make_mock_var_calculator(insufficient_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -556,10 +559,10 @@ class TestPortfolioVaRValidation:
         assert result is True
         assert any("Insufficient" in w for w in warnings)
 
-    def test_sell_always_approved(self, test_container):
+    def test_sell_always_approved(self):
         var_result = _make_var_result(var_95=0.10, cvar_99=0.20)
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -580,9 +583,9 @@ class TestPortfolioVaRValidation:
 
 
 class TestAdaptiveStopLoss:
-    def test_high_cdar(self, test_container):
+    def test_high_cdar(self):
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=True,
@@ -596,9 +599,9 @@ class TestAdaptiveStopLoss:
 
         assert multiplier == agent._var_config.atr_multiplier_min
 
-    def test_low_cdar(self, test_container):
+    def test_low_cdar(self):
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=True,
@@ -611,9 +614,9 @@ class TestAdaptiveStopLoss:
 
         assert multiplier == agent.ATR_MULTIPLIER
 
-    def test_disabled(self, test_container):
+    def test_disabled(self):
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_config=PortfolioVaRConfig(
                 enabled=True,
                 adaptive_stop_loss=False,
@@ -626,10 +629,10 @@ class TestAdaptiveStopLoss:
 
 
 class TestGenerateRiskReport:
-    def test_fields(self, test_container):
+    def test_fields(self):
         var_result = _make_var_result(var_95=0.02, cvar_99=0.03)
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True),
         )
@@ -644,10 +647,10 @@ class TestGenerateRiskReport:
         assert report.current_exposure_percent == 30.0
         assert report.risk_status == "HEALTHY"
 
-    def test_breach_status(self, test_container):
+    def test_breach_status(self):
         var_result = _make_var_result(var_95=0.05, cvar_99=0.08)
         agent = RiskManagementAgent(
-            test_container.llm_client(),
+            PositionSizingConfig(),
             portfolio_var_calculator=_make_mock_var_calculator(var_result),
             portfolio_var_config=PortfolioVaRConfig(enabled=True, max_var_95=0.03, max_cvar_99=0.05),
         )
@@ -661,9 +664,9 @@ class TestGenerateRiskReport:
 
 
 @pytest.mark.asyncio
-async def test_assess_with_target_weight(test_container, sample_ohlcv_data):
+async def test_assess_with_target_weight(sample_ohlcv_data):
     """Test risk assessment with target portfolio weight."""
-    agent = RiskManagementAgent(test_container.llm_client())
+    agent = RiskManagementAgent(PositionSizingConfig())
 
     account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
@@ -687,9 +690,9 @@ async def test_assess_with_target_weight(test_container, sample_ohlcv_data):
 
 
 @pytest.mark.asyncio
-async def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data):
+async def test_broker_failure_blocks_approval(sample_ohlcv_data):
     """broker_api_failed flag prevents approval."""
-    agent = RiskManagementAgent(test_container.llm_client())
+    agent = RiskManagementAgent(PositionSizingConfig())
 
     account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
@@ -714,9 +717,9 @@ async def test_broker_failure_blocks_approval(test_container, sample_ohlcv_data)
 
 
 @pytest.mark.asyncio
-async def test_assess_includes_take_profit(test_container, sample_ohlcv_data):
+async def test_assess_includes_take_profit(sample_ohlcv_data):
     """BUY assessment populates take_profit and reward_risk_ratio."""
-    agent = RiskManagementAgent(test_container.llm_client())
+    agent = RiskManagementAgent(PositionSizingConfig())
     account_info = AccountInfo(balance=100000.0, available_cash=50000.0, positions={}, total_exposure=0.0)
 
     result = agent.assess(
@@ -736,12 +739,10 @@ async def test_assess_includes_take_profit(test_container, sample_ohlcv_data):
 
 
 @pytest.mark.asyncio
-async def test_validate_risk_rejects_low_rr(test_container, account_info):
+async def test_validate_risk_rejects_low_rr(account_info):
     """R:R below minimum rejects trade."""
-    from src.daemon.config.risk import PositionSizingConfig
-
     config = PositionSizingConfig(min_reward_risk_ratio=3.0)
-    agent = RiskManagementAgent(test_container.llm_client(), position_sizing_config=config)
+    agent = RiskManagementAgent(config)
 
     position_sizing = PositionSizeCalculation(
         recommended_shares=100,

@@ -153,6 +153,9 @@ ignore = [
     "PLR0912", # many branches OK for signal assessment
     "PLR0913", # many args OK for watcher constructors
 ]
+"src/v1/trades/service.py" = [
+    "PLR0913", # many args OK for DI constructor with optional deps
+]
 "src/models/llm.py" = [
     "PLR0913", # many args OK for provider-specific connection params
 ]
