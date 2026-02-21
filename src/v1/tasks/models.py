@@ -1,8 +1,10 @@
 """Task scheduling and result models."""
 
+from __future__ import annotations
+
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class DayOfWeek(StrEnum):
@@ -31,13 +33,33 @@ class DedupStrategy(StrEnum):
 class TaskSchedule(BaseModel):
     """Schedule definition for a task."""
 
-    time: str = Field(description="Scheduled time in HH:MM format")
+    time: str | None = Field(
+        default=None, description="HH:MM time (required for DAILY/NONE, omit for INTERVAL)"
+    )
     days: list[DayOfWeek] = Field(description="Days to run on")
     enabled: bool = True
     dedup: DedupStrategy = DedupStrategy.DAILY
     dedup_interval_minutes: int | None = Field(
         default=None, description="Minutes between runs (required for INTERVAL strategy)"
     )
+
+    @model_validator(mode="after")
+    def _validate(self) -> TaskSchedule:
+        """Validate time/interval consistency."""
+        if self.dedup == DedupStrategy.INTERVAL:
+            if self.dedup_interval_minutes is None:
+                msg = "dedup_interval_minutes required for INTERVAL strategy"
+                raise ValueError(msg)
+            if self.time is not None:
+                msg = "time must be omitted (set to None) for INTERVAL strategy"
+                raise ValueError(msg)
+            return self
+
+        # Non-INTERVAL strategies (DAILY, NONE): require time.
+        if self.time is None:
+            msg = "time required for non-INTERVAL strategies"
+            raise ValueError(msg)
+        return self
 
     def __repr__(self) -> str:
         """String representation."""

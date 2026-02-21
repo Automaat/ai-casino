@@ -110,7 +110,9 @@ class DaemonRunner:
         """
         from zoneinfo import ZoneInfo
 
+        from src.database.engine import MissingDatabaseURLError
         from src.v1.tasks.implementations.game_plan import GamePlanTask
+        from src.v1.tasks.implementations.portfolio_snapshot import PortfolioSnapshotTask
         from src.v1.tasks.interface import Task
         from src.v1.tasks.runner import TaskRunner
 
@@ -129,6 +131,21 @@ class DaemonRunner:
                     scheduler=self.scheduler,
                 )
             )
+
+        # Portfolio snapshot task
+        snapshot_config = self.config.portfolio_snapshot
+        if snapshot_config.enabled and self._components.broker:
+            try:
+                database_engine = self._container.database_engine()
+                tasks.append(
+                    PortfolioSnapshotTask(
+                        broker=self._components.broker,
+                        database_engine=database_engine,
+                        config=snapshot_config,
+                    )
+                )
+            except MissingDatabaseURLError:
+                logger.warning("Portfolio snapshot task disabled: database not configured")
 
         tz = ZoneInfo(self.config.schedule.timezone)
         return TaskRunner(tasks, tz)
