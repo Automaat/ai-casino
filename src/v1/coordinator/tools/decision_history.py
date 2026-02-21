@@ -88,7 +88,33 @@ class QueryPastDecisionsTool(BaseTool):
         )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute decision history query with outcome analysis.
+        """Sync fallback - delegates to aexecute.
+
+        Args:
+            **kwargs: Tool arguments
+
+        Returns:
+            Formatted markdown table with decisions and statistics
+
+        Raises:
+            RuntimeError: If called from within a running event loop
+        """
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "QueryPastDecisionsTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
+
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute decision history query with outcome analysis asynchronously.
 
         Args:
             **kwargs: Tool arguments
@@ -101,7 +127,6 @@ class QueryPastDecisionsTool(BaseTool):
         Returns:
             Formatted markdown table with decisions and statistics
         """
-        # Extract and validate parameters
         symbol = kwargs.get("symbol")
         if symbol and not isinstance(symbol, str):
             symbol = str(symbol)
@@ -124,17 +149,13 @@ class QueryPastDecisionsTool(BaseTool):
         logger.info(f"Querying past decisions: symbol={symbol}, signal={signal}, lookback={lookback_days}d")
 
         try:
-            # Run async query via memory layer
-            return asyncio.run(
-                self._async_execute(
-                    symbol=symbol,
-                    signal=signal,
-                    lookback_days=lookback_days,
-                    min_confidence=min_confidence,
-                    horizon=horizon,
-                )
+            return await self._async_execute(
+                symbol=symbol,
+                signal=signal,
+                lookback_days=lookback_days,
+                min_confidence=min_confidence,
+                horizon=horizon,
             )
-
         except Exception as e:
             logger.opt(exception=True).error(f"Decision query failed: {e}")
             return f"Failed to query past decisions: {e}"

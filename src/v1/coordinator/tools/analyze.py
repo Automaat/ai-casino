@@ -207,7 +207,7 @@ class AnalyzeSymbolTool(BaseTool):
 
         # Store structured result in coordinator for reflection tool access
         if self._coordinator:
-            self._coordinator._last_analysis_results[symbol] = result  # noqa: SLF001
+            self._coordinator.last_analysis_results[symbol] = result
 
         return self._format_result(result)
 

@@ -1,5 +1,6 @@
 """Reflect on decision tool for coordinator."""
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -7,6 +8,7 @@ from loguru import logger
 from src.agents.critic import CriticAgent, CriticAnalysis, DecisionEvaluationRequest
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
+from src.v1.coordinator.memory import DecisionQueryParams
 
 if TYPE_CHECKING:
     from src.v1.coordinator.agent import TradingCoordinator
@@ -73,7 +75,33 @@ class ReflectOnDecisionTool(BaseTool):
         )
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
-        """Execute reflection on decision.
+        """Sync fallback - delegates to aexecute.
+
+        Args:
+            **kwargs: Tool arguments (symbol: str, reason: str)
+
+        Returns:
+            Formatted critique result
+
+        Raises:
+            RuntimeError: If called from within a running event loop
+        """
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "ReflectOnDecisionTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
+
+    async def aexecute(self, **kwargs: str | int | float | bool) -> str:
+        """Execute reflection on decision asynchronously.
 
         Args:
             **kwargs: Tool arguments (symbol: str, reason: str)
@@ -87,7 +115,7 @@ class ReflectOnDecisionTool(BaseTool):
         logger.info(f"Reflecting on {symbol} decision (reason: {reason})")
 
         # Check iteration limit
-        current_count = self._coordinator._reflection_counters.get(symbol, 0)  # noqa: SLF001
+        current_count = self._coordinator.reflection_counters.get(symbol, 0)
         if current_count >= MAX_REFLECTIONS_PER_SYMBOL:
             return (
                 f"⚠️ **Reflection limit reached for {symbol}** "
@@ -96,7 +124,7 @@ class ReflectOnDecisionTool(BaseTool):
             )
 
         # Retrieve last analysis result
-        result = self._coordinator._last_analysis_results.get(symbol)  # noqa: SLF001
+        result = self._coordinator.last_analysis_results.get(symbol)
         if result is None:
             return (
                 f"❌ **Cannot reflect on {symbol}** - no analysis found.\n\n"
@@ -104,54 +132,42 @@ class ReflectOnDecisionTool(BaseTool):
             )
 
         # Build evaluation request
-        request = self._build_evaluation_request(symbol, result, reason)
-
-        # Run critique
-        import asyncio
-        import concurrent.futures
-
-        def run_in_thread() -> CriticAnalysis:
-            return asyncio.run(self._critic_agent.evaluate(request))
+        request = await self._build_evaluation_request(symbol, result, reason)
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(run_in_thread)
-                critique = future.result()
+            critique = await self._critic_agent.evaluate(request)
         except Exception as e:
             logger.opt(exception=True).error(f"Critique failed for {symbol}: {e}")
             return f"❌ **Critique failed for {symbol}:** {e}"
 
         # Increment reflection counter
-        self._coordinator._reflection_counters[symbol] = current_count + 1  # noqa: SLF001
+        self._coordinator.reflection_counters[symbol] = current_count + 1
 
         # Format result
         return self._format_critique(symbol, reason, critique, current_count + 1)
 
-    def _build_evaluation_request(
+    async def _build_evaluation_request(
         self,
         symbol: str,
         result: TradingWorkflowResult,
-        reason: str,  # noqa: ARG002
+        reason: str,
     ) -> DecisionEvaluationRequest:
         """Build evaluation request from workflow result.
 
         Args:
             symbol: Stock symbol
             result: Trading workflow result
-            reason: Reflection reason (logged but not used in request)
+            reason: Reflection reason (unused in request body)
 
         Returns:
             DecisionEvaluationRequest
         """
-        # Get portfolio constraints from config
-        constraints = None
-        if hasattr(self._coordinator, "_config"):
-            constraints = {
-                "min_confidence": self._coordinator._config.min_confidence_to_trade,  # noqa: SLF001
-            }
+        _ = reason  # contextual — logged at call site, not embedded in request
+        constraints = {
+            "min_confidence": self._coordinator.config.min_confidence_to_trade,
+        }
 
-        # Get recent outcomes from memory
-        recent_outcomes = self._get_recent_outcomes(symbol)
+        recent_outcomes = await self._get_recent_outcomes(symbol)
 
         return DecisionEvaluationRequest(
             symbol=symbol,
@@ -166,17 +182,29 @@ class ReflectOnDecisionTool(BaseTool):
             recent_outcomes=recent_outcomes,
         )
 
-    def _get_recent_outcomes(self, _symbol: str) -> list[str]:
-        """Get recent execution outcomes for symbol.
+    async def _get_recent_outcomes(self, symbol: str) -> list[str]:
+        """Get recent execution outcomes for symbol from coordinator memory.
 
         Args:
-            _symbol: Stock symbol (unused - async implementation pending)
+            symbol: Stock symbol
 
         Returns:
-            Empty list (placeholder for async memory retrieval)
+            List of formatted outcome strings for critic context
         """
-        # TODO: Make this async to properly retrieve memories from coordinator
-        return []
+        try:
+            params = DecisionQueryParams(symbol=symbol, lookback_days=30, limit=5)
+            results = await self._coordinator.memory.query_decisions(params)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to fetch recent outcomes for {symbol}: {e}")
+            return []
+
+        outcomes = []
+        for r in results:
+            date = r.timestamp.strftime("%m/%d")
+            return_str = f"{r.return_pct:+.1f}%" if r.return_pct is not None else "pending"
+            hit_miss_str = r.hit_miss if r.hit_miss is not None else "PENDING"
+            outcomes.append(f"{date} {r.signal} conf={r.confidence:.0%} → {hit_miss_str} ({return_str})")
+        return outcomes
 
     def _format_critique(
         self,
