@@ -409,3 +409,52 @@ class TestRiskIntegration:
         assert result.rejection.reason == TradeRejectionReason.RISK_REJECTED
         assert "Risk assessment error" in result.rejection.message
         broker.submit_order.assert_not_called()
+
+
+class TestSnapshotPortfolio:
+    """Tests for TradingService._snapshot_portfolio()."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_snapshot_skipped_when_no_db(self, broker: Mock, daemon_config: Mock) -> None:
+        """Snapshot is skipped when database_engine is None."""
+        service = TradingService(broker=broker, daemon_config=daemon_config)
+
+        # Should not raise — no db engine means no-op
+        await service._snapshot_portfolio(_REQUEST)
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_snapshot_created_with_correct_trigger(self, broker: Mock, daemon_config: Mock) -> None:
+        """Snapshot trigger includes action and symbol from request."""
+        account = Mock()
+        account.balance = 100_000.0
+        account.available_cash = 50_000.0
+        account.total_exposure = 50_000.0
+        account.portfolio_value = 100_000.0
+        account.positions = {}
+        broker.get_account_info = Mock(return_value=account)
+
+        db_engine = _make_db_engine()
+        service = TradingService(broker=broker, daemon_config=daemon_config, database_engine=db_engine)
+
+        with patch("src.database.repositories.snapshot.PortfolioSnapshotRepository") as repo_cls:
+            repo = AsyncMock()
+            repo_cls.return_value = repo
+
+            await service._snapshot_portfolio(_REQUEST)
+
+        repo.create.assert_called_once()
+        snapshot_arg = repo.create.call_args[0][0]
+        assert snapshot_arg.trigger == "TRADE:BUY:AAPL"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_snapshot_error_does_not_propagate(self, broker: Mock, daemon_config: Mock) -> None:
+        """Snapshot errors are swallowed (non-blocking behavior)."""
+        broker.get_account_info = Mock(side_effect=RuntimeError("broker down"))
+        db_engine = _make_db_engine()
+        service = TradingService(broker=broker, daemon_config=daemon_config, database_engine=db_engine)
+
+        # Should not raise even though broker.get_account_info fails
+        await service._snapshot_portfolio(_REQUEST)
