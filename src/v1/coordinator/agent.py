@@ -88,6 +88,33 @@ class TradingCoordinator:
         """
         return self._memory
 
+    @property
+    def config(self) -> CoordinatorConfig:
+        """Coordinator configuration.
+
+        Returns:
+            CoordinatorConfig instance
+        """
+        return self._config
+
+    @property
+    def reflection_counters(self) -> dict[str, int]:
+        """Per-symbol reflection counters for current cycle.
+
+        Returns:
+            Mutable dict of symbol → reflection count
+        """
+        return self._reflection_counters
+
+    @property
+    def last_analysis_results(self) -> dict[str, TradingWorkflowResult]:
+        """Last analysis results per symbol for current cycle.
+
+        Returns:
+            Mutable dict of symbol → TradingWorkflowResult
+        """
+        return self._last_analysis_results
+
     async def run_cycle(
         self,
         watchlist: list[str],
