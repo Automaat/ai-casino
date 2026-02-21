@@ -479,6 +479,65 @@ class NewsWatchlistEvent(BaseModel):
         return f"NewsWatchlistEvent(source={self.source}, title={self.article.title[:50]}...)"
 
 
+class EnrichedPosition(BaseModel):
+    """Position enriched with entry metadata and health flags."""
+
+    symbol: str
+    qty: float
+    avg_entry_price: float
+    current_price: float
+    unrealized_pnl: float
+    unrealized_pnl_percent: float
+    days_held: int | None = None
+    entry_confidence: float | None = None
+    entry_signal: str | None = None
+    stop_loss_price: float | None = None
+    flags: list[str] = Field(default_factory=list)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        flags_str = ",".join(self.flags) if self.flags else "none"
+        return f"EnrichedPosition({self.symbol} pnl={self.unrealized_pnl_percent:+.1f}% flags={flags_str})"
+
+
+class PositionReviewEvent(BaseModel):
+    """Scheduled position review event with enriched data."""
+
+    event_id: str = Field(
+        default_factory=lambda: f"pos-review-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex}"
+    )
+    event_type: Literal["position_review"] = "position_review"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: str = "position_review_task"
+    positions: list[EnrichedPosition]
+    portfolio_value: float
+    total_exposure: float
+
+    def to_prompt_text(self) -> str:
+        """Format position review for coordinator prompt."""
+        lines = [
+            f"POSITION REVIEW ({len(self.positions)} positions):",
+            f"Portfolio: ${self.portfolio_value:,.0f} | Exposure: ${self.total_exposure:,.0f}",
+            "",
+        ]
+        for p in self.positions:
+            flags_str = f" [{', '.join(p.flags)}]" if p.flags else ""
+            entry_info = f" entry={p.entry_confidence:.0%}" if p.entry_confidence is not None else ""
+            stop_info = f" stop=${p.stop_loss_price:.2f}" if p.stop_loss_price is not None else ""
+            days_info = f" held={p.days_held}d" if p.days_held is not None else ""
+            lines.append(
+                f"  {p.symbol}: {p.qty} shares @ ${p.avg_entry_price:.2f} → "
+                f"${p.current_price:.2f} ({p.unrealized_pnl_percent:+.1f}%)"
+                f"{days_info}{entry_info}{stop_info}{flags_str}"
+            )
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        symbols = [p.symbol for p in self.positions]
+        return f"PositionReviewEvent(positions={symbols})"
+
+
 class SignalEvent(BaseModel):
     """Pre-market signal queued for regular session processing."""
 

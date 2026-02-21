@@ -138,6 +138,7 @@ Events enter the queue from two paths:
 | `anomaly` | `AnomalyEvent` | Market data watcher |
 | `news_trending` | `NewsTrendingEvent` | News trending watcher |
 | `signal` | `SignalEvent` | `AnalysisOrchestrator` (pre-market) |
+| `position_review` | `PositionReviewEvent` | `PositionReviewTask` (scheduled) |
 
 ---
 

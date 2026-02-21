@@ -113,6 +113,7 @@ class DaemonRunner:
         from src.database.engine import MissingDatabaseURLError
         from src.v1.tasks.implementations.game_plan import GamePlanTask
         from src.v1.tasks.implementations.portfolio_snapshot import PortfolioSnapshotTask
+        from src.v1.tasks.implementations.position_review import PositionReviewTask
         from src.v1.tasks.interface import Task
         from src.v1.tasks.runner import TaskRunner
 
@@ -129,6 +130,22 @@ class DaemonRunner:
                     broker_manager=self._broker_manager,
                     config=game_plan_config,
                     scheduler=self.scheduler,
+                )
+            )
+
+        # Position review task
+        pr_config = self.config.position_review
+        if pr_config.enabled and self.config.coordinator.enabled:
+            broker = self._container.alpaca_broker()
+            queue = self._container.market_event_queue()
+            db_engine = self._container.database_engine() if self.config.database.enable_persistence else None
+            tasks.append(
+                PositionReviewTask(
+                    broker=broker,
+                    queue=queue,
+                    config=pr_config,
+                    scheduler=self.scheduler,
+                    database_engine=db_engine,
                 )
             )
 

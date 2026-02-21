@@ -368,6 +368,17 @@ daemon:
     # Confidence penalty multiplier for failed backtests (0.1-1.0)
     confidence_penalty_multiplier: 0.7
 
+  position_review:
+    # Scheduled position review via event queue
+    # Enriches broker positions with entry metadata, computes health flags,
+    # and fires PositionReviewEvent for coordinator to evaluate sell decisions
+    # Requires coordinator.enabled: true
+    enabled: false
+    # When to run: "regular_market" (09:30-16:00 ET)
+    run_during: "regular_market"
+    # Re-check interval in minutes (15-480)
+    interval_minutes: 60
+
   game_plan:
     # Pre-market game plan generation (market overview + strategy)
     enabled: false
