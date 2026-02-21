@@ -34,7 +34,7 @@
 				sectorAttribution.fetch()
 			]);
 			const historyData = await api.getRiskHistory(90);
-			riskHistory = historyData.history;
+			riskHistory = historyData.reports;
 		} catch (error) {
 			console.error('Failed to load risk data:', error);
 		} finally {
