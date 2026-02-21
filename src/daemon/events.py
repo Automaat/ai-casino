@@ -503,7 +503,9 @@ class EnrichedPosition(BaseModel):
 class PositionReviewEvent(BaseModel):
     """Scheduled position review event with enriched data."""
 
-    event_id: str = Field(default_factory=lambda: f"pos-review-{datetime.now(UTC).strftime('%Y%m%d-%H%M')}")
+    event_id: str = Field(
+        default_factory=lambda: f"pos-review-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex}"
+    )
     event_type: Literal["position_review"] = "position_review"
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str = "position_review_task"
@@ -520,8 +522,8 @@ class PositionReviewEvent(BaseModel):
         ]
         for p in self.positions:
             flags_str = f" [{', '.join(p.flags)}]" if p.flags else ""
-            entry_info = f" entry={p.entry_confidence:.0%}" if p.entry_confidence else ""
-            stop_info = f" stop=${p.stop_loss_price:.2f}" if p.stop_loss_price else ""
+            entry_info = f" entry={p.entry_confidence:.0%}" if p.entry_confidence is not None else ""
+            stop_info = f" stop=${p.stop_loss_price:.2f}" if p.stop_loss_price is not None else ""
             days_info = f" held={p.days_held}d" if p.days_held is not None else ""
             lines.append(
                 f"  {p.symbol}: {p.qty} shares @ ${p.avg_entry_price:.2f} → "

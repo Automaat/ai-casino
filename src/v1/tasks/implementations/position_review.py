@@ -157,14 +157,15 @@ class PositionReviewTask(Task):
                 entry_signal = trade.action.value
                 stop_loss_price = trade.stop_loss_price
 
-            flags = self.compute_health_flags(bp.unrealized_pnl_percent, days_held, entry_confidence)
+            pnl_pct_points = bp.unrealized_pnl_percent * 100.0
+            flags = self.compute_health_flags(pnl_pct_points, days_held, entry_confidence)
 
             enriched.append(
                 EnrichedPosition(
                     symbol=symbol,
                     qty=bp.qty,
                     avg_entry_price=bp.avg_entry_price,
-                    current_price=bp.avg_entry_price + (bp.unrealized_pnl / bp.qty) if bp.qty else 0.0,
+                    current_price=bp.market_value / bp.qty if bp.qty else 0.0,
                     unrealized_pnl=bp.unrealized_pnl,
                     unrealized_pnl_percent=bp.unrealized_pnl_percent,
                     days_held=days_held,
@@ -194,12 +195,7 @@ class PositionReviewTask(Task):
 
             async with self._db.session() as session:
                 repo = TradeRepository(session)
-                result = {}
-                for symbol in symbols:
-                    trade = await repo.get_entry_trade(symbol)
-                    if trade:
-                        result[symbol] = trade
-                return result
+                return await repo.get_entry_trades_bulk(symbols)
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to fetch entry trades: {e}")
             return {}

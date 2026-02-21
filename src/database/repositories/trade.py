@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 
 from src.database.models import TradeORM
 from src.database.repositories.base import BaseRepository
@@ -226,6 +226,35 @@ class TradeRepository(BaseRepository[TradeRecord]):
             is_paper_trade=orm.is_paper_trade,
             closed_at=orm.closed_at,
         )
+
+    async def get_entry_trades_bulk(self, symbols: list[str]) -> dict[str, TradeRecord]:
+        """Get most recent entry trade per symbol (OPEN BUY) in a single query.
+
+        Args:
+            symbols: Stock ticker symbols
+
+        Returns:
+            Dict mapping symbol to TradeRecord
+        """
+        if not symbols:
+            return {}
+        subq = (
+            select(TradeORM.symbol, func.max(TradeORM.timestamp).label("max_ts"))
+            .where(
+                TradeORM.symbol.in_(symbols),
+                TradeORM.status == "OPEN",
+                TradeORM.action == Signal.BUY.value,
+            )
+            .group_by(TradeORM.symbol)
+            .subquery()
+        )
+        result = await self._session.execute(
+            select(TradeORM).join(
+                subq,
+                and_(TradeORM.symbol == subq.c.symbol, TradeORM.timestamp == subq.c.max_ts),
+            )
+        )
+        return {orm.symbol: self._to_record(orm) for orm in result.scalars().all()}
 
     async def get_recent_closed_by_symbol(self, symbol: str, limit: int = 5) -> list[TradeRecord]:
         """Get recent closed trades for a symbol.
