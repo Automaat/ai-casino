@@ -145,7 +145,7 @@ class RiskReportTask(Task):
 
         event = RiskReportEvent(
             timestamp=datetime.now(UTC),
-            risk_status=cast(Literal["BREACH", "WARNING"], report.risk_status),
+            risk_status=cast("Literal['BREACH', 'WARNING']", report.risk_status),
             var_95=report.var_95,
             var_99=report.var_99,
             cvar_95=report.cvar_95,
