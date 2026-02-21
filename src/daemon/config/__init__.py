@@ -41,6 +41,7 @@ from src.daemon.config.portfolio import (
     PeerAnalysisConfig,
     PortfolioHealthConfig,
     PortfolioRebalancingConfig,
+    PortfolioSnapshotConfig,
 )
 from src.daemon.config.position_review import PositionReviewConfig
 from src.daemon.config.pre_market import PreMarketScreeningConfig
@@ -107,6 +108,7 @@ __all__ = [
     "PeerAnalysisConfig",
     "PortfolioHealthConfig",
     "PortfolioRebalancingConfig",
+    "PortfolioSnapshotConfig",
     "PositionCircuitBreakerConfig",
     "PositionManagementConfig",
     "PositionReviewConfig",
@@ -164,6 +166,7 @@ class DaemonConfig(BaseModel):
     pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
     position_review: PositionReviewConfig = Field(default_factory=PositionReviewConfig)
+    portfolio_snapshot: PortfolioSnapshotConfig = Field(default_factory=PortfolioSnapshotConfig)
     position_sizing: PositionSizingConfig = Field(default_factory=PositionSizingConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
     monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
@@ -231,6 +234,7 @@ class DaemonConfig(BaseModel):
             "pre_trade_backtesting": daemon_data.pop("pre_trade_backtesting", {}) or {},
             "game_plan": daemon_data.pop("game_plan", {}) or {},
             "position_review": daemon_data.pop("position_review", {}) or {},
+            "portfolio_snapshot": daemon_data.pop("portfolio_snapshot", {}) or {},
             "position_sizing": daemon_data.pop("position_sizing", {}) or {},
             "position_management": daemon_data.pop("position_management", {}) or {},
             "monte_carlo": daemon_data.pop("monte_carlo", {}) or {},
@@ -315,6 +319,7 @@ class DaemonConfig(BaseModel):
             pre_trade_backtesting=PreTradeBacktestingConfig(**sections["pre_trade_backtesting"]),
             game_plan=GamePlanConfig(**sections["game_plan"]),
             position_review=PositionReviewConfig(**sections["position_review"]),
+            portfolio_snapshot=PortfolioSnapshotConfig(**sections["portfolio_snapshot"]),
             position_sizing=PositionSizingConfig(**sections["position_sizing"]),
             position_management=PositionManagementConfig(
                 **sections["position_management"],

@@ -389,6 +389,12 @@ daemon:
     # Hours of overnight news to analyze
     lookback_hours: 16
 
+  portfolio_snapshot:
+    # Periodic portfolio balance snapshots (powers equity curve in UI)
+    enabled: true
+    # Minutes between snapshots (1-60)
+    interval_minutes: 10
+
   pre_market:
     # Pre-market screening for gap plays and catalysts (7:00-9:30 AM ET)
     enabled: false

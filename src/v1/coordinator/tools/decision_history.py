@@ -95,8 +95,23 @@ class QueryPastDecisionsTool(BaseTool):
 
         Returns:
             Formatted markdown table with decisions and statistics
+
+        Raises:
+            RuntimeError: If called from within a running event loop
         """
-        return asyncio.run(self.aexecute(**kwargs))
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "QueryPastDecisionsTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
 
     async def aexecute(self, **kwargs: str | int | float | bool) -> str:
         """Execute decision history query with outcome analysis asynchronously.

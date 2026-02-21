@@ -107,6 +107,7 @@ class TradingService:
         # Non-blocking side effects
         await self._persist_trade(order_status, request)
         await self._notify_trade(order_status, request)
+        await self._snapshot_portfolio(request)
 
         return result
 
@@ -290,6 +291,30 @@ class TradingService:
             await self._notification_service.notify(message)
         except Exception as e:
             logger.opt(exception=True).warning(f"Trade notification failed: {e}")
+
+    async def _snapshot_portfolio(self, request: TradeRequest) -> None:
+        """Capture portfolio snapshot after trade execution."""
+        if not self._database_engine:
+            return
+        try:
+            from src.database.repositories.snapshot import PortfolioSnapshot, PortfolioSnapshotRepository
+
+            account_info = await asyncio.to_thread(self._broker.get_account_info)
+            async with self._database_engine.session() as session:
+                repo = PortfolioSnapshotRepository(session)
+                await repo.create(
+                    PortfolioSnapshot(
+                        timestamp=datetime.now(UTC),
+                        balance=account_info.balance,
+                        available_cash=account_info.available_cash,
+                        total_exposure=account_info.total_exposure,
+                        portfolio_value=account_info.portfolio_value,
+                        positions={k: v.model_dump() for k, v in account_info.positions.items()},
+                        trigger=f"TRADE:{request.action.value}:{request.symbol}",
+                    )
+                )
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Portfolio snapshot failed: {e}")
 
     async def _check_risk(self, request: TradeRequest) -> TradeResult | None:
         """Run risk assessment and apply limits. Returns rejected result or None to proceed."""
