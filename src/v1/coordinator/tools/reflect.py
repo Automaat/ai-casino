@@ -82,8 +82,23 @@ class ReflectOnDecisionTool(BaseTool):
 
         Returns:
             Formatted critique result
+
+        Raises:
+            RuntimeError: If called from within a running event loop
         """
-        return asyncio.run(self.aexecute(**kwargs))
+        # Guard against being called from within an existing event loop
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop; safe to use asyncio.run
+            return asyncio.run(self.aexecute(**kwargs))
+        else:
+            # There is a running loop; callers should use the async API directly
+            msg = (
+                "ReflectOnDecisionTool.execute() cannot be called from a running "
+                "event loop. Use 'aexecute' instead."
+            )
+            raise RuntimeError(msg)
 
     async def aexecute(self, **kwargs: str | int | float | bool) -> str:
         """Execute reflection on decision asynchronously.
@@ -187,7 +202,8 @@ class ReflectOnDecisionTool(BaseTool):
         for r in results:
             date = r.timestamp.strftime("%m/%d")
             return_str = f"{r.return_pct:+.1f}%" if r.return_pct is not None else "pending"
-            outcomes.append(f"{date} {r.signal} conf={r.confidence:.0%} → {r.hit_miss} ({return_str})")
+            hit_miss_str = r.hit_miss if r.hit_miss is not None else "PENDING"
+            outcomes.append(f"{date} {r.signal} conf={r.confidence:.0%} → {hit_miss_str} ({return_str})")
         return outcomes
 
     def _format_critique(
