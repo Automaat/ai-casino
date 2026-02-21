@@ -356,15 +356,6 @@ class DaemonTaskService:
                 f"   {result.reason}"
             )
 
-    async def run_daily_risk_report(self) -> None:
-        """Generate and persist daily portfolio risk report."""
-        if not self.components.config.risk_limits.enabled or not self.components.broker:
-            return
-
-        from src.daemon.tasks.reporting_tasks import RiskReportTask
-
-        await RiskReportTask(self.components, self.container).run()
-
     async def run_signal_tracking(self) -> None:
         """Update signal outcomes with T+1d/5d/20d prices."""
         if not self.components.config.signal_tracking.enabled:

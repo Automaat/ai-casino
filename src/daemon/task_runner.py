@@ -162,10 +162,6 @@ class ScheduledTaskRunner:
             else:
                 task_method()
 
-        # Special case: daily risk report (runs when market closed)
-        if not self.scheduler.is_market_open() and self._task_service:
-            await self._task_service.run_daily_risk_report()
-
     @staticmethod
     async def _run_background_task(name: str, method: Callable[[], Awaitable[None]]) -> None:
         """Run a task in the background with error handling.

@@ -164,6 +164,24 @@ class DaemonRunner:
             except MissingDatabaseURLError:
                 logger.warning("Portfolio snapshot task disabled: database not configured")
 
+        # Risk report task
+        risk_config = self.config.risk_limits
+        if risk_config.enabled and self._components.broker and self._workflow is not None:
+            from src.v1.tasks.implementations.risk_report import RiskReportTask
+
+            queue = self._container.market_event_queue() if self.config.coordinator.enabled else None
+            tasks.append(
+                RiskReportTask(
+                    risk_manager=self._workflow.risk_manager,
+                    broker=self._components.broker,
+                    queue=queue,
+                    state=self.state,
+                    scheduler=self.scheduler,
+                    config=risk_config,
+                    notification_service=self._components.notification_service,
+                )
+            )
+
         tz = ZoneInfo(self.config.schedule.timezone)
         return TaskRunner(tasks, tz)
 
@@ -280,6 +298,9 @@ class DaemonRunner:
 
         # Initialize workflow (needed by scheduled tasks: RiskReportTask, CorrelationAuditTask)
         self._init_workflow()
+
+        # Rebuild v1 task runner with workflow-dependent tasks now available
+        self._v1_task_runner = self._build_v1_task_runner()
 
         # Create lifecycle manager
         lifecycle = DaemonLifecycle(self._components)

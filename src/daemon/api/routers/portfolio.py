@@ -328,6 +328,7 @@ async def get_risk(
         cvar_99=latest.cvar_99,
         cdar_95=latest.cdar_95,
         max_drawdown=latest.max_drawdown,
+        portfolio_volatility=latest.portfolio_volatility,
         risk_status=latest.risk_status,
     )
 
@@ -348,6 +349,7 @@ async def get_risk_history(
             cvar_99=r.cvar_99,
             cdar_95=r.cdar_95,
             max_drawdown=r.max_drawdown,
+            portfolio_volatility=r.portfolio_volatility,
             risk_status=r.risk_status,
         )
         for r in all_reports

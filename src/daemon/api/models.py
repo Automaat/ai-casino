@@ -193,6 +193,7 @@ class RiskReportResponse(BaseModel):
     cvar_99: float
     cdar_95: float
     max_drawdown: float
+    portfolio_volatility: float
     risk_status: str
 
 

@@ -156,6 +156,9 @@ ignore = [
 "src/v1/trades/service.py" = [
     "PLR0913", # many args OK for DI constructor with optional deps
 ]
+"src/v1/tasks/implementations/risk_report.py" = [
+    "PLR0913", # many args OK for DI constructor with optional notification/queue deps
+]
 "src/models/llm.py" = [
     "PLR0913", # many args OK for provider-specific connection params
 ]

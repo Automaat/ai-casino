@@ -18,6 +18,15 @@ class RiskLimitsConfig(BaseModel):
     cdar_stop_threshold: float = Field(default=0.10, ge=0.01, le=0.50)
     atr_multiplier_min: float = Field(default=1.0, ge=0.5, le=2.0)
     report_dir: str = "~/.ai-casino/risk-reports"
+    report_time: str = "16:30"
+
+    @model_validator(mode="after")
+    def validate_report_time(self) -> RiskLimitsConfig:
+        """Validate report_time format and after-hours range when enabled."""
+        if not self.enabled:
+            return self
+        validate_time_range(self.report_time, "report_time", "after_hours")
+        return self
 
 
 class PreTradeBacktestingConfig(BaseModel):

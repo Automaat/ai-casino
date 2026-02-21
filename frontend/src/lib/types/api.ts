@@ -145,7 +145,7 @@ export interface RiskReportResponse {
 }
 
 export interface RiskHistoryResponse {
-	history: RiskReportResponse[];
+	reports: RiskReportResponse[];
 }
 
 export interface CorrelationMatrixResponse {
