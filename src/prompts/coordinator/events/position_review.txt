@@ -1,0 +1,16 @@
+### Position Review — Portfolio Health Check
+
+{event_details}
+
+**Triage:** urgency={urgency}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+1. Review each position's health flags and P&L trajectory
+2. For positions with SIGNIFICANT_LOSS or EXTENDED_HOLD flags:
+   call `analyze_symbol(symbol, include_position_context=true)` for updated analysis
+3. If analysis confirms broken thesis or deteriorated setup:
+   call `execute_trade(symbol, action="SELL", quantity=..., confidence=..., rationale="...")`
+4. For CONSIDER_PROFIT_TAKING positions: evaluate if partial or full exit is warranted
+5. Save key observations via `save_observation`
+6. Do NOT screen for new buys — focus only on existing positions

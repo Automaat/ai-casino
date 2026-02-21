@@ -10,7 +10,17 @@ from src.v1.coordinator.models import CoordinatorConfig
 from src.v1.event_queue.models import QueuedMarketEvent
 
 _EVENT_TYPE_TEMPLATES = frozenset(
-    {"news", "news_watchlist", "social", "filing", "trump", "anomaly", "news_trending", "signal"}
+    {
+        "news",
+        "news_watchlist",
+        "social",
+        "filing",
+        "trump",
+        "anomaly",
+        "news_trending",
+        "signal",
+        "position_review",
+    }
 )
 
 
@@ -157,7 +167,43 @@ def _format_event_details(event_data: dict) -> str:
         lines.append(f"Anomaly types: {', '.join(anomaly_types)}")
 
     _append_signal_fields(event_data, lines)
+    _append_position_review_fields(event_data, lines)
     return "\n".join(lines)
+
+
+def _append_position_review_fields(event_data: dict, lines: list[str]) -> None:
+    """Append position_review-specific fields to lines list."""
+    positions = event_data.get("positions")
+    if not positions:
+        return
+
+    portfolio_value = event_data.get("portfolio_value", 0)
+    total_exposure = event_data.get("total_exposure", 0)
+    lines.append(f"Portfolio: ${portfolio_value:,.0f} | Exposure: ${total_exposure:,.0f}")
+    lines.append(f"Positions ({len(positions)}):")
+
+    for pos in positions:
+        symbol = pos.get("symbol", "?")
+        qty = pos.get("qty", 0)
+        entry = pos.get("avg_entry_price", 0)
+        current = pos.get("current_price", 0)
+        pnl_pct = pos.get("unrealized_pnl_percent", 0)
+        days = pos.get("days_held")
+        confidence = pos.get("entry_confidence")
+        stop = pos.get("stop_loss_price")
+        flags = pos.get("flags", [])
+
+        parts = [f"  {symbol}: {qty} @ ${entry:.2f} → ${current:.2f} ({pnl_pct:+.1f}%)"]
+        if days is not None:
+            parts.append(f"held={days}d")
+        if confidence is not None:
+            parts.append(f"conf={confidence:.0%}")
+        if stop is not None:
+            parts.append(f"stop=${stop:.2f}")
+        if flags:
+            parts.append(f"[{', '.join(flags)}]")
+
+        lines.append(" ".join(parts))
 
 
 def _append_signal_fields(event_data: dict, lines: list[str]) -> None:
