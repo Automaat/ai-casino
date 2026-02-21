@@ -20,8 +20,6 @@ if TYPE_CHECKING:
     from src.v1.trades.brokers.models import BrokerPosition
     from src.v1.trades.brokers.protocol import Broker
 
-_SESSION_START_TIMES = {"regular_market": "09:30"}
-
 _FLAG_SIGNIFICANT_LOSS_PCT = -5.0
 _FLAG_DETERIORATING_PCT = -2.0
 _FLAG_EXTENDED_HOLD_DAYS = 20
@@ -65,9 +63,7 @@ class PositionReviewTask(Task):
     @property
     def schedule(self) -> TaskSchedule:
         """Schedule from config."""
-        start_time = _SESSION_START_TIMES[self._config.run_during]
         return TaskSchedule(
-            time=start_time,
             days=WEEKDAYS,
             enabled=self._config.enabled,
             dedup=DedupStrategy.INTERVAL,

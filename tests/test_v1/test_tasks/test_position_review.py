@@ -84,7 +84,7 @@ class TestTaskMetadata:
         schedule = task.schedule
         assert schedule.dedup == DedupStrategy.INTERVAL
         assert schedule.dedup_interval_minutes == 45
-        assert schedule.time == "09:30"
+        assert schedule.time is None
         assert schedule.enabled is True
 
     @pytest.mark.unit
