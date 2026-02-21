@@ -33,10 +33,13 @@ def is_due(schedule: TaskSchedule, last_run: datetime | None, now: datetime) -> 
     if today_dow not in schedule.days:
         return False
 
-    hour, minute = map(int, schedule.time.split(":"))
-    scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if now < scheduled:
-        return False
+    if schedule.dedup != DedupStrategy.INTERVAL:
+        if schedule.time is None:
+            return False
+        hour, minute = map(int, schedule.time.split(":"))
+        scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if now < scheduled:
+            return False
 
     return not _should_skip(schedule, last_run, now)
 

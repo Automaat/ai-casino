@@ -41,6 +41,7 @@ from src.daemon.config.portfolio import (
     PeerAnalysisConfig,
     PortfolioHealthConfig,
     PortfolioRebalancingConfig,
+    PortfolioSnapshotConfig,
 )
 from src.daemon.config.pre_market import PreMarketScreeningConfig
 from src.daemon.config.profiling import ProfilingConfig
@@ -106,6 +107,7 @@ __all__ = [
     "PeerAnalysisConfig",
     "PortfolioHealthConfig",
     "PortfolioRebalancingConfig",
+    "PortfolioSnapshotConfig",
     "PositionCircuitBreakerConfig",
     "PositionManagementConfig",
     "PositionSizingConfig",
@@ -161,6 +163,7 @@ class DaemonConfig(BaseModel):
     signal_tracking: SignalTrackingConfig = Field(default_factory=SignalTrackingConfig)
     pre_trade_backtesting: PreTradeBacktestingConfig = Field(default_factory=PreTradeBacktestingConfig)
     game_plan: GamePlanConfig = Field(default_factory=GamePlanConfig)
+    portfolio_snapshot: PortfolioSnapshotConfig = Field(default_factory=PortfolioSnapshotConfig)
     position_sizing: PositionSizingConfig = Field(default_factory=PositionSizingConfig)
     position_management: PositionManagementConfig = Field(default_factory=PositionManagementConfig)
     monte_carlo: MonteCarloConfig = Field(default_factory=MonteCarloConfig)
@@ -227,6 +230,7 @@ class DaemonConfig(BaseModel):
             "signal_tracking": daemon_data.pop("signal_tracking", {}) or {},
             "pre_trade_backtesting": daemon_data.pop("pre_trade_backtesting", {}) or {},
             "game_plan": daemon_data.pop("game_plan", {}) or {},
+            "portfolio_snapshot": daemon_data.pop("portfolio_snapshot", {}) or {},
             "position_sizing": daemon_data.pop("position_sizing", {}) or {},
             "position_management": daemon_data.pop("position_management", {}) or {},
             "monte_carlo": daemon_data.pop("monte_carlo", {}) or {},
@@ -310,6 +314,7 @@ class DaemonConfig(BaseModel):
             signal_tracking=SignalTrackingConfig(**sections["signal_tracking"]),
             pre_trade_backtesting=PreTradeBacktestingConfig(**sections["pre_trade_backtesting"]),
             game_plan=GamePlanConfig(**sections["game_plan"]),
+            portfolio_snapshot=PortfolioSnapshotConfig(**sections["portfolio_snapshot"]),
             position_sizing=PositionSizingConfig(**sections["position_sizing"]),
             position_management=PositionManagementConfig(
                 **sections["position_management"],

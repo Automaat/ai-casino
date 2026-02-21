@@ -103,3 +103,10 @@ class GamePlanConfig(BaseModel):
         if self.enabled:
             validate_time_range(self.generation_time, "generation_time", "pre_market")
         return self
+
+
+class PortfolioSnapshotConfig(BaseModel):
+    """Periodic portfolio snapshot config."""
+
+    enabled: bool = True
+    interval_minutes: int = Field(default=10, ge=1, le=60)
