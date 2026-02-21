@@ -284,6 +284,7 @@ daemon:
     # Portfolio-level VaR risk limits
     enabled: false
     # Maximum 95% VaR threshold (0.001-0.20)
+    # Conservative: 0.01-0.02 | Moderate (default): 0.03 | Aggressive: 0.04-0.06
     max_var_95: 0.03
     # Maximum 99% CVaR threshold (0.001-0.30)
     max_cvar_99: 0.05
@@ -297,8 +298,7 @@ daemon:
     atr_multiplier_min: 1.0
     # Risk reports directory
     report_dir: "~/.ai-casino/risk-reports"
-    # Daily report time (HH:MM ET, post-market)
-    # Conservative: 0.01-0.02 VaR95 | Moderate (default): 0.03 | Aggressive: 0.04-0.06
+    # Daily report time (HH:MM ET, post-market, 16:00-20:00)
     report_time: "16:30"
 
   risk_validation:

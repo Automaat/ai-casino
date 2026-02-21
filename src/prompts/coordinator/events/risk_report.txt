@@ -6,7 +6,7 @@
 **Reasoning:** {reasoning}
 
 **Instructions:**
-The market is now open. This risk report was generated at yesterday's close.
+The market is now open. This risk report was generated at the most recent market close (see the report timestamp).
 Prices may have shifted since then — factor that in before acting.
 
 **If BREACH:**

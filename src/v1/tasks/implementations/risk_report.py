@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 from loguru import logger
 
@@ -145,7 +145,7 @@ class RiskReportTask(Task):
 
         event = RiskReportEvent(
             timestamp=datetime.now(UTC),
-            risk_status=report.risk_status,
+            risk_status=cast(Literal["BREACH", "WARNING"], report.risk_status),
             var_95=report.var_95,
             var_99=report.var_99,
             cvar_95=report.cvar_95,
@@ -171,8 +171,15 @@ class RiskReportTask(Task):
         process_after = self._scheduler.next_regular_open()
         if self._queue is None:
             return
-        await self._queue.enqueue(event, triage, ttl_hours=18, process_after=process_after)
-        logger.info(f"Risk event enqueued: {report.risk_status}, process_after={process_after.isoformat()}")
+        now = datetime.now(UTC)
+        delay_seconds = (process_after - now).total_seconds()
+        delay_hours = max(0, int((delay_seconds + 3599) // 3600))
+        ttl_hours = max(24, delay_hours + 4)
+        await self._queue.enqueue(event, triage, ttl_hours=ttl_hours, process_after=process_after)
+        logger.info(
+            f"Risk event enqueued: {report.risk_status}, "
+            f"process_after={process_after.isoformat()}, ttl_hours={ttl_hours}"
+        )
 
     async def _notify_var_breach(self, report: object) -> None:
         """Send notification for VaR breach.

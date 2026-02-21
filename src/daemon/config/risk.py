@@ -20,6 +20,14 @@ class RiskLimitsConfig(BaseModel):
     report_dir: str = "~/.ai-casino/risk-reports"
     report_time: str = "16:30"
 
+    @model_validator(mode="after")
+    def validate_report_time(self) -> RiskLimitsConfig:
+        """Validate report_time format and after-hours range when enabled."""
+        if not self.enabled:
+            return self
+        validate_time_range(self.report_time, "report_time", "after_hours")
+        return self
+
 
 class PreTradeBacktestingConfig(BaseModel):
     """Configuration for pre-trade backtesting validation."""

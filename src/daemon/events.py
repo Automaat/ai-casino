@@ -572,7 +572,7 @@ class RiskReportEvent(BaseModel):
     event_type: Literal["risk_report"] = "risk_report"
     timestamp: datetime
     source: str = "risk_report_task"
-    risk_status: str
+    risk_status: Literal["BREACH", "WARNING"]
     var_95: float
     var_99: float
     cvar_95: float
