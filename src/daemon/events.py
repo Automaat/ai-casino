@@ -565,6 +565,40 @@ class SignalEvent(BaseModel):
         )
 
 
+class RiskReportEvent(BaseModel):
+    """Scheduled portfolio risk report event (BREACH or WARNING only)."""
+
+    event_id: str = Field(default_factory=lambda: f"risk_report_{datetime.now(UTC).date().isoformat()}")
+    event_type: Literal["risk_report"] = "risk_report"
+    timestamp: datetime
+    source: str = "risk_report_task"
+    risk_status: str
+    var_95: float
+    var_99: float
+    cvar_95: float
+    cvar_99: float
+    cdar_95: float
+    max_drawdown: float
+    portfolio_volatility: float
+    current_exposure_percent: float
+    num_positions: int
+    var_limit_breached: bool
+    cvar_limit_breached: bool
+
+    def to_prompt_text(self) -> str:
+        """Format risk event for coordinator prompt."""
+        return (
+            f"RISK REPORT ({self.risk_status}):\n"
+            f"VaR95={self.var_95:.2%}, CVaR99={self.cvar_99:.2%}, CDaR95={self.cdar_95:.2%}\n"
+            f"Max Drawdown={self.max_drawdown:.2%}, Volatility={self.portfolio_volatility:.2%}\n"
+            f"Exposure={self.current_exposure_percent:.1f}%, Positions={self.num_positions}"
+        )
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return f"RiskReportEvent(status={self.risk_status}, var_95={self.var_95:.2%})"
+
+
 class TriageResult(BaseModel):
     """LLM triage result for an event."""
 

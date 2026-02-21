@@ -1,0 +1,24 @@
+### Portfolio Risk Report — {urgency}
+
+{event_details}
+
+**Triage:** urgency={urgency}, sentiment={sentiment}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+The market is now open. This risk report was generated at yesterday's close.
+Prices may have shifted since then — factor that in before acting.
+
+**If BREACH:**
+1. Call `get_account_info` to confirm current exposure
+2. For each position contributing to the breach, call `analyze_symbol(symbol, include_position_context=true)` before deciding
+3. Reduce the highest-risk holdings to bring portfolio VaR within limits
+4. Execute sells via `execute_trade` only where analysis confirms deteriorated thesis
+5. Save observations via `save_observation` documenting the risk reduction rationale
+
+**If WARNING:**
+1. Review concentration — flag any positions showing deterioration
+2. Do not force sells unless analysis confirms thesis failure
+3. Save a `save_observation` noting the warning and any positions to monitor
+
+Be decisive but not reflexive. Risk metrics are backward-looking; current price action matters.

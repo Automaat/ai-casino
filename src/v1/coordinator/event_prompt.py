@@ -20,6 +20,7 @@ _EVENT_TYPE_TEMPLATES = frozenset(
         "news_trending",
         "signal",
         "position_review",
+        "risk_report",
     }
 )
 
@@ -168,6 +169,7 @@ def _format_event_details(event_data: dict) -> str:
 
     _append_signal_fields(event_data, lines)
     _append_position_review_fields(event_data, lines)
+    _append_risk_report_fields(event_data, lines)
     return "\n".join(lines)
 
 
@@ -204,6 +206,27 @@ def _append_position_review_fields(event_data: dict, lines: list[str]) -> None:
             parts.append(f"[{', '.join(flags)}]")
 
         lines.append(" ".join(parts))
+
+
+def _append_risk_report_fields(event_data: dict, lines: list[str]) -> None:
+    """Append risk_report-specific fields to lines list."""
+    if event_data.get("event_type") != "risk_report":
+        return
+    if risk_status := event_data.get("risk_status"):
+        lines.append(f"Risk Status: {risk_status}")
+    var_95 = event_data.get("var_95")
+    cvar_99 = event_data.get("cvar_99")
+    cdar_95 = event_data.get("cdar_95")
+    if var_95 is not None and cvar_99 is not None and cdar_95 is not None:
+        lines.append(f"VaR95={var_95:.2%}, CVaR99={cvar_99:.2%}, CDaR95={cdar_95:.2%}")
+    max_dd = event_data.get("max_drawdown")
+    vol = event_data.get("portfolio_volatility")
+    if max_dd is not None and vol is not None:
+        lines.append(f"Max Drawdown={max_dd:.2%}, Volatility={vol:.2%}")
+    exposure = event_data.get("current_exposure_percent")
+    num_pos = event_data.get("num_positions")
+    if exposure is not None and num_pos is not None:
+        lines.append(f"Exposure={exposure:.1f}%, Positions={num_pos}")
 
 
 def _append_signal_fields(event_data: dict, lines: list[str]) -> None:
