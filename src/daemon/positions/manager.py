@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.daemon.config import PositionManagementConfig
 from src.daemon.positions.checks import PositionCheckRunner
@@ -78,8 +79,10 @@ class PositionManager:
         """
         logger.info("Syncing positions with broker")
         broker = self._ensure_broker()
-        broker_info = broker.get_account_info()
-        broker_positions = broker_info.positions
+        broker_result = broker.get_account_info()
+        if isinstance(broker_result, Err):
+            raise broker_result.err_value
+        broker_positions = broker_result.ok().positions
 
         new_positions = self._find_new_positions(state_positions, broker_positions)
         updated_positions = self._find_updated_positions(state_positions, broker_positions)
@@ -360,13 +363,15 @@ class PositionManager:
             return
         try:
             broker = self._ensure_broker()
-            order = broker.submit_order(
+            order_result = broker.submit_order(
                 symbol=position.symbol,
                 qty=int(action.qty_sold),
                 side="sell",
             )
+            if isinstance(order_result, Err):
+                raise order_result.err_value
             action.executed = True
-            action.order_id = order.order_id
+            action.order_id = order_result.ok().order_id
             logger.info(f"Executed {action.action_type}: {position.symbol} x{action.qty_sold}")
         except Exception as e:
             logger.opt(exception=True).error(
@@ -403,10 +408,9 @@ class PositionManager:
         broker = self._ensure_broker()
 
         if position.stop_loss_order_id:
-            try:
-                broker.cancel_order(position.stop_loss_order_id)
-                logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
-            except Exception as e:
+            cancel_result = broker.cancel_order(position.stop_loss_order_id)
+            if isinstance(cancel_result, Err):
+                e = cancel_result.err_value
                 # Proceed despite pending cancel - broker will finalize the cancellation shortly.
                 # Brief overlap of stop-loss orders is safer than blocking the stop update
                 # or leaving the position without a valid protective stop.
@@ -419,8 +423,13 @@ class PositionManager:
                         f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}"
                     )
                     return None
+            else:
+                logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
 
-        broker_info = broker.get_account_info()
+        acct_result = broker.get_account_info()
+        if isinstance(acct_result, Err):
+            raise acct_result.err_value
+        broker_info = acct_result.ok()
         if position.symbol not in broker_info.positions:
             logger.warning(f"Position closed during stop update: {position.symbol}")
             return None
@@ -450,11 +459,14 @@ class PositionManager:
             return None
 
         try:
-            order = broker.submit_stop_order(
+            stop_result = broker.submit_stop_order(
                 symbol=position.symbol,
                 qty=int(position.current_qty),
                 stop_price=new_stop_loss,
             )
+            if isinstance(stop_result, Err):
+                raise stop_result.err_value
+            order = stop_result.ok()
             position.stop_loss_order_id = order.order_id
             position.current_stop_loss = new_stop_loss
             position.last_updated = datetime.now(UTC)

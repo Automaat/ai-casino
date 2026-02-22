@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from result import Err, Ok
 
 from src.daemon.config.base import TradingMode
 from src.data.broker import OrderStatus
@@ -66,7 +67,7 @@ _REQUEST = TradeRequest(
 @pytest.fixture
 def broker() -> Mock:
     mock = Mock()
-    mock.submit_order = Mock(return_value=_make_order_status())
+    mock.submit_order = Mock(return_value=Ok(_make_order_status()))
     return mock
 
 
@@ -123,7 +124,7 @@ class TestHappyPath:
     @pytest.mark.asyncio
     @pytest.mark.unit
     async def test_sell_notification_title(self, broker: Mock, daemon_config: Mock) -> None:
-        broker.submit_order = Mock(return_value=_make_order_status(side="sell"))
+        broker.submit_order = Mock(return_value=Ok(_make_order_status(side="sell")))
         notification_service = AsyncMock()
         service = TradingService(
             broker=broker,
@@ -249,7 +250,7 @@ class TestBrokerError:
     @pytest.mark.unit
     async def test_broker_error_returns_rejection(self, daemon_config: Mock) -> None:
         broker = Mock()
-        broker.submit_order = Mock(side_effect=RuntimeError("Connection refused"))
+        broker.submit_order = Mock(return_value=Err(RuntimeError("Connection refused")))
         service = TradingService(broker=broker, daemon_config=daemon_config)
 
         result = await service.execute(_REQUEST)
@@ -358,7 +359,7 @@ class TestRiskIntegration:
     @pytest.mark.asyncio
     @pytest.mark.unit
     async def test_risk_caps_quantity(self, broker: Mock, daemon_config: Mock) -> None:
-        broker.submit_order = Mock(return_value=_make_order_status(qty=5))
+        broker.submit_order = Mock(return_value=Ok(_make_order_status(qty=5)))
         risk_service = AsyncMock()
         risk_service.assess_trade = AsyncMock(return_value=_make_risk_decision(recommended_shares=5))
         request = TradeRequest(
@@ -433,7 +434,7 @@ class TestSnapshotPortfolio:
         account.total_exposure = 50_000.0
         account.portfolio_value = 100_000.0
         account.positions = {}
-        broker.get_account_info = Mock(return_value=account)
+        broker.get_account_info = Mock(return_value=Ok(account))
 
         db_engine = _make_db_engine()
         service = TradingService(broker=broker, daemon_config=daemon_config, database_engine=db_engine)

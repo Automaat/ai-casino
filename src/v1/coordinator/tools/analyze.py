@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 from pydantic import BaseModel
+from result import Err
 
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParameter, ToolParametersSchema
@@ -220,24 +221,22 @@ class AnalyzeSymbolTool(BaseTool):
         Returns:
             Position context or None
         """
-        try:
-            broker = self._container.alpaca_broker()
-            account_info = broker.get_account_info()
-
-            if symbol in account_info.positions:
-                pos = account_info.positions[symbol]
-                return PositionContext(
-                    has_position=True,
-                    quantity=pos.qty,
-                    avg_entry_price=pos.avg_entry_price,
-                    unrealized_pnl=pos.unrealized_pnl,
-                    unrealized_pnl_percent=pos.unrealized_pnl_percent,
-                )
-
+        broker = self._container.alpaca_broker()
+        result = broker.get_account_info()
+        if isinstance(result, Err):
+            logger.opt(exception=True).warning(f"Failed to get position context: {result.err_value}")
             return None
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to get position context: {e}")
-            return None
+        account_info = result.ok()
+        if symbol in account_info.positions:
+            pos = account_info.positions[symbol]
+            return PositionContext(
+                has_position=True,
+                quantity=pos.qty,
+                avg_entry_price=pos.avg_entry_price,
+                unrealized_pnl=pos.unrealized_pnl,
+                unrealized_pnl_percent=pos.unrealized_pnl_percent,
+            )
+        return None
 
     def _format_result(self, result: TradingWorkflowResult) -> str:
         """Format workflow result as markdown summary.

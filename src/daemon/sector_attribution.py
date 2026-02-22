@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.daemon.state.models import SectorAttributionRecord
 from src.metrics.sector_attribution import SectorAttributionAnalyzer
@@ -46,8 +47,10 @@ class DaemonSectorAttribution:
             logger.info("No positions to analyze")
             return
 
-        account_info = await asyncio.to_thread(self._broker.get_account_info)
-        broker_positions = account_info.positions
+        account_result = await asyncio.to_thread(self._broker.get_account_info)
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        broker_positions = account_result.ok().positions
 
         if not broker_positions:
             logger.warning("No broker positions available")

@@ -1,0 +1,35 @@
+rules:
+  - id: v1-exception-wrap-to-result
+    patterns:
+      - pattern: |
+          try:
+              ...
+          except Exception as $E:
+              ...
+              raise $ERR(...) from $E
+    message: >
+      Wrapping Exception in a domain error. Use @as_result(Exception) and
+      return Result[T, Exception] instead of re-raising.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: best-practice
+      references:
+        - https://github.com/rustedpy/result
+
+  - id: v1-return-none-on-exception
+    pattern: |
+      try:
+          ...
+      except $EXC as $E:
+          ...
+          return None
+    message: >
+      Returning None on exception. Return Err(str($E)) instead and use
+      Result[T, str] as the return type to make failure explicit.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: best-practice
+      references:
+        - https://github.com/rustedpy/result

@@ -154,7 +154,6 @@ class AnomalyWatcher(PeriodicWatcher):
                     logger.debug(f"Established baseline for {symbol}: {avg_vol:,.0f}")
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to establish baseline for {symbol}: {e}")
-                return None
 
         if symbol not in self._volume_baselines:
             return None
@@ -206,7 +205,6 @@ class AnomalyWatcher(PeriodicWatcher):
                     logger.debug(f"Cached prev close for {symbol}: ${prev_close:.2f}")
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to fetch prev close for {symbol}: {e}")
-                return None
 
         if symbol not in self._previous_close_cache:
             return None
@@ -239,13 +237,12 @@ class AnomalyWatcher(PeriodicWatcher):
         if self._market_fetcher is None:
             msg = "Market fetcher not initialized"
             raise RuntimeError(msg)
+        intraday = None
         try:
             intraday = await asyncio.to_thread(self._market_fetcher.fetch_intraday, symbol, "60min")
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to fetch intraday for {symbol}: {e}")
-            return None
-
-        if intraday.data.empty:
+        if intraday is None or intraday.data.empty:
             logger.debug(f"No intraday data for {symbol}")
             return None
 

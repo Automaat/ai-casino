@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, cast
 
 from loguru import logger
+from result import Err
 
 from src.daemon.events import RiskReportEvent, Sentiment, TriageResult, Urgency
 from src.daemon.state.models import RiskReportRecord
@@ -79,7 +80,14 @@ class RiskReportTask(Task):
         """
         start = time.monotonic()
 
-        account = await asyncio.to_thread(self._broker.get_account_info)
+        _result = await asyncio.to_thread(self._broker.get_account_info)
+        if isinstance(_result, Err):
+            msg = f"Broker API unavailable: {_result.err_value}"
+            logger.opt(exception=True).error(msg)
+            return TaskResult(
+                task_name=self.name, success=False, duration_seconds=time.monotonic() - start, message=msg
+            )
+        account = _result.ok()
         report = await asyncio.to_thread(
             self._risk_manager.generate_risk_report,
             broker_positions=account.positions,

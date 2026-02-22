@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pandas as pd
 from loguru import logger
+from result import Err
 
 from src.daemon.config import MonteCarloConfig
 from src.daemon.state import MonteCarloRecord
@@ -46,8 +47,10 @@ class DaemonStressTester:
             ValueError: If no positions or insufficient historical data
         """
         logger.info("[STRESS TEST] Fetching current positions")
-        account_info = self.broker.get_account_info()
-        positions = list(account_info.positions.values())
+        account_result = self.broker.get_account_info()
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        positions = list(account_result.ok().positions.values())
 
         if not positions:
             msg = "No positions in portfolio for stress testing"

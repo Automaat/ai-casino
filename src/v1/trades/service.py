@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.daemon.config.base import TradingMode
 from src.strategies.signal import Signal
@@ -194,21 +195,21 @@ class TradingService:
 
     async def _submit_order(self, request: TradeRequest) -> OrderStatus | None:
         """Submit order to broker."""
-        try:
-            logger.info(
-                f"Executing {request.action} order: {request.quantity} {request.symbol} "
-                f"(stop_loss={request.stop_loss_price})"
-            )
-            return await asyncio.to_thread(
-                self._broker.submit_order,
-                symbol=request.symbol,
-                qty=request.quantity,
-                side=request.action.value.lower(),
-                stop_loss_price=request.stop_loss_price,
-            )
-        except Exception as e:
-            logger.opt(exception=True).error(f"Trade execution failed: {e}")
+        logger.info(
+            f"Executing {request.action} order: {request.quantity} {request.symbol} "
+            f"(stop_loss={request.stop_loss_price})"
+        )
+        order_result = await asyncio.to_thread(
+            self._broker.submit_order,
+            symbol=request.symbol,
+            qty=request.quantity,
+            side=request.action.value.lower(),
+            stop_loss_price=request.stop_loss_price,
+        )
+        if isinstance(order_result, Err):
+            logger.opt(exception=True).error(f"Trade execution failed: {order_result.err_value}")
             return None
+        return order_result.ok()
 
     async def _persist_trade(self, order_status: OrderStatus, request: TradeRequest) -> None:
         """Persist executed trade to database (non-blocking on failure)."""
@@ -299,7 +300,13 @@ class TradingService:
         try:
             from src.database.repositories.snapshot import PortfolioSnapshot, PortfolioSnapshotRepository
 
-            account_info = await asyncio.to_thread(self._broker.get_account_info)
+            account_result = await asyncio.to_thread(self._broker.get_account_info)
+            if isinstance(account_result, Err):
+                logger.opt(exception=True).warning(
+                    f"Portfolio snapshot failed - broker: {account_result.err_value}"
+                )
+                return
+            account_info = account_result.ok()
             async with self._database_engine.session() as session:
                 repo = PortfolioSnapshotRepository(session)
                 await repo.create(

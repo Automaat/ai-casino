@@ -85,16 +85,20 @@ def mock_memory() -> AsyncMock:
 @pytest.fixture
 def mock_broker() -> Mock:
     """Create mock broker."""
+    from result import Ok
+
     from src.data.broker import BrokerAccountInfo
 
     mock = Mock()
     mock.get_account_info = Mock(
-        return_value=BrokerAccountInfo(
-            balance=10000.0,
-            portfolio_value=10000.0,
-            available_cash=10000.0,
-            total_exposure=0.0,
-            positions={},
+        return_value=Ok(
+            BrokerAccountInfo(
+                balance=10000.0,
+                portfolio_value=10000.0,
+                available_cash=10000.0,
+                total_exposure=0.0,
+                positions={},
+            )
         )
     )
     return mock

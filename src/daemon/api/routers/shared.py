@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 from loguru import logger
+from result import Err
 
 if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
@@ -72,7 +73,10 @@ async def get_broker_account_info_cached(
             try:
                 from src.data.broker import BrokerAccountInfo
 
-                account_info: BrokerAccountInfo = await asyncio.to_thread(components.broker.get_account_info)
+                account_result = await asyncio.to_thread(components.broker.get_account_info)
+                if isinstance(account_result, Err):
+                    raise account_result.err_value
+                account_info: BrokerAccountInfo = account_result.ok()
                 cache[cache_key] = {
                     "positions": account_info.positions,
                     "portfolio_value": account_info.portfolio_value,

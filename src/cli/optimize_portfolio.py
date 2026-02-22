@@ -5,6 +5,7 @@ import os
 
 import typer
 from loguru import logger
+from result import Err
 from rich.console import Console
 from rich.table import Table
 
@@ -167,7 +168,10 @@ def _print_portfolio_result(portfolio: OptimizedPortfolio) -> None:
 
 def _print_current_portfolio(broker: AlpacaBroker) -> None:
     """Print current Alpaca portfolio positions."""
-    account_info = broker.get_account_info()
+    account_result = broker.get_account_info()
+    if isinstance(account_result, Err):
+        raise account_result.err_value
+    account_info = account_result.ok()
 
     table = Table(title="Current Portfolio (Alpaca)", show_header=True, header_style="bold cyan")
     table.add_column("Symbol", style="cyan", width=10)

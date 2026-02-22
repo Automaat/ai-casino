@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.database.repositories.snapshot import PortfolioSnapshot, PortfolioSnapshotRepository
 from src.v1.tasks.interface import Task
@@ -62,7 +63,14 @@ class PortfolioSnapshotTask(Task):
         """
         start = time.monotonic()
 
-        account_info = await asyncio.to_thread(self._broker.get_account_info)
+        _result = await asyncio.to_thread(self._broker.get_account_info)
+        if isinstance(_result, Err):
+            msg = f"Broker API unavailable: {_result.err_value}"
+            logger.opt(exception=True).error(msg)
+            return TaskResult(
+                task_name=self.name, success=False, duration_seconds=time.monotonic() - start, message=msg
+            )
+        account_info = _result.ok()
         async with self._database_engine.session() as session:
             repo = PortfolioSnapshotRepository(session)
             await repo.create(

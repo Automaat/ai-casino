@@ -2,6 +2,7 @@
 
 from loguru import logger
 from pydantic import BaseModel
+from result import Err
 
 from src.optimization.portfolio import OptimizedPortfolio, PortfolioOptimizer, PortfolioRebalance
 from src.v1.trades.brokers import Broker
@@ -148,9 +149,12 @@ class DaemonRebalancer:
                 side = "buy" if rebalance.action == "BUY" else "sell"
                 shares = abs(rebalance.shares_to_trade)
 
-                order_status = self.broker.submit_order(
+                order_result = self.broker.submit_order(
                     symbol=rebalance.symbol, qty=shares, side=side, stop_loss_price=None
                 )
+                if isinstance(order_result, Err):
+                    raise order_result.err_value
+                order_status = order_result.ok()
 
                 if order_status.filled_at is not None and order_status.filled_avg_price is not None:
                     executed += 1

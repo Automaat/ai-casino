@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 from rich.console import Console
 
 from src.daemon.tasks.base import TaskExecutor
@@ -164,7 +165,10 @@ class RiskReportTask(TaskExecutor):
 
         from src.daemon.state import RiskReportRecord
 
-        account_info = await asyncio.to_thread(self.components.broker.get_account_info)
+        account_result = await asyncio.to_thread(self.components.broker.get_account_info)
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        account_info = account_result.ok()
         workflow = self.components.workflow
         if not workflow:
             logger.warning("Workflow not initialized")

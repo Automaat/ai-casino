@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
+from result import Err
 
 from src.agents.risk.models import AccountInfo
 from src.strategies.signal import Signal
@@ -131,17 +132,18 @@ class RiskService:
 
         async def fetch_account() -> None:
             nonlocal account_info, broker_api_failed
-            try:
-                broker_info = await asyncio.to_thread(self._broker.get_account_info)
+            _result = await asyncio.to_thread(self._broker.get_account_info)
+            if isinstance(_result, Err):
+                logger.opt(exception=True).warning(f"Broker API failed: {_result.err_value}")
+                broker_api_failed = True
+            else:
+                broker_info = _result.ok()
                 account_info = AccountInfo(
                     balance=broker_info.balance,
                     available_cash=broker_info.available_cash,
                     positions={s: p.market_value for s, p in broker_info.positions.items()},
                     total_exposure=broker_info.total_exposure,
                 )
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Broker API failed: {e}")
-                broker_api_failed = True
 
         async def fetch_market() -> pd.DataFrame:
             result = await asyncio.to_thread(self._market_fetcher.fetch_daily, symbol, 90)

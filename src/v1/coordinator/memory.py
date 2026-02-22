@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 
 from loguru import logger
 from pydantic import BaseModel, Field
+from result import Err
 
 if TYPE_CHECKING:
     from src.daemon.state import DaemonState
@@ -253,38 +254,34 @@ class CoordinatorMemory:
         if not self._broker:
             return "Portfolio data unavailable"
 
-        try:
-            account_info = await asyncio.to_thread(self._broker.get_account_info)
+        result = await asyncio.to_thread(self._broker.get_account_info)
+        if isinstance(result, Err):
+            logger.opt(exception=True).error(f"Failed to get portfolio summary: {result.err_value}")
+            return f"Portfolio data unavailable: {result.err_value}"
+        account_info = result.ok()
+        if account_info.portfolio_value > 0:
+            exposure_percent_str = f"{account_info.total_exposure / account_info.portfolio_value * 100:.1f}%"
+        else:
+            exposure_percent_str = "N/A"
 
-            if getattr(account_info, "portfolio_value", None) and account_info.portfolio_value > 0:
-                exposure_percent_str = (
-                    f"{account_info.total_exposure / account_info.portfolio_value * 100:.1f}%"
+        lines = [
+            "## Current Portfolio",
+            f"- **Balance**: ${account_info.balance:,.2f}",
+            f"- **Portfolio Value**: ${account_info.portfolio_value:,.2f}",
+            f"- **Available Cash**: ${account_info.available_cash:,.2f}",
+            f"- **Total Exposure**: ${account_info.total_exposure:,.2f} ({exposure_percent_str})",
+        ]
+
+        if account_info.positions:
+            lines.append(f"\n**Positions ({len(account_info.positions)}):**")
+            for symbol, pos in account_info.positions.items():
+                lines.append(
+                    f"- {symbol}: {pos.qty} shares @ ${pos.avg_entry_price:.2f} "
+                    f"(P&L: ${pos.unrealized_pnl:,.2f} / {pos.unrealized_pnl_percent:+.1f}%)"
                 )
-            else:
-                exposure_percent_str = "N/A"
 
-            lines = [
-                "## Current Portfolio",
-                f"- **Balance**: ${account_info.balance:,.2f}",
-                f"- **Portfolio Value**: ${account_info.portfolio_value:,.2f}",
-                f"- **Available Cash**: ${account_info.available_cash:,.2f}",
-                f"- **Total Exposure**: ${account_info.total_exposure:,.2f} ({exposure_percent_str})",
-            ]
-
-            if account_info.positions:
-                lines.append(f"\n**Positions ({len(account_info.positions)}):**")
-                for symbol, pos in account_info.positions.items():
-                    lines.append(
-                        f"- {symbol}: {pos.qty} shares @ ${pos.avg_entry_price:.2f} "
-                        f"(P&L: ${pos.unrealized_pnl:,.2f} / {pos.unrealized_pnl_percent:+.1f}%)"
-                    )
-
-            text = "\n".join(lines)
-            return self._truncate_to_budget(text, max_tokens)
-
-        except Exception as e:
-            logger.opt(exception=True).error(f"Failed to get portfolio summary: {e}")
-            return f"Portfolio data unavailable: {e}"
+        text = "\n".join(lines)
+        return self._truncate_to_budget(text, max_tokens)
 
     async def get_analysis_history(
         self,

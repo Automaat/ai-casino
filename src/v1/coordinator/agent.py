@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.models.llm import LLMClient
 from src.prompts import PromptLoader
@@ -554,29 +555,28 @@ class TradingCoordinator:
         Returns:
             Formatted positions summary string
         """
-        try:
-            account_info = await asyncio.to_thread(self._broker.get_account_info)
-
-            if not account_info.positions:
-                return "No open positions"
-
-            count = len(account_info.positions)
-            position_label = "position" if count == 1 else "positions"
-            lines = [f"{count} open {position_label}:"]
-            for symbol, pos in account_info.positions.items():
-                pnl_pct = pos.unrealized_pnl_percent
-                pnl_dollar = pos.unrealized_pnl
-                status = "profit" if pnl_dollar > 0 else "loss" if pnl_dollar < 0 else "flat"
-
-                lines.append(
-                    f"- {symbol}: {pos.qty} shares @ ${pos.avg_entry_price:.2f} "
-                    f"({status}: {pnl_pct:+.1f}% / ${pnl_dollar:+,.2f})"
-                )
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to get positions summary: {e}")
+        result = await asyncio.to_thread(self._broker.get_account_info)
+        if isinstance(result, Err):
+            logger.opt(exception=True).warning(f"Failed to get positions summary: {result.err_value}")
             return "Positions data unavailable"
+        account_info = result.ok()
+        if not account_info.positions:
+            return "No open positions"
+
+        count = len(account_info.positions)
+        position_label = "position" if count == 1 else "positions"
+        lines = [f"{count} open {position_label}:"]
+        for symbol, pos in account_info.positions.items():
+            pnl_pct = pos.unrealized_pnl_percent
+            pnl_dollar = pos.unrealized_pnl
+            status = "profit" if pnl_dollar > 0 else "loss" if pnl_dollar < 0 else "flat"
+
+            lines.append(
+                f"- {symbol}: {pos.qty} shares @ ${pos.avg_entry_price:.2f} "
+                f"({status}: {pnl_pct:+.1f}% / ${pnl_dollar:+,.2f})"
+            )
+
+        return "\n".join(lines)
 
     async def _get_recent_outcomes_summary(self, lookback_days: int = 7, limit: int = 10) -> str:
         """Get recent trade outcomes for cycle prompt context.

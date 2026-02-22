@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 if TYPE_CHECKING:
     from src.data.broker import AlpacaBroker
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
 from src.agents.risk import AccountInfo, RiskAssessment
 from src.agents.trader import TradingDecision
-from src.data.broker import BrokerAPIError, OrderStatus
+from src.data.broker import OrderStatus
 from src.strategies.session import TradingSession
 from src.workflows.models.execution import TradeExecutionInput, TradeExecutionOutput
 
@@ -238,41 +239,33 @@ async def _execute_via_broker(
 
     def _sync_submit_order() -> OrderStatus | None:
         """Synchronous order submission wrapper for thread execution."""
-        try:
-            stop_loss_price = (
-                input_data.risk_assessment.stop_loss.stop_loss_price
-                if input_data.risk_assessment.stop_loss
-                else None
-            )
-            qty = (
-                int(input_data.risk_assessment.position_sizing.recommended_shares)
-                if input_data.risk_assessment.position_sizing
-                else 0
-            )
-            order = broker_client.submit_order(
-                symbol=input_data.symbol,
-                qty=qty,
-                side=action.value.lower(),
-                stop_loss_price=stop_loss_price,
-            )
-            stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None"
-            logger.info(
-                f"Executed {action.value}: {input_data.symbol} x{order.qty} (stop-loss={stop_loss_str})"
-            )
-            return order
-        except BrokerAPIError as e:
+        stop_loss_price = (
+            input_data.risk_assessment.stop_loss.stop_loss_price
+            if input_data.risk_assessment.stop_loss
+            else None
+        )
+        qty = (
+            int(input_data.risk_assessment.position_sizing.recommended_shares)
+            if input_data.risk_assessment.position_sizing
+            else 0
+        )
+        order_result = broker_client.submit_order(
+            symbol=input_data.symbol,
+            qty=qty,
+            side=action.value.lower(),
+            stop_loss_price=stop_loss_price,
+        )
+        if isinstance(order_result, Err):
             logger.critical(
                 f"BROKER API FAILURE during order submission for {input_data.symbol} "
-                f"with action {action.value}: {e}"
+                f"with action {action.value}: {order_result.err_value}"
             )
-            warnings.append(f"Order submission failed: {e}")
+            warnings.append(f"Order submission failed: {order_result.err_value}")
             return None
-        except Exception as e:
-            logger.opt(exception=True).error(
-                f"Unexpected error submitting order for {input_data.symbol}: {e}"
-            )
-            warnings.append(f"Order submission error: {e}")
-            return None
+        order = order_result.ok()
+        stop_loss_str = f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None"
+        logger.info(f"Executed {action.value}: {input_data.symbol} x{order.qty} (stop-loss={stop_loss_str})")
+        return order
 
     order = await asyncio.to_thread(_sync_submit_order)
 

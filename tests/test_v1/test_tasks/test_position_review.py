@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from result import Ok
 
 from src.daemon.config.position_review import PositionReviewConfig
 from src.daemon.events import PositionReviewEvent
@@ -119,7 +120,7 @@ class TestExecute:
         task, _broker, queue = _make_task()
 
         with patch("src.v1.tasks.implementations.position_review.asyncio") as mock_asyncio:
-            mock_asyncio.to_thread = AsyncMock(return_value=_make_account(positions={}))
+            mock_asyncio.to_thread = AsyncMock(return_value=Ok(_make_account(positions={})))
             result = await task.execute()
 
         assert result.success is True
@@ -134,7 +135,7 @@ class TestExecute:
         task, _broker, queue = _make_task()
 
         with patch("src.v1.tasks.implementations.position_review.asyncio") as mock_asyncio:
-            mock_asyncio.to_thread = AsyncMock(return_value=account)
+            mock_asyncio.to_thread = AsyncMock(return_value=Ok(account))
             result = await task.execute()
 
         assert result.success is True
@@ -158,7 +159,7 @@ class TestExecute:
         assert await task.last_run_at() is None
 
         with patch("src.v1.tasks.implementations.position_review.asyncio") as mock_asyncio:
-            mock_asyncio.to_thread = AsyncMock(return_value=_make_account(positions={}))
+            mock_asyncio.to_thread = AsyncMock(return_value=Ok(_make_account(positions={})))
             await task.execute()
 
         last = await task.last_run_at()
@@ -173,7 +174,7 @@ class TestExecute:
         task, _broker, queue = _make_task(db_engine=None)
 
         with patch("src.v1.tasks.implementations.position_review.asyncio") as mock_asyncio:
-            mock_asyncio.to_thread = AsyncMock(return_value=account)
+            mock_asyncio.to_thread = AsyncMock(return_value=Ok(account))
             result = await task.execute()
 
         assert result.success is True

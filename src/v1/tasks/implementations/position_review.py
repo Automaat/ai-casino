@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.daemon.events import EnrichedPosition, PositionReviewEvent, Sentiment, TriageResult, Urgency
 from src.strategies.session import TradingSession
@@ -88,7 +89,14 @@ class PositionReviewTask(Task):
                 message=f"Skipped: session={session.value if session else 'closed'}",
             )
 
-        account = await asyncio.to_thread(self._broker.get_account_info)
+        _result = await asyncio.to_thread(self._broker.get_account_info)
+        if isinstance(_result, Err):
+            msg = f"Broker API unavailable: {_result.err_value}"
+            logger.opt(exception=True).error(msg)
+            return TaskResult(
+                task_name=self.name, success=False, duration_seconds=time.monotonic() - start, message=msg
+            )
+        account = _result.ok()
         if not account.positions:
             self._last_run = datetime.now(UTC)
             return TaskResult(

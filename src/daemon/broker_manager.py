@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from loguru import logger
+from result import Err
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.cache.historical import HistoricalCache
@@ -150,8 +151,10 @@ class BrokerManager:
             return
 
         try:
-            account_info = self.broker.get_account_info()
-            position_symbols = set(account_info.positions.keys())
+            account_result = self.broker.get_account_info()
+            if isinstance(account_result, Err):
+                raise account_result.err_value
+            position_symbols = set(account_result.ok().positions.keys())
 
             if not position_symbols:
                 logger.debug("No positions to merge")
