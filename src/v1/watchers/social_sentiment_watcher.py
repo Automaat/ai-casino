@@ -32,7 +32,11 @@ class SocialSentimentWatcherConfig:
 
 
 class SocialSentimentWatcher(PeriodicWatcher):
-    """Background service that polls Reddit DB + ApeWisdom and computes social signals."""
+    """DEPRECATED: Remove alongside legacy pipeline (analysis_orchestrator.py).
+
+    ApeWisdom data is now available via SocialSentimentWorker / GetSocialSentimentTool.
+    This watcher only serves the legacy pipeline context injection path.
+    """
 
     def __init__(
         self,

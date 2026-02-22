@@ -19,6 +19,9 @@ def mock_analysis():
     analysis.reddit_sentiment = 0.72
     analysis.wsb_mentions_24h = 42
     analysis.interpretation = "Strong bullish social sentiment across platforms."
+    analysis.apewisdom_rank = 5
+    analysis.apewisdom_mentions = 1200
+    analysis.apewisdom_mention_delta_pct = 42.0
     return analysis
 
 
@@ -114,6 +117,9 @@ class TestGetSocialSentimentTool:
         analysis.reddit_sentiment = None
         analysis.wsb_mentions_24h = 0
         analysis.interpretation = "No data available."
+        analysis.apewisdom_rank = None
+        analysis.apewisdom_mentions = None
+        analysis.apewisdom_mention_delta_pct = None
 
         result = tool._format_result("AAPL", analysis)
 

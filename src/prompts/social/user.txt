@@ -13,6 +13,9 @@ Top Reddit posts:
 ## Finnhub News Buzz
 {finnhub_news_summary}
 
+## ApeWisdom (WSB Trending)
+{apewisdom_summary}
+
 ## Computed Metrics
 - Overall social score: {overall_score}
 - Social momentum: {momentum}
@@ -21,6 +24,6 @@ Provide a bullish/bearish interpretation synthesizing all sources. Consider:
 1. Retail investor sentiment strength
 2. Agreement across sources (Finnhub, Reddit, news buzz)
 3. Momentum direction (rising/falling/stable)
-4. Mention volume significance
+4. Mention volume significance and ApeWisdom trending rank
 
 Return your analysis as structured output with interpretation, sentiment_label, and confidence_keywords.
