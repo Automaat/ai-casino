@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from loguru import logger
 
@@ -18,6 +18,9 @@ from src.daemon.events import (
 )
 from src.data.economic_calendar import EconomicCalendarEntry, EconomicCalendarFetcher
 from src.v1.watchers.base import PeriodicWatcher
+
+if TYPE_CHECKING:
+    from src.database.engine import DatabaseEngine
 
 _MEDIUM_IMPACT_HOURS_THRESHOLD: Final[float] = 4.0
 
@@ -38,16 +41,19 @@ class EconomicCalendarWatcher(PeriodicWatcher):
         self,
         fetcher: EconomicCalendarFetcher,
         config: EconomicCalendarWatcherConfig,
+        database_engine: DatabaseEngine | None = None,
     ) -> None:
         """Initialize economic calendar watcher.
 
         Args:
             fetcher: FRED economic calendar fetcher
             config: Watcher configuration
+            database_engine: Optional database engine for signal persistence
         """
         super().__init__(poll_interval=config.poll_interval_minutes * 60)
         self._fetcher = fetcher
         self._config = config
+        self._database_engine = database_engine
         self._current_signal: EconomicEventSignal | None = None
 
     @property
@@ -196,6 +202,16 @@ class EconomicCalendarWatcher(PeriodicWatcher):
             f"Economic calendar assessed: risk={signal.risk_level}, "
             f"events={len(events)}, recommendation={signal.recommendation}"
         )
+
+        if self._database_engine:
+            try:
+                from src.database.repositories.economic_calendar import EconomicCalendarSignalRepository
+
+                async with self._database_engine.session() as session:
+                    repo = EconomicCalendarSignalRepository(session)
+                    await repo.create(signal)
+            except Exception as e:
+                logger.opt(exception=True).warning(f"Failed to persist economic signal: {e}")
 
     def __repr__(self) -> str:
         """String representation."""

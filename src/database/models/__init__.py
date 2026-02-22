@@ -11,6 +11,7 @@ from src.database.models.discovery import (
     DiscoveryHistoryRecordORM,
     DiscoverySourceMetricsORM,
 )
+from src.database.models.economic_calendar import EconomicCalendarSignalORM
 from src.database.models.metrics import (
     ExecutionMetricORM,
     MonteCarloRecordORM,
@@ -69,6 +70,7 @@ __all__ = [
     "DiscoveryHistoryRecordORM",
     "DiscoverySourceMetricsORM",
     "EarningsCalendarRecordORM",
+    "EconomicCalendarSignalORM",
     "ExecutionGraphORM",
     "ExecutionMetricORM",
     "GamePlanRecordORM",
