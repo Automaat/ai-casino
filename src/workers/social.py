@@ -543,7 +543,12 @@ class SocialSentimentWorker:
         """
         if not ticker:
             return "Not in ApeWisdom trending"
-        delta_str = f", {delta_pct:+.0f}% vs 24h ago" if delta_pct is not None else ""
+        if delta_pct is not None:
+            delta_str = f", {delta_pct:+.0f}% vs 24h ago"
+        elif ticker.mentions_24h_ago == 0 and ticker.mentions > 0:
+            delta_str = ", NEW"
+        else:
+            delta_str = ""
         return f"Rank #{ticker.rank}, {ticker.mentions} mentions{delta_str}"
 
     def _compute_confidence(
