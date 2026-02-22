@@ -15,6 +15,7 @@ from src.workflows.types import WorkflowExtraContext
 
 if TYPE_CHECKING:
     from src.di.container import AppContainer
+    from src.v1.analysis_service import AnalysisService
     from src.v1.coordinator.agent import TradingCoordinator
     from src.workflows.types import TradingWorkflowResult
 
@@ -36,15 +37,18 @@ class AnalyzeSymbolTool(BaseTool):
         self,
         container: AppContainer,
         coordinator: TradingCoordinator | None = None,
+        analysis_service: AnalysisService | None = None,
     ) -> None:
         """Initialize tool with DI container.
 
         Args:
             container: DI container for workflow creation
             coordinator: Optional coordinator for result storage
+            analysis_service: Optional service for persisting analysis records
         """
         self._container = container
         self._coordinator = coordinator
+        self._analysis_service = analysis_service
 
     @property
     def name(self) -> str:
@@ -209,6 +213,14 @@ class AnalyzeSymbolTool(BaseTool):
         # Store structured result in coordinator for reflection tool access
         if self._coordinator:
             self._coordinator.last_analysis_results[symbol] = result
+
+        # Persist to DB
+        if self._analysis_service:
+            record_result = await self._analysis_service.record(result)
+            if isinstance(record_result, Err):
+                logger.opt(exception=record_result.err_value).warning(
+                    f"Failed to persist analysis for {symbol}"
+                )
 
         return self._format_result(result)
 
