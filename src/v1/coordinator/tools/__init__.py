@@ -90,8 +90,11 @@ def build_coordinator_registry(
     daemon_config = container.daemon_config()
     notification_service = container.notification_service()
 
+    from src.v1.analysis_service import AnalysisService
+
     registry.register(MarketOverviewTool(container.market_fetcher()))
-    registry.register(AnalyzeSymbolTool(container, coordinator))
+    analysis_service = AnalysisService(_resolve_database_engine(daemon_config, container))
+    registry.register(AnalyzeSymbolTool(container, coordinator, analysis_service))
     registry.register(PortfolioStatusTool(broker))
 
     risk_service = container.risk_service()
