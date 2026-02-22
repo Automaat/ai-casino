@@ -496,6 +496,11 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
     )
 
+    options_flow_watcher = providers.Singleton(
+        watcher_providers.create_options_flow_watcher,
+        daemon_config=daemon_config,
+    )
+
 
 def create_container(config_path: str | Path | None = None) -> AppContainer:
     """Create dependency injection container.
