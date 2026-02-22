@@ -4,8 +4,8 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
-from src.di.config import load_daemon_config
 from src.data.apewisdom import ApeWisdomFetcher
+from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
 from src.di.providers import circuit_breaker as circuit_breaker_providers
 from src.di.providers import daemon as daemon_providers
