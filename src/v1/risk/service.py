@@ -134,7 +134,7 @@ class RiskService:
             nonlocal account_info, broker_api_failed
             _result = await asyncio.to_thread(self._broker.get_account_info)
             if isinstance(_result, Err):
-                logger.opt(exception=True).warning(f"Broker API failed: {_result.err_value}")
+                logger.opt(exception=_result.err_value).warning(f"Broker API failed: {_result.err_value}")
                 broker_api_failed = True
             else:
                 broker_info = _result.ok()

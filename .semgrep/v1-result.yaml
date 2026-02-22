@@ -25,8 +25,8 @@ rules:
           ...
           return None
     message: >
-      Returning None on exception. Return Err(str($E)) instead and use
-      Result[T, str] as the return type to make failure explicit.
+      Returning None on exception. Return Err($E) instead and use
+      Result[T, Exception] as the return type to make failure explicit.
     languages: [python]
     severity: WARNING
     metadata:

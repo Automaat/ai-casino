@@ -207,7 +207,9 @@ class TradingService:
             stop_loss_price=request.stop_loss_price,
         )
         if isinstance(order_result, Err):
-            logger.opt(exception=True).error(f"Trade execution failed: {order_result.err_value}")
+            logger.opt(exception=order_result.err_value).error(
+                f"Trade execution failed: {order_result.err_value}"
+            )
             return None
         return order_result.ok()
 
@@ -302,7 +304,7 @@ class TradingService:
 
             account_result = await asyncio.to_thread(self._broker.get_account_info)
             if isinstance(account_result, Err):
-                logger.opt(exception=True).warning(
+                logger.opt(exception=account_result.err_value).warning(
                     f"Portfolio snapshot failed - broker: {account_result.err_value}"
                 )
                 return

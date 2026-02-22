@@ -66,7 +66,7 @@ class PortfolioSnapshotTask(Task):
         _result = await asyncio.to_thread(self._broker.get_account_info)
         if isinstance(_result, Err):
             msg = f"Broker API unavailable: {_result.err_value}"
-            logger.opt(exception=True).error(msg)
+            logger.opt(exception=_result.err_value).error(msg)
             return TaskResult(
                 task_name=self.name, success=False, duration_seconds=time.monotonic() - start, message=msg
             )

@@ -256,7 +256,9 @@ class CoordinatorMemory:
 
         result = await asyncio.to_thread(self._broker.get_account_info)
         if isinstance(result, Err):
-            logger.opt(exception=True).error(f"Failed to get portfolio summary: {result.err_value}")
+            logger.opt(exception=result.err_value).error(
+                f"Failed to get portfolio summary: {result.err_value}"
+            )
             return f"Portfolio data unavailable: {result.err_value}"
         account_info = result.ok()
         if account_info.portfolio_value > 0:

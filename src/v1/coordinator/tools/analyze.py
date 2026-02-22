@@ -224,7 +224,9 @@ class AnalyzeSymbolTool(BaseTool):
         broker = self._container.alpaca_broker()
         result = broker.get_account_info()
         if isinstance(result, Err):
-            logger.opt(exception=True).warning(f"Failed to get position context: {result.err_value}")
+            logger.opt(exception=result.err_value).warning(
+                f"Failed to get position context: {result.err_value}"
+            )
             return None
         account_info = result.ok()
         if symbol in account_info.positions:

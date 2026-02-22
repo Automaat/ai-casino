@@ -61,7 +61,9 @@ class PortfolioStatusTool(BaseTool):
 
         account_result = self._broker.get_account_info()
         if isinstance(account_result, Err):
-            logger.opt(exception=True).error(f"Portfolio status check failed: {account_result.err_value}")
+            logger.opt(exception=account_result.err_value).error(
+                f"Portfolio status check failed: {account_result.err_value}"
+            )
             return f"Failed to fetch portfolio status: {account_result.err_value}"
 
         account_info = account_result.ok()
