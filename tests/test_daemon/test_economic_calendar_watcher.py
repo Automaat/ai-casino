@@ -1,7 +1,7 @@
 """Unit tests for EconomicCalendarWatcher."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -193,3 +193,77 @@ async def test_run_updates_signal(watcher: EconomicCalendarWatcher, mock_fetcher
 
     assert watcher.current_signal is not None
     mock_fetcher.fetch_economic_calendar.assert_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_tick_persists_signal_with_database_engine(
+    mock_fetcher: MagicMock, config: EconomicCalendarWatcherConfig
+) -> None:
+    """_tick() calls repository.create() when database_engine is provided."""
+    mock_engine = MagicMock()
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_engine.session.return_value = mock_session
+
+    mock_repo = AsyncMock()
+    mock_repo.create = AsyncMock()
+
+    mock_fetcher.fetch_economic_calendar.return_value = []
+    watcher = EconomicCalendarWatcher(fetcher=mock_fetcher, config=config, database_engine=mock_engine)
+
+    with patch(
+        "src.database.repositories.economic_calendar.EconomicCalendarSignalRepository",
+        return_value=mock_repo,
+    ):
+        await watcher._tick()
+
+    mock_repo.create.assert_called_once()
+    created_signal = mock_repo.create.call_args[0][0]
+    assert created_signal.risk_level == EconomicRiskLevel.LOW
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_tick_swallows_persistence_exception(
+    mock_fetcher: MagicMock, config: EconomicCalendarWatcherConfig
+) -> None:
+    """_tick() swallows DB exception and still updates current_signal."""
+    mock_engine = MagicMock()
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_engine.session.return_value = mock_session
+
+    mock_repo = AsyncMock()
+    mock_repo.create = AsyncMock(side_effect=RuntimeError("DB write failed"))
+
+    mock_fetcher.fetch_economic_calendar.return_value = []
+    watcher = EconomicCalendarWatcher(fetcher=mock_fetcher, config=config, database_engine=mock_engine)
+
+    with patch(
+        "src.database.repositories.economic_calendar.EconomicCalendarSignalRepository",
+        return_value=mock_repo,
+    ):
+        await watcher._tick()  # must not raise
+
+    assert watcher.current_signal is not None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_tick_skips_persistence_without_database_engine(
+    mock_fetcher: MagicMock, config: EconomicCalendarWatcherConfig
+) -> None:
+    """_tick() does not attempt DB persistence when database_engine is None."""
+    mock_fetcher.fetch_economic_calendar.return_value = []
+    watcher = EconomicCalendarWatcher(fetcher=mock_fetcher, config=config)
+
+    with patch(
+        "src.database.repositories.economic_calendar.EconomicCalendarSignalRepository"
+    ) as mock_repo_cls:
+        await watcher._tick()
+
+    mock_repo_cls.assert_not_called()
+    assert watcher.current_signal is not None
