@@ -406,6 +406,49 @@ class CoordinatorMemory:
 
         return f"{truncated}\n\n[Truncated for length]"
 
+    async def get_current_economic_signal(self) -> str | None:
+        """Get current economic risk signal from database.
+
+        Returns None if no database, no recent signal (>3h), or risk is LOW.
+
+        Returns:
+            Formatted risk string or None
+        """
+        if not self._database_engine:
+            return None
+
+        from src.daemon.events import EconomicRiskLevel
+        from src.database.repositories.economic_calendar import EconomicCalendarSignalRepository
+
+        signal = None
+        try:
+            repo = EconomicCalendarSignalRepository(self._database_engine.session())
+            repo.owns_session = True
+            async with repo:
+                signal = await repo.get_latest()
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to get economic signal: {e}")
+
+        if signal is None:
+            return None
+
+        staleness_threshold = timedelta(hours=3)
+        if datetime.now(UTC) - signal.computed_at > staleness_threshold:
+            return None
+
+        if signal.risk_level == EconomicRiskLevel.LOW:
+            return None
+
+        events_str = ", ".join(e.event for e in signal.upcoming_events[:3])
+        avoid_str = ""
+        if signal.avoid_until:
+            avoid_str = f" | Avoid until: {signal.avoid_until.strftime('%H:%M')} UTC"
+
+        return (
+            f"ECONOMIC RISK: {signal.risk_level} | {signal.recommendation} | "
+            f"{signal.reason} | Events: {events_str}{avoid_str}"
+        )
+
     async def query_decisions(self, params: DecisionQueryParams | None = None) -> list:
         """Query past trading decisions with outcomes for learning.
 

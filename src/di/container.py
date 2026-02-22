@@ -494,6 +494,7 @@ class AppContainer(containers.DeclarativeContainer):
     economic_calendar_watcher = providers.Singleton(
         watcher_providers.create_economic_calendar_watcher,
         daemon_config=daemon_config,
+        database_engine=database_engine,
     )
 
     options_flow_watcher = providers.Singleton(

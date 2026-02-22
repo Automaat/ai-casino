@@ -18,6 +18,7 @@ from src.v1.watchers.trump_watcher import TrumpWatcher, TrumpWatcherConfig
 
 if TYPE_CHECKING:
     from src.daemon.state.facade import DaemonState
+    from src.database.engine import DatabaseEngine
     from src.di.container import AppContainer
     from src.v1.watchers.economic_calendar_watcher import EconomicCalendarWatcher
     from src.v1.watchers.options_flow_watcher import OptionsFlowWatcher
@@ -258,11 +259,13 @@ def create_anomaly_watcher(
 
 def create_economic_calendar_watcher(
     daemon_config: DaemonConfig,
+    database_engine: DatabaseEngine | None = None,
 ) -> EconomicCalendarWatcher | None:
     """Create economic calendar watcher if enabled.
 
     Args:
         daemon_config: Daemon configuration
+        database_engine: Optional database engine for signal persistence
 
     Returns:
         EconomicCalendarWatcher instance if enabled, None otherwise
@@ -286,7 +289,7 @@ def create_economic_calendar_watcher(
         lookahead_hours=config.lookahead_hours,
         high_impact_avoid_hours=config.high_impact_avoid_hours,
     )
-    watcher = EconomicCalendarWatcher(fetcher=fetcher, config=watcher_config)
+    watcher = EconomicCalendarWatcher(fetcher=fetcher, config=watcher_config, database_engine=database_engine)
     logger.info("EconomicCalendarWatcher created")
     return watcher
 

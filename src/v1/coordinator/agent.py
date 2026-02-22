@@ -370,6 +370,9 @@ class TradingCoordinator:
             self._format_degradation_context(degradation_context) if degradation_context else ""
         )
 
+        # Get economic risk signal
+        economic_risk_section = await self._memory.get_current_economic_signal() or ""
+
         # Get trading mode
         trading_mode = self._get_trading_mode()
 
@@ -387,6 +390,7 @@ class TradingCoordinator:
             today_game_plan_section=today_game_plan_section,
             portfolio_section=portfolio_section,
             degradation_section=degradation_section,
+            economic_risk_section=economic_risk_section,
         )
 
     async def _build_cycle_prompt(
