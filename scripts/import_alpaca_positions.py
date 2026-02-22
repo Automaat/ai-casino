@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
+from result import Err
 
 from src.daemon.config import DaemonConfig
 from src.daemon.positions import PositionRecord
@@ -47,13 +48,12 @@ async def main() -> None:
 
     # Fetch Alpaca positions
     logger.info("Fetching positions from Alpaca...")
-    try:
-        account_info = broker.get_account_info()
-        alpaca_positions = list(account_info.positions.values())
-        logger.info(f"Found {len(alpaca_positions)} positions in Alpaca")
-    except Exception as e:
-        logger.error(f"Failed to fetch Alpaca positions: {e}")
+    account_result = broker.get_account_info()
+    if isinstance(account_result, Err):
+        logger.error(f"Failed to fetch Alpaca positions: {account_result.err_value}")
         return
+    alpaca_positions = list(account_result.ok().positions.values())
+    logger.info(f"Found {len(alpaca_positions)} positions in Alpaca")
 
     if not alpaca_positions:
         logger.info("No positions to import")

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, Mock
 
 import pandas as pd
 import pytest
+from result import Err, Ok
 
 from src.agents.risk.models import (
     AccountInfo,
@@ -99,7 +100,7 @@ def risk_agent() -> MagicMock:
 @pytest.fixture
 def broker() -> MagicMock:
     b = MagicMock()
-    b.get_account_info.return_value = _make_broker_account()
+    b.get_account_info.return_value = Ok(_make_broker_account())
     return b
 
 
@@ -154,7 +155,7 @@ class TestAssessTrade:
     @pytest.mark.asyncio
     @pytest.mark.unit
     async def test_broker_api_failure(self, service: RiskService, broker: MagicMock) -> None:
-        broker.get_account_info.side_effect = Exception("Connection refused")
+        broker.get_account_info.return_value = Err(Exception("Connection refused"))
 
         # Should still work — broker_api_failed=True passed to agent
         decision = await service.assess_trade("AAPL", Signal.BUY, 0.85)

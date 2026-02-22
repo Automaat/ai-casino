@@ -136,6 +136,18 @@ jobs:
       - name: Check uv.lock is up-to-date
         run: uv lock --check
 
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8  # v3.6.1
+
+      - name: Run semgrep
+        run: mise run semgrep
+
   security-audit:
     name: Security Audit (pip-audit)
     runs-on: ubuntu-latest

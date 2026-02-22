@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 from pydantic import BaseModel, Field
+from result import Err
 from scipy.optimize import minimize
 
 from src.data.market import MarketDataFetcher
@@ -310,7 +311,10 @@ class PortfolioOptimizer:
             err_msg = "Broker not configured - cannot fetch current portfolio"
             raise ValueError(err_msg)
 
-        account_info = self.broker.get_account_info()
+        account_result = self.broker.get_account_info()
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        account_info = account_result.ok()
         portfolio_value = account_info.portfolio_value
 
         if portfolio_value == 0:
@@ -386,7 +390,10 @@ class PortfolioOptimizer:
             logger.warning("Broker not configured, cannot calculate shares to trade")
             return
 
-        account_info = self.broker.get_account_info()
+        account_result = self.broker.get_account_info()
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        account_info = account_result.ok()
         portfolio_value = account_info.portfolio_value
 
         for rebalance in rebalances:
@@ -417,12 +424,9 @@ class PortfolioOptimizer:
             shares = dollar_delta / current_price
 
             # Sign-preserving rounding: floor for sells, ceil for buys
-            if shares < 0:
-                rebalance.shares_to_trade = math.floor(shares)
-            elif shares > 0:
-                rebalance.shares_to_trade = math.ceil(shares)
-            else:
-                rebalance.shares_to_trade = 0
+            rebalance.shares_to_trade = (
+                math.floor(shares) if shares < 0 else math.ceil(shares) if shares > 0 else 0
+            )
 
             # Validate action matches share direction
             self._validate_rebalance_action(rebalance, symbol)

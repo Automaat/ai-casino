@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, TypedDict
 
 from loguru import logger
+from result import Err
 from rich.console import Console
 
 from src.daemon.state.managers.portfolio import CorrelationAuditInput, PortfolioRebalancingInput
@@ -249,7 +250,10 @@ class PortfolioHealthCheckTask(TaskExecutor):
             logger.warning("No broker configured for health check")
             return
 
-        account_info = await asyncio.to_thread(self.components.broker.get_account_info)
+        account_result = await asyncio.to_thread(self.components.broker.get_account_info)
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        account_info = account_result.ok()
         positions = account_info.positions
         portfolio_value = float(account_info.portfolio_value)
         cash = float(account_info.available_cash)
@@ -547,8 +551,10 @@ class CorrelationAuditTask(TaskExecutor):
             logger.warning("No broker configured")
             return
 
-        account_info = await asyncio.to_thread(self.components.broker.get_account_info)
-        positions = account_info.positions
+        account_result = await asyncio.to_thread(self.components.broker.get_account_info)
+        if isinstance(account_result, Err):
+            raise account_result.err_value
+        positions = account_result.ok().positions
 
         if len(positions) < 2:
             logger.info(f"Insufficient positions ({len(positions)}), need ≥2")

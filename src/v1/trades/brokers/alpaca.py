@@ -9,10 +9,10 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, StopOrderRequest
 from loguru import logger
+from result import Err, Ok, Result
 
 from src.v1.trades.brokers.models import (
     BrokerAccountInfo,
-    BrokerAPIError,
     BrokerPosition,
     OrderStatus,
 )
@@ -94,11 +94,11 @@ class AlpacaBroker:
         )
         logger.info(f"Initialized AlpacaBroker (paper={self.paper})")
 
-    def get_account_info(self) -> BrokerAccountInfo:
+    def get_account_info(self) -> Result[BrokerAccountInfo, Exception]:
         """Fetch current account information.
 
         Returns:
-            BrokerAccountInfo with balance, cash, positions, and exposure
+            Ok(BrokerAccountInfo) or Err(exception)
         """
         try:
             account = self.client.get_account()
@@ -122,21 +122,22 @@ class AlpacaBroker:
                 )
                 total_exposure += market_value
 
-            return BrokerAccountInfo(
-                balance=float(account.equity) if account.equity else 0.0,
-                available_cash=float(account.buying_power) if account.buying_power else 0.0,
-                positions=positions,
-                total_exposure=total_exposure,
-                portfolio_value=float(account.portfolio_value) if account.portfolio_value else 0.0,
+            return Ok(
+                BrokerAccountInfo(
+                    balance=float(account.equity) if account.equity else 0.0,
+                    available_cash=float(account.buying_power) if account.buying_power else 0.0,
+                    positions=positions,
+                    total_exposure=total_exposure,
+                    portfolio_value=float(account.portfolio_value) if account.portfolio_value else 0.0,
+                )
             )
         except Exception as e:
-            msg = f"Failed to fetch account info: {e}"
-            logger.opt(exception=True).error(msg)
-            raise BrokerAPIError(msg) from e
+            logger.opt(exception=True).error(f"Failed to fetch account info: {e}")
+            return Err(e)
 
     def submit_order(
         self, symbol: str, qty: int, side: str, stop_loss_price: float | None = None
-    ) -> OrderStatus:
+    ) -> Result[OrderStatus, Exception]:
         """Submit market order with optional stop loss.
 
         For SELL orders, automatically cancels any conflicting pending SELL orders
@@ -149,11 +150,10 @@ class AlpacaBroker:
             stop_loss_price: Optional stop loss price
 
         Returns:
-            OrderStatus with order details
+            Ok(OrderStatus) or Err(exception)
         """
         if qty <= 0:
-            msg = f"Order quantity must be positive, got {qty}"
-            raise ValueError(msg)
+            return Err(ValueError(f"Order quantity must be positive, got {qty}"))
 
         normalized_side = side.lower()
         if normalized_side == "buy":
@@ -161,8 +161,7 @@ class AlpacaBroker:
         elif normalized_side == "sell":
             order_side = OrderSide.SELL
         else:
-            msg = f"Invalid order side: {side!r}. Expected 'buy' or 'sell'."
-            raise ValueError(msg)
+            return Err(ValueError(f"Invalid order side: {side!r}. Expected 'buy' or 'sell'."))
 
         # Check for conflicting pending SELL orders
         if normalized_side == "sell":
@@ -178,8 +177,7 @@ class AlpacaBroker:
 
             if stop_loss_price is not None:
                 if stop_loss_price <= 0:
-                    msg = f"Stop loss price must be positive, got {stop_loss_price}"
-                    raise ValueError(msg)
+                    return Err(ValueError(f"Stop loss price must be positive, got {stop_loss_price}"))
                 # Round stop loss price to valid broker increment
                 stop_loss_price = round_price_for_broker(stop_loss_price)
                 order_data.order_class = OrderClass.OTO
@@ -204,41 +202,41 @@ class AlpacaBroker:
             if self._cache:
                 self._cache.store_order_fill(order_status)
 
-            return order_status
+            return Ok(order_status)
         except Exception as e:
-            msg = f"Failed to submit order: {e}"
-            logger.opt(exception=True).error(msg)
-            raise BrokerAPIError(msg) from e
+            logger.opt(exception=True).error(f"Failed to submit order: {e}")
+            return Err(e)
 
-    def get_order_status(self, order_id: str) -> OrderStatus:
+    def get_order_status(self, order_id: str) -> Result[OrderStatus, Exception]:
         """Get status of an existing order.
 
         Args:
             order_id: Order ID to query
 
         Returns:
-            OrderStatus with current order details
+            Ok(OrderStatus) or Err(exception)
         """
         try:
             order = self.client.get_order_by_id(order_id=order_id)
 
-            return OrderStatus(
-                order_id=str(order.id),
-                symbol=order.symbol or "",
-                qty=float(order.qty or 0),
-                filled_qty=float(order.filled_qty or 0),
-                side=order.side.value if order.side else "unknown",
-                status=order.status.value,
-                submitted_at=order.submitted_at,
-                filled_at=order.filled_at,
-                filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
+            return Ok(
+                OrderStatus(
+                    order_id=str(order.id),
+                    symbol=order.symbol or "",
+                    qty=float(order.qty or 0),
+                    filled_qty=float(order.filled_qty or 0),
+                    side=order.side.value if order.side else "unknown",
+                    status=order.status.value,
+                    submitted_at=order.submitted_at,
+                    filled_at=order.filled_at,
+                    filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
+                )
             )
         except Exception as e:
-            msg = f"Failed to get order status: {e}"
-            logger.opt(exception=True).error(msg)
-            raise BrokerAPIError(msg) from e
+            logger.opt(exception=True).error(f"Failed to get order status: {e}")
+            return Err(e)
 
-    def submit_stop_order(self, symbol: str, qty: int, stop_price: float) -> OrderStatus:
+    def submit_stop_order(self, symbol: str, qty: int, stop_price: float) -> Result[OrderStatus, Exception]:
         """Submit stop order to protect existing long position.
 
         Args:
@@ -247,15 +245,13 @@ class AlpacaBroker:
             stop_price: Price to trigger sell order
 
         Returns:
-            OrderStatus with order details
+            Ok(OrderStatus) or Err(exception)
         """
         if qty <= 0:
-            msg = f"Order quantity must be positive, got {qty}"
-            raise ValueError(msg)
+            return Err(ValueError(f"Order quantity must be positive, got {qty}"))
 
         if stop_price <= 0:
-            msg = f"Stop price must be positive, got {stop_price}"
-            raise ValueError(msg)
+            return Err(ValueError(f"Stop price must be positive, got {stop_price}"))
 
         # Round stop price to valid broker increment
         stop_price = round_price_for_broker(stop_price)
@@ -274,21 +270,22 @@ class AlpacaBroker:
             price_fmt = f"${stop_price:.4f}" if stop_price < 1.0 else f"${stop_price:.2f}"
             logger.info(f"Submitted stop order: SELL {qty} {symbol} @ {price_fmt}")
 
-            return OrderStatus(
-                order_id=str(order.id),
-                symbol=order.symbol or "",
-                qty=float(order.qty or 0),
-                filled_qty=float(order.filled_qty or 0),
-                side=order.side.value if order.side else "unknown",
-                status=order.status.value,
-                submitted_at=order.submitted_at,
-                filled_at=order.filled_at,
-                filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
+            return Ok(
+                OrderStatus(
+                    order_id=str(order.id),
+                    symbol=order.symbol or "",
+                    qty=float(order.qty or 0),
+                    filled_qty=float(order.filled_qty or 0),
+                    side=order.side.value if order.side else "unknown",
+                    status=order.status.value,
+                    submitted_at=order.submitted_at,
+                    filled_at=order.filled_at,
+                    filled_avg_price=float(order.filled_avg_price) if order.filled_avg_price else None,
+                )
             )
         except Exception as e:
-            msg = f"Failed to submit order: {e}"
-            logger.opt(exception=True).error(msg)
-            raise BrokerAPIError(msg) from e
+            logger.opt(exception=True).error(f"Failed to submit stop order: {e}")
+            return Err(e)
 
     def _cancel_pending_sell_orders(self, symbol: str) -> None:
         """Cancel pending SELL orders for symbol to free up shares.
@@ -346,19 +343,22 @@ class AlpacaBroker:
             logger.opt(exception=True).error(f"Failed to get open orders: {e}")
             return []
 
-    def cancel_order(self, order_id: str) -> None:
+    def cancel_order(self, order_id: str) -> Result[None, Exception]:
         """Cancel an existing order.
 
         Args:
             order_id: Order ID to cancel
+
+        Returns:
+            Ok(None) or Err(exception)
         """
         try:
             self.client.cancel_order_by_id(order_id=order_id)
             logger.info(f"Cancelled order: {order_id}")
+            return Ok(None)
         except Exception as e:
-            msg = f"Failed to cancel order {order_id}: {e}"
-            logger.opt(exception=True).error(msg)
-            raise BrokerAPIError(msg) from e
+            logger.opt(exception=True).error(f"Failed to cancel order {order_id}: {e}")
+            return Err(e)
 
     def is_market_open(self) -> bool:
         """Check if market is currently open.

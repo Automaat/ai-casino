@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from result import Err
 
 from src.tools.base import BaseTool
 from src.tools.models import ToolDefinition, ToolFunction, ToolParametersSchema
@@ -58,39 +59,40 @@ class PortfolioStatusTool(BaseTool):
         """
         logger.info("Fetching portfolio status")
 
-        try:
-            account_info = self._broker.get_account_info()
+        account_result = self._broker.get_account_info()
+        if isinstance(account_result, Err):
+            logger.opt(exception=account_result.err_value).error(
+                f"Portfolio status check failed: {account_result.err_value}"
+            )
+            return f"Failed to fetch portfolio status: {account_result.err_value}"
 
-            lines = [
-                "# Portfolio Status",
-                "",
-                f"**Balance:** ${account_info.balance:,.2f}",
-                f"**Available Cash:** ${account_info.available_cash:,.2f}",
-                f"**Total Exposure:** ${account_info.total_exposure:,.2f}",
-                f"**Portfolio Value:** ${account_info.portfolio_value:,.2f}",
-                "",
-                "## Open Positions",
-            ]
+        account_info = account_result.ok()
+        lines = [
+            "# Portfolio Status",
+            "",
+            f"**Balance:** ${account_info.balance:,.2f}",
+            f"**Available Cash:** ${account_info.available_cash:,.2f}",
+            f"**Total Exposure:** ${account_info.total_exposure:,.2f}",
+            f"**Portfolio Value:** ${account_info.portfolio_value:,.2f}",
+            "",
+            "## Open Positions",
+        ]
 
-            if not account_info.positions:
-                lines.append("No open positions")
-            else:
-                for pos in account_info.positions.values():
-                    # Calculate current price from market value and quantity
-                    current_price = pos.market_value / pos.qty if pos.qty > 0 else 0.0
-                    pnl_sign = "+" if pos.unrealized_pnl >= 0 else ""
-                    pnl_pct_sign = "+" if pos.unrealized_pnl_percent >= 0 else ""
-                    lines.append(
-                        f"- **{pos.symbol}**: {pos.qty} shares @ ${current_price:.2f} "
-                        f"| P&L: {pnl_sign}${pos.unrealized_pnl:.2f} "
-                        f"({pnl_pct_sign}{pos.unrealized_pnl_percent:.2f}%)"
-                    )
+        if not account_info.positions:
+            lines.append("No open positions")
+        else:
+            for pos in account_info.positions.values():
+                # Calculate current price from market value and quantity
+                current_price = pos.market_value / pos.qty if pos.qty > 0 else 0.0
+                pnl_sign = "+" if pos.unrealized_pnl >= 0 else ""
+                pnl_pct_sign = "+" if pos.unrealized_pnl_percent >= 0 else ""
+                lines.append(
+                    f"- **{pos.symbol}**: {pos.qty} shares @ ${current_price:.2f} "
+                    f"| P&L: {pnl_sign}${pos.unrealized_pnl:.2f} "
+                    f"({pnl_pct_sign}{pos.unrealized_pnl_percent:.2f}%)"
+                )
 
-            return "\n".join(lines)
-
-        except Exception as e:
-            logger.opt(exception=True).error(f"Portfolio status check failed: {e}")
-            return f"Failed to fetch portfolio status: {e}"
+        return "\n".join(lines)
 
     def __repr__(self) -> str:
         """String representation."""

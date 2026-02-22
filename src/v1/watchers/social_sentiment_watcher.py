@@ -337,7 +337,7 @@ class SocialSentimentWatcher(PeriodicWatcher):
 
         except Exception as e:
             logger.opt(exception=True).warning(f"Reddit sentiment DB query failed: {e}")
-            return None
+        return None
 
     async def _tick(self) -> None:
         """Fetch and assess all configured symbols with concurrency limit."""

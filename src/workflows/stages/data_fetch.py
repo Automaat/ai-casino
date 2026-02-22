@@ -17,8 +17,10 @@ if TYPE_CHECKING:
     from src.data.news import NewsFetcher
     from src.data.truth_social import TruthSocialFetcher
 
+from result import Err
+
 from src.agents.risk import AccountInfo
-from src.data.broker import BrokerAccountInfo, BrokerAPIError
+from src.data.broker import BrokerAccountInfo
 from src.data.market import MarketData
 from src.data.truth_social import TrumpPostData, TruthPost
 from src.strategies.session import TradingSession
@@ -310,21 +312,12 @@ async def _get_account_info_internal(
         )  # No broker = safe mock mode
 
     # Dangerous case: broker configured but API fails
+    # Narrowed: broker is AlpacaBroker after the None check above
+    active_broker = broker
+
     def _sync_get_account() -> tuple[AccountInfo, BrokerAccountInfo | None, bool]:
-        try:
-            # Broker already checked for None above
-            broker_info = broker.get_account_info()  # type: ignore[union-attr]
-            return (
-                AccountInfo(
-                    balance=broker_info.balance,
-                    available_cash=broker_info.available_cash,
-                    positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
-                    total_exposure=broker_info.total_exposure,
-                ),
-                broker_info,
-                True,
-            )
-        except BrokerAPIError:
+        result = active_broker.get_account_info()
+        if isinstance(result, Err):
             logger.critical(
                 "BROKER API FAILURE: Account info unavailable but auto_trade configured. "
                 "This would cause incorrect position sizing. Trade execution disabled for this symbol."
@@ -339,6 +332,17 @@ async def _get_account_info_internal(
                 None,
                 False,
             )  # Signal broker failure
+        broker_info = result.ok()
+        return (
+            AccountInfo(
+                balance=broker_info.balance,
+                available_cash=broker_info.available_cash,
+                positions={sym: pos.qty for sym, pos in broker_info.positions.items()},
+                total_exposure=broker_info.total_exposure,
+            ),
+            broker_info,
+            True,
+        )
 
     return await asyncio.to_thread(_sync_get_account)
 

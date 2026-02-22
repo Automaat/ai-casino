@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from result import Err, Ok
+
 from src.agents.fundamental import FundamentalAnalysis
 from src.agents.news import NewsAnalysis
 from src.agents.risk import AccountInfo, RiskAssessment
@@ -247,7 +249,7 @@ async def test_execute_trade_with_broker(test_container, sample_ohlcv_data):
         filled_at=datetime.now(),
         filled_avg_price=150.0,
     )
-    mock_broker.submit_order.return_value = mock_order
+    mock_broker.submit_order.return_value = Ok(mock_order)
 
     workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
 
@@ -338,7 +340,8 @@ async def test_execute_trade_error_handling(test_container, sample_ohlcv_data):
     from src.workflows.models.account import AccountInfo
 
     mock_broker = MagicMock()
-    mock_broker.submit_order.side_effect = Exception("API error")
+    mock_broker.submit_order.side_effect = None
+    mock_broker.submit_order.return_value = Err(Exception("API error"))
 
     workflow = create_test_workflow(test_container, broker=mock_broker, use_meta_agent=False)
 
@@ -633,7 +636,8 @@ async def test_broker_api_failure_blocks_trade(test_container_full):
     from src.data.broker import BrokerAPIError
 
     mock_broker = MagicMock()
-    mock_broker.get_account_info.side_effect = BrokerAPIError("API timeout")
+    mock_broker.get_account_info.side_effect = None
+    mock_broker.get_account_info.return_value = Err(BrokerAPIError("API timeout"))
 
     workflow = create_test_workflow(test_container_full, broker=mock_broker, use_meta_agent=False)
 
@@ -671,14 +675,17 @@ async def test_order_submission_failure_handled(test_container_full):
     from src.data.broker import BrokerAccountInfo, BrokerAPIError
 
     mock_broker = MagicMock()
-    mock_broker.get_account_info.return_value = BrokerAccountInfo(
-        balance=50000.0,
-        available_cash=30000.0,
-        positions={},
-        total_exposure=0.0,
-        portfolio_value=50000.0,
+    mock_broker.get_account_info.return_value = Ok(
+        BrokerAccountInfo(
+            balance=50000.0,
+            available_cash=30000.0,
+            positions={},
+            total_exposure=0.0,
+            portfolio_value=50000.0,
+        )
     )
-    mock_broker.submit_order.side_effect = BrokerAPIError("Order rejected")
+    mock_broker.submit_order.side_effect = None
+    mock_broker.submit_order.return_value = Err(BrokerAPIError("Order rejected"))
 
     workflow = create_test_workflow(test_container_full, broker=mock_broker, use_meta_agent=False)
 

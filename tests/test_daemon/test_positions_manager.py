@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import pytest
+from result import Err, Ok
 
 from src.daemon.config import PositionManagementConfig
 from src.daemon.positions.manager import PositionManager
@@ -43,32 +44,36 @@ def position() -> PositionRecord:
 def mock_broker(position: PositionRecord) -> Mock:
     """Broker mock with a position at $160."""
     broker = Mock()
-    broker.get_account_info.return_value = BrokerAccountInfo(
-        balance=50000.0,
-        available_cash=25000.0,
-        total_exposure=10000.0,
-        portfolio_value=50000.0,
-        positions={
-            position.symbol: BrokerPosition(
-                symbol=position.symbol,
-                qty=10.0,
-                market_value=1600.0,
-                avg_entry_price=150.0,
-                unrealized_pnl=100.0,
-                unrealized_pnl_percent=6.67,
-            )
-        },
+    broker.get_account_info.return_value = Ok(
+        BrokerAccountInfo(
+            balance=50000.0,
+            available_cash=25000.0,
+            total_exposure=10000.0,
+            portfolio_value=50000.0,
+            positions={
+                position.symbol: BrokerPosition(
+                    symbol=position.symbol,
+                    qty=10.0,
+                    market_value=1600.0,
+                    avg_entry_price=150.0,
+                    unrealized_pnl=100.0,
+                    unrealized_pnl_percent=6.67,
+                )
+            },
+        )
     )
-    broker.submit_stop_order.return_value = OrderStatus(
-        order_id="new-order-456",
-        symbol=position.symbol,
-        qty=10.0,
-        filled_qty=0.0,
-        side="sell",
-        status="accepted",
-        submitted_at=datetime.now(UTC),
-        filled_at=None,
-        filled_avg_price=None,
+    broker.submit_stop_order.return_value = Ok(
+        OrderStatus(
+            order_id="new-order-456",
+            symbol=position.symbol,
+            qty=10.0,
+            filled_qty=0.0,
+            side="sell",
+            status="accepted",
+            submitted_at=datetime.now(UTC),
+            filled_at=None,
+            filled_avg_price=None,
+        )
     )
     return broker
 
@@ -86,7 +91,7 @@ class TestUpdateStopLossPendingCancel:
         self, config: PositionManagementConfig, position: PositionRecord, mock_broker: Mock
     ) -> None:
         """cancel_order raising 'order pending cancel' should not block the stop update."""
-        mock_broker.cancel_order.side_effect = Exception("order pending cancel")
+        mock_broker.cancel_order.return_value = Err(Exception("order pending cancel"))
         manager = self._make_manager(config, mock_broker)
 
         with patch.object(manager._persistence, "persist_action", return_value=None):
@@ -99,7 +104,7 @@ class TestUpdateStopLossPendingCancel:
         self, config: PositionManagementConfig, position: PositionRecord, mock_broker: Mock
     ) -> None:
         """cancel_order raising Alpaca error code 42210000 should not block the stop update."""
-        mock_broker.cancel_order.side_effect = Exception("42210000: order is in pending_cancel state")
+        mock_broker.cancel_order.return_value = Err(Exception("42210000: order is in pending_cancel state"))
         manager = self._make_manager(config, mock_broker)
 
         with patch.object(manager._persistence, "persist_action", return_value=None):
@@ -112,7 +117,7 @@ class TestUpdateStopLossPendingCancel:
         self, config: PositionManagementConfig, position: PositionRecord, mock_broker: Mock
     ) -> None:
         """Unrelated cancel_order exceptions should log an error and return None."""
-        mock_broker.cancel_order.side_effect = Exception("connection timeout")
+        mock_broker.cancel_order.return_value = Err(Exception("connection timeout"))
         manager = self._make_manager(config, mock_broker)
 
         with patch.object(manager._persistence, "persist_action", return_value=None):

@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from alpaca.trading.enums import OrderClass
+from result import Err
 
 from src.v1.trades.brokers import AlpacaBroker, BrokerAccountInfo, BrokerPosition, OrderStatus
 
@@ -113,7 +114,8 @@ def test_get_account_info(mock_trading_client, mock_account, mock_positions, mon
     client_instance.get_all_positions.return_value = mock_positions
 
     broker = AlpacaBroker()
-    account_info = broker.get_account_info()
+    result = broker.get_account_info()
+    account_info = result.ok()
 
     assert isinstance(account_info, BrokerAccountInfo)
     assert account_info.balance == 100000.0
@@ -135,7 +137,8 @@ def test_get_account_info_positions(mock_trading_client, mock_account, mock_posi
     client_instance.get_all_positions.return_value = mock_positions
 
     broker = AlpacaBroker()
-    account_info = broker.get_account_info()
+    result = broker.get_account_info()
+    account_info = result.ok()
 
     aapl_pos = account_info.positions["AAPL"]
     assert isinstance(aapl_pos, BrokerPosition)
@@ -156,8 +159,9 @@ def test_get_account_info_error(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(Exception, match="API error"):
-        broker.get_account_info()
+    result = broker.get_account_info()
+    assert isinstance(result, Err)
+    assert "API error" in str(result.err_value)
 
 
 def test_submit_order_buy(mock_trading_client, mock_order, monkeypatch):
@@ -169,7 +173,8 @@ def test_submit_order_buy(mock_trading_client, mock_order, monkeypatch):
     client_instance.submit_order.return_value = mock_order
 
     broker = AlpacaBroker()
-    order_status = broker.submit_order("AAPL", 10, "buy")
+    result = broker.submit_order("AAPL", 10, "buy")
+    order_status = result.ok()
 
     assert isinstance(order_status, OrderStatus)
     assert order_status.order_id == "order-123"
@@ -190,7 +195,8 @@ def test_submit_order_sell(mock_trading_client, mock_order, monkeypatch):
     client_instance.submit_order.return_value = mock_order
 
     broker = AlpacaBroker()
-    order_status = broker.submit_order("TSLA", 5, "sell")
+    result = broker.submit_order("TSLA", 5, "sell")
+    order_status = result.ok()
 
     assert order_status.side == "sell"
 
@@ -204,7 +210,8 @@ def test_submit_order_with_stop_loss(mock_trading_client, mock_order, monkeypatc
     client_instance.submit_order.return_value = mock_order
 
     broker = AlpacaBroker()
-    order_status = broker.submit_order("AAPL", 10, "buy", stop_loss_price=140.0)
+    result = broker.submit_order("AAPL", 10, "buy", stop_loss_price=140.0)
+    order_status = result.ok()
 
     assert order_status.order_id == "order-123"
     client_instance.submit_order.assert_called_once()
@@ -225,8 +232,9 @@ def test_submit_order_error(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(Exception, match="Order failed"):
-        broker.submit_order("AAPL", 10, "buy")
+    result = broker.submit_order("AAPL", 10, "buy")
+    assert isinstance(result, Err)
+    assert "Order failed" in str(result.err_value)
 
 
 def test_get_order_status(mock_trading_client, mock_order, monkeypatch):
@@ -238,7 +246,8 @@ def test_get_order_status(mock_trading_client, mock_order, monkeypatch):
     client_instance.get_order_by_id.return_value = mock_order
 
     broker = AlpacaBroker()
-    order_status = broker.get_order_status("order-123")
+    result = broker.get_order_status("order-123")
+    order_status = result.ok()
 
     assert isinstance(order_status, OrderStatus)
     assert order_status.order_id == "order-123"
@@ -255,8 +264,9 @@ def test_get_order_status_error(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(Exception, match="Order not found"):
-        broker.get_order_status("invalid-order")
+    result = broker.get_order_status("invalid-order")
+    assert isinstance(result, Err)
+    assert "Order not found" in str(result.err_value)
 
 
 def test_cancel_order(mock_trading_client, monkeypatch):
@@ -282,8 +292,9 @@ def test_cancel_order_error(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(Exception, match="Cancel failed"):
-        broker.cancel_order("order-123")
+    result = broker.cancel_order("order-123")
+    assert isinstance(result, Err)
+    assert "Cancel failed" in str(result.err_value)
 
 
 def test_broker_repr(mock_trading_client, monkeypatch):
@@ -305,8 +316,9 @@ def test_submit_order_invalid_side(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(ValueError, match=r"Invalid order side: 'invalid'\. Expected 'buy' or 'sell'\."):
-        broker.submit_order("AAPL", 10, "invalid")
+    result = broker.submit_order("AAPL", 10, "invalid")
+    assert isinstance(result, Err)
+    assert "Invalid order side" in str(result.err_value)
 
 
 def test_submit_order_invalid_qty(mock_trading_client, monkeypatch):
@@ -316,11 +328,13 @@ def test_submit_order_invalid_qty(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(ValueError, match="Order quantity must be positive, got 0"):
-        broker.submit_order("AAPL", 0, "buy")
+    result = broker.submit_order("AAPL", 0, "buy")
+    assert isinstance(result, Err)
+    assert "Order quantity must be positive, got 0" in str(result.err_value)
 
-    with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
-        broker.submit_order("AAPL", -5, "buy")
+    result = broker.submit_order("AAPL", -5, "buy")
+    assert isinstance(result, Err)
+    assert "Order quantity must be positive, got -5" in str(result.err_value)
 
 
 def test_submit_stop_order(mock_trading_client, mock_order, monkeypatch):
@@ -333,7 +347,8 @@ def test_submit_stop_order(mock_trading_client, mock_order, monkeypatch):
     client_instance.submit_order.return_value = mock_order
 
     broker = AlpacaBroker()
-    order_status = broker.submit_stop_order("AAPL", 10, 140.0)
+    result = broker.submit_stop_order("AAPL", 10, 140.0)
+    order_status = result.ok()
 
     assert isinstance(order_status, OrderStatus)
     assert order_status.order_id == "order-123"
@@ -356,11 +371,13 @@ def test_submit_stop_order_invalid_qty(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(ValueError, match="Order quantity must be positive, got 0"):
-        broker.submit_stop_order("AAPL", 0, 140.0)
+    result = broker.submit_stop_order("AAPL", 0, 140.0)
+    assert isinstance(result, Err)
+    assert "Order quantity must be positive, got 0" in str(result.err_value)
 
-    with pytest.raises(ValueError, match="Order quantity must be positive, got -5"):
-        broker.submit_stop_order("AAPL", -5, 140.0)
+    result = broker.submit_stop_order("AAPL", -5, 140.0)
+    assert isinstance(result, Err)
+    assert "Order quantity must be positive, got -5" in str(result.err_value)
 
 
 def test_submit_stop_order_invalid_price(mock_trading_client, monkeypatch):
@@ -370,11 +387,13 @@ def test_submit_stop_order_invalid_price(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(ValueError, match=r"Stop price must be positive, got 0"):
-        broker.submit_stop_order("AAPL", 10, 0.0)
+    result = broker.submit_stop_order("AAPL", 10, 0.0)
+    assert isinstance(result, Err)
+    assert "Stop price must be positive, got 0" in str(result.err_value)
 
-    with pytest.raises(ValueError, match=r"Stop price must be positive, got -10\.5"):
-        broker.submit_stop_order("AAPL", 10, -10.5)
+    result = broker.submit_stop_order("AAPL", 10, -10.5)
+    assert isinstance(result, Err)
+    assert "Stop price must be positive, got -10.5" in str(result.err_value)
 
 
 def test_submit_stop_order_error(mock_trading_client, monkeypatch):
@@ -387,8 +406,9 @@ def test_submit_stop_order_error(mock_trading_client, monkeypatch):
 
     broker = AlpacaBroker()
 
-    with pytest.raises(Exception, match="Stop order failed"):
-        broker.submit_stop_order("AAPL", 10, 140.0)
+    result = broker.submit_stop_order("AAPL", 10, 140.0)
+    assert isinstance(result, Err)
+    assert "Stop order failed" in str(result.err_value)
 
 
 def test_submit_stop_order_rounds_price_above_dollar(mock_trading_client, mock_order, monkeypatch):
@@ -459,15 +479,16 @@ def test_submit_order_with_stop_loss_rounds_below_dollar(mock_trading_client, mo
 
 def test_submit_order_validates_stop_loss_price(mock_trading_client, monkeypatch):
     """Test order with invalid stop_loss_price raises error."""
-    from src.v1.trades.brokers import BrokerAPIError
 
     monkeypatch.setenv("ALPACA_API_KEY", "test-key")
     monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
 
     broker = AlpacaBroker()
 
-    with pytest.raises(BrokerAPIError, match=r"Stop loss price must be positive, got 0"):
-        broker.submit_order("AAPL", 10, "buy", stop_loss_price=0.0)
+    result = broker.submit_order("AAPL", 10, "buy", stop_loss_price=0.0)
+    assert isinstance(result, Err)
+    assert "Stop loss price must be positive" in str(result.err_value)
 
-    with pytest.raises(BrokerAPIError, match=r"Stop loss price must be positive, got -10\.5"):
-        broker.submit_order("AAPL", 10, "buy", stop_loss_price=-10.5)
+    result = broker.submit_order("AAPL", 10, "buy", stop_loss_price=-10.5)
+    assert isinstance(result, Err)
+    assert "Stop loss price must be positive" in str(result.err_value)

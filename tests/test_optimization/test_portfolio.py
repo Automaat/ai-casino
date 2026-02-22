@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from result import Ok
 
 from src.data.broker import AlpacaBroker, BrokerAccountInfo, BrokerPosition
 from src.data.market import MarketData, MarketDataFetcher
@@ -94,7 +95,7 @@ def mock_alpaca_broker() -> AlpacaBroker:
         portfolio_value=3000.0,
     )
 
-    broker.get_account_info.return_value = account_info
+    broker.get_account_info.return_value = Ok(account_info)
     return broker
 
 

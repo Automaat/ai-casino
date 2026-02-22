@@ -69,16 +69,20 @@ def mock_memory():
 @pytest.fixture
 def mock_broker():
     """Create mock broker."""
+    from result import Ok
+
     from src.data.broker import BrokerAccountInfo
 
     mock = Mock()
     mock.get_account_info = Mock(
-        return_value=BrokerAccountInfo(
-            balance=10000.0,
-            portfolio_value=12000.0,
-            available_cash=8000.0,
-            total_exposure=2000.0,
-            positions={},
+        return_value=Ok(
+            BrokerAccountInfo(
+                balance=10000.0,
+                portfolio_value=12000.0,
+                available_cash=8000.0,
+                total_exposure=2000.0,
+                positions={},
+            )
         )
     )
     return mock
@@ -375,7 +379,19 @@ def test_get_trading_mode_manual(coordinator):
 @pytest.mark.asyncio
 async def test_get_positions_summary_no_positions(coordinator, mock_broker):
     """Test positions summary with no open positions."""
-    mock_broker.get_account_info.return_value.positions = {}
+    from result import Ok
+
+    from src.data.broker import BrokerAccountInfo
+
+    mock_broker.get_account_info.return_value = Ok(
+        BrokerAccountInfo(
+            balance=10000.0,
+            portfolio_value=12000.0,
+            available_cash=8000.0,
+            total_exposure=2000.0,
+            positions={},
+        )
+    )
     summary = await coordinator._get_positions_summary()
     assert "No open positions" in summary
 
@@ -383,23 +399,27 @@ async def test_get_positions_summary_no_positions(coordinator, mock_broker):
 @pytest.mark.asyncio
 async def test_get_positions_summary_with_positions(coordinator, mock_broker):
     """Test positions summary with open positions."""
+    from result import Ok
+
     from src.data.broker import BrokerAccountInfo, BrokerPosition
 
-    mock_broker.get_account_info.return_value = BrokerAccountInfo(
-        balance=10000.0,
-        portfolio_value=12000.0,
-        available_cash=8000.0,
-        total_exposure=2000.0,
-        positions={
-            "AAPL": BrokerPosition(
-                symbol="AAPL",
-                qty=10.0,
-                market_value=1500.0,
-                avg_entry_price=150.0,
-                unrealized_pnl=100.0,
-                unrealized_pnl_percent=6.67,
-            )
-        },
+    mock_broker.get_account_info.return_value = Ok(
+        BrokerAccountInfo(
+            balance=10000.0,
+            portfolio_value=12000.0,
+            available_cash=8000.0,
+            total_exposure=2000.0,
+            positions={
+                "AAPL": BrokerPosition(
+                    symbol="AAPL",
+                    qty=10.0,
+                    market_value=1500.0,
+                    avg_entry_price=150.0,
+                    unrealized_pnl=100.0,
+                    unrealized_pnl_percent=6.67,
+                )
+            },
+        )
     )
 
     summary = await coordinator._get_positions_summary()
@@ -413,7 +433,9 @@ async def test_get_positions_summary_with_positions(coordinator, mock_broker):
 @pytest.mark.asyncio
 async def test_get_positions_summary_error(coordinator, mock_broker):
     """Test positions summary error handling."""
-    mock_broker.get_account_info.side_effect = ValueError("Broker error")
+    from result import Err
+
+    mock_broker.get_account_info.return_value = Err(ValueError("Broker error"))
     summary = await coordinator._get_positions_summary()
     assert "unavailable" in summary
 

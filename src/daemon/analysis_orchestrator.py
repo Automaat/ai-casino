@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final, cast
 
 from loguru import logger
 from pydantic import BaseModel
+from result import Err
 
 from src.agents.news import NewsAnalysis
 from src.agents.sentiment import SentimentAnalysis
@@ -174,8 +175,10 @@ class AnalysisOrchestrator:
             return None
 
         try:
-            broker_info = broker.get_account_info()
-            return broker_info.positions
+            broker_result = broker.get_account_info()
+            if isinstance(broker_result, Err):
+                raise broker_result.err_value
+            return broker_result.ok().positions
         except Exception as e:
             logger.opt(exception=True).warning(f"Failed to prefetch account info: {e}")
             return None

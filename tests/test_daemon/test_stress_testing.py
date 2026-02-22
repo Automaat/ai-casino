@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import numpy as np
 import pandas as pd
 import pytest
+from result import Ok
 
 from src.daemon.config import MonteCarloConfig
 from src.daemon.state import MonteCarloRecord
@@ -36,29 +37,31 @@ def mock_broker(mocker):
     from src.data.broker import BrokerAccountInfo
 
     broker = mocker.Mock()
-    broker.get_account_info.return_value = BrokerAccountInfo(
-        balance=10000.0,
-        available_cash=5000.0,
-        positions={
-            "AAPL": BrokerPosition(
-                symbol="AAPL",
-                qty=10,
-                market_value=1500.0,
-                avg_entry_price=140.0,
-                unrealized_pnl=100.0,
-                unrealized_pnl_percent=0.067,
-            ),
-            "MSFT": BrokerPosition(
-                symbol="MSFT",
-                qty=5,
-                market_value=1000.0,
-                avg_entry_price=190.0,
-                unrealized_pnl=50.0,
-                unrealized_pnl_percent=0.053,
-            ),
-        },
-        total_exposure=2500.0,
-        portfolio_value=10000.0,
+    broker.get_account_info.return_value = Ok(
+        BrokerAccountInfo(
+            balance=10000.0,
+            available_cash=5000.0,
+            positions={
+                "AAPL": BrokerPosition(
+                    symbol="AAPL",
+                    qty=10,
+                    market_value=1500.0,
+                    avg_entry_price=140.0,
+                    unrealized_pnl=100.0,
+                    unrealized_pnl_percent=0.067,
+                ),
+                "MSFT": BrokerPosition(
+                    symbol="MSFT",
+                    qty=5,
+                    market_value=1000.0,
+                    avg_entry_price=190.0,
+                    unrealized_pnl=50.0,
+                    unrealized_pnl_percent=0.053,
+                ),
+            },
+            total_exposure=2500.0,
+            portfolio_value=10000.0,
+        )
     )
     return broker
 
@@ -111,12 +114,14 @@ def test_executor_handles_no_positions(mock_broker, mock_market_fetcher, monte_c
     """Test error when portfolio is empty."""
     from src.data.broker import BrokerAccountInfo
 
-    mock_broker.get_account_info.return_value = BrokerAccountInfo(
-        balance=10000.0,
-        available_cash=10000.0,
-        positions={},
-        total_exposure=0.0,
-        portfolio_value=10000.0,
+    mock_broker.get_account_info.return_value = Ok(
+        BrokerAccountInfo(
+            balance=10000.0,
+            available_cash=10000.0,
+            positions={},
+            total_exposure=0.0,
+            portfolio_value=10000.0,
+        )
     )
 
     executor = DaemonStressTester(mock_broker, mock_market_fetcher, monte_carlo_config)

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from result import Ok
 
 from src.daemon.config.portfolio import PortfolioSnapshotConfig
 from src.v1.tasks.implementations.portfolio_snapshot import PortfolioSnapshotTask
@@ -76,7 +77,7 @@ class TestExecute:
         """Snapshot created with correct trigger and account fields."""
         account = _make_account_info()
         broker = Mock()
-        broker.get_account_info = Mock(return_value=account)
+        broker.get_account_info = Mock(return_value=Ok(account))
         engine = _make_db_engine()
         config = _make_config()
         task = PortfolioSnapshotTask(broker=broker, database_engine=engine, config=config)
@@ -101,7 +102,7 @@ class TestExecute:
         """TaskResult includes a non-negative duration."""
         account = _make_account_info()
         broker = Mock()
-        broker.get_account_info = Mock(return_value=account)
+        broker.get_account_info = Mock(return_value=Ok(account))
         engine = _make_db_engine()
         task = PortfolioSnapshotTask(broker=broker, database_engine=engine, config=_make_config())
 

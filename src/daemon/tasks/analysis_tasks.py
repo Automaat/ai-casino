@@ -6,6 +6,7 @@ import asyncio
 from datetime import datetime
 
 from loguru import logger
+from result import Err
 from rich.console import Console
 
 from src.daemon.state.models import PeerAnalysisInput
@@ -87,8 +88,10 @@ class SectorRotationTask(TaskExecutor):
         flagged: list[str] = []
         if self.components.broker:
             try:
-                account_info = await asyncio.to_thread(self.components.broker.get_account_info)
-                position_symbols = list(account_info.positions.keys())
+                account_result = await asyncio.to_thread(self.components.broker.get_account_info)
+                if isinstance(account_result, Err):
+                    raise account_result.err_value
+                position_symbols = list(account_result.ok().positions.keys())
                 flagged = daemon_rotation.flag_weak_positions(position_symbols, analysis)
             except Exception as e:
                 logger.opt(exception=True).warning(f"Failed to flag positions: {e}")
