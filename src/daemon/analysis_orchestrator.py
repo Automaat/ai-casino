@@ -458,6 +458,7 @@ class AnalysisOrchestrator:
                     f"Events: {', '.join(e.event for e in signal.upcoming_events[:3])}"
                 )
 
+        # TODO: remove with legacy pipeline
         options_flow_ctx = None
         if self._options_flow_watcher:
             sig = self._options_flow_watcher.get_signal(symbol)

@@ -67,6 +67,10 @@ class OptionsFlowWatcher(PeriodicWatcher):
         """
         return self._signals.get(symbol)
 
+    def get_all_signals(self) -> list[OptionsFlowSignal]:
+        """Return all cached signals."""
+        return list(self._signals.values())
+
     def _detect_block_trades(self, snapshot: OptionsChainSnapshot) -> list[BlockTrade]:
         """Detect high-premium contracts from options chain.
 

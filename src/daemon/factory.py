@@ -541,9 +541,7 @@ class DaemonFactory:
             )
 
         if self.config.options_flow_watcher.enabled:
-            options_flow_watcher = watcher_providers.create_options_flow_watcher(
-                self.config,
-            )
+            options_flow_watcher = self._container.options_flow_watcher()
 
         if self.config.social_sentiment_watcher.enabled:
             social_sentiment_watcher = watcher_providers.create_social_sentiment_watcher(

@@ -78,6 +78,7 @@ def build_coordinator_registry(
     from src.v1.coordinator.tools.history import AnalysisHistoryTool
     from src.v1.coordinator.tools.market_overview import MarketOverviewTool
     from src.v1.coordinator.tools.observation import SaveObservationTool
+    from src.v1.coordinator.tools.options_flow import GetOptionsFlowTool
     from src.v1.coordinator.tools.portfolio import PortfolioStatusTool
     from src.v1.trades.service import TradingService
 
@@ -110,6 +111,7 @@ def build_coordinator_registry(
     registry.register(GetRiskMetricsTool(container=container))
     registry.register(GetSocialSentimentTool(container=container))
     registry.register(TrumpAnalysisTool(container=container))
+    registry.register(GetOptionsFlowTool(container.options_flow_watcher()))
 
     if memory is None:
         memory = CoordinatorMemory()
