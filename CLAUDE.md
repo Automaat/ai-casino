@@ -65,6 +65,36 @@ tests/               # Mirror of src/, conftest.py has shared fixtures
 - **Non-critical** (may swallow): batch processing, cache, metrics — use `logger.opt(exception=True).warning()` when swallowing
 - Specific exceptions first, then general
 
+### Result-based Error Handling (src/v1 MANDATORY)
+
+All I/O methods in `src/v1` **must** return `Result[T, Exception]` (rustedpy `result==0.17.0`).
+Use `isinstance(result, Err)` for checks — never `match Ok(x)/Err(e)` (pyrefly can't narrow it).
+
+```python
+# ✅ Correct pattern
+from result import Err, Ok, Result
+
+def fetch(self) -> Result[Data, Exception]:
+    try:
+        return Ok(self._client.get())
+    except Exception as e:
+        return Err(e)
+
+# ✅ Correct caller pattern
+result = fetch()
+if isinstance(result, Err):
+    logger.error(f"Failed: {result.err_value}")
+    return  # or raise result.err_value / return fallback
+data = result.ok()
+
+# ❌ Never use match — pyrefly cannot narrow through it
+match result:
+    case Ok(value): ...
+    case Err(e): ...
+```
+
+Semgrep enforces 0 findings in `src/v1` — run `mise run semgrep` before committing.
+
 ### Pydantic Models
 
 All classes: 1-line docstring, `__repr__()`. Use `Field()` for validation, `| None` not `Optional`, `StrEnum` for fixed strings, `@property` for computed fields. Name: `{Component}{Purpose}`.
