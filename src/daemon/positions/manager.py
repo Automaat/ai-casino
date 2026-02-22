@@ -407,10 +407,18 @@ class PositionManager:
                 broker.cancel_order(position.stop_loss_order_id)
                 logger.info(f"Cancelled old stop-loss order: {position.stop_loss_order_id}")
             except Exception as e:
-                logger.opt(exception=True).error(
-                    f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}"
-                )
-                return None
+                # Proceed despite pending cancel - broker will finalize the cancellation shortly.
+                # Brief overlap of stop-loss orders is safer than blocking the stop update
+                # or leaving the position without a valid protective stop.
+                if "42210000" in str(e) or "order pending cancel" in str(e).lower():
+                    logger.info(
+                        f"Stop-loss order {position.stop_loss_order_id} already pending cancel, proceeding"
+                    )
+                else:
+                    logger.opt(exception=True).error(
+                        f"Failed to cancel old stop-loss order {position.stop_loss_order_id}: {e}"
+                    )
+                    return None
 
         broker_info = broker.get_account_info()
         if position.symbol not in broker_info.positions:
