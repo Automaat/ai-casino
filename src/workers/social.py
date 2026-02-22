@@ -8,6 +8,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.agents.social import SocialSentimentAnalysis
+from src.data.apewisdom import ApeWisdomFetcher, ApeWisdomTicker
 from src.data.finnhub import FinnhubFetcher, NewsSentimentData, SocialSentimentData
 from src.data.reddit import RedditFetcher, RedditSentimentData
 from src.models.llm import LLMClient
@@ -43,6 +44,7 @@ class SocialDataInputs(BaseModel):
     reddit_sentiment: float | None
     overall_score: float
     momentum: str
+    apewisdom_ticker: ApeWisdomTicker | None = None
 
     class Config:
         """Pydantic config."""
@@ -59,6 +61,7 @@ class SocialSentimentWorker:
         finnhub_fetcher: FinnhubFetcher,
         reddit_fetcher: RedditFetcher,
         finbert: FinBERTSentiment,
+        apewisdom: ApeWisdomFetcher,
     ) -> None:
         """Initialize social sentiment worker.
 
@@ -67,11 +70,13 @@ class SocialSentimentWorker:
             finnhub_fetcher: Finnhub data fetcher
             reddit_fetcher: Reddit data fetcher
             finbert: FinBERT sentiment model
+            apewisdom: ApeWisdom trending data fetcher
         """
         self.llm = llm_client
         self.finnhub = finnhub_fetcher
         self.reddit = reddit_fetcher
         self.finbert = finbert
+        self.apewisdom = apewisdom
         self._prompts = PromptLoader("social")
         logger.info("Initialized SocialSentimentWorker")
 
@@ -86,8 +91,11 @@ class SocialSentimentWorker:
         """
         logger.info(f"SocialSentimentWorker analyzing {symbol}")
 
-        # Fetch data from all sources
-        finnhub_social, finnhub_news, reddit_data = await self._fetch_all_sources(symbol)
+        # Fetch data from all sources in parallel
+        (finnhub_social, finnhub_news, reddit_data), ape_ticker = await asyncio.gather(
+            self._fetch_all_sources(symbol),
+            self._fetch_apewisdom(symbol),
+        )
 
         # Compute individual sentiments
         finnhub_sentiment = self._compute_finnhub_sentiment(finnhub_social)
@@ -98,6 +106,13 @@ class SocialSentimentWorker:
         momentum = self._compute_social_momentum(finnhub_social)
         wsb_mentions = reddit_data.mention_count if reddit_data else 0
 
+        # Compute ApeWisdom delta
+        ape_delta: float | None = None
+        if ape_ticker and ape_ticker.mentions_24h_ago > 0:
+            ape_delta = (
+                (ape_ticker.mentions - ape_ticker.mentions_24h_ago) / ape_ticker.mentions_24h_ago * 100
+            )
+
         # LLM interpretation
         social_data = SocialDataInputs(
             finnhub_social=finnhub_social,
@@ -106,9 +121,10 @@ class SocialSentimentWorker:
             reddit_sentiment=reddit_sentiment,
             overall_score=overall_score,
             momentum=momentum,
+            apewisdom_ticker=ape_ticker,
         )
         interpretation, sentiment_label, confidence_keywords = await self._get_llm_interpretation(
-            symbol, social_data
+            symbol, social_data, ape_ticker, ape_delta
         )
 
         # Compute confidence
@@ -130,7 +146,25 @@ class SocialSentimentWorker:
             sentiment_label=sentiment_label,
             interpretation=interpretation,
             confidence=confidence,
+            apewisdom_rank=ape_ticker.rank if ape_ticker else None,
+            apewisdom_mentions=ape_ticker.mentions if ape_ticker else None,
+            apewisdom_mention_delta_pct=ape_delta,
         )
+
+    async def _fetch_apewisdom(self, symbol: str) -> ApeWisdomTicker | None:
+        """Fetch ApeWisdom trending data for a symbol.
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            ApeWisdomTicker if symbol is trending, None otherwise
+        """
+        try:
+            return await asyncio.to_thread(self.apewisdom.get_ticker, symbol)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"ApeWisdom fetch failed: {e}")
+            return None
 
     def _process_fetch_results(
         self,
@@ -369,13 +403,19 @@ class SocialSentimentWorker:
         return "stable"
 
     async def _get_llm_interpretation(
-        self, symbol: str, data: SocialDataInputs
+        self,
+        symbol: str,
+        data: SocialDataInputs,
+        ape_ticker: ApeWisdomTicker | None,
+        ape_delta: float | None,
     ) -> tuple[str, str, list[str]]:
         """Get LLM interpretation of social sentiment.
 
         Args:
             symbol: Stock ticker
             data: Container with all social sentiment data
+            ape_ticker: ApeWisdom ticker data if trending
+            ape_delta: Mention delta percentage vs 24h ago
 
         Returns:
             Tuple of (interpretation, sentiment_label, confidence_keywords)
@@ -383,6 +423,7 @@ class SocialSentimentWorker:
         finnhub_social_summary = self._format_finnhub_summary(data.finnhub_social)
         reddit_posts_text = self._format_reddit_posts(data.reddit_data)
         finnhub_news_summary = self._format_finnhub_news_summary(data.finnhub_news)
+        apewisdom_summary = self._format_apewisdom_summary(ape_ticker, ape_delta)
 
         prompt = self._prompts.load(
             "user",
@@ -394,6 +435,7 @@ class SocialSentimentWorker:
             finnhub_news_summary=finnhub_news_summary,
             overall_score=data.overall_score,
             momentum=data.momentum,
+            apewisdom_summary=apewisdom_summary,
         )
         system_prompt = self._prompts.load("system")
 
@@ -488,6 +530,26 @@ class SocialSentimentWorker:
             f"bullish: {data.sentiment.bullish_percent:.1f}%, "
             f"bearish: {data.sentiment.bearish_percent:.1f}%"
         )
+
+    def _format_apewisdom_summary(self, ticker: ApeWisdomTicker | None, delta_pct: float | None) -> str:
+        """Format ApeWisdom trending summary.
+
+        Args:
+            ticker: ApeWisdom ticker data if trending
+            delta_pct: Mention delta percentage vs 24h ago
+
+        Returns:
+            Formatted summary string
+        """
+        if not ticker:
+            return "Not in ApeWisdom trending"
+        if delta_pct is not None:
+            delta_str = f", {delta_pct:+.0f}% vs 24h ago"
+        elif ticker.mentions_24h_ago == 0 and ticker.mentions > 0:
+            delta_str = ", NEW"
+        else:
+            delta_str = ""
+        return f"Rank #{ticker.rank}, {ticker.mentions} mentions{delta_str}"
 
     def _compute_confidence(
         self,

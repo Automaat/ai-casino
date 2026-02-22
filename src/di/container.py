@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dependency_injector import containers, providers
 
+from src.data.apewisdom import ApeWisdomFetcher
 from src.di.config import load_daemon_config
 from src.di.providers import agents as agent_providers
 from src.di.providers import circuit_breaker as circuit_breaker_providers
@@ -127,6 +128,8 @@ class AppContainer(containers.DeclarativeContainer):
         daemon_config=daemon_config,
         historical_cache=historical_cache,
     )
+
+    apewisdom_fetcher = providers.Singleton(ApeWisdomFetcher)
 
     truth_social_fetcher = providers.Singleton(
         data_providers.create_truth_social_fetcher,
@@ -399,6 +402,7 @@ class AppContainer(containers.DeclarativeContainer):
         finnhub_fetcher=finnhub_fetcher,
         reddit_fetcher=reddit_fetcher,
         finbert=finbert_sentiment,
+        apewisdom_fetcher=apewisdom_fetcher,
     )
 
     # Workflow providers (4 named variants) - Factory pattern to support runtime overrides

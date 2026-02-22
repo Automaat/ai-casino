@@ -127,6 +127,18 @@ class GetSocialSentimentTool(BaseTool):
 
         lines.append(f"- WSB Mentions (24h): {result.wsb_mentions_24h}")
 
+        if result.apewisdom_rank is not None:
+            delta_str = (
+                f", {result.apewisdom_mention_delta_pct:+.0f}% vs 24h"
+                if result.apewisdom_mention_delta_pct is not None
+                else ""
+            )
+            lines.append(
+                f"- ApeWisdom: rank #{result.apewisdom_rank}, {result.apewisdom_mentions} mentions{delta_str}"
+            )
+        else:
+            lines.append("- ApeWisdom: Not in trending")
+
         lines.extend(
             [
                 "",

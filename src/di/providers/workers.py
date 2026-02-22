@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from src.data.apewisdom import ApeWisdomFetcher
 from src.data.comparative import ComparativeDataFetcher
 from src.data.earnings import EarningsCalendarFetcher
 from src.data.finnhub import FinnhubFetcher
@@ -135,6 +136,7 @@ def create_social_sentiment_worker(
     finnhub_fetcher: FinnhubFetcher,
     reddit_fetcher: RedditFetcher,
     finbert: FinBERTSentiment,
+    apewisdom_fetcher: ApeWisdomFetcher,
 ) -> SocialSentimentWorker:
     """Create SocialSentimentWorker.
 
@@ -143,8 +145,9 @@ def create_social_sentiment_worker(
         finnhub_fetcher: Finnhub data fetcher
         reddit_fetcher: Reddit data fetcher
         finbert: FinBERT sentiment model
+        apewisdom_fetcher: ApeWisdom trending fetcher
 
     Returns:
         SocialSentimentWorker instance
     """
-    return SocialSentimentWorker(llm_client, finnhub_fetcher, reddit_fetcher, finbert)
+    return SocialSentimentWorker(llm_client, finnhub_fetcher, reddit_fetcher, finbert, apewisdom_fetcher)
