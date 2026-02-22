@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from src.tools.base import BaseTool
@@ -105,8 +105,6 @@ class GetOptionsFlowTool(BaseTool):
         return "\n".join(lines)
 
     def _format_signal(self, signal: OptionsFlowSignal) -> str:
-        from datetime import datetime
-
         age_min = int((datetime.now(UTC) - signal.computed_at).total_seconds() // 60)
         lines = [
             f"# Options Flow: {signal.symbol}",
