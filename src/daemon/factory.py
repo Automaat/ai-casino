@@ -536,8 +536,15 @@ class DaemonFactory:
             )
 
         if self.config.economic_calendar_watcher.enabled:
+            from src.database.engine import MissingDatabaseURLError
+
+            try:
+                db_engine = self._container.database_engine()
+            except MissingDatabaseURLError:
+                db_engine = None
             economic_calendar_watcher = watcher_providers.create_economic_calendar_watcher(
                 self.config,
+                database_engine=db_engine,
             )
 
         if self.config.options_flow_watcher.enabled:

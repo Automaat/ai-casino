@@ -445,7 +445,7 @@ class CoordinatorMemory:
             avoid_str = f" | Avoid until: {signal.avoid_until.strftime('%H:%M')} UTC"
 
         return (
-            f"ECONOMIC RISK: {signal.risk_level} | {signal.recommendation} | "
+            f"ECONOMIC RISK: {signal.risk_level} | {signal.recommendation.name} | "
             f"{signal.reason} | Events: {events_str}{avoid_str}"
         )
 

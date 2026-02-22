@@ -67,6 +67,21 @@ def create_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine:
     return engine
 
 
+def create_optional_database_engine(daemon_config: DaemonConfig) -> DatabaseEngine | None:
+    """Create DatabaseEngine if URL configured, else None.
+
+    Args:
+        daemon_config: Daemon configuration
+
+    Returns:
+        DatabaseEngine instance or None if URL not configured
+    """
+    try:
+        return create_database_engine(daemon_config)
+    except MissingDatabaseURLError:
+        return None
+
+
 def create_market_event_queue(database_engine: DatabaseEngine) -> MarketEventQueue:
     """Create MarketEventQueue singleton.
 

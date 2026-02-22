@@ -86,7 +86,7 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
   Return HOLD on all new candidates. Note reason in save_observation.
 - `REDUCE_SIZE`: continue normal analysis but apply 5% confidence penalty and use minimum
   position sizing. Prefer analyzing over executing.
-- No section present: trade normally per conviction thresholds.
+- If `{economic_risk_section}` is empty or provides no active directive, trade normally per conviction thresholds.
 
 ## Risk Framework
 
