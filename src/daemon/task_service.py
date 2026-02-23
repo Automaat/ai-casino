@@ -99,15 +99,6 @@ class DaemonTaskService:
 
         await DiscoveryOutcomeTask(self.components, self.container).run()
 
-    async def run_health_check(self) -> None:
-        """Run health check task."""
-        if not self.components.config.health.enabled:
-            return
-
-        from src.daemon.tasks.monitoring_tasks import HealthCheckTask
-
-        await HealthCheckTask(self.components, self.container).run()
-
     async def run_journal(self) -> None:
         """Run trade journal task."""
         if not self.components.config.journal.enabled:
