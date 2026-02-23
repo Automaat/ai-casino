@@ -315,7 +315,7 @@ class DaemonRunner:
         from src.daemon.cycle_orchestrator import DaemonCycleOrchestrator
         from src.daemon.lifecycle import DaemonLifecycle
 
-        # Initialize workflow (needed by scheduled tasks like CorrelationAuditTask and workflow-dependent v1 tasks)
+        # Initialize workflow (needed by CorrelationAuditTask and workflow-dependent v1 tasks)
         self._init_workflow()
 
         # Rebuild v1 task runner with workflow-dependent tasks now available
