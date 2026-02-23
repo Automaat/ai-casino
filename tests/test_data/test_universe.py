@@ -56,9 +56,9 @@ NVDA,"NVIDIA Corporation","Information Technology",1.2
 
 
 @pytest.fixture
-def universe_fetcher(tmp_path):
-    """Create StockUniverseFetcher with temp cache."""
-    return StockUniverseFetcher(cache_dir=str(tmp_path / "universe_cache"))
+def universe_fetcher():
+    """Create StockUniverseFetcher."""
+    return StockUniverseFetcher()
 
 
 class TestStockInfo:
@@ -93,20 +93,10 @@ class TestStockUniverse:
 class TestStockUniverseFetcher:
     """Tests for StockUniverseFetcher."""
 
-    def test_init(self, tmp_path):
+    def test_init(self):
         """Test fetcher initialization."""
-        cache_dir = tmp_path / "cache"
-        fetcher = StockUniverseFetcher(cache_dir=str(cache_dir))
-
-        assert cache_dir.exists()
+        fetcher = StockUniverseFetcher()
         assert "StockUniverseFetcher" in repr(fetcher)
-
-    def test_init_default_cache(self, tmp_path):
-        """Test fetcher creates cache directory when given a path."""
-        cache_dir = tmp_path / "data" / "cache" / "universe"
-        fetcher = StockUniverseFetcher(cache_dir=str(cache_dir))
-        assert cache_dir.exists()
-        fetcher.clear_cache()
 
     @patch("src.data.universe.httpx.Client")
     def test_fetch_sp500(self, mock_client_class, universe_fetcher, mock_sp500_html):

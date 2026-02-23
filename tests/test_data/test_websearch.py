@@ -26,20 +26,13 @@ def mock_ddgs():
 
 
 @pytest.fixture
-def fetcher(tmp_path):
-    """Create WebSearchFetcher with temp cache dir."""
-    return WebSearchFetcher(cache_dir=str(tmp_path / "cache"))
+def fetcher():
+    """Create WebSearchFetcher."""
+    return WebSearchFetcher()
 
 
 class TestWebSearchFetcher:
     """Tests for WebSearchFetcher."""
-
-    def test_init_creates_cache_dir(self, tmp_path):
-        """Test that init creates cache directory."""
-        cache_dir = tmp_path / "new_cache"
-        fetcher = WebSearchFetcher(cache_dir=str(cache_dir))
-        assert cache_dir.exists()
-        assert fetcher._cache_dir == cache_dir
 
     def test_cache_key_deterministic(self, fetcher):
         """Test cache key generation is deterministic."""
@@ -125,7 +118,6 @@ class TestWebSearchFetcher:
         """Test string representation."""
         repr_str = repr(fetcher)
         assert "WebSearchFetcher" in repr_str
-        assert "cache_dir" in repr_str
 
 
 class TestWebSearchResult:

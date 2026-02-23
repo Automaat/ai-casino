@@ -4,13 +4,11 @@ import hashlib
 import os
 import re
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import praw
 import praw.models
 import prawcore
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -22,6 +20,7 @@ from tenacity import (
 )
 
 from src.cache.historical import HistoricalCache
+from src.cache.memory import MemoryTTLCache
 from src.utils.ticker_extraction import extract_tickers
 
 # Cache TTL in seconds
@@ -198,7 +197,6 @@ class RedditFetcher:
         client_id: str | None = None,
         client_secret: str | None = None,
         user_agent: str | None = None,
-        cache_dir: str | None = None,
         historical_cache: HistoricalCache | None = None,
     ) -> None:
         """Initialize Reddit fetcher.
@@ -207,19 +205,13 @@ class RedditFetcher:
             client_id: Reddit API client ID
             client_secret: Reddit API client secret
             user_agent: Reddit API user agent
-            cache_dir: Cache directory path
             historical_cache: Optional permanent cache for posts
         """
         self._client_id = client_id or os.getenv("REDDIT_CLIENT_ID")
         self._client_secret = client_secret or os.getenv("REDDIT_CLIENT_SECRET")
         self._user_agent = user_agent or os.getenv("REDDIT_USER_AGENT", "ai-casino/1.0")
 
-        self._cache_dir = Path(cache_dir or "data/cache/reddit")
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        # Dual caching design (intentional):
-        # - Cache (diskcache): API responses with 5-15min TTL for volatility
-        # - HistoricalCache (SQLite): Parsed posts, permanent cross-session deduplication
-        self._cache = Cache(str(self._cache_dir))
+        self._cache = MemoryTTLCache()
         self._historical_cache = historical_cache
 
         self._reddit: praw.Reddit | None = None
@@ -227,7 +219,7 @@ class RedditFetcher:
         if not self._client_id or not self._client_secret:
             logger.warning("Reddit credentials not set - API calls will fail")
         else:
-            logger.info(f"Initialized RedditFetcher (cache_dir={self._cache_dir})")
+            logger.info("Initialized RedditFetcher")
 
     def _get_reddit(self) -> praw.Reddit:
         """Lazy init PRAW client.
@@ -488,4 +480,4 @@ class RedditFetcher:
     def __repr__(self) -> str:
         """String representation."""
         authenticated = bool(self._client_id and self._client_secret)
-        return f"RedditFetcher(authenticated={authenticated}, cache_dir={self._cache_dir})"
+        return f"RedditFetcher(authenticated={authenticated})"

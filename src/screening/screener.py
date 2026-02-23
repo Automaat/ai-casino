@@ -4,13 +4,11 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
 import pandas_ta_classic  # noqa: F401 - Required to register .ta accessor
 import yfinance as yf
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -21,6 +19,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.cache.memory import MemoryTTLCache
 from src.data.universe import StockInfo, StockUniverseFetcher
 from src.strategies.signal import Signal
 
@@ -87,21 +86,17 @@ class StockScreener:
         self,
         universe_fetcher: StockUniverseFetcher,
         liquidity_filters: LiquidityFilterConfig | None = None,
-        cache_dir: str | None = None,
     ) -> None:
         """Initialize stock screener.
 
         Args:
             universe_fetcher: StockUniverseFetcher instance
             liquidity_filters: Liquidity filter configuration for US_LIQUID universe
-            cache_dir: Cache directory path. Defaults to data/cache/screening/
         """
         self._universe_fetcher = universe_fetcher
         self._liquidity_filters = liquidity_filters
-        self._cache_dir = Path(cache_dir or "data/cache/screening")
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir))
-        logger.info(f"Initialized StockScreener (cache_dir={self._cache_dir})")
+        self._cache = MemoryTTLCache()
+        logger.info("Initialized StockScreener")
 
     def _cache_key(self, criteria: ScreeningCriteria, universe: str) -> str:
         """Generate cache key.
@@ -436,4 +431,4 @@ class StockScreener:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"StockScreener(cache_dir={self._cache_dir})"
+        return "StockScreener()"

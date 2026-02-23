@@ -67,8 +67,8 @@ def mock_reddit(mock_submission):
 
 
 @pytest.fixture
-def fetcher(tmp_path):
-    """Create RedditFetcher with temp cache dir and mock credentials."""
+def fetcher():
+    """Create RedditFetcher with mock credentials."""
     with patch.dict(
         "os.environ",
         {
@@ -77,7 +77,7 @@ def fetcher(tmp_path):
             "REDDIT_USER_AGENT": "test_agent",
         },
     ):
-        return RedditFetcher(cache_dir=str(tmp_path / "cache"))
+        return RedditFetcher()
 
 
 class TestRedditPost:
@@ -161,18 +161,7 @@ class TestTrendingTicker:
 class TestRedditFetcher:
     """Tests for RedditFetcher."""
 
-    def test_init_creates_cache_dir(self, tmp_path):
-        """Test that init creates cache directory."""
-        cache_dir = tmp_path / "new_cache"
-        with patch.dict(
-            "os.environ",
-            {"REDDIT_CLIENT_ID": "test", "REDDIT_CLIENT_SECRET": "test"},
-        ):
-            fetcher = RedditFetcher(cache_dir=str(cache_dir))
-            assert cache_dir.exists()
-            assert fetcher._cache_dir == cache_dir
-
-    def test_init_with_explicit_credentials(self, tmp_path):
+    def test_init_with_explicit_credentials(self):
         """Test init with explicit credentials."""
         test_client_id = "explicit_id"
         test_client_secret = "explicit_secret"
@@ -181,16 +170,15 @@ class TestRedditFetcher:
             client_id=test_client_id,
             client_secret=test_client_secret,
             user_agent=test_user_agent,
-            cache_dir=str(tmp_path / "cache"),
         )
         assert fetcher._client_id == test_client_id
         assert fetcher._client_secret == test_client_secret
         assert fetcher._user_agent == test_user_agent
 
-    def test_init_without_credentials_logs_warning(self, tmp_path):
+    def test_init_without_credentials_logs_warning(self):
         """Test that missing credentials logs warning."""
         with patch.dict("os.environ", {}, clear=True):
-            fetcher = RedditFetcher(cache_dir=str(tmp_path / "cache"))
+            fetcher = RedditFetcher()
             assert fetcher._client_id is None or fetcher._client_secret is None
 
     def test_cache_key_deterministic(self, fetcher):
@@ -336,19 +324,17 @@ class TestRedditFetcher:
 
         assert mock_reddit.subreddit.return_value.search.call_count == 2
 
-    def test_repr_shows_auth_status(self, tmp_path):
+    def test_repr_shows_auth_status(self):
         """Test __repr__ shows authentication status."""
-        # Authenticated
         with patch.dict(
             "os.environ",
             {"REDDIT_CLIENT_ID": "test", "REDDIT_CLIENT_SECRET": "test"},
         ):
-            fetcher = RedditFetcher(cache_dir=str(tmp_path / "cache1"))
+            fetcher = RedditFetcher()
             assert "authenticated=True" in repr(fetcher)
 
-        # Not authenticated
         with patch.dict("os.environ", {}, clear=True):
-            fetcher = RedditFetcher(cache_dir=str(tmp_path / "cache2"))
+            fetcher = RedditFetcher()
             assert "authenticated=False" in repr(fetcher)
 
     def test_submission_body_truncation(self, fetcher, mock_reddit, mock_submission):
@@ -368,10 +354,10 @@ class TestRedditFetcher:
         fetcher._get_reddit()
         assert fetcher._reddit is not None
 
-    def test_get_reddit_raises_without_credentials(self, tmp_path):
+    def test_get_reddit_raises_without_credentials(self):
         """Test that _get_reddit raises without credentials."""
         with patch.dict("os.environ", {}, clear=True):
-            fetcher = RedditFetcher(cache_dir=str(tmp_path / "cache"))
+            fetcher = RedditFetcher()
             with pytest.raises(ValueError, match="credentials not configured"):
                 fetcher._get_reddit()
 

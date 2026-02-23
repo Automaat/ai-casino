@@ -2,11 +2,9 @@
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Final
 
 import httpx
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -16,6 +14,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from src.cache.memory import MemoryTTLCache
 
 HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
@@ -75,27 +75,22 @@ class EconomicCalendarFetcher:
     def __init__(
         self,
         api_key: str | None,
-        cache_dir: str = "data/cache/economic_calendar",
         cache_ttl: int = 1800,
     ) -> None:
         """Initialize FRED economic calendar fetcher.
 
         Args:
             api_key: FRED API key (free from fred.stlouisfed.org)
-            cache_dir: Cache directory path
             cache_ttl: Cache TTL in seconds
         """
         self._api_key = api_key
         self._cache_ttl = cache_ttl
-
-        self._cache_dir = Path(cache_dir)
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir))
+        self._cache = MemoryTTLCache()
 
         if not self._api_key:
             logger.warning("fred_api_key not configured - only FOMC hardcoded dates available")
         else:
-            logger.info(f"Initialized EconomicCalendarFetcher (cache_dir={self._cache_dir})")
+            logger.info("Initialized EconomicCalendarFetcher")
 
     def _cache_key(self, *args: str) -> str:
         """Generate cache key from args."""
@@ -217,4 +212,4 @@ class EconomicCalendarFetcher:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"EconomicCalendarFetcher(authenticated={bool(self._api_key)}, cache_dir={self._cache_dir})"
+        return f"EconomicCalendarFetcher(authenticated={bool(self._api_key)})"

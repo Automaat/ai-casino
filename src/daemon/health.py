@@ -452,35 +452,12 @@ class HealthChecker:
         )
 
     def _prune_stale_cache(self) -> CleanupResult:
-        """Prune expired entries from diskcache directories."""
-        cache_base = Path("data/cache")
-        if not cache_base.exists():
-            return CleanupResult(
-                operation="prune_cache",
-                files_affected=0,
-                bytes_freed=0,
-                message="No cache directory found",
-            )
-
-        total_expired = 0
-        for cache_dir in cache_base.iterdir():
-            if not cache_dir.is_dir():
-                continue
-            try:
-                from diskcache import Cache
-
-                cache = Cache(str(cache_dir))
-                expired = cache.expire()
-                total_expired += expired
-                cache.close()
-            except Exception as e:
-                logger.opt(exception=True).warning(f"Failed to prune cache {cache_dir}: {e}")
-
+        """No-op — caches are now in-memory, no pruning needed."""
         return CleanupResult(
             operation="prune_cache",
-            files_affected=total_expired,
+            files_affected=0,
             bytes_freed=0,
-            message=f"Expired {total_expired} cache entries",
+            message="In-memory caches self-expire on access",
         )
 
     def _rotate_logs(self) -> CleanupResult:

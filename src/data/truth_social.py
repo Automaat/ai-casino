@@ -2,16 +2,15 @@
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import httpx
 from dateutil import parser
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.cache.historical import HistoricalCache
+from src.cache.memory import MemoryTTLCache
 
 CACHE_TTL = 300  # 5 minutes (matches archive update frequency)
 
@@ -60,23 +59,16 @@ class TruthSocialFetcher:
 
     def __init__(
         self,
-        cache_dir: str | None = None,
         historical_cache: HistoricalCache | None = None,
     ) -> None:
         """Initialize Truth Social fetcher.
 
         Args:
-            cache_dir: Cache directory path
             historical_cache: Optional permanent cache for posts
         """
-        self._cache_dir = Path(cache_dir or "data/cache/truth_social")
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        # Dual caching design (intentional):
-        # - Cache (diskcache): API responses with 5-15min TTL for volatility
-        # - HistoricalCache (SQLite): Parsed posts, permanent cross-session deduplication
-        self._cache = Cache(str(self._cache_dir))
+        self._cache = MemoryTTLCache()
         self._historical_cache = historical_cache
-        logger.info(f"Initialized TruthSocialFetcher (cache_dir={self._cache_dir})")
+        logger.info("Initialized TruthSocialFetcher")
 
     def _cache_key(self, prefix: str, *args: str) -> str:
         """Generate cache key."""
@@ -232,4 +224,4 @@ class TruthSocialFetcher:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"TruthSocialFetcher(cache_dir={self._cache_dir})"
+        return "TruthSocialFetcher()"
