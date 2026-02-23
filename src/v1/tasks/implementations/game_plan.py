@@ -61,7 +61,7 @@ class GamePlanTask(Task):
     async def execute(self) -> TaskResult:
         """Generate game plan and persist.
 
-        Retries up to max_retries times if confidence is below min_confidence.
+        Attempts generation up to max_retries times if confidence is below min_confidence.
 
         Returns:
             TaskResult with outcome
@@ -80,10 +80,17 @@ class GamePlanTask(Task):
             if candidate.confidence >= self._config.min_confidence:
                 plan = candidate
                 break
-            logger.warning(
-                f"Game plan attempt {attempt}/{self._config.max_retries} low confidence "
-                f"({candidate.confidence:.2f} < {self._config.min_confidence:.2f}), retrying"
-            )
+            if attempt < self._config.max_retries:
+                logger.warning(
+                    f"Game plan attempt {attempt}/{self._config.max_retries} low confidence "
+                    f"({candidate.confidence:.2f} < {self._config.min_confidence:.2f}), retrying"
+                )
+            else:
+                logger.warning(
+                    f"Game plan attempt {attempt}/{self._config.max_retries} low confidence "
+                    f"({candidate.confidence:.2f} < {self._config.min_confidence:.2f}), "
+                    "accepting low-confidence plan on final attempt"
+                )
             plan = candidate
 
         if plan is None:
