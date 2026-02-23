@@ -263,3 +263,27 @@ async def test_orchestrator_target_allocations(mock_components):
     assert mock_components.workflow.set_target_allocations.call_count == 2
     mock_components.workflow.set_target_allocations.assert_any_call(target_allocations)
     mock_components.workflow.set_target_allocations.assert_any_call(None)
+
+
+async def test_orchestrator_removes_invalid_discovery_candidate_on_no_data(mock_components):
+    """Test ValueError('No data returned') triggers removal from active_discovery_candidates."""
+    config = AnalysisOrchestratorConfig()
+    mock_components.container = None  # skips DB removal path, tests broker_manager removal
+    mock_components.broker_manager = Mock()
+    mock_components.broker_manager.config = Mock()
+    mock_components.economic_calendar_watcher = None
+    mock_components.options_flow_watcher = None
+    mock_components.social_sentiment_watcher = None
+
+    orchestrator = AnalysisOrchestrator(config=config, components=mock_components)
+
+    async def mock_analyze(symbol, *args, **kwargs):
+        raise ValueError(f"No data returned for {symbol}")
+
+    mock_components.workflow.analyze.side_effect = mock_analyze
+
+    result = await orchestrator.orchestrate(["BADTICKER"])
+
+    assert result.failed == 1
+    assert "BADTICKER" in result.failed_symbols
+    mock_components.broker_manager.config.remove_watchlist_symbol.assert_called_once_with("BADTICKER")

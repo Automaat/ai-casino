@@ -136,6 +136,31 @@ class TestSocialSentimentWatcher:
         assert signal.confidence == 1.0  # 2 platforms * 0.5
 
     @pytest.mark.asyncio
+    async def test_apewisdom_none_mentions_24h_ago_no_division(
+        self, watcher: SocialSentimentWatcher
+    ) -> None:
+        """Verify no division attempted and no exception raised when mentions_24h_ago=None."""
+        ape_ticker = ApeWisdomTicker(
+            rank=5,
+            ticker="TSLA",
+            name="Tesla Corp",
+            mentions=200,
+            upvotes=5000,
+            rank_24h_ago=7,
+            mentions_24h_ago=None,
+        )
+        ape_map = {"TSLA": ape_ticker}
+
+        with patch.object(watcher, "_query_reddit_sentiment", new_callable=AsyncMock, return_value=None):
+            await watcher._fetch_and_assess_symbol("TSLA", ape_map)
+
+        signal = watcher.get_signal("TSLA")
+        assert signal is not None
+        # mention_delta_pct stays at default 0.0 — no division attempted
+        ape_platform = next(p for p in signal.platform_breakdown if p.platform == "apewisdom")
+        assert ape_platform.mention_delta_pct == 0.0
+
+    @pytest.mark.asyncio
     async def test_no_data_produces_no_signal(self, watcher: SocialSentimentWatcher) -> None:
         """Verify no signal when neither platform has data."""
         with patch.object(watcher, "_query_reddit_sentiment", new_callable=AsyncMock, return_value=None):

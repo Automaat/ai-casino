@@ -149,6 +149,38 @@ class TestApeWisdomFetcher:
         assert ticker.ticker == "GME"
         assert ticker.rank == 1
 
+    def test_fetch_trending_parses_null_mentions_24h_ago(self, fetcher: ApeWisdomFetcher) -> None:
+        """Verify model parses successfully when API returns null mentions_24h_ago."""
+        response = {
+            "results": [
+                {
+                    "rank": 1,
+                    "ticker": "NVDA",
+                    "name": "NVIDIA Corp",
+                    "mentions": 200,
+                    "upvotes": 5000,
+                    "rank_24h_ago": 3,
+                    "mentions_24h_ago": None,
+                }
+            ]
+        }
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.json.return_value = response
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__enter__ = MagicMock(return_value=mock_client)
+            mock_client.__exit__ = MagicMock(return_value=False)
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value = mock_client
+
+            tickers = fetcher.fetch_trending()
+
+        assert len(tickers) == 1
+        assert tickers[0].ticker == "NVDA"
+        assert tickers[0].mentions_24h_ago is None
+
     def test_get_ticker_not_found(self, fetcher: ApeWisdomFetcher, sample_api_response: dict) -> None:
         """Verify get_ticker returns None for unknown symbol."""
         mock_response = MagicMock(spec=httpx.Response)
@@ -185,6 +217,21 @@ class TestApeWisdomTicker:
         assert ticker.rank == 1
         assert ticker.ticker == "GME"
         assert ticker.mentions == 500
+
+    def test_model_creation_with_null_mentions_24h_ago(self) -> None:
+        """Verify model parses successfully when mentions_24h_ago is None."""
+        ticker = ApeWisdomTicker(
+            rank=1,
+            ticker="NVDA",
+            name="NVIDIA Corp",
+            mentions=200,
+            upvotes=5000,
+            rank_24h_ago=3,
+            mentions_24h_ago=None,
+        )
+        assert ticker.mentions_24h_ago is None
+        assert ticker.rank == 1
+        assert ticker.mentions == 200
 
     def test_repr(self) -> None:
         """Verify repr output."""

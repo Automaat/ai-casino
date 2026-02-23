@@ -425,7 +425,7 @@ class AnalysisOrchestrator:
             error_msg = f"Failed to analyze {symbol}: {type(e).__name__}{exc_detail}"
             logger.opt(exception=True).error(error_msg)
             await self.state.record_error(error_msg)
-            await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
+            await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": error_msg})
             return None
 
     async def _remove_invalid_discovery_candidate(self, symbol: str) -> None:
