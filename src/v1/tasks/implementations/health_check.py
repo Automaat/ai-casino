@@ -53,7 +53,7 @@ class HealthCheckTask(Task):
             days=list(DayOfWeek),
             enabled=self._config.health.enabled,
             dedup=DedupStrategy.INTERVAL,
-            dedup_interval_minutes=max(1, self._config.health.check_interval_seconds // 60),
+            dedup_interval_minutes=max(1, round(self._config.health.check_interval_seconds / 60)),
         )
 
     async def execute(self) -> TaskResult:
