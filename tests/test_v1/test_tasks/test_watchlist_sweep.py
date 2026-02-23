@@ -136,15 +136,11 @@ class TestExecuteNeverAnalyzedPrioritization:
         # AAPL analyzed recently-stale, TSLA never analyzed
         timestamps = {"AAPL": stale_ts.replace(tzinfo=None)}
 
-        task, _, queue = _make_task(
-            config=config, watchlist=["AAPL", "TSLA"], timestamps=timestamps
-        )
+        task, _, queue = _make_task(config=config, watchlist=["AAPL", "TSLA"], timestamps=timestamps)
 
         with patch(
             "src.database.repositories.analysis.AnalysisRecordRepository",
-            return_value=MagicMock(
-                get_last_analysis_timestamps=AsyncMock(return_value=timestamps)
-            ),
+            return_value=MagicMock(get_last_analysis_timestamps=AsyncMock(return_value=timestamps)),
         ):
             result = await task.execute()
 
@@ -166,9 +162,7 @@ class TestExecuteNeverAnalyzedPrioritization:
 
         with patch(
             "src.database.repositories.analysis.AnalysisRecordRepository",
-            return_value=MagicMock(
-                get_last_analysis_timestamps=AsyncMock(return_value=timestamps)
-            ),
+            return_value=MagicMock(get_last_analysis_timestamps=AsyncMock(return_value=timestamps)),
         ):
             await task.execute()
 
@@ -186,20 +180,16 @@ class TestExecuteStaleOldestFirst:
         now = datetime.now(UTC)
         config = SweepPassConfig(enabled=True, stale_hours=4, max_symbols=10)
         timestamps = {
-            "AAPL": (now - timedelta(hours=8)).replace(tzinfo=None),   # older
-            "MSFT": (now - timedelta(hours=5)).replace(tzinfo=None),   # newer stale
+            "AAPL": (now - timedelta(hours=8)).replace(tzinfo=None),  # older
+            "MSFT": (now - timedelta(hours=5)).replace(tzinfo=None),  # newer stale
             "TSLA": (now - timedelta(hours=12)).replace(tzinfo=None),  # oldest
         }
 
-        task, _, queue = _make_task(
-            config=config, watchlist=["AAPL", "MSFT", "TSLA"], timestamps=timestamps
-        )
+        task, _, queue = _make_task(config=config, watchlist=["AAPL", "MSFT", "TSLA"], timestamps=timestamps)
 
         with patch(
             "src.database.repositories.analysis.AnalysisRecordRepository",
-            return_value=MagicMock(
-                get_last_analysis_timestamps=AsyncMock(return_value=timestamps)
-            ),
+            return_value=MagicMock(get_last_analysis_timestamps=AsyncMock(return_value=timestamps)),
         ):
             await task.execute()
 
@@ -222,15 +212,11 @@ class TestExecuteMaxSymbolsLimit:
             "TSLA": (now - timedelta(hours=8)).replace(tzinfo=None),
         }
 
-        task, _, queue = _make_task(
-            config=config, watchlist=["AAPL", "MSFT", "TSLA"], timestamps=timestamps
-        )
+        task, _, queue = _make_task(config=config, watchlist=["AAPL", "MSFT", "TSLA"], timestamps=timestamps)
 
         with patch(
             "src.database.repositories.analysis.AnalysisRecordRepository",
-            return_value=MagicMock(
-                get_last_analysis_timestamps=AsyncMock(return_value=timestamps)
-            ),
+            return_value=MagicMock(get_last_analysis_timestamps=AsyncMock(return_value=timestamps)),
         ):
             await task.execute()
 
