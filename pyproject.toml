@@ -33,7 +33,6 @@ dependencies = [
     "asyncpg==0.31.0",
     # Web Search
     "ddgs==9.10.0",
-    "diskcache==5.6.3",
     # Reddit
     "praw==7.8.1",
     # Utilities

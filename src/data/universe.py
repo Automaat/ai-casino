@@ -4,14 +4,12 @@ import csv
 import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
 import pandas as pd
 import yfinance as yf
 from bs4 import BeautifulSoup
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -21,6 +19,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from src.cache.memory import MemoryTTLCache
 
 if TYPE_CHECKING:
     from src.daemon.config import LiquidityFilterConfig
@@ -68,16 +68,10 @@ class StockUniverse(BaseModel):
 class StockUniverseFetcher:
     """Fetch stock lists from Wikipedia with caching."""
 
-    def __init__(self, cache_dir: str | None = None) -> None:
-        """Initialize stock universe fetcher.
-
-        Args:
-            cache_dir: Cache directory path. Defaults to data/cache/universe/
-        """
-        self._cache_dir = Path(cache_dir or "data/cache/universe")
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir))
-        logger.info(f"Initialized StockUniverseFetcher (cache_dir={self._cache_dir})")
+    def __init__(self) -> None:
+        """Initialize stock universe fetcher."""
+        self._cache = MemoryTTLCache()
+        logger.info("Initialized StockUniverseFetcher")
 
     def _cache_key(self, universe_name: str) -> str:
         """Generate cache key from universe name.
@@ -565,4 +559,4 @@ class StockUniverseFetcher:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"StockUniverseFetcher(cache_dir={self._cache_dir})"
+        return "StockUniverseFetcher()"

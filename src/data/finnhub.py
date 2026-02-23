@@ -2,10 +2,8 @@
 
 import hashlib
 from datetime import UTC, datetime
-from pathlib import Path
 
 import httpx
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -15,6 +13,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from src.cache.memory import MemoryTTLCache
 
 # Cache TTL in seconds
 FINNHUB_CACHE_TTL = 3600  # 1 hour
@@ -82,7 +82,6 @@ class FinnhubFetcher:
     def __init__(
         self,
         api_key: str | None = None,
-        cache_dir: str | None = None,
         enable_social_sentiment: bool = False,
         enable_news_sentiment: bool = False,
     ) -> None:
@@ -90,22 +89,18 @@ class FinnhubFetcher:
 
         Args:
             api_key: Finnhub API key
-            cache_dir: Cache directory path
             enable_social_sentiment: Enable social sentiment (premium)
             enable_news_sentiment: Enable news sentiment (premium)
         """
         self._api_key = api_key
         self._enable_social_sentiment = enable_social_sentiment
         self._enable_news_sentiment = enable_news_sentiment
-
-        self._cache_dir = Path(cache_dir or "data/cache/finnhub")
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir))
+        self._cache = MemoryTTLCache()
 
         if not self._api_key:
             logger.warning("finnhub_api_key not set in config - API calls will fail")
         else:
-            logger.info(f"Initialized FinnhubFetcher (cache_dir={self._cache_dir})")
+            logger.info("Initialized FinnhubFetcher")
 
     def _cache_key(self, prefix: str, *args: str) -> str:
         """Generate cache key.
@@ -314,4 +309,4 @@ class FinnhubFetcher:
     def __repr__(self) -> str:
         """String representation."""
         authenticated = bool(self._api_key)
-        return f"FinnhubFetcher(authenticated={authenticated}, cache_dir={self._cache_dir})"
+        return f"FinnhubFetcher(authenticated={authenticated})"

@@ -278,27 +278,16 @@ class TestArchiveOldAnalyses:
 
 
 class TestPruneStaleCache:
-    def test_no_cache_dir(self, checker: HealthChecker, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        # Run from tmp_path so "data/cache" doesn't resolve to project cache
-        monkeypatch.chdir(tmp_path)
-
+    def test_noop_returns_zero_files_affected(self, checker: HealthChecker):
         result = checker._prune_stale_cache()
 
         assert result.files_affected == 0
 
-    def test_prunes_caches(self, checker: HealthChecker, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        cache_base = tmp_path / "data" / "cache"
-        service_dir = cache_base / "test_service"
-        service_dir.mkdir(parents=True)
-
-        # Run from tmp_path so "data/cache" resolves to our test dir
-        monkeypatch.chdir(tmp_path)
-
+    def test_noop_message(self, checker: HealthChecker):
         result = checker._prune_stale_cache()
 
-        # diskcache.expire() returns 0 for empty cache, but proves the path works
         assert result.operation == "prune_cache"
-        assert isinstance(result.files_affected, int)
+        assert result.message == "In-memory caches self-expire on access"
 
 
 class TestRotateLogs:

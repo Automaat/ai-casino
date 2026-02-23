@@ -1,0 +1,57 @@
+"""Thread-safe in-memory TTL cache."""
+
+import threading
+import time
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+
+
+class MemoryTTLCache(Generic[T]):
+    """Thread-safe in-memory cache with per-entry TTL."""
+
+    def __init__(self) -> None:
+        """Initialize empty cache with a lock."""
+        self._store: dict[str, tuple[T, float]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> T | None:
+        """Return cached value or None if missing/expired."""
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            value, expires_at = entry
+            if time.monotonic() > expires_at:
+                del self._store[key]
+                return None
+            return value
+
+    def set(self, key: str, value: T, expire: int | None = None) -> None:
+        """Store value with optional TTL in seconds."""
+        expires_at = time.monotonic() + expire if expire is not None else float("inf")
+        with self._lock:
+            self._store[key] = (value, expires_at)
+
+    def expire(self) -> int:
+        """Evict expired entries. Returns count removed."""
+        now = time.monotonic()
+        with self._lock:
+            expired = [k for k, (_, exp) in self._store.items() if now > exp]
+            for k in expired:
+                del self._store[k]
+            return len(expired)
+
+    def clear(self) -> None:
+        """Remove all entries."""
+        with self._lock:
+            self._store.clear()
+
+    def close(self) -> None:
+        """No-op — compatibility shim."""
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        with self._lock:
+            size = len(self._store)
+        return f"MemoryTTLCache(entries={size})"

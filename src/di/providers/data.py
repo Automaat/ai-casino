@@ -150,7 +150,6 @@ def create_finnhub_fetcher(
 
     return FinnhubFetcher(
         api_key=api_key,
-        cache_dir="data/cache/finnhub",
         enable_social_sentiment=premium_config.enable_social_sentiment,
         enable_news_sentiment=premium_config.enable_news_sentiment,
     )
@@ -187,7 +186,6 @@ def create_reddit_fetcher(
         client_id=client_id,
         client_secret=client_secret,
         user_agent=user_agent,
-        cache_dir="data/cache/reddit",
         historical_cache=historical_cache,
     )
 
@@ -204,7 +202,6 @@ def create_truth_social_fetcher(
         Configured TruthSocialFetcher
     """
     return TruthSocialFetcher(
-        cache_dir="data/cache/truth_social",
         historical_cache=historical_cache,
     )
 
@@ -215,9 +212,7 @@ def create_stock_universe_fetcher() -> StockUniverseFetcher:
     Returns:
         Configured StockUniverseFetcher
     """
-    return StockUniverseFetcher(
-        cache_dir="data/cache/universe",
-    )
+    return StockUniverseFetcher()
 
 
 def create_websearch_fetcher() -> WebSearchFetcher:
@@ -226,9 +221,7 @@ def create_websearch_fetcher() -> WebSearchFetcher:
     Returns:
         Configured WebSearchFetcher
     """
-    return WebSearchFetcher(
-        cache_dir="data/cache/websearch",
-    )
+    return WebSearchFetcher()
 
 
 def create_earnings_fetcher() -> EarningsCalendarFetcher:

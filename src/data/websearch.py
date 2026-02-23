@@ -4,10 +4,8 @@ import contextlib
 import hashlib
 from datetime import datetime
 from enum import StrEnum
-from pathlib import Path
 
 from ddgs import DDGS
-from diskcache import Cache, JSONDisk
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import (
@@ -17,6 +15,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from src.cache.memory import MemoryTTLCache
 
 HTTP_RETRY = retry(
     stop=stop_after_attempt(3),
@@ -62,16 +62,10 @@ class WebSearchResponse(BaseModel):
 class WebSearchFetcher:
     """Fetch web search results using DuckDuckGo."""
 
-    def __init__(self, cache_dir: str | None = None) -> None:
-        """Initialize web search fetcher.
-
-        Args:
-            cache_dir: Cache directory path. Defaults to data/cache/websearch/
-        """
-        self._cache_dir = Path(cache_dir or "data/cache/websearch")
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir), disk=JSONDisk, disk_compress_level=6)
-        logger.info(f"Initialized WebSearchFetcher (cache_dir={self._cache_dir})")
+    def __init__(self) -> None:
+        """Initialize web search fetcher."""
+        self._cache = MemoryTTLCache()
+        logger.info("Initialized WebSearchFetcher")
 
     def _cache_key(self, query: str, search_type: SearchType) -> str:
         """Generate cache key from query and search type.
@@ -210,4 +204,4 @@ class WebSearchFetcher:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"WebSearchFetcher(cache_dir={self._cache_dir})"
+        return "WebSearchFetcher()"

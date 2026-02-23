@@ -1,7 +1,6 @@
 """Tests for after-hours data prefetching."""
 
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pandas as pd
@@ -79,17 +78,15 @@ def mock_fundamental_fetcher() -> Mock:
 
 @pytest.fixture
 def prefetcher(
-    tmp_path: Path,
     mock_market_fetcher: Mock,
     mock_news_fetcher: Mock,
     mock_fundamental_fetcher: Mock,
 ) -> DataPrefetcher:
-    """Create prefetcher with mocked fetchers and tmp cache."""
+    """Create prefetcher with mocked fetchers."""
     return DataPrefetcher(
         market_fetcher=mock_market_fetcher,
         news_fetcher=mock_news_fetcher,
         fundamental_fetcher=mock_fundamental_fetcher,
-        cache_dir=str(tmp_path / "prefetch_cache"),
     )
 
 

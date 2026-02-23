@@ -52,10 +52,9 @@ def mock_indicator_response():
 
 
 @pytest.fixture
-def fetcher(tmp_path):
-    """Create FinnhubFetcher with temp cache dir and mock API key."""
+def fetcher():
+    """Create FinnhubFetcher with mock API key."""
     return FinnhubFetcher(
-        cache_dir=str(tmp_path / "cache"),
         api_key="test_api_key",
         enable_social_sentiment=True,
         enable_news_sentiment=True,
@@ -156,31 +155,22 @@ class TestNewsSentimentData:
 class TestFinnhubFetcher:
     """Tests for FinnhubFetcher."""
 
-    def test_init_creates_cache_dir(self, tmp_path):
-        """Test that init creates cache directory."""
-        cache_dir = tmp_path / "new_cache"
-        fetcher = FinnhubFetcher(cache_dir=str(cache_dir), api_key="test")
-        assert cache_dir.exists()
-        assert fetcher._cache_dir == cache_dir
-
-    def test_init_with_explicit_key(self, tmp_path):
+    def test_init_with_explicit_key(self):
         """Test init with explicit API key."""
-        fetcher = FinnhubFetcher(api_key="explicit_key", cache_dir=str(tmp_path / "cache"))
+        fetcher = FinnhubFetcher(api_key="explicit_key")
         assert fetcher._api_key == "explicit_key"
 
-    def test_init_without_key_logs_warning(self, tmp_path):
+    def test_init_without_key_logs_warning(self):
         """Test that missing API key logs warning."""
-        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+        fetcher = FinnhubFetcher()
         assert fetcher._api_key is None
 
-    def test_repr_shows_auth_status(self, tmp_path):
+    def test_repr_shows_auth_status(self):
         """Test __repr__ shows authentication status."""
-        # Authenticated
-        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache1"), api_key="test")
+        fetcher = FinnhubFetcher(api_key="test")
         assert "authenticated=True" in repr(fetcher)
 
-        # Not authenticated
-        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache2"))
+        fetcher = FinnhubFetcher()
         assert "authenticated=False" in repr(fetcher)
 
     def test_cache_key_deterministic(self, fetcher):
@@ -246,9 +236,9 @@ class TestFetchSocialSentiment:
             assert params["from"] == "2024-01-01"
             assert params["to"] == "2024-01-31"
 
-    def test_returns_empty_without_api_key(self, tmp_path):
+    def test_returns_empty_without_api_key(self):
         """Test that fetch returns empty data without API key."""
-        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+        fetcher = FinnhubFetcher()
         result = fetcher.fetch_social_sentiment("AAPL")
         assert result.symbol == "AAPL"
         assert result.reddit == []
@@ -319,9 +309,9 @@ class TestFetchSentimentIndicator:
 
             assert mock_client.return_value.__enter__.return_value.get.call_count == 1
 
-    def test_returns_empty_without_api_key(self, tmp_path):
+    def test_returns_empty_without_api_key(self):
         """Test that fetch returns empty data without API key."""
-        fetcher = FinnhubFetcher(cache_dir=str(tmp_path / "cache"))
+        fetcher = FinnhubFetcher()
         result = fetcher.fetch_sentiment_indicator("AAPL")
         assert result.symbol == "AAPL"
         assert result.company_news_score == 0.0

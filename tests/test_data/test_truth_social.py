@@ -76,15 +76,7 @@ def test_trump_post_data_creation():
 
 def test_fetcher_init():
     fetcher = TruthSocialFetcher()
-    assert fetcher._cache_dir.exists()
-
-
-def test_fetcher_init_custom_cache():
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        fetcher = TruthSocialFetcher(cache_dir=tmpdir)
-        assert str(fetcher._cache_dir) == tmpdir
+    assert fetcher._cache is not None
 
 
 def test_fetch_archive(sample_archive_response):

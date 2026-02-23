@@ -4,14 +4,13 @@ import asyncio
 import hashlib
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from diskcache import Cache
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from src.cache.memory import MemoryTTLCache
 from src.data.fundamental import FundamentalDataFetcher
 from src.data.market import MarketData, MarketDataFetcher
 from src.data.news import NewsArticle, NewsFetcher
@@ -53,7 +52,6 @@ class DataPrefetcher:
         market_fetcher: MarketDataFetcher,
         news_fetcher: NewsFetcher,
         fundamental_fetcher: FundamentalDataFetcher,
-        cache_dir: str = "data/cache/prefetch",
     ) -> None:
         """Initialize data prefetcher.
 
@@ -61,15 +59,12 @@ class DataPrefetcher:
             market_fetcher: Market data fetcher instance
             news_fetcher: News fetcher instance
             fundamental_fetcher: Fundamental data fetcher instance
-            cache_dir: Directory for diskcache storage
         """
         self._market_fetcher = market_fetcher
         self._news_fetcher = news_fetcher
         self._fundamental_fetcher = fundamental_fetcher
-        self._cache_dir = Path(cache_dir)
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = Cache(str(self._cache_dir))
-        logger.info(f"DataPrefetcher initialized (cache_dir={self._cache_dir})")
+        self._cache = MemoryTTLCache()
+        logger.info("DataPrefetcher initialized")
 
     def _cache_key(self, prefix: str, symbol: str) -> str:
         """Generate SHA256 cache key.
@@ -307,4 +302,4 @@ class DataPrefetcher:
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"DataPrefetcher(cache_dir={self._cache_dir})"
+        return "DataPrefetcher()"

@@ -90,12 +90,9 @@ def sample_ohlcv_breakout():
 
 
 @pytest.fixture
-def stock_screener(mock_universe_fetcher, tmp_path):
+def stock_screener(mock_universe_fetcher):
     """Create StockScreener with mocked universe fetcher."""
-    return StockScreener(
-        universe_fetcher=mock_universe_fetcher,
-        cache_dir=str(tmp_path / "screening_cache"),
-    )
+    return StockScreener(universe_fetcher=mock_universe_fetcher)
 
 
 class TestScreeningCriteria:
