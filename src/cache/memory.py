@@ -2,6 +2,7 @@
 
 import threading
 import time
+from typing import Any
 
 
 class MemoryTTLCache:
@@ -9,10 +10,10 @@ class MemoryTTLCache:
 
     def __init__(self) -> None:
         """Initialize empty cache with a reentrant lock."""
-        self._store: dict[str, tuple[object, float]] = {}
+        self._store: dict[str, tuple[Any, float]] = {}
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> object | None:
+    def get(self, key: str) -> Any:
         """Return cached value or None if missing/expired."""
         with self._lock:
             entry = self._store.get(key)
@@ -24,7 +25,7 @@ class MemoryTTLCache:
                 return None
             return value
 
-    def set(self, key: str, value: object, expire: int | None = None) -> None:
+    def set(self, key: str, value: Any, expire: int | None = None) -> None:
         """Store value with optional TTL in seconds."""
         expires_at = time.monotonic() + expire if expire is not None else float("inf")
         with self._lock:
