@@ -1,4 +1,4 @@
-"""Analysis tasks for game planning, discovery, sector rotation, and peer analysis."""
+"""Analysis tasks for discovery, sector rotation, and peer analysis."""
 
 from __future__ import annotations
 
@@ -13,59 +13,6 @@ from src.daemon.state.models import PeerAnalysisInput
 from src.daemon.tasks.base import TaskExecutor
 
 console = Console()
-
-
-class GamePlanTask(TaskExecutor):
-    """Daily game plan generation task."""
-
-    @property
-    def task_name(self) -> str:
-        """Task display name."""
-        return "Game Plan Generation"
-
-    async def execute(self) -> None:
-        """Execute game plan generation logic (legacy — use v1 GamePlanTask instead)."""
-        # Get or init game plan agent
-        if self.components.game_plan_agent is None:
-            agent = self.container.game_plan_agent()
-        else:
-            agent = self.components.game_plan_agent
-
-        watchlist = await self.components.broker_manager.get_merged_watchlist()
-
-        plan = await agent.generate(
-            watchlist,
-            timezone=self.components.scheduler.timezone,
-        )
-
-        from src.daemon.state.models import GamePlanRecord
-
-        await self.components.state.record_game_plan(
-            GamePlanRecord(
-                timestamp=plan.generated_at,
-                priority_symbols=plan.priority_symbols,
-                risk_stance=plan.risk_stance,
-                sector_focus=plan.sector_focus,
-                reasoning=plan.reasoning,
-                confidence=plan.confidence,
-                overnight_summary=plan.overnight_summary,
-                key_levels=plan.key_levels,
-                generated_at=plan.generated_at,
-            )
-        )
-
-        console.print("[bold green]✓ Game Plan Generated[/bold green]")
-        console.print(f"  Risk Stance: {plan.risk_stance}")
-        console.print(f"  Priority: {', '.join(plan.priority_symbols)}")
-        console.print(f"  Sectors: {', '.join(plan.sector_focus)}")
-
-    async def get_last_run(self) -> datetime | None:
-        """Get last game plan timestamp."""
-        return await self.components.state.get_last_game_plan()
-
-    async def record_success(self, duration: float) -> None:
-        """Record game plan completion."""
-        # State already recorded in execute()
 
 
 class SectorRotationTask(TaskExecutor):

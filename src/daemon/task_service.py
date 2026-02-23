@@ -81,12 +81,6 @@ class DaemonTaskService:
 
         await RebalancingTask(self.components, self.container).run()
 
-    async def run_game_plan(self) -> None:
-        """Run game plan generation task."""
-        from src.daemon.tasks.analysis_tasks import GamePlanTask
-
-        await GamePlanTask(self.components, self.container).run()
-
     async def run_prefetch(self) -> None:
         """Run data prefetch task."""
         if not self.components.config.prefetch.enabled:
