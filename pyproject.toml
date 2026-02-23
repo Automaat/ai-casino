@@ -137,6 +137,6 @@ environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
 [dependency-groups]
 dev = [
     "pip-audit>=2.10.0",
-    "pyrefly==0.53.0",
+    "pyrefly==0.54.0",
     "ruff>=0.15.0",
 ]
