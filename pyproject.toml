@@ -46,7 +46,7 @@ dependencies = [
     "pyyaml==6.0.3",
     "packaging>=24.0",  # Required by langsmith (transitive dependency)
     # API Server
-    "fastapi==0.131.0",
+    "fastapi==0.132.0",
     "uvicorn[standard]==0.41.0",
     # CLI & TUI
     "typer==0.24.1",
