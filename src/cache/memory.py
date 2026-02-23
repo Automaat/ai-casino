@@ -11,7 +11,7 @@ class MemoryTTLCache(Generic[T]):
     """Thread-safe in-memory cache with per-entry TTL."""
 
     def __init__(self) -> None:
-        """Initialize empty cache with a reentrant lock."""
+        """Initialize empty cache with a lock."""
         self._store: dict[str, tuple[T, float]] = {}
         self._lock = threading.Lock()
 
@@ -52,4 +52,6 @@ class MemoryTTLCache(Generic[T]):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"MemoryTTLCache(entries={len(self._store)})"
+        with self._lock:
+            size = len(self._store)
+        return f"MemoryTTLCache(entries={size})"
