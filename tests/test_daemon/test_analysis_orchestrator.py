@@ -278,7 +278,8 @@ async def test_orchestrator_removes_invalid_discovery_candidate_on_no_data(mock_
     orchestrator = AnalysisOrchestrator(config=config, components=mock_components)
 
     async def mock_analyze(symbol, *args, **kwargs):
-        raise ValueError(f"No data returned for {symbol}")
+        msg = f"No data returned for {symbol}"
+        raise ValueError(msg)
 
     mock_components.workflow.analyze.side_effect = mock_analyze
 

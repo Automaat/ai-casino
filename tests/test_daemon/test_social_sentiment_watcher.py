@@ -136,9 +136,7 @@ class TestSocialSentimentWatcher:
         assert signal.confidence == 1.0  # 2 platforms * 0.5
 
     @pytest.mark.asyncio
-    async def test_apewisdom_none_mentions_24h_ago_no_division(
-        self, watcher: SocialSentimentWatcher
-    ) -> None:
+    async def test_apewisdom_none_mentions_24h_ago_no_division(self, watcher: SocialSentimentWatcher) -> None:
         """Verify no division attempted and no exception raised when mentions_24h_ago=None."""
         ape_ticker = ApeWisdomTicker(
             rank=5,
