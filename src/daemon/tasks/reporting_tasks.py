@@ -1,19 +1,14 @@
-"""Reporting tasks for journals, tearsheets, and risk reports."""
+"""Reporting tasks for journals and tearsheets."""
 
 from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
-from result import Err
 from rich.console import Console
 
 from src.daemon.tasks.base import TaskExecutor
-
-if TYPE_CHECKING:
-    from src.agents.risk.models import PortfolioRiskReport
 
 console = Console()
 
@@ -148,110 +143,3 @@ class TearsheetTask(TaskExecutor):
     async def record_success(self, duration: float) -> None:
         """Record tearsheet completion."""
         # State already recorded in execute()
-
-
-class RiskReportTask(TaskExecutor):
-    """Daily portfolio risk report task."""
-
-    @property
-    def task_name(self) -> str:
-        """Task display name."""
-        return "Portfolio Risk Report"
-
-    async def execute(self) -> None:
-        """Execute risk report generation logic."""
-        if not self.components.broker:
-            return
-
-        from src.daemon.state import RiskReportRecord
-
-        account_result = await asyncio.to_thread(self.components.broker.get_account_info)
-        if isinstance(account_result, Err):
-            raise account_result.err_value
-        account_info = account_result.ok()
-        workflow = self.components.workflow
-        if not workflow:
-            logger.warning("Workflow not initialized")
-            return
-
-        report = await asyncio.to_thread(
-            workflow.risk_manager.generate_risk_report,
-            broker_positions=account_info.positions,
-            portfolio_value=account_info.portfolio_value,
-            total_exposure=account_info.total_exposure,
-            lookback_days=self.components.config.risk_limits.lookback_days,
-        )
-
-        # Record in database
-        await self.components.state.record_risk_report(
-            RiskReportRecord(
-                timestamp=datetime.now(UTC),
-                var_95=report.var_95,
-                var_99=report.var_99,
-                cvar_95=report.cvar_95,
-                cvar_99=report.cvar_99,
-                cdar_95=report.cdar_95,
-                max_drawdown=report.max_drawdown,
-                portfolio_volatility=report.portfolio_volatility,
-                current_exposure_percent=report.current_exposure_percent,
-                num_positions=report.num_positions,
-                var_limit_breached=report.var_limit_breached,
-                cvar_limit_breached=report.cvar_limit_breached,
-                risk_status=report.risk_status,
-            )
-        )
-
-        status_color = {"HEALTHY": "green", "WARNING": "yellow", "BREACH": "red"}.get(
-            report.risk_status, "white"
-        )
-        console.print(f"[{status_color}]Risk status: {report.risk_status}[/{status_color}]")
-        console.print(f"[dim]VaR95={report.var_95:.4f}, CVaR99={report.cvar_99:.4f}[/dim]")
-        logger.info(f"Risk report generated: {report.risk_status}")
-
-        # Send notification if VaR limits breached
-        if (report.var_limit_breached or report.cvar_limit_breached) and self.components.notification_service:
-            task = asyncio.create_task(self._notify_var_breach(report))
-
-            def _log_var_notification_result(t: asyncio.Task[object]) -> None:
-                if t.cancelled():
-                    return
-                exc = t.exception()
-                if exc is not None:
-                    logger.opt(exception=exc).error("VaR notification failed")
-
-            task.add_done_callback(_log_var_notification_result)
-
-    async def get_last_run(self) -> datetime | None:
-        """Get last risk report timestamp."""
-        return await self.components.state.get_last_risk_report()
-
-    async def record_success(self, duration: float) -> None:
-        """Record risk report completion."""
-        # State already recorded in execute()
-
-    async def _notify_var_breach(self, report: PortfolioRiskReport) -> None:
-        """Send notification for VaR breach (helper method).
-
-        Args:
-            report: Risk report with VaR metrics
-        """
-        from src.v1.notifications.models import NotificationMessage, NotificationSeverity
-
-        if not self.components.notification_service:
-            return
-
-        message = NotificationMessage(
-            title="Risk Limit Breach",
-            body=f"VaR95={report.var_95:.2%}, CVaR95={report.cvar_95:.2%}",
-            severity=NotificationSeverity.ERROR,
-            metadata={
-                "var_95": report.var_95,
-                "var_99": report.var_99,
-                "cvar_95": report.cvar_95,
-                "cvar_99": report.cvar_99,
-                "risk_status": report.risk_status,
-                "positions": report.num_positions,
-            },
-            timestamp=datetime.now(UTC),
-        )
-        await self.components.notification_service.notify(message)
