@@ -104,7 +104,7 @@ class WatchlistSweepTask(Task):
                     last_analysis_age_hours=(
                         (now - last_analyzed[s].replace(tzinfo=UTC)).total_seconds() / 3600.0
                         if s in last_analyzed
-                        else float(self._config.stale_hours + 1)
+                        else None
                     ),
                 )
                 for s in sweep_symbols
@@ -156,15 +156,11 @@ class WatchlistSweepTask(Task):
         Returns:
             Dict mapping symbol to last analysis datetime
         """
-        try:
-            from src.database.repositories.analysis import AnalysisRecordRepository
+        from src.database.repositories.analysis import AnalysisRecordRepository
 
-            async with self._db.session() as session:
-                repo = AnalysisRecordRepository(session)
-                return await repo.get_last_analysis_timestamps(symbols)
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Failed to fetch analysis timestamps: {e}")
-            return {}
+        async with self._db.session() as session:
+            repo = AnalysisRecordRepository(session)
+            return await repo.get_last_analysis_timestamps(symbols)
 
     async def last_run_at(self) -> datetime | None:
         """Get last execution timestamp."""

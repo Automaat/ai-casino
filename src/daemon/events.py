@@ -603,11 +603,15 @@ class StaleSymbolInfo(BaseModel):
     """Staleness data for a single symbol."""
 
     symbol: str
-    last_analysis_age_hours: float
+    last_analysis_age_hours: float | None = None
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return f"StaleSymbolInfo({self.symbol} age={self.last_analysis_age_hours:.1f}h)"
+        if self.last_analysis_age_hours is None:
+            age_str = "never analyzed"
+        else:
+            age_str = f"{self.last_analysis_age_hours:.1f}h"
+        return f"StaleSymbolInfo({self.symbol} age={age_str})"
 
 
 class WatchlistStaleEvent(BaseModel):
@@ -623,7 +627,10 @@ class WatchlistStaleEvent(BaseModel):
         """Format stale watchlist event for coordinator prompt."""
         lines = [f"STALE WATCHLIST: {len(self.stale_symbols)} symbols need analysis"]
         for s in self.stale_symbols:
-            lines.append(f"  {s.symbol}: {s.last_analysis_age_hours:.1f}h since last analysis")
+            if s.last_analysis_age_hours is None:
+                lines.append(f"  {s.symbol}: never analyzed")
+            else:
+                lines.append(f"  {s.symbol}: {s.last_analysis_age_hours:.1f}h since last analysis")
         return "\n".join(lines)
 
     def __repr__(self) -> str:

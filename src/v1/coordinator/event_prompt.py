@@ -238,7 +238,12 @@ def _append_watchlist_stale_fields(event_data: dict, lines: list[str]) -> None:
         return
     lines.append(f"Stale symbols ({len(stale)}):")
     for s in stale:
-        lines.append(f"  {s['symbol']}: {s['last_analysis_age_hours']:.1f}h ago")
+        symbol = s.get("symbol", "<unknown>")
+        age_hours = s.get("last_analysis_age_hours")
+        if age_hours is None:
+            lines.append(f"  {symbol}: never analyzed")
+        else:
+            lines.append(f"  {symbol}: {age_hours:.1f}h ago")
 
 
 def _append_signal_fields(event_data: dict, lines: list[str]) -> None:
