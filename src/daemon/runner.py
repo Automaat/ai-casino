@@ -182,6 +182,25 @@ class DaemonRunner:
                 )
             )
 
+        # Watchlist sweep task
+        sweep_config = self.config.coordinator.sweep_pass
+        if sweep_config.enabled and self.config.coordinator.enabled:
+            from src.v1.tasks.implementations.watchlist_sweep import WatchlistSweepTask
+
+            try:
+                database_engine = self._container.database_engine()
+                queue = self._container.market_event_queue()
+                tasks.append(
+                    WatchlistSweepTask(
+                        queue=queue,
+                        broker_manager=self._broker_manager,
+                        database_engine=database_engine,
+                        config=sweep_config,
+                    )
+                )
+            except MissingDatabaseURLError:
+                logger.warning("Watchlist sweep task disabled: database not configured")
+
         tz = ZoneInfo(self.config.schedule.timezone)
         return TaskRunner(tasks, tz)
 

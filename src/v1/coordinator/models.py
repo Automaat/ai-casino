@@ -46,6 +46,7 @@ class SweepPassConfig(BaseModel):
     enabled: bool = True
     stale_hours: int = Field(default=4, ge=1, le=24)
     max_symbols: int = Field(default=20, ge=1, le=50)
+    interval_minutes: int = Field(default=60, ge=15, le=480)
 
     def __repr__(self) -> str:
         """String representation."""
@@ -57,7 +58,7 @@ class SweepPassConfig(BaseModel):
 class CoordinatorConfig(BaseModel):
     """Configuration for the coordinator agent."""
 
-    enabled: bool = False
+    enabled: bool = True
     max_tool_calls: int = Field(default=25, ge=5, le=50, description="Maximum tool calls per cycle")
     temperature: float = Field(default=0.5, ge=0.0, le=1.0, description="LLM temperature for coordinator")
     model_override: str | None = Field(

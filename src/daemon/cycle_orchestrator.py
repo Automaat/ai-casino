@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time as time_mod
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -15,7 +15,6 @@ from rich.console import Console
 from src.daemon.degradation import AgentType
 from src.daemon.notification_helper import DaemonNotificationHelper
 from src.strategies.session import TradingSession
-from src.workflows.types import TradingWorkflowResult
 
 if TYPE_CHECKING:
     from src.daemon.degradation import DegradationContext
@@ -145,20 +144,9 @@ class DaemonCycleOrchestrator:
             logger.info(f"Starting analysis cycle for {len(watchlist)} symbols")
             console.print(f"\n[bold]Running analysis cycle...[/bold] ({datetime.now(tz=UTC):%H:%M:%S})")
 
-            # Route based on coordinator feature flag
-            cycle_result = None
-            if self.components.config.coordinator.enabled:
-                try:
-                    cycle_result = await self._run_coordinator_cycle(watchlist, degradation_context)
-                except Exception as e:
-                    logger.opt(exception=True).error(f"Coordinator cycle failed: {e}, falling back to legacy")
-                    # Fall through to legacy cycle
+            cycle_result = await self._run_coordinator_cycle(watchlist, degradation_context)
 
-            if cycle_result is None:
-                logger.debug("Using legacy cycle (coordinator disabled or failed)")
-                cycle_result = await self._run_legacy_cycle(watchlist, degradation_context)
-
-            # Phase 7-8: Handled by coordinator/legacy cycle methods
+            # Phase 7-8: Handled by coordinator cycle method
 
             # Record profiling metrics to state
             if profile_metrics:
@@ -275,11 +263,6 @@ class DaemonCycleOrchestrator:
         # Save metrics
         await self._save_coordinator_metrics(coordinator_result, patterns_detected)
 
-        # Sweep pass: analyze stale watchlist symbols not covered by coordinator
-        sweep_count = await self._run_sweep_pass(
-            coordinator_result.symbols_analyzed, watchlist, degradation_context
-        )
-
         # Log coordinator-specific results
         console.print(
             f"\n[bold cyan]Coordinator Cycle Results ({datetime.now(tz=UTC):%Y-%m-%d %H:%M})[/bold cyan]"
@@ -316,76 +299,8 @@ class DaemonCycleOrchestrator:
             analysis_performed=True,
             halted=False,
             degradation_tier=degradation_context.tier.value,
-            results_count=len(coordinator_result.symbols_analyzed) + sweep_count,
+            results_count=len(coordinator_result.symbols_analyzed),
         )
-
-    async def _run_sweep_pass(
-        self,
-        analyzed_symbols: list[str],
-        watchlist: list[str],
-        degradation_context: DegradationContext,
-    ) -> int:
-        """Analyze stale watchlist symbols not covered by coordinator cycle.
-
-        Args:
-            analyzed_symbols: Symbols already analyzed by coordinator this cycle
-            watchlist: Full watchlist
-            degradation_context: Degradation context
-
-        Returns:
-            Number of symbols analyzed in sweep
-        """
-        from src.daemon.degradation import DegradationTier
-
-        sweep_config = self.components.config.coordinator.sweep_pass
-        if not sweep_config.enabled:
-            return 0
-
-        if degradation_context.tier in (DegradationTier.MINIMAL, DegradationTier.HALTED):
-            return 0
-
-        try:
-            analyzed_set = set(analyzed_symbols)
-            candidates = [s for s in watchlist if s not in analyzed_set]
-            if not candidates:
-                return 0
-
-            # Query last analysis timestamps for candidates
-            engine = self.components.container.database_engine()
-            async with engine.session() as session:
-                from src.database.repositories.analysis import AnalysisRecordRepository
-
-                repo = AnalysisRecordRepository(session)
-                last_analyzed = await repo.get_last_analysis_timestamps(candidates)
-
-            stale_threshold = datetime.now(UTC) - timedelta(hours=sweep_config.stale_hours)
-
-            never_analyzed = [s for s in candidates if s not in last_analyzed]
-            stale = [
-                s
-                for s in candidates
-                if s in last_analyzed and last_analyzed[s].replace(tzinfo=UTC) < stale_threshold
-            ]
-
-            # Never-analyzed first, then oldest-first
-            stale_sorted = sorted(stale, key=lambda s: last_analyzed[s])
-            sweep_symbols = (never_analyzed + stale_sorted)[: sweep_config.max_symbols]
-
-            if not sweep_symbols:
-                return 0
-
-            logger.info(
-                f"Sweep pass: {len(sweep_symbols)} stale symbols "
-                f"(threshold: {sweep_config.stale_hours}h, "
-                f"never={len(never_analyzed)}, stale={len(stale)})"
-            )
-
-            results = await self._analyze_watchlist(sweep_symbols, degradation_context)
-            return len(results)
-
-        except Exception as e:
-            logger.opt(exception=True).warning(f"Sweep pass failed: {e}")
-            return 0
 
     async def _sync_coordinator_positions(self) -> None:
         """Sync daemon state positions with broker (reconciliation)."""
@@ -413,81 +328,6 @@ class DaemonCycleOrchestrator:
                 )
         except Exception as e:
             logger.opt(exception=True).warning(f"Coordinator position sync failed: {e}")
-
-    async def _run_legacy_cycle(
-        self,
-        watchlist: list[str],
-        degradation_context: DegradationContext,
-    ) -> CycleResult:
-        """Run legacy watchlist-driven analysis cycle.
-
-        Args:
-            watchlist: Symbols to analyze
-            degradation_context: Degradation context
-
-        Returns:
-            CycleResult with legacy metrics
-        """
-        # Publish cycle start event
-        await self._publish_event(
-            "CYCLE_START",
-            {"watchlist_size": len(watchlist), "degradation_tier": str(degradation_context.tier)},
-        )
-
-        cycle_start_time = time_mod.time()
-        results = await self._analyze_watchlist(watchlist, degradation_context)
-        cycle_duration = time_mod.time() - cycle_start_time
-
-        # Log results
-        self._log_results(results)
-
-        # Count results with warnings as potential errors
-        error_count = sum(1 for r in results if r.warnings)
-        await self._publish_event(
-            "CYCLE_COMPLETE",
-            {
-                "results_count": len(results),
-                "errors_count": error_count,
-                "duration_seconds": round(cycle_duration, 2),
-            },
-        )
-
-        return CycleResult(
-            sleep_seconds=self.components.config.interval_minutes * 60,
-            analysis_performed=True,
-            halted=False,
-            degradation_tier=degradation_context.tier.value,
-            results_count=len(results),
-        )
-
-    def _log_results(self, results: list[TradingWorkflowResult]) -> None:
-        """Log analysis results to console.
-
-        Args:
-            results: List of analysis results
-        """
-        from src.strategies.session import TradingSession
-
-        console.print(f"\n[bold cyan]Analysis Results ({datetime.now(tz=UTC):%Y-%m-%d %H:%M})[/bold cyan]")
-        console.print("-" * 50)
-
-        for result in results:
-            signal = result.decision.action.value
-            color = {"BUY": "green", "SELL": "red"}.get(signal, "yellow")
-
-            # Add pre-market badge if applicable
-            session_badge = ""
-            if result.trading_session == TradingSession.PRE_MARKET:
-                session_badge = " [dim](PRE-MARKET)[/dim]"
-
-            console.print(
-                f"[bold]{result.symbol}[/bold]: "
-                f"[{color}]{signal}[/{color}] "
-                f"(confidence: {result.decision.confidence:.2f}){session_badge}"
-            )
-
-        console.print("-" * 50)
-        console.print(f"Total: {len(results)} symbols analyzed\n")
 
     async def _save_coordinator_metrics(
         self,
@@ -641,29 +481,6 @@ class DaemonCycleOrchestrator:
             }
 
         return await coordinator.run_cycle(watchlist, degradation_dict, trading_session)
-
-    async def _analyze_watchlist(
-        self,
-        watchlist: list[str],
-        degradation_context: DegradationContext | None = None,
-    ) -> list[TradingWorkflowResult]:
-        """Analyze all symbols in watchlist (delegates to analysis orchestrator)."""
-        target_allocations = None
-
-        context_builder = self.components.container.context_builder(
-            components=self.components,
-            container=self.components.container,
-        )
-        orchestrator = self.factory.init_analysis_orchestrator(self.components, context_builder)
-        result = await orchestrator.orchestrate(watchlist, target_allocations, degradation_context)
-
-        logger.info(
-            f"Orchestration complete: {result.successful}/{result.total_symbols} successful, "
-            f"{result.failed} failed, {result.position_actions} position actions, "
-            f"{result.duration_seconds:.2f}s"
-        )
-
-        return result.results
 
     async def _publish_event(self, event_type: str, data: dict[str, object]) -> None:
         """Publish event to event bus.

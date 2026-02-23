@@ -1,0 +1,12 @@
+### Watchlist Stale Analysis Request
+
+{event_details}
+
+**Triage:** urgency={urgency}, confidence={confidence:.0%}
+**Reasoning:** {reasoning}
+
+**Instructions:**
+These watchlist symbols haven't been analyzed recently. For each symbol:
+1. Call analyze_symbol to get fresh analysis
+2. Execute trades only if confidence meets threshold and signal is strong
+3. Prioritize symbols with longest staleness first
