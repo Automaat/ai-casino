@@ -21,6 +21,7 @@ _EVENT_TYPE_TEMPLATES = frozenset(
         "signal",
         "position_review",
         "risk_report",
+        "watchlist_stale",
     }
 )
 
@@ -170,6 +171,7 @@ def _format_event_details(event_data: dict) -> str:
     _append_signal_fields(event_data, lines)
     _append_position_review_fields(event_data, lines)
     _append_risk_report_fields(event_data, lines)
+    _append_watchlist_stale_fields(event_data, lines)
     return "\n".join(lines)
 
 
@@ -227,6 +229,21 @@ def _append_risk_report_fields(event_data: dict, lines: list[str]) -> None:
     num_pos = event_data.get("num_positions")
     if exposure is not None and num_pos is not None:
         lines.append(f"Exposure={exposure:.1f}%, Positions={num_pos}")
+
+
+def _append_watchlist_stale_fields(event_data: dict, lines: list[str]) -> None:
+    """Append watchlist_stale-specific fields to lines list."""
+    stale = event_data.get("stale_symbols", [])
+    if not stale:
+        return
+    lines.append(f"Stale symbols ({len(stale)}):")
+    for s in stale:
+        symbol = s.get("symbol", "<unknown>")
+        age_hours = s.get("last_analysis_age_hours")
+        if age_hours is None:
+            lines.append(f"  {symbol}: never analyzed")
+        else:
+            lines.append(f"  {symbol}: {age_hours:.1f}h ago")
 
 
 def _append_signal_fields(event_data: dict, lines: list[str]) -> None:

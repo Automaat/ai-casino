@@ -897,8 +897,7 @@ daemon:
   coordinator:
     # Enable coordinator agent (autonomous multi-step trading cycles)
     # Coordinator orchestrates analysis, tool calls, and trade execution
-    # WARNING: Experimental feature - test thoroughly in paper mode
-    enabled: false
+    enabled: true
 
     # Maximum tool calls per coordinator cycle (5-50)
     # Controls how many actions (fetch data, analyze, execute) the agent can take
@@ -1018,12 +1017,14 @@ daemon:
       min_threshold: 0.5
 
     sweep_pass:
-      # Analyze stale watchlist symbols after each coordinator cycle
+      # Analyze stale watchlist symbols via WatchlistSweepTask (event-driven)
       enabled: true
       # Hours before a symbol is considered stale (1-24)
       stale_hours: 4
-      # Max symbols to sweep per cycle (1-50)
+      # Max symbols to enqueue per sweep run (1-50)
       max_symbols: 20
+      # Minutes between sweep runs (15-480)
+      interval_minutes: 60
 
     # ===== EXAMPLES =====
     #

@@ -599,6 +599,46 @@ class RiskReportEvent(BaseModel):
         return f"RiskReportEvent(status={self.risk_status}, var_95={self.var_95:.2%})"
 
 
+class StaleSymbolInfo(BaseModel):
+    """Staleness data for a single symbol."""
+
+    symbol: str
+    last_analysis_age_hours: float | None = None
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        if self.last_analysis_age_hours is None:
+            age_str = "never analyzed"
+        else:
+            age_str = f"{self.last_analysis_age_hours:.1f}h"
+        return f"StaleSymbolInfo({self.symbol} age={age_str})"
+
+
+class WatchlistStaleEvent(BaseModel):
+    """Batch event requesting coordinator analysis of stale watchlist symbols."""
+
+    event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    event_type: Literal["watchlist_stale"] = "watchlist_stale"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: str = "watchlist_sweep_task"
+    stale_symbols: list[StaleSymbolInfo]
+
+    def to_prompt_text(self) -> str:
+        """Format stale watchlist event for coordinator prompt."""
+        lines = [f"STALE WATCHLIST: {len(self.stale_symbols)} symbols need analysis"]
+        for s in self.stale_symbols:
+            if s.last_analysis_age_hours is None:
+                lines.append(f"  {s.symbol}: never analyzed")
+            else:
+                lines.append(f"  {s.symbol}: {s.last_analysis_age_hours:.1f}h since last analysis")
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        symbols = [s.symbol for s in self.stale_symbols]
+        return f"WatchlistStaleEvent(symbols={symbols})"
+
+
 class TriageResult(BaseModel):
     """LLM triage result for an event."""
 

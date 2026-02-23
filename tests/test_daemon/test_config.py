@@ -879,7 +879,7 @@ class TestCoordinatorConfig:
     def test_defaults(self):
         config = CoordinatorConfig()
 
-        assert config.enabled is False
+        assert config.enabled is True
         assert config.max_tool_calls == 25
         assert config.temperature == 0.5
         assert config.model_override is None
@@ -937,7 +937,7 @@ class TestCoordinatorConfig:
     def test_daemon_config_has_coordinator(self):
         config = DaemonConfig()
         assert isinstance(config.coordinator, CoordinatorConfig)
-        assert config.coordinator.enabled is False
+        assert config.coordinator.enabled is True
 
     def test_from_yaml_with_coordinator(self):
         yaml_content = """
@@ -985,7 +985,7 @@ daemon:
 
         config = DaemonConfig.from_yaml(path)
 
-        assert config.coordinator.enabled is False
+        assert config.coordinator.enabled is True
         assert config.coordinator.max_tool_calls == 25
         assert config.coordinator.temperature == 0.5
 
