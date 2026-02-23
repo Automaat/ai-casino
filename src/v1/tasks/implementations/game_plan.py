@@ -61,6 +61,8 @@ class GamePlanTask(Task):
     async def execute(self) -> TaskResult:
         """Generate game plan and persist.
 
+        Attempts generation up to max_retries times if confidence is below min_confidence.
+
         Returns:
             TaskResult with outcome
         """
@@ -69,10 +71,31 @@ class GamePlanTask(Task):
         watchlist = await self._broker_manager.get_merged_watchlist()
         logger.info(f"Generating game plan for {len(watchlist)} symbols")
 
-        plan = await self._agent.generate(
-            watchlist,
-            timezone=self._scheduler.timezone,
-        )
+        plan = None
+        for attempt in range(1, self._config.max_retries + 1):
+            candidate = await self._agent.generate(
+                watchlist,
+                timezone=self._scheduler.timezone,
+            )
+            if candidate.confidence >= self._config.min_confidence:
+                plan = candidate
+                break
+            if attempt < self._config.max_retries:
+                logger.warning(
+                    f"Game plan attempt {attempt}/{self._config.max_retries} low confidence "
+                    f"({candidate.confidence:.2f} < {self._config.min_confidence:.2f}), retrying"
+                )
+            else:
+                logger.warning(
+                    f"Game plan attempt {attempt}/{self._config.max_retries} low confidence "
+                    f"({candidate.confidence:.2f} < {self._config.min_confidence:.2f}), "
+                    "accepting low-confidence plan on final attempt"
+                )
+            plan = candidate
+
+        if plan is None:
+            msg = "Game plan generation produced no result"
+            raise RuntimeError(msg)
 
         await self._state.record_game_plan(
             GamePlanRecord(
@@ -89,8 +112,14 @@ class GamePlanTask(Task):
         )
 
         duration = time.monotonic() - start
-        msg = f"{len(plan.priority_symbols)} priority symbols, stance={plan.risk_stance}"
-        logger.info(f"Game plan complete: {msg}")
+        msg = (
+            f"{len(plan.priority_symbols)} priority symbols, "
+            f"stance={plan.risk_stance}, confidence={plan.confidence:.2f}"
+        )
+        if plan.confidence < self._config.min_confidence:
+            logger.warning(f"Game plan complete (low confidence after all retries): {msg}")
+        else:
+            logger.info(f"Game plan complete: {msg}")
 
         return TaskResult(
             task_name=self.name,
