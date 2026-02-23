@@ -119,8 +119,10 @@ class AnalyzeSymbolTool(BaseTool):
         try:
             return await self._run_analysis(symbol, period_days, include_position_context)
         except Exception as e:
-            logger.opt(exception=True).error(f"Analysis failed for {symbol}: {e}")
-            return f"Analysis failed for {symbol}: {e}"
+            exc_detail = f": {e}" if str(e) else ""
+            msg = f"Analysis failed for {symbol}: {type(e).__name__}{exc_detail}"
+            logger.opt(exception=True).error(msg)
+            return msg
 
     def execute(self, **kwargs: str | int | float | bool) -> str:
         """Execute full trading analysis (sync wrapper for compatibility).
@@ -146,8 +148,10 @@ class AnalyzeSymbolTool(BaseTool):
                 future = executor.submit(run_in_thread)
                 return future.result()
         except Exception as e:
-            logger.opt(exception=True).error(f"Analysis failed for {symbol}: {e}")
-            return f"Analysis failed for {symbol}: {e}"
+            exc_detail = f": {e}" if str(e) else ""
+            msg = f"Analysis failed for {symbol}: {type(e).__name__}{exc_detail}"
+            logger.opt(exception=True).error(msg)
+            return msg
 
     async def _get_cooldown_symbols(self) -> list[str]:
         """Fetch symbols under re-entry cooldown from trade history.

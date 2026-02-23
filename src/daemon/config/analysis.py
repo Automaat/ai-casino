@@ -17,7 +17,7 @@ class AnalysisOrchestratorConfig(BaseModel):
         default=5000, ge=1000, le=10000, description="Timeout for supervisor planning phase"
     )
     worker_execution_timeout_ms: int = Field(
-        default=30000, ge=10000, le=60000, description="Timeout for worker execution phase"
+        default=30000, ge=10000, le=120000, description="Timeout for worker execution phase"
     )
 
 

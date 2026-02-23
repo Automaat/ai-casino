@@ -210,7 +210,7 @@ class SocialSentimentWatcher(PeriodicWatcher):
             trending_rank = ape_ticker.rank
 
             # Compute delta from 24h ago
-            if ape_ticker.mentions_24h_ago > 0:
+            if ape_ticker.mentions_24h_ago is not None and ape_ticker.mentions_24h_ago > 0:
                 mention_delta_pct = (
                     (ape_ticker.mentions - ape_ticker.mentions_24h_ago) / ape_ticker.mentions_24h_ago * 100
                 )
