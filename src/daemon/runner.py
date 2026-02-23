@@ -201,6 +201,19 @@ class DaemonRunner:
             except MissingDatabaseURLError:
                 logger.warning("Watchlist sweep task disabled: database not configured")
 
+        # Health check task
+        if self.config.health.enabled:
+            from src.v1.tasks.implementations.health_check import HealthCheckTask
+
+            tasks.append(
+                HealthCheckTask(
+                    config=self.config,
+                    state=self.state,
+                    container=self._container,
+                    notification_service=self._components.notification_service,
+                )
+            )
+
         tz = ZoneInfo(self.config.schedule.timezone)
         return TaskRunner(tasks, tz)
 
