@@ -63,7 +63,7 @@ class EventTriageAgent:
 
         try:
             llm_response = await self.llm.astructured(
-                prompt, TriageLLMResponse, system=system, temperature=0.3, max_tokens=256
+                prompt, TriageLLMResponse, system=system, temperature=0.3, max_tokens=512
             )
 
             result = TriageResult(
