@@ -34,7 +34,7 @@ Your mandate is to orchestrate systematic workflow execution by leveraging avail
 - `reflect_on_decision`: Request critical evaluation of trading decision quality
 
 **Execution:**
-- `execute_trade`: Submit market order (requires confirmation in MANUAL mode)
+- `execute_trade`: Submit market order (requires confirmation in MANUAL mode). **Always include `symbol` field** (e.g., `symbol: "GPN"`). Required fields: symbol, action, quantity, confidence, rationale.
 
 **Portfolio:**
 - `portfolio_status`: Current balance, positions, P&L, exposure

@@ -108,7 +108,7 @@ class SocialSentimentWorker:
 
         # Compute ApeWisdom delta
         ape_delta: float | None = None
-        if ape_ticker and ape_ticker.mentions_24h_ago > 0:
+        if ape_ticker and ape_ticker.mentions_24h_ago is not None and ape_ticker.mentions_24h_ago > 0:
             ape_delta = (
                 (ape_ticker.mentions - ape_ticker.mentions_24h_ago) / ape_ticker.mentions_24h_ago * 100
             )
@@ -545,7 +545,7 @@ class SocialSentimentWorker:
             return "Not in ApeWisdom trending"
         if delta_pct is not None:
             delta_str = f", {delta_pct:+.0f}% vs 24h ago"
-        elif ticker.mentions_24h_ago == 0 and ticker.mentions > 0:
+        elif (ticker.mentions_24h_ago is None or ticker.mentions_24h_ago == 0) and ticker.mentions > 0:
             delta_str = ", NEW"
         else:
             delta_str = ""

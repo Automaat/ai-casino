@@ -18,7 +18,7 @@ class ApeWisdomTicker(BaseModel):
     mentions: int
     upvotes: int
     rank_24h_ago: int
-    mentions_24h_ago: int
+    mentions_24h_ago: int | None = None
 
     def __repr__(self) -> str:
         """String representation."""

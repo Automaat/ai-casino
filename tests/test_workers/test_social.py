@@ -39,6 +39,20 @@ def mock_apewisdom_ticker_new():
 
 
 @pytest.fixture
+def mock_apewisdom_ticker_null_history():
+    """ApeWisdom ticker with None 24h history (API returned null)."""
+    return ApeWisdomTicker(
+        rank=5,
+        ticker="AAPL",
+        name="Apple Inc",
+        mentions=50,
+        upvotes=20,
+        rank_24h_ago=8,
+        mentions_24h_ago=None,
+    )
+
+
+@pytest.fixture
 def mock_social_worker(test_container):
     """Create SocialSentimentWorker with mocked dependencies."""
     mock_apewisdom = Mock(spec=ApeWisdomFetcher)
@@ -193,6 +207,40 @@ async def test_analyze_apewisdom_fields_none_when_not_trending(mock_social_worke
     assert result.apewisdom_rank is None
     assert result.apewisdom_mentions is None
     assert result.apewisdom_mention_delta_pct is None
+
+
+async def test_analyze_delta_none_when_mentions_24h_ago_is_none(
+    mock_social_worker, mock_apewisdom_ticker_null_history
+):
+    """Test analyze() sets delta to None when mentions_24h_ago is None."""
+    mock_social_worker._fetch_all_sources = AsyncMock(return_value=(None, None, None))
+    mock_social_worker._fetch_apewisdom = AsyncMock(return_value=mock_apewisdom_ticker_null_history)
+    mock_social_worker._compute_reddit_sentiment = AsyncMock(return_value=None)
+    mock_social_worker.llm.astructured = AsyncMock(
+        return_value=Mock(
+            interpretation="No history available.",
+            sentiment_label="NEUTRAL",
+            confidence_keywords=[],
+        )
+    )
+
+    result = await mock_social_worker.analyze("AAPL")
+
+    assert isinstance(result, SocialSentimentAnalysis)
+    assert result.apewisdom_rank == 5
+    assert result.apewisdom_mentions == 50
+    assert result.apewisdom_mention_delta_pct is None
+
+
+def test_format_apewisdom_summary_null_mentions_24h_ago(
+    mock_social_worker, mock_apewisdom_ticker_null_history
+):
+    """Test summary shows NEW when mentions_24h_ago is None."""
+    result = mock_social_worker._format_apewisdom_summary(mock_apewisdom_ticker_null_history, None)
+
+    assert "Rank #5" in result
+    assert "50 mentions" in result
+    assert "NEW" in result
 
 
 def test_social_worker_repr(mock_social_worker):

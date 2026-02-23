@@ -420,11 +420,34 @@ class AnalysisOrchestrator:
         except Exception as e:
             if isinstance(e, ValueError) and "No data returned" in str(e):
                 self._components.broker_manager.config.remove_watchlist_symbol(symbol)
-            error_msg = f"Failed to analyze {symbol}: {e}"
+                await self._remove_invalid_discovery_candidate(symbol)
+            exc_detail = f": {e}" if str(e) else ""
+            error_msg = f"Failed to analyze {symbol}: {type(e).__name__}{exc_detail}"
             logger.opt(exception=True).error(error_msg)
             await self.state.record_error(error_msg)
-            await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": str(e)})
+            await self._publish_event("ANALYSIS_ERROR", {"symbol": symbol, "error": error_msg})
             return None
+
+    async def _remove_invalid_discovery_candidate(self, symbol: str) -> None:
+        """Remove symbol from active_discovery_candidates when data is unavailable.
+
+        Args:
+            symbol: Stock ticker to remove
+        """
+        container = self._components.container if self._components else None
+        if not container:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories.active_discovery import ActiveDiscoveryCandidateRepository
+
+            async with get_session() as session:
+                repo = ActiveDiscoveryCandidateRepository(session)
+                deleted = await repo.delete_by_symbol(symbol)
+                if deleted:
+                    logger.info(f"Removed invalid discovery candidate from DB: {symbol}")
+        except Exception as e:
+            logger.opt(exception=True).warning(f"Failed to remove discovery candidate {symbol}: {e}")
 
     async def _build_extra_context(
         self,
