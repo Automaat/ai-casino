@@ -96,6 +96,8 @@ class GamePlanConfig(BaseModel):
     generation_time: str = "04:00"
     futures_symbols: list[str] = Field(default_factory=lambda: ["ES=F", "NQ=F"])
     lookback_hours: int = 16
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    max_retries: int = Field(default=3, ge=1, le=10)
 
     @model_validator(mode="after")
     def validate_generation_time(self) -> GamePlanConfig:

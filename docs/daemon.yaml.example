@@ -391,6 +391,10 @@ daemon:
     futures_symbols: ["ES=F", "NQ=F"]
     # Hours of overnight news to analyze
     lookback_hours: 16
+    # Minimum acceptable confidence (0.0-1.0); plans below this are retried
+    min_confidence: 0.5
+    # Max generation attempts before accepting low-confidence plan
+    max_retries: 3
 
   portfolio_snapshot:
     # Periodic portfolio balance snapshots (powers equity curve in UI)
