@@ -341,15 +341,6 @@ class DaemonTaskService:
                 f"   {result.reason}"
             )
 
-    async def run_signal_tracking(self) -> None:
-        """Update signal outcomes with T+1d/5d/20d prices."""
-        if not self.components.config.signal_tracking.enabled:
-            return
-
-        from src.daemon.tasks.monitoring_tasks import SignalTrackingTask
-
-        await SignalTrackingTask(self.components, self.container).run()
-
     async def run_monte_carlo_stress_testing(self) -> None:
         """Execute Monte Carlo portfolio stress testing (weekly/daily task)."""
         from src.daemon.tasks.monitoring_tasks import MonteCarloTask

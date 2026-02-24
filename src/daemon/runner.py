@@ -201,6 +201,20 @@ class DaemonRunner:
             except MissingDatabaseURLError:
                 logger.warning("Watchlist sweep task disabled: database not configured")
 
+        # Signal tracking task
+        if self.config.signal_tracking.enabled:
+            from src.v1.tasks.implementations.signal_tracking import SignalTrackingTask
+
+            tasks.append(
+                SignalTrackingTask(
+                    historical_cache=self._components.historical_cache,
+                    market_fetcher=self._container.yfinance_market_fetcher(),
+                    state=self.state,
+                    config=self.config.signal_tracking,
+                    broker=self._components.broker,
+                )
+            )
+
         # Health check task
         if self.config.health.enabled:
             from src.v1.tasks.implementations.health_check import HealthCheckTask
