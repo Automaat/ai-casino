@@ -45,6 +45,7 @@ class SignalTrackingTask(Task):
         self._state = state
         self._config = config
         self._broker = broker
+        self._last_run: datetime | None = None
 
     @property
     def name(self) -> str:
@@ -73,10 +74,12 @@ class SignalTrackingTask(Task):
         try:
             tracker = SignalOutcomeTracker(self._cache, self._market_fetcher, self._broker)
             stats = await asyncio.to_thread(tracker.update_outcomes)
-            await self._state.set_last_signal_tracking(datetime.now(UTC))
+            now = datetime.now(UTC)
+            self._last_run = now
+            await self._state.set_last_signal_tracking(now)
             total = sum(stats.values())
             msg = f"updated={total} {stats}"
-            logger.info(f"Signal tracking complete: {msg}")
+            logger.debug(f"Signal tracking complete: {msg}")
             return TaskResult(
                 task_name=self.name,
                 success=True,
@@ -93,8 +96,8 @@ class SignalTrackingTask(Task):
             )
 
     async def last_run_at(self) -> datetime | None:
-        """Get last signal tracking timestamp from state."""
-        return await self._state.get_last_signal_tracking()
+        """Get last signal tracking timestamp from state or in-memory fallback."""
+        return await self._state.get_last_signal_tracking() or self._last_run
 
     def __repr__(self) -> str:
         """String representation."""
