@@ -1,4 +1,4 @@
-"""Monitoring tasks for daemon health, signal tracking, and stress testing."""
+"""Monitoring tasks for daemon health and stress testing."""
 
 from __future__ import annotations
 
@@ -7,43 +7,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from rich.console import Console
 
 from src.daemon.tasks.base import TaskExecutor
 
 if TYPE_CHECKING:
     from src.daemon.factory import DaemonComponents
     from src.di.container import AppContainer
-
-console = Console()
-
-
-class SignalTrackingTask(TaskExecutor):
-    """Signal outcome tracking task (T+1d/5d/20d price updates)."""
-
-    @property
-    def task_name(self) -> str:
-        """Task display name."""
-        return "Signal Tracking"
-
-    async def execute(self) -> None:
-        """Execute signal tracking logic."""
-        from src.daemon.signal_tracker import SignalOutcomeTracker
-
-        market_fetcher = self.container.yfinance_market_fetcher()
-        tracker = SignalOutcomeTracker(
-            self.components.historical_cache, market_fetcher, self.components.broker
-        )
-        stats = await asyncio.to_thread(tracker.update_outcomes)
-        console.print(f"[dim]Signal tracking: {stats}[/dim]")
-
-    async def get_last_run(self) -> datetime | None:
-        """Get last signal tracking timestamp."""
-        return await self.components.state.get_last_signal_tracking()
-
-    async def record_success(self, duration: float) -> None:
-        """Record signal tracking completion."""
-        await self.components.state.set_last_signal_tracking(datetime.now(UTC))
 
 
 class MonteCarloTask(TaskExecutor):
