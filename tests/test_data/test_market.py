@@ -179,6 +179,20 @@ def test_fetch_yfinance_no_retry_on_value_error():
         assert mock_instance.history.call_count == 1
 
 
+def test_fetch_yfinance_type_error_converted_to_value_error():
+    with patch("src.data.market.yf.Ticker") as mock_ticker:
+        mock_instance = MagicMock()
+        mock_ticker.return_value = mock_instance
+        mock_instance.history.side_effect = TypeError("NoneType is not iterable")
+
+        fetcher = MarketDataFetcher(use_alpha_vantage=False)
+
+        with pytest.raises(ValueError, match="delisted or API unavailable"):
+            fetcher.fetch_daily("AAPL")
+
+        assert mock_instance.history.call_count == 1
+
+
 def test_fetch_intraday_retries_on_error(sample_df):
     with patch("src.data.market.TimeSeries") as mock_ts:
         mock_instance = MagicMock()
