@@ -230,6 +230,12 @@ class MarketDataFetcher:
                 data=data,
                 last_updated=datetime.now(),
             )
+        except ValueError:
+            raise
+        except TypeError as e:
+            msg = f"yfinance returned invalid response for {symbol} (possibly delisted or API unavailable)"
+            logger.error(msg)
+            raise ValueError(msg) from e
         except Exception as e:
             logger.opt(exception=True).error(f"yfinance fetch failed: {e}")
             raise
