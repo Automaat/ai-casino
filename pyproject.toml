@@ -7,7 +7,7 @@ requires-python = "==3.14.3"
 dependencies = [
     # Technical Analysis
     "pandas==3.0.1",
-    "pandas-ta-classic==0.3.59",
+    "pandas-ta-classic==0.3.78",
     "numpy==2.4.2",
     # Sentiment Analysis
     "transformers==5.2.0",
