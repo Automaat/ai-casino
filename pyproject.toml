@@ -32,7 +32,7 @@ dependencies = [
     "sqlalchemy[asyncio]==2.0.48",
     "asyncpg==0.31.0",
     # Web Search
-    "ddgs==9.11.2",
+    "ddgs==9.11.4",
     # Reddit
     "praw==7.8.1",
     # Utilities
