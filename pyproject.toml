@@ -23,7 +23,7 @@ dependencies = [
     # Trading
     "alpaca-py==0.43.2",
     "backtesting==0.6.5",
-    "bokeh>=3.8,<3.9",  # backtesting 0.6.5 incompatible with bokeh 3.8+
+    "bokeh>=3.9,<3.10",  # backtesting 0.6.5 incompatible with bokeh 3.8+
     # Optimization
     "optuna==4.7.0",
     "riskfolio-lib==7.2.1",
@@ -133,6 +133,9 @@ project-excludes = [
 # Restrict dependency resolution to Unix platforms (Linux/macOS)
 # Prevents Windows resolution failures in CI for platform-specific deps like riskfolio-lib
 environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
+constraint-dependencies = [
+    "tornado>=6.5.5",  # CVE-2026-31958, GHSA-78cv-mqj4-43f7
+]
 
 [dependency-groups]
 dev = [
