@@ -32,7 +32,7 @@ dependencies = [
     "sqlalchemy[asyncio]==2.0.48",
     "asyncpg==0.31.0",
     # Web Search
-    "ddgs==9.11.2",
+    "ddgs==9.11.4",
     # Reddit
     "praw==7.8.1",
     # Utilities
@@ -133,6 +133,9 @@ project-excludes = [
 # Restrict dependency resolution to Unix platforms (Linux/macOS)
 # Prevents Windows resolution failures in CI for platform-specific deps like riskfolio-lib
 environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
+constraint-dependencies = [
+    "tornado>=6.5.5",  # CVE-2026-31958, GHSA-78cv-mqj4-43f7
+]
 
 [dependency-groups]
 dev = [
