@@ -23,7 +23,7 @@ dependencies = [
     # Trading
     "alpaca-py==0.43.2",
     "backtesting==0.6.5",
-    "bokeh>=3.8,<3.9",  # backtesting 0.6.5 incompatible with bokeh 3.8+
+    "bokeh>=3.9,<3.10",  # backtesting 0.6.5 incompatible with bokeh 3.8+
     # Optimization
     "optuna==4.7.0",
     "riskfolio-lib==7.2.1",
