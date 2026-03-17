@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for GPU-optimized FinBERT service
-FROM nvidia/cuda:13.1.1-runtime-ubuntu22.04 AS builder
+FROM nvidia/cuda:13.2.0-runtime-ubuntu22.04 AS builder
 
 # Install Python 3.12 and build tools
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user -r /tmp/requirements.txt
 
 # Runtime stage
-FROM nvidia/cuda:13.1.1-runtime-ubuntu22.04
+FROM nvidia/cuda:13.2.0-runtime-ubuntu22.04
 
 # Install Python 3.12 and curl
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
