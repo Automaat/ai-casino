@@ -1,7 +1,7 @@
 [tools]
 python = "3.14.3"
 "pipx:uv" = "0.10.11"
-"pipx:ruff" = "0.15.6"
+"pipx:ruff" = "0.15.7"
 "pipx:semgrep" = "1.156.0"
 ollama = "0.13.5"
 
