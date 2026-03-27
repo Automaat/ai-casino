@@ -55,6 +55,7 @@ dependencies = [
     "result==0.17.0",  # Go-style error handling
     "playwright>=1.58.0",
     "playwright-stealth>=2.0.2",
+    "requests>=2.33.0",  # CVE-2026-25645: security fix
 ]
 
 [project.optional-dependencies]
