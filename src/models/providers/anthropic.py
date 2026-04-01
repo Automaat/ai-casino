@@ -1,7 +1,7 @@
 """Anthropic LLM provider using official SDK."""
 
 from collections.abc import AsyncIterator
-from typing import TypeVar
+from typing import TypeVar, cast
 
 from anthropic import AsyncAnthropic
 from anthropic.types import Message, TextBlock
@@ -150,8 +150,7 @@ class AnthropicProvider(BaseLLMProvider):
         if system_param:
             kwargs["system"] = system_param
 
-        response = await self._client.messages.create(**kwargs)
-        assert isinstance(response, Message)
+        response = cast("Message", await self._client.messages.create(**kwargs))
         self._last_usage = self._extract_usage(response)
         content = next((b.text for b in response.content if isinstance(b, TextBlock)), "")
         logger.debug(f"Anthropic response length: {len(content)} chars")
@@ -203,8 +202,7 @@ class AnthropicProvider(BaseLLMProvider):
         if system_param:
             kwargs["system"] = system_param
 
-        response = await self._client.messages.create(**kwargs)
-        assert isinstance(response, Message)
+        response = cast("Message", await self._client.messages.create(**kwargs))
         self._last_usage = self._extract_usage(response)
 
         text_content = None
@@ -263,8 +261,7 @@ class AnthropicProvider(BaseLLMProvider):
         if system_param:
             kwargs["system"] = system_param
 
-        response = await self._client.messages.create(**kwargs)
-        assert isinstance(response, Message)
+        response = cast("Message", await self._client.messages.create(**kwargs))
         self._last_usage = self._extract_usage(response)
 
         for block in response.content:
