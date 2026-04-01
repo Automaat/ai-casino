@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from anthropic import AsyncAnthropic
-from anthropic.types import Message
+from anthropic.types import Message, TextBlock
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
@@ -151,8 +151,9 @@ class AnthropicProvider(BaseLLMProvider):
             kwargs["system"] = system_param
 
         response = await self._client.messages.create(**kwargs)
+        assert isinstance(response, Message)
         self._last_usage = self._extract_usage(response)
-        content = response.content[0].text if response.content else ""
+        content = next((b.text for b in response.content if isinstance(b, TextBlock)), "")
         logger.debug(f"Anthropic response length: {len(content)} chars")
         return content
 
@@ -203,6 +204,7 @@ class AnthropicProvider(BaseLLMProvider):
             kwargs["system"] = system_param
 
         response = await self._client.messages.create(**kwargs)
+        assert isinstance(response, Message)
         self._last_usage = self._extract_usage(response)
 
         text_content = None
@@ -262,6 +264,7 @@ class AnthropicProvider(BaseLLMProvider):
             kwargs["system"] = system_param
 
         response = await self._client.messages.create(**kwargs)
+        assert isinstance(response, Message)
         self._last_usage = self._extract_usage(response)
 
         for block in response.content:
