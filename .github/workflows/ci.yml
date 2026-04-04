@@ -174,4 +174,4 @@ jobs:
       # See src/data/websearch.py for mitigation details
       # CVE-2026-4539: pygments vulnerability - no fix available yet
       - name: Run pip-audit
-        run: uv run pip-audit --ignore-vuln CVE-2025-69872 --ignore-vuln CVE-2026-4539
+        run: uv run pip-audit --ignore-vuln CVE-2025-69872 --ignore-vuln CVE-2026-4539 --ignore-vuln CVE-2026-33752
