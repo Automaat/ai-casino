@@ -50,7 +50,7 @@ dependencies = [
     "uvicorn[standard]==0.43.0",
     # CLI & TUI
     "typer==0.24.1",
-    "textual==8.2.2",
+    "textual==8.2.3",
     "dependency-injector==4.49.0",  # DI container infrastructure
     "result==0.17.0",  # Go-style error handling
     "playwright>=1.58.0",
