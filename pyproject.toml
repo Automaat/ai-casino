@@ -137,6 +137,8 @@ environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
 constraint-dependencies = [
     "tornado>=6.5.5",  # CVE-2026-31958, GHSA-78cv-mqj4-43f7
     "requests>=2.33.0",  # CVE-2026-25645
+    "lxml>=6.1.0",  # CVE-2026-41066
+    "pillow>=12.2.0",  # CVE-2026-40192
 ]
 
 [dependency-groups]
