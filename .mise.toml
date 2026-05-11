@@ -1,5 +1,5 @@
 [tools]
-python = "3.14.4"
+python = "3.14.5"
 "pipx:uv" = "0.11.13"
 "pipx:ruff" = "0.15.10"
 "pipx:semgrep" = "1.162.0"
