@@ -42,7 +42,7 @@ dependencies = [
     "rich==15.0.0",
     "loguru==0.7.3",
     "pydantic==2.12.5",
-    "pydantic-settings==2.13.1",
+    "pydantic-settings==2.14.2",  # GHSA-4xgf-cpjx-pc3j
     "pyyaml==6.0.3",
     "packaging>=24.0",  # Required by langsmith (transitive dependency)
     # API Server
@@ -135,10 +135,16 @@ project-excludes = [
 # Prevents Windows resolution failures in CI for platform-specific deps like riskfolio-lib
 environments = ["sys_platform == 'linux' or sys_platform == 'darwin'"]
 constraint-dependencies = [
-    "tornado>=6.5.5",  # CVE-2026-31958, GHSA-78cv-mqj4-43f7
+    "tornado>=6.5.7",  # CVE-2026-31958, GHSA-78cv-mqj4-43f7, CVE-2026-49853/54/55, GHSA-pw6j-qg29-8w7f
     "requests>=2.33.0",  # CVE-2026-25645
     "lxml>=6.1.0",  # CVE-2026-41066
     "pillow>=12.2.0",  # CVE-2026-40192
+    "aiohttp>=3.14.1",  # CVE-2026-34993/47265/50269/54273-54280
+    "idna>=3.15",  # PYSEC-2026-215
+    "msgpack>=1.2.1",  # GHSA-6v7p-g79w-8964
+    "starlette>=1.3.1",  # PYSEC-2026-161, CVE-2026-48817/48818/54282/54283
+    "urllib3>=2.7.0",  # PYSEC-2026-141, PYSEC-2026-142
+    "pip>=26.1.2",  # PYSEC-2026-196
 ]
 
 [dependency-groups]

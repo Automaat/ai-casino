@@ -175,10 +175,13 @@ jobs:
       # CVE-2026-4539: pygments vulnerability - no fix available yet
       # CVE-2026-33752: curl-cffi vulnerability - blocked by yfinance==1.2.0 cap on curl-cffi<0.14
       # CVE-2026-3219: pip vulnerability - no fix available yet
+      # CVE-2025-3000: torch torch.jit.script memory corruption - no upstream fix
+      #   (affects all torch versions; torch is a required core dependency)
       - name: Run pip-audit
         run: |
           uv run pip-audit \
             --ignore-vuln CVE-2025-69872 \
             --ignore-vuln CVE-2026-4539 \
             --ignore-vuln CVE-2026-33752 \
-            --ignore-vuln CVE-2026-3219
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln CVE-2025-3000

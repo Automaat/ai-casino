@@ -1,0 +1,22 @@
+# Automated releases via release-please (conventional commits -> release PR -> tag + GitHub Release).
+# On merge to the default branch, release-please opens/updates a release PR; merging it
+# tags the release and publishes a GitHub Release with a generated changelog.
+# ADAPT: branches -> repo default branch (main/master).
+name: release-please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
