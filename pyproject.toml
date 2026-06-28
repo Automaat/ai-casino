@@ -41,7 +41,7 @@ dependencies = [
     "python-dateutil==2.9.0.post0",
     "rich==15.0.0",
     "loguru==0.7.3",
-    "pydantic==2.12.5",
+    "pydantic==2.13.4",
     "pydantic-settings==2.14.2",  # GHSA-4xgf-cpjx-pc3j
     "pyyaml==6.0.3",
     "packaging>=24.0",  # Required by langsmith (transitive dependency)
