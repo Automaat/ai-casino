@@ -34,7 +34,7 @@ dependencies = [
     # Web Search
     "ddgs==9.14.4",
     # Reddit
-    "praw==7.8.2",
+    "praw==8.0.2",
     # Utilities
     "tenacity==9.1.4",
     "python-dotenv==1.2.2",
