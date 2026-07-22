@@ -22,7 +22,7 @@ dependencies = [
     "alpha-vantage==3.0.0",
     # Trading
     "alpaca-py==0.43.5",
-    "backtesting==0.6.5",
+    "backtesting==0.6.6",
     "bokeh>=3.9,<3.10",  # backtesting 0.6.5 incompatible with bokeh 3.8+
     # Optimization
     "optuna==4.9.0",
