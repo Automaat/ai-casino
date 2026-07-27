@@ -18,7 +18,7 @@ dependencies = [
     "httpx==0.28.1",
     "pydantic-ai-slim==2.1.0",
     # Market Data
-    "yfinance==1.5.1",
+    "yfinance==1.5.2",
     "alpha-vantage==3.0.0",
     # Trading
     "alpaca-py==0.43.5",
