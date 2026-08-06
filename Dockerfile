@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build stage - install build tools and compile dependencies
-FROM python:3.14.6-slim AS builder
+FROM python:3.14.7-slim AS builder
 
 # Install system dependencies needed for building Python packages
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY src ./src
 
 # Runtime stage - minimal image with only Python and compiled wheels
-FROM python:3.14.6-slim
+FROM python:3.14.7-slim
 
 # Install runtime dependencies (curl for healthcheck)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
