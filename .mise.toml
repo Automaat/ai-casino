@@ -2,7 +2,7 @@
 python = "3.14.7"
 "pipx:uv" = "0.12.5"
 "pipx:ruff" = "0.16.3"
-"pipx:semgrep" = "1.172.0"
+"pipx:semgrep" = "1.173.0"
 ollama = "0.32.13"
 
 [tasks.lint]
