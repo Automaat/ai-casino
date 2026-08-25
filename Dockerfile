@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     git
 
 # Install uv (pinned version for reproducible builds)
-COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.6 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl
 
 # Install uv (pinned version for reproducible builds)
-COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.6 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
