@@ -8,7 +8,7 @@
 
 services:
   ollama:
-    image: ollama/ollama:0.33.1
+    image: ollama/ollama:0.33.2
     container_name: ai-casino-ollama-dev
     restart: unless-stopped
     ports:
