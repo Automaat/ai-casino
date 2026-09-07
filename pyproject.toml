@@ -25,7 +25,7 @@ dependencies = [
     "backtesting==0.6.6",
     "bokeh>=3.10,<3.11",  # backtesting 0.6.5 incompatible with bokeh 3.8+
     # Optimization
-    "optuna==4.9.0",
+    "optuna==5.0.0",
     "riskfolio-lib==7.3.0",
     "quantstats==0.0.81",
     # Database
