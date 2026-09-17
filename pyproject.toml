@@ -16,7 +16,7 @@ dependencies = [
     "openai==3.14.1",
     "anthropic==1.6.0",
     "httpx==0.28.1",
-    "pydantic-ai-slim==2.43.0",
+    "pydantic-ai-slim==2.44.0",
     # Market Data
     "yfinance==1.7.0",
     "alpha-vantage==3.0.0",
