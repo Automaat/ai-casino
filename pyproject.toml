@@ -27,7 +27,7 @@ dependencies = [
     # Optimization
     "optuna==5.0.0",
     "riskfolio-lib==7.3.0",
-    "quantstats==0.0.81",
+    "quantstats==0.0.82",
     # Database
     "sqlalchemy[asyncio]==2.1.1",
     "asyncpg==0.31.0",
