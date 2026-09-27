@@ -121,7 +121,7 @@ requires-dist = [
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "python-dotenv", specifier = "==1.2.3" },
     { name = "pyyaml", specifier = "==6.0.3" },
-    { name = "quantstats", specifier = "==0.0.85" },
+    { name = "quantstats", specifier = "==0.0.86" },
     { name = "requests", specifier = ">=2.33.0" },
     { name = "result", specifier = "==0.17.0" },
     { name = "rich", specifier = "==15.0.0" },
@@ -2589,7 +2589,7 @@ wheels = [
 
 [[package]]
 name = "quantstats"
-version = "0.0.85"
+version = "0.0.86"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib" },
@@ -2601,9 +2601,9 @@ dependencies = [
     { name = "tabulate" },
     { name = "yfinance" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6b/ed/d5557546565a463c4de100f91d12be2d9ea209211a1f823c65dcd8723df6/quantstats-0.0.85.tar.gz", hash = "sha256:f7440e456f7f79a2f9b7c523353d2c71b2756ba2006857b6a4589f7e5f5e13a0", size = 98074, upload-time = "2026-09-26T20:10:57.048Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/5a/a859727babc25df8e42e5d2d0d928de5652be7bf1d20a768ecc58add2d3c/quantstats-0.0.86.tar.gz", hash = "sha256:eb348e342410f0abb9b7a457f524df703dc337ed075303b842eaba220a11c7e1", size = 99113, upload-time = "2026-09-27T19:41:43.759Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/82/2eaa965376c16c5411b567e4cd62d7e4f16f761d299d0dcaf7921630336e/quantstats-0.0.85-py3-none-any.whl", hash = "sha256:0ad4f65bb4b1b6426a33bb1ca7dd2cf6b8db44a6e7bc17e5503313607fdc7d4e", size = 96283, upload-time = "2026-09-26T20:10:55.745Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/46/3d9304b888c5e67e00e3ad814e06ab08b21c0386e14ba5d08daceaab9b31/quantstats-0.0.86-py3-none-any.whl", hash = "sha256:4cfb157c8228cbb47681d6a81767d465fbc2bdf529643dd7e836479d2165efd6", size = 96762, upload-time = "2026-09-27T19:41:42.612Z" },
 ]
 
 [[package]]
