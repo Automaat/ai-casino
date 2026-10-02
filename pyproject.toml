@@ -29,7 +29,7 @@ dependencies = [
     "riskfolio-lib==7.3.0",
     "quantstats==0.0.86",
     # Database
-    "sqlalchemy[asyncio]==2.1.1",
+    "sqlalchemy[asyncio]==2.1.2",
     "asyncpg==0.31.0",
     # Web Search
     "ddgs==9.16.0",
