@@ -125,7 +125,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.33.0" },
     { name = "result", specifier = "==0.17.0" },
     { name = "rich", specifier = "==15.0.0" },
-    { name = "riskfolio-lib", specifier = "==7.3.0" },
+    { name = "riskfolio-lib", specifier = "==7.4.0" },
     { name = "snakeviz", marker = "extra == 'profiling'", specifier = ">=2.2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.1.3" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -2294,11 +2294,11 @@ wheels = [
 
 [[package]]
 name = "pybind11"
-version = "3.0.1"
+version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2f/7b/a6d8dcb83c457e24a9df1e4d8fd5fb8034d4bbc62f3c324681e8a9ba57c2/pybind11-3.0.1.tar.gz", hash = "sha256:9c0f40056a016da59bab516efb523089139fcc6f2ba7e4930854c61efb932051", size = 546914, upload-time = "2025-08-22T20:09:27.265Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/f3/95b0f40b31df41dbfe6bb0857419c9442c15839cbac4796f1c26ae0b6081/pybind11-3.1.0.tar.gz", hash = "sha256:a1cc06b524ab3edca51f8ad3895f9c4fa20b8b19283173dff4ae781449dc9639", size = 603746, upload-time = "2026-08-06T23:33:00.675Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/8a/37362fc2b949d5f733a8b0f2ff51ba423914cabefe69f1d1b6aab710f5fe/pybind11-3.0.1-py3-none-any.whl", hash = "sha256:aa8f0aa6e0a94d3b64adfc38f560f33f15e589be2175e103c0a33c6bce55ee89", size = 293611, upload-time = "2025-08-22T20:09:25.235Z" },
+    { url = "https://files.pythonhosted.org/packages/33/fd/8762f7ee3e4e4be6d1d846cffb4916dd9bb02b2f800d3603718a0efe494c/pybind11-3.1.0-py3-none-any.whl", hash = "sha256:b8488090f8acffbcb6b5d6a85571a6827a0a2981ffb75e5a0b27b87c4a6b7dd0", size = 319402, upload-time = "2026-08-06T23:32:59.047Z" },
 ]
 
 [[package]]
@@ -2667,7 +2667,7 @@ wheels = [
 
 [[package]]
 name = "riskfolio-lib"
-version = "7.3.0"
+version = "7.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arch" },
@@ -2686,12 +2686,12 @@ dependencies = [
     { name = "vectorbt" },
     { name = "xlsxwriter" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/73/15/bde460cd3425b339c2d65576632e10e4c001e260d4e6b4d210373f4133cd/riskfolio_lib-7.3.0.tar.gz", hash = "sha256:73ab9400691e0ca4258ba1b3d4939018c67809955504807b0559904405246bdf", size = 4157437, upload-time = "2026-05-31T07:11:48.901Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/b8/685e1bb7424cc5326f203dfc8da8671d78b85ce2b14b98a0de77b77ecb8b/riskfolio_lib-7.4.0.tar.gz", hash = "sha256:b02ca9d34e7e96b49e1b2a1c2bd4557894ab5f4376e4730f3bc610c6d65a806a", size = 4083197, upload-time = "2026-10-04T05:08:50.115Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/75/31/b1678b2318e14d8b1863ccdb9da418bf6502ce8fb7c8a8fda12e5488b2dd/riskfolio_lib-7.3.0-cp314-cp314-macosx_10_13_universal2.whl", hash = "sha256:ecf02c4a56d5f04649a86508ec896c6af24747e3422f4413aad188707bf4ab69", size = 492984, upload-time = "2026-05-31T07:11:42.543Z" },
-    { url = "https://files.pythonhosted.org/packages/2f/e7/ac252fe888ba9a4fb36fd5109d65fff942c9a7637a4cdcdb8d1627f5128d/riskfolio_lib-7.3.0-cp314-cp314-macosx_10_13_x86_64.whl", hash = "sha256:bc841861a7f421e645e8f473e6c1ab5ade3e1d40c8d0d469512cb77f713168e3", size = 328204, upload-time = "2026-05-31T07:11:43.916Z" },
-    { url = "https://files.pythonhosted.org/packages/b6/c5/b158d4ee52b54323b5e5a3e0028a160b2710d099b8bbc5ebc3e9143937d5/riskfolio_lib-7.3.0-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:494d9271560c81944d071822f835d78555f69c3d37be1a855045dfa1f2dc5efc", size = 315814, upload-time = "2026-05-31T07:11:44.947Z" },
-    { url = "https://files.pythonhosted.org/packages/b1/c9/4e1eb83e8bc4f1436188030da4dae8ac12251a554e8ea2c4f294225d96bf/riskfolio_lib-7.3.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:175d49c0ac65a1de14e3c4fd755168c83a59dd56c8fa8942d881262e83a46d50", size = 334327, upload-time = "2026-05-31T07:11:46.34Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/50/36d7952505ba3e3b7b58b72beccd6763ba140c900a69b180791c4049e959/riskfolio_lib-7.4.0-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:0502cb96fd0fb8dc288c4a514561c654500b112326c8b1e0503432c8d3372fe8", size = 434680, upload-time = "2026-10-04T05:08:43.876Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/32/ab67e77ff1e4f7d0c4ca6ba6f966e9ab359066c16decffe2d81d889339f4/riskfolio_lib-7.4.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:d25dcbcc87df67a61b3a32472d0e6c61d13f385657251678c807074505961050", size = 297341, upload-time = "2026-10-04T05:08:44.919Z" },
+    { url = "https://files.pythonhosted.org/packages/33/66/0ef30cc6e81971a8b6a9ed4fee8ab914922b8f97819008ec8e83e6cd461a/riskfolio_lib-7.4.0-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:df3004f237f9b0b21e151597e3898022948b95c0014e106598c8a8abba28d5c3", size = 292617, upload-time = "2026-10-04T05:08:45.909Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/d3/96d14a77103430108c596d4c8657e33055c09dff4503aedc82099b6e49e3/riskfolio_lib-7.4.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8abe73ca4b46d2e41d7a3ce22b9e9492e53277ead421e4ebe8fd6579563b8e0d", size = 305168, upload-time = "2026-10-04T05:08:47.524Z" },
 ]
 
 [[package]]
