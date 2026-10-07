@@ -49,7 +49,7 @@ dependencies = [
     "fastapi==0.142.2",
     "uvicorn[standard]==0.54.0",
     # CLI & TUI
-    "typer==0.27.2",
+    "typer==0.27.3",
     "textual==8.2.8",
     "dependency-injector==4.49.1",  # DI container infrastructure
     "result==0.17.0",  # Go-style error handling
