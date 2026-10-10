@@ -13,7 +13,7 @@ dependencies = [
     "transformers==5.19.0",
     "torch==2.14.1",
     # LLM & Agents
-    "openai==3.27.0",
+    "openai==3.28.0",
     "anthropic==1.13.0",
     "httpx==0.28.1",
     "pydantic-ai-slim==2.54.0",
