@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for CPU-optimized FinBERT service
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 # Install build dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user -r /tmp/requirements.txt
 
 # Runtime stage
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # Install curl for healthcheck
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
