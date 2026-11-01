@@ -14,7 +14,7 @@ dependencies = [
     "torch==2.15.0",
     # LLM & Agents
     "openai==3.42.0",
-    "anthropic==1.17.0",
+    "anthropic==2.3.0",
     "httpx==0.28.1",
     "pydantic-ai-slim==2.64.0",
     # Market Data
