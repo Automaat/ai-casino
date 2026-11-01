@@ -10,7 +10,7 @@ dependencies = [
     "pandas-ta-classic==0.9.0",
     "numpy==2.5.4",
     # Sentiment Analysis
-    "transformers==5.19.0",
+    "transformers==5.22.1",
     "torch==2.14.1",
     # LLM & Agents
     "openai==3.42.0",
