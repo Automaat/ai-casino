@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Development Dockerfile for Svelte frontend with HMR
-FROM node:24-alpine
+FROM node:26-alpine
 
 # Install curl for healthcheck
 RUN apk add --no-cache curl
