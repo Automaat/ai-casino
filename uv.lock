@@ -125,7 +125,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.33.0" },
     { name = "result", specifier = "==0.17.0" },
     { name = "rich", specifier = "==15.0.0" },
-    { name = "riskfolio-lib", specifier = "==7.4.0" },
+    { name = "riskfolio-lib", specifier = "==7.4.1" },
     { name = "snakeviz", marker = "extra == 'profiling'", specifier = ">=2.2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.1.8" },
     { name = "tenacity", specifier = "==9.2.1" },
@@ -2171,7 +2171,7 @@ wheels = [
 
 [[package]]
 name = "riskfolio-lib"
-version = "7.4.0"
+version = "7.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arch" },
@@ -2190,7 +2190,7 @@ dependencies = [
     { name = "vectorbt" },
     { name = "xlsxwriter" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/b8/685e1bb7424cc5326f203dfc8da8671d78b85ce2b14b98a0de77b77ecb8b/riskfolio_lib-7.4.0.tar.gz", hash = "sha256:b02ca9d34e7e96b49e1b2a1c2bd4557894ab5f4376e4730f3bc610c6d65a806a", size = 4083197, upload-time = "2026-10-04T05:08:50.115Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/2d/cf620f30075cbabd5793a005fb3b7eb0512a7b33f89194439d3727265b79/riskfolio_lib-7.4.1.tar.gz", hash = "sha256:70e5265800ff4d7bcc32181dbfc0f19929fd9660722be3b45e17c5e8ba488140", size = 4039984, upload-time = "2026-11-04T16:16:58.978Z" }
 
 [[package]]
 name = "ruff"
