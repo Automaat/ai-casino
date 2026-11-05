@@ -21,7 +21,7 @@ dependencies = [
     "yfinance==1.8.0",
     "alpha-vantage==3.0.0",
     # Trading
-    "alpaca-py==0.44.0",
+    "alpaca-py==0.45.0",
     "backtesting==0.6.6",
     "bokeh>=3.10,<3.11",  # backtesting 0.6.5 incompatible with bokeh 3.8+
     # Optimization
