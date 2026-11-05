@@ -91,7 +91,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'dev'", specifier = "==0.22.1" },
-    { name = "alpaca-py", specifier = "==0.44.0" },
+    { name = "alpaca-py", specifier = "==0.45.0" },
     { name = "alpha-vantage", specifier = "==3.0.0" },
     { name = "anthropic", specifier = "==2.5.0" },
     { name = "asyncpg", specifier = "==0.32.0" },
@@ -207,20 +207,20 @@ wheels = [
 
 [[package]]
 name = "alpaca-py"
-version = "0.44.0"
+version = "0.45.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "msgpack" },
     { name = "pandas" },
     { name = "pydantic" },
-    { name = "pytz" },
     { name = "requests" },
     { name = "sseclient-py" },
+    { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/b7/99f09835590f2a3fbdb82abf72d81a199a7aca6d0335a6bc6ec057fc2792/alpaca_py-0.44.0.tar.gz", hash = "sha256:5388715b67b51ad30fa07308e89299d48b19bed65b81013b8a1158fa5837337b", size = 103559, upload-time = "2026-08-11T10:15:05.96Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/5f/c113a99128a7f670688a931aebed290dcced9ec59501682ceeb6fe75a2c8/alpaca_py-0.45.0.tar.gz", hash = "sha256:89b39e29b734e3bb13832691126366b4508998511e42f66159faa547f9493256", size = 127005, upload-time = "2026-11-05T09:12:29.655Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/9e/69a2d867988578d6f9e52e35d435d8a43296257cf590fb881a3752de7651/alpaca_py-0.44.0-py3-none-any.whl", hash = "sha256:b54673f967c0c814a5e0223cbb0211a5d9d75a8d107e792872b14e5bae957c03", size = 128904, upload-time = "2026-08-11T10:15:07.141Z" },
+    { url = "https://files.pythonhosted.org/packages/05/32/5aeaa0ca00e9bd1caba768eadb9c72bada3e136d0a2b3a6a8552a6d6f080/alpaca_py-0.45.0-py3-none-any.whl", hash = "sha256:49d1969520f93f0f3f194a595b4ac8dc180e9e7e1eb84b5b8fd5bd641f217dd2", size = 150030, upload-time = "2026-11-05T09:12:30.821Z" },
 ]
 
 [[package]]
