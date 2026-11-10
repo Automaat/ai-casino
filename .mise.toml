@@ -3,7 +3,7 @@ python = "3.15.2"
 "pipx:uv" = "0.13.7"
 "pipx:ruff" = "0.17.4"
 "pipx:semgrep" = "1.184.0"
-ollama = "0.40.15"
+ollama = "0.40.16"
 
 [tasks.lint]
 description = "Run ruff linter"
