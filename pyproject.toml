@@ -40,7 +40,7 @@ dependencies = [
     "python-dotenv==1.2.4",
     "python-dateutil==4.0.0",
     "rich==15.0.0",
-    "loguru==0.7.3",
+    "loguru==0.8.0",
     "pydantic==2.14.3",
     "pydantic-settings==2.16.2",  # GHSA-4xgf-cpjx-pc3j
     "pyyaml==6.0.3",
