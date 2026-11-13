@@ -42,7 +42,7 @@ dependencies = [
     "rich==15.0.0",
     "loguru==0.8.0",
     "pydantic==2.14.3",
-    "pydantic-settings==2.16.2",  # GHSA-4xgf-cpjx-pc3j
+    "pydantic-settings==2.16.3",  # GHSA-4xgf-cpjx-pc3j
     "pyyaml==6.0.3",
     "packaging>=24.0",  # Required by langsmith (transitive dependency)
     # API Server
