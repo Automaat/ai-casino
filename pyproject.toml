@@ -8,7 +8,7 @@ dependencies = [
     # Technical Analysis
     "pandas==3.1.1",
     "pandas-ta-classic==0.9.0",
-    "numpy==2.5.4",
+    "numpy==2.5.5",
     # Sentiment Analysis
     "transformers==5.23.0",
     "torch==2.15.0",
