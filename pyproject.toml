@@ -47,7 +47,7 @@ dependencies = [
     "packaging>=24.0",  # Required by langsmith (transitive dependency)
     # API Server
     "fastapi==0.165.0",
-    "uvicorn[standard]==0.54.0",
+    "uvicorn[standard]==0.55.0",
     # CLI & TUI
     "typer==0.29.3",
     "textual==8.2.8",
